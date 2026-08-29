@@ -1,0 +1,25 @@
+[Unit]
+Description=m-ranked
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=telegram-monitor
+Group=telegram-monitor
+WorkingDirectory=/opt/telegram-reaction-monitor
+EnvironmentFile=/opt/telegram-reaction-monitor/.env
+ExecStart=/opt/telegram-reaction-monitor/.venv/bin/python -m app run
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/telegram-reaction-monitor/data /opt/telegram-reaction-monitor/logs
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

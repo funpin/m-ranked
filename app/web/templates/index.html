@@ -1,0 +1,84 @@
+{% extends "base.html" %}{% block title %}Рейтинг · m-ranked{% endblock %}
+{% block content %}
+<div class="section-head"><div><h1>Рейтинг каналов и публикаций</h1><p class="lead">Для каждой публикации берётся её последний замер за выбранный период.</p></div></div>
+
+<div id="rating-content" class="rating-content" aria-live="polite">
+<form id="rating-controls" class="controls panel compact rating-controls" method="get" action="/rating" data-rating-form>
+  <label><span class="control-label" title="В рейтинг попадают публикации, вышедшие внутри выбранного периода.">Период ⓘ</span><br>
+    <select name="period" data-rating-period>{% for value,label in [('3h','3 часа'),('1d','Сутки'),('7d','Неделя'),('30d','Последний месяц')] %}<option value="{{ value }}" {{ 'selected' if value==period else '' }}>{{ label }}</option>{% endfor %}</select>
+  </label>
+  <input type="hidden" name="channel_sort" value="{{ channel_sort }}"><input type="hidden" name="channel_direction" value="{{ channel_direction }}">
+  <input type="hidden" name="post_sort" value="{{ post_sort }}"><input type="hidden" name="post_direction" value="{{ post_direction }}">
+  <button type="submit">Применить</button><span class="rating-loading" data-rating-status hidden>Обновляю…</span>
+</form>
+
+{% macro sort_link(label,key,current,direction,prefix,help) -%}
+  {% set next_direction='asc' if current==key and direction=='desc' else 'desc' %}
+  {% if prefix=='channel' %}
+  <a class="sort-link" data-rating-sort href="?period={{ period }}&channel_sort={{ key }}&channel_direction={{ next_direction }}&post_sort={{ post_sort }}&post_direction={{ post_direction }}" title="{{ help }}">{{ label }} <span class="info-mark">ⓘ</span>{% if current==key %}<span class="sort-direction">{{ '↓' if direction=='desc' else '↑' }}</span>{% endif %}</a>
+  {% else %}
+  <a class="sort-link" data-rating-sort href="?period={{ period }}&channel_sort={{ channel_sort }}&channel_direction={{ channel_direction }}&post_sort={{ key }}&post_direction={{ next_direction }}" title="{{ help }}">{{ label }} <span class="info-mark">ⓘ</span>{% if current==key %}<span class="sort-direction">{{ '↓' if direction=='desc' else '↑' }}</span>{% endif %}</a>
+  {% endif %}
+{%- endmacro %}
+
+<section class="panel section rating-panel" id="channel-rating">
+  <div class="rating-panel-head"><div><h2>Каналы</h2><p class="panel-note">Типичная и общая активность каналов в сравнении с размером аудитории.</p></div><span class="period-badge">Период: {{ period_badge }}</span></div>
+  <div class="rating-explanation"><b>По умолчанию:</b> выше показаны каналы с большей долей среднего числа реакций от текущего числа подписчиков.</div>
+  <div class="table-wrap rating-table-wrap"><table class="rating-table"><thead><tr><th>#</th><th>Канал</th><th>{{ sort_link('Среднее реакций','average',channel_sort,channel_direction,'channel','Среднее арифметическое текущего числа реакций на одну публикацию за период.') }}</th><th>{{ sort_link('Реакций всего','total',channel_sort,channel_direction,'channel','Сумма текущих счётчиков реакций всех публикаций канала, вышедших за период.') }}</th><th>{{ sort_link('Реакции / подписчики','engagement',channel_sort,channel_direction,'channel','Среднее число реакций на пост, делённое на текущее число подписчиков. Это не доля уникальных людей: один человек может поставить несколько реакций.') }}</th><th>{{ sort_link('Подписчики','subscribers',channel_sort,channel_direction,'channel','Текущее точное число подписчиков канала; обновляется не чаще раза в сутки.') }}</th></tr></thead><tbody>
+  {% for row in channel_rankings %}<tr><td class="rank">{{ loop.index }}</td><td class="entity-cell"><a class="entity-link" href="/channels/{{ row.id }}">{{ row.title or ('@' ~ row.username) }}</a><div class="muted">@{{ row.username }} · {{ row.post_count }} публикаций</div></td><td><b>{{ '%.1f'|format(row.avg_reactions) }}</b></td><td>{{ row.total_reactions }}</td><td><b>{{ '%.3f%%'|format(row.engagement) if row.engagement is not none else '—' }}</b></td><td>{{ row.subscriber_count or '—' }}</td></tr>{% else %}<tr><td colspan="6" class="empty-state">Данные появятся после первого замера.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+
+<section class="panel section rating-panel" id="post-rating">
+  <div class="rating-panel-head"><div><h2>Публикации</h2><p class="panel-note">Сравнение отдельных постов по реакциям, просмотрам и их соотношению.</p></div><span class="period-badge">Период: {{ period_badge }}</span></div>
+  <div class="rating-explanation">Название вуза открывает <b>внутреннюю статистику</b>. Ссылка «Открыть пост в Telegram ↗» ведёт на оригинал в новой вкладке.</div>
+  <div class="table-wrap rating-table-wrap"><table class="rating-table"><thead><tr><th>#</th><th>Публикация</th><th>{{ sort_link('Реакции','reactions',post_sort,post_direction,'post','Текущее общее число реакций на публикации по её последнему замеру.') }}</th><th>{{ sort_link('Просмотры','views',post_sort,post_direction,'post','Текущее число просмотров публикации по её последнему замеру.') }}</th><th>{{ sort_link('Реакции / подписчики','subscriber_share',post_sort,post_direction,'post','Число реакций на посте, делённое на текущее число подписчиков канала. Один человек может дать несколько реакций.') }}</th><th>{{ sort_link('Реакции / просмотры','view_share',post_sort,post_direction,'post','Число реакций на посте, делённое на число его просмотров. Это доля реакций, а не уникальных людей, поэтому она может быть выше 100%.') }}</th></tr></thead><tbody>
+  {% for post in top_posts %}<tr><td class="rank">{{ loop.index }}</td><td class="entity-cell"><a class="entity-link" href="/posts/{{ post.id }}">{{ post.title or ('@' ~ post.username) }} · №{{ post.telegram_message_id }}</a>{% if post.deleted_at %}<a class="telegram-link external" target="_blank" rel="noopener noreferrer" href="https://tgstat.ru/channel/@{{ post.username }}/{{ post.telegram_message_id }}">Открыть сохранённую публикацию в TGStat</a><span class="pill deleted">удалена из Telegram</span>{% else %}<a class="telegram-link external" target="_blank" rel="noopener noreferrer" href="https://t.me/{{ post.username }}/{{ post.telegram_message_id }}">Открыть пост в Telegram</a>{% endif %}</td><td><b>{{ post.total_reactions }}</b></td><td>{{ post.views_count if post.views_count is not none else '—' }}</td><td>{{ '%.3f%%'|format(post.engagement) if post.engagement is not none else '—' }}</td><td>{{ '%.2f%%'|format(post.view_engagement) if post.view_engagement is not none else '—' }}</td></tr>{% else %}<tr><td colspan="6" class="empty-state">Пока нет замеров.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+</div>
+
+<script>
+(() => {
+  let activeRequest;
+  const selector = '#rating-content';
+  async function updateRating(url, addHistory = true) {
+    const current = document.querySelector(selector);
+    if (!current) return;
+    const scrollPosition = {x: window.scrollX, y: window.scrollY};
+    if (activeRequest) activeRequest.abort();
+    activeRequest = new AbortController();
+    current.classList.add('is-loading'); current.setAttribute('aria-busy', 'true');
+    const status = current.querySelector('[data-rating-status]'); if (status) status.hidden = false;
+    try {
+      const response = await fetch(url, {headers: {'X-Requested-With': 'fetch'}, signal: activeRequest.signal});
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const replacement = page.querySelector(selector);
+      if (!replacement) throw new Error('Блок рейтинга не найден');
+      current.replaceWith(replacement);
+      if (addHistory) history.pushState({rating: true}, '', url);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.scrollTo({left: scrollPosition.x, top: scrollPosition.y, behavior: 'instant'});
+      }));
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      current.classList.remove('is-loading'); current.removeAttribute('aria-busy');
+      if (status) { status.hidden = false; status.textContent = 'Не удалось обновить. Повторите ещё раз.'; }
+    }
+  }
+  document.addEventListener('submit', event => {
+    const form = event.target.closest('[data-rating-form]'); if (!form) return;
+    event.preventDefault(); const query = new URLSearchParams(new FormData(form));
+    updateRating(`${form.action}?${query.toString()}`);
+  });
+  document.addEventListener('change', event => { if (event.target.matches('[data-rating-period]')) event.target.form.requestSubmit(); });
+  document.addEventListener('click', event => {
+    const link = event.target.closest('[data-rating-sort]');
+    if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); updateRating(link.href);
+  });
+  window.addEventListener('popstate', () => { if (location.pathname === '/rating') updateRating(location.href, false); });
+})();
+</script>
+{% endblock %}

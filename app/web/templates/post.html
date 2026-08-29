@@ -1,0 +1,110 @@
+{% extends "base.html" %}{% block title %}Публикация №{{ post.telegram_message_id }} · m-ranked{% endblock %}
+{% block content %}
+<div class="post-heading"><div><h1><a href="/channels/{{ post.channel_id }}">{{ post.title or ('@' ~ post.username) }}</a> / {% if post.deleted_at %}<a class="external" target="_blank" rel="noopener noreferrer" href="https://tgstat.ru/channel/@{{ post.username }}/{{ post.telegram_message_id }}">№{{ post.telegram_message_id }} в TGStat</a>{% else %}<a class="external" target="_blank" rel="noopener noreferrer" href="https://t.me/{{ post.username }}/{{ post.telegram_message_id }}">№{{ post.telegram_message_id }}</a>{% endif %}</h1>
+<p class="muted">Опубликовано: <b>{{ post.published_at|local_datetime }} МСК</b> · история {{ 'полная' if post.history_complete else 'неполная' }} · тип: {{ post_type_labels.get(post.post_type, post.post_type) }}{% if post.deleted_at %} · <span class="bad">удалена из Telegram</span>{% endif %}{% if post.ambiguous_album_reactions %} · <span class="warn">реакции элементов альбома различаются</span>{% endif %}</p>
+</div><nav class="post-navigation" aria-label="Навигация по публикациям">{% if older_post %}<a class="post-nav-link" href="/posts/{{ older_post.id }}" rel="prev"><span>← Назад</span><small>№{{ older_post.telegram_message_id }}</small></a>{% else %}<span class="post-nav-link disabled"><span>← Назад</span><small>Нет более раннего</small></span>{% endif %}{% if newer_post %}<a class="post-nav-link next" href="/posts/{{ newer_post.id }}" rel="next"><span>Вперёд →</span><small>№{{ newer_post.telegram_message_id }}</small></a>{% else %}<span class="post-nav-link next disabled"><span>Вперёд →</span><small>Нет более нового</small></span>{% endif %}</nav></div>
+<div class="grid">
+  <div class="panel"><h2>Накопление реакций и просмотров</h2><p class="panel-note">Обе линии построены по одним и тем же замерам. В режиме 1:1 используется общая шкала; «Авто» накладывает кривые с независимыми шкалами для сравнения их формы.</p><div class="post-chart-toolbar"><div id="accumulationLegend" class="chart-legend post-chart-legend" aria-label="Показатели графика"></div><div class="scale-mode" aria-label="Режим масштаба"><span>Масштаб</span><div><button type="button" class="scale-mode-button active" data-mode="shared" aria-pressed="true">1:1</button><button type="button" class="scale-mode-button" data-mode="auto" aria-pressed="false">Авто</button></div></div></div><div class="chart"><canvas id="totalChart"></canvas></div></div>
+  <div class="panel"><h2>Прирост между замерами</h2><p class="panel-note">Сколько новых реакций появилось после предыдущего опроса. Для своевременно найденного нового поста первый прирост считается от момента публикации.</p><div class="chart"><canvas id="deltaChart"></canvas></div></div>
+</div>
+<div class="panel chart-range"><div class="chart-range-head"><b>Масштаб по времени</b><span id="rangeLabel">Все замеры</span></div><div class="dual-range"><input id="rangeStart" type="range" aria-label="Начало диапазона"><input id="rangeEnd" type="range" aria-label="Конец диапазона"></div><div class="range-notes"><p class="panel-note">Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается.</p><span id="hiddenPoints" class="pill hidden-points" hidden></span></div></div>
+<div class="panel mt table-wrap"><h2>История замеров</h2><table><thead><tr><th>Время замера, МСК</th><th>После публикации</th><th>Всего реакций</th><th>Прирост</th><th title="Прирост реакций, делённый на три с округлением вверх">Мин. людей ⓘ</th><th>Просмотры</th><th>Реакции</th><th>Интервал</th></tr></thead><tbody>
+{% for row in snapshots %}<tr id="snapshot-{{ row.id }}" class="snapshot-row {{ 'synthetic-row' if row.synthetic else '' }}"><td><button type="button" class="snapshot-jump" data-snapshot-id="{{ row.id }}" title="Показать эту точку на графике">{{ row.measured_at|local_datetime }}</button></td><td>{{ 'момент публикации' if row.synthetic else row.age_seconds|duration }}</td><td>{{ row.total_reactions }}</td><td class="{{ 'bad' if row.spike else '' }}">{{ '%+d'|format(row.delta_total) if row.delta_total is not none else '—' }}</td><td>{{ ('≥' ~ row.minimum_people) if row.minimum_people else ('0' if row.minimum_people == 0 else '—') }}</td><td>{{ row.views_count if row.views_count is not none else '—' }}</td><td><span class="reaction-list">{% for emoji,count in row.reactions.items() %}<span class="reaction-item">{% if emoji.startswith('custom:') %}<img class="reaction-emoji" src="/emoji/{{ emoji[7:] }}" alt="Пользовательская реакция" title="Пользовательская реакция" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="reaction-fallback" hidden>❔</span>{% elif emoji == 'paid:star' %}⭐{% elif emoji.startswith('unknown:') %}❔{% else %}{{ emoji }}{% endif %} <b>{{ count }}</b></span>{% endfor %}</span></td><td>{{ 'точка публикации' if row.synthetic else ('увеличенный промежуток' if row.interval_uncertain else 'штатный замер') }}</td></tr>{% endfor %}
+</tbody></table></div>
+<script>
+const rows={{ chart_json|safe }};
+let displayedRows=[];
+const integerTicks={precision:0,callback:value=>Number.isInteger(value)?value:null};
+const chartOptions=yTitle=>({responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},scales:{x:{title:{display:true,text:'Время замера и возраст публикации'},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:9}},y:{beginAtZero:true,title:{display:true,text:yTitle},ticks:integerTicks}}});
+const accumulationOptions=chartOptions('Реакций и просмотров');
+accumulationOptions.plugins={legend:{display:false},tooltip:{callbacks:{afterBody(items){if(!items.length)return'';const index=items[0].dataIndex;const reactions=totalChart.data.datasets[0].data[index];const views=totalChart.data.datasets[1].data[index];return views>0&&reactions!==null?`Реакции / просмотры: ${(reactions*100/views).toFixed(2)}%`:''}}}};
+accumulationOptions.onClick=(event,elements)=>{if(elements.length)focusSnapshot(elements[0].index)};
+accumulationOptions.onHover=(event,elements)=>{event.native.target.style.cursor=elements.length?'pointer':'default'};
+accumulationOptions.scales.y.grid={drawOnChartArea:true};
+accumulationOptions.scales.yViews={display:false,beginAtZero:true,position:'right',title:{display:true,text:'Просмотров'},ticks:integerTicks,grid:{drawOnChartArea:false}};
+const totalChart=new Chart(document.getElementById('totalChart'),{type:'line',data:{labels:[],datasets:[{label:'Всего реакций',data:[],yAxisID:'y',borderColor:'#16a085',backgroundColor:'#16a08522',fill:true,tension:.15,pointRadius:3,pointHoverRadius:7},{label:'Всего просмотров',data:[],yAxisID:'y',borderColor:'#0868df',backgroundColor:'#0868df1f',fill:true,hidden:true,tension:.15,pointRadius:3,pointHoverRadius:7,spanGaps:true}]},options:accumulationOptions});
+const deltaOptions=chartOptions('Новых реакций');
+deltaOptions.onClick=(event,elements)=>{if(elements.length)focusSnapshot(elements[0].index)};
+deltaOptions.onHover=(event,elements)=>{event.native.target.style.cursor=elements.length?'pointer':'default'};
+const deltaChart=new Chart(document.getElementById('deltaChart'),{type:'bar',data:{labels:[],datasets:[{label:'Прирост реакций',data:[],backgroundColor:[]}]},options:deltaOptions});
+const accumulationLegend=document.getElementById('accumulationLegend');
+totalChart.data.datasets.forEach((dataset,index)=>{
+  const visible=totalChart.isDatasetVisible(index);
+  const button=document.createElement('button');button.type='button';button.className=`legend-toggle${visible?'':' is-hidden'}`;button.title=`${visible?'Скрыть':'Вернуть'} линию: ${dataset.label}`;
+  button.innerHTML=`<span class="legend-swatch" style="background:${dataset.borderColor}"></span><span class="legend-label">${dataset.label}</span>`;
+  button.addEventListener('click',()=>{const visible=totalChart.isDatasetVisible(index);totalChart.setDatasetVisibility(index,!visible);button.classList.toggle('is-hidden',visible);button.title=`${visible?'Вернуть':'Скрыть'} линию: ${dataset.label}`;totalChart.update();});
+  accumulationLegend.appendChild(button);
+});
+document.querySelectorAll('.scale-mode-button').forEach(button=>button.addEventListener('click',()=>{
+  const auto=button.dataset.mode==='auto';
+  totalChart.data.datasets[1].yAxisID=auto?'yViews':'y';
+  totalChart.options.scales.y.title.text=auto?'Реакций':'Реакций и просмотров';
+  totalChart.options.scales.yViews.display=auto;
+  document.querySelectorAll('.scale-mode-button').forEach(candidate=>{
+    const active=candidate===button;candidate.classList.toggle('active',active);candidate.setAttribute('aria-pressed',String(active));
+  });
+  totalChart.update();
+}));
+const rangeStart=document.getElementById('rangeStart');
+const rangeEnd=document.getElementById('rangeEnd');
+const rangeLabel=document.getElementById('rangeLabel');
+const hiddenPoints=document.getElementById('hiddenPoints');
+const MAX_VISIBLE_POINTS=144;
+const lastIndex=Math.max(0,rows.length-1);
+for(const input of [rangeStart,rangeEnd]){input.min=0;input.max=lastIndex;input.step=1;input.disabled=rows.length<2}
+rangeStart.value=0;rangeEnd.value=lastIndex;
+function sampleRows(source,limit=MAX_VISIBLE_POINTS){
+  if(source.length<=limit)return source;
+  const sampled=[];
+  let previous=-1;
+  for(let i=0;i<limit;i++){
+    const index=Math.round(i*(source.length-1)/(limit-1));
+    if(index!==previous){sampled.push(source[index]);previous=index}
+  }
+  return sampled;
+}
+function focusSnapshot(index){
+  const snapshot=displayedRows[index];if(!snapshot)return;
+  const row=document.getElementById(`snapshot-${snapshot.id}`);if(!row)return;
+  document.querySelectorAll('.snapshot-highlight').forEach(item=>item.classList.remove('snapshot-highlight'));
+  row.classList.add('snapshot-highlight');row.scrollIntoView({behavior:'smooth',block:'center'});
+  window.setTimeout(()=>row.classList.remove('snapshot-highlight'),2600);
+}
+function focusChart(snapshotId){
+  const rowIndex=rows.findIndex(row=>String(row.id)===String(snapshotId));if(rowIndex<0)return;
+  if(!displayedRows.some(row=>String(row.id)===String(snapshotId))){
+    let start=Math.max(0,rowIndex-Math.floor((MAX_VISIBLE_POINTS-1)/2));
+    let end=Math.min(lastIndex,start+MAX_VISIBLE_POINTS-1);
+    start=Math.max(0,end-MAX_VISIBLE_POINTS+1);
+    rangeStart.value=start;rangeEnd.value=end;updateRange();
+  }
+  const pointIndex=displayedRows.findIndex(row=>String(row.id)===String(snapshotId));if(pointIndex<0)return;
+  totalChart.setActiveElements([{datasetIndex:0,index:pointIndex}]);
+  deltaChart.setActiveElements([{datasetIndex:0,index:pointIndex}]);
+  totalChart.update('none');deltaChart.update('none');
+  document.getElementById('totalChart').closest('.panel').scrollIntoView({behavior:'smooth',block:'center'});
+  window.setTimeout(()=>{totalChart.setActiveElements([]);deltaChart.setActiveElements([]);totalChart.update('none');deltaChart.update('none')},2600);
+}
+function updateRange(changed){
+  let start=Number(rangeStart.value),end=Number(rangeEnd.value);
+  if(rows.length>1&&start>=end){if(changed===rangeStart){start=end-1}else{end=start+1}}
+  rangeStart.value=Math.max(0,start);rangeEnd.value=Math.min(lastIndex,end);
+  const rangeRows=rows.slice(Number(rangeStart.value),Number(rangeEnd.value)+1);
+  const visible=sampleRows(rangeRows);
+  displayedRows=visible;
+  const hiddenCount=rangeRows.length-visible.length;
+  const labels=visible.map(r=>[r.measured_label,r.age_label]);
+  const pointRadius=visible.length<=24?5:visible.length<=80?3:1;
+  const tickLimit=visible.length<=16?visible.length:Math.min(12,Math.max(6,Math.round(120/Math.sqrt(visible.length))));
+  totalChart.data.labels=labels;totalChart.data.datasets[0].data=visible.map(r=>r.total_reactions);totalChart.data.datasets[1].data=visible.map(r=>r.views_count);totalChart.data.datasets[0].pointRadius=pointRadius;totalChart.data.datasets[1].pointRadius=pointRadius;totalChart.options.scales.x.ticks.maxTicksLimit=tickLimit;
+  const displayedDeltas=visible.map((r,index)=>index===0?r.delta_total:r.total_reactions-visible[index-1].total_reactions);
+  deltaChart.data.labels=labels;deltaChart.data.datasets[0].data=displayedDeltas;deltaChart.data.datasets[0].backgroundColor=displayedDeltas.map(value=>value<0?'#c13b4f':'#0868df');deltaChart.options.scales.x.ticks.maxTicksLimit=tickLimit;
+  totalChart.update('none');deltaChart.update('none');
+  rangeLabel.textContent=rangeRows.length?`${rangeRows[0].measured_label} — ${rangeRows[rangeRows.length-1].measured_label} · ${rangeRows.length} замеров`:'Нет замеров';
+  hiddenPoints.hidden=hiddenCount===0;
+  hiddenPoints.textContent=hiddenCount?`Не отображено точек: ${hiddenCount}`:'';
+}
+rangeStart.addEventListener('input',()=>updateRange(rangeStart));rangeEnd.addEventListener('input',()=>updateRange(rangeEnd));updateRange();
+document.querySelectorAll('.snapshot-jump').forEach(button=>button.addEventListener('click',()=>focusChart(button.dataset.snapshotId)));
+</script>
+{% endblock %}
