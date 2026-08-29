@@ -452,3 +452,36 @@ def test_management_accepts_public_preview_link_and_deletes_channel(tmp_path):
     )
     assert deleted.status_code == 200
     assert not db.list_channels()
+
+
+def test_management_links_non_telegram_account_to_institution(tmp_path):
+    cfg = replace(settings(tmp_path), admin_password="test-password", admin_csrf_secret="test-csrf")
+    db = Database(cfg.database_path)
+    db.migrate()
+    client = TestClient(create_app(cfg, db))
+    auth = (cfg.admin_username, "test-password")
+
+    institution = client.post(
+        "/manage/institutions",
+        data={"name": "Тестовый университет", "short_name": "Тестовый вуз", "csrf_token": "test-csrf"},
+        auth=auth,
+    )
+    assert institution.status_code == 200
+    institution_id = int(db.list_institutions()[0]["id"])
+
+    account = client.post(
+        "/manage/platform-accounts",
+        data={
+            "institution_id": institution_id, "platform": "vk",
+            "reference": "https://vk.com/test_university", "title": "Тестовый VK",
+            "url": "", "csrf_token": "test-csrf",
+        },
+        auth=auth,
+    )
+    assert account.status_code == 200
+    assert "Аккаунт привязан к вузу" in account.text
+    assert "ожидает токен" in account.text
+    linked = db.list_platform_accounts(institution_id)
+    assert len(linked) == 1
+    assert linked[0]["external_key"] == "test_university"
+    assert linked[0]["url"] == "https://vk.com/test_university"
