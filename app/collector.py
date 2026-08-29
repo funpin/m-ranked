@@ -54,6 +54,27 @@ def is_published_post(message: Any) -> bool:
     )
 
 
+def logical_views(messages: Iterable[Any]) -> int | None:
+    """Return the visible view counter for a Telegram post or album.
+
+    Telegram may repeat the same counter on album elements.  Taking the
+    maximum avoids multiplying one logical post's audience by its item count.
+    """
+    values = [int(value) for message in messages if (value := getattr(message, "views", None)) is not None]
+    return max(values) if values else None
+
+
+def logical_comments(messages: Iterable[Any]) -> int | None:
+    """Return the reply/comment counter for a Telegram post or album."""
+    values: list[int] = []
+    for message in messages:
+        replies = getattr(message, "replies", None)
+        value = getattr(replies, "replies", None) if replies is not None else None
+        if value is not None:
+            values.append(int(value))
+    return max(values) if values else None
+
+
 def group_logical_posts(messages: Iterable[Any]) -> list[LogicalPost]:
     groups: dict[str, list[Any]] = defaultdict(list)
     for message in messages:
@@ -193,6 +214,8 @@ class Collector:
                 post["id"], measured, age_seconds(published_at, measured), state.total,
                 state.reactions, state.raw, self.settings.poll_interval_minutes,
                 self.settings.jump_min_abs, self.settings.jump_min_ratio,
+                comments_count=logical_comments(fetched),
+                views_count=logical_views(fetched),
             )
             if inserted:
                 latest = self.db.query(
@@ -200,8 +223,9 @@ class Collector:
                     (post["id"],),
                 )[0]
                 logger.info(
-                    "@%s/%s snapshot total=%s delta=%s",
+                    "@%s/%s snapshot total=%s delta=%s views=%s comments=%s",
                     username, post["telegram_message_id"], state.total, latest["delta_total"],
+                    logical_views(fetched), logical_comments(fetched),
                 )
                 if latest["spike"]:
                     logger.warning("@%s/%s reaction spike detected", username, post["telegram_message_id"])

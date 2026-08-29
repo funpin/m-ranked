@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from app.collector import Collector
+from app.collector import Collector, logical_comments, logical_views
 from app.config import Settings
 from app.database import Database
 
@@ -29,6 +29,8 @@ def test_mocked_telegram_poll_writes_snapshot_without_duplicates(tmp_path):
         action=None,
         media=None,
         reactions=SimpleNamespace(results=[]),
+        views=321,
+        replies=SimpleNamespace(replies=7),
     )
     settings = Settings(
         telegram_api_id=1,
@@ -60,6 +62,18 @@ def test_mocked_telegram_poll_writes_snapshot_without_duplicates(tmp_path):
     assert len(db.query("SELECT * FROM reaction_snapshots")) == 1
     snapshot = db.query("SELECT * FROM reaction_snapshots")[0]
     assert snapshot["total_reactions"] == 0
+    assert snapshot["views_count"] == 321
+    assert snapshot["comments_count"] == 7
     assert db.get_state("poll_last_duration_seconds") is not None
     assert db.get_state("poll_last_error_count") == "0"
     assert db.get_state("poll_last_channel_count") == "1"
+
+
+def test_album_metrics_are_not_multiplied():
+    messages = [
+        SimpleNamespace(views=100, replies=SimpleNamespace(replies=3)),
+        SimpleNamespace(views=100, replies=SimpleNamespace(replies=3)),
+        SimpleNamespace(views=99, replies=None),
+    ]
+    assert logical_views(messages) == 100
+    assert logical_comments(messages) == 3

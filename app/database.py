@@ -379,7 +379,8 @@ class Database:
                        p.published_at, p.discovered_at, p.history_complete,
                        p.post_type, s.measured_at, s.age_seconds,
                        s.total_reactions, s.delta_total, s.views_count,
-                       s.delta_views, s.reactions_json, s.delta_by_reaction_json,
+                       s.delta_views, s.comments_count, s.delta_comments,
+                       s.reactions_json, s.delta_by_reaction_json,
                        s.interval_uncertain, s.spike, s.synthetic
                        FROM posts p JOIN channels c ON c.id=p.channel_id
                        LEFT JOIN reaction_snapshots s ON s.post_id=p.id
@@ -424,7 +425,7 @@ class Database:
                 (
                     post_id, iso(published_at), -post_id, 0, 0, "{}",
                     '{"synthetic":"publication"}', None, None, None, None,
-                    0, 0, None, None, 0, None, 1, iso(utc_now()),
+                    0, 0, 0, None, 0, None, 1, iso(utc_now()),
                 ),
             )
             first_actual = conn.execute(
@@ -438,13 +439,15 @@ class Database:
                 elapsed = max(1, int((measured - published_at).total_seconds()))
                 first_total = int(first_actual["total_reactions"])
                 first_views = first_actual["views_count"]
+                first_comments = first_actual["comments_count"]
                 conn.execute(
                     """UPDATE reaction_snapshots SET delta_total=?,
                        delta_by_reaction_json=reactions_json, delta_seconds=?,
                        rate_per_hour=?, interval_uncertain=0, spike=0,
-                       delta_views=? WHERE id=?""",
+                       delta_comments=?, delta_views=? WHERE id=?""",
                     (
                         first_total, elapsed, first_total * 3600 / elapsed,
+                        int(first_comments) if first_comments is not None else None,
                         int(first_views) if first_views is not None else None,
                         first_actual["id"],
                     ),

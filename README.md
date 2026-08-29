@@ -134,5 +134,12 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 - логи: `/opt/telegram-reaction-monitor/logs/app.log`;
 - systemd: `journalctl -u telegram-reaction-monitor`.
 
+## Несколько площадок
+
+Проект развивается от мониторинга Telegram к модели «вуз → аккаунты социальных
+сетей». Целевая схема, сопоставимые метрики и ограничения VK, MAX и Rutube
+описаны в [MULTIPLATFORM.md](MULTIPLATFORM.md). Сырые показатели разных сетей
+не считаются уникальным общим охватом.
+
 Проект ничего не публикует, не ставит реакции, не вступает в каналы и не
 изменяет Telegram-аккаунт.
