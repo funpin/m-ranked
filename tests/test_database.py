@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import sqlite3
 from types import SimpleNamespace
 
 from app.database import Database
@@ -102,3 +103,73 @@ def test_delete_channel_removes_its_history(tmp_path):
     assert db.channel(channel_id) is None
     assert not db.query("SELECT id FROM posts")
     assert not db.query("SELECT id FROM reaction_snapshots")
+    assert not db.list_platform_accounts()
+    assert not db.list_institutions()
+
+
+def test_telegram_channel_is_linked_to_platform_account(tmp_path):
+    db = Database(tmp_path / "test.db")
+    db.migrate()
+    channel_id = db.add_channel("example")
+    channel = db.channel(channel_id)
+    assert channel["institution_id"] is not None
+    assert channel["platform_account_id"] is not None
+
+    institutions = db.list_institutions()
+    accounts = db.list_platform_accounts(int(channel["institution_id"]))
+    assert len(institutions) == 1
+    assert len(accounts) == 1
+    assert accounts[0]["platform"] == "telegram"
+    assert accounts[0]["external_key"] == "example"
+
+    vk_id = db.add_platform_account(
+        int(channel["institution_id"]), "vk", "university", "university",
+        "University VK", "https://vk.com/university",
+    )
+    assert vk_id != int(channel["platform_account_id"])
+    assert {row["platform"] for row in db.list_platform_accounts()} == {"telegram", "vk"}
+
+
+def test_platform_migration_backfills_existing_channel_once(tmp_path):
+    path = tmp_path / "legacy.db"
+    with sqlite3.connect(path) as conn:
+        conn.executescript("""
+            CREATE TABLE channels (
+                id INTEGER PRIMARY KEY,
+                telegram_id INTEGER,
+                username TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                title TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                added_at TEXT NOT NULL,
+                last_seen_message_id INTEGER NOT NULL DEFAULT 0,
+                last_checked_at TEXT,
+                last_error TEXT,
+                subscriber_count INTEGER,
+                subscriber_count_display TEXT,
+                subscriber_measured_at TEXT,
+                m_rating_tg_rank INTEGER,
+                m_rating_tg_score REAL,
+                m_rating_period TEXT,
+                m_rating_measured_at TEXT
+            );
+            INSERT INTO channels(
+                telegram_id, username, title, enabled, added_at,
+                subscriber_count, subscriber_count_display
+            ) VALUES(123, 'legacy', 'Legacy University', 1,
+                     '2026-08-01T00:00:00+00:00', 1000, '1K');
+        """)
+    db = Database(path)
+    db.migrate()
+    before = (
+        len(db.list_institutions()), len(db.list_platform_accounts()),
+        db.query("SELECT max(version) version FROM schema_migrations")[0]["version"],
+    )
+    db.migrate()
+    after = (
+        len(db.list_institutions()), len(db.list_platform_accounts()),
+        db.query("SELECT max(version) version FROM schema_migrations")[0]["version"],
+    )
+    assert before == after == (1, 1, 7)
+    account = db.list_platform_accounts()[0]
+    assert account["native_id"] == "123"
+    assert account["subscriber_count"] == 1000

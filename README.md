@@ -101,6 +101,9 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 ```bash
 .venv/bin/python -m app add-channel https://t.me/s/example
 .venv/bin/python -m app list-channels
+.venv/bin/python -m app list-institutions
+.venv/bin/python -m app add-institution "Название вуза" --short-name "Короткое имя"
+.venv/bin/python -m app add-platform-account 1 vk university --url https://vk.com/university
 .venv/bin/python -m app poll-now
 .venv/bin/python -m app run
 .venv/bin/pytest -q
@@ -140,6 +143,11 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 сетей». Целевая схема, сопоставимые метрики и ограничения VK, MAX и Rutube
 описаны в [MULTIPLATFORM.md](MULTIPLATFORM.md). Сырые показатели разных сетей
 не считаются уникальным общим охватом.
+
+Миграция схемы 7 автоматически создаёт для каждого прежнего Telegram-канала
+вуз и связанный `telegram`-аккаунт, не перемещая и не пересчитывая историю.
+VK-клиент пока работает как изолированный read-only адаптер и не запускается
+планировщиком без отдельного этапа подключения.
 
 Проект ничего не публикует, не ставит реакции, не вступает в каналы и не
 изменяет Telegram-аккаунт.
