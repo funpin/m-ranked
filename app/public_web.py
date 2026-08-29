@@ -103,12 +103,21 @@ def metadata_is_due(
 def _reaction_key(span: Tag) -> str:
     if "tgme_reaction_paid" in (span.get("class") or []):
         return "paid:star"
-    animated = span.select_one("tg-emoji[emoji-id]")
+    animated = span.select_one("tg-emoji[emoji-id], tg-emoji[data-emoji-id], [data-emoji-id]")
     if animated:
-        return f"custom:{animated.get('emoji-id')}"
+        emoji_id = animated.get("emoji-id") or animated.get("data-emoji-id")
+        if emoji_id:
+            return f"custom:{emoji_id}"
     emoji = span.select_one("i.emoji b")
     if emoji and emoji.get_text(strip=True):
         return emoji.get_text(strip=True)
+    image = span.select_one("img[alt]")
+    if image and image.get("alt"):
+        return str(image.get("alt")).strip()
+    text = span.get_text(" ", strip=True)
+    plain = re.sub(r"\s*[0-9]+(?:[.,][0-9]+)?\s*[KMB]?\s*$", "", text, flags=re.I).strip()
+    if plain:
+        return plain
     return "unknown:web"
 
 
@@ -200,23 +209,50 @@ class PublicWebCollector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        channels = self.db.list_channels(enabled_only=True)
+        error_count = 0
+        self.db.set_state("poll_last_started_at", iso(started))
         logger.info("public web polling started")
-        for channel in self.db.list_channels(enabled_only=True):
+        for channel in channels:
             try:
                 await self._poll_channel(channel)
             except Exception as exc:
+                error_count += 1
                 self.db.finish_channel_check(channel["id"], 0, str(exc))
                 logger.exception("@%s public web polling failed", channel["username"])
         try:
             archive_and_purge(self.settings, self.db)
         except Exception:
+            error_count += 1
             logger.exception("post archive and retention cleanup failed")
         completed = datetime.now(timezone.utc)
+        duration = (completed - started).total_seconds()
         self.db.set_state("last_poll", iso(completed))
+        self.db.set_state("poll_last_completed_at", iso(completed))
+        self.db.set_state("poll_last_duration_seconds", f"{duration:.3f}")
+        self.db.set_state("poll_last_error_count", str(error_count))
+        self.db.set_state("poll_last_channel_count", str(len(channels)))
         self.db.set_state(
             "next_poll", iso(completed + timedelta(minutes=self.settings.poll_interval_minutes))
         )
-        logger.info("public web polling complete in %.2fs", (completed - started).total_seconds())
+        logger.info(
+            "public web polling complete duration=%.2fs channels=%s errors=%s",
+            duration, len(channels), error_count,
+        )
+
+    def _record_missing(
+        self, post_id: int, username: str, message_id: int,
+        measured: datetime, reason: str,
+    ) -> bool:
+        count, confirmed = self.db.record_post_missing(
+            post_id, measured, reason, self.settings.deletion_confirmation_checks,
+        )
+        logger.warning(
+            "@%s/%s missing check=%s/%s reason=%s detected_at=%s confirmed=%s",
+            username, message_id, count, self.settings.deletion_confirmation_checks,
+            reason, iso(measured), confirmed,
+        )
+        return confirmed
 
     async def _poll_channel(self, channel: Any) -> None:
         username = str(channel["username"])
@@ -279,15 +315,19 @@ class PublicWebCollector:
                 except httpx.HTTPStatusError as exc:
                     if exc.response.status_code not in {404, 410}:
                         raise
-                    self.db.mark_post_deleted(stored["id"], measured)
-                    logger.info("@%s/%s marked as deleted", username, mid)
+                    self._record_missing(
+                        stored["id"], username, mid, measured,
+                        f"telegram_embed_http_{exc.response.status_code}",
+                    )
                     continue
                 parsed = parse_public_page(html, username)
                 public_post = next((post for post in parsed if post.message_id == mid), None)
             if public_post is None:
                 if public_post_is_deleted(html):
-                    self.db.mark_post_deleted(stored["id"], measured)
-                    logger.info("@%s/%s marked as deleted", username, mid)
+                    self._record_missing(
+                        stored["id"], username, mid, measured,
+                        "telegram_embed_post_not_found",
+                    )
                     continue
                 logger.warning("@%s/%s unavailable in public preview", username, mid)
                 continue

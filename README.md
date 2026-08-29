@@ -1,14 +1,82 @@
 # m-ranked
 
-Read-only monitor for the reaction and view history of Telegram broadcast-channel posts. It stores exact UTC measurements in SQLite, groups Telegram albums into logical posts, calculates deltas, and presents channel and publication ratings in a FastAPI dashboard.
+Read-only монитор динамики реакций и просмотров публичных Telegram-каналов.
+Приложение хранит сырые UTC-замеры в SQLite, группирует альбомы Telegram в
+логические публикации и пересчитывает показатели интерфейса из этих замеров.
 
-Set `DATA_SOURCE=public_web` to monitor public channels without Telegram credentials. This mode reads Telegram's public, login-free post preview pages. Subscriber counts come from the public channel landing page and are refreshed exactly once a day; post reaction and view counters may be compact values such as `1.2K`. Private channels and the account's subscription list are not available in this mode.
+Рабочие адреса: `https://m.funpin.ru` и `https://m.funpin.su`.
 
-The application never sends messages, reacts, comments, joins channels, or changes the Telegram account. A Telegram user session is as sensitive as a password; keep `data/telegram.session`, `.env`, and the database private.
+## Модель данных
 
-## Debian 12/13 installation
+В SQLite хранятся каналы, публикации и отдельные замеры. Медианы, приросты,
+рейтинги и сравнение периодов не сохраняются отдельными агрегатами.
 
-Run as root. Debian 12 supplies Python 3.11; the code supports Python 3.11 and newer.
+- Временные метки БД — UTC; интерфейс — Europe/Moscow.
+- Живые публикации и замеры хранятся 40 дней.
+- Перед очисткой каждая публикация сохраняется в CSV.GZ.
+- Уникальная пара `(post_id, measurement_bucket)` защищает от дублей.
+- Пропущенные интервалы помечаются неопределёнными и не интерполируются.
+- Удаление подтверждается двумя последовательными явными ответами Telegram
+  `404/410` или `Post not found`; единичная ошибка только увеличивает счётчик.
+
+## Формулы интерфейса
+
+### Обзор
+
+Периоды: 3 часа, сутки, 7 дней и 30 дней. Окно имеет форму
+`(начало, конец]`: замер ровно на левой границе относится к предыдущему окну.
+
+Для каждого поста любого возраста берутся первый и последний сопоставимые
+замеры внутри окна. Для нового поста с полной историей началом служит
+синтетический ноль в момент публикации.
+
+- `реакции/просмотры за период` — сумма приростов отдельных постов;
+- `медиана прироста` — медиана приростов постов, округлённая до целого;
+- цветная плашка — разница с предыдущим окном той же длины;
+- плашка скрывается при нулевом изменении или отсутствии сравнения.
+
+### Сравнение каналов
+
+Для выбранного горизонта используются только публикации, история которых
+покрывает его целиком. Поэтому состав выборки внутри одной линии постоянен.
+На каждом целом часу используется последний замер, уже известный к этому часу:
+будущий замер не переносится назад.
+
+- накопление реакций — медиана накопленных реакций по фиксированной когорте;
+- конверсия — сначала `реакции × 100 / просмотры` для каждого поста, затем
+  медиана процентов по той же временной точке;
+- tooltip каждой точки показывает число участвующих публикаций.
+
+Одна Premium-реакция не равна одному человеку: Telegram позволяет одному
+пользователю оставить несколько реакций.
+
+## Частота сбора
+
+| Возраст публикации | Интервал |
+|---|---:|
+| до 24 часов | 5 минут |
+| 24–48 часов | 15 минут |
+| 48–72 часа | 1 час |
+| 3–7 суток | 3 часа |
+| 7–14 суток | 6 часов |
+| от 14 суток | 12 часов |
+
+Метаданные канала и подписчики обновляются не чаще раза в сутки.
+
+## Локальная разработка
+
+Требуется Python 3.11 или новее. На macOS системный `/usr/bin/python3` может
+оказаться Python 3.9 и не подходит.
+
+```bash
+python3.13 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/pytest -q
+```
+
+Тесты не используют реальный Telegram и создают временные SQLite-базы.
+
+## Установка на Debian 12/13
 
 ```bash
 apt-get update
@@ -24,111 +92,47 @@ chmod 600 .env
 chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 ```
 
-## Telegram credentials and first authorization
+Для публичных каналов используется `DATA_SOURCE=public_web`; Telegram-сессия
+не нужна. MTProto-режим требует `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` и
+предварительной команды `python -m app auth`.
 
-1. Sign in at <https://my.telegram.org>.
-2. Open **API development tools** and create an application.
-3. Put its numeric `api_id` and `api_hash` in `/opt/telegram-reaction-monitor/.env`.
-4. Keep the default session path `/opt/telegram-reaction-monitor/data/telegram.session`.
-5. Temporarily give the service account an interactive shell only for authorization, then remove it again:
+## Основные команды
 
 ```bash
-usermod -s /bin/bash telegram-monitor
-cd /opt/telegram-reaction-monitor
-sudo -u telegram-monitor .venv/bin/python -m app auth
-usermod -s /usr/sbin/nologin telegram-monitor
-chmod 600 data/telegram.session .env
-```
-
-Telegram will ask for the phone number, login code, and (when enabled) the account's 2FA password. The saved session is reused after every restart.
-
-## Configure channels and make the first measurement
-
-Channels can be public broadcast-channel usernames or `t.me` URLs. The account must already be able to read them; the monitor never joins them automatically.
-
-```bash
-cd /opt/telegram-reaction-monitor
-sudo -u telegram-monitor .venv/bin/python -m app add-channel https://t.me/channel_a
-sudo -u telegram-monitor .venv/bin/python -m app add-channel @channel_b
-sudo -u telegram-monitor .venv/bin/python -m app add-channel @channel_c
-sudo -u telegram-monitor .venv/bin/python -m app add-channel @channel_d
-sudo -u telegram-monitor .venv/bin/python -m app add-channel @channel_e
-sudo -u telegram-monitor .venv/bin/python -m app list-channels
-sudo -u telegram-monitor .venv/bin/python -m app poll-now
-```
-
-Removing a channel only disables future polling and preserves history:
-
-```bash
-sudo -u telegram-monitor .venv/bin/python -m app remove-channel @channel_e
-```
-
-## Tests and dashboard smoke test
-
-Tests mock Telegram and do not need credentials or a live session.
-
-```bash
-cd /opt/telegram-reaction-monitor
+.venv/bin/python -m app add-channel https://t.me/s/example
+.venv/bin/python -m app list-channels
+.venv/bin/python -m app poll-now
+.venv/bin/python -m app run
 .venv/bin/pytest -q
-.venv/bin/python -m app --help
-sudo -u telegram-monitor .venv/bin/python -m app web
-curl -fsS http://127.0.0.1:8080/health
 ```
 
-The dashboard binds only to `127.0.0.1:8080`; put nginx or another reverse proxy in front of it.
+## Страницы
 
-```bash
-ssh -L 8080:127.0.0.1:8080 root@SERVER_IP
-```
+- `/` — обзор активности каналов;
+- `/rating` — рейтинг каналов и публикаций;
+- `/compare` — накопление реакций и конверсия;
+- `/channels/{id}` — публикации и статистика канала;
+- `/posts/{id}` — история отдельной публикации;
+- `/manage` — управление, М‑Рейтинг и использование диска;
+- `/export/snapshots.csv`, `/export/posts.csv` — экспорт;
+- `/health` — состояние источника и метрики последнего цикла.
 
-`/` contains the channel overview, `/rating` contains sortable channel and post ratings, and `/compare` contains two median curves plus an hourly delta heatmap. CSV exports are linked in the navigation bar.
+## Конфигурация
 
-## systemd
+Ключевые переменные перечислены в `.env.example`. Особенно важны:
 
-```bash
-cp deploy/telegram-reaction-monitor.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now telegram-reaction-monitor.service
-systemctl status telegram-reaction-monitor.service --no-pager
-journalctl -u telegram-reaction-monitor.service -n 100 --no-pager
-curl -fsS http://127.0.0.1:8080/health
-systemctl restart telegram-reaction-monitor.service
-systemctl is-active telegram-reaction-monitor.service
-```
+- `TRACK_POST_FOR_HOURS=960` — опрос до 40 суток;
+- `RETENTION_DAYS=40` — архивирование и очистка;
+- `DELETION_CONFIRMATION_CHECKS=2` — подтверждения удаления;
+- `SUBSCRIBER_REFRESH_HOURS=24` — обновление подписчиков;
+- `DISPLAY_TIMEZONE=Europe/Moscow` — часовой пояс интерфейса.
 
-The unit uses `Restart=always`, a five-second restart delay, filesystem hardening, and write access only to `data/` and `logs/`.
+Постоянные файлы сервера:
 
-## Configuration
+- база: `/opt/telegram-reaction-monitor/data/reactions.db`;
+- архивы: `/opt/telegram-reaction-monitor/data/archives/`;
+- логи: `/opt/telegram-reaction-monitor/logs/app.log`;
+- systemd: `journalctl -u telegram-reaction-monitor`.
 
-All persisted timestamps are UTC. `DISPLAY_TIMEZONE` is reserved for display formatting and never changes age calculations.
-
-| Variable | Default | Meaning |
-|---|---:|---|
-| `POLL_INTERVAL_MINUTES` | `5` | Polling interval for posts younger than 24 hours |
-| `TRACK_POST_FOR_HOURS` | `744` | Keep polling posts for 31 days |
-| `COMPLETE_HISTORY_MAX_FIRST_AGE_MINUTES` | `6` | Maximum timely first-observation age for complete history |
-| `MEDIUM_POLL_INTERVAL_MINUTES` | `15` | Polling interval for posts 1–7 days old |
-| `OLD_POLL_INTERVAL_MINUTES` | `180` | Polling interval for posts 7–31 days old |
-| `RETENTION_DAYS` | `31` | Archive then remove older live data |
-| `SUBSCRIBER_REFRESH_HOURS` | `24` | Exact subscriber refresh interval |
-| `JUMP_MIN_ABS` | `15` | Minimum absolute interval jump |
-| `JUMP_MIN_RATIO` | `2.0` | Minimum total-reaction ratio |
-| `WEB_HOST` | `127.0.0.1` | Dashboard bind address |
-| `WEB_PORT` | `8080` | Dashboard port |
-| `DISPLAY_TIMEZONE` | `Europe/Moscow` | UI timezone |
-
-After changing `.env`, apply it with:
-
-```bash
-systemctl restart telegram-reaction-monitor.service
-```
-
-Persistent files:
-
-- SQLite: `/opt/telegram-reaction-monitor/data/reactions.db`
-- Compressed per-post archives: `/opt/telegram-reaction-monitor/data/archives/`
-- Telegram session: `/opt/telegram-reaction-monitor/data/telegram.session`
-- Rotating application log: `/opt/telegram-reaction-monitor/logs/app.log`
-- systemd log: `journalctl -u telegram-reaction-monitor.service`
-
-Raw snapshots are append-only. A unique `(post_id, measurement_bucket)` guard prevents duplicate rows on repeated polling while preserving the exact measurement timestamp. Missing intervals are marked uncertain and are never interpolated.
+Проект ничего не публикует, не ставит реакции, не вступает в каналы и не
+изменяет Telegram-аккаунт.

@@ -51,9 +51,44 @@ def nearest_hourly_points(rows: Sequence[Mapping[str, float]], max_hour: int) ->
     return points
 
 
+def hourly_asof_points(rows: Sequence[Mapping[str, float]], max_hour: int) -> dict[int, float]:
+    """Return the latest value known at each whole hour without using future data."""
+    ordered = sorted(rows, key=lambda row: float(row["age_seconds"]))
+    points: dict[int, float] = {}
+    index = 0
+    latest: Mapping[str, float] | None = None
+    for hour in range(max_hour + 1):
+        target = hour * 3600
+        while index < len(ordered) and float(ordered[index]["age_seconds"]) <= target:
+            latest = ordered[index]
+            index += 1
+        if latest is not None:
+            points[hour] = float(latest["total_reactions"])
+    return points
+
+
 def median_curve(post_points: Iterable[Mapping[int, float]], max_hour: int) -> list[float | None]:
     posts = list(post_points)
     return [
         median(values) if (values := [post[h] for post in posts if h in post]) else None
         for h in range(max_hour + 1)
     ]
+
+
+def fixed_cohort_median_curve(
+    post_points: Iterable[Mapping[int, float]],
+    max_hour: int,
+    start_hour: int = 0,
+) -> tuple[list[float | None], list[int], int]:
+    """Build a curve from one cohort that covers the complete requested horizon."""
+    cohort = [
+        post for post in post_points
+        if start_hour in post and max_hour in post
+    ]
+    curve: list[float | None] = []
+    counts: list[int] = []
+    for hour in range(max_hour + 1):
+        values = [post[hour] for post in cohort if hour in post]
+        curve.append(median(values) if values else None)
+        counts.append(len(values))
+    return curve, counts, len(cohort)

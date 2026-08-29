@@ -21,11 +21,12 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from ..analytics import median_curve, nearest_hourly_points
+from ..analytics import fixed_cohort_median_curve, hourly_asof_points
 from ..config import Settings
 from ..collector import normalize_channel_ref
 from ..database import Database
 from ..m_rating import refresh_m_rating
+from ..reactions import custom_emoji_asset
 
 
 POST_TYPE_LABELS = {
@@ -466,6 +467,13 @@ def create_app(
             "channels": len(db.list_channels(enabled_only=True)),
             "last_poll": db.get_state("last_poll"),
             "next_poll": db.get_state("next_poll"),
+            "poll_cycle": {
+                "started_at": db.get_state("poll_last_started_at"),
+                "completed_at": db.get_state("poll_last_completed_at"),
+                "duration_seconds": db.get_state("poll_last_duration_seconds"),
+                "error_count": db.get_state("poll_last_error_count"),
+                "channel_count": db.get_state("poll_last_channel_count"),
+            },
         }
 
     @app.get("/emoji/{emoji_id}")
@@ -484,15 +492,7 @@ def create_app(
             if response.status_code != 200:
                 raise HTTPException(status_code=404, detail="Реакция не найдена")
             payload = response.json()
-            emoji_type = str(payload.get("type") or "").lower()
-            image_types = {"webp", "png", "gif", "jpg", "jpeg"}
-            # Animated custom emoji are commonly WebM videos, which cannot be
-            # rendered by an <img>. Telegram also provides a static thumbnail;
-            # use it so every reaction remains visible in the measurements table.
-            target = str(
-                payload.get("emoji") if emoji_type in image_types
-                else payload.get("thumb") or ""
-            )
+            target = custom_emoji_asset(payload) or ""
             hostname = (urlparse(target).hostname or "").lower()
             if not target.startswith("https://") or not (
                 hostname == "t.me"
@@ -822,8 +822,11 @@ def create_app(
                 continue
             partial_sql = "" if include_partial else "AND p.history_complete=1"
             posts = db.query(
-                f"SELECT p.id, p.telegram_message_id, p.deleted_at FROM posts p WHERE p.channel_id=? {partial_sql}",
-                (channel["id"],),
+                f"""SELECT p.id, p.telegram_message_id, p.deleted_at FROM posts p
+                    WHERE p.channel_id=? {partial_sql}
+                      AND EXISTS(SELECT 1 FROM reaction_snapshots coverage
+                                 WHERE coverage.post_id=p.id AND coverage.age_seconds>=?)""",
+                (channel["id"], period * 3600),
             )
             raw_points: list[dict[int, float]] = []
             raw_conversion_points: list[dict[int, float]] = []
@@ -833,7 +836,7 @@ def create_app(
                        FROM reaction_snapshots WHERE post_id=? AND age_seconds<=? ORDER BY age_seconds""",
                     (post["id"], period * 3600),
                 )
-                points = nearest_hourly_points(rows, period)
+                points = hourly_asof_points(rows, period)
                 if points:
                     raw_points.append(points)
                 conversion_rows = [
@@ -847,14 +850,25 @@ def create_app(
                     for row in rows
                     if row["views_count"] is not None and int(row["views_count"]) > 0
                 ]
-                conversion_points = nearest_hourly_points(conversion_rows, period)
+                conversion_points = hourly_asof_points(conversion_rows, period)
                 if conversion_points:
                     raw_conversion_points.append(conversion_points)
+            start_hour = 1 if include_partial else 0
+            curve, sample_counts, cohort_size = fixed_cohort_median_curve(
+                raw_points, period, start_hour=start_hour,
+            )
+            conversion_curve, conversion_sample_counts, conversion_cohort_size = (
+                fixed_cohort_median_curve(raw_conversion_points, period, start_hour=1)
+            )
             datasets.append({
                 "channel": channel["username"],
                 "title": channel["title"] or f"@{channel['username']}",
-                "curve": median_curve(raw_points, period),
-                "conversion_curve": median_curve(raw_conversion_points, period),
+                "curve": curve,
+                "sample_counts": sample_counts,
+                "cohort_size": cohort_size,
+                "conversion_curve": conversion_curve,
+                "conversion_sample_counts": conversion_sample_counts,
+                "conversion_cohort_size": conversion_cohort_size,
             })
         data = {"labels": list(range(period + 1)), "datasets": datasets}
         has_points = any(

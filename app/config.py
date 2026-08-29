@@ -59,6 +59,7 @@ class Settings:
     days_4_to_6_poll_interval_minutes: int = 180
     days_7_to_13_poll_interval_minutes: int = 360
     day_14_plus_poll_interval_minutes: int = 720
+    deletion_confirmation_checks: int = 2
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -115,6 +116,7 @@ class Settings:
             day_14_plus_poll_interval_minutes=_int(
                 "DAY_14_PLUS_POLL_INTERVAL_MINUTES", 720
             ),
+            deletion_confirmation_checks=_int("DELETION_CONFIRMATION_CHECKS", 2),
         )
 
     def require_telegram(self) -> tuple[int, str]:

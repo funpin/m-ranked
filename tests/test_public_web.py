@@ -43,6 +43,21 @@ def test_public_page_reactions_paid_custom_and_album():
     assert posts[0].views_count == 3530
 
 
+def test_public_page_reaction_markup_variants():
+    html = """
+    <div class="tgme_widget_message" data-post="example/77">
+      <div class="tgme_widget_message_reactions">
+        <span class="tgme_reaction"><tg-emoji data-emoji-id="456"></tg-emoji>2</span>
+        <span class="tgme_reaction"><img alt="🔥">3</span>
+        <span class="tgme_reaction">👍 4</span>
+      </div>
+      <time datetime="2026-08-28T08:00:00+00:00"></time>
+    </div>
+    """
+    post = parse_public_page(html, "example")[0]
+    assert post.reactions.reactions == {"custom:456": 2, "🔥": 3, "👍": 4}
+
+
 def test_public_channel_metadata():
     html = """
     <div class="tgme_channel_info_header_title">Example University</div>
@@ -78,6 +93,7 @@ def test_public_collector_marks_explicitly_missing_post_deleted(tmp_path):
         complete_history_max_first_age_minutes=6,
         jump_min_abs=15,
         jump_min_ratio=2.0,
+        deletion_confirmation_checks=2,
     )
     db = Database(tmp_path / "public.db")
     db.migrate()
@@ -114,11 +130,51 @@ def test_public_collector_marks_explicitly_missing_post_deleted(tmp_path):
     finally:
         asyncio.run(collector.close())
 
-    deleted = db.query("SELECT deleted_at FROM posts WHERE id=?", (deleted_post_id,))[0]
+    pending = db.query(
+        "SELECT deleted_at, missing_check_count, missing_reason FROM posts WHERE id=?",
+        (deleted_post_id,),
+    )[0]
+    assert pending["deleted_at"] is None
+    assert pending["missing_check_count"] == 1
+    assert pending["missing_reason"] == "telegram_embed_post_not_found"
+
+    collector = PublicWebCollector(settings, db)
+    collector._fetch = fake_fetch
+    try:
+        asyncio.run(collector._poll_channel(db.channel(channel_id)))
+    finally:
+        asyncio.run(collector.close())
+
+    deleted = db.query(
+        "SELECT deleted_at, missing_check_count FROM posts WHERE id=?", (deleted_post_id,)
+    )[0]
     assert deleted["deleted_at"] is not None
+    assert deleted["missing_check_count"] == 2
     assert all(post["id"] != deleted_post_id for post in db.active_posts(
         channel_id, (now - timedelta(days=40)).isoformat(),
     ))
+
+
+def test_available_post_clears_pending_deletion_confirmation(tmp_path):
+    now = datetime.now(timezone.utc)
+    db = Database(tmp_path / "recovered.db")
+    db.migrate()
+    channel_id = db.add_channel("recovered")
+    post_id = db.add_post(
+        channel_id, "m:51", [51], None, now, now, 0, True, "text", False,
+    )
+    count, confirmed = db.record_post_missing(
+        post_id, now, "temporary_404", confirmation_checks=2,
+    )
+    assert (count, confirmed) == (1, False)
+    db.mark_post_available(post_id)
+    row = db.query(
+        "SELECT deleted_at, missing_check_count, missing_reason FROM posts WHERE id=?",
+        (post_id,),
+    )[0]
+    assert row["deleted_at"] is None
+    assert row["missing_check_count"] == 0
+    assert row["missing_reason"] is None
 
 
 def test_age_based_snapshot_intervals():
