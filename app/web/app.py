@@ -27,6 +27,7 @@ from ..collector import normalize_channel_ref
 from ..database import Database
 from ..m_rating import refresh_m_rating
 from ..reactions import custom_emoji_asset
+from ..vk import normalize_vk_community_ref
 
 
 POST_TYPE_LABELS = {
@@ -611,9 +612,12 @@ def create_app(
         request: Request,
         m_rating_status: str | None = Query(default=None),
         channel_status: str | None = Query(default=None),
+        platform_status: str | None = Query(default=None),
         _: str = Depends(require_admin),
     ) -> HTMLResponse:
         managed_channels = db.list_channels()
+        institutions = db.list_institutions()
+        platform_accounts = db.list_platform_accounts()
         project_root = Path(__file__).resolve().parents[2]
         database_path = settings.database_path
         if not database_path.is_absolute():
@@ -636,6 +640,11 @@ def create_app(
         return render(
             request, "manage.html", channels=managed_channels,
             channel_count=len(managed_channels),
+            institutions=institutions,
+            institution_names={row["id"]: row["name"] for row in institutions},
+            platform_accounts=platform_accounts,
+            platform_count=len(platform_accounts),
+            platform_status=platform_status,
             storage=storage,
             csrf_token=settings.admin_csrf_secret,
             m_rating_status=m_rating_status,
@@ -668,6 +677,56 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return RedirectResponse("/manage?channel_status=added", status_code=303)
+
+    @app.post("/manage/institutions")
+    async def manage_add_institution(
+        name: str = Form(...), short_name: str = Form(default=""),
+        csrf_token: str = Form(...), _: str = Depends(require_admin),
+    ) -> RedirectResponse:
+        check_csrf(csrf_token)
+        if not name.strip():
+            raise HTTPException(status_code=400, detail="Укажите название вуза")
+        db.add_institution(name, short_name or None)
+        return RedirectResponse("/manage?platform_status=institution-added", status_code=303)
+
+    @app.post("/manage/platform-accounts")
+    async def manage_add_platform_account(
+        institution_id: int = Form(...), platform: str = Form(...),
+        reference: str = Form(...), title: str = Form(default=""),
+        url: str = Form(default=""), csrf_token: str = Form(...),
+        _: str = Depends(require_admin),
+    ) -> RedirectResponse:
+        check_csrf(csrf_token)
+        if platform not in {"vk", "max", "rutube"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Telegram-каналы добавляются через основную форму мониторинга",
+            )
+        institutions = {int(row["id"]) for row in db.list_institutions()}
+        if institution_id not in institutions:
+            raise HTTPException(status_code=404, detail="Вуз не найден")
+        original = reference.strip()
+        if not original:
+            raise HTTPException(status_code=400, detail="Укажите аккаунт или ссылку")
+        if platform == "vk":
+            external_key = normalize_vk_community_ref(original)
+            username = external_key
+            account_url = url.strip() or f"https://vk.com/{external_key}"
+            access_mode, data_quality = "public", "exact"
+        else:
+            parsed = urlparse(original if "://" in original else f"https://placeholder/{original}")
+            external_key = parsed.path.strip("/").split("/")[-1].lstrip("@")
+            if not external_key:
+                raise HTTPException(status_code=400, detail="Не удалось определить аккаунт")
+            username = external_key
+            account_url = url.strip() or (original if "://" in original else None)
+            access_mode, data_quality = "owner", "unavailable"
+        db.add_platform_account(
+            institution_id, platform, external_key, username=username,
+            title=title.strip() or None, url=account_url,
+            access_mode=access_mode, data_quality=data_quality,
+        )
+        return RedirectResponse("/manage?platform_status=account-added", status_code=303)
 
     @app.post("/manage/channels/{channel_id}/disable")
     async def manage_disable_channel(
