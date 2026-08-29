@@ -110,6 +110,34 @@ class Database:
                 CREATE TABLE IF NOT EXISTS app_state (
                     key TEXT PRIMARY KEY, value TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS institutions (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    short_name TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS platform_accounts (
+                    id INTEGER PRIMARY KEY,
+                    institution_id INTEGER NOT NULL REFERENCES institutions(id),
+                    platform TEXT NOT NULL CHECK(platform IN ('telegram','vk','max','rutube')),
+                    external_key TEXT NOT NULL COLLATE NOCASE,
+                    native_id TEXT,
+                    username TEXT COLLATE NOCASE,
+                    title TEXT,
+                    url TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    access_mode TEXT NOT NULL DEFAULT 'public',
+                    data_quality TEXT NOT NULL DEFAULT 'exact',
+                    subscriber_count INTEGER,
+                    subscriber_count_display TEXT,
+                    subscriber_measured_at TEXT,
+                    last_checked_at TEXT,
+                    last_error TEXT,
+                    added_at TEXT NOT NULL,
+                    UNIQUE(platform, external_key)
+                );
+                CREATE INDEX IF NOT EXISTS idx_platform_accounts_institution
+                    ON platform_accounts(institution_id, platform);
                 """
             )
             conn.execute(
@@ -179,6 +207,118 @@ class Database:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(6, ?)",
                 (iso(utc_now()),),
             )
+            channel_columns = {row[1] for row in conn.execute("PRAGMA table_info(channels)")}
+            if "institution_id" not in channel_columns:
+                conn.execute("ALTER TABLE channels ADD COLUMN institution_id INTEGER")
+            if "platform_account_id" not in channel_columns:
+                conn.execute("ALTER TABLE channels ADD COLUMN platform_account_id INTEGER")
+            unlinked = list(conn.execute(
+                """SELECT * FROM channels
+                   WHERE institution_id IS NULL OR platform_account_id IS NULL
+                   ORDER BY id"""
+            ))
+            for channel in unlinked:
+                title = str(channel["title"] or f"@{channel['username']}")
+                institution_id = channel["institution_id"]
+                if institution_id is None:
+                    cursor = conn.execute(
+                        "INSERT INTO institutions(name, short_name, created_at) VALUES(?,?,?)",
+                        (title, title, iso(utc_now())),
+                    )
+                    institution_id = int(cursor.lastrowid)
+                account_id = channel["platform_account_id"]
+                if account_id is None:
+                    conn.execute(
+                        """INSERT INTO platform_accounts(
+                             institution_id, platform, external_key, native_id, username,
+                             title, url, enabled, access_mode, data_quality,
+                             subscriber_count, subscriber_count_display,
+                             subscriber_measured_at, last_checked_at, last_error, added_at
+                           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                           ON CONFLICT(platform, external_key) DO UPDATE SET
+                             institution_id=excluded.institution_id,
+                             username=excluded.username""",
+                        (
+                            institution_id, "telegram", str(channel["username"]).casefold(),
+                            str(channel["telegram_id"]) if channel["telegram_id"] else None,
+                            channel["username"], channel["title"],
+                            f"https://t.me/{channel['username']}", channel["enabled"],
+                            "mtproto" if channel["telegram_id"] else "public",
+                            "exact" if channel["telegram_id"] else "rounded",
+                            channel["subscriber_count"], channel["subscriber_count_display"],
+                            channel["subscriber_measured_at"], channel["last_checked_at"],
+                            channel["last_error"], channel["added_at"],
+                        ),
+                    )
+                    account = conn.execute(
+                        "SELECT id FROM platform_accounts WHERE platform='telegram' AND external_key=?",
+                        (str(channel["username"]).casefold(),),
+                    ).fetchone()
+                    account_id = int(account["id"])
+                conn.execute(
+                    "UPDATE channels SET institution_id=?, platform_account_id=? WHERE id=?",
+                    (institution_id, account_id, channel["id"]),
+                )
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(7, ?)",
+                (iso(utc_now()),),
+            )
+
+    def add_institution(self, name: str, short_name: str | None = None) -> int:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                "INSERT INTO institutions(name, short_name, created_at) VALUES(?,?,?)",
+                (name.strip(), (short_name or name).strip(), iso(utc_now())),
+            )
+            return int(cursor.lastrowid)
+
+    def list_institutions(self) -> list[sqlite3.Row]:
+        with self.connect() as conn:
+            return list(conn.execute("SELECT * FROM institutions ORDER BY name COLLATE NOCASE"))
+
+    def add_platform_account(
+        self,
+        institution_id: int,
+        platform: str,
+        external_key: str,
+        username: str | None = None,
+        title: str | None = None,
+        url: str | None = None,
+        access_mode: str = "public",
+        data_quality: str = "exact",
+    ) -> int:
+        if platform not in {"telegram", "vk", "max", "rutube"}:
+            raise ValueError(f"Unsupported platform: {platform}")
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO platform_accounts(
+                     institution_id, platform, external_key, username, title, url,
+                     enabled, access_mode, data_quality, added_at
+                   ) VALUES(?,?,?,?,?,?,1,?,?,?)
+                   ON CONFLICT(platform, external_key) DO UPDATE SET
+                     institution_id=excluded.institution_id, username=excluded.username,
+                     title=coalesce(excluded.title, platform_accounts.title),
+                     url=coalesce(excluded.url, platform_accounts.url), enabled=1,
+                     access_mode=excluded.access_mode, data_quality=excluded.data_quality""",
+                (
+                    institution_id, platform, external_key, username, title, url,
+                    access_mode, data_quality, iso(utc_now()),
+                ),
+            )
+            row = conn.execute(
+                "SELECT id FROM platform_accounts WHERE platform=? AND external_key=?",
+                (platform, external_key),
+            ).fetchone()
+            return int(row["id"])
+
+    def list_platform_accounts(self, institution_id: int | None = None) -> list[sqlite3.Row]:
+        where = "WHERE institution_id=?" if institution_id is not None else ""
+        params = (institution_id,) if institution_id is not None else ()
+        with self.connect() as conn:
+            return list(conn.execute(
+                f"SELECT * FROM platform_accounts {where} ORDER BY platform, title, username",
+                params,
+            ))
 
     def add_channel(self, username: str) -> int:
         with self.connect() as conn:
@@ -189,12 +329,47 @@ class Database:
                 (username, iso(utc_now())),
             )
             row = conn.execute("SELECT id FROM channels WHERE username=?", (username,)).fetchone()
-            return int(row["id"])
+            channel_id = int(row["id"])
+            channel = conn.execute("SELECT * FROM channels WHERE id=?", (channel_id,)).fetchone()
+            if channel["institution_id"] is None:
+                title = f"@{username}"
+                cursor = conn.execute(
+                    "INSERT INTO institutions(name, short_name, created_at) VALUES(?,?,?)",
+                    (title, title, iso(utc_now())),
+                )
+                institution_id = int(cursor.lastrowid)
+                conn.execute(
+                    """INSERT INTO platform_accounts(
+                         institution_id, platform, external_key, username, url,
+                         enabled, access_mode, data_quality, added_at
+                       ) VALUES(?, 'telegram', ?, ?, ?, 1, 'public', 'rounded', ?)""",
+                    (institution_id, username.casefold(), username, f"https://t.me/{username}", iso(utc_now())),
+                )
+                account_id = int(conn.execute(
+                    "SELECT id FROM platform_accounts WHERE platform='telegram' AND external_key=?",
+                    (username.casefold(),),
+                ).fetchone()["id"])
+                conn.execute(
+                    "UPDATE channels SET institution_id=?, platform_account_id=? WHERE id=?",
+                    (institution_id, account_id, channel_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE platform_accounts SET enabled=1 WHERE id=?",
+                    (channel["platform_account_id"],),
+                )
+            return channel_id
 
     def disable_channel(self, username: str) -> bool:
         with self.connect() as conn:
             result = conn.execute(
                 "UPDATE channels SET enabled=0 WHERE username=? COLLATE NOCASE", (username,)
+            )
+            conn.execute(
+                """UPDATE platform_accounts SET enabled=0 WHERE id=(
+                     SELECT platform_account_id FROM channels WHERE username=? COLLATE NOCASE
+                   )""",
+                (username,),
             )
             return result.rowcount > 0
 
@@ -205,7 +380,18 @@ class Database:
             # posts explicitly; their dependent snapshots and message mappings do
             # cascade, then the channel itself can be deleted safely.
             conn.execute("DELETE FROM posts WHERE channel_id=?", (channel_id,))
+            channel = conn.execute(
+                "SELECT institution_id, platform_account_id FROM channels WHERE id=?", (channel_id,)
+            ).fetchone()
             result = conn.execute("DELETE FROM channels WHERE id=?", (channel_id,))
+            if channel is not None and channel["platform_account_id"] is not None:
+                conn.execute("DELETE FROM platform_accounts WHERE id=?", (channel["platform_account_id"],))
+                remaining = conn.execute(
+                    "SELECT 1 FROM platform_accounts WHERE institution_id=? LIMIT 1",
+                    (channel["institution_id"],),
+                ).fetchone()
+                if remaining is None:
+                    conn.execute("DELETE FROM institutions WHERE id=?", (channel["institution_id"],))
             return result.rowcount > 0
 
     def list_channels(self, enabled_only: bool = False) -> list[sqlite3.Row]:
@@ -223,6 +409,12 @@ class Database:
                 "UPDATE channels SET telegram_id=?, title=?, username=?, last_error=NULL WHERE id=?",
                 (telegram_id, title, username, channel_id),
             )
+            conn.execute(
+                """UPDATE platform_accounts SET native_id=?, username=?, title=?, url=?,
+                   access_mode='mtproto', data_quality='exact', last_error=NULL
+                   WHERE id=(SELECT platform_account_id FROM channels WHERE id=?)""",
+                (str(telegram_id), username, title, f"https://t.me/{username}", channel_id),
+            )
 
     def update_channel_public_metadata(
         self, channel_id: int, title: str | None, subscribers: int | None, display: str | None
@@ -232,6 +424,14 @@ class Database:
                 """UPDATE channels SET title=coalesce(?, title), subscriber_count=?,
                    subscriber_count_display=?, subscriber_measured_at=?, last_error=NULL
                    WHERE id=?""",
+                (title, subscribers, display, iso(utc_now()), channel_id),
+            )
+            conn.execute(
+                """UPDATE platform_accounts SET title=coalesce(?, title),
+                   subscriber_count=?, subscriber_count_display=?, subscriber_measured_at=?,
+                   last_error=NULL WHERE id=(
+                     SELECT platform_account_id FROM channels WHERE id=?
+                   )""",
                 (title, subscribers, display, iso(utc_now()), channel_id),
             )
 
@@ -259,10 +459,17 @@ class Database:
 
     def finish_channel_check(self, channel_id: int, last_seen: int, error: str | None = None) -> None:
         with self.connect() as conn:
+            checked_at = iso(utc_now())
             conn.execute(
                 """UPDATE channels SET last_seen_message_id=max(last_seen_message_id, ?),
                    last_checked_at=?, last_error=? WHERE id=?""",
-                (last_seen, iso(utc_now()), error, channel_id),
+                (last_seen, checked_at, error, channel_id),
+            )
+            conn.execute(
+                """UPDATE platform_accounts SET last_checked_at=?, last_error=? WHERE id=(
+                     SELECT platform_account_id FROM channels WHERE id=?
+                   )""",
+                (checked_at, error, channel_id),
             )
 
     def add_post(

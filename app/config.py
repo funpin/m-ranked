@@ -60,6 +60,8 @@ class Settings:
     days_7_to_13_poll_interval_minutes: int = 360
     day_14_plus_poll_interval_minutes: int = 720
     deletion_confirmation_checks: int = 2
+    vk_access_token: str | None = None
+    vk_api_version: str = "5.199"
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -117,6 +119,8 @@ class Settings:
                 "DAY_14_PLUS_POLL_INTERVAL_MINUTES", 720
             ),
             deletion_confirmation_checks=_int("DELETION_CONFIRMATION_CHECKS", 2),
+            vk_access_token=os.getenv("VK_ACCESS_TOKEN", "").strip() or None,
+            vk_api_version=os.getenv("VK_API_VERSION", "5.199").strip() or "5.199",
         )
 
     def require_telegram(self) -> tuple[int, str]:

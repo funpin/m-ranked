@@ -37,6 +37,19 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("run", help="Run polling scheduler and web dashboard")
     sub.add_parser("poll-now", help="Run exactly one complete polling cycle")
     sub.add_parser("list-channels", help="List configured channels")
+    sub.add_parser("list-institutions", help="List universities and their platform accounts")
+    institution = sub.add_parser("add-institution", help="Create a university container")
+    institution.add_argument("name")
+    institution.add_argument("--short-name", default=None)
+    account = sub.add_parser("add-platform-account", help="Attach a social account to a university")
+    account.add_argument("institution_id", type=int)
+    account.add_argument("platform", choices=("telegram", "vk", "max", "rutube"))
+    account.add_argument("external_key")
+    account.add_argument("--username", default=None)
+    account.add_argument("--title", default=None)
+    account.add_argument("--url", default=None)
+    account.add_argument("--access-mode", default="public")
+    account.add_argument("--data-quality", default="exact")
     add = sub.add_parser("add-channel", help="Add or re-enable a channel")
     add.add_argument("channel")
     remove = sub.add_parser("remove-channel", help="Disable a channel without deleting history")
@@ -93,6 +106,24 @@ def main(argv: list[str] | None = None) -> int:
         for row in db.list_channels():
             state = "enabled" if row["enabled"] else "disabled"
             print(f"@{row['username']}\t{state}\t{row['title'] or ''}")
+    elif args.command == "list-institutions":
+        accounts_by_institution: dict[int, list[object]] = {}
+        for account in db.list_platform_accounts():
+            accounts_by_institution.setdefault(int(account["institution_id"]), []).append(account)
+        for institution in db.list_institutions():
+            print(f"{institution['id']}\t{institution['short_name'] or institution['name']}")
+            for account in accounts_by_institution.get(int(institution["id"]), []):
+                identity = account["username"] or account["external_key"]
+                print(f"  {account['platform']}\t{identity}\t{account['url'] or ''}")
+    elif args.command == "add-institution":
+        institution_id = db.add_institution(args.name, args.short_name)
+        print(f"Added institution id={institution_id}")
+    elif args.command == "add-platform-account":
+        account_id = db.add_platform_account(
+            args.institution_id, args.platform, args.external_key,
+            args.username, args.title, args.url, args.access_mode, args.data_quality,
+        )
+        print(f"Added {args.platform} account id={account_id}")
     elif args.command == "add-channel":
         username = normalize_channel_ref(args.channel)
         channel_id = db.add_channel(username)
