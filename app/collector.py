@@ -94,8 +94,11 @@ class Collector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        channels = self.db.list_channels(enabled_only=True)
+        error_count = 0
+        self.db.set_state("poll_last_started_at", iso(started))
         logger.info("polling started")
-        for channel in self.db.list_channels(enabled_only=True):
+        for channel in channels:
             try:
                 await self._poll_channel(channel)
             except Exception as exc:
@@ -106,16 +109,26 @@ class Collector:
                     try:
                         await self._poll_channel(channel)
                     except Exception as retry_exc:
+                        error_count += 1
                         self.db.finish_channel_check(channel["id"], 0, str(retry_exc))
                         logger.exception("@%s polling failed after FloodWait", channel["username"])
                 else:
+                    error_count += 1
                     self.db.finish_channel_check(channel["id"], 0, str(exc))
                     logger.exception("@%s polling failed", channel["username"])
         completed = datetime.now(timezone.utc)
+        duration = (completed - started).total_seconds()
         self.db.set_state("last_poll", iso(completed))
+        self.db.set_state("poll_last_completed_at", iso(completed))
+        self.db.set_state("poll_last_duration_seconds", f"{duration:.3f}")
+        self.db.set_state("poll_last_error_count", str(error_count))
+        self.db.set_state("poll_last_channel_count", str(len(channels)))
         next_poll = completed + timedelta(minutes=self.settings.poll_interval_minutes)
         self.db.set_state("next_poll", iso(next_poll))
-        logger.info("polling complete in %.2fs", (completed - started).total_seconds())
+        logger.info(
+            "polling complete duration=%.2fs channels=%s errors=%s",
+            duration, len(channels), error_count,
+        )
 
     async def _poll_channel(self, channel: Any) -> None:
         entity = await self.reader.client.get_entity(channel["username"])
@@ -157,8 +170,17 @@ class Collector:
             fetched = await self.reader.client.get_messages(entity, ids=ids)
             fetched = [message for message in fetched if message is not None]
             if not fetched:
-                self.db.mark_post_deleted(post["id"], datetime.now(timezone.utc))
-                logger.warning("@%s/%s is unavailable", username, post["telegram_message_id"])
+                detected = datetime.now(timezone.utc)
+                count, confirmed = self.db.record_post_missing(
+                    post["id"], detected, "mtproto_empty_get_messages",
+                    self.settings.deletion_confirmation_checks,
+                )
+                logger.warning(
+                    "@%s/%s missing check=%s/%s reason=mtproto_empty_get_messages "
+                    "detected_at=%s confirmed=%s",
+                    username, post["telegram_message_id"], count,
+                    self.settings.deletion_confirmation_checks, iso(detected), confirmed,
+                )
                 continue
             self.db.mark_post_available(post["id"])
             if post["telegram_grouped_id"]:

@@ -5,6 +5,17 @@ from typing import Any, Iterable
 from .models import ReactionState
 
 
+def custom_emoji_asset(payload: dict[str, Any]) -> str | None:
+    """Select a browser-renderable Telegram custom-emoji asset."""
+    emoji_type = str(payload.get("type") or "").lower()
+    if emoji_type in {"webp", "png", "gif", "jpg", "jpeg"}:
+        value = payload.get("emoji") or payload.get("thumb")
+    else:
+        # Animated WebM/TGS assets cannot be rendered by the table's <img>.
+        value = payload.get("thumb") or payload.get("emoji_static")
+    return str(value) if value else None
+
+
 def reaction_key(reaction: Any) -> str:
     emoticon = getattr(reaction, "emoticon", None)
     if emoticon is not None:

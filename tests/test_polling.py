@@ -60,3 +60,6 @@ def test_mocked_telegram_poll_writes_snapshot_without_duplicates(tmp_path):
     assert len(db.query("SELECT * FROM reaction_snapshots")) == 1
     snapshot = db.query("SELECT * FROM reaction_snapshots")[0]
     assert snapshot["total_reactions"] == 0
+    assert db.get_state("poll_last_duration_seconds") is not None
+    assert db.get_state("poll_last_error_count") == "0"
+    assert db.get_state("poll_last_channel_count") == "1"

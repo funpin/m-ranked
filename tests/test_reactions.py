@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 
-from app.reactions import choose_album_reactions, parse_message_reactions, reaction_key
+from app.reactions import (
+    choose_album_reactions,
+    custom_emoji_asset,
+    parse_message_reactions,
+    reaction_key,
+)
 
 
 @dataclass
@@ -43,6 +48,13 @@ def test_reaction_parsing_and_total():
 def test_custom_emoji_has_stable_identifier():
     state = parse_message_reactions(Message(Reactions([Result(ReactionCustomEmoji(123456), 9)])))
     assert state.reactions == {"custom:123456": 9}
+
+
+def test_custom_emoji_asset_variants_have_static_fallbacks():
+    assert custom_emoji_asset({"type": "webp", "emoji": "https://t.me/a.webp"}) == "https://t.me/a.webp"
+    assert custom_emoji_asset({"type": "webm", "emoji": "https://t.me/a.webm", "thumb": "https://t.me/a.png"}) == "https://t.me/a.png"
+    assert custom_emoji_asset({"type": "tgs", "emoji_static": "https://t.me/a.webp"}) == "https://t.me/a.webp"
+    assert custom_emoji_asset({"type": "webm"}) is None
 
 
 def test_paid_reaction_and_zero_reactions():

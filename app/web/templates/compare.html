@@ -37,7 +37,7 @@
 </form>
 
 <section class="help-grid compare-help" aria-label="Как читать сравнение">
-  <div class="explain"><b>Типичное накопление реакций</b>Одна линия — один канал. Каждая точка показывает медианное число реакций у его публикаций на соответствующем целом часу после выхода. Медиана — середина набора, поэтому один вирусный пост не перетягивает график на себя.</div>
+  <div class="explain"><b>Типичное накопление реакций</b>Одна линия — один канал. Для всего выбранного горизонта используется одна и та же выборка публикаций, доживших до его конца. Точка показывает медианное число реакций на соответствующем целом часу; берётся последний уже известный к этому часу замер.</div>
   <div class="explain"><b>Конверсия просмотров в реакции</b>Для каждого поста рассчитывается отношение реакций к просмотрам, затем для каждого часа берётся медиана этих процентов по каналу. Это отношение количества реакций, а не точное число людей: один пользователь Telegram Premium может оставить несколько реакций.</div>
 </section>
 
@@ -75,17 +75,19 @@ updateCount();
 const data={{ data_json|safe }}, colors=['#0868df','#16a085','#e67e22','#c13b4f','#7b61c9','#00838f','#ef6c00','#5c6bc0','#2e7d32','#ad1457','#6d4c41','#3949ab','#00897b','#f4511e','#8e24aa','#039be5','#7cb342','#d81b60'];
 const observed=data.datasets.flatMap(d=>d.curve.map((value,hour)=>value===null?null:hour).filter(value=>value!==null));
 const lastObserved=Math.max(1,...observed), chartMax=Math.min({{ period }},lastObserved+1);
-function sets(key='curve'){return data.datasets.map((d,i)=>({label:d.title,channel:d.channel,data:d[key].map((y,x)=>y===null?null:{x,y}).filter(Boolean),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'22',spanGaps:true,tension:.15,pointRadius:4,pointHoverRadius:7,borderWidth:3}))}
-const common={responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items.length?`Через ${items[0].parsed.x} ч после публикации`:'',label:item=>`${item.dataset.label}: ${Math.round(item.parsed.y)} реакций`}}},scales:{x:{type:'linear',min:0,max:chartMax,title:{display:true,text:'Часов после публикации'},ticks:{precision:0}},y:{beginAtZero:true,title:{display:true,text:'Реакций, медиана'},ticks:{precision:0}}}};
+function sets(key='curve',countsKey='sample_counts'){return data.datasets.map((d,i)=>({label:d.title,channel:d.channel,cohortSize:d[key==='curve'?'cohort_size':'conversion_cohort_size'],sampleCounts:d[countsKey],data:d[key].map((y,x)=>y===null?null:{x,y}).filter(Boolean),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'22',spanGaps:true,tension:.15,pointRadius:4,pointHoverRadius:7,borderWidth:3}))}
+function postWord(value){const n=Math.abs(Number(value))%100;const n1=n%10;if(n>10&&n<20)return'постов';if(n1===1)return'пост';if(n1>=2&&n1<=4)return'поста';return'постов'}
+const sampleLabel=item=>{const n=item.dataset.sampleCounts?.[item.parsed.x]||0;return `Выборка: ${n} ${n===1?'публикация':(n>=2&&n<=4?'публикации':'публикаций')}`};
+const common={responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items.length?`Через ${items[0].parsed.x} ч после публикации`:'',label:item=>`${item.dataset.label}: ${Math.round(item.parsed.y)} реакций`,afterLabel:sampleLabel}}},scales:{x:{type:'linear',min:0,max:chartMax,title:{display:true,text:'Часов после публикации'},ticks:{precision:0}},y:{beginAtZero:true,title:{display:true,text:'Реакций, медиана'},ticks:{precision:0}}}};
 const medianChart=new Chart(document.getElementById('medianChart'),{type:'line',data:{datasets:sets()},options:common});
-const conversionOptions={responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items.length?'Через '+items[0].parsed.x+' ч после публикации':'',label:item=>item.dataset.label+': '+item.parsed.y.toFixed(2)+'%'}}},scales:{x:{type:'linear',min:0,max:chartMax,title:{display:true,text:'Часов после публикации'},ticks:{precision:0}},y:{beginAtZero:true,title:{display:true,text:'Реакции / просмотры, медиана'},ticks:{callback:value=>value+'%'}}}};
-const conversionChart=new Chart(document.getElementById('conversionChart'),{type:'line',data:{datasets:sets('conversion_curve')},options:conversionOptions});
+const conversionOptions={responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items.length?'Через '+items[0].parsed.x+' ч после публикации':'',label:item=>item.dataset.label+': '+item.parsed.y.toFixed(2)+'%',afterLabel:sampleLabel}}},scales:{x:{type:'linear',min:0,max:chartMax,title:{display:true,text:'Часов после публикации'},ticks:{precision:0}},y:{beginAtZero:true,title:{display:true,text:'Реакции / просмотры, медиана'},ticks:{callback:value=>value+'%'}}}};
+const conversionChart=new Chart(document.getElementById('conversionChart'),{type:'line',data:{datasets:sets('conversion_curve','conversion_sample_counts')},options:conversionOptions});
 const legend=document.getElementById('channel-legend');
 medianChart.data.datasets.forEach((dataset,index)=>{
   const button=document.createElement('button');button.type='button';button.className='legend-toggle';button.title=`Скрыть линию: ${dataset.label}`;
   const swatch=document.createElement('span');swatch.className='legend-swatch';swatch.style.background=dataset.borderColor;
   const label=document.createElement('span');label.className='legend-label';label.textContent=dataset.label;
-  const username=document.createElement('small');username.textContent=`@${dataset.channel}`;
+  const username=document.createElement('small');username.textContent=`@${dataset.channel} · ${dataset.cohortSize} ${postWord(dataset.cohortSize)}`;
   button.append(swatch,label,username);
   button.addEventListener('click',()=>{const visible=medianChart.isDatasetVisible(index);medianChart.setDatasetVisibility(index,!visible);conversionChart.setDatasetVisibility(index,!visible);button.classList.toggle('is-hidden',visible);button.title=`${visible?'Вернуть':'Скрыть'} линию: ${dataset.label}`;medianChart.update();conversionChart.update();});
   legend.append(button);

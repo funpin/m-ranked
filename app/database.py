@@ -146,6 +146,13 @@ class Database:
                 )
             if "deleted_at" not in post_columns:
                 conn.execute("ALTER TABLE posts ADD COLUMN deleted_at TEXT")
+            for name, sql_type in (
+                ("missing_check_count", "INTEGER NOT NULL DEFAULT 0"),
+                ("missing_last_checked_at", "TEXT"),
+                ("missing_reason", "TEXT"),
+            ):
+                if name not in post_columns:
+                    conn.execute(f"ALTER TABLE posts ADD COLUMN {name} {sql_type}")
             snapshot_columns = {
                 row[1] for row in conn.execute("PRAGMA table_info(reaction_snapshots)")
             }
@@ -166,6 +173,10 @@ class Database:
             )
             conn.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(5, ?)",
+                (iso(utc_now()),),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(6, ?)",
                 (iso(utc_now()),),
             )
 
@@ -314,9 +325,40 @@ class Database:
                 (iso(detected_at), post_id),
             )
 
+    def record_post_missing(
+        self,
+        post_id: int,
+        detected_at: datetime,
+        reason: str,
+        confirmation_checks: int,
+    ) -> tuple[int, bool]:
+        """Record an explicit missing result and delete only after confirmation."""
+        with self.connect() as conn:
+            conn.execute(
+                """UPDATE posts SET missing_check_count=missing_check_count+1,
+                   missing_last_checked_at=?, missing_reason=? WHERE id=?""",
+                (iso(detected_at), reason, post_id),
+            )
+            row = conn.execute(
+                "SELECT missing_check_count, deleted_at FROM posts WHERE id=?", (post_id,)
+            ).fetchone()
+            if row is None:
+                return 0, False
+            count = int(row["missing_check_count"])
+            confirmed = count >= confirmation_checks
+            if confirmed and row["deleted_at"] is None:
+                conn.execute(
+                    "UPDATE posts SET deleted_at=? WHERE id=?", (iso(detected_at), post_id)
+                )
+            return count, confirmed
+
     def mark_post_available(self, post_id: int) -> None:
         with self.connect() as conn:
-            conn.execute("UPDATE posts SET deleted_at=NULL WHERE id=?", (post_id,))
+            conn.execute(
+                """UPDATE posts SET deleted_at=NULL, missing_check_count=0,
+                   missing_last_checked_at=NULL, missing_reason=NULL WHERE id=?""",
+                (post_id,),
+            )
 
     def expired_posts(self, cutoff_iso: str) -> list[sqlite3.Row]:
         with self.connect() as conn:

@@ -1,11 +1,15 @@
 from datetime import datetime, timedelta, timezone
 from dataclasses import replace
+import importlib
 
 from fastapi.testclient import TestClient
+import pytest
 
 from app.config import Settings
 from app.database import Database
 from app.web.app import create_app
+
+web_app_module = importlib.import_module("app.web.app")
 
 
 def settings(tmp_path):
@@ -47,6 +51,7 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     health = client.get("/health")
     assert health.status_code == 200
     assert health.json()["telegram_connected"] is True
+    assert "poll_cycle" in health.json()
     for path in ("/", "/rating", f"/channels/{channel_id}", f"/posts/{post_id}", "/compare"):
         response = client.get(path)
         assert response.status_code == 200, response.text
@@ -188,6 +193,111 @@ def test_overview_counts_activity_of_previously_published_posts(tmp_path):
     assert ">30</b><small>просмотров за 3 часа" in overview
     assert ">+4</b>" not in overview
     assert ">+30</b>" not in overview
+
+
+@pytest.mark.parametrize(
+    ("period", "window"),
+    (("3h", timedelta(hours=3)), ("1d", timedelta(days=1)),
+     ("7d", timedelta(days=7)), ("30d", timedelta(days=30))),
+)
+def test_overview_period_windows_use_fixed_open_left_boundary(
+    tmp_path, monkeypatch, period, window,
+):
+    fixed_now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(web_app_module, "datetime", FrozenDateTime)
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    channel_id = db.add_channel(f"period_{period}")
+    post_id = db.add_post(
+        channel_id, "m:700", [700], None, fixed_now - timedelta(days=39),
+        fixed_now - timedelta(days=39), 0, True, "text", False,
+    )
+    cutoff = fixed_now - window
+    for measured_at, reactions, views in (
+        (cutoff, 100, 1000),
+        (cutoff + window / 2, 130, 1300),
+        (fixed_now, 170, 1700),
+    ):
+        db.insert_snapshot(
+            post_id, measured_at, 0, reactions, {"👍": reactions}, [],
+            1, 15, 2.0, views_count=views,
+        )
+    page = TestClient(create_app(cfg, db, lambda: True)).get(
+        f"/?period={period}&sort=reactions"
+    ).text
+    # The point exactly at the cutoff belongs to the previous window.  The
+    # current delta therefore starts at the first point strictly after it.
+    assert ">40</b><small>реакций" in page
+    assert ">400</b><small>просмотров" in page
+
+
+def test_overview_previous_period_and_even_median_are_compared_after_rounding(
+    tmp_path, monkeypatch,
+):
+    fixed_now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(web_app_module, "datetime", FrozenDateTime)
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    channel_id = db.add_channel("median_window")
+    for index, (previous_delta, current_delta) in enumerate(((1, 2), (2, 3)), 1):
+        post_id = db.add_post(
+            channel_id, f"m:{800 + index}", [800 + index], None,
+            fixed_now - timedelta(days=5), fixed_now - timedelta(days=5),
+            0, True, "text", False,
+        )
+        values = (
+            (fixed_now - timedelta(hours=47), 10),
+            (fixed_now - timedelta(hours=25), 10 + previous_delta),
+            (fixed_now - timedelta(hours=23), 20),
+            (fixed_now, 20 + current_delta),
+        )
+        for measured_at, reactions in values:
+            db.insert_snapshot(
+                post_id, measured_at, 0, reactions, {"👍": reactions}, [],
+                1, 15, 2.0, views_count=reactions * 10,
+            )
+    page = TestClient(create_app(cfg, db, lambda: True)).get("/?period=1d").text
+    assert ">3</b><small>медиана прироста реакций" in page
+    assert "+1 за сутки" in page
+
+
+def test_comparison_exposes_one_fixed_sample_count_per_curve(tmp_path):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    channel_id = db.add_channel("fixed_cohort")
+    published = datetime.now(timezone.utc) - timedelta(hours=25)
+    for message_id, final in ((901, 20), (902, 40)):
+        post_id = db.add_post(
+            channel_id, f"m:{message_id}", [message_id], None,
+            published, published, 0, True, "text", False,
+        )
+        db.insert_snapshot(post_id, published, 0, 0, {}, [], 1, 15, 2.0, views_count=0)
+        db.insert_snapshot(
+            post_id, published + timedelta(hours=24), 24 * 3600, final,
+            {"👍": final}, [], 1, 15, 2.0, views_count=final * 10,
+        )
+    page = TestClient(create_app(cfg, db, lambda: True)).get(
+        f"/compare?submitted=true&channels={channel_id}&period=24"
+    ).text
+    assert '"cohort_size": 2' in page
+    assert '"sample_counts": [2, 2' in page
+    assert "Выборка:" in page
+    assert "dataset.cohortSize" in page
 
 
 def test_overview_filters_keep_valid_values_and_reject_removed_period(tmp_path):
