@@ -1,0 +1,94 @@
+{% extends "base.html" %}{% block title %}Сравнение каналов · m-ranked{% endblock %}
+{% block content %}
+<h1>Сравнение каналов</h1>
+<p class="lead">Сравните, как аудитория разных вузов реагирует на публикации в первые часы и дни после выхода.</p>
+
+<form class="panel selector-panel compare-selector" method="get" id="compare-form">
+  <input type="hidden" name="submitted" value="true">
+  <div class="compare-filter-head"><div><h2>Настройка сравнения</h2><p class="panel-note">Выберите каналы и глубину истории публикаций.</p></div><span class="selection-count pill" id="selection-count"></span></div>
+  <div class="selector-toolbar">
+    <input id="channel-search" type="search" placeholder="Найти вуз или @канал" autocomplete="off">
+    <button class="secondary" type="button" id="select-all">Выбрать все</button>
+    <button class="secondary" type="button" id="clear-all">Снять выбор</button>
+  </div>
+  <p class="panel-note compare-selection-note">Для читаемого графика обычно достаточно выбрать 2–5 каналов. Линии также можно скрывать прямо в легенде.</p>
+  <div class="choice-grid" id="channel-choices">
+    {% for channel in channels %}
+    <label class="choice" data-search="{{ (channel.title or '')|lower }} @{{ channel.username|lower }}">
+      <input type="checkbox" name="channels" value="{{ channel.id }}" {{ 'checked' if channel.id in selected else '' }}>
+      <span>
+        <span class="choice-main">{{ channel.title or ('@' ~ channel.username) }}</span>
+        <span class="choice-meta">@{{ channel.username }}{% if channel.subscriber_count_display %} · {{ channel.subscriber_count_display }} подписчиков{% endif %}</span>
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+  <div class="selector-footer">
+    <label>Период после публикации<br>
+      <select name="period">
+        {% for h,label in [(24,'24 часа'),(48,'48 часов'),(72,'72 часа'),(168,'7 дней'),(336,'14 дней')] %}
+        <option value="{{ h }}" {{ 'selected' if h==period else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label><input type="checkbox" name="include_partial" value="true" {{ 'checked' if include_partial else '' }}> Включить публикации с неполной историей</label>
+    <button type="submit">Показать сравнение</button>
+  </div>
+</form>
+
+<section class="help-grid compare-help" aria-label="Как читать сравнение">
+  <div class="explain"><b>Типичное накопление реакций</b>Одна линия — один канал. Каждая точка показывает медианное число реакций у его публикаций на соответствующем целом часу после выхода. Медиана — середина набора, поэтому один вирусный пост не перетягивает график на себя.</div>
+  <div class="explain"><b>Конверсия просмотров в реакции</b>Для каждого поста рассчитывается отношение реакций к просмотрам, затем для каждого часа берётся медиана этих процентов по каналу. Это отношение количества реакций, а не точное число людей: один пользователь Telegram Premium может оставить несколько реакций.</div>
+</section>
+
+<p class="notice"><b>Полная и неполная история:</b> полной считается история публикации, которую монитор начал наблюдать не позднее чем через {{ settings.complete_history_max_first_age_minutes }} минут после выхода. Неполные истории полезны для текущего наблюдения, но могут искажать сравнение первых часов.</p>
+
+{% if not selected %}
+<div class="panel empty-state mt">Выберите хотя бы один канал и нажмите «Показать сравнение».</div>
+{% elif not has_points %}
+<div class="panel empty-state mt">Для выбранных каналов пока недостаточно замеров. Попробуйте включить публикации с неполной историей или вернитесь после следующих опросов.</div>
+{% endif %}
+
+<div class="section">
+  <div class="panel comparison-panel">
+    <div class="rating-panel-head"><div><h2>Типичное накопление реакций</h2><p class="panel-note">Точка — медиана на конкретном целом часу после публикации. Нажмите на вуз в легенде, чтобы скрыть или вернуть его линию.</p></div><span class="period-badge">Первые {{ comparison_period_label }}</span></div>
+    <div class="chart-legend" id="channel-legend" aria-label="Каналы на графике"></div>
+    <div class="chart comparison-main-chart"><canvas id="medianChart"></canvas></div>
+  </div>
+</div>
+
+<div class="panel comparison-panel mt">
+  <div class="rating-panel-head"><div><h2>Конверсия просмотров в реакции</h2><p class="panel-note">Точка — медиана отношений «реакции / просмотры» у отдельных постов на конкретном часу. Линии включаются и выключаются общей легендой выше.</p></div><span class="period-badge">Первые {{ comparison_period_label }}</span></div>
+  <div class="chart comparison-main-chart"><canvas id="conversionChart"></canvas></div>
+</div>
+
+<script>
+const search=document.getElementById('channel-search'), choices=[...document.querySelectorAll('.choice')], boxes=choices.map(choice=>choice.querySelector('input')), count=document.getElementById('selection-count');
+function updateCount(){const selected=boxes.filter(box=>box.checked).length;count.textContent=`Выбрано: ${selected} из ${boxes.length}`;}
+function setAll(checked){boxes.forEach(box=>{box.checked=checked});updateCount();}
+search.addEventListener('input',()=>{const query=search.value.trim().toLocaleLowerCase('ru');choices.forEach(choice=>{choice.hidden=!choice.dataset.search.includes(query)});});
+boxes.forEach(box=>box.addEventListener('change',updateCount));
+document.getElementById('select-all').addEventListener('click',()=>setAll(true));
+document.getElementById('clear-all').addEventListener('click',()=>setAll(false));
+updateCount();
+
+const data={{ data_json|safe }}, colors=['#0868df','#16a085','#e67e22','#c13b4f','#7b61c9','#00838f','#ef6c00','#5c6bc0','#2e7d32','#ad1457','#6d4c41','#3949ab','#00897b','#f4511e','#8e24aa','#039be5','#7cb342','#d81b60'];
+const observed=data.datasets.flatMap(d=>d.curve.map((value,hour)=>value===null?null:hour).filter(value=>value!==null));
+const lastObserved=Math.max(1,...observed), chartMax=Math.min({{ period }},lastObserved+1);
+function sets(key='curve'){return data.datasets.map((d,i)=>({label:d.title,channel:d.channel,data:d[key].map((y,x)=>y===null?null:{x,y}).filter(Boolean),borderColor:colors[i%colors.length],backgroundColor:colors[i%colors.length]+'22',spanGaps:true,tension:.15,pointRadius:4,pointHoverRadius:7,borderWidth:3}))}
+const common={responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items.length?`Через ${items[0].parsed.x} ч после публикации`:'',label:item=>`${item.dataset.label}: ${Math.round(item.parsed.y)} реакций`}}},scales:{x:{type:'linear',min:0,max:chartMax,title:{display:true,text:'Часов после публикации'},ticks:{precision:0}},y:{beginAtZero:true,title:{display:true,text:'Реакций, медиана'},ticks:{precision:0}}}};
+const medianChart=new Chart(document.getElementById('medianChart'),{type:'line',data:{datasets:sets()},options:common});
+const conversionOptions={responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items.length?'Через '+items[0].parsed.x+' ч после публикации':'',label:item=>item.dataset.label+': '+item.parsed.y.toFixed(2)+'%'}}},scales:{x:{type:'linear',min:0,max:chartMax,title:{display:true,text:'Часов после публикации'},ticks:{precision:0}},y:{beginAtZero:true,title:{display:true,text:'Реакции / просмотры, медиана'},ticks:{callback:value=>value+'%'}}}};
+const conversionChart=new Chart(document.getElementById('conversionChart'),{type:'line',data:{datasets:sets('conversion_curve')},options:conversionOptions});
+const legend=document.getElementById('channel-legend');
+medianChart.data.datasets.forEach((dataset,index)=>{
+  const button=document.createElement('button');button.type='button';button.className='legend-toggle';button.title=`Скрыть линию: ${dataset.label}`;
+  const swatch=document.createElement('span');swatch.className='legend-swatch';swatch.style.background=dataset.borderColor;
+  const label=document.createElement('span');label.className='legend-label';label.textContent=dataset.label;
+  const username=document.createElement('small');username.textContent=`@${dataset.channel}`;
+  button.append(swatch,label,username);
+  button.addEventListener('click',()=>{const visible=medianChart.isDatasetVisible(index);medianChart.setDatasetVisibility(index,!visible);conversionChart.setDatasetVisibility(index,!visible);button.classList.toggle('is-hidden',visible);button.title=`${visible?'Вернуть':'Скрыть'} линию: ${dataset.label}`;medianChart.update();conversionChart.update();});
+  legend.append(button);
+});
+</script>
+{% endblock %}

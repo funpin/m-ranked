@@ -1,0 +1,66 @@
+{% extends "base.html" %}{% block title %}Обзор · m-ranked{% endblock %}
+{% block content %}
+<h1>Обзор каналов</h1>
+<p class="lead"><b>Активность всех постов в базе за выбранный период</b> — включая публикации, вышедшие раньше. Это прирост реакций и просмотров внутри временного окна, а не сумма текущих показателей только у новых постов.</p>
+<style>
+  .post-stat-badges{display:flex;align-items:center;gap:7px;margin-top:9px;white-space:nowrap}
+  .post-stat-badge{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:5px 8px;border:1px solid #d9e5f4;border-radius:9px;background:#f7faff;color:#7b8799;line-height:1}
+  .post-stat-badge svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .post-stat-badge b{color:#53627a;font-size:15px;line-height:1;font-variant-numeric:tabular-nums}
+  .post-stat-badge.activity{border-color:#d6e5f8;background:#f4f8ff;color:#0868df}
+  .post-stat-badge.activity b{color:#0868df}
+  .post-stat-badge.new{border-color:#d3eee5;background:#f2fbf7}
+  .post-stat-badge.new,.post-stat-badge.new b{color:#087e5b}
+  .overview-card,.overview-header{overflow:visible}
+  .overview-card:has(.post-stat-badge:hover){z-index:50}
+  .post-stat-badge.has-tooltip::after{top:auto;right:auto;bottom:calc(100% + 8px);left:0;white-space:normal}
+  .post-stat-badge:nth-child(2)::after{left:50%;margin-left:-130px}
+  .post-stat-badge:nth-child(3)::after{right:0;left:auto}
+  @media(max-width:780px){.post-stat-badges{flex-wrap:wrap}.post-stat-badge.has-tooltip::after{width:min(260px,75vw)}}
+</style>
+<form class="panel controls compact" method="get">
+  <label>Период<br><select name="period">{% for value,label in [('3h','3 часа'),('1d','Сутки'),('7d','Неделя'),('30d','Последний месяц')] %}<option value="{{ value }}" {{ 'selected' if value==period else '' }}>{{ label }}</option>{% endfor %}</select></label>
+  <label>Сортировать<br><select name="sort">{% for value,label in [('median_reactions','Медиана прироста реакций'),('m_rating','М‑Рейтинг · место'),('reactions','Прирост реакций'),('views','Прирост просмотров'),('posts','Новые публикации'),('subscribers','Подписчики')] %}<option value="{{ value }}" {{ 'selected' if value==sort else '' }}>{{ label }}</option>{% endfor %}</select></label>
+  <label>Порядок<br><select name="direction"><option value="desc" {{ 'selected' if direction=='desc' else '' }}>По убыванию</option><option value="asc" {{ 'selected' if direction=='asc' else '' }}>По возрастанию</option></select></label>
+  <button type="submit">Применить</button>
+</form>
+<div class="grid section overview-grid">
+{% for channel in channels %}
+  <a class="card overview-card" href="/channels/{{ channel.id }}">
+    {% if channel.m_rating_tg_rank %}<span class="m-rating-badge" title="Официальный М‑Рейтинг, Telegram · {{ channel.m_rating_period }} · балл {{ '%.3f'|format(channel.m_rating_tg_score) }}">М‑Рейтинг TG · №{{ channel.m_rating_tg_rank }}</span>{% endif %}
+    <div class="overview-header">
+      <div class="card-title-row"><h3 title="{{ channel.title or ('@' ~ channel.username) }}">{{ channel.title or ('@' ~ channel.username) }}</h3></div>
+      <div class="muted channel-meta">@{{ channel.username }} · {{ channel.subscriber_count or '—' }} подписчиков</div>
+      <div class="post-stat-badges" aria-label="Публикации за выбранный период">
+        <span class="post-stat-badge has-tooltip" data-tooltip="Всего публикаций этого канала, которые сейчас хранятся в базе."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg><b>{{ channel.total_post_count }}</b></span>
+        <span class="post-stat-badge activity has-tooltip" data-tooltip="Публикации любого возраста, у которых есть минимум два сопоставимых замера внутри выбранного периода. По ним рассчитывается прирост реакций и просмотров."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8M16 7h4v4"/></svg><b>{{ channel.activity_post_count }}</b></span>
+        <span class="post-stat-badge new has-tooltip" data-tooltip="Новые публикации этого канала, вышедшие непосредственно внутри выбранного периода."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg><b>{{ channel.post_count }}</b></span>
+      </div>
+    </div>
+    <div class="metrics overview-metrics">
+      <span class="has-tooltip" data-tooltip="Прирост реакций на всех отслеживаемых постах внутри выбранного периода, включая опубликованные раньше. Это не сумма текущих реакций только у новых постов. Для каждого поста берётся разница между первым и последним сравнимым замером окна.">
+        <b class="metric">{{ channel.total_reactions if channel.total_reactions is not none else '—' }}</b><small>реакций {{ period_short }} ⓘ</small>
+        <span class="trend-slot">{% if channel.delta_total_reactions %}<em class="trend {{ 'up' if channel.delta_total_reactions>0 else 'down' }}">{{ '%+d'|format(channel.delta_total_reactions) }} {{ period_short }}</em>{% endif %}</span>
+      </span>
+      <span class="has-tooltip" data-tooltip="Прирост просмотров на всех отслеживаемых постах внутри выбранного периода, включая опубликованные раньше. Это не сумма текущих просмотров только у новых постов. Для каждого поста берётся разница между первым и последним сравнимым замером окна.">
+        <b class="metric">{{ channel.total_views if channel.total_views is not none else '—' }}</b><small>просмотров {{ period_short }} ⓘ</small>
+        <span class="trend-slot">{% if channel.delta_total_views %}<em class="trend {{ 'up' if channel.delta_total_views>0 else 'down' }}">{{ '%+d'|format(channel.delta_total_views) }} {{ period_short }}</em>{% endif %}</span>
+      </span>
+      <span class="has-tooltip" data-tooltip="Медиана прироста реакций среди всех постов с динамикой в выбранном периоде, включая опубликованные раньше. Это типичный прирост одного поста, а не медиана текущих реакций у новых публикаций. Результат округляется до целого.">
+        <b class="metric">{{ channel.median_reactions if channel.median_reactions is not none else '—' }}</b><small>медиана прироста реакций ⓘ</small>
+        <span class="trend-slot">{% if channel.delta_median_reactions %}<em class="trend {{ 'up' if channel.delta_median_reactions>0 else 'down' }}">{{ '%+d'|format(channel.delta_median_reactions) }} {{ period_short }}</em>{% endif %}</span>
+      </span>
+      <span class="has-tooltip" data-tooltip="Медиана прироста просмотров среди всех постов с динамикой в выбранном периоде, включая опубликованные раньше. Это типичный прирост одного поста, а не медиана текущих просмотров у новых публикаций. Результат округляется до целого.">
+        <b class="metric">{{ channel.median_views if channel.median_views is not none else '—' }}</b><small>медиана прироста просмотров ⓘ</small>
+        <span class="trend-slot">{% if channel.delta_median_views %}<em class="trend {{ 'up' if channel.delta_median_views>0 else 'down' }}">{{ '%+d'|format(channel.delta_median_views) }} {{ period_short }}</em>{% endif %}</span>
+      </span>
+    </div>
+    <div class="overview-footer">
+      <div class="{{ 'bad' if channel.last_error else 'ok' }}">{{ channel.last_error or 'активен' }}</div>
+      <div class="muted">Последний опрос: {{ channel.last_checked_at|local_datetime if channel.last_checked_at else 'ещё не выполнялся' }}{% if channel.last_checked_at %} МСК{% endif %}</div>
+    </div>
+  </a>
+{% else %}<div class="panel">За выбранный период публикаций не найдено.</div>{% endfor %}
+</div>
+<p class="notice section"><b>Как считаются показатели:</b> в карточке показана активность всех отслеживаемых постов, для которых внутри выбранного периода есть сравнимые замеры, а не только новых публикаций. Реакции и просмотры — разница между первым и последним замером внутри окна; прирост до первого замера в период не включается. Для новых постов с полной историей отсчёт идёт от нуля в момент публикации. Медианы — типичный прирост одного поста за это окно и округляются до целого. Плашка у медианы сравнивает типичный прирост с предыдущим таким же периодом и скрывается, если сравнивать не с чем или изменения нет. Метки скачков временно отключены.</p>
+{% endblock %}
