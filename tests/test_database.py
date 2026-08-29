@@ -50,15 +50,19 @@ def test_timely_publication_baseline_sets_initial_growth(tmp_path):
     assert db.ensure_publication_baseline(post_id, published, 240, 360)
     assert db.insert_snapshot(
         post_id, published + timedelta(minutes=4), 240, 173,
-        {"👍": 173}, [], 5, 15, 2.0, views_count=370,
+        {"👍": 173}, [], 5, 15, 2.0, comments_count=12, views_count=370,
     )
     rows = db.query(
-        "SELECT total_reactions, delta_total, views_count, delta_views, synthetic "
+        "SELECT total_reactions, delta_total, comments_count, delta_comments, "
+        "views_count, delta_views, synthetic "
         "FROM reaction_snapshots WHERE post_id=? ORDER BY measured_at",
         (post_id,),
     )
     assert [row["total_reactions"] for row in rows] == [0, 173]
     assert rows[1]["delta_total"] == 173
+    assert rows[0]["comments_count"] == 0
+    assert rows[1]["comments_count"] == 12
+    assert rows[1]["delta_comments"] == 12
     assert rows[1]["views_count"] == 370
     assert rows[1]["delta_views"] == 370
     assert rows[0]["synthetic"] == 1

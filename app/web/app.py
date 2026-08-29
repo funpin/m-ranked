@@ -716,6 +716,8 @@ def create_app(
                 (SELECT max(age_seconds) FROM reaction_snapshots s WHERE s.post_id=p.id) current_age,
                 (SELECT views_count FROM reaction_snapshots s WHERE s.post_id=p.id
                  ORDER BY measured_at DESC LIMIT 1) current_views,
+                (SELECT comments_count FROM reaction_snapshots s WHERE s.post_id=p.id
+                 ORDER BY measured_at DESC LIMIT 1) current_comments,
                 (SELECT max(spike) FROM reaction_snapshots s WHERE s.post_id=p.id) has_spike
                FROM posts p WHERE p.channel_id=? AND p.published_at>=?
                ORDER BY p.published_at DESC""",
@@ -735,7 +737,7 @@ def create_app(
             (channel_id, retention_cutoff.isoformat()),
         )
         latest_metrics = db.query(
-            """SELECT s.views_count, s.total_reactions FROM posts p
+            """SELECT s.views_count, s.comments_count, s.total_reactions FROM posts p
                JOIN reaction_snapshots s ON s.id=(
                  SELECT s2.id FROM reaction_snapshots s2
                  WHERE s2.post_id=p.id AND s2.synthetic=0
@@ -752,6 +754,8 @@ def create_app(
         reactions = [row["total_reactions"] for row in latest_metrics]
         stats["median_views"] = median(views) if views else None
         stats["median_reactions"] = median(reactions) if reactions else None
+        comments = [row["comments_count"] for row in latest_metrics if row["comments_count"] is not None]
+        stats["median_comments"] = median(comments) if comments else None
         stats["retention_days"] = settings.retention_days
         return render(request, "channel.html", channel=channel, posts=posts, stats=stats)
 
@@ -899,13 +903,17 @@ def create_app(
     async def export_snapshots() -> StreamingResponse:
         rows = db.query(
             """SELECT c.username, p.telegram_message_id, p.published_at, s.measured_at,
-               s.age_seconds/3600.0 age_hours, s.total_reactions, s.delta_total, s.reactions_json
+               s.age_seconds/3600.0 age_hours, s.total_reactions, s.delta_total,
+               s.views_count, s.delta_views, s.comments_count, s.delta_comments,
+               s.reactions_json
                FROM reaction_snapshots s JOIN posts p ON p.id=s.post_id
                JOIN channels c ON c.id=p.channel_id ORDER BY c.username, p.id, s.measured_at"""
         )
         return csv_response(
             "snapshots.csv",
-            ["канал", "id_публикации", "опубликовано", "измерено", "возраст_часов", "реакций_всего", "изменение", "реакции_json"],
+            ["канал", "id_публикации", "опубликовано", "измерено", "возраст_часов",
+             "реакций_всего", "изменение_реакций", "просмотры", "изменение_просмотров",
+             "комментарии", "изменение_комментариев", "реакции_json"],
             [list(row) for row in rows],
         )
 
@@ -914,13 +922,18 @@ def create_app(
         rows = db.query(
             """SELECT c.username, p.telegram_message_id, p.published_at, p.history_complete,
                (SELECT total_reactions FROM reaction_snapshots s WHERE s.post_id=p.id ORDER BY measured_at DESC LIMIT 1),
+               (SELECT views_count FROM reaction_snapshots s WHERE s.post_id=p.id ORDER BY measured_at DESC LIMIT 1),
+               (SELECT comments_count FROM reaction_snapshots s WHERE s.post_id=p.id ORDER BY measured_at DESC LIMIT 1),
                (SELECT max(delta_total) FROM reaction_snapshots s WHERE s.post_id=p.id),
                (SELECT age_seconds/3600.0 FROM reaction_snapshots s WHERE s.post_id=p.id ORDER BY delta_total DESC LIMIT 1)
                FROM posts p JOIN channels c ON c.id=p.channel_id ORDER BY c.username, p.published_at"""
         )
         return csv_response(
             "posts.csv",
-            ["канал", "id_публикации", "опубликовано", "полная_история", "последнее_число_реакций", "максимальный_скачок", "возраст_скачка_часов"],
+            ["канал", "id_публикации", "опубликовано", "полная_история",
+             "последнее_число_реакций", "последнее_число_просмотров",
+             "последнее_число_комментариев", "максимальный_скачок",
+             "возраст_скачка_часов"],
             [list(row) for row in rows],
         )
 
