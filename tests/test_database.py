@@ -207,6 +207,29 @@ def test_channel_can_be_linked_to_named_institution_and_names_are_editable(tmp_p
     assert updated["institution_short_name"] == "Новое короткое"
 
 
+def test_institution_stores_all_social_m_rating_slices(tmp_path):
+    db = Database(tmp_path / "test.db")
+    db.migrate()
+    institution_id = db.add_institution("Университет", "У")
+    measured_at = datetime(2026, 8, 30, tzinfo=timezone.utc)
+    db.update_institution_m_rating(
+        institution_id,
+        {
+            "social": (1, 99.5), "tg": (2, 80.0), "vk": (3, 70.0),
+            "max": (4, 60.0), "rutube": (5, 50.0),
+        },
+        "Июль 2026",
+        measured_at,
+    )
+    institution = db.list_institutions()[0]
+    assert institution["m_rating_social_rank"] == 1
+    assert institution["m_rating_tg_rank"] == 2
+    assert institution["m_rating_vk_rank"] == 3
+    assert institution["m_rating_max_rank"] == 4
+    assert institution["m_rating_rutube_rank"] == 5
+    assert institution["m_rating_period"] == "Июль 2026"
+
+
 def test_existing_channel_is_moved_without_leaving_placeholder_institution(tmp_path):
     db = Database(tmp_path / "test.db")
     db.migrate()
@@ -258,7 +281,7 @@ def test_platform_migration_backfills_existing_channel_once(tmp_path):
         len(db.list_institutions()), len(db.list_platform_accounts()),
         db.query("SELECT max(version) version FROM schema_migrations")[0]["version"],
     )
-    assert before == after == (1, 1, 8)
+    assert before == after == (1, 1, 9)
     account = db.list_platform_accounts()[0]
     assert account["native_id"] == "123"
     assert account["subscriber_count"] == 1000

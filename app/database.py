@@ -300,6 +300,29 @@ class Database:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(8, ?)",
                 (iso(utc_now()),),
             )
+            institution_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(institutions)")
+            }
+            for name, sql_type in (
+                ("m_rating_social_rank", "INTEGER"),
+                ("m_rating_social_score", "REAL"),
+                ("m_rating_tg_rank", "INTEGER"),
+                ("m_rating_tg_score", "REAL"),
+                ("m_rating_vk_rank", "INTEGER"),
+                ("m_rating_vk_score", "REAL"),
+                ("m_rating_max_rank", "INTEGER"),
+                ("m_rating_max_score", "REAL"),
+                ("m_rating_rutube_rank", "INTEGER"),
+                ("m_rating_rutube_score", "REAL"),
+                ("m_rating_period", "TEXT"),
+                ("m_rating_measured_at", "TEXT"),
+            ):
+                if name not in institution_columns:
+                    conn.execute(f"ALTER TABLE institutions ADD COLUMN {name} {sql_type}")
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(9, ?)",
+                (iso(utc_now()),),
+            )
 
     def add_institution(self, name: str, short_name: str | None = None) -> int:
         with self.connect() as conn:
@@ -713,6 +736,28 @@ class Database:
                 """UPDATE channels SET m_rating_tg_rank=?, m_rating_tg_score=?,
                    m_rating_period=?, m_rating_measured_at=? WHERE id=?""",
                 (rank, score, period, iso(measured_at), channel_id),
+            )
+
+    def update_institution_m_rating(
+        self,
+        institution_id: int,
+        ratings: dict[str, tuple[int, float]],
+        period: str,
+        measured_at: datetime,
+    ) -> None:
+        """Store all official M-Rating social slices on the institution."""
+        values: list[object] = []
+        assignments: list[str] = []
+        for category in ("social", "tg", "vk", "max", "rutube"):
+            rank, score = ratings.get(category, (None, None))
+            assignments.extend((f"m_rating_{category}_rank=?", f"m_rating_{category}_score=?"))
+            values.extend((rank, score))
+        assignments.extend(("m_rating_period=?", "m_rating_measured_at=?"))
+        values.extend((period, iso(measured_at), institution_id))
+        with self.connect() as conn:
+            conn.execute(
+                f"UPDATE institutions SET {', '.join(assignments)} WHERE id=?",
+                values,
             )
 
     def finish_channel_check(self, channel_id: int, last_seen: int, error: str | None = None) -> None:

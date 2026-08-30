@@ -522,6 +522,8 @@ def test_management_uses_unified_account_controls_for_telegram(tmp_path):
     assert "База результатов парсинга" in added.text
     assert 'role="progressbar"' in added.text
     assert "МГУ (МГУ имени М.В. Ломоносова)" in added.text
+    assert "Общий М‑Рейтинг —" in added.text
+    assert "М‑Рейтинг TELEGRAM —" in added.text
     assert 'data-telegram="https://t.me/naukamsu"' in added.text
     assert "Быстро добавить отдельный Telegram-канал" not in added.text
     assert '<th>Название</th><th>Подписчики</th>' not in added.text

@@ -12,6 +12,13 @@ from .database import Database
 
 BASE_URL = "https://www.m-rating.ru/"
 CONFIG_URL = urljoin(BASE_URL, "js/config.js")
+RATING_CATEGORIES = {
+    "social": "social",
+    "tg": "tg",
+    "vk": "vk",
+    "max": "ok",
+    "rutube": "rt",
+}
 
 # Stable university codes published by M-Рейтинг. The Telegram usernames are
 # deliberately mapped explicitly: similarly named universities must never be
@@ -66,32 +73,45 @@ def _config_year(source: str) -> int:
 
 
 def latest_telegram_ranking(payload: dict, year: int) -> tuple[str, dict[str, tuple[int, float]]]:
+    period, rankings = latest_social_rankings(payload, year)
+    return period, rankings["tg"]
+
+
+def latest_social_rankings(
+    payload: dict, year: int,
+) -> tuple[str, dict[str, dict[str, tuple[int, float]]]]:
     months = payload.get("months") or []
     selected: dict | None = None
     for month in reversed(months):
         items = month.get("items") or []
-        if any((item.get("scores") or {}).get("tg") is not None for item in items):
+        if any(
+            any((item.get("scores") or {}).get(source) is not None for source in RATING_CATEGORIES.values())
+            for item in items
+        ):
             selected = month
             break
     if selected is None:
-        raise ValueError("В М-Рейтинге пока нет данных Telegram")
+        raise ValueError("В М-Рейтинге пока нет данных по социальным сетям")
 
-    ranked = sorted(
-        selected.get("items") or [],
-        key=lambda item: (
-            -float((item.get("scores") or {}).get("tg"))
-            if (item.get("scores") or {}).get("tg") is not None
-            else float("inf"),
-            str(item.get("name") or "").casefold(),
-        ),
-    )
-    by_code: dict[str, tuple[int, float]] = {}
-    for index, item in enumerate(ranked, start=1):
-        score = (item.get("scores") or {}).get("tg")
-        code = str(item.get("code") or "").strip()
-        if code and score is not None:
-            by_code[code] = (index, float(score))
-    return f"{selected.get('name')} {year}", by_code
+    rankings: dict[str, dict[str, tuple[int, float]]] = {}
+    for category, source in RATING_CATEGORIES.items():
+        ranked = sorted(
+            (
+                item for item in selected.get("items") or []
+                if (item.get("scores") or {}).get(source) is not None
+            ),
+            key=lambda item: (
+                -float((item.get("scores") or {}).get(source)),
+                str(item.get("name") or "").casefold(),
+            ),
+        )
+        by_code: dict[str, tuple[int, float]] = {}
+        for index, item in enumerate(ranked, start=1):
+            code = str(item.get("code") or "").strip()
+            if code:
+                by_code[code] = (index, float((item.get("scores") or {})[source]))
+        rankings[category] = by_code
+    return f"{selected.get('name')} {year}", rankings
 
 
 async def refresh_m_rating(db: Database, client: httpx.AsyncClient | None = None) -> MRatingImportResult:
@@ -109,21 +129,35 @@ async def refresh_m_rating(db: Database, client: httpx.AsyncClient | None = None
         ratings_path = _config_value(config_response.text, "ratingsJson")
         ratings_response = await client.get(urljoin(BASE_URL, ratings_path))
         ratings_response.raise_for_status()
-        period, ranking = latest_telegram_ranking(ratings_response.json(), year)
+        period, rankings = latest_social_rankings(ratings_response.json(), year)
         fetched_at = datetime.now(timezone.utc)
         updated = 0
+        updated_institutions: set[int] = set()
         for channel in db.list_channels():
             code = CHANNEL_TO_M_RATING_CODE.get(str(channel["username"]).casefold())
-            match = ranking.get(code or "")
-            if not match:
+            if not code:
                 continue
-            rank, score = match
-            db.update_channel_m_rating(int(channel["id"]), rank, score, period, fetched_at)
+            telegram_match = rankings["tg"].get(code)
+            if telegram_match:
+                rank, score = telegram_match
+                db.update_channel_m_rating(int(channel["id"]), rank, score, period, fetched_at)
+            institution_id = channel["institution_id"]
+            if institution_id is None or int(institution_id) in updated_institutions:
+                continue
+            institution_ratings = {
+                category: ranking[code]
+                for category, ranking in rankings.items()
+                if code in ranking
+            }
+            db.update_institution_m_rating(
+                int(institution_id), institution_ratings, period, fetched_at,
+            )
+            updated_institutions.add(int(institution_id))
             updated += 1
         db.set_state("m_rating_last_period", period)
         db.set_state("m_rating_last_updated", fetched_at.isoformat())
         db.set_state("m_rating_last_error", "")
-        return MRatingImportResult(period, updated, len(ranking), fetched_at)
+        return MRatingImportResult(period, updated, len(rankings["social"]), fetched_at)
     except Exception as exc:
         db.set_state("m_rating_last_error", str(exc))
         raise

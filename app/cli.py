@@ -9,8 +9,10 @@ from pathlib import Path
 from .collector import Collector, normalize_channel_ref
 from .config import Settings
 from .database import Database
+from .m_rating import refresh_m_rating
 from .scheduler import run_service
 from .public_web import PublicWebCollector
+from .official_accounts import sync_official_accounts
 from .telegram_client import TelegramReader
 from .vk_collector import VkCollector
 from .web.app import create_app
@@ -39,6 +41,8 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("poll-now", help="Run exactly one complete polling cycle")
     sub.add_parser("list-channels", help="List configured channels")
     sub.add_parser("list-institutions", help="List universities and their platform accounts")
+    sub.add_parser("sync-official-accounts", help="Import the curated official social accounts")
+    sub.add_parser("refresh-m-rating", help="Refresh all five official M-Rating social slices")
     institution = sub.add_parser("add-institution", help="Create a university container")
     institution.add_argument("name")
     institution.add_argument("--short-name", default=None)
@@ -126,6 +130,20 @@ def main(argv: list[str] | None = None) -> int:
             for account in accounts_by_institution.get(int(institution["id"]), []):
                 identity = account["username"] or account["external_key"]
                 print(f"  {account['platform']}\t{identity}\t{account['url'] or ''}")
+    elif args.command == "sync-official-accounts":
+        result = sync_official_accounts(db)
+        print(
+            f"Synced {result['accounts']} accounts for {result['institutions']} institutions; "
+            f"unmatched curated Telegram accounts: {', '.join(result['missing']) or 'none'}; "
+            f"institutions without curated social accounts: "
+            f"{', '.join(result['uncovered']) or 'none'}"
+        )
+    elif args.command == "refresh-m-rating":
+        result = asyncio.run(refresh_m_rating(db))
+        print(
+            f"Updated {result.updated} institutions from {result.period}; "
+            f"{result.available} universities available"
+        )
     elif args.command == "add-institution":
         institution_id = db.add_institution(args.name, args.short_name)
         print(f"Added institution id={institution_id}")
