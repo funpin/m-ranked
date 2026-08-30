@@ -85,6 +85,13 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "window.localStorage.setItem(POST_CHART_PREFERENCES_KEY" in post_page
     assert "applyScaleMode(postChartPreferences.scaleMode,false)" in post_page
     assert "postChartPreferences[index===0?'reactions':'views']=!visible" in post_page
+    assert 'id="deltaLegend"' in post_page
+    assert "Прирост просмотров" in post_page
+    assert "borderColor:'#16a085'" in post_page
+    assert "postChartPreferences.deltaViews" in post_page
+    assert "applyDeltaScaleMode(postChartPreferences.deltaScaleMode,false)" in post_page
+    assert 'class="snapshot-history-table"' in post_page
+    assert 'class="reaction-cell"' in post_page
     assert "общая шкала 1:1</small>" not in post_page
     assert 'id="snapshot-' in post_page
     assert "focusSnapshot(elements[0].index)" in post_page

@@ -4,18 +4,18 @@
 <p class="muted">Опубликовано: <b>{{ post.published_at|local_datetime }} МСК</b> · история {{ 'полная' if post.history_complete else 'неполная' }} · тип: {{ post_type_labels.get(post.post_type, post.post_type) }}{% if post.deleted_at %} · <span class="bad">удалена из Telegram</span>{% endif %}{% if post.ambiguous_album_reactions %} · <span class="warn">реакции элементов альбома различаются</span>{% endif %}</p>
 </div><nav class="post-navigation" aria-label="Навигация по публикациям">{% if older_post %}<a class="post-nav-link" href="/posts/{{ older_post.id }}" rel="prev"><span>← Назад</span><small>№{{ older_post.telegram_message_id }}</small></a>{% else %}<span class="post-nav-link disabled"><span>← Назад</span><small>Нет более раннего</small></span>{% endif %}{% if newer_post %}<a class="post-nav-link next" href="/posts/{{ newer_post.id }}" rel="next"><span>Вперёд →</span><small>№{{ newer_post.telegram_message_id }}</small></a>{% else %}<span class="post-nav-link next disabled"><span>Вперёд →</span><small>Нет более нового</small></span>{% endif %}</nav></div>
 <div class="grid">
-  <div class="panel"><h2>Накопление реакций и просмотров</h2><p class="panel-note">Обе линии построены по одним и тем же замерам. В режиме 1:1 используется общая шкала; «Авто» накладывает кривые с независимыми шкалами для сравнения их формы.</p><div class="post-chart-toolbar"><div id="accumulationLegend" class="chart-legend post-chart-legend" aria-label="Показатели графика"></div><div class="scale-mode" aria-label="Режим масштаба"><span>Масштаб</span><div><button type="button" class="scale-mode-button active" data-mode="shared" aria-pressed="true">1:1</button><button type="button" class="scale-mode-button" data-mode="auto" aria-pressed="false">Авто</button></div></div></div><div class="chart"><canvas id="totalChart"></canvas></div></div>
-  <div class="panel"><h2>Прирост между замерами</h2><p class="panel-note">Сколько новых реакций появилось после предыдущего опроса. Для своевременно найденного нового поста первый прирост считается от момента публикации.</p><div class="chart"><canvas id="deltaChart"></canvas></div></div>
+  <div class="panel"><h2>Накопление реакций и просмотров</h2><p class="panel-note">Обе линии построены по одним и тем же замерам. В режиме 1:1 используется общая шкала; «Авто» накладывает кривые с независимыми шкалами для сравнения их формы.</p><div class="post-chart-toolbar"><div id="accumulationLegend" class="chart-legend post-chart-legend" aria-label="Показатели графика"></div><div class="scale-mode" aria-label="Режим масштаба"><span>Масштаб</span><div><button type="button" class="scale-mode-button accumulation-scale-mode-button active" data-mode="shared" aria-pressed="true">1:1</button><button type="button" class="scale-mode-button accumulation-scale-mode-button" data-mode="auto" aria-pressed="false">Авто</button></div></div></div><div class="chart"><canvas id="totalChart"></canvas></div></div>
+  <div class="panel"><h2>Прирост между замерами</h2><p class="panel-note">Сколько новых реакций и просмотров появилось после предыдущего опроса. В режиме 1:1 используется общая шкала; «Авто» показывает показатели на независимых шкалах.</p><div class="post-chart-toolbar"><div id="deltaLegend" class="chart-legend post-chart-legend" aria-label="Показатели графика прироста"></div><div class="scale-mode" aria-label="Режим масштаба прироста"><span>Масштаб</span><div><button type="button" class="scale-mode-button delta-scale-mode-button active" data-mode="shared" aria-pressed="true">1:1</button><button type="button" class="scale-mode-button delta-scale-mode-button" data-mode="auto" aria-pressed="false">Авто</button></div></div></div><div class="chart"><canvas id="deltaChart"></canvas></div></div>
 </div>
 <div class="panel chart-range"><div class="chart-range-head"><b>Масштаб по времени</b><span id="rangeLabel">Все замеры</span></div><div class="dual-range"><input id="rangeStart" type="range" aria-label="Начало диапазона"><input id="rangeEnd" type="range" aria-label="Конец диапазона"></div><div class="range-notes"><p class="panel-note">Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается.</p><span id="hiddenPoints" class="pill hidden-points" hidden></span></div></div>
-<div class="panel mt table-wrap"><h2>История замеров</h2><table><thead><tr><th>Время замера, МСК</th><th>После публикации</th><th>Всего реакций</th><th>Прирост</th><th class="has-tooltip" tabindex="0" data-tooltip="Прирост реакций / 3, округлённый вверх.">Мин. людей ⓘ</th><th>Просмотры</th><th>Комментарии</th><th>Δ комментариев</th><th>Реакции</th><th>Интервал</th></tr></thead><tbody>
-{% for row in snapshots %}<tr id="snapshot-{{ row.id }}" class="snapshot-row {{ 'synthetic-row' if row.synthetic else '' }}"><td><button type="button" class="snapshot-jump" data-snapshot-id="{{ row.id }}" title="Показать эту точку на графике">{{ row.measured_at|local_datetime }}</button></td><td>{{ 'момент публикации' if row.synthetic else row.age_seconds|duration }}</td><td>{{ row.total_reactions }}</td><td class="{{ 'bad' if row.spike else '' }}">{{ '%+d'|format(row.delta_total) if row.delta_total is not none else '—' }}</td><td>{{ ('≥' ~ row.minimum_people) if row.minimum_people else ('0' if row.minimum_people == 0 else '—') }}</td><td>{{ row.views_count if row.views_count is not none else '—' }}</td><td>{{ row.comments_count if row.comments_count is not none else '—' }}</td><td>{{ '%+d'|format(row.delta_comments) if row.delta_comments is not none else '—' }}</td><td><span class="reaction-list">{% for emoji,count in row.reactions.items() %}<span class="reaction-item">{% if emoji.startswith('custom:') %}<img class="reaction-emoji" src="/emoji/{{ emoji[7:] }}" alt="Пользовательская реакция" title="Пользовательская реакция" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="reaction-fallback" hidden>❔</span>{% elif emoji == 'paid:star' %}⭐{% elif emoji.startswith('unknown:') %}❔{% else %}{{ emoji }}{% endif %} <b>{{ count }}</b></span>{% endfor %}</span></td><td>{{ 'точка публикации' if row.synthetic else ('увеличенный промежуток' if row.interval_uncertain else 'штатный замер') }}</td></tr>{% endfor %}
+<div class="panel mt table-wrap"><h2>История замеров</h2><table class="snapshot-history-table"><thead><tr><th>Время замера, МСК</th><th>После публикации</th><th>Всего реакций</th><th>Прирост</th><th class="has-tooltip" tabindex="0" data-tooltip="Прирост реакций / 3, округлённый вверх.">Мин. людей ⓘ</th><th>Просмотры</th><th>Комментарии</th><th>Δ комментариев</th><th>Реакции</th><th>Интервал</th></tr></thead><tbody>
+{% for row in snapshots %}<tr id="snapshot-{{ row.id }}" class="snapshot-row {{ 'synthetic-row' if row.synthetic else '' }}"><td><button type="button" class="snapshot-jump" data-snapshot-id="{{ row.id }}" title="Показать эту точку на графике">{{ row.measured_at|local_datetime }}</button></td><td>{{ 'момент публикации' if row.synthetic else row.age_seconds|duration }}</td><td>{{ row.total_reactions }}</td><td class="{{ 'bad' if row.spike else '' }}">{{ '%+d'|format(row.delta_total) if row.delta_total is not none else '—' }}</td><td>{{ ('≥' ~ row.minimum_people) if row.minimum_people else ('0' if row.minimum_people == 0 else '—') }}</td><td>{{ row.views_count if row.views_count is not none else '—' }}</td><td>{{ row.comments_count if row.comments_count is not none else '—' }}</td><td>{{ '%+d'|format(row.delta_comments) if row.delta_comments is not none else '—' }}</td><td class="reaction-cell"><span class="reaction-list">{% for emoji,count in row.reactions.items() %}<span class="reaction-item">{% if emoji.startswith('custom:') %}<img class="reaction-emoji" src="/emoji/{{ emoji[7:] }}" alt="Пользовательская реакция" title="Пользовательская реакция" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="reaction-fallback" hidden>❔</span>{% elif emoji == 'paid:star' %}⭐{% elif emoji.startswith('unknown:') %}❔{% else %}{{ emoji }}{% endif %} <b>{{ count }}</b></span>{% endfor %}</span></td><td>{{ 'точка публикации' if row.synthetic else ('увеличенный промежуток' if row.interval_uncertain else 'штатный замер') }}</td></tr>{% endfor %}
 </tbody></table></div>
 <script>
 const rows={{ chart_json|safe }};
 let displayedRows=[];
 const POST_CHART_PREFERENCES_KEY='m-ranked:post-chart-preferences:v1';
-const defaultPostChartPreferences={reactions:true,views:false,scaleMode:'shared'};
+const defaultPostChartPreferences={reactions:true,views:false,scaleMode:'shared',deltaReactions:true,deltaViews:false,deltaScaleMode:'shared'};
 function loadPostChartPreferences(){
   try{
     const saved=JSON.parse(window.localStorage.getItem(POST_CHART_PREFERENCES_KEY)||'{}');
@@ -23,6 +23,9 @@ function loadPostChartPreferences(){
       reactions:typeof saved.reactions==='boolean'?saved.reactions:defaultPostChartPreferences.reactions,
       views:typeof saved.views==='boolean'?saved.views:defaultPostChartPreferences.views,
       scaleMode:['shared','auto'].includes(saved.scaleMode)?saved.scaleMode:defaultPostChartPreferences.scaleMode,
+      deltaReactions:typeof saved.deltaReactions==='boolean'?saved.deltaReactions:defaultPostChartPreferences.deltaReactions,
+      deltaViews:typeof saved.deltaViews==='boolean'?saved.deltaViews:defaultPostChartPreferences.deltaViews,
+      deltaScaleMode:['shared','auto'].includes(saved.deltaScaleMode)?saved.deltaScaleMode:defaultPostChartPreferences.deltaScaleMode,
     };
   }catch(error){return {...defaultPostChartPreferences}}
 }
@@ -42,9 +45,14 @@ const totalChart=new Chart(document.getElementById('totalChart'),{type:'line',da
 totalChart.setDatasetVisibility(0,postChartPreferences.reactions);
 totalChart.setDatasetVisibility(1,postChartPreferences.views);
 const deltaOptions=chartOptions('Новых реакций');
+deltaOptions.plugins={legend:{display:false}};
 deltaOptions.onClick=(event,elements)=>{if(elements.length)focusSnapshot(elements[0].index)};
 deltaOptions.onHover=(event,elements)=>{event.native.target.style.cursor=elements.length?'pointer':'default'};
-const deltaChart=new Chart(document.getElementById('deltaChart'),{type:'bar',data:{labels:[],datasets:[{label:'Прирост реакций',data:[],backgroundColor:[]}]},options:deltaOptions});
+deltaOptions.scales.y.grid={drawOnChartArea:true};
+deltaOptions.scales.yViews={display:false,beginAtZero:true,position:'right',title:{display:true,text:'Прирост просмотров'},ticks:integerTicks,grid:{drawOnChartArea:false}};
+const deltaChart=new Chart(document.getElementById('deltaChart'),{type:'bar',data:{labels:[],datasets:[{label:'Прирост реакций',data:[],yAxisID:'y',backgroundColor:[],borderColor:'#16a085',borderWidth:1},{label:'Прирост просмотров',data:[],yAxisID:'y',backgroundColor:[],borderColor:'#0868df',borderWidth:1}]},options:deltaOptions});
+deltaChart.setDatasetVisibility(0,postChartPreferences.deltaReactions);
+deltaChart.setDatasetVisibility(1,postChartPreferences.deltaViews);
 const accumulationLegend=document.getElementById('accumulationLegend');
 totalChart.data.datasets.forEach((dataset,index)=>{
   const visible=totalChart.isDatasetVisible(index);
@@ -58,14 +66,36 @@ function applyScaleMode(mode,update=true){
   totalChart.data.datasets[1].yAxisID=auto?'yViews':'y';
   totalChart.options.scales.y.title.text=auto?'Реакций':'Реакций и просмотров';
   totalChart.options.scales.yViews.display=auto;
-  document.querySelectorAll('.scale-mode-button').forEach(candidate=>{
+  document.querySelectorAll('.accumulation-scale-mode-button').forEach(candidate=>{
     const active=candidate.dataset.mode===mode;candidate.classList.toggle('active',active);candidate.setAttribute('aria-pressed',String(active));
   });
   if(update)totalChart.update();
 }
 applyScaleMode(postChartPreferences.scaleMode,false);
-document.querySelectorAll('.scale-mode-button').forEach(button=>button.addEventListener('click',()=>{
+document.querySelectorAll('.accumulation-scale-mode-button').forEach(button=>button.addEventListener('click',()=>{
   postChartPreferences.scaleMode=button.dataset.mode;savePostChartPreferences();applyScaleMode(button.dataset.mode);
+}));
+const deltaLegend=document.getElementById('deltaLegend');
+deltaChart.data.datasets.forEach((dataset,index)=>{
+  const visible=deltaChart.isDatasetVisible(index);
+  const button=document.createElement('button');button.type='button';button.className=`legend-toggle${visible?'':' is-hidden'}`;button.title=`${visible?'Скрыть':'Вернуть'} столбцы: ${dataset.label}`;
+  button.innerHTML=`<span class="legend-swatch" style="background:${dataset.borderColor}"></span><span class="legend-label">${dataset.label}</span>`;
+  button.addEventListener('click',()=>{const visible=deltaChart.isDatasetVisible(index);deltaChart.setDatasetVisibility(index,!visible);button.classList.toggle('is-hidden',visible);button.title=`${visible?'Вернуть':'Скрыть'} столбцы: ${dataset.label}`;postChartPreferences[index===0?'deltaReactions':'deltaViews']=!visible;savePostChartPreferences();deltaChart.update();});
+  deltaLegend.appendChild(button);
+});
+function applyDeltaScaleMode(mode,update=true){
+  const auto=mode==='auto';
+  deltaChart.data.datasets[1].yAxisID=auto?'yViews':'y';
+  deltaChart.options.scales.y.title.text=auto?'Прирост реакций':'Прирост реакций и просмотров';
+  deltaChart.options.scales.yViews.display=auto;
+  document.querySelectorAll('.delta-scale-mode-button').forEach(candidate=>{
+    const active=candidate.dataset.mode===mode;candidate.classList.toggle('active',active);candidate.setAttribute('aria-pressed',String(active));
+  });
+  if(update)deltaChart.update();
+}
+applyDeltaScaleMode(postChartPreferences.deltaScaleMode,false);
+document.querySelectorAll('.delta-scale-mode-button').forEach(button=>button.addEventListener('click',()=>{
+  postChartPreferences.deltaScaleMode=button.dataset.mode;savePostChartPreferences();applyDeltaScaleMode(button.dataset.mode);
 }));
 const rangeStart=document.getElementById('rangeStart');
 const rangeEnd=document.getElementById('rangeEnd');
@@ -102,7 +132,8 @@ function focusChart(snapshotId){
   }
   const pointIndex=displayedRows.findIndex(row=>String(row.id)===String(snapshotId));if(pointIndex<0)return;
   totalChart.setActiveElements([{datasetIndex:0,index:pointIndex}]);
-  deltaChart.setActiveElements([{datasetIndex:0,index:pointIndex}]);
+  const deltaDatasetIndex=deltaChart.isDatasetVisible(0)?0:1;
+  deltaChart.setActiveElements([{datasetIndex:deltaDatasetIndex,index:pointIndex}]);
   totalChart.update('none');deltaChart.update('none');
   document.getElementById('totalChart').closest('.panel').scrollIntoView({behavior:'smooth',block:'center'});
   window.setTimeout(()=>{totalChart.setActiveElements([]);deltaChart.setActiveElements([]);totalChart.update('none');deltaChart.update('none')},2600);
@@ -120,7 +151,12 @@ function updateRange(changed){
   const tickLimit=visible.length<=16?visible.length:Math.min(12,Math.max(6,Math.round(120/Math.sqrt(visible.length))));
   totalChart.data.labels=labels;totalChart.data.datasets[0].data=visible.map(r=>r.total_reactions);totalChart.data.datasets[1].data=visible.map(r=>r.views_count);totalChart.data.datasets[0].pointRadius=pointRadius;totalChart.data.datasets[1].pointRadius=pointRadius;totalChart.options.scales.x.ticks.maxTicksLimit=tickLimit;
   const displayedDeltas=visible.map((r,index)=>index===0?r.delta_total:r.total_reactions-visible[index-1].total_reactions);
-  deltaChart.data.labels=labels;deltaChart.data.datasets[0].data=displayedDeltas;deltaChart.data.datasets[0].backgroundColor=displayedDeltas.map(value=>value<0?'#c13b4f':'#0868df');deltaChart.options.scales.x.ticks.maxTicksLimit=tickLimit;
+  const displayedViewDeltas=visible.map((r,index)=>{
+    if(index===0)return r.delta_views;
+    const previous=visible[index-1].views_count;
+    return r.views_count===null||r.views_count===undefined||previous===null||previous===undefined?null:r.views_count-previous;
+  });
+  deltaChart.data.labels=labels;deltaChart.data.datasets[0].data=displayedDeltas;deltaChart.data.datasets[0].backgroundColor=displayedDeltas.map(value=>value<0?'#c13b4f':'#16a085cc');deltaChart.data.datasets[1].data=displayedViewDeltas;deltaChart.data.datasets[1].backgroundColor=displayedViewDeltas.map(value=>value<0?'#c13b4f':'#0868dfbb');deltaChart.options.scales.x.ticks.maxTicksLimit=tickLimit;
   totalChart.update('none');deltaChart.update('none');
   rangeLabel.textContent=rangeRows.length?`${rangeRows[0].measured_label} — ${rangeRows[rangeRows.length-1].measured_label} · ${rangeRows.length} замеров`:'Нет замеров';
   hiddenPoints.hidden=hiddenCount===0;
