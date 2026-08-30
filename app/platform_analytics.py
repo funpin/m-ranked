@@ -309,6 +309,10 @@ def platform_activity_cards(
             int(account["subscriber_count"])
             for account in selected_accounts if account["subscriber_count"] is not None
         ]
+        checked_values = [
+            str(account["last_checked_at"])
+            for account in selected_accounts if account["last_checked_at"]
+        ]
         if not selected_accounts:
             status_text, status_kind = "Аккаунт не добавлен", "muted"
         elif not any(bool(account["enabled"]) for account in selected_accounts):
@@ -327,6 +331,7 @@ def platform_activity_cards(
             "accounts": selected_accounts,
             "account_count": len(selected_accounts),
             "subscriber_count": sum(subscriber_values) if subscriber_values else None,
+            "last_checked_at": max(checked_values) if checked_values else None,
             "rating_rank": institution.get(rank_field),
             "rating_score": institution.get(score_field),
             "total_post_count": total_counts.get(institution_id, 0),

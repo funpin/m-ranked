@@ -582,7 +582,15 @@ class Database:
                             ORDER BY s.measured_at DESC LIMIT 1) latest_comments,
                            (SELECT s.shares_count FROM platform_snapshots s
                             WHERE s.platform_post_id=pp.id
-                            ORDER BY s.measured_at DESC LIMIT 1) latest_shares
+                            ORDER BY s.measured_at DESC LIMIT 1) latest_shares,
+                           (SELECT s.age_seconds FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id
+                            ORDER BY s.measured_at DESC LIMIT 1) current_age,
+                           (SELECT s.age_seconds FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id
+                            ORDER BY s.measured_at LIMIT 1) first_age,
+                           (SELECT COUNT(*) FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id) snapshot_count
                     FROM platform_posts pp
                     JOIN platform_accounts pa ON pa.id=pp.platform_account_id
                     JOIN institutions i ON i.id=pa.institution_id

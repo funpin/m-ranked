@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% block title %}{{ page_title }} · m-ranked{% endblock %}
+{% block content %}
+<h1>{{ page_title }}{% if account_label %} <span class="muted">{{ account_label }}</span>{% endif %}</h1>
+<div class="panel">
+  <p class="panel-note">Данные ниже — по всем публикациям {{ active_platform_label }}, которые сейчас хранятся в базе: за последние {{ stats.retention_days }} дней. Недоступные площадке метрики показываются прочерком.</p>
+  <div class="metrics channel-metrics">
+    <span><b class="metric">{{ stats.post_count }}</b><small>публикаций в базе</small></span>
+    <span class="has-tooltip" tabindex="0" data-tooltip="Первый замер выполнен не позднее {{ settings.complete_history_max_first_age_minutes }} минут после публикации."><b class="metric">{{ stats.monitored }}</b><small>с полной историей ⓘ</small></span>
+    <span class="has-tooltip" tabindex="0" data-tooltip="Типичное число {{ active_platform_info.primary }} на публикацию."><b class="metric">{{ stats.median_reactions|int if stats.median_reactions is not none else '—' }}</b><small>медиана {{ active_platform_info.primary }} ⓘ</small></span>
+    <span class="has-tooltip" tabindex="0" data-tooltip="Типичное число просмотров на публикацию."><b class="metric">{{ stats.median_views|int if stats.median_views is not none else '—' }}</b><small>медиана просмотров ⓘ</small></span>
+    <span class="has-tooltip" tabindex="0" data-tooltip="Типичное число комментариев на публикацию."><b class="metric">{{ stats.median_comments|int if stats.median_comments is not none else '—' }}</b><small>медиана комментариев ⓘ</small></span>
+    {% set platform_short = {'vk':'ВК','max':'MAX','rutube':'RUTUBE'}.get(active_platform, active_platform|upper) %}
+    <span class="has-tooltip" tabindex="0" data-tooltip="Официальное место в М‑Рейтинге {{ active_platform_label }}."><b class="metric">{{ '№' ~ stats.rating_rank if stats.rating_rank else '—' }}</b><small>М‑Рейтинг {{ platform_short }} ⓘ{% if stats.rating_period %} · {{ stats.rating_period }}{% endif %}</small></span>
+  </div>
+</div>
+<div class="panel mt table-wrap"><table><thead><tr><th>Публикация</th><th>Опубликовано, МСК</th><th>Возраст</th><th>История</th><th>{{ active_platform_info.primary }}</th><th>Просмотры</th><th>Комментарии</th><th>Тип</th></tr></thead><tbody>
+{% for post in posts %}<tr><td><a href="/platform-posts/{{ post.id }}?platform={{ active_platform }}">{{ post.external_id }}</a>{% if post.url %} · <a class="muted external" target="_blank" rel="noopener noreferrer" href="{{ post.url }}">{{ active_platform_label }}</a>{% endif %}</td><td>{{ post.published_at|local_datetime }}</td><td>{{ post.current_age|duration }}</td><td>{% if post.snapshot_count %}<span class="pill {{ 'ok' if post.history_complete else 'warn' }}">{{ 'полная' if post.history_complete else 'неполная' }}</span>{% else %}<span class="muted">нет замеров</span>{% endif %}</td><td>{{ post.latest_reactions if post.latest_reactions is not none else '—' }}</td><td>{{ post.latest_views if post.latest_views is not none else '—' }}</td><td>{{ post.latest_comments if post.latest_comments is not none else '—' }}</td><td>{{ post_type_labels.get(post.post_type, post.post_type) }}</td></tr>{% else %}<tr><td colspan="8" class="empty-state">Публикации ещё не собраны.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
