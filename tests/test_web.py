@@ -319,22 +319,35 @@ def test_comparison_exposes_one_fixed_sample_count_per_curve(tmp_path):
     assert "dataset.cohortSize" in page
 
 
-def test_comparison_partial_history_uses_available_hours_only(tmp_path):
+def test_comparison_partial_history_uses_one_fixed_sample(tmp_path):
     cfg = settings(tmp_path)
     db = Database(cfg.database_path)
     db.migrate()
     channel_id = db.add_channel("partial_curve")
-    published = datetime.now(timezone.utc) - timedelta(hours=4)
-    post_id = db.add_post(
+    published = datetime.now(timezone.utc) - timedelta(hours=25)
+    complete_horizon = db.add_post(
         channel_id, "m:903", [903], None, published, published,
-        0, False, "text", False,
+        30 * 60, False, "text", False,
     )
     db.insert_snapshot(
-        post_id, published, 0, 0, {}, [], 1, 15, 2.0, views_count=10,
+        complete_horizon, published + timedelta(minutes=30), 30 * 60, 5,
+        {"👍": 5}, [], 1, 15, 2.0, views_count=50,
     )
     db.insert_snapshot(
-        post_id, published + timedelta(hours=3), 3 * 3600, 12,
-        {"👍": 12}, [], 1, 15, 2.0, views_count=120,
+        complete_horizon, published + timedelta(hours=24), 24 * 3600, 25,
+        {"👍": 25}, [], 1, 15, 2.0, views_count=250,
+    )
+    ends_early = db.add_post(
+        channel_id, "m:904", [904], None, published, published,
+        30 * 60, False, "text", False,
+    )
+    db.insert_snapshot(
+        ends_early, published + timedelta(minutes=30), 30 * 60, 100,
+        {"👍": 100}, [], 1, 15, 2.0, views_count=500,
+    )
+    db.insert_snapshot(
+        ends_early, published + timedelta(hours=3), 3 * 3600, 300,
+        {"👍": 300}, [], 1, 15, 2.0, views_count=1000,
     )
 
     client = TestClient(create_app(cfg, db, lambda: True))
@@ -342,8 +355,12 @@ def test_comparison_partial_history_uses_available_hours_only(tmp_path):
         f"/compare?submitted=true&channels={channel_id}&period=24&include_partial=true"
     ).text
     assert '"cohort_size": 1' in partial_page
-    assert '"curve": [0.0, 0.0, 0.0, 12.0, null' in partial_page
+    assert '"curve": [null, 5.0, 5.0' in partial_page
+    assert '"sample_counts": [0, 1, 1, 1' in partial_page
+    assert '25.0]' in partial_page
+    assert '300.0' not in partial_page
     assert "Неполная история включена:" in partial_page
+    assert "Выборка внутри линии не меняется." in partial_page
     assert "недостаточно замеров" not in partial_page
 
     full_page = client.get(

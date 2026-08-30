@@ -102,26 +102,11 @@ def fixed_cohort_median_curve(
     curve: list[float | None] = []
     counts: list[int] = []
     for hour in range(max_hour + 1):
+        if hour < start_hour:
+            curve.append(None)
+            counts.append(0)
+            continue
         values = [post[hour] for post in cohort if hour in post]
         curve.append(median(values) if values else None)
         counts.append(len(values))
     return curve, counts, len(cohort)
-
-
-def available_cohort_median_curve(
-    post_points: Iterable[Mapping[int, float]],
-    max_hour: int,
-) -> tuple[list[float | None], list[int], int]:
-    """Build a curve from posts with an actual observation at each hour.
-
-    This mode is intended for live/partial history, so the sample may shrink
-    towards the end of the selected horizon.
-    """
-    posts = [post for post in post_points if post]
-    curve: list[float | None] = []
-    counts: list[int] = []
-    for hour in range(max_hour + 1):
-        values = [post[hour] for post in posts if hour in post]
-        curve.append(median(values) if values else None)
-        counts.append(len(values))
-    return curve, counts, len(posts)
