@@ -178,10 +178,12 @@ def test_platform_context_never_falls_back_to_telegram_data(tmp_path):
 
     rating = client.get("/rating?platform=vk").text
     assert "Рейтинг · ВКонтакте" in rating
-    assert "Раздел не смешивает данные разных соцсетей" in rating
+    assert "Только публикации и замеры ВКонтакте" in rating
     assert "999" not in rating
     comparison = client.get("/compare?platform=vk").text
     assert "Сравнение · ВКонтакте" in comparison
+    assert "Типичное накопление лайков" in comparison
+    assert "999" not in comparison
     assert 'href="/?platform=vk"' in comparison
 
     redirect = client.get(
@@ -236,6 +238,58 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     ).status_code == 404
     assert "-10_20" in client.get("/export/posts.csv?platform=vk").text
     assert "160" in client.get("/export/snapshots.csv?platform=vk").text
+
+    rating = client.get("/rating?platform=vk&period=1d").text
+    assert "Рейтинг · ВКонтакте" in rating
+    assert "ВУЗ" in rating
+    assert f'/platform-posts/{platform_post_id}?platform=vk' in rating
+    assert "Открыть публикацию VK" in rating
+
+
+def test_vk_comparison_uses_fixed_platform_cohort_and_interactions(tmp_path):
+    cfg = replace(settings(tmp_path), vk_access_token="token")
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("Полный тестовый вуз", "ТВУЗ")
+    account_id = db.add_platform_account(
+        institution_id, "vk", "test_vk", title="VK тестового вуза",
+    )
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    for index, values in enumerate(((10, 20), (30, 50)), start=1):
+        platform_post_id = db.upsert_platform_post(
+            account_id, f"-1_{index}", published, published,
+            "text", f"https://vk.com/wall-1_{index}", {},
+        )
+        db.insert_platform_snapshot(
+            platform_post_id, published, 0, 5,
+            views_count=100, reactions_count=values[0],
+            comments_count=2, shares_count=1, raw={},
+        )
+        db.insert_platform_snapshot(
+            platform_post_id, published + timedelta(hours=24), 24 * 3600, 60,
+            views_count=200, reactions_count=values[1],
+            comments_count=4, shares_count=2, raw={},
+        )
+    telegram_channel = db.add_channel("telegram_only")
+    telegram_post = db.add_post(
+        telegram_channel, "m:999", [999], None, published, published,
+        0, True, "text", False,
+    )
+    db.insert_snapshot(
+        telegram_post, published + timedelta(hours=24), 24 * 3600,
+        9999, {"👍": 9999}, [], 60, 15, 2.0, views_count=10000,
+    )
+    client = TestClient(create_app(cfg, db))
+
+    page = client.get(
+        f"/compare?platform=vk&submitted=true&institutions={institution_id}&period=24",
+    ).text
+
+    assert "Сравнение · ВКонтакте" in page
+    assert "ТВУЗ" in page
+    assert '"cohort_size": 2' in page
+    assert '"sample_counts": [2, 2' in page
+    assert "9999" not in page
+    assert "Взаимодействия / просмотры, медиана" in page
 
 
 def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp_path):

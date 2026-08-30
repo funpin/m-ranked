@@ -68,6 +68,92 @@ def collector_configured(settings: Settings, platform: str) -> bool:
     return False
 
 
+def platform_rating_data(
+    db: Database, platform: str, cutoff: datetime,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return institution and publication ratings isolated to one platform."""
+    if platform not in PLATFORM_PRESENTATION:
+        raise ValueError(f"Unsupported platform rating: {platform}")
+    posts = [dict(row) for row in db.query(
+        """SELECT pp.id, pp.external_id, pp.url, pp.published_at,
+                  pa.id platform_account_id, pa.institution_id, pa.username,
+                  pa.title account_title, i.name institution_name,
+                  i.short_name institution_short_name,
+                  latest.views_count, latest.reactions_count,
+                  latest.comments_count, latest.shares_count
+           FROM platform_posts pp
+           JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+           JOIN institutions i ON i.id=pa.institution_id
+           JOIN platform_snapshots latest ON latest.id=(
+                SELECT s.id FROM platform_snapshots s
+                WHERE s.platform_post_id=pp.id
+                ORDER BY s.measured_at DESC LIMIT 1)
+           WHERE pa.platform=? AND pa.enabled=1 AND pp.published_at>=?""",
+        (platform, cutoff.isoformat()),
+    )]
+    subscribers: dict[int, int | None] = {}
+    for account in db.list_platform_accounts(platform=platform, enabled_only=True):
+        institution_id = int(account["institution_id"])
+        value = account["subscriber_count"]
+        if value is not None:
+            subscribers[institution_id] = (subscribers.get(institution_id) or 0) + int(value)
+        else:
+            subscribers.setdefault(institution_id, None)
+
+    grouped: dict[int, dict[str, Any]] = {}
+    for post in posts:
+        institution_id = int(post["institution_id"])
+        row = grouped.setdefault(institution_id, {
+            "id": institution_id,
+            "name": post["institution_name"],
+            "short_name": post["institution_short_name"],
+            "post_count": 0,
+            "total_views": 0,
+            "total_reactions": 0,
+            "total_comments": 0,
+            "total_shares": 0,
+            "total_interactions": 0,
+            "reaction_values": [],
+        })
+        row["post_count"] += 1
+        for metric in ("views", "reactions", "comments", "shares"):
+            value = post[f"{metric}_count"]
+            if value is not None:
+                row[f"total_{metric}"] += int(value)
+        interaction_values = [
+            post["reactions_count"], post["comments_count"], post["shares_count"],
+        ]
+        available_interactions = [int(value) for value in interaction_values if value is not None]
+        post["interactions_count"] = (
+            sum(available_interactions) if available_interactions else None
+        )
+        post["interaction_rate"] = (
+            post["interactions_count"] * 100.0 / int(post["views_count"])
+            if post["interactions_count"] is not None
+            and post["views_count"] is not None and int(post["views_count"]) > 0
+            else None
+        )
+        if post["interactions_count"] is not None:
+            row["total_interactions"] += post["interactions_count"]
+        if post["reactions_count"] is not None:
+            row["reaction_values"].append(int(post["reactions_count"]))
+
+    institutions: list[dict[str, Any]] = []
+    for institution_id, row in grouped.items():
+        row["avg_reactions"] = (
+            sum(row["reaction_values"]) / len(row["reaction_values"])
+            if row["reaction_values"] else None
+        )
+        row["interaction_rate"] = (
+            row["total_interactions"] * 100.0 / row["total_views"]
+            if row["total_views"] > 0 else None
+        )
+        row["subscriber_count"] = subscribers.get(institution_id)
+        del row["reaction_values"]
+        institutions.append(row)
+    return institutions, posts
+
+
 def platform_activity_cards(
     db: Database,
     settings: Settings,

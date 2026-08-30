@@ -29,7 +29,11 @@ from ..config import Settings
 from ..collector import normalize_channel_ref
 from ..database import Database
 from ..m_rating import refresh_m_rating
-from ..platform_analytics import PLATFORM_PRESENTATION, platform_activity_cards
+from ..platform_analytics import (
+    PLATFORM_PRESENTATION,
+    platform_activity_cards,
+    platform_rating_data,
+)
 from ..reactions import custom_emoji_asset
 from ..vk import normalize_vk_community_ref
 
@@ -728,6 +732,53 @@ def create_app(
         platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
         platform = normalize_platform(platform)
+        if platform == "vk":
+            period, period_delta, period_label, period_short = period_spec(period)
+            cutoff = datetime.now(timezone.utc) - period_delta
+            institution_rankings, top_posts = platform_rating_data(db, platform, cutoff)
+            institution_keys = {
+                "average": "avg_reactions", "total": "total_reactions",
+                "engagement": "interaction_rate", "views": "total_views",
+                "subscribers": "subscriber_count",
+            }
+            post_keys = {
+                "reactions": "reactions_count", "views": "views_count",
+                "comments": "comments_count", "shares": "shares_count",
+                "interactions": "interactions_count", "view_share": "interaction_rate",
+            }
+            channel_sort = channel_sort if channel_sort in institution_keys else "engagement"
+            post_sort = post_sort if post_sort in post_keys else "view_share"
+            channel_direction = channel_direction if channel_direction in {"asc", "desc"} else "desc"
+            post_direction = post_direction if post_direction in {"asc", "desc"} else "desc"
+
+            def sorted_available(
+                rows: list[dict[str, Any]], key: str, descending: bool,
+            ) -> list[dict[str, Any]]:
+                available = [row for row in rows if row.get(key) is not None]
+                unavailable = [row for row in rows if row.get(key) is None]
+                available.sort(key=lambda row: row[key], reverse=descending)
+                return available + unavailable
+
+            institution_rankings = sorted_available(
+                institution_rankings, institution_keys[channel_sort], channel_direction == "desc",
+            )
+            top_posts = sorted_available(
+                top_posts, post_keys[post_sort], post_direction == "desc",
+            )
+            return render(
+                request, "platform_rating.html",
+                institution_rankings=institution_rankings,
+                top_posts=top_posts[:50], period=period,
+                period_label=period_label, period_short=period_short,
+                period_badge={
+                    "3h": "3 часа", "1d": "24 часа",
+                    "7d": "7 дней", "30d": "30 дней",
+                }[period],
+                channel_sort=channel_sort, channel_direction=channel_direction,
+                post_sort=post_sort, post_direction=post_direction,
+                active_platform=platform,
+                presentation=PLATFORM_PRESENTATION[platform],
+            )
         if platform != "telegram":
             return render(
                 request, "platform_pending.html", page_title="Рейтинг",
@@ -1366,12 +1417,120 @@ def create_app(
     async def compare(
         request: Request,
         channels: list[int] = Query(default=[]),
+        institutions: list[int] = Query(default=[]),
         period: int = Query(default=72),
         include_partial: bool = Query(default=False),
         submitted: bool = Query(default=False),
         platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
         platform = normalize_platform(platform)
+        if platform == "vk":
+            period = period if period in (24, 48, 72, 168, 336) else 72
+            entities = _rows_dict(db.query(
+                """SELECT i.id, i.name, i.short_name,
+                          GROUP_CONCAT(COALESCE(pa.title, pa.username, pa.external_key), ', ') accounts
+                   FROM institutions i JOIN platform_accounts pa ON pa.institution_id=i.id
+                   WHERE pa.platform='vk' AND pa.enabled=1
+                   GROUP BY i.id ORDER BY COALESCE(i.short_name, i.name) COLLATE NOCASE"""
+            ))
+            selected_entities = (
+                institutions if submitted else [int(row["id"]) for row in entities]
+            )
+            datasets: list[dict[str, Any]] = []
+            for entity in entities:
+                if int(entity["id"]) not in selected_entities:
+                    continue
+                coverage_clause = (
+                    "" if include_partial else
+                    """AND EXISTS(SELECT 1 FROM platform_snapshots early
+                                   WHERE early.platform_post_id=pp.id
+                                     AND early.age_seconds<=?)"""
+                )
+                params: list[Any] = [int(entity["id"]), period * 3600]
+                if not include_partial:
+                    params.append(settings.complete_history_max_first_age_minutes * 60)
+                posts = db.query(
+                    f"""SELECT pp.id FROM platform_posts pp
+                         JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+                         WHERE pa.platform='vk' AND pa.enabled=1
+                           AND pa.institution_id=?
+                           AND EXISTS(SELECT 1 FROM platform_snapshots coverage
+                                      WHERE coverage.platform_post_id=pp.id
+                                        AND coverage.age_seconds>=?)
+                           {coverage_clause}""",
+                    tuple(params),
+                )
+                raw_points: list[dict[int, float]] = []
+                raw_conversion_points: list[dict[int, float]] = []
+                for post in posts:
+                    rows = _rows_dict(db.query(
+                        """SELECT age_seconds, views_count, reactions_count,
+                                  comments_count, shares_count
+                           FROM platform_snapshots
+                           WHERE platform_post_id=? AND age_seconds<=?
+                           ORDER BY age_seconds""",
+                        (post["id"], period * 3600),
+                    ))
+                    likes_rows = [
+                        {"age_seconds": row["age_seconds"],
+                         "total_reactions": row["reactions_count"]}
+                        for row in rows if row["reactions_count"] is not None
+                    ]
+                    points = hourly_asof_points(likes_rows, period)
+                    if points:
+                        raw_points.append(points)
+                    conversion_rows = []
+                    for row in rows:
+                        if row["views_count"] is None or int(row["views_count"]) <= 0:
+                            continue
+                        values = [
+                            row["reactions_count"], row["comments_count"], row["shares_count"],
+                        ]
+                        available = [int(value) for value in values if value is not None]
+                        if not available:
+                            continue
+                        conversion_rows.append({
+                            "age_seconds": row["age_seconds"],
+                            "total_reactions": sum(available) * 100 / int(row["views_count"]),
+                        })
+                    conversion_points = hourly_asof_points(conversion_rows, period)
+                    if conversion_points:
+                        raw_conversion_points.append(conversion_points)
+                curve, sample_counts, cohort_size = fixed_cohort_median_curve(
+                    raw_points, period, start_hour=1 if include_partial else 0,
+                )
+                conversion_curve, conversion_counts, conversion_size = (
+                    fixed_cohort_median_curve(
+                        raw_conversion_points, period,
+                        start_hour=1 if include_partial else 0,
+                    )
+                )
+                datasets.append({
+                    "channel": entity["short_name"] or entity["name"],
+                    "title": entity["short_name"] or entity["name"],
+                    "curve": curve, "sample_counts": sample_counts,
+                    "cohort_size": cohort_size,
+                    "conversion_curve": conversion_curve,
+                    "conversion_sample_counts": conversion_counts,
+                    "conversion_cohort_size": conversion_size,
+                })
+            data = {"labels": list(range(period + 1)), "datasets": datasets}
+            has_points = any(
+                any(value is not None for value in dataset["curve"])
+                for dataset in datasets
+            )
+            return render(
+                request, "platform_compare.html", entities=entities,
+                selected=selected_entities, period=period,
+                comparison_period_label={
+                    24: "24 часа", 48: "48 часов", 72: "72 часа",
+                    168: "7 дней", 336: "14 дней",
+                }[period],
+                include_partial=include_partial,
+                data_json=json.dumps(data, ensure_ascii=False),
+                has_points=has_points, submitted=submitted,
+                active_platform=platform,
+            )
         if platform != "telegram":
             return render(
                 request, "platform_pending.html", page_title="Сравнение",
