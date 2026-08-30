@@ -616,19 +616,42 @@ def create_app(
         m_rating_status: str | None = Query(default=None),
         channel_status: str | None = Query(default=None),
         platform_status: str | None = Query(default=None),
+        institution_id: int | None = Query(default=None),
         _: str = Depends(require_admin),
     ) -> HTMLResponse:
         managed_channels = db.list_channels_with_institutions()
+        channels_by_account = {
+            int(row["platform_account_id"]): row
+            for row in managed_channels if row["platform_account_id"] is not None
+        }
         institutions = db.list_institutions()
         platform_accounts = db.list_platform_accounts()
         accounts_by_institution: dict[int, list[Any]] = {}
         for account in platform_accounts:
             accounts_by_institution.setdefault(int(account["institution_id"]), []).append(account)
-        institution_groups = [
-            {"institution": institution,
-             "accounts": accounts_by_institution.get(int(institution["id"]), [])}
-            for institution in institutions
-        ]
+        institution_groups = []
+        for institution in institutions:
+            accounts = accounts_by_institution.get(int(institution["id"]), [])
+            account_values: dict[str, str] = {}
+            for account in accounts:
+                platform = str(account["platform"])
+                if platform in account_values:
+                    continue
+                reference = str(account["url"] or "")
+                if not reference:
+                    username = str(account["username"] or account["external_key"] or "")
+                    reference = f"@{username}" if platform == "telegram" else username
+                account_values[platform] = reference
+            institution_groups.append({
+                "institution": institution,
+                "accounts": accounts,
+                "account_values": account_values,
+            })
+        institution_ids = {int(row["id"]) for row in institutions}
+        selected_institution_id = (
+            institution_id if institution_id in institution_ids
+            else (int(institutions[0]["id"]) if institutions else None)
+        )
         project_root = Path(__file__).resolve().parents[2]
         database_path = settings.database_path
         if not database_path.is_absolute():
@@ -654,6 +677,8 @@ def create_app(
             institutions=institutions,
             institution_names={row["id"]: row["name"] for row in institutions},
             institution_groups=institution_groups,
+            selected_institution_id=selected_institution_id,
+            channels_by_account=channels_by_account,
             platform_accounts=platform_accounts,
             platform_count=len(platform_accounts),
             platform_status=platform_status,
@@ -698,8 +723,11 @@ def create_app(
         check_csrf(csrf_token)
         if not name.strip():
             raise HTTPException(status_code=400, detail="Укажите название вуза")
-        db.add_institution(name, short_name or None)
-        return RedirectResponse("/manage?platform_status=institution-added", status_code=303)
+        institution_id = db.add_institution(name, short_name or None)
+        return RedirectResponse(
+            f"/manage?platform_status=institution-added&institution_id={institution_id}",
+            status_code=303,
+        )
 
     @app.post("/manage/institutions/{institution_id}")
     async def manage_update_institution(
@@ -713,7 +741,10 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not updated:
             raise HTTPException(status_code=404, detail="Вуз не найден")
-        return RedirectResponse("/manage?platform_status=institution-updated", status_code=303)
+        return RedirectResponse(
+            f"/manage?platform_status=institution-updated&institution_id={institution_id}",
+            status_code=303,
+        )
 
     @app.post("/manage/institutions/{institution_id}/accounts")
     async def manage_update_institution_accounts(
@@ -754,7 +785,56 @@ def create_app(
                 institution_id, platform, external_key, username=external_key,
                 url=account_url, access_mode=access_mode, data_quality=data_quality,
             )
-        return RedirectResponse("/manage?platform_status=accounts-updated", status_code=303)
+        return RedirectResponse(
+            f"/manage?platform_status=accounts-updated&institution_id={institution_id}",
+            status_code=303,
+        )
+
+    @app.post("/manage/platform-accounts/{account_id}/disable")
+    async def manage_disable_platform_account(
+        account_id: int, csrf_token: str = Form(...),
+        _: str = Depends(require_admin),
+    ) -> RedirectResponse:
+        check_csrf(csrf_token)
+        account = db.platform_account(account_id)
+        if account is None:
+            raise HTTPException(status_code=404, detail="Аккаунт не найден")
+        db.set_platform_account_enabled(account_id, False)
+        return RedirectResponse(
+            f"/manage?platform_status=account-disabled&institution_id={account['institution_id']}",
+            status_code=303,
+        )
+
+    @app.post("/manage/platform-accounts/{account_id}/enable")
+    async def manage_enable_platform_account(
+        account_id: int, csrf_token: str = Form(...),
+        _: str = Depends(require_admin),
+    ) -> RedirectResponse:
+        check_csrf(csrf_token)
+        account = db.platform_account(account_id)
+        if account is None:
+            raise HTTPException(status_code=404, detail="Аккаунт не найден")
+        db.set_platform_account_enabled(account_id, True)
+        return RedirectResponse(
+            f"/manage?platform_status=account-enabled&institution_id={account['institution_id']}",
+            status_code=303,
+        )
+
+    @app.post("/manage/platform-accounts/{account_id}/delete")
+    async def manage_delete_platform_account(
+        account_id: int, csrf_token: str = Form(...),
+        _: str = Depends(require_admin),
+    ) -> RedirectResponse:
+        check_csrf(csrf_token)
+        account = db.platform_account(account_id)
+        if account is None:
+            raise HTTPException(status_code=404, detail="Аккаунт не найден")
+        institution_id = int(account["institution_id"])
+        db.delete_platform_account(account_id)
+        return RedirectResponse(
+            f"/manage?platform_status=account-deleted&institution_id={institution_id}",
+            status_code=303,
+        )
 
     @app.post("/manage/platform-accounts")
     async def manage_add_platform_account(
