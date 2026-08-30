@@ -234,7 +234,23 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     account = client.get(f"/platform-accounts/{account_id}?platform=vk").text
     assert f'/platform-posts/{platform_post_id}?platform=vk' in account
     publication = client.get(f"/platform-posts/{platform_post_id}?platform=vk").text
-    assert "Накопление метрик" in publication
+    assert "Накопление лайков, просмотров, комментариев и репостов" in publication
+    assert "Прирост между замерами" in publication
+    assert 'id="accumulationLegend"' in publication
+    assert 'id="deltaLegend"' in publication
+    assert 'id="rangeStart"' in publication
+    assert 'id="rangeEnd"' in publication
+    assert 'data-mode="shared"' in publication
+    assert 'data-mode="auto"' in publication
+    assert "PLATFORM_POST_CHART_PREFERENCES_KEY" in publication
+    assert "MAX_VISIBLE_POINTS=144" in publication
+    assert 'class="snapshot-jump"' in publication
+    assert ".post-heading h1{overflow-wrap:anywhere}" in publication
+    assert ".post-nav-link small{max-width:100%" in publication
+    assert "Всего лайков" in publication
+    assert "Прирост лайков" in publication
+    assert "Прирост просмотров" in publication
+    assert "1 ч 0 мин" in publication
     assert "wall-10_20" in publication
     assert client.get(
         f"/platform-posts/{platform_post_id}?platform=max",
@@ -247,6 +263,32 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     assert "ВУЗ" in rating
     assert f'/platform-posts/{platform_post_id}?platform=vk' in rating
     assert "Открыть публикацию VK" in rating
+
+
+def test_platform_post_page_links_adjacent_account_posts(tmp_path):
+    cfg = replace(settings(tmp_path), vk_access_token="token")
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("Соседний вуз", "СВ")
+    account_id = db.add_platform_account(
+        institution_id, "vk", "adjacent-vk", title="VK соседнего вуза",
+    )
+    published = datetime.now(timezone.utc) - timedelta(hours=3)
+    post_ids = [
+        db.upsert_platform_post(
+            account_id, f"-10_{external_id}", published + timedelta(hours=index),
+            published + timedelta(hours=index), "text",
+            f"https://vk.com/wall-10_{external_id}", {},
+        )
+        for index, external_id in enumerate((101, 102, 103))
+    ]
+    client = TestClient(create_app(cfg, db))
+
+    page = client.get(f"/platform-posts/{post_ids[1]}?platform=vk").text
+
+    assert f'href="/platform-posts/{post_ids[0]}?platform=vk" rel="prev"' in page
+    assert "-10_101" in page
+    assert f'href="/platform-posts/{post_ids[2]}?platform=vk" rel="next"' in page
+    assert "-10_103" in page
 
 
 def test_vk_comparison_uses_fixed_platform_cohort_and_interactions(tmp_path):
@@ -406,6 +448,26 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     assert "Опубликовано, МСК" in institution
     assert "Возраст" in institution
     assert "История" in institution
+
+    publication = client.get(
+        f"/platform-posts/{post_id}?platform={platform}",
+    ).text
+    assert 'class="post-heading"' in publication
+    assert 'id="totalChart"' in publication
+    assert 'id="deltaChart"' in publication
+    assert "Масштаб по времени" in publication
+    assert "Прирост между замерами" in publication
+    assert "window.localStorage.setItem(PLATFORM_POST_CHART_PREFERENCES_KEY" in publication
+    assert '"key": "views"' in publication
+    assert '"key": "reactions"' not in publication
+    if platform == "rutube":
+        assert "Накопление просмотров" in publication
+        assert '"key": "comments"' not in publication
+        assert '"key": "shares"' not in publication
+    else:
+        assert "Накопление просмотров, комментариев и репостов" in publication
+        assert '"key": "comments"' in publication
+        assert '"key": "shares"' in publication
 
 
 def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp_path):

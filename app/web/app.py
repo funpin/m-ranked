@@ -1351,15 +1351,42 @@ def create_app(
         post_platform = str(post["platform"])
         if platform not in {"all", post_platform}:
             raise HTTPException(status_code=404, detail="Публикация другой площадки")
+        older_post = db.query(
+            """SELECT id, external_id FROM platform_posts
+               WHERE platform_account_id=?
+                 AND (published_at<? OR (published_at=? AND id<?))
+               ORDER BY published_at DESC, id DESC LIMIT 1""",
+            (
+                post["platform_account_id"], post["published_at"],
+                post["published_at"], post_id,
+            ),
+        )
+        newer_post = db.query(
+            """SELECT id, external_id FROM platform_posts
+               WHERE platform_account_id=?
+                 AND (published_at>? OR (published_at=? AND id>?))
+               ORDER BY published_at ASC, id ASC LIMIT 1""",
+            (
+                post["platform_account_id"], post["published_at"],
+                post["published_at"], post_id,
+            ),
+        )
         snapshots = _rows_dict(db.platform_snapshots(post_id))
         previous: dict[str, int | None] = {
             "views": None, "reactions": None, "comments": None, "shares": None,
         }
+        previous_measured_at: datetime | None = None
         for row in snapshots:
-            row["measured_label"] = _as_datetime(row["measured_at"]).astimezone(tz).strftime(
+            measured_at = _as_datetime(row["measured_at"])
+            row["measured_label"] = measured_at.astimezone(tz).strftime(
                 "%d.%m, %H:%M:%S"
             )
             row["age_label"] = f"через {format_duration(row['age_seconds'])}"
+            row["interval_label"] = (
+                format_duration((measured_at - previous_measured_at).total_seconds())
+                if previous_measured_at is not None else "—"
+            )
+            previous_measured_at = measured_at
             for metric in previous:
                 value = row[f"{metric}_count"]
                 row[f"delta_{metric}"] = (
@@ -1367,9 +1394,70 @@ def create_app(
                     if value is not None and previous[metric] is not None else None
                 )
                 previous[metric] = int(value) if value is not None else None
+        presentation = PLATFORM_PRESENTATION[post_platform]
+        reaction_label = "Лайки" if post_platform == "vk" else "Реакции"
+        metric_catalog = (
+            {
+                "key": "reactions", "field": "reactions_count",
+                "delta_field": "delta_reactions", "label": reaction_label,
+                "noun": str(presentation["primary"]),
+                "total_label": f"Всего {presentation['primary']}",
+                "delta_label": f"Прирост {presentation['primary']}",
+                "color": "#16a085",
+            },
+            {
+                "key": "views", "field": "views_count",
+                "delta_field": "delta_views", "label": "Просмотры",
+                "noun": "просмотров",
+                "total_label": "Всего просмотров",
+                "delta_label": "Прирост просмотров", "color": "#0868df",
+            },
+            {
+                "key": "comments", "field": "comments_count",
+                "delta_field": "delta_comments", "label": "Комментарии",
+                "noun": "комментариев",
+                "total_label": "Всего комментариев",
+                "delta_label": "Прирост комментариев", "color": "#a86200",
+            },
+            {
+                "key": "shares", "field": "shares_count",
+                "delta_field": "delta_shares", "label": "Репосты",
+                "noun": "репостов",
+                "total_label": "Всего репостов",
+                "delta_label": "Прирост репостов", "color": "#7857c7",
+            },
+        )
+        available_metrics = [
+            dict(metric) for metric in metric_catalog
+            if metric["key"] in presentation["capabilities"]
+            and (
+                not snapshots
+                or any(row.get(str(metric["field"])) is not None for row in snapshots)
+            )
+        ]
+        if not available_metrics:
+            available_metrics = [
+                dict(metric) for metric in metric_catalog
+                if metric["key"] in presentation["capabilities"]
+            ]
+        metric_nouns = [str(metric["noun"]) for metric in available_metrics]
+        metric_phrase = (
+            metric_nouns[0] if len(metric_nouns) == 1
+            else f"{', '.join(metric_nouns[:-1])} и {metric_nouns[-1]}"
+        )
+        complete_limit = settings.complete_history_max_first_age_minutes * 60
+        history_complete = bool(
+            snapshots and snapshots[0].get("age_seconds") is not None
+            and int(snapshots[0]["age_seconds"]) <= complete_limit
+        )
         return render(
             request, "platform_publication.html", post=post, snapshots=snapshots,
+            older_post=older_post[0] if older_post else None,
+            newer_post=newer_post[0] if newer_post else None,
+            available_metrics=available_metrics, metric_phrase=metric_phrase,
+            history_complete=history_complete,
             chart_json=json.dumps(snapshots, ensure_ascii=False),
+            metric_json=json.dumps(available_metrics, ensure_ascii=False),
             active_platform=post_platform,
         )
 
