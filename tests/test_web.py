@@ -78,6 +78,10 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert 'data-mode="shared"' in post_page
     assert 'data-mode="auto"' in post_page
     assert "totalChart.options.scales.yViews.display=auto" in post_page
+    assert "POST_CHART_PREFERENCES_KEY='m-ranked:post-chart-preferences:v1'" in post_page
+    assert "window.localStorage.setItem(POST_CHART_PREFERENCES_KEY" in post_page
+    assert "applyScaleMode(postChartPreferences.scaleMode,false)" in post_page
+    assert "postChartPreferences[index===0?'reactions':'views']=!visible" in post_page
     assert "общая шкала 1:1</small>" not in post_page
     assert 'id="snapshot-' in post_page
     assert "focusSnapshot(elements[0].index)" in post_page
