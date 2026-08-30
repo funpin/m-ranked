@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Обзор · m-ranked{% endblock %}
 {% block content %}
-<h1>{% if active_platform == 'telegram' %}Обзор каналов{% else %}Обзор вузов · {{ active_platform_label }}{% endif %}</h1>
-{% if active_platform == 'telegram' %}<p class="lead"><b>Активность всех постов в базе за выбранный период</b> — включая публикации, вышедшие раньше. Это прирост реакций и просмотров внутри временного окна, а не сумма текущих показателей только у новых постов.</p>{% elif active_platform == 'all' %}<p class="lead"><b>Общий контур вуза:</b> официальные аккаунты и общий М‑Рейтинг без сложения несопоставимых метрик разных площадок.</p>{% else %}<p class="lead"><b>Активность публикаций {{ active_platform_label }} за выбранный период.</b> Данные других соцсетей в расчёт не попадают; недоступные площадке метрики показываются прочерком.</p>{% endif %}
+<h1>{% if active_platform == 'all' %}Обзор вузов{% else %}Обзор каналов{% endif %}</h1>
+{% if active_platform == 'telegram' %}<p class="lead"><b>Активность всех постов в базе за выбранный период</b> — включая публикации, вышедшие раньше. Это прирост реакций и просмотров внутри временного окна, а не сумма текущих показателей только у новых постов.</p>{% elif active_platform == 'all' %}<p class="lead"><b>Общий контур вуза:</b> официальные аккаунты и общий М‑Рейтинг без сложения несопоставимых метрик разных площадок.</p>{% else %}<p class="lead"><b>Активность всех публикаций в базе за выбранный период</b> — включая публикации, вышедшие раньше. Это прирост доступных метрик {{ active_platform_label }} внутри временного окна, а не сумма текущих показателей только у новых публикаций. Данные других соцсетей в расчёт не попадают.</p>{% endif %}
 <style>
   .post-stat-badges{display:flex;align-items:center;gap:7px;margin-top:9px;white-space:nowrap}
   .post-stat-badge{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:5px 8px;border:1px solid #d9e5f4;border-radius:9px;background:#f7faff;color:#7b8799;line-height:1}
@@ -72,26 +72,35 @@
 {% else %}
 <div class="grid section overview-grid">
 {% for card in platform_cards %}
+  {% if active_platform == 'all' %}
   <article class="card overview-card platform-overview-card">
     {% if card.rating_rank %}<span class="m-rating-badge has-tooltip" tabindex="0" data-tooltip="Официальное место в М‑Рейтинге: {{ active_platform_label }}{% if card.institution.m_rating_period %} · {{ card.institution.m_rating_period }}{% endif %}.">М‑Рейтинг {{ platform_options|selectattr('value','equalto',active_platform)|map(attribute='label')|first }} · №{{ card.rating_rank }}</span>{% endif %}
-    <div class="overview-header"><div class="card-title-row"><h3 class="institution-title" tabindex="0" data-floating-tooltip="{{ card.institution.name }}" aria-label="Полное название вуза"><span class="title-text">{% if active_platform != 'all' %}<a href="/institutions/{{ card.institution.id }}?platform={{ active_platform }}">{{ card.institution.short_name or card.institution.name }}</a>{% else %}{{ card.institution.short_name or card.institution.name }}{% endif %}</span><span class="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div></div>
+    <div class="overview-header"><div class="card-title-row"><h3 class="institution-title" tabindex="0" data-floating-tooltip="{{ card.institution.name }}" aria-label="Полное название вуза"><span class="title-text">{{ card.institution.short_name or card.institution.name }}</span><span class="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div></div>
     {% if card.accounts %}<div class="platform-card-accounts">{% for account in card.accounts %}<div class="platform-account-line"><span class="platform-chip platform-{{ account.platform }}">{{ {'telegram':'TG','vk':'ВК','max':'MAX','rutube':'RUTUBE'}.get(account.platform, account.platform|upper) }}</span>{% set account_name = account.title or account.username or account.external_key %}{% if account.url %}<a class="external" href="{{ account.url }}" target="_blank" rel="noopener noreferrer">{{ account_name }}</a>{% else %}<span>{{ account_name }}</span>{% endif %}</div>{% endfor %}</div>{% else %}<div class="platform-empty">Официальный аккаунт этой площадки пока не подтверждён.</div>{% endif %}
-    {% if active_platform == 'all' %}
     <div class="platform-card-summary"><span><b class="metric">{{ card.connected_count }}/4</b><small>площадок подключено</small></span><span><b class="metric">{{ card.account_count }}</b><small>аккаунтов добавлено</small></span></div>
-    {% else %}
+    <div class="overview-footer"><div class="{{ card.status_kind }}">{{ card.status_text }}</div></div>
+  </article>
+  {% else %}
+  <a class="card overview-card" href="/institutions/{{ card.institution.id }}?platform={{ active_platform }}">
+    {% if card.rating_rank %}<span class="m-rating-badge has-tooltip" tabindex="0" data-tooltip="Официальное место в М‑Рейтинге {{ active_platform_label }}{% if card.institution.m_rating_period %} · {{ card.institution.m_rating_period }}{% endif %}.">М‑Рейтинг {{ platform_options|selectattr('value','equalto',active_platform)|map(attribute='label')|first }} · №{{ card.rating_rank }}</span>{% endif %}
+    <div class="overview-header">
+      <div class="card-title-row"><h3 class="institution-title" tabindex="0" data-floating-tooltip="{{ card.institution.name }}" aria-label="Полное название вуза"><span class="title-text">{{ card.institution.short_name or card.institution.name }}</span><span class="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div>
+      {% if card.accounts %}{% set account = card.accounts|first %}<div class="muted channel-meta">{% if account.username %}@{{ account.username }}{% else %}{{ account.title or account.external_key }}{% endif %} · {{ card.subscriber_count if card.subscriber_count is not none else '—' }} подписчиков{% if card.account_count > 1 %} · ещё {{ card.account_count - 1 }}{% endif %}</div>{% else %}<div class="muted channel-meta">Официальный аккаунт не добавлен</div>{% endif %}
+    </div>
     <div class="post-stat-badges" aria-label="Публикации {{ period_short }}">
-      <span class="post-stat-badge has-tooltip" tabindex="0" data-tooltip="Всего публикаций в базе."><b>{{ card.total_post_count }}</b></span>
-      <span class="post-stat-badge activity has-tooltip" tabindex="0" data-tooltip="Публикации из БД с активностью {{ period_short }}."><b>{{ card.activity_post_count }}</b></span>
-      <span class="post-stat-badge new has-tooltip" tabindex="0" data-tooltip="Публикации, вышедшие {{ period_short }}."><b>{{ card.post_count }}</b></span>
+      <span class="post-stat-badge has-tooltip" tabindex="0" data-tooltip="Всего публикаций в базе."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg><b>{{ card.total_post_count }}</b></span>
+      <span class="post-stat-badge activity has-tooltip" tabindex="0" data-tooltip="Публикации из БД с активностью {{ period_short }}."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8M16 7h4v4"/></svg><b>{{ card.activity_post_count }}</b></span>
+      <span class="post-stat-badge new has-tooltip" tabindex="0" data-tooltip="Публикации, вышедшие {{ period_short }}."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg><b>{{ card.post_count }}</b></span>
     </div>
     <div class="metrics overview-metrics">
-      {% for metric,label in [('reactions',active_platform_info.primary),('views',active_platform_info.views),('comments',active_platform_info.comments),('shares',active_platform_info.shares)] %}
-      {% if metric in active_platform_info.capabilities %}<span><b class="metric">{{ card['total_' ~ metric] if card['total_' ~ metric] is not none else '—' }}</b><small>{{ label }} {{ period_short }}</small><span class="trend-slot">{% set trend = card['delta_total_' ~ metric] %}{% if trend %}<em class="trend {{ 'up' if trend>0 else 'down' }}">{{ '%+d'|format(trend) }} {{ period_short }}</em>{% endif %}</span></span>{% endif %}
-      {% endfor %}
+      <span class="has-tooltip" tabindex="0" data-tooltip="Прирост {{ active_platform_info.primary }} всех публикаций из БД {{ period_short }}."><b class="metric">{{ card.total_reactions if card.total_reactions is not none else '—' }}</b><small>{{ active_platform_info.primary }} {{ period_short }} ⓘ</small><span class="trend-slot">{% if card.delta_total_reactions %}<em class="trend {{ 'up' if card.delta_total_reactions>0 else 'down' }}">{{ '%+d'|format(card.delta_total_reactions) }} {{ period_short }}</em>{% endif %}</span></span>
+      <span class="has-tooltip" tabindex="0" data-tooltip="Прирост просмотров всех публикаций из БД {{ period_short }}."><b class="metric">{{ card.total_views if card.total_views is not none else '—' }}</b><small>просмотров {{ period_short }} ⓘ</small><span class="trend-slot">{% if card.delta_total_views %}<em class="trend {{ 'up' if card.delta_total_views>0 else 'down' }}">{{ '%+d'|format(card.delta_total_views) }} {{ period_short }}</em>{% endif %}</span></span>
+      <span class="has-tooltip" tabindex="0" data-tooltip="Типичный прирост {{ active_platform_info.primary }} публикации из БД {{ period_short }}."><b class="metric">{{ card.median_reactions if card.median_reactions is not none else '—' }}</b><small>медиана прироста {{ active_platform_info.primary }} ⓘ</small><span class="trend-slot">{% if card.delta_median_reactions %}<em class="trend {{ 'up' if card.delta_median_reactions>0 else 'down' }}">{{ '%+d'|format(card.delta_median_reactions) }} {{ period_short }}</em>{% endif %}</span></span>
+      <span class="has-tooltip" tabindex="0" data-tooltip="Типичный прирост просмотров публикации из БД {{ period_short }}."><b class="metric">{{ card.median_views if card.median_views is not none else '—' }}</b><small>медиана прироста просмотров ⓘ</small><span class="trend-slot">{% if card.delta_median_views %}<em class="trend {{ 'up' if card.delta_median_views>0 else 'down' }}">{{ '%+d'|format(card.delta_median_views) }} {{ period_short }}</em>{% endif %}</span></span>
     </div>
-    {% endif %}
-    <div class="overview-footer"><div class="{{ card.status_kind }}">{{ card.status_text }}</div>{% if active_platform != 'all' %}<div class="muted">{{ card.account_count }} {{ card.account_count|plural_ru('аккаунт','аккаунта','аккаунтов') }} · {{ card.subscriber_count if card.subscriber_count is not none else '—' }} подписчиков</div>{% endif %}</div>
-  </article>
+    <div class="overview-footer"><div class="{{ card.status_kind }}">{{ 'активен' if card.status_kind == 'ok' else card.status_text }}</div><div class="muted">Последний опрос: {{ card.last_checked_at|local_datetime if card.last_checked_at else 'ещё не выполнялся' }}{% if card.last_checked_at %} МСК{% endif %}</div></div>
+  </a>
+  {% endif %}
 {% else %}<div class="panel">Вузы ещё не добавлены.</div>{% endfor %}
 </div>
 {% if active_platform == 'all' %}<p class="notice section"><b>Почему нет общей суммы:</b> лайк, реакция, просмотр видео и просмотр поста имеют разный смысл. Общий режим показывает покрытие и официальный общий М‑Рейтинг; единый межплатформенный индекс будет добавлен только после утверждения формулы.</p>{% else %}<p class="notice section"><b>Как считаются показатели:</b> для каждой публикации берётся разница между первым и последним сравнимым снимком внутри окна. Метрики, которых нет в официальном источнике {{ active_platform_label }}, не заменяются нулями и не подменяются Telegram-данными.</p>{% endif %}

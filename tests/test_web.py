@@ -166,9 +166,9 @@ def test_platform_context_never_falls_back_to_telegram_data(tmp_path):
     client = TestClient(create_app(cfg, db, lambda: True))
 
     vk_overview = client.get("/?platform=vk").text
-    assert "Обзор вузов · ВКонтакте" in vk_overview
+    assert "Обзор каналов" in vk_overview
     assert 'name="platform" value="vk" checked' in vk_overview
-    assert "Официальный VK" in vk_overview
+    assert "@platform_context_vk" in vk_overview
     assert "М‑Рейтинг ВК · №7" in vk_overview
     assert "9999" not in vk_overview
     assert "Данные других соцсетей в расчёт не попадают" in vk_overview
@@ -227,7 +227,10 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     assert "60" in overview
     assert f'/institutions/{institution_id}?platform=vk' in overview
     institution = client.get(f"/institutions/{institution_id}?platform=vk").text
-    assert f'/platform-accounts/{account_id}?platform=vk' in institution
+    assert "публикаций в базе" in institution
+    assert "с полной историей" in institution
+    assert "медиана лайков" in institution
+    assert f'/platform-posts/{platform_post_id}?platform=vk' in institution
     account = client.get(f"/platform-accounts/{account_id}?platform=vk").text
     assert f'/platform-posts/{platform_post_id}?platform=vk' in account
     publication = client.get(f"/platform-posts/{platform_post_id}?platform=vk").text
@@ -347,6 +350,62 @@ def test_rutube_rating_and_comparison_use_views_only(tmp_path):
     assert '"sample_counts": [2, 2' in comparison
     assert "Вовлечённость от просмотров" not in comparison
     assert "77777" not in comparison
+
+
+@pytest.mark.parametrize(("platform", "token_field"), (
+    ("max", "max_access_token"),
+    ("rutube", None),
+))
+def test_non_telegram_platforms_reuse_overview_and_channel_layout(
+    tmp_path, platform, token_field,
+):
+    cfg = settings(tmp_path)
+    if token_field:
+        cfg = replace(cfg, **{token_field: "token"})
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("Единый дизайн университета", "ЕДУ")
+    account_id = db.add_platform_account(
+        institution_id, platform, f"{platform}-official",
+        username=f"{platform}_official", title=f"{platform.upper()} вуза",
+        url=f"https://example.test/{platform}",
+    )
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    post_id = db.upsert_platform_post(
+        account_id, f"{platform}-post", now - timedelta(hours=2),
+        now - timedelta(hours=2), "video", f"https://example.test/{platform}/post", {},
+    )
+    db.insert_platform_snapshot(
+        post_id, now - timedelta(hours=1), 3600, 5,
+        views_count=100, reactions_count=None,
+        comments_count=2 if platform == "max" else None,
+        shares_count=1 if platform == "max" else None, raw={},
+    )
+    db.insert_platform_snapshot(
+        post_id, now, 7200, 5, views_count=160, reactions_count=None,
+        comments_count=4 if platform == "max" else None,
+        shares_count=2 if platform == "max" else None, raw={},
+    )
+    client = TestClient(create_app(cfg, db))
+
+    overview = client.get(f"/?platform={platform}&period=3h").text
+    assert "Обзор каналов" in overview
+    assert f'href="/institutions/{institution_id}?platform={platform}"' in overview
+    assert f"@{platform}_official" in overview
+    assert 'aria-label="Публикации за 3 часа"' in overview
+    assert "медиана прироста просмотров" in overview
+    assert '<div class="platform-card-accounts">' not in overview
+
+    institution = client.get(
+        f"/institutions/{institution_id}?platform={platform}",
+    ).text
+    assert "ЕДУ" in institution
+    assert f"@{platform}_official" in institution
+    assert 'class="metrics channel-metrics"' in institution
+    assert "публикаций в базе" in institution
+    assert f'/platform-posts/{post_id}?platform={platform}' in institution
+    assert "Опубликовано, МСК" in institution
+    assert "Возраст" in institution
+    assert "История" in institution
 
 
 def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp_path):

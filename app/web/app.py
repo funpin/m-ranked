@@ -48,6 +48,7 @@ POST_TYPE_LABELS = {
     "geo": "геолокация",
     "album": "альбом",
     "media": "медиа",
+    "video": "видео",
 }
 
 PLATFORM_OPTIONS = (
@@ -565,6 +566,49 @@ def create_app(
                 "status_kind": status_kind,
             })
         return cards
+
+    def platform_channel_stats(
+        posts: list[Any], accounts: list[Any], platform: str,
+        institution: Any,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
+        prepared = _rows_dict(posts)
+        complete_limit = settings.complete_history_max_first_age_minutes * 60
+        for post in prepared:
+            post["history_complete"] = (
+                post.get("first_age") is not None
+                and int(post["first_age"]) <= complete_limit
+            )
+        reactions = [
+            int(post["latest_reactions"]) for post in prepared
+            if post.get("latest_reactions") is not None
+        ]
+        views = [
+            int(post["latest_views"]) for post in prepared
+            if post.get("latest_views") is not None
+        ]
+        comments = [
+            int(post["latest_comments"]) for post in prepared
+            if post.get("latest_comments") is not None
+        ]
+        rank_field, _ = PLATFORM_RATING_FIELDS[platform]
+        stats = {
+            "post_count": len(prepared),
+            "monitored": sum(bool(post["history_complete"]) for post in prepared),
+            "median_reactions": median(reactions) if reactions else None,
+            "median_views": median(views) if views else None,
+            "median_comments": median(comments) if comments else None,
+            "retention_days": settings.retention_days,
+            "rating_rank": institution[rank_field],
+            "rating_period": institution["m_rating_period"],
+        }
+        account_rows = _rows_dict(accounts)
+        labels = []
+        for account in account_rows:
+            if account.get("username"):
+                labels.append(f"@{account['username']}")
+            else:
+                labels.append(str(account.get("title") or account["external_key"]))
+        return prepared, stats, " · ".join(labels)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -1238,8 +1282,21 @@ def create_app(
             institution_id=institution_id, platform=account_platform,
         )
         posts = db.list_platform_posts(
-            platform=account_platform, institution_id=institution_id, limit=200,
+            platform=account_platform, institution_id=institution_id,
+            published_after=datetime.now(timezone.utc) - timedelta(days=settings.retention_days),
+            limit=500,
         )
+        if platform != "all":
+            prepared_posts, stats, account_label = platform_channel_stats(
+                posts, accounts, platform, institution,
+            )
+            return render(
+                request, "platform_channel.html", institution=institution,
+                accounts=accounts, posts=prepared_posts, stats=stats,
+                account_label=account_label,
+                page_title=institution["short_name"] or institution["name"],
+                active_platform=platform,
+            )
         return render(
             request, "institution.html", institution=institution,
             accounts=accounts, posts=posts, active_platform=platform,
@@ -1266,10 +1323,20 @@ def create_app(
         if platform not in {"all", account_platform}:
             raise HTTPException(status_code=404, detail="Аккаунт другой площадки")
         institution = db.institution(int(account["institution_id"]))
-        posts = db.list_platform_posts(account_id=account_id, limit=300)
+        posts = db.list_platform_posts(
+            account_id=account_id,
+            published_after=datetime.now(timezone.utc) - timedelta(days=settings.retention_days),
+            limit=500,
+        )
+        prepared_posts, stats, account_label = platform_channel_stats(
+            posts, [account], account_platform, institution,
+        )
         return render(
-            request, "platform_account.html", account=account,
-            institution=institution, posts=posts, active_platform=account_platform,
+            request, "platform_channel.html", account=account,
+            institution=institution, accounts=[account], posts=prepared_posts,
+            stats=stats, account_label=account_label,
+            page_title=account["title"] or institution["short_name"] or institution["name"],
+            active_platform=account_platform,
         )
 
     @app.get("/platform-posts/{post_id}", response_class=HTMLResponse)
