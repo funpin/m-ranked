@@ -312,6 +312,40 @@ def test_comparison_exposes_one_fixed_sample_count_per_curve(tmp_path):
     assert "dataset.cohortSize" in page
 
 
+def test_comparison_partial_history_uses_available_hours_only(tmp_path):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    channel_id = db.add_channel("partial_curve")
+    published = datetime.now(timezone.utc) - timedelta(hours=4)
+    post_id = db.add_post(
+        channel_id, "m:903", [903], None, published, published,
+        0, False, "text", False,
+    )
+    db.insert_snapshot(
+        post_id, published, 0, 0, {}, [], 1, 15, 2.0, views_count=10,
+    )
+    db.insert_snapshot(
+        post_id, published + timedelta(hours=3), 3 * 3600, 12,
+        {"👍": 12}, [], 1, 15, 2.0, views_count=120,
+    )
+
+    client = TestClient(create_app(cfg, db, lambda: True))
+    partial_page = client.get(
+        f"/compare?submitted=true&channels={channel_id}&period=24&include_partial=true"
+    ).text
+    assert '"cohort_size": 1' in partial_page
+    assert '"curve": [0.0, 0.0, 0.0, 12.0, null' in partial_page
+    assert "Неполная история включена:" in partial_page
+    assert "недостаточно замеров" not in partial_page
+
+    full_page = client.get(
+        f"/compare?submitted=true&channels={channel_id}&period=24"
+    ).text
+    assert '"cohort_size": 0' in full_page
+    assert "недостаточно замеров" in full_page
+
+
 def test_overview_filters_keep_valid_values_and_reject_removed_period(tmp_path):
     cfg = settings(tmp_path)
     db = Database(cfg.database_path)
