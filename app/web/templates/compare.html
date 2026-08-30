@@ -4,6 +4,7 @@
 <p class="lead">Сравните, как аудитория разных вузов реагирует на публикации в первые часы и дни после выхода.</p>
 
 <form class="panel selector-panel compare-selector" method="get" id="compare-form">
+  <input type="hidden" name="platform" value="{{ active_platform }}">
   <input type="hidden" name="submitted" value="true">
   <div class="compare-filter-head"><div><h2>Настройка сравнения</h2><p class="panel-note">Выберите каналы и глубину истории публикаций.</p></div><span class="selection-count pill" id="selection-count"></span></div>
   <div class="selector-toolbar">

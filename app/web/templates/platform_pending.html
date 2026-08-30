@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}{{ page_title }} · {{ active_platform_label }} · m-ranked{% endblock %}
+{% block content %}
+<h1>{{ page_title }} · {{ active_platform_label }}</h1>
+<p class="lead">{{ page_description }}</p>
+<section class="panel platform-pending">
+  <span class="platform-chip platform-{{ active_platform }}">{{ active_platform_label }}</span>
+  <div><h2>Раздел не смешивает данные разных соцсетей</h2><p class="panel-note">Платформенный контекст уже сохранён в адресе и навигации. Данные Telegram здесь намеренно не показываются вместо выбранной площадки. Полная аналитика появится после подключения её вертикального сценария.</p></div>
+  <a class="secondary pending-back" href="{{ nav_urls.overview }}">Вернуться к обзору</a>
+</section>
+{% endblock %}

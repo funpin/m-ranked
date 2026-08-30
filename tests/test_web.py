@@ -63,6 +63,10 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "Монитор реакций" not in overview
     assert "медиана прироста реакций" in overview
     assert "медиана прироста просмотров" in overview
+    assert 'name="platform" value="telegram" checked' in overview
+    assert 'name="platform" value="all"' in overview
+    assert 'href="/?platform=telegram"' in overview
+    assert 'href="/channels/' in overview and "?platform=telegram" in overview
     assert "включая публикации, вышедшие раньше" in overview
     assert "не сумма текущих показателей только у новых постов" in overview
     assert ".overview-header{height:auto;min-height:0}" in overview
@@ -128,10 +132,69 @@ def test_post_page_links_adjacent_channel_posts(tmp_path):
 
     page = client.get(f"/posts/{post_ids[1]}").text
 
-    assert f'href="/posts/{post_ids[0]}" rel="prev"' in page
+    assert f'href="/posts/{post_ids[0]}?platform=telegram" rel="prev"' in page
     assert "№101" in page
-    assert f'href="/posts/{post_ids[2]}" rel="next"' in page
+    assert f'href="/posts/{post_ids[2]}?platform=telegram" rel="next"' in page
     assert "№103" in page
+
+
+def test_platform_context_never_falls_back_to_telegram_data(tmp_path):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    channel_id = db.add_channel("platform_context")
+    channel = db.channel(channel_id)
+    institution_id = int(channel["institution_id"])
+    db.add_platform_account(
+        institution_id, "vk", "platform_context_vk",
+        username="platform_context_vk", title="Официальный VK",
+        url="https://vk.com/platform_context_vk",
+    )
+    db.update_institution_m_rating(
+        institution_id, {"vk": (7, 42.0)}, "Июль 2026",
+        datetime.now(timezone.utc),
+    )
+    published = datetime.now(timezone.utc) - timedelta(hours=1)
+    post_id = db.add_post(
+        channel_id, "m:20", [20], None, published, published,
+        0, True, "text", False,
+    )
+    db.insert_snapshot(
+        post_id, published, 0, 999, {"👍": 999}, [], 60, 15, 2.0,
+        views_count=9999,
+    )
+    client = TestClient(create_app(cfg, db, lambda: True))
+
+    vk_overview = client.get("/?platform=vk").text
+    assert "Обзор вузов · ВКонтакте" in vk_overview
+    assert 'name="platform" value="vk" checked' in vk_overview
+    assert "Официальный VK" in vk_overview
+    assert "М‑Рейтинг ВК · №7" in vk_overview
+    assert "9999" not in vk_overview
+    assert "Telegram-цифры намеренно скрыты" in vk_overview
+    assert 'href="/rating?platform=vk"' in vk_overview
+    assert 'href="/compare?platform=vk"' in vk_overview
+    assert "Экспорт для ВКонтакте" in vk_overview
+
+    rating = client.get("/rating?platform=vk").text
+    assert "Рейтинг · ВКонтакте" in rating
+    assert "Раздел не смешивает данные разных соцсетей" in rating
+    assert "999" not in rating
+    comparison = client.get("/compare?platform=vk").text
+    assert "Сравнение · ВКонтакте" in comparison
+    assert 'href="/?platform=vk"' in comparison
+
+    redirect = client.get(
+        f"/channels/{channel_id}?platform=vk", follow_redirects=False,
+    )
+    assert redirect.status_code == 307
+    assert redirect.headers["location"] == "/?platform=vk"
+    assert client.get("/export/snapshots.csv?platform=vk").status_code == 409
+    assert client.get("/export/posts.csv?platform=vk").status_code == 409
+
+    fallback = client.get("/?platform=unknown").text
+    assert "Обзор каналов" in fallback
+    assert 'name="platform" value="telegram" checked' in fallback
 
 
 def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp_path):
