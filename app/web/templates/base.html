@@ -34,7 +34,7 @@
     @media(max-width:900px){.comparison-main-chart{height:460px}.compare-help{grid-template-columns:1fr}.storage-grid,.platform-forms{grid-template-columns:1fr}}
     @media(max-width:780px){nav{gap:12px;overflow:auto}.brand strong{display:none}main{padding-top:24px}h1{font-size:27px}.choice-grid{grid-template-columns:1fr}.selector-footer{align-items:stretch}.selector-footer button{width:100%}.compare-filter-head,.manage-heading,.storage-heading{align-items:stretch;flex-direction:column}.compare-filter-head .selection-count{width:max-content}.comparison-panel{padding:17px 12px}.comparison-main-chart{height:400px}.chart-legend{grid-template-columns:repeat(2,minmax(0,1fr))}.m-rating-admin{align-items:stretch;flex-direction:column}.m-rating-admin button{width:100%}.channel-count-badge{width:max-content}.storage-heading .period-badge{width:max-content}.account-fields{grid-template-columns:1fr}.storage-heading .period-badge{width:max-content}.rating-controls{top:62px}.rating-panel-head{display:block}.period-badge{margin-top:8px}.rating-panel{padding:16px 12px}.rating-table .entity-cell{min-width:220px}.overview-card{min-height:0}.overview-header{height:auto;min-height:0;overflow:visible}.overview-header h3{display:block;min-height:0;overflow:visible}.channel-meta{white-space:normal}.post-count-meta{display:block;min-height:0;overflow:visible}.manage-actions{min-width:205px;flex-wrap:wrap}.post-heading{display:block}.post-navigation{margin:14px 0}.post-nav-link{flex:1}.post-chart-toolbar{align-items:stretch;flex-direction:column}.scale-mode{justify-content:space-between}.range-notes{display:block}.hidden-points{margin-top:9px}}
     .trend{display:block;width:max-content;max-width:100%;margin-top:5px;padding:2px 7px;border-radius:99px;font-size:10px;font-style:normal;font-weight:800;text-transform:none;white-space:nowrap;letter-spacing:normal;box-shadow:none;opacity:1;visibility:visible;transform:none;transition:none;pointer-events:auto}.trend.up{color:#087e5b;background:#e8f7f1}.trend.down{color:#c13b4f;background:#fdecef}.has-tooltip{position:relative;outline:none;cursor:help}.has-tooltip::after{content:attr(data-tooltip);position:absolute;left:0;bottom:calc(100% + 8px);z-index:100;width:max-content;max-width:260px;padding:8px 10px;border-radius:9px;background:#101828;color:white;font-size:12px;font-weight:500;line-height:1.35;text-transform:none;white-space:normal;letter-spacing:0;box-shadow:0 8px 24px rgba(0,0,0,.2);opacity:0;visibility:hidden;transform:translateY(4px);transition:.15s;pointer-events:none}.has-tooltip:hover::after,.has-tooltip:focus::after,.has-tooltip.tooltip-open::after{opacity:1;visibility:visible;transform:none}.snapshot-jump{padding:0;border:0;border-radius:0;background:transparent;color:var(--blue);font-weight:800;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}.snapshot-jump:hover{color:#064fa9;text-decoration-style:solid}
-    .m-rating-badge.has-tooltip{position:absolute}.m-rating-badge.has-tooltip::after{top:calc(100% + 8px);right:0;bottom:auto;left:auto}
+    .m-rating-badge.has-tooltip{position:absolute}.m-rating-badge.has-tooltip::after{top:calc(100% + 8px);right:0;bottom:auto;left:auto}.floating-tooltip{position:fixed;z-index:3000;width:max-content;max-width:min(320px,calc(100vw - 24px));padding:8px 10px;border-radius:9px;background:#101828;color:#fff;font-size:12px;font-weight:500;line-height:1.35;box-shadow:0 8px 24px rgba(0,0,0,.2);pointer-events:none}.floating-tooltip.mobile{inset:auto 12px max(12px,env(safe-area-inset-bottom)) 12px!important;width:auto;max-width:none;font-size:13px}
     @media(max-width:780px){body{overflow-x:hidden}nav{gap:14px;padding:8px 12px}.brand{gap:7px}.brand img{width:36px;height:36px}main{padding:22px 12px 50px}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.controls label{min-width:0}.controls input,.controls select,.controls button{width:100%;min-width:0}.card:hover{transform:none}.overview-metrics{gap:12px 14px}.has-tooltip::after,.post-stat-badge.has-tooltip::after{position:fixed!important;inset:auto 12px max(12px,env(safe-area-inset-bottom)) 12px!important;z-index:1000!important;width:auto!important;max-width:none!important;margin:0!important;padding:10px 12px;font-size:13px;line-height:1.35;text-align:left}.has-tooltip:focus::after{opacity:0;visibility:hidden}.has-tooltip.tooltip-open::after{opacity:1;visibility:visible}}
     @media(max-width:430px){.controls{grid-template-columns:1fr}.overview-card{padding-right:16px;padding-left:16px}}
   </style>
@@ -42,6 +42,7 @@
 <body>
 <nav><a class="brand" href="/"><img src="/static/logo.png" alt="Логотип m-ranked"><strong><span>m</span>-ranked</strong></a><a href="/">Обзор</a><a href="/rating">Рейтинг</a><a href="/compare">Сравнение</a><a href="/export/snapshots.csv">Экспорт CSV</a><a href="/manage">Управление</a></nav>
 <main>{% block content %}{% endblock %}</main>
+<div id="floatingTooltip" class="floating-tooltip" role="tooltip" hidden></div>
 <script>
 (() => {
   const coarsePointer = window.matchMedia('(hover: none), (pointer: coarse)');
@@ -62,6 +63,36 @@
     tooltip.setAttribute('aria-expanded', 'true');
     tooltip.focus({preventScroll: true});
   }, true);
+})();
+</script>
+<script>
+(() => {
+  const bubble = document.getElementById('floatingTooltip');
+  const coarsePointer = window.matchMedia('(hover: none), (pointer: coarse)');
+  let active;
+  function hide() { bubble.hidden = true; if (active) active.classList.remove('tooltip-open'); active = null; }
+  function show(target) {
+    const text = target.dataset.floatingTooltip; if (!text) return;
+    active = target; bubble.textContent = text; bubble.hidden = false;
+    bubble.classList.toggle('mobile', coarsePointer.matches);
+    if (coarsePointer.matches) return;
+    const rect = target.getBoundingClientRect();
+    const left = Math.max(12, Math.min(rect.left, innerWidth - bubble.offsetWidth - 12));
+    const above = rect.top - bubble.offsetHeight - 8;
+    bubble.style.left = `${left}px`; bubble.style.top = `${above >= 12 ? above : rect.bottom + 8}px`;
+  }
+  document.addEventListener('mouseover', event => { const target = event.target.closest('[data-floating-tooltip]'); if (target && !coarsePointer.matches) show(target); });
+  document.addEventListener('mouseout', event => { if (active && !active.contains(event.relatedTarget)) hide(); });
+  document.addEventListener('focusin', event => { const target = event.target.closest('[data-floating-tooltip]'); if (target) show(target); });
+  document.addEventListener('focusout', event => { if (active && !active.contains(event.relatedTarget)) hide(); });
+  document.addEventListener('click', event => {
+    if (!coarsePointer.matches) return;
+    const target = event.target.closest('[data-floating-tooltip]');
+    if (!target) { hide(); return; }
+    if (active === target) { hide(); return; }
+    event.preventDefault(); event.stopPropagation(); hide(); target.classList.add('tooltip-open'); show(target);
+  }, true);
+  addEventListener('scroll', hide, {passive: true}); addEventListener('resize', hide);
 })();
 </script>
 </body></html>

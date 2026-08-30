@@ -13,12 +13,11 @@
   .post-stat-badge.new,.post-stat-badge.new b{color:#087e5b}
   .overview-card,.overview-header{overflow:visible}
   .overview-header{height:auto;min-height:0}
-  .overview-card:has(.has-tooltip:hover),.overview-card:has(.has-tooltip:focus),.overview-card:has(.tooltip-open){z-index:50}
+  .overview-card:has(.has-tooltip:hover),.overview-card:has(.has-tooltip:focus),.overview-card:has(.tooltip-open),.overview-card:has(.institution-title:hover){z-index:50}
   .post-stat-badge.has-tooltip::after{top:auto;right:auto;bottom:calc(100% + 8px);left:0;white-space:normal}
   .post-stat-badge:nth-child(2)::after{left:50%;margin-left:-130px}
   .post-stat-badge:nth-child(3)::after{right:0;left:auto}
   .overview-header .institution-title{display:inline-flex;align-items:baseline;gap:7px;width:max-content;max-width:100%;min-height:0;margin:0 0 5px}
-  .overview-header .institution-title.has-tooltip::after{top:calc(100% + 8px);bottom:auto;left:0}
   .institution-title .title-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .institution-title .title-info{flex:0 0 auto;cursor:help}
   @media(max-width:780px){.post-stat-badges{flex-wrap:wrap}}
@@ -34,28 +33,28 @@
   <a class="card overview-card" href="/channels/{{ channel.id }}">
     {% if channel.m_rating_tg_rank %}<span class="m-rating-badge has-tooltip" tabindex="0" data-tooltip="Официальное место в М‑Рейтинге TG{% if channel.m_rating_period %} · {{ channel.m_rating_period }}{% endif %}.">М‑Рейтинг TG · №{{ channel.m_rating_tg_rank }}</span>{% endif %}
     <div class="overview-header">
-      <div class="card-title-row"><h3 class="institution-title has-tooltip" tabindex="0" title="{{ channel.institution_name or channel.title or ('@' ~ channel.username) }}" data-tooltip="{{ channel.institution_name or channel.title or ('@' ~ channel.username) }}" aria-label="Полное название вуза"><span class="title-text">{{ channel.institution_short_name or channel.institution_name or channel.title or ('@' ~ channel.username) }}</span><span class="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div>
+      <div class="card-title-row"><h3 class="institution-title" tabindex="0" data-floating-tooltip="{{ channel.institution_name or channel.title or ('@' ~ channel.username) }}" aria-label="Полное название вуза"><span class="title-text">{{ channel.institution_short_name or channel.institution_name or channel.title or ('@' ~ channel.username) }}</span><span class="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div>
       <div class="muted channel-meta">@{{ channel.username }} · {{ channel.subscriber_count or '—' }} подписчиков</div>
       <div class="post-stat-badges" aria-label="Публикации {{ period_short }}">
         <span class="post-stat-badge has-tooltip" tabindex="0" data-tooltip="Всего постов в базе."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg><b>{{ channel.total_post_count }}</b></span>
-        <span class="post-stat-badge activity has-tooltip" tabindex="0" data-tooltip="Посты с двумя замерами {{ period_short }}."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8M16 7h4v4"/></svg><b>{{ channel.activity_post_count }}</b></span>
+        <span class="post-stat-badge activity has-tooltip" tabindex="0" data-tooltip="Посты из БД с активностью {{ period_short }}."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8M16 7h4v4"/></svg><b>{{ channel.activity_post_count }}</b></span>
         <span class="post-stat-badge new has-tooltip" tabindex="0" data-tooltip="Посты, вышедшие {{ period_short }}."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg><b>{{ channel.post_count }}</b></span>
       </div>
     </div>
     <div class="metrics overview-metrics">
-      <span class="has-tooltip" tabindex="0" data-tooltip="Прирост реакций всех постов {{ period_short }}.">
+      <span class="has-tooltip" tabindex="0" data-tooltip="Прирост реакций всех постов из БД {{ period_short }}.">
         <b class="metric">{{ channel.total_reactions if channel.total_reactions is not none else '—' }}</b><small>реакций {{ period_short }} ⓘ</small>
         <span class="trend-slot">{% if channel.delta_total_reactions %}<em class="trend {{ 'up' if channel.delta_total_reactions>0 else 'down' }}">{{ '%+d'|format(channel.delta_total_reactions) }} {{ period_short }}</em>{% endif %}</span>
       </span>
-      <span class="has-tooltip" tabindex="0" data-tooltip="Прирост просмотров всех постов {{ period_short }}.">
+      <span class="has-tooltip" tabindex="0" data-tooltip="Прирост просмотров всех постов из БД {{ period_short }}.">
         <b class="metric">{{ channel.total_views if channel.total_views is not none else '—' }}</b><small>просмотров {{ period_short }} ⓘ</small>
         <span class="trend-slot">{% if channel.delta_total_views %}<em class="trend {{ 'up' if channel.delta_total_views>0 else 'down' }}">{{ '%+d'|format(channel.delta_total_views) }} {{ period_short }}</em>{% endif %}</span>
       </span>
-      <span class="has-tooltip" tabindex="0" data-tooltip="Типичный прирост реакций одного поста {{ period_short }}.">
+      <span class="has-tooltip" tabindex="0" data-tooltip="Типичный прирост реакций поста из БД {{ period_short }}.">
         <b class="metric">{{ channel.median_reactions if channel.median_reactions is not none else '—' }}</b><small>медиана прироста реакций ⓘ</small>
         <span class="trend-slot">{% if channel.delta_median_reactions %}<em class="trend {{ 'up' if channel.delta_median_reactions>0 else 'down' }}">{{ '%+d'|format(channel.delta_median_reactions) }} {{ period_short }}</em>{% endif %}</span>
       </span>
-      <span class="has-tooltip" tabindex="0" data-tooltip="Типичный прирост просмотров одного поста {{ period_short }}.">
+      <span class="has-tooltip" tabindex="0" data-tooltip="Типичный прирост просмотров поста из БД {{ period_short }}.">
         <b class="metric">{{ channel.median_views if channel.median_views is not none else '—' }}</b><small>медиана прироста просмотров ⓘ</small>
         <span class="trend-slot">{% if channel.delta_median_views %}<em class="trend {{ 'up' if channel.delta_median_views>0 else 'down' }}">{{ '%+d'|format(channel.delta_median_views) }} {{ period_short }}</em>{% endif %}</span>
       </span>
