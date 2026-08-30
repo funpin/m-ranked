@@ -104,6 +104,8 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 .venv/bin/python -m app list-institutions
 .venv/bin/python -m app add-institution "Название вуза" --short-name "Короткое имя"
 .venv/bin/python -m app add-platform-account 1 vk university --url https://vk.com/university
+.venv/bin/python -m app sync-official-accounts
+.venv/bin/python -m app refresh-m-rating
 .venv/bin/python -m app poll-now
 .venv/bin/python -m app run
 .venv/bin/pytest -q
@@ -119,6 +121,13 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 - `/manage` — управление, М‑Рейтинг и использование диска;
 - `/export/snapshots.csv`, `/export/posts.csv` — экспорт;
 - `/health` — состояние источника и метрики последнего цикла.
+
+Официальный М‑Рейтинг хранится на уровне вуза в пяти независимых срезах:
+общий индекс соцсетей, Telegram, VK, MAX и RUTUBE. Команда
+`sync-official-accounts` идемпотентно добавляет только вручную подтверждённые
+официальные страницы. Для всех 24 вузов текущей выборки подтверждена хотя бы
+одна страница VK, MAX или RUTUBE; если конкретная платформа не подтверждена,
+её поле остаётся пустым.
 
 ## Конфигурация
 

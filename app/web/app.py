@@ -646,6 +646,15 @@ def create_app(
                 "institution": institution,
                 "accounts": accounts,
                 "account_values": account_values,
+                "platform_ratings": {
+                    "telegram": (institution["m_rating_tg_rank"], institution["m_rating_tg_score"]),
+                    "vk": (institution["m_rating_vk_rank"], institution["m_rating_vk_score"]),
+                    "max": (institution["m_rating_max_rank"], institution["m_rating_max_score"]),
+                    "rutube": (
+                        institution["m_rating_rutube_rank"],
+                        institution["m_rating_rutube_score"],
+                    ),
+                },
             })
         institution_ids = {int(row["id"]) for row in institutions}
         selected_institution_id = (
