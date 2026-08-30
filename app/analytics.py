@@ -51,13 +51,27 @@ def nearest_hourly_points(rows: Sequence[Mapping[str, float]], max_hour: int) ->
     return points
 
 
-def hourly_asof_points(rows: Sequence[Mapping[str, float]], max_hour: int) -> dict[int, float]:
-    """Return the latest value known at each whole hour without using future data."""
+def hourly_asof_points(
+    rows: Sequence[Mapping[str, float]],
+    max_hour: int,
+    *,
+    stop_at_last_observation: bool = False,
+) -> dict[int, float]:
+    """Return the latest value known at each whole hour without using future data.
+
+    In partial-history mode the curve must not pretend that the last measured
+    value is known for the remainder of the requested horizon.
+    """
     ordered = sorted(rows, key=lambda row: float(row["age_seconds"]))
+    if not ordered:
+        return {}
+    last_hour = max_hour
+    if stop_at_last_observation:
+        last_hour = min(max_hour, int(float(ordered[-1]["age_seconds"]) // 3600))
     points: dict[int, float] = {}
     index = 0
     latest: Mapping[str, float] | None = None
-    for hour in range(max_hour + 1):
+    for hour in range(last_hour + 1):
         target = hour * 3600
         while index < len(ordered) and float(ordered[index]["age_seconds"]) <= target:
             latest = ordered[index]
@@ -92,3 +106,22 @@ def fixed_cohort_median_curve(
         curve.append(median(values) if values else None)
         counts.append(len(values))
     return curve, counts, len(cohort)
+
+
+def available_cohort_median_curve(
+    post_points: Iterable[Mapping[int, float]],
+    max_hour: int,
+) -> tuple[list[float | None], list[int], int]:
+    """Build a curve from posts with an actual observation at each hour.
+
+    This mode is intended for live/partial history, so the sample may shrink
+    towards the end of the selected horizon.
+    """
+    posts = [post for post in post_points if post]
+    curve: list[float | None] = []
+    counts: list[int] = []
+    for hour in range(max_hour + 1):
+        values = [post[hour] for post in posts if hour in post]
+        curve.append(median(values) if values else None)
+        counts.append(len(values))
+    return curve, counts, len(posts)

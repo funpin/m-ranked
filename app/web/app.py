@@ -21,7 +21,11 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from ..analytics import fixed_cohort_median_curve, hourly_asof_points
+from ..analytics import (
+    available_cohort_median_curve,
+    fixed_cohort_median_curve,
+    hourly_asof_points,
+)
 from ..config import Settings
 from ..collector import normalize_channel_ref
 from ..database import Database
@@ -951,14 +955,22 @@ def create_app(
         for channel in all_channels:
             if channel["id"] not in selected:
                 continue
-            partial_sql = "" if include_partial else "AND p.history_complete=1"
-            posts = db.query(
-                f"""SELECT p.id, p.telegram_message_id, p.deleted_at FROM posts p
-                    WHERE p.channel_id=? {partial_sql}
-                      AND EXISTS(SELECT 1 FROM reaction_snapshots coverage
-                                 WHERE coverage.post_id=p.id AND coverage.age_seconds>=?)""",
-                (channel["id"], period * 3600),
-            )
+            if include_partial:
+                posts = db.query(
+                    """SELECT p.id, p.telegram_message_id, p.deleted_at FROM posts p
+                       WHERE p.channel_id=?
+                         AND EXISTS(SELECT 1 FROM reaction_snapshots coverage
+                                    WHERE coverage.post_id=p.id)""",
+                    (channel["id"],),
+                )
+            else:
+                posts = db.query(
+                    """SELECT p.id, p.telegram_message_id, p.deleted_at FROM posts p
+                       WHERE p.channel_id=? AND p.history_complete=1
+                         AND EXISTS(SELECT 1 FROM reaction_snapshots coverage
+                                    WHERE coverage.post_id=p.id AND coverage.age_seconds>=?)""",
+                    (channel["id"], period * 3600),
+                )
             raw_points: list[dict[int, float]] = []
             raw_conversion_points: list[dict[int, float]] = []
             for post in posts:
@@ -967,7 +979,9 @@ def create_app(
                        FROM reaction_snapshots WHERE post_id=? AND age_seconds<=? ORDER BY age_seconds""",
                     (post["id"], period * 3600),
                 )
-                points = hourly_asof_points(rows, period)
+                points = hourly_asof_points(
+                    rows, period, stop_at_last_observation=include_partial,
+                )
                 if points:
                     raw_points.append(points)
                 conversion_rows = [
@@ -981,16 +995,27 @@ def create_app(
                     for row in rows
                     if row["views_count"] is not None and int(row["views_count"]) > 0
                 ]
-                conversion_points = hourly_asof_points(conversion_rows, period)
+                conversion_points = hourly_asof_points(
+                    conversion_rows, period,
+                    stop_at_last_observation=include_partial,
+                )
                 if conversion_points:
                     raw_conversion_points.append(conversion_points)
-            start_hour = 1 if include_partial else 0
-            curve, sample_counts, cohort_size = fixed_cohort_median_curve(
-                raw_points, period, start_hour=start_hour,
+            curve_builder = (
+                available_cohort_median_curve if include_partial
+                else fixed_cohort_median_curve
             )
-            conversion_curve, conversion_sample_counts, conversion_cohort_size = (
-                fixed_cohort_median_curve(raw_conversion_points, period, start_hour=1)
-            )
+            curve, sample_counts, cohort_size = curve_builder(raw_points, period)
+            if include_partial:
+                conversion_curve, conversion_sample_counts, conversion_cohort_size = (
+                    available_cohort_median_curve(raw_conversion_points, period)
+                )
+            else:
+                conversion_curve, conversion_sample_counts, conversion_cohort_size = (
+                    fixed_cohort_median_curve(
+                        raw_conversion_points, period, start_hour=1,
+                    )
+                )
             datasets.append({
                 "channel": channel["username"],
                 "title": channel["title"] or f"@{channel['username']}",

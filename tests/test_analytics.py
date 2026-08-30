@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from app.analytics import (
+    available_cohort_median_curve,
     age_seconds,
     delta_by_reaction,
     history_is_complete,
@@ -54,6 +55,25 @@ def test_hourly_asof_points_never_uses_a_future_measurement():
         {"age_seconds": 3 * 3600, "total_reactions": 20},
     ]
     assert hourly_asof_points(rows, 3) == {0: 0.0, 1: 8.0, 2: 12.0, 3: 20.0}
+
+
+def test_partial_hourly_points_stop_at_last_real_observation():
+    rows = [
+        {"age_seconds": 0, "total_reactions": 0},
+        {"age_seconds": 2 * 3600 + 30, "total_reactions": 12},
+    ]
+    assert hourly_asof_points(
+        rows, 24, stop_at_last_observation=True,
+    ) == {0: 0.0, 1: 0.0, 2: 0.0}
+
+
+def test_available_cohort_reports_changing_sample_size():
+    curve, counts, cohort_size = available_cohort_median_curve(
+        [{0: 0, 1: 10, 2: 20}, {0: 0, 1: 30}], 3,
+    )
+    assert curve == [0.0, 20.0, 20, None]
+    assert counts == [2, 2, 1, 0]
+    assert cohort_size == 2
 
 
 def test_fixed_cohort_does_not_change_between_hours():
