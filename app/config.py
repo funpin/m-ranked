@@ -25,6 +25,18 @@ def _float(name: str, default: float) -> float:
     return value
 
 
+def _bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().casefold()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be true or false")
+
+
 @dataclass(frozen=True)
 class Settings:
     telegram_api_id: int | None
@@ -62,6 +74,10 @@ class Settings:
     deletion_confirmation_checks: int = 2
     vk_access_token: str | None = None
     vk_api_version: str = "5.199"
+    max_access_token: str | None = None
+    max_api_base: str = "https://platform-api2.max.ru"
+    rutube_public_api_enabled: bool = True
+    rutube_api_base: str = "https://rutube.ru/api"
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -121,6 +137,16 @@ class Settings:
             deletion_confirmation_checks=_int("DELETION_CONFIRMATION_CHECKS", 2),
             vk_access_token=os.getenv("VK_ACCESS_TOKEN", "").strip() or None,
             vk_api_version=os.getenv("VK_API_VERSION", "5.199").strip() or "5.199",
+            max_access_token=os.getenv("MAX_ACCESS_TOKEN", "").strip() or None,
+            max_api_base=(
+                os.getenv("MAX_API_BASE", "https://platform-api2.max.ru").strip()
+                or "https://platform-api2.max.ru"
+            ).rstrip("/"),
+            rutube_public_api_enabled=_bool("RUTUBE_PUBLIC_API_ENABLED", True),
+            rutube_api_base=(
+                os.getenv("RUTUBE_API_BASE", "https://rutube.ru/api").strip()
+                or "https://rutube.ru/api"
+            ).rstrip("/"),
         )
 
     def require_telegram(self) -> tuple[int, str]:

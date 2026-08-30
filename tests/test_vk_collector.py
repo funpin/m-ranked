@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 from app.config import Settings
@@ -42,6 +43,9 @@ class FakeVkClient:
         assert community_id == 42
         return [self.post]
 
+    async def posts(self, post_ids: list[str]) -> list[VkPost]:
+        return [self.post] if self.post.external_key in post_ids else []
+
     async def close(self) -> None:
         self.closed = True
 
@@ -82,3 +86,30 @@ def test_vk_collector_stores_post_and_raw_snapshot(tmp_path):
     assert (snapshot["comments_count"], snapshot["shares_count"]) == (2, 1)
     assert db.get_state("vk_poll_last_error_count") == "0"
     assert db.get_state("vk_poll_last_account_count") == "1"
+
+
+def test_vk_collector_refreshes_known_post_outside_wall_page(tmp_path):
+    cfg = replace(_settings(tmp_path), discovery_limit=1)
+    db = Database(cfg.database_path)
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(institution_id, "vk", "university")
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    old_post = VkPost(-42, 7, published, "text", 120, 8, 3, 2, {"id": 7})
+    platform_post_id = db.upsert_platform_post(
+        account_id, old_post.external_key, published, published, "text", None, {},
+    )
+    db.insert_platform_snapshot(
+        platform_post_id, published + timedelta(hours=1), 3600, 5,
+        views_count=100, reactions_count=5, comments_count=2, shares_count=1, raw={},
+    )
+
+    class PointClient(FakeVkClient):
+        async def wall(self, community_id: int, count: int = 100) -> list[VkPost]:
+            return []
+
+    asyncio.run(VkCollector(cfg, db, PointClient(old_post)).poll_cycle())
+
+    snapshots = db.platform_snapshots(platform_post_id)
+    assert len(snapshots) == 2
+    assert snapshots[-1]["views_count"] == 120

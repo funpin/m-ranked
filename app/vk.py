@@ -133,3 +133,11 @@ class VkClient:
         )
         items = response.get("items", []) if isinstance(response, dict) else []
         return [parse_vk_post(item) for item in items if not item.get("is_pinned")]
+
+    async def posts(self, post_ids: list[str]) -> list[VkPost]:
+        """Refresh exact counters for already known posts outside wall.get's first page."""
+        if not post_ids:
+            return []
+        response = await self._call("wall.getById", posts=",".join(post_ids[:100]))
+        items = response.get("items", []) if isinstance(response, dict) else response or []
+        return [parse_vk_post(item) for item in items]

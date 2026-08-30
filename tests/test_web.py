@@ -171,10 +171,10 @@ def test_platform_context_never_falls_back_to_telegram_data(tmp_path):
     assert "Официальный VK" in vk_overview
     assert "М‑Рейтинг ВК · №7" in vk_overview
     assert "9999" not in vk_overview
-    assert "Telegram-цифры намеренно скрыты" in vk_overview
+    assert "Данные других соцсетей в расчёт не попадают" in vk_overview
     assert 'href="/rating?platform=vk"' in vk_overview
     assert 'href="/compare?platform=vk"' in vk_overview
-    assert "Экспорт для ВКонтакте" in vk_overview
+    assert 'href="/export/snapshots.csv?platform=vk"' in vk_overview
 
     rating = client.get("/rating?platform=vk").text
     assert "Рейтинг · ВКонтакте" in rating
@@ -189,12 +189,53 @@ def test_platform_context_never_falls_back_to_telegram_data(tmp_path):
     )
     assert redirect.status_code == 307
     assert redirect.headers["location"] == "/?platform=vk"
-    assert client.get("/export/snapshots.csv?platform=vk").status_code == 409
-    assert client.get("/export/posts.csv?platform=vk").status_code == 409
+    assert client.get("/export/snapshots.csv?platform=vk").status_code == 200
+    assert client.get("/export/posts.csv?platform=vk").status_code == 200
 
     fallback = client.get("/?platform=unknown").text
     assert "Обзор каналов" in fallback
     assert 'name="platform" value="telegram" checked' in fallback
+
+
+def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
+    cfg = replace(settings(tmp_path), vk_access_token="token")
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("Полное название", "ВУЗ")
+    account_id = db.add_platform_account(
+        institution_id, "vk", "official", title="VK вуза",
+        url="https://vk.com/official",
+    )
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    platform_post_id = db.upsert_platform_post(
+        account_id, "-10_20", now - timedelta(hours=2), now - timedelta(hours=2),
+        "photo", "https://vk.com/wall-10_20", {"id": 20},
+    )
+    db.insert_platform_snapshot(
+        platform_post_id, now - timedelta(hours=1), 3600, 5,
+        views_count=100, reactions_count=10, comments_count=2, shares_count=1, raw={},
+    )
+    db.insert_platform_snapshot(
+        platform_post_id, now, 7200, 5,
+        views_count=160, reactions_count=15, comments_count=4, shares_count=3, raw={},
+    )
+    client = TestClient(create_app(cfg, db))
+
+    overview = client.get("/?platform=vk&period=3h").text
+    assert "Публикации из БД с активностью за 3 часа" in overview
+    assert "60" in overview
+    assert f'/institutions/{institution_id}?platform=vk' in overview
+    institution = client.get(f"/institutions/{institution_id}?platform=vk").text
+    assert f'/platform-accounts/{account_id}?platform=vk' in institution
+    account = client.get(f"/platform-accounts/{account_id}?platform=vk").text
+    assert f'/platform-posts/{platform_post_id}?platform=vk' in account
+    publication = client.get(f"/platform-posts/{platform_post_id}?platform=vk").text
+    assert "Накопление метрик" in publication
+    assert "wall-10_20" in publication
+    assert client.get(
+        f"/platform-posts/{platform_post_id}?platform=max",
+    ).status_code == 404
+    assert "-10_20" in client.get("/export/posts.csv?platform=vk").text
+    assert "160" in client.get("/export/snapshots.csv?platform=vk").text
 
 
 def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp_path):

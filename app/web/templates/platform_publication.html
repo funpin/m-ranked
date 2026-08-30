@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Публикация {{ post.external_id }} · m-ranked{% endblock %}
+{% block content %}
+<p><a href="/platform-accounts/{{ post.platform_account_id }}?platform={{ active_platform }}">← К публикациям аккаунта</a></p>
+<h1>{{ post.institution_short_name or post.institution_name }} / {{ post.external_id }}</h1>
+<p class="lead">Опубликовано: {{ post.published_at|local_datetime }} МСК · {{ active_platform_label }}{% if post.url %} · <a class="external" href="{{ post.url }}" target="_blank" rel="noopener noreferrer">открыть оригинал</a>{% endif %}</p>
+<section class="panel"><h2>Накопление метрик</h2><div class="chart"><canvas id="platformChart"></canvas></div></section>
+<section class="panel section"><h2>История замеров</h2>{% if snapshots %}<div class="table-wrap"><table><thead><tr><th>Замер</th><th>Возраст</th><th>Просмотры</th><th>Реакции</th><th>Комментарии</th><th>Репосты</th></tr></thead><tbody>{% for row in snapshots %}<tr><td>{{ row.measured_at|local_datetime }} МСК</td><td>{{ row.age_seconds|duration }}</td><td>{{ row.views_count if row.views_count is not none else '—' }}</td><td>{{ row.reactions_count if row.reactions_count is not none else '—' }}</td><td>{{ row.comments_count if row.comments_count is not none else '—' }}</td><td>{{ row.shares_count if row.shares_count is not none else '—' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty-state">Замеров ещё нет.</div>{% endif %}</section>
+<script>
+const rows={{ chart_json|safe }};
+const series=[['views_count','Просмотры','#0868df'],['reactions_count','Реакции','#16a085'],['comments_count','Комментарии','#a86200'],['shares_count','Репосты','#7857c7']];
+new Chart(document.getElementById('platformChart'),{type:'line',data:{labels:rows.map(row=>[row.measured_label,row.age_label]),datasets:series.filter(([key])=>rows.some(row=>row[key]!==null&&row[key]!==undefined)).map(([key,label,color])=>({label,data:rows.map(row=>row[key]),borderColor:color,backgroundColor:`${color}22`,pointRadius:3,tension:.15,fill:false}))},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{beginAtZero:true}}}});
+</script>
+{% endblock %}
