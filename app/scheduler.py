@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
+from typing import Any
 
 import uvicorn
 
@@ -11,15 +12,22 @@ from .config import Settings
 from .database import Database
 from .public_web import PublicWebCollector
 from .telegram_client import TelegramReader
+from .vk_collector import VkCollector
 from .web.app import create_app
 
 logger = logging.getLogger(__name__)
 
 
-async def polling_loop(collector: Collector, settings: Settings) -> None:
+async def polling_loop(
+    collector: Any,
+    settings: Settings,
+    auxiliary_collectors: tuple[Any, ...] = (),
+) -> None:
     while True:
         try:
             await collector.poll_cycle()
+            for auxiliary in auxiliary_collectors:
+                await auxiliary.poll_cycle()
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -28,6 +36,8 @@ async def polling_loop(collector: Collector, settings: Settings) -> None:
 
 
 async def run_service(settings: Settings, db: Database) -> None:
+    vk_collector = VkCollector(settings, db) if settings.vk_access_token else None
+    auxiliary_collectors = (vk_collector,) if vk_collector else ()
     if settings.data_source == "public_web":
         collector = PublicWebCollector(settings, db)
         connected = True
@@ -39,7 +49,9 @@ async def run_service(settings: Settings, db: Database) -> None:
         server = uvicorn.Server(
             uvicorn.Config(app, host=settings.web_host, port=settings.web_port, log_config=None)
         )
-        poll_task = asyncio.create_task(polling_loop(collector, settings))
+        poll_task = asyncio.create_task(
+            polling_loop(collector, settings, auxiliary_collectors)
+        )
         try:
             await server.serve()
         finally:
@@ -48,6 +60,8 @@ async def run_service(settings: Settings, db: Database) -> None:
             with suppress(asyncio.CancelledError):
                 await poll_task
             await collector.close()
+            if vk_collector:
+                await vk_collector.close()
         return
 
     api_id, api_hash = settings.require_telegram()
@@ -65,7 +79,9 @@ async def run_service(settings: Settings, db: Database) -> None:
     try:
         await reader.connect()
         connected = True
-        poll_task = asyncio.create_task(polling_loop(Collector(settings, db, reader), settings))
+        poll_task = asyncio.create_task(
+            polling_loop(Collector(settings, db, reader), settings, auxiliary_collectors)
+        )
         await server.serve()
     finally:
         connected = False
@@ -74,3 +90,5 @@ async def run_service(settings: Settings, db: Database) -> None:
             with suppress(asyncio.CancelledError):
                 await poll_task
         await reader.disconnect()
+        if vk_collector:
+            await vk_collector.close()

@@ -138,6 +138,39 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS idx_platform_accounts_institution
                     ON platform_accounts(institution_id, platform);
+                CREATE TABLE IF NOT EXISTS platform_posts (
+                    id INTEGER PRIMARY KEY,
+                    platform_account_id INTEGER NOT NULL
+                        REFERENCES platform_accounts(id) ON DELETE CASCADE,
+                    external_id TEXT NOT NULL,
+                    published_at TEXT NOT NULL,
+                    discovered_at TEXT NOT NULL,
+                    post_type TEXT NOT NULL,
+                    url TEXT,
+                    deleted_at TEXT,
+                    raw_json TEXT,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(platform_account_id, external_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_platform_posts_account_published
+                    ON platform_posts(platform_account_id, published_at DESC);
+                CREATE TABLE IF NOT EXISTS platform_snapshots (
+                    id INTEGER PRIMARY KEY,
+                    platform_post_id INTEGER NOT NULL
+                        REFERENCES platform_posts(id) ON DELETE CASCADE,
+                    measured_at TEXT NOT NULL,
+                    measurement_bucket INTEGER NOT NULL,
+                    age_seconds INTEGER NOT NULL,
+                    views_count INTEGER,
+                    reactions_count INTEGER,
+                    comments_count INTEGER,
+                    shares_count INTEGER,
+                    raw_json TEXT,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(platform_post_id, measurement_bucket)
+                );
+                CREATE INDEX IF NOT EXISTS idx_platform_snapshots_post_age
+                    ON platform_snapshots(platform_post_id, age_seconds);
                 """
             )
             conn.execute(
@@ -263,6 +296,10 @@ class Database:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(7, ?)",
                 (iso(utc_now()),),
             )
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(8, ?)",
+                (iso(utc_now()),),
+            )
 
     def add_institution(self, name: str, short_name: str | None = None) -> int:
         with self.connect() as conn:
@@ -323,14 +360,134 @@ class Database:
             ).fetchone()
             return int(row["id"])
 
-    def list_platform_accounts(self, institution_id: int | None = None) -> list[sqlite3.Row]:
-        where = "WHERE institution_id=?" if institution_id is not None else ""
-        params = (institution_id,) if institution_id is not None else ()
+    def list_platform_accounts(
+        self,
+        institution_id: int | None = None,
+        platform: str | None = None,
+        enabled_only: bool = False,
+    ) -> list[sqlite3.Row]:
+        conditions: list[str] = []
+        params: list[Any] = []
+        if institution_id is not None:
+            conditions.append("institution_id=?")
+            params.append(institution_id)
+        if platform is not None:
+            conditions.append("platform=?")
+            params.append(platform)
+        if enabled_only:
+            conditions.append("enabled=1")
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         with self.connect() as conn:
             return list(conn.execute(
                 f"SELECT * FROM platform_accounts {where} ORDER BY platform, title, username",
-                params,
+                tuple(params),
             ))
+
+    def update_platform_account_metadata(
+        self,
+        account_id: int,
+        *,
+        native_id: str,
+        username: str,
+        title: str,
+        url: str,
+        subscriber_count: int | None,
+        measured_at: datetime,
+    ) -> None:
+        display = (
+            f"{subscriber_count:,}".replace(",", " ")
+            if subscriber_count is not None else None
+        )
+        with self.connect() as conn:
+            conn.execute(
+                """UPDATE platform_accounts SET native_id=?, username=?, title=?, url=?,
+                   subscriber_count=?, subscriber_count_display=?,
+                   subscriber_measured_at=?, last_checked_at=?, last_error=NULL
+                   WHERE id=?""",
+                (
+                    native_id, username, title, url, subscriber_count, display,
+                    iso(measured_at), iso(measured_at), account_id,
+                ),
+            )
+
+    def finish_platform_account_check(
+        self, account_id: int, measured_at: datetime, error: str | None = None,
+    ) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE platform_accounts SET last_checked_at=?, last_error=? WHERE id=?",
+                (iso(measured_at), error, account_id),
+            )
+
+    def upsert_platform_post(
+        self,
+        platform_account_id: int,
+        external_id: str,
+        published_at: datetime,
+        discovered_at: datetime,
+        post_type: str,
+        url: str | None,
+        raw: Any,
+    ) -> int:
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO platform_posts(
+                     platform_account_id, external_id, published_at, discovered_at,
+                     post_type, url, raw_json, created_at
+                   ) VALUES(?,?,?,?,?,?,?,?)
+                   ON CONFLICT(platform_account_id, external_id) DO UPDATE SET
+                     post_type=excluded.post_type, url=excluded.url,
+                     raw_json=excluded.raw_json, deleted_at=NULL""",
+                (
+                    platform_account_id, external_id, iso(published_at),
+                    iso(discovered_at), post_type, url,
+                    json.dumps(raw, ensure_ascii=False, sort_keys=True), iso(utc_now()),
+                ),
+            )
+            row = conn.execute(
+                """SELECT id FROM platform_posts
+                   WHERE platform_account_id=? AND external_id=?""",
+                (platform_account_id, external_id),
+            ).fetchone()
+            return int(row["id"])
+
+    def latest_platform_snapshot_at(self, platform_post_id: int) -> str | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """SELECT measured_at FROM platform_snapshots
+                   WHERE platform_post_id=? ORDER BY measured_at DESC LIMIT 1""",
+                (platform_post_id,),
+            ).fetchone()
+            return str(row["measured_at"]) if row else None
+
+    def insert_platform_snapshot(
+        self,
+        platform_post_id: int,
+        measured_at: datetime,
+        age_seconds: int,
+        poll_interval_minutes: int,
+        *,
+        views_count: int | None,
+        reactions_count: int | None,
+        comments_count: int | None,
+        shares_count: int | None,
+        raw: Any,
+    ) -> bool:
+        bucket = int(measured_at.timestamp()) // (poll_interval_minutes * 60)
+        with self.connect() as conn:
+            result = conn.execute(
+                """INSERT OR IGNORE INTO platform_snapshots(
+                     platform_post_id, measured_at, measurement_bucket, age_seconds,
+                     views_count, reactions_count, comments_count, shares_count,
+                     raw_json, created_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    platform_post_id, iso(measured_at), bucket, age_seconds,
+                    views_count, reactions_count, comments_count, shares_count,
+                    json.dumps(raw, ensure_ascii=False, sort_keys=True), iso(utc_now()),
+                ),
+            )
+            return result.rowcount == 1
 
     def add_channel(self, username: str, institution_id: int | None = None) -> int:
         with self.connect() as conn:

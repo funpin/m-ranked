@@ -130,6 +130,36 @@ def test_telegram_channel_is_linked_to_platform_account(tmp_path):
     assert {row["platform"] for row in db.list_platform_accounts()} == {"telegram", "vk"}
 
 
+def test_platform_posts_store_raw_cross_network_metrics(tmp_path):
+    db = Database(tmp_path / "test.db")
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(
+        institution_id, "vk", "university", "university",
+        "University", "https://vk.com/university",
+    )
+    published = datetime(2026, 8, 30, 8, tzinfo=timezone.utc)
+    measured = published + timedelta(hours=1)
+    post_id = db.upsert_platform_post(
+        account_id, "-42_7", published, measured, "photo",
+        "https://vk.com/wall-42_7", {"id": 7},
+    )
+    assert db.insert_platform_snapshot(
+        post_id, measured, 3600, 5,
+        views_count=100, reactions_count=5, comments_count=2,
+        shares_count=1, raw={"likes": 5},
+    )
+    assert not db.insert_platform_snapshot(
+        post_id, measured, 3600, 5,
+        views_count=100, reactions_count=5, comments_count=2,
+        shares_count=1, raw={"likes": 5},
+    )
+    row = db.query("SELECT * FROM platform_snapshots")[0]
+    assert (row["views_count"], row["reactions_count"]) == (100, 5)
+    assert (row["comments_count"], row["shares_count"]) == (2, 1)
+    assert db.list_platform_accounts(platform="vk", enabled_only=True)[0]["id"] == account_id
+
+
 def test_channel_can_be_linked_to_named_institution_and_names_are_editable(tmp_path):
     db = Database(tmp_path / "test.db")
     db.migrate()
@@ -200,7 +230,7 @@ def test_platform_migration_backfills_existing_channel_once(tmp_path):
         len(db.list_institutions()), len(db.list_platform_accounts()),
         db.query("SELECT max(version) version FROM schema_migrations")[0]["version"],
     )
-    assert before == after == (1, 1, 7)
+    assert before == after == (1, 1, 8)
     account = db.list_platform_accounts()[0]
     assert account["native_id"] == "123"
     assert account["subscriber_count"] == 1000
