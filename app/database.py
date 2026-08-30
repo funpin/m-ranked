@@ -276,6 +276,18 @@ class Database:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM institutions ORDER BY name COLLATE NOCASE"))
 
+    def update_institution(self, institution_id: int, name: str, short_name: str) -> bool:
+        name = name.strip()
+        short_name = short_name.strip()
+        if not name or not short_name:
+            raise ValueError("Institution name and short name are required")
+        with self.connect() as conn:
+            result = conn.execute(
+                "UPDATE institutions SET name=?, short_name=? WHERE id=?",
+                (name, short_name, institution_id),
+            )
+            return result.rowcount > 0
+
     def add_platform_account(
         self,
         institution_id: int,
@@ -320,8 +332,12 @@ class Database:
                 params,
             ))
 
-    def add_channel(self, username: str) -> int:
+    def add_channel(self, username: str, institution_id: int | None = None) -> int:
         with self.connect() as conn:
+            if institution_id is not None and conn.execute(
+                "SELECT 1 FROM institutions WHERE id=?", (institution_id,)
+            ).fetchone() is None:
+                raise ValueError("Institution not found")
             conn.execute(
                 """INSERT INTO channels(username, enabled, added_at)
                    VALUES(?, 1, ?)
@@ -331,7 +347,8 @@ class Database:
             row = conn.execute("SELECT id FROM channels WHERE username=?", (username,)).fetchone()
             channel_id = int(row["id"])
             channel = conn.execute("SELECT * FROM channels WHERE id=?", (channel_id,)).fetchone()
-            if channel["institution_id"] is None:
+            previous_institution_id = channel["institution_id"]
+            if channel["institution_id"] is None and institution_id is None:
                 title = f"@{username}"
                 cursor = conn.execute(
                     "INSERT INTO institutions(name, short_name, created_at) VALUES(?,?,?)",
@@ -353,6 +370,39 @@ class Database:
                     "UPDATE channels SET institution_id=?, platform_account_id=? WHERE id=?",
                     (institution_id, account_id, channel_id),
                 )
+            elif institution_id is not None:
+                account_id = channel["platform_account_id"]
+                if account_id is None:
+                    conn.execute(
+                        """INSERT INTO platform_accounts(
+                             institution_id, platform, external_key, username, url,
+                             enabled, access_mode, data_quality, added_at
+                           ) VALUES(?, 'telegram', ?, ?, ?, 1, 'public', 'rounded', ?)""",
+                        (
+                            institution_id, username.casefold(), username,
+                            f"https://t.me/{username}", iso(utc_now()),
+                        ),
+                    )
+                    account_id = int(conn.execute(
+                        "SELECT id FROM platform_accounts WHERE platform='telegram' AND external_key=?",
+                        (username.casefold(),),
+                    ).fetchone()["id"])
+                else:
+                    conn.execute(
+                        "UPDATE platform_accounts SET institution_id=?, enabled=1 WHERE id=?",
+                        (institution_id, account_id),
+                    )
+                conn.execute(
+                    "UPDATE channels SET institution_id=?, platform_account_id=? WHERE id=?",
+                    (institution_id, account_id, channel_id),
+                )
+                if previous_institution_id not in (None, institution_id):
+                    remaining = conn.execute(
+                        "SELECT 1 FROM platform_accounts WHERE institution_id=? LIMIT 1",
+                        (previous_institution_id,),
+                    ).fetchone()
+                    if remaining is None:
+                        conn.execute("DELETE FROM institutions WHERE id=?", (previous_institution_id,))
             else:
                 conn.execute(
                     "UPDATE platform_accounts SET enabled=1 WHERE id=?",
@@ -398,6 +448,17 @@ class Database:
         where = "WHERE enabled=1" if enabled_only else ""
         with self.connect() as conn:
             return list(conn.execute(f"SELECT * FROM channels {where} ORDER BY username"))
+
+    def list_channels_with_institutions(self, enabled_only: bool = False) -> list[sqlite3.Row]:
+        where = "WHERE c.enabled=1" if enabled_only else ""
+        with self.connect() as conn:
+            return list(conn.execute(
+                f"""SELECT c.*, i.name AS institution_name,
+                           i.short_name AS institution_short_name
+                    FROM channels c
+                    LEFT JOIN institutions i ON i.id=c.institution_id
+                    {where} ORDER BY c.username"""
+            ))
 
     def channel(self, channel_id: int) -> sqlite3.Row | None:
         with self.connect() as conn:

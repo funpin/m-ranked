@@ -167,7 +167,7 @@ def create_app(
     def channel_period_stats(
         cutoff: datetime, previous_cutoff: datetime | None = None,
     ) -> list[dict[str, Any]]:
-        channels = _rows_dict(db.list_channels(enabled_only=True))
+        channels = _rows_dict(db.list_channels_with_institutions(enabled_only=True))
         posts = _rows_dict(db.query(
             """SELECT p.id, p.channel_id, p.telegram_message_id, p.history_complete,
                s.total_reactions, s.views_count,
@@ -311,7 +311,7 @@ def create_app(
         """Aggregate actual post changes during a time window for the overview."""
 
         now = datetime.now(timezone.utc)
-        channels = _rows_dict(db.list_channels(enabled_only=True))
+        channels = _rows_dict(db.list_channels_with_institutions(enabled_only=True))
 
         def window_samples(start: datetime, end: datetime) -> dict[int, list[dict[str, Any]]]:
             rows = _rows_dict(db.query(
@@ -615,9 +615,17 @@ def create_app(
         platform_status: str | None = Query(default=None),
         _: str = Depends(require_admin),
     ) -> HTMLResponse:
-        managed_channels = db.list_channels()
+        managed_channels = db.list_channels_with_institutions()
         institutions = db.list_institutions()
         platform_accounts = db.list_platform_accounts()
+        accounts_by_institution: dict[int, list[Any]] = {}
+        for account in platform_accounts:
+            accounts_by_institution.setdefault(int(account["institution_id"]), []).append(account)
+        institution_groups = [
+            {"institution": institution,
+             "accounts": accounts_by_institution.get(int(institution["id"]), [])}
+            for institution in institutions
+        ]
         project_root = Path(__file__).resolve().parents[2]
         database_path = settings.database_path
         if not database_path.is_absolute():
@@ -642,6 +650,7 @@ def create_app(
             channel_count=len(managed_channels),
             institutions=institutions,
             institution_names={row["id"]: row["name"] for row in institutions},
+            institution_groups=institution_groups,
             platform_accounts=platform_accounts,
             platform_count=len(platform_accounts),
             platform_status=platform_status,
@@ -689,6 +698,61 @@ def create_app(
         db.add_institution(name, short_name or None)
         return RedirectResponse("/manage?platform_status=institution-added", status_code=303)
 
+    @app.post("/manage/institutions/{institution_id}")
+    async def manage_update_institution(
+        institution_id: int, name: str = Form(...), short_name: str = Form(...),
+        csrf_token: str = Form(...), _: str = Depends(require_admin),
+    ) -> RedirectResponse:
+        check_csrf(csrf_token)
+        try:
+            updated = db.update_institution(institution_id, name, short_name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not updated:
+            raise HTTPException(status_code=404, detail="Вуз не найден")
+        return RedirectResponse("/manage?platform_status=institution-updated", status_code=303)
+
+    @app.post("/manage/institutions/{institution_id}/accounts")
+    async def manage_update_institution_accounts(
+        institution_id: int, telegram: str = Form(default=""),
+        vk: str = Form(default=""), max_account: str = Form(default=""),
+        rutube: str = Form(default=""), csrf_token: str = Form(...),
+        _: str = Depends(require_admin),
+    ) -> RedirectResponse:
+        check_csrf(csrf_token)
+        if institution_id not in {int(row["id"]) for row in db.list_institutions()}:
+            raise HTTPException(status_code=404, detail="Вуз не найден")
+        values = {"telegram": telegram, "vk": vk, "max": max_account, "rutube": rutube}
+        if not any(value.strip() for value in values.values()):
+            raise HTTPException(status_code=400, detail="Укажите хотя бы один аккаунт")
+        for platform, reference in values.items():
+            original = reference.strip()
+            if not original:
+                continue
+            if platform == "telegram":
+                db.add_channel(normalize_channel_ref(original), institution_id=institution_id)
+                continue
+            if platform == "vk":
+                external_key = normalize_vk_community_ref(original)
+                account_url = f"https://vk.com/{external_key}"
+                access_mode, data_quality = "public", "exact"
+            else:
+                parsed = urlparse(original if "://" in original else f"https://placeholder/{original}")
+                if "://" in original and (
+                    parsed.scheme not in {"http", "https"} or not parsed.hostname
+                ):
+                    raise HTTPException(status_code=400, detail=f"Некорректная ссылка {platform}")
+                external_key = parsed.path.strip("/").split("/")[-1].lstrip("@")
+                if not external_key:
+                    raise HTTPException(status_code=400, detail=f"Не удалось определить {platform}")
+                account_url = original if "://" in original else None
+                access_mode, data_quality = "owner", "unavailable"
+            db.add_platform_account(
+                institution_id, platform, external_key, username=external_key,
+                url=account_url, access_mode=access_mode, data_quality=data_quality,
+            )
+        return RedirectResponse("/manage?platform_status=accounts-updated", status_code=303)
+
     @app.post("/manage/platform-accounts")
     async def manage_add_platform_account(
         institution_id: int = Form(...), platform: str = Form(...),
@@ -715,6 +779,10 @@ def create_app(
             access_mode, data_quality = "public", "exact"
         else:
             parsed = urlparse(original if "://" in original else f"https://placeholder/{original}")
+            if "://" in original and (
+                parsed.scheme not in {"http", "https"} or not parsed.hostname
+            ):
+                raise HTTPException(status_code=400, detail=f"Некорректная ссылка {platform}")
             external_key = parsed.path.strip("/").split("/")[-1].lstrip("@")
             if not external_key:
                 raise HTTPException(status_code=400, detail="Не удалось определить аккаунт")
