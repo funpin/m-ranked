@@ -14,6 +14,22 @@
 <script>
 const rows={{ chart_json|safe }};
 let displayedRows=[];
+const POST_CHART_PREFERENCES_KEY='m-ranked:post-chart-preferences:v1';
+const defaultPostChartPreferences={reactions:true,views:false,scaleMode:'shared'};
+function loadPostChartPreferences(){
+  try{
+    const saved=JSON.parse(window.localStorage.getItem(POST_CHART_PREFERENCES_KEY)||'{}');
+    return {
+      reactions:typeof saved.reactions==='boolean'?saved.reactions:defaultPostChartPreferences.reactions,
+      views:typeof saved.views==='boolean'?saved.views:defaultPostChartPreferences.views,
+      scaleMode:['shared','auto'].includes(saved.scaleMode)?saved.scaleMode:defaultPostChartPreferences.scaleMode,
+    };
+  }catch(error){return {...defaultPostChartPreferences}}
+}
+let postChartPreferences=loadPostChartPreferences();
+function savePostChartPreferences(){
+  try{window.localStorage.setItem(POST_CHART_PREFERENCES_KEY,JSON.stringify(postChartPreferences))}catch(error){}
+}
 const integerTicks={precision:0,callback:value=>Number.isInteger(value)?value:null};
 const chartOptions=yTitle=>({responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},scales:{x:{title:{display:true,text:'Время замера и возраст публикации'},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:9}},y:{beginAtZero:true,title:{display:true,text:yTitle},ticks:integerTicks}}});
 const accumulationOptions=chartOptions('Реакций и просмотров');
@@ -23,6 +39,8 @@ accumulationOptions.onHover=(event,elements)=>{event.native.target.style.cursor=
 accumulationOptions.scales.y.grid={drawOnChartArea:true};
 accumulationOptions.scales.yViews={display:false,beginAtZero:true,position:'right',title:{display:true,text:'Просмотров'},ticks:integerTicks,grid:{drawOnChartArea:false}};
 const totalChart=new Chart(document.getElementById('totalChart'),{type:'line',data:{labels:[],datasets:[{label:'Всего реакций',data:[],yAxisID:'y',borderColor:'#16a085',backgroundColor:'#16a08522',fill:true,tension:.15,pointRadius:3,pointHoverRadius:7},{label:'Всего просмотров',data:[],yAxisID:'y',borderColor:'#0868df',backgroundColor:'#0868df1f',fill:true,hidden:true,tension:.15,pointRadius:3,pointHoverRadius:7,spanGaps:true}]},options:accumulationOptions});
+totalChart.setDatasetVisibility(0,postChartPreferences.reactions);
+totalChart.setDatasetVisibility(1,postChartPreferences.views);
 const deltaOptions=chartOptions('Новых реакций');
 deltaOptions.onClick=(event,elements)=>{if(elements.length)focusSnapshot(elements[0].index)};
 deltaOptions.onHover=(event,elements)=>{event.native.target.style.cursor=elements.length?'pointer':'default'};
@@ -32,18 +50,22 @@ totalChart.data.datasets.forEach((dataset,index)=>{
   const visible=totalChart.isDatasetVisible(index);
   const button=document.createElement('button');button.type='button';button.className=`legend-toggle${visible?'':' is-hidden'}`;button.title=`${visible?'Скрыть':'Вернуть'} линию: ${dataset.label}`;
   button.innerHTML=`<span class="legend-swatch" style="background:${dataset.borderColor}"></span><span class="legend-label">${dataset.label}</span>`;
-  button.addEventListener('click',()=>{const visible=totalChart.isDatasetVisible(index);totalChart.setDatasetVisibility(index,!visible);button.classList.toggle('is-hidden',visible);button.title=`${visible?'Вернуть':'Скрыть'} линию: ${dataset.label}`;totalChart.update();});
+  button.addEventListener('click',()=>{const visible=totalChart.isDatasetVisible(index);totalChart.setDatasetVisibility(index,!visible);button.classList.toggle('is-hidden',visible);button.title=`${visible?'Вернуть':'Скрыть'} линию: ${dataset.label}`;postChartPreferences[index===0?'reactions':'views']=!visible;savePostChartPreferences();totalChart.update();});
   accumulationLegend.appendChild(button);
 });
-document.querySelectorAll('.scale-mode-button').forEach(button=>button.addEventListener('click',()=>{
-  const auto=button.dataset.mode==='auto';
+function applyScaleMode(mode,update=true){
+  const auto=mode==='auto';
   totalChart.data.datasets[1].yAxisID=auto?'yViews':'y';
   totalChart.options.scales.y.title.text=auto?'Реакций':'Реакций и просмотров';
   totalChart.options.scales.yViews.display=auto;
   document.querySelectorAll('.scale-mode-button').forEach(candidate=>{
-    const active=candidate===button;candidate.classList.toggle('active',active);candidate.setAttribute('aria-pressed',String(active));
+    const active=candidate.dataset.mode===mode;candidate.classList.toggle('active',active);candidate.setAttribute('aria-pressed',String(active));
   });
-  totalChart.update();
+  if(update)totalChart.update();
+}
+applyScaleMode(postChartPreferences.scaleMode,false);
+document.querySelectorAll('.scale-mode-button').forEach(button=>button.addEventListener('click',()=>{
+  postChartPreferences.scaleMode=button.dataset.mode;savePostChartPreferences();applyScaleMode(button.dataset.mode);
 }));
 const rangeStart=document.getElementById('rangeStart');
 const rangeEnd=document.getElementById('rangeEnd');
