@@ -526,6 +526,8 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
     assert 'title="Новое полное название">НПН</h3>' in overview
     assert "Старое полное название" not in overview
     assert 'id="accountMatrix"' in linked.text
+    assert linked.text.index('id="accountMatrix"') < linked.text.index('class="platform-form institution-create"')
+    assert "Добавьте полное название для подсказок" in linked.text
     assert "Редактировать название" in linked.text
     db.add_platform_account(
         institution_id, "max", "max_without_username",
