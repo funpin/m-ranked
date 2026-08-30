@@ -164,8 +164,8 @@ def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp
     assert 'class="post-stat-badges"' in overview
     assert "Всего постов в базе" in overview
     assert "<b>2</b>" in overview
-    assert "Посты с двумя замерами за 3 часа" in overview
-    assert "Прирост реакций всех постов за 3 часа" in overview
+    assert "Посты из БД с активностью за 3 часа" in overview
+    assert "Прирост реакций всех постов из БД за 3 часа" in overview
     assert "отслеживаются</span>" not in overview
     assert "новых</span>" not in overview
 
@@ -246,7 +246,7 @@ def test_overview_period_windows_use_fixed_open_left_boundary(
     # current delta therefore starts at the first point strictly after it.
     assert ">40</b><small>реакций" in page
     assert ">400</b><small>просмотров" in page
-    assert f"Прирост реакций всех постов {period_short}." in page
+    assert f"Прирост реакций всех постов из БД {period_short}." in page
     assert f"Посты, вышедшие {period_short}." in page
 
 
@@ -531,14 +531,14 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
     channel = db.list_channels_with_institutions()[0]
     assert channel["institution_short_name"] == "НПН"
     overview = client.get("/").text
-    assert 'data-tooltip="Новое полное название"' in overview
-    assert 'title="Новое полное название"' in overview
-    assert 'class="institution-title has-tooltip"' in overview
+    assert 'data-floating-tooltip="Новое полное название"' in overview
+    assert 'class="institution-title"' in overview
     assert '<span class="title-text">НПН</span><span class="title-info info-mark"' in overview
     assert ".m-rating-badge.has-tooltip{position:absolute}" in overview
     assert ".m-rating-badge.has-tooltip::after{top:calc(100% + 8px)" in overview
     assert ".overview-header .institution-title{display:inline-flex" in overview
-    assert ".overview-header .institution-title.has-tooltip::after{top:calc(100% + 8px)" in overview
+    assert 'id="floatingTooltip"' in overview
+    assert "target.dataset.floatingTooltip" in overview
     assert "Старое полное название" not in overview
     assert 'id="accountMatrix"' in linked.text
     assert linked.text.index('id="accountMatrix"') < linked.text.index('class="platform-form institution-create"')
