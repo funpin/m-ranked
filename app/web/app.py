@@ -45,6 +45,29 @@ POST_TYPE_LABELS = {
     "media": "медиа",
 }
 
+PLATFORM_OPTIONS = (
+    {"value": "all", "label": "Общий", "long_label": "Все соцсети"},
+    {"value": "telegram", "label": "TG", "long_label": "Telegram"},
+    {"value": "vk", "label": "ВК", "long_label": "ВКонтакте"},
+    {"value": "max", "label": "MAX", "long_label": "MAX"},
+    {"value": "rutube", "label": "RUTUBE", "long_label": "Rutube"},
+)
+PLATFORM_VALUES = {str(option["value"]) for option in PLATFORM_OPTIONS}
+PLATFORM_ALIASES = {"tg": "telegram", "общий": "all"}
+PLATFORM_RATING_FIELDS = {
+    "all": ("m_rating_social_rank", "m_rating_social_score"),
+    "telegram": ("m_rating_tg_rank", "m_rating_tg_score"),
+    "vk": ("m_rating_vk_rank", "m_rating_vk_score"),
+    "max": ("m_rating_max_rank", "m_rating_max_score"),
+    "rutube": ("m_rating_rutube_rank", "m_rating_rutube_score"),
+}
+
+
+def normalize_platform(value: str | None) -> str:
+    normalized = str(value or "telegram").strip().casefold()
+    normalized = PLATFORM_ALIASES.get(normalized, normalized)
+    return normalized if normalized in PLATFORM_VALUES else "telegram"
+
 
 def _rows_dict(rows: list[Any]) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
@@ -145,6 +168,14 @@ def create_app(
             raise HTTPException(status_code=403, detail="Недействительный защитный токен")
 
     def render(request: Request, template: str, **context: Any) -> HTMLResponse:
+        active_platform = normalize_platform(
+            context.pop("active_platform", request.query_params.get("platform"))
+        )
+        platform_label = next(
+            str(option["long_label"])
+            for option in PLATFORM_OPTIONS if option["value"] == active_platform
+        )
+        platform_query = f"platform={active_platform}"
         return templates.TemplateResponse(
             request=request,
             name=template,
@@ -152,6 +183,17 @@ def create_app(
                 "tz": tz,
                 "settings": settings,
                 "post_type_labels": POST_TYPE_LABELS,
+                "platform_options": PLATFORM_OPTIONS,
+                "active_platform": active_platform,
+                "active_platform_label": platform_label,
+                "platform_query": platform_query,
+                "nav_urls": {
+                    "overview": f"/?{platform_query}",
+                    "rating": f"/rating?{platform_query}",
+                    "compare": f"/compare?{platform_query}",
+                    "export": f"/export/snapshots.csv?{platform_query}",
+                    "manage": f"/manage?{platform_query}",
+                },
                 **context,
             },
         )
@@ -458,6 +500,66 @@ def create_app(
             result.append(channel)
         return result
 
+    def platform_overview_cards(platform: str) -> list[dict[str, Any]]:
+        institutions = _rows_dict(db.list_institutions())
+        accounts = _rows_dict(db.list_platform_accounts())
+        accounts_by_institution: dict[int, list[dict[str, Any]]] = {}
+        for account in accounts:
+            accounts_by_institution.setdefault(int(account["institution_id"]), []).append(account)
+        rank_field, score_field = PLATFORM_RATING_FIELDS[platform]
+        cards: list[dict[str, Any]] = []
+        for institution in institutions:
+            institution_accounts = accounts_by_institution.get(int(institution["id"]), [])
+            selected_accounts = (
+                institution_accounts
+                if platform == "all"
+                else [account for account in institution_accounts if account["platform"] == platform]
+            )
+            connected_platforms = {
+                str(account["platform"])
+                for account in institution_accounts if bool(account["enabled"])
+            }
+            subscriber_values = [
+                int(account["subscriber_count"])
+                for account in selected_accounts if account["subscriber_count"] is not None
+            ]
+            if not selected_accounts:
+                status_text = "Аккаунт не добавлен"
+                status_kind = "muted"
+            elif not any(bool(account["enabled"]) for account in selected_accounts):
+                status_text = "Все аккаунты отключены"
+                status_kind = "warn"
+            elif platform in {"max", "rutube"}:
+                status_text = "Сбор проектируется"
+                status_kind = "warn"
+            elif platform == "vk" and not settings.vk_access_token:
+                status_text = "Для сбора нужен VK-токен"
+                status_kind = "warn"
+            elif platform == "all":
+                status_text = f"Подключено площадок: {len(connected_platforms)} из 4"
+                status_kind = "ok" if connected_platforms else "muted"
+            elif any(account["last_error"] for account in selected_accounts):
+                status_text = "Последний опрос завершился ошибкой"
+                status_kind = "bad"
+            elif any(account["last_checked_at"] for account in selected_accounts):
+                status_text = "Источник опрашивается"
+                status_kind = "ok"
+            else:
+                status_text = "Ожидает первого опроса"
+                status_kind = "muted"
+            cards.append({
+                "institution": institution,
+                "accounts": selected_accounts,
+                "account_count": len(selected_accounts),
+                "connected_count": len(connected_platforms),
+                "subscriber_count": sum(subscriber_values) if subscriber_values else None,
+                "rating_rank": institution.get(rank_field),
+                "rating_score": institution.get(score_field),
+                "status_text": status_text,
+                "status_kind": status_kind,
+            })
+        return cards
+
     @app.get("/health")
     async def health() -> dict[str, Any]:
         return {
@@ -522,8 +624,32 @@ def create_app(
         period: str = Query(default="1d"),
         sort: str = Query(default="median_reactions"),
         direction: str = Query(default="desc"),
+        platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
+        platform = normalize_platform(platform)
         period, period_delta, period_label, period_short = period_spec(period)
+        direction = direction if direction in {"asc", "desc"} else "desc"
+        if platform != "telegram":
+            cards = platform_overview_cards(platform)
+            platform_sort_keys = {
+                "m_rating": "rating_rank",
+                "accounts": "account_count",
+                "subscribers": "subscriber_count",
+            }
+            if platform == "all":
+                platform_sort_keys["coverage"] = "connected_count"
+            sort = sort if sort in platform_sort_keys else "m_rating"
+            sort_key = platform_sort_keys[sort]
+            available = [card for card in cards if card.get(sort_key) is not None]
+            unavailable = [card for card in cards if card.get(sort_key) is None]
+            available.sort(
+                key=lambda card: card[sort_key], reverse=direction == "desc",
+            )
+            return render(
+                request, "overview.html", channels=[], platform_cards=available + unavailable,
+                period=period, period_label=period_label, period_short=period_short,
+                sort=sort, direction=direction, active_platform=platform,
+            )
         cutoff = datetime.now(timezone.utc) - period_delta
         sort_keys = {
             "subscribers": "subscriber_count", "posts": "post_count",
@@ -532,7 +658,6 @@ def create_app(
             "m_rating": "m_rating_tg_rank",
         }
         sort = sort if sort in sort_keys else "median_reactions"
-        direction = direction if direction in {"asc", "desc"} else "desc"
         channels = channel_activity_stats(cutoff, cutoff - period_delta)
         sort_key = sort_keys[sort]
         available = [row for row in channels if row.get(sort_key) is not None]
@@ -544,7 +669,8 @@ def create_app(
         return render(
             request, "overview.html", channels=channels, period=period,
             period_label=period_label, period_short=period_short,
-            sort=sort, direction=direction,
+            sort=sort, direction=direction, active_platform=platform,
+            platform_cards=[],
         )
 
     @app.get("/rating", response_class=HTMLResponse)
@@ -555,7 +681,15 @@ def create_app(
         channel_direction: str = Query(default="desc"),
         post_sort: str = Query(default="view_share"),
         post_direction: str = Query(default="desc"),
+        platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
+        platform = normalize_platform(platform)
+        if platform != "telegram":
+            return render(
+                request, "platform_pending.html", page_title="Рейтинг",
+                page_description="Рейтинг будет построен только по выбранной площадке.",
+                active_platform=platform,
+            )
         period, period_delta, period_label, period_short = period_spec(period)
         channel_keys = {
             "average": "avg_reactions", "total": "total_reactions",
@@ -607,7 +741,7 @@ def create_app(
             period_badge={"3h": "3 часа", "1d": "24 часа", "7d": "7 дней", "30d": "30 дней"}[period],
             channel_sort=channel_sort,
             channel_direction=channel_direction, post_sort=post_sort,
-            post_direction=post_direction,
+            post_direction=post_direction, active_platform=platform,
         )
 
     @app.get("/manage", response_class=HTMLResponse)
@@ -923,7 +1057,13 @@ def create_app(
         return RedirectResponse("/manage?channel_status=deleted", status_code=303)
 
     @app.get("/channels/{channel_id}", response_class=HTMLResponse)
-    async def channel_page(request: Request, channel_id: int) -> HTMLResponse:
+    async def channel_page(
+        request: Request, channel_id: int,
+        platform: str = Query(default="telegram"),
+    ) -> HTMLResponse:
+        platform = normalize_platform(platform)
+        if platform != "telegram":
+            return RedirectResponse(f"/?platform={platform}", status_code=307)
         channel = db.channel(channel_id)
         if channel is None:
             return HTMLResponse("Канал не найден", status_code=404)
@@ -976,10 +1116,19 @@ def create_app(
         comments = [row["comments_count"] for row in latest_metrics if row["comments_count"] is not None]
         stats["median_comments"] = median(comments) if comments else None
         stats["retention_days"] = settings.retention_days
-        return render(request, "channel.html", channel=channel, posts=posts, stats=stats)
+        return render(
+            request, "channel.html", channel=channel, posts=posts, stats=stats,
+            active_platform="telegram",
+        )
 
     @app.get("/posts/{post_id}", response_class=HTMLResponse)
-    async def post_page(request: Request, post_id: int) -> HTMLResponse:
+    async def post_page(
+        request: Request, post_id: int,
+        platform: str = Query(default="telegram"),
+    ) -> HTMLResponse:
+        platform = normalize_platform(platform)
+        if platform != "telegram":
+            return RedirectResponse(f"/?platform={platform}", status_code=307)
         found = db.query(
             """SELECT p.*, c.username, c.title FROM posts p
                JOIN channels c ON c.id=p.channel_id WHERE p.id=?""",
@@ -1023,6 +1172,7 @@ def create_app(
             older_post=older_post[0] if older_post else None,
             newer_post=newer_post[0] if newer_post else None,
             chart_json=json.dumps(snapshots, ensure_ascii=False),
+            active_platform="telegram",
         )
 
     @app.get("/compare", response_class=HTMLResponse)
@@ -1032,7 +1182,18 @@ def create_app(
         period: int = Query(default=72),
         include_partial: bool = Query(default=False),
         submitted: bool = Query(default=False),
+        platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
+        platform = normalize_platform(platform)
+        if platform != "telegram":
+            return render(
+                request, "platform_pending.html", page_title="Сравнение",
+                page_description=(
+                    "Сравнение будет использовать публикации и фиксированные "
+                    "выборки только выбранной площадки."
+                ),
+                active_platform=platform,
+            )
         all_channels = sorted(
             db.list_channels(enabled_only=True),
             key=lambda row: str(row["title"] or row["username"]).casefold(),
@@ -1115,7 +1276,7 @@ def create_app(
                 168: "7 дней", 336: "14 дней",
             }[period],
             include_partial=include_partial, data_json=json.dumps(data),
-            has_points=has_points, submitted=submitted,
+            has_points=has_points, submitted=submitted, active_platform=platform,
         )
 
     def csv_response(name: str, headers: list[str], rows: list[list[Any]]) -> StreamingResponse:
@@ -1129,7 +1290,15 @@ def create_app(
         )
 
     @app.get("/export/snapshots.csv")
-    async def export_snapshots() -> StreamingResponse:
+    async def export_snapshots(
+        platform: str = Query(default="telegram"),
+    ) -> StreamingResponse:
+        platform = normalize_platform(platform)
+        if platform != "telegram":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Экспорт снимков {platform} ещё не подключён",
+            )
         rows = db.query(
             """SELECT c.username, p.telegram_message_id, p.published_at, s.measured_at,
                s.age_seconds/3600.0 age_hours, s.total_reactions, s.delta_total,
@@ -1147,7 +1316,15 @@ def create_app(
         )
 
     @app.get("/export/posts.csv")
-    async def export_posts() -> StreamingResponse:
+    async def export_posts(
+        platform: str = Query(default="telegram"),
+    ) -> StreamingResponse:
+        platform = normalize_platform(platform)
+        if platform != "telegram":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Экспорт публикаций {platform} ещё не подключён",
+            )
         rows = db.query(
             """SELECT c.username, p.telegram_message_id, p.published_at, p.history_complete,
                (SELECT total_reactions FROM reaction_snapshots s WHERE s.post_id=p.id ORDER BY measured_at DESC LIMIT 1),
