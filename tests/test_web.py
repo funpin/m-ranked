@@ -69,6 +69,22 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert 'href="/channels/' in overview and "?platform=telegram" in overview
     assert "включая публикации, вышедшие раньше" in overview
     assert "не сумма текущих показателей только у новых постов" in overview
+    telegram_sort = overview.split('<select name="sort">', 1)[1].split("</select>", 1)[0]
+    assert [
+        telegram_sort.index(f'value="{value}"')
+        for value in (
+            "median_reactions", "m_rating", "reactions", "views", "posts",
+            "subscribers",
+        )
+    ] == sorted([
+        telegram_sort.index(f'value="{value}"')
+        for value in (
+            "median_reactions", "m_rating", "reactions", "views", "posts",
+            "subscribers",
+        )
+    ])
+    assert "М‑Рейтинг TG · место" in telegram_sort
+    assert "М‑Рейтинг TG учитывает только площадку Telegram" in overview
     assert ".overview-header{height:auto;min-height:0}" in overview
     assert ".has-tooltip.tooltip-open::after" in overview
     assert "event.target.closest('.has-tooltip[data-tooltip]')" in overview
@@ -170,6 +186,12 @@ def test_platform_context_never_falls_back_to_telegram_data(tmp_path):
     assert 'name="platform" value="vk" checked' in vk_overview
     assert "@platform_context_vk" in vk_overview
     assert "М‑Рейтинг ВК · №7" in vk_overview
+    vk_sort = vk_overview.split('<select name="sort">', 1)[1].split("</select>", 1)[0]
+    assert "М‑Рейтинг ВК · место" in vk_sort
+    assert "М‑Рейтинг ВК учитывает только площадку ВКонтакте" in vk_overview
+    assert 'value="activity"' not in vk_sort
+    assert 'value="comments"' not in vk_sort
+    assert 'value="shares"' not in vk_sort
     assert "9999" not in vk_overview
     assert "Данные других соцсетей в расчёт не попадают" in vk_overview
     assert 'href="/rating?platform=vk"' in vk_overview
@@ -436,6 +458,31 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     assert 'aria-label="Публикации за 3 часа"' in overview
     assert "медиана прироста просмотров" in overview
     assert '<div class="platform-card-accounts">' not in overview
+    platform_sort = overview.split('<select name="sort">', 1)[1].split("</select>", 1)[0]
+    platform_code = "MAX" if platform == "max" else "RUTUBE"
+    assert [
+        platform_sort.index(f'value="{value}"')
+        for value in (
+            "median_reactions", "m_rating", "reactions", "views", "posts",
+            "subscribers",
+        )
+    ] == sorted([
+        platform_sort.index(f'value="{value}"')
+        for value in (
+            "median_reactions", "m_rating", "reactions", "views", "posts",
+            "subscribers",
+        )
+    ])
+    assert f"М‑Рейтинг {platform_code} · место" in platform_sort
+    assert f"М‑Рейтинг {platform_code} учитывает только площадку" in overview
+    assert 'value="activity"' not in platform_sort
+    assert 'value="comments"' not in platform_sort
+    assert 'value="shares"' not in platform_sort
+
+    fallback_overview = client.get(
+        f"/?platform={platform}&sort=comments",
+    ).text
+    assert 'value="median_reactions" selected' in fallback_overview
 
     institution = client.get(
         f"/institutions/{institution_id}?platform={platform}",
