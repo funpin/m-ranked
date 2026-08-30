@@ -712,25 +712,24 @@ def create_app(
                     now - period_delta * 2, now,
                 )
             )
-            platform_sort_keys = {
-                "m_rating": "rating_rank",
-                "accounts": "account_count",
-                "subscribers": "subscriber_count",
-            }
             if platform == "all":
-                platform_sort_keys["coverage"] = "connected_count"
+                platform_sort_keys = {
+                    "m_rating": "rating_rank",
+                    "coverage": "connected_count",
+                    "accounts": "account_count",
+                }
+                default_sort = "m_rating"
             else:
-                platform_sort_keys.update({
-                    "posts": "post_count",
-                    "activity": "activity_post_count",
+                platform_sort_keys = {
+                    "median_reactions": "median_reactions",
+                    "m_rating": "rating_rank",
                     "reactions": "total_reactions",
                     "views": "total_views",
-                    "comments": "total_comments",
-                    "shares": "total_shares",
-                    "median_reactions": "median_reactions",
-                    "median_views": "median_views",
-                })
-            sort = sort if sort in platform_sort_keys else "m_rating"
+                    "posts": "post_count",
+                    "subscribers": "subscriber_count",
+                }
+                default_sort = "median_reactions"
+            sort = sort if sort in platform_sort_keys else default_sort
             sort_key = platform_sort_keys[sort]
             available = [card for card in cards if card.get(sort_key) is not None]
             unavailable = [card for card in cards if card.get(sort_key) is None]
