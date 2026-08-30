@@ -532,7 +532,8 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
     assert channel["institution_short_name"] == "НПН"
     overview = client.get("/").text
     assert 'data-tooltip="Новое полное название"' in overview
-    assert '<span class="title-text">НПН</span><span class="title-info info-mark has-tooltip"' in overview
+    assert 'class="institution-title has-tooltip"' in overview
+    assert '<span class="title-text">НПН</span><span class="title-info info-mark"' in overview
     assert ".m-rating-badge.has-tooltip{position:absolute}" in overview
     assert ".m-rating-badge.has-tooltip::after{top:calc(100% + 8px)" in overview
     assert ".overview-header .institution-title{display:inline-flex" in overview
