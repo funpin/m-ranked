@@ -107,6 +107,34 @@ def test_delete_channel_removes_its_history(tmp_path):
     assert not db.list_institutions()
 
 
+def test_platform_account_controls_keep_telegram_state_in_sync(tmp_path):
+    db = Database(tmp_path / "test.db")
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    channel_id = db.add_channel("university", institution_id=institution_id)
+    channel = db.channel(channel_id)
+    account_id = int(channel["platform_account_id"])
+    now = datetime.now(timezone.utc)
+    post_id = db.add_post(
+        channel_id, "m:1", [1], None, now, now, 0, True, "text", False,
+    )
+    db.insert_snapshot(post_id, now, 0, 4, {"👍": 4}, [], 5, 15, 2.0)
+
+    assert db.set_platform_account_enabled(account_id, False)
+    assert not db.platform_account(account_id)["enabled"]
+    assert not db.channel(channel_id)["enabled"]
+    assert db.set_platform_account_enabled(account_id, True)
+    assert db.platform_account(account_id)["enabled"]
+    assert db.channel(channel_id)["enabled"]
+
+    assert db.delete_platform_account(account_id)
+    assert db.platform_account(account_id) is None
+    assert db.channel(channel_id) is None
+    assert not db.query("SELECT id FROM posts")
+    assert not db.query("SELECT id FROM reaction_snapshots")
+    assert int(db.list_institutions()[0]["id"]) == institution_id
+
+
 def test_telegram_channel_is_linked_to_platform_account(tmp_path):
     db = Database(tmp_path / "test.db")
     db.migrate()

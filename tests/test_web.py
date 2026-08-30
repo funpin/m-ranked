@@ -493,35 +493,58 @@ def test_deleted_post_uses_tgstat_links(tmp_path):
     assert "Конверсия просмотров в реакции" in compare_page
 
 
-def test_management_accepts_public_preview_link_and_deletes_channel(tmp_path):
+def test_management_uses_unified_account_controls_for_telegram(tmp_path):
     cfg = replace(settings(tmp_path), admin_password="test-password", admin_csrf_secret="test-csrf")
     db = Database(cfg.database_path)
     db.migrate()
     client = TestClient(create_app(cfg, db))
     auth = (cfg.admin_username, "test-password")
 
+    client.post(
+        "/manage/institutions",
+        data={"name": "МГУ имени М.В. Ломоносова", "short_name": "МГУ", "csrf_token": "test-csrf"},
+        auth=auth,
+    )
+    institution_id = int(db.list_institutions()[0]["id"])
     added = client.post(
-        "/manage/channels",
-        data={"channel": "https://t.me/s/naukamsu", "csrf_token": "test-csrf"},
+        f"/manage/institutions/{institution_id}/accounts",
+        data={
+            "telegram": "https://t.me/s/naukamsu", "vk": "",
+            "max_account": "", "rutube": "", "csrf_token": "test-csrf",
+        },
         auth=auth,
     )
     assert added.status_code == 200
-    assert "Канал добавлен" in added.text
+    assert "Аккаунты сохранены" in added.text
     assert 'class="channel-count-badge"' in added.text
     assert ">1</b><span>канал добавлен</span>" in added.text
     assert "Использование хранилища" in added.text
     assert "База результатов парсинга" in added.text
     assert 'role="progressbar"' in added.text
+    assert "МГУ (МГУ имени М.В. Ломоносова)" in added.text
+    assert 'data-telegram="https://t.me/naukamsu"' in added.text
+    assert "Быстро добавить отдельный Telegram-канал" not in added.text
+    assert '<th>Название</th><th>Подписчики</th>' not in added.text
     channel = db.list_channels()[0]
     assert channel["username"] == "naukamsu"
+    account_id = int(channel["platform_account_id"])
 
-    deleted = client.post(
-        f"/manage/channels/{channel['id']}/delete",
+    disabled = client.post(
+        f"/manage/platform-accounts/{account_id}/disable",
         data={"csrf_token": "test-csrf"},
         auth=auth,
     )
+    assert disabled.status_code == 200
+    assert "История сохранена" in disabled.text
+    assert not db.channel(int(channel["id"]))["enabled"]
+
+    deleted = client.post(
+        f"/manage/platform-accounts/{account_id}/delete",
+        data={"csrf_token": "test-csrf"}, auth=auth,
+    )
     assert deleted.status_code == 200
     assert not db.list_channels()
+    assert len(db.list_institutions()) == 1
 
 
 def test_management_links_non_telegram_account_to_institution(tmp_path):
@@ -549,7 +572,7 @@ def test_management_links_non_telegram_account_to_institution(tmp_path):
         auth=auth,
     )
     assert account.status_code == 200
-    assert "Аккаунты привязаны к вузу" in account.text
+    assert "Аккаунты сохранены" in account.text
     assert "нужен токен" in account.text
     linked = db.list_platform_accounts(institution_id)
     assert len(linked) == 1
@@ -582,7 +605,7 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
         auth=auth,
     )
     assert linked.status_code == 200
-    assert "Аккаунты привязаны к вузу" in linked.text
+    assert "Аккаунты сохранены" in linked.text
     assert {row["platform"] for row in db.list_platform_accounts(institution_id)} == {
         "telegram", "vk",
     }
@@ -600,7 +623,7 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
     assert "Старое полное название" not in overview
     assert 'id="accountMatrix"' in linked.text
     assert linked.text.index('id="accountMatrix"') < linked.text.index('class="platform-form institution-create"')
-    assert "Добавьте полное название для подсказок" in linked.text
+    assert "Полное название показывается в подсказках" in linked.text
     assert "Редактировать название" in linked.text
     db.add_platform_account(
         institution_id, "max", "max_without_username",
@@ -610,6 +633,12 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
     assert "max_without_username ↗" in management
     assert "@None" not in management
     assert "3 аккаунта · 1 вуз" in management
+    assert "НПН (Новое полное название)" in management
+    assert 'data-telegram="https://t.me/new_tg"' in management
+    assert 'data-vk="https://vk.com/new_vk"' in management
+    assert "Быстро добавить отдельный Telegram-канал" not in management
+    assert "/manage/platform-accounts/" in management
+    assert ">Удалить</button>" in management
 
     rejected = client.post(
         f"/manage/institutions/{institution_id}/accounts",

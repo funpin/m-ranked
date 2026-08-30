@@ -383,6 +383,46 @@ class Database:
                 tuple(params),
             ))
 
+    def platform_account(self, account_id: int) -> sqlite3.Row | None:
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT * FROM platform_accounts WHERE id=?", (account_id,),
+            ).fetchone()
+
+    def set_platform_account_enabled(self, account_id: int, enabled: bool) -> bool:
+        """Enable or pause an account and its legacy Telegram collector together."""
+        with self.connect() as conn:
+            result = conn.execute(
+                "UPDATE platform_accounts SET enabled=? WHERE id=?",
+                (int(enabled), account_id),
+            )
+            if result.rowcount:
+                conn.execute(
+                    "UPDATE channels SET enabled=? WHERE platform_account_id=?",
+                    (int(enabled), account_id),
+                )
+            return result.rowcount > 0
+
+    def delete_platform_account(self, account_id: int) -> bool:
+        """Delete one account and its measurements, preserving the institution."""
+        with self.connect() as conn:
+            account = conn.execute(
+                "SELECT id FROM platform_accounts WHERE id=?", (account_id,),
+            ).fetchone()
+            if account is None:
+                return False
+            channel_ids = [
+                int(row["id"])
+                for row in conn.execute(
+                    "SELECT id FROM channels WHERE platform_account_id=?", (account_id,),
+                )
+            ]
+            for channel_id in channel_ids:
+                conn.execute("DELETE FROM posts WHERE channel_id=?", (channel_id,))
+                conn.execute("DELETE FROM channels WHERE id=?", (channel_id,))
+            conn.execute("DELETE FROM platform_accounts WHERE id=?", (account_id,))
+            return True
+
     def update_platform_account_metadata(
         self,
         account_id: int,
