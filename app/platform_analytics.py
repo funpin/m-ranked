@@ -114,6 +114,7 @@ def platform_rating_data(
             "total_shares": 0,
             "total_interactions": 0,
             "reaction_values": [],
+            "view_values": [],
         })
         row["post_count"] += 1
         for metric in ("views", "reactions", "comments", "shares"):
@@ -137,6 +138,8 @@ def platform_rating_data(
             row["total_interactions"] += post["interactions_count"]
         if post["reactions_count"] is not None:
             row["reaction_values"].append(int(post["reactions_count"]))
+        if post["views_count"] is not None:
+            row["view_values"].append(int(post["views_count"]))
 
     institutions: list[dict[str, Any]] = []
     for institution_id, row in grouped.items():
@@ -144,12 +147,17 @@ def platform_rating_data(
             sum(row["reaction_values"]) / len(row["reaction_values"])
             if row["reaction_values"] else None
         )
+        row["avg_views"] = (
+            sum(row["view_values"]) / len(row["view_values"])
+            if row["view_values"] else None
+        )
         row["interaction_rate"] = (
             row["total_interactions"] * 100.0 / row["total_views"]
             if row["total_views"] > 0 else None
         )
         row["subscriber_count"] = subscribers.get(institution_id)
         del row["reaction_values"]
+        del row["view_values"]
         institutions.append(row)
     return institutions, posts
 

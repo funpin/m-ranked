@@ -732,22 +732,33 @@ def create_app(
         platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
         platform = normalize_platform(platform)
-        if platform == "vk":
+        if platform in {"vk", "rutube"}:
             period, period_delta, period_label, period_short = period_spec(period)
             cutoff = datetime.now(timezone.utc) - period_delta
             institution_rankings, top_posts = platform_rating_data(db, platform, cutoff)
-            institution_keys = {
-                "average": "avg_reactions", "total": "total_reactions",
-                "engagement": "interaction_rate", "views": "total_views",
-                "subscribers": "subscriber_count",
-            }
-            post_keys = {
-                "reactions": "reactions_count", "views": "views_count",
-                "comments": "comments_count", "shares": "shares_count",
-                "interactions": "interactions_count", "view_share": "interaction_rate",
-            }
-            channel_sort = channel_sort if channel_sort in institution_keys else "engagement"
-            post_sort = post_sort if post_sort in post_keys else "view_share"
+            if platform == "vk":
+                institution_keys = {
+                    "average": "avg_reactions", "total": "total_reactions",
+                    "engagement": "interaction_rate", "views": "total_views",
+                    "subscribers": "subscriber_count",
+                }
+                post_keys = {
+                    "reactions": "reactions_count", "views": "views_count",
+                    "comments": "comments_count", "shares": "shares_count",
+                    "interactions": "interactions_count", "view_share": "interaction_rate",
+                }
+                default_institution_sort, default_post_sort = "engagement", "view_share"
+            else:
+                institution_keys = {
+                    "average_views": "avg_views", "views": "total_views",
+                    "posts": "post_count", "subscribers": "subscriber_count",
+                }
+                post_keys = {"views": "views_count"}
+                default_institution_sort = default_post_sort = "views"
+            channel_sort = (
+                channel_sort if channel_sort in institution_keys else default_institution_sort
+            )
+            post_sort = post_sort if post_sort in post_keys else default_post_sort
             channel_direction = channel_direction if channel_direction in {"asc", "desc"} else "desc"
             post_direction = post_direction if post_direction in {"asc", "desc"} else "desc"
 
@@ -778,6 +789,7 @@ def create_app(
                 post_sort=post_sort, post_direction=post_direction,
                 active_platform=platform,
                 presentation=PLATFORM_PRESENTATION[platform],
+                has_interactions=platform == "vk",
             )
         if platform != "telegram":
             return render(
@@ -1424,14 +1436,15 @@ def create_app(
         platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
         platform = normalize_platform(platform)
-        if platform == "vk":
+        if platform in {"vk", "rutube"}:
             period = period if period in (24, 48, 72, 168, 336) else 72
             entities = _rows_dict(db.query(
                 """SELECT i.id, i.name, i.short_name,
                           GROUP_CONCAT(COALESCE(pa.title, pa.username, pa.external_key), ', ') accounts
                    FROM institutions i JOIN platform_accounts pa ON pa.institution_id=i.id
-                   WHERE pa.platform='vk' AND pa.enabled=1
-                   GROUP BY i.id ORDER BY COALESCE(i.short_name, i.name) COLLATE NOCASE"""
+                   WHERE pa.platform=? AND pa.enabled=1
+                   GROUP BY i.id ORDER BY COALESCE(i.short_name, i.name) COLLATE NOCASE""",
+                (platform,),
             ))
             selected_entities = (
                 institutions if submitted else [int(row["id"]) for row in entities]
@@ -1446,13 +1459,13 @@ def create_app(
                                    WHERE early.platform_post_id=pp.id
                                      AND early.age_seconds<=?)"""
                 )
-                params: list[Any] = [int(entity["id"]), period * 3600]
+                params: list[Any] = [platform, int(entity["id"]), period * 3600]
                 if not include_partial:
                     params.append(settings.complete_history_max_first_age_minutes * 60)
                 posts = db.query(
                     f"""SELECT pp.id FROM platform_posts pp
                          JOIN platform_accounts pa ON pa.id=pp.platform_account_id
-                         WHERE pa.platform='vk' AND pa.enabled=1
+                         WHERE pa.platform=? AND pa.enabled=1
                            AND pa.institution_id=?
                            AND EXISTS(SELECT 1 FROM platform_snapshots coverage
                                       WHERE coverage.platform_post_id=pp.id
@@ -1471,14 +1484,22 @@ def create_app(
                            ORDER BY age_seconds""",
                         (post["id"], period * 3600),
                     ))
-                    likes_rows = [
+                    primary_rows = [
                         {"age_seconds": row["age_seconds"],
-                         "total_reactions": row["reactions_count"]}
-                        for row in rows if row["reactions_count"] is not None
+                         "total_reactions": (
+                             row["reactions_count"] if platform == "vk"
+                             else row["views_count"]
+                         )}
+                        for row in rows if (
+                            row["reactions_count"] if platform == "vk"
+                            else row["views_count"]
+                        ) is not None
                     ]
-                    points = hourly_asof_points(likes_rows, period)
+                    points = hourly_asof_points(primary_rows, period)
                     if points:
                         raw_points.append(points)
+                    if platform != "vk":
+                        continue
                     conversion_rows = []
                     for row in rows:
                         if row["views_count"] is None or int(row["views_count"]) <= 0:
@@ -1530,6 +1551,8 @@ def create_app(
                 data_json=json.dumps(data, ensure_ascii=False),
                 has_points=has_points, submitted=submitted,
                 active_platform=platform,
+                presentation=PLATFORM_PRESENTATION[platform],
+                has_interactions=platform == "vk",
             )
         if platform != "telegram":
             return render(
