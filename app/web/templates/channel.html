@@ -6,10 +6,10 @@
   <div class="metrics channel-metrics">
     <span><b class="metric">{{ stats.post_count }}</b><small>публикаций в базе</small></span>
     <span><b class="metric">{{ stats.monitored }}</b><small>с полной историей</small></span>
-    <span class="has-tooltip" data-tooltip="Срединное число реакций на одну публикацию. Половина публикаций имеет не больше этого числа, половина — не меньше."><b class="metric">{{ stats.median_reactions|int if stats.median_reactions is not none else '—' }}</b><small>медиана реакций ⓘ</small></span>
-    <span class="has-tooltip" data-tooltip="Срединное число просмотров на одну публикацию. Половина публикаций имеет не больше этого числа, половина — не меньше."><b class="metric">{{ stats.median_views|int if stats.median_views is not none else '—' }}</b><small>медиана просмотров ⓘ</small></span>
-    <span class="has-tooltip" data-tooltip="Срединное число комментариев к одной публикации по последнему сохранённому замеру. Доступно при сборе через Telegram MTProto."><b class="metric">{{ stats.median_comments|int if stats.median_comments is not none else '—' }}</b><small>медиана комментариев ⓘ</small></span>
-    <span class="has-tooltip" data-tooltip="Место в последней вручную загруженной версии официального М‑Рейтинга по Telegram."><b class="metric">{{ '№' ~ channel.m_rating_tg_rank if channel.m_rating_tg_rank else '—' }}</b><small>М‑Рейтинг TG ⓘ{% if channel.m_rating_period %} · {{ channel.m_rating_period }}{% endif %}</small></span>
+    <span class="has-tooltip" tabindex="0" data-tooltip="Типичное число реакций на пост."><b class="metric">{{ stats.median_reactions|int if stats.median_reactions is not none else '—' }}</b><small>медиана реакций ⓘ</small></span>
+    <span class="has-tooltip" tabindex="0" data-tooltip="Типичное число просмотров на пост."><b class="metric">{{ stats.median_views|int if stats.median_views is not none else '—' }}</b><small>медиана просмотров ⓘ</small></span>
+    <span class="has-tooltip" tabindex="0" data-tooltip="Типичное число комментариев на пост."><b class="metric">{{ stats.median_comments|int if stats.median_comments is not none else '—' }}</b><small>медиана комментариев ⓘ</small></span>
+    <span class="has-tooltip" tabindex="0" data-tooltip="Официальное место в М‑Рейтинге TG."><b class="metric">{{ '№' ~ channel.m_rating_tg_rank if channel.m_rating_tg_rank else '—' }}</b><small>М‑Рейтинг TG ⓘ{% if channel.m_rating_period %} · {{ channel.m_rating_period }}{% endif %}</small></span>
   </div>
 </div>
 <div class="panel mt table-wrap"><table><thead><tr><th>Публикация</th><th>Опубликовано, МСК</th><th>Возраст</th><th>История</th><th>Реакции</th><th>Просмотры</th><th>Комментарии</th><th>Тип</th></tr></thead><tbody>

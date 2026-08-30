@@ -65,6 +65,9 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "медиана прироста просмотров" in overview
     assert "включая публикации, вышедшие раньше" in overview
     assert "не сумма текущих показателей только у новых постов" in overview
+    assert ".overview-header{height:auto;min-height:0}" in overview
+    assert ".has-tooltip.tooltip-open::after" in overview
+    assert "event.target.closest('.has-tooltip[data-tooltip]')" in overview
     post_page = client.get(f"/posts/{post_id}").text
     assert "Масштаб по времени" in post_page
     assert "Мин. людей" in post_page
@@ -159,9 +162,10 @@ def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp
     assert "медиана прироста просмотров" in overview
     assert "11.5" not in overview
     assert 'class="post-stat-badges"' in overview
-    assert "Всего публикаций этого канала" in overview
+    assert "Всего постов в базе" in overview
     assert "<b>2</b>" in overview
-    assert "минимум два сопоставимых замера" in overview
+    assert "Посты с двумя замерами за 3 часа" in overview
+    assert "Прирост реакций всех постов за 3 часа" in overview
     assert "отслеживаются</span>" not in overview
     assert "новых</span>" not in overview
 
@@ -200,12 +204,14 @@ def test_overview_counts_activity_of_previously_published_posts(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("period", "window"),
-    (("3h", timedelta(hours=3)), ("1d", timedelta(days=1)),
-     ("7d", timedelta(days=7)), ("30d", timedelta(days=30))),
+    ("period", "window", "period_short"),
+    (("3h", timedelta(hours=3), "за 3 часа"),
+     ("1d", timedelta(days=1), "за сутки"),
+     ("7d", timedelta(days=7), "за неделю"),
+     ("30d", timedelta(days=30), "за месяц")),
 )
 def test_overview_period_windows_use_fixed_open_left_boundary(
-    tmp_path, monkeypatch, period, window,
+    tmp_path, monkeypatch, period, window, period_short,
 ):
     fixed_now = datetime(2026, 8, 29, 12, tzinfo=timezone.utc)
 
@@ -240,6 +246,8 @@ def test_overview_period_windows_use_fixed_open_left_boundary(
     # current delta therefore starts at the first point strictly after it.
     assert ">40</b><small>реакций" in page
     assert ">400</b><small>просмотров" in page
+    assert f"Прирост реакций всех постов {period_short}." in page
+    assert f"Посты, вышедшие {period_short}." in page
 
 
 def test_overview_previous_period_and_even_median_are_compared_after_rounding(
@@ -523,7 +531,8 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
     channel = db.list_channels_with_institutions()[0]
     assert channel["institution_short_name"] == "НПН"
     overview = client.get("/").text
-    assert 'title="Новое полное название">НПН</h3>' in overview
+    assert 'data-tooltip="Новое полное название"' in overview
+    assert '<span class="title-text">НПН</span><span class="info-mark"' in overview
     assert "Старое полное название" not in overview
     assert 'id="accountMatrix"' in linked.text
     assert linked.text.index('id="accountMatrix"') < linked.text.index('class="platform-form institution-create"')
