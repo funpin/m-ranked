@@ -12,6 +12,7 @@ from .database import Database
 from .scheduler import run_service
 from .public_web import PublicWebCollector
 from .telegram_client import TelegramReader
+from .vk_collector import VkCollector
 from .web.app import create_app
 
 
@@ -81,16 +82,26 @@ async def _auth(settings: Settings) -> None:
 
 
 async def _poll(settings: Settings, db: Database) -> None:
+    vk_collector = VkCollector(settings, db) if settings.vk_access_token else None
     if settings.data_source == "public_web":
         collector = PublicWebCollector(settings, db)
         try:
             await collector.poll_cycle()
+            if vk_collector:
+                await vk_collector.poll_cycle()
         finally:
             await collector.close()
+            if vk_collector:
+                await vk_collector.close()
         return
     api_id, api_hash = settings.require_telegram()
     async with TelegramReader(api_id, api_hash, settings.telegram_session_path) as reader:
         await Collector(settings, db, reader).poll_cycle()
+    if vk_collector:
+        try:
+            await vk_collector.poll_cycle()
+        finally:
+            await vk_collector.close()
 
 
 def main(argv: list[str] | None = None) -> int:

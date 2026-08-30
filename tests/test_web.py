@@ -526,7 +526,7 @@ def test_management_links_non_telegram_account_to_institution(tmp_path):
     )
     assert account.status_code == 200
     assert "Аккаунты привязаны к вузу" in account.text
-    assert "ожидает токен" in account.text
+    assert "нужен токен" in account.text
     linked = db.list_platform_accounts(institution_id)
     assert len(linked) == 1
     assert linked[0]["external_key"] == "test_university"
