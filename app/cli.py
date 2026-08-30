@@ -9,9 +9,11 @@ from pathlib import Path
 from .collector import Collector, normalize_channel_ref
 from .config import Settings
 from .database import Database
+from .max_collector import MaxCollector
 from .m_rating import refresh_m_rating
 from .scheduler import run_service
 from .public_web import PublicWebCollector
+from .rutube_collector import RutubeCollector
 from .official_accounts import sync_official_accounts
 from .telegram_client import TelegramReader
 from .vk_collector import VkCollector
@@ -86,26 +88,33 @@ async def _auth(settings: Settings) -> None:
 
 
 async def _poll(settings: Settings, db: Database) -> None:
-    vk_collector = VkCollector(settings, db) if settings.vk_access_token else None
+    auxiliary_collectors = tuple(
+        collector for collector in (
+            VkCollector(settings, db) if settings.vk_access_token else None,
+            MaxCollector(settings, db) if settings.max_access_token else None,
+            RutubeCollector(settings, db) if settings.rutube_public_api_enabled else None,
+        ) if collector is not None
+    )
     if settings.data_source == "public_web":
         collector = PublicWebCollector(settings, db)
         try:
             await collector.poll_cycle()
-            if vk_collector:
-                await vk_collector.poll_cycle()
+            for auxiliary in auxiliary_collectors:
+                await auxiliary.poll_cycle()
         finally:
             await collector.close()
-            if vk_collector:
-                await vk_collector.close()
+            for auxiliary in auxiliary_collectors:
+                await auxiliary.close()
         return
     api_id, api_hash = settings.require_telegram()
     async with TelegramReader(api_id, api_hash, settings.telegram_session_path) as reader:
         await Collector(settings, db, reader).poll_cycle()
-    if vk_collector:
-        try:
-            await vk_collector.poll_cycle()
-        finally:
-            await vk_collector.close()
+    try:
+        for auxiliary in auxiliary_collectors:
+            await auxiliary.poll_cycle()
+    finally:
+        for auxiliary in auxiliary_collectors:
+            await auxiliary.close()
 
 
 def main(argv: list[str] | None = None) -> int:

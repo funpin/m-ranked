@@ -10,7 +10,9 @@ import uvicorn
 from .collector import Collector
 from .config import Settings
 from .database import Database
+from .max_collector import MaxCollector
 from .public_web import PublicWebCollector
+from .rutube_collector import RutubeCollector
 from .telegram_client import TelegramReader
 from .vk_collector import VkCollector
 from .web.app import create_app
@@ -36,8 +38,13 @@ async def polling_loop(
 
 
 async def run_service(settings: Settings, db: Database) -> None:
-    vk_collector = VkCollector(settings, db) if settings.vk_access_token else None
-    auxiliary_collectors = (vk_collector,) if vk_collector else ()
+    auxiliary_collectors: tuple[Any, ...] = tuple(
+        collector for collector in (
+            VkCollector(settings, db) if settings.vk_access_token else None,
+            MaxCollector(settings, db) if settings.max_access_token else None,
+            RutubeCollector(settings, db) if settings.rutube_public_api_enabled else None,
+        ) if collector is not None
+    )
     if settings.data_source == "public_web":
         collector = PublicWebCollector(settings, db)
         connected = True
@@ -60,8 +67,8 @@ async def run_service(settings: Settings, db: Database) -> None:
             with suppress(asyncio.CancelledError):
                 await poll_task
             await collector.close()
-            if vk_collector:
-                await vk_collector.close()
+            for auxiliary in auxiliary_collectors:
+                await auxiliary.close()
         return
 
     api_id, api_hash = settings.require_telegram()
@@ -90,5 +97,5 @@ async def run_service(settings: Settings, db: Database) -> None:
             with suppress(asyncio.CancelledError):
                 await poll_task
         await reader.disconnect()
-        if vk_collector:
-            await vk_collector.close()
+        for auxiliary in auxiliary_collectors:
+            await auxiliary.close()

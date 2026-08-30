@@ -77,6 +77,27 @@ class VkCollector:
         )
         cutoff = measured_at - timedelta(hours=self.settings.track_post_for_hours)
         inserted = 0
+        wall_keys = {post.external_key for post in posts}
+        stored = self.db.list_platform_posts(
+            platform="vk", account_id=int(account["id"]), published_after=cutoff,
+        )
+        due_ids: list[str] = []
+        for row in stored:
+            external_id = str(row["external_id"])
+            if external_id in wall_keys:
+                continue
+            published_at = datetime.fromisoformat(str(row["published_at"]))
+            if published_at.tzinfo is None:
+                published_at = published_at.replace(tzinfo=timezone.utc)
+            interval = snapshot_interval_minutes(
+                age_seconds(published_at, measured_at), self.settings,
+            )
+            if snapshot_is_due(
+                self.db.latest_platform_snapshot_at(int(row["id"])), measured_at, interval,
+            ):
+                due_ids.append(external_id)
+        for offset in range(0, len(due_ids), 100):
+            posts.extend(await self.client.posts(due_ids[offset:offset + 100]))
         for post in posts:
             if post.published_at < cutoff:
                 continue

@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}{{ account.title or account.external_key }} · m-ranked{% endblock %}
+{% block content %}
+<p><a href="/institutions/{{ institution.id }}?platform={{ active_platform }}">← {{ institution.short_name or institution.name }}</a></p>
+<h1>{{ account.title or account.username or account.external_key }}</h1>
+<p class="lead"><span class="platform-chip platform-{{ account.platform }}">{{ active_platform_label }}</span> · {{ account.subscriber_count if account.subscriber_count is not none else '—' }} подписчиков{% if account.url %} · <a class="external" href="{{ account.url }}" target="_blank" rel="noopener noreferrer">официальный аккаунт</a>{% endif %}</p>
+{% if account.last_error %}<p class="notice bad">Последний опрос: {{ account.last_error }}</p>{% endif %}
+<section class="panel"><div class="section-head"><h2>Публикации</h2><span class="period-badge">{{ posts|length }}</span></div>
+{% if posts %}<div class="table-wrap"><table><thead><tr><th>Опубликовано</th><th>ID</th><th>Просмотры</th><th>Реакции</th><th>Комментарии</th><th>Репосты</th></tr></thead><tbody>
+{% for post in posts %}<tr><td>{{ post.published_at|local_datetime }} МСК</td><td><a href="/platform-posts/{{ post.id }}?platform={{ active_platform }}">{{ post.external_id }}</a>{% if post.url %} · <a class="external" href="{{ post.url }}" target="_blank" rel="noopener noreferrer">оригинал</a>{% endif %}</td><td>{{ post.latest_views if post.latest_views is not none else '—' }}</td><td>{{ post.latest_reactions if post.latest_reactions is not none else '—' }}</td><td>{{ post.latest_comments if post.latest_comments is not none else '—' }}</td><td>{{ post.latest_shares if post.latest_shares is not none else '—' }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty-state">Публикации ещё не собраны.</div>{% endif %}
+</section>
+{% endblock %}

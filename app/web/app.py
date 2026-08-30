@@ -29,6 +29,7 @@ from ..config import Settings
 from ..collector import normalize_channel_ref
 from ..database import Database
 from ..m_rating import refresh_m_rating
+from ..platform_analytics import PLATFORM_PRESENTATION, platform_activity_cards
 from ..reactions import custom_emoji_asset
 from ..vk import normalize_vk_community_ref
 
@@ -186,6 +187,7 @@ def create_app(
                 "platform_options": PLATFORM_OPTIONS,
                 "active_platform": active_platform,
                 "active_platform_label": platform_label,
+                "active_platform_info": PLATFORM_PRESENTATION.get(active_platform),
                 "platform_query": platform_query,
                 "nav_urls": {
                     "overview": f"/?{platform_query}",
@@ -562,6 +564,28 @@ def create_app(
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
+        integrations = {
+            "telegram": {
+                "configured": (
+                    settings.data_source == "public_web"
+                    or bool(settings.telegram_api_id and settings.telegram_api_hash)
+                ),
+                "mode": settings.data_source,
+            },
+            "vk": {"configured": bool(settings.vk_access_token)},
+            "max": {"configured": bool(settings.max_access_token)},
+            "rutube": {
+                "configured": settings.rutube_public_api_enabled,
+                "mode": "official_public_feed",
+            },
+        }
+        for key in ("vk", "max", "rutube"):
+            integrations[key]["poll_cycle"] = {
+                "completed_at": db.get_state(f"{key}_poll_last_completed_at"),
+                "duration_seconds": db.get_state(f"{key}_poll_last_duration_seconds"),
+                "error_count": db.get_state(f"{key}_poll_last_error_count"),
+                "account_count": db.get_state(f"{key}_poll_last_account_count"),
+            }
         return {
             "status": "ok",
             "data_source": settings.data_source,
@@ -580,6 +604,7 @@ def create_app(
                 "error_count": db.get_state("poll_last_error_count"),
                 "channel_count": db.get_state("poll_last_channel_count"),
             },
+            "integrations": integrations,
         }
 
     @app.get("/emoji/{emoji_id}")
@@ -630,7 +655,15 @@ def create_app(
         period, period_delta, period_label, period_short = period_spec(period)
         direction = direction if direction in {"asc", "desc"} else "desc"
         if platform != "telegram":
-            cards = platform_overview_cards(platform)
+            now = datetime.now(timezone.utc)
+            cards = (
+                platform_overview_cards(platform)
+                if platform == "all"
+                else platform_activity_cards(
+                    db, settings, platform, now - period_delta,
+                    now - period_delta * 2, now,
+                )
+            )
             platform_sort_keys = {
                 "m_rating": "rating_rank",
                 "accounts": "account_count",
@@ -638,6 +671,17 @@ def create_app(
             }
             if platform == "all":
                 platform_sort_keys["coverage"] = "connected_count"
+            else:
+                platform_sort_keys.update({
+                    "posts": "post_count",
+                    "activity": "activity_post_count",
+                    "reactions": "total_reactions",
+                    "views": "total_views",
+                    "comments": "total_comments",
+                    "shares": "total_shares",
+                    "median_reactions": "median_reactions",
+                    "median_views": "median_views",
+                })
             sort = sort if sort in platform_sort_keys else "m_rating"
             sort_key = platform_sort_keys[sort]
             available = [card for card in cards if card.get(sort_key) is not None]
@@ -814,6 +858,35 @@ def create_app(
                 round(database_bytes * 100 / project_bytes, 2) if project_bytes else 0
             ),
         }
+        max_accounts = [row for row in platform_accounts if row["platform"] == "max"]
+        integrations = (
+            {
+                "platform": "Telegram", "configured": (
+                    settings.data_source == "public_web"
+                    or bool(settings.telegram_api_id and settings.telegram_api_hash)
+                ),
+                "detail": (
+                    "Публичный HTML-источник"
+                    if settings.data_source == "public_web"
+                    else "MTProto: API ID, API hash и сессия"
+                ),
+            },
+            {
+                "platform": "ВКонтакте", "configured": bool(settings.vk_access_token),
+                "detail": "VK_ACCESS_TOKEN · просмотры, лайки, комментарии, репосты",
+            },
+            {
+                "platform": "MAX", "configured": bool(settings.max_access_token),
+                "detail": (
+                    f"MAX_ACCESS_TOKEN · chat_id задан у "
+                    f"{sum(bool(row['native_id']) for row in max_accounts)} из {len(max_accounts)} аккаунтов"
+                ),
+            },
+            {
+                "platform": "Rutube", "configured": settings.rutube_public_api_enabled,
+                "detail": "Официальный публичный JSON-фид · токен не требуется · просмотры",
+            },
+        )
         return render(
             request, "manage.html", channels=managed_channels,
             channel_count=len(managed_channels),
@@ -832,6 +905,7 @@ def create_app(
             m_rating_period=db.get_state("m_rating_last_period"),
             m_rating_updated=db.get_state("m_rating_last_updated"),
             m_rating_error=db.get_state("m_rating_last_error"),
+            integrations=integrations,
         )
 
     @app.post("/manage/m-rating/update")
@@ -923,7 +997,9 @@ def create_app(
                 if not external_key:
                     raise HTTPException(status_code=400, detail=f"Не удалось определить {platform}")
                 account_url = original if "://" in original else None
-                access_mode, data_quality = "owner", "unavailable"
+            access_mode, data_quality = (
+                ("owner", "exact") if platform == "max" else ("public", "partial")
+            )
             db.add_platform_account(
                 institution_id, platform, external_key, username=external_key,
                 url=account_url, access_mode=access_mode, data_quality=data_quality,
@@ -979,6 +1055,24 @@ def create_app(
             status_code=303,
         )
 
+    @app.post("/manage/platform-accounts/{account_id}/native-id")
+    async def manage_platform_account_native_id(
+        account_id: int, native_id: str = Form(...), csrf_token: str = Form(...),
+        _: str = Depends(require_admin),
+    ) -> RedirectResponse:
+        check_csrf(csrf_token)
+        account = db.platform_account(account_id)
+        if account is None:
+            raise HTTPException(status_code=404, detail="Аккаунт не найден")
+        value = native_id.strip()
+        if account["platform"] == "max" and value and not value.lstrip("-").isdigit():
+            raise HTTPException(status_code=400, detail="MAX chat_id должен быть числом")
+        db.set_platform_account_native_id(account_id, value)
+        return RedirectResponse(
+            f"/manage?platform_status=native-id-updated&institution_id={account['institution_id']}",
+            status_code=303,
+        )
+
     @app.post("/manage/platform-accounts")
     async def manage_add_platform_account(
         institution_id: int = Form(...), platform: str = Form(...),
@@ -1014,7 +1108,9 @@ def create_app(
                 raise HTTPException(status_code=400, detail="Не удалось определить аккаунт")
             username = external_key
             account_url = url.strip() or (original if "://" in original else None)
-            access_mode, data_quality = "owner", "unavailable"
+            access_mode, data_quality = (
+                ("owner", "exact") if platform == "max" else ("public", "partial")
+            )
         db.add_platform_account(
             institution_id, platform, external_key, username=username,
             title=title.strip() or None, url=account_url,
@@ -1055,6 +1151,97 @@ def create_app(
         if not db.delete_channel(channel_id):
             raise HTTPException(status_code=404, detail="Канал не найден")
         return RedirectResponse("/manage?channel_status=deleted", status_code=303)
+
+    @app.get("/institutions/{institution_id}", response_class=HTMLResponse)
+    async def institution_page(
+        request: Request, institution_id: int,
+        platform: str = Query(default="all"),
+    ) -> HTMLResponse:
+        platform = normalize_platform(platform)
+        if platform == "telegram":
+            telegram_channels = [
+                row for row in db.list_channels_with_institutions()
+                if int(row["institution_id"] or 0) == institution_id
+            ]
+            if len(telegram_channels) == 1:
+                return RedirectResponse(
+                    f"/channels/{telegram_channels[0]['id']}?platform=telegram", status_code=307,
+                )
+        institution = db.institution(institution_id)
+        if institution is None:
+            raise HTTPException(status_code=404, detail="Вуз не найден")
+        account_platform = None if platform == "all" else platform
+        accounts = db.list_platform_accounts(
+            institution_id=institution_id, platform=account_platform,
+        )
+        posts = db.list_platform_posts(
+            platform=account_platform, institution_id=institution_id, limit=200,
+        )
+        return render(
+            request, "institution.html", institution=institution,
+            accounts=accounts, posts=posts, active_platform=platform,
+        )
+
+    @app.get("/platform-accounts/{account_id}", response_class=HTMLResponse)
+    async def platform_account_page(
+        request: Request, account_id: int,
+        platform: str = Query(default="vk"),
+    ) -> HTMLResponse:
+        platform = normalize_platform(platform)
+        account = db.platform_account(account_id)
+        if account is None:
+            raise HTTPException(status_code=404, detail="Аккаунт не найден")
+        account_platform = str(account["platform"])
+        if account_platform == "telegram":
+            channel = db.query(
+                "SELECT id FROM channels WHERE platform_account_id=?", (account_id,),
+            )
+            if channel:
+                return RedirectResponse(
+                    f"/channels/{channel[0]['id']}?platform=telegram", status_code=307,
+                )
+        if platform not in {"all", account_platform}:
+            raise HTTPException(status_code=404, detail="Аккаунт другой площадки")
+        institution = db.institution(int(account["institution_id"]))
+        posts = db.list_platform_posts(account_id=account_id, limit=300)
+        return render(
+            request, "platform_account.html", account=account,
+            institution=institution, posts=posts, active_platform=account_platform,
+        )
+
+    @app.get("/platform-posts/{post_id}", response_class=HTMLResponse)
+    async def platform_post_page(
+        request: Request, post_id: int,
+        platform: str = Query(default="vk"),
+    ) -> HTMLResponse:
+        platform = normalize_platform(platform)
+        post = db.platform_post(post_id)
+        if post is None:
+            raise HTTPException(status_code=404, detail="Публикация не найдена")
+        post_platform = str(post["platform"])
+        if platform not in {"all", post_platform}:
+            raise HTTPException(status_code=404, detail="Публикация другой площадки")
+        snapshots = _rows_dict(db.platform_snapshots(post_id))
+        previous: dict[str, int | None] = {
+            "views": None, "reactions": None, "comments": None, "shares": None,
+        }
+        for row in snapshots:
+            row["measured_label"] = _as_datetime(row["measured_at"]).astimezone(tz).strftime(
+                "%d.%m, %H:%M:%S"
+            )
+            row["age_label"] = f"через {format_duration(row['age_seconds'])}"
+            for metric in previous:
+                value = row[f"{metric}_count"]
+                row[f"delta_{metric}"] = (
+                    int(value) - int(previous[metric])
+                    if value is not None and previous[metric] is not None else None
+                )
+                previous[metric] = int(value) if value is not None else None
+        return render(
+            request, "platform_publication.html", post=post, snapshots=snapshots,
+            chart_json=json.dumps(snapshots, ensure_ascii=False),
+            active_platform=post_platform,
+        )
 
     @app.get("/channels/{channel_id}", response_class=HTMLResponse)
     async def channel_page(
@@ -1295,9 +1482,28 @@ def create_app(
     ) -> StreamingResponse:
         platform = normalize_platform(platform)
         if platform != "telegram":
-            raise HTTPException(
-                status_code=409,
-                detail=f"Экспорт снимков {platform} ещё не подключён",
+            where = "" if platform == "all" else "WHERE pa.platform=?"
+            params: tuple[Any, ...] = () if platform == "all" else (platform,)
+            rows = db.query(
+                f"""SELECT pa.platform, i.short_name, pa.external_key,
+                           pp.external_id, pp.published_at, ps.measured_at,
+                           ps.age_seconds/3600.0 age_hours, ps.views_count,
+                           ps.reactions_count, ps.comments_count, ps.shares_count,
+                           ps.raw_json
+                    FROM platform_snapshots ps
+                    JOIN platform_posts pp ON pp.id=ps.platform_post_id
+                    JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+                    JOIN institutions i ON i.id=pa.institution_id
+                    {where}
+                    ORDER BY pa.platform, i.short_name, pp.published_at, ps.measured_at""",
+                params,
+            )
+            return csv_response(
+                f"snapshots-{platform}.csv",
+                ["площадка", "вуз", "аккаунт", "id_публикации", "опубликовано",
+                 "измерено", "возраст_часов", "просмотры", "реакции",
+                 "комментарии", "репосты", "сырой_json"],
+                [list(row) for row in rows],
             )
         rows = db.query(
             """SELECT c.username, p.telegram_message_id, p.published_at, s.measured_at,
@@ -1321,9 +1527,32 @@ def create_app(
     ) -> StreamingResponse:
         platform = normalize_platform(platform)
         if platform != "telegram":
-            raise HTTPException(
-                status_code=409,
-                detail=f"Экспорт публикаций {platform} ещё не подключён",
+            where = "" if platform == "all" else "WHERE pa.platform=?"
+            params: tuple[Any, ...] = () if platform == "all" else (platform,)
+            rows = db.query(
+                f"""SELECT pa.platform, i.short_name, pa.external_key,
+                           pp.external_id, pp.published_at, pp.post_type, pp.url,
+                           (SELECT views_count FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id ORDER BY measured_at DESC LIMIT 1),
+                           (SELECT reactions_count FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id ORDER BY measured_at DESC LIMIT 1),
+                           (SELECT comments_count FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id ORDER BY measured_at DESC LIMIT 1),
+                           (SELECT shares_count FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id ORDER BY measured_at DESC LIMIT 1)
+                    FROM platform_posts pp
+                    JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+                    JOIN institutions i ON i.id=pa.institution_id
+                    {where}
+                    ORDER BY pa.platform, i.short_name, pp.published_at""",
+                params,
+            )
+            return csv_response(
+                f"posts-{platform}.csv",
+                ["площадка", "вуз", "аккаунт", "id_публикации", "опубликовано",
+                 "тип", "ссылка", "последние_просмотры", "последние_реакции",
+                 "последние_комментарии", "последние_репосты"],
+                [list(row) for row in rows],
             )
         rows = db.query(
             """SELECT c.username, p.telegram_message_id, p.published_at, p.history_complete,

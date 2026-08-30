@@ -336,6 +336,12 @@ class Database:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM institutions ORDER BY name COLLATE NOCASE"))
 
+    def institution(self, institution_id: int) -> sqlite3.Row | None:
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT * FROM institutions WHERE id=?", (institution_id,),
+            ).fetchone()
+
     def update_institution(self, institution_id: int, name: str, short_name: str) -> bool:
         name = name.strip()
         short_name = short_name.strip()
@@ -482,6 +488,14 @@ class Database:
                 (iso(measured_at), error, account_id),
             )
 
+    def set_platform_account_native_id(self, account_id: int, native_id: str) -> bool:
+        with self.connect() as conn:
+            result = conn.execute(
+                "UPDATE platform_accounts SET native_id=? WHERE id=?",
+                (native_id.strip() or None, account_id),
+            )
+            return result.rowcount > 0
+
     def upsert_platform_post(
         self,
         platform_account_id: int,
@@ -522,6 +536,83 @@ class Database:
                 (platform_post_id,),
             ).fetchone()
             return str(row["measured_at"]) if row else None
+
+    def list_platform_posts(
+        self,
+        *,
+        platform: str | None = None,
+        institution_id: int | None = None,
+        account_id: int | None = None,
+        published_after: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[sqlite3.Row]:
+        conditions: list[str] = []
+        params: list[Any] = []
+        if platform is not None:
+            conditions.append("pa.platform=?")
+            params.append(platform)
+        if institution_id is not None:
+            conditions.append("pa.institution_id=?")
+            params.append(institution_id)
+        if account_id is not None:
+            conditions.append("pa.id=?")
+            params.append(account_id)
+        if published_after is not None:
+            conditions.append("pp.published_at>=?")
+            params.append(iso(published_after))
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        limit_sql = " LIMIT ?" if limit is not None else ""
+        if limit is not None:
+            params.append(max(1, int(limit)))
+        with self.connect() as conn:
+            return list(conn.execute(
+                f"""SELECT pp.*, pa.platform, pa.institution_id,
+                           pa.external_key account_external_key,
+                           pa.username account_username, pa.title account_title,
+                           pa.url account_url, i.name institution_name,
+                           i.short_name institution_short_name,
+                           (SELECT s.views_count FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id
+                            ORDER BY s.measured_at DESC LIMIT 1) latest_views,
+                           (SELECT s.reactions_count FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id
+                            ORDER BY s.measured_at DESC LIMIT 1) latest_reactions,
+                           (SELECT s.comments_count FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id
+                            ORDER BY s.measured_at DESC LIMIT 1) latest_comments,
+                           (SELECT s.shares_count FROM platform_snapshots s
+                            WHERE s.platform_post_id=pp.id
+                            ORDER BY s.measured_at DESC LIMIT 1) latest_shares
+                    FROM platform_posts pp
+                    JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+                    JOIN institutions i ON i.id=pa.institution_id
+                    {where}
+                    ORDER BY pp.published_at DESC{limit_sql}""",
+                tuple(params),
+            ))
+
+    def platform_post(self, post_id: int) -> sqlite3.Row | None:
+        rows = self.query(
+            """SELECT pp.*, pa.platform, pa.institution_id,
+                      pa.external_key account_external_key,
+                      pa.username account_username, pa.title account_title,
+                      pa.url account_url, i.name institution_name,
+                      i.short_name institution_short_name
+               FROM platform_posts pp
+               JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+               JOIN institutions i ON i.id=pa.institution_id
+               WHERE pp.id=?""",
+            (post_id,),
+        )
+        return rows[0] if rows else None
+
+    def platform_snapshots(self, post_id: int) -> list[sqlite3.Row]:
+        with self.connect() as conn:
+            return list(conn.execute(
+                """SELECT * FROM platform_snapshots
+                   WHERE platform_post_id=? ORDER BY measured_at""",
+                (post_id,),
+            ))
 
     def insert_platform_snapshot(
         self,
