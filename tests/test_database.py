@@ -130,6 +130,37 @@ def test_telegram_channel_is_linked_to_platform_account(tmp_path):
     assert {row["platform"] for row in db.list_platform_accounts()} == {"telegram", "vk"}
 
 
+def test_channel_can_be_linked_to_named_institution_and_names_are_editable(tmp_path):
+    db = Database(tmp_path / "test.db")
+    db.migrate()
+    institution_id = db.add_institution("Полное название", "Короткое")
+    channel_id = db.add_channel("named_channel", institution_id=institution_id)
+
+    channel = db.list_channels_with_institutions()[0]
+    assert int(channel["id"]) == channel_id
+    assert int(channel["institution_id"]) == institution_id
+    assert channel["institution_name"] == "Полное название"
+    assert channel["institution_short_name"] == "Короткое"
+    assert len(db.list_institutions()) == 1
+
+    assert db.update_institution(institution_id, "Новое полное", "Новое короткое")
+    updated = db.list_channels_with_institutions()[0]
+    assert updated["institution_name"] == "Новое полное"
+    assert updated["institution_short_name"] == "Новое короткое"
+
+
+def test_existing_channel_is_moved_without_leaving_placeholder_institution(tmp_path):
+    db = Database(tmp_path / "test.db")
+    db.migrate()
+    channel_id = db.add_channel("move_me")
+    target_id = db.add_institution("Целевой вуз", "ЦВ")
+
+    assert db.add_channel("move_me", institution_id=target_id) == channel_id
+    channel = db.channel(channel_id)
+    assert int(channel["institution_id"]) == target_id
+    assert [row["name"] for row in db.list_institutions()] == ["Целевой вуз"]
+
+
 def test_platform_migration_backfills_existing_channel_once(tmp_path):
     path = tmp_path / "legacy.db"
     with sqlite3.connect(path) as conn:

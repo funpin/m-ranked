@@ -479,9 +479,65 @@ def test_management_links_non_telegram_account_to_institution(tmp_path):
         auth=auth,
     )
     assert account.status_code == 200
-    assert "Аккаунт привязан к вузу" in account.text
+    assert "Аккаунты привязаны к вузу" in account.text
     assert "ожидает токен" in account.text
     linked = db.list_platform_accounts(institution_id)
     assert len(linked) == 1
     assert linked[0]["external_key"] == "test_university"
     assert linked[0]["url"] == "https://vk.com/test_university"
+
+
+def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
+    cfg = replace(settings(tmp_path), admin_password="test-password", admin_csrf_secret="test-csrf")
+    db = Database(cfg.database_path)
+    db.migrate()
+    institution_id = db.add_institution("Старое полное название", "Старое")
+    client = TestClient(create_app(cfg, db))
+    auth = (cfg.admin_username, "test-password")
+
+    updated = client.post(
+        f"/manage/institutions/{institution_id}",
+        data={"name": "Новое полное название", "short_name": "НПН", "csrf_token": "test-csrf"},
+        auth=auth,
+    )
+    assert updated.status_code == 200
+    assert "Названия вуза обновлены" in updated.text
+
+    linked = client.post(
+        f"/manage/institutions/{institution_id}/accounts",
+        data={
+            "telegram": "https://t.me/s/new_tg", "vk": "https://vk.com/new_vk",
+            "max_account": "", "rutube": "", "csrf_token": "test-csrf",
+        },
+        auth=auth,
+    )
+    assert linked.status_code == 200
+    assert "Аккаунты привязаны к вузу" in linked.text
+    assert {row["platform"] for row in db.list_platform_accounts(institution_id)} == {
+        "telegram", "vk",
+    }
+    channel = db.list_channels_with_institutions()[0]
+    assert channel["institution_short_name"] == "НПН"
+    overview = client.get("/").text
+    assert 'title="Новое полное название">НПН</h3>' in overview
+    assert "Старое полное название" not in overview
+    assert 'id="accountMatrix"' in linked.text
+    assert "Редактировать название" in linked.text
+    db.add_platform_account(
+        institution_id, "max", "max_without_username",
+        url="https://max.ru/max_without_username",
+    )
+    management = client.get("/manage", auth=auth).text
+    assert "max_without_username ↗" in management
+    assert "@None" not in management
+    assert "3 аккаунта · 1 вуз" in management
+
+    rejected = client.post(
+        f"/manage/institutions/{institution_id}/accounts",
+        data={
+            "telegram": "", "vk": "", "max_account": "javascript://unsafe",
+            "rutube": "", "csrf_token": "test-csrf",
+        },
+        auth=auth,
+    )
+    assert rejected.status_code == 400
