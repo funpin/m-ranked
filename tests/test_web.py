@@ -292,6 +292,63 @@ def test_vk_comparison_uses_fixed_platform_cohort_and_interactions(tmp_path):
     assert "Взаимодействия / просмотры, медиана" in page
 
 
+def test_rutube_rating_and_comparison_use_views_only(tmp_path):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("Полный видео-вуз", "ВИДЕОВУЗ")
+    account_id = db.add_platform_account(
+        institution_id, "rutube", "video-channel", title="Rutube видео-вуза",
+        url="https://rutube.ru/channel/123/",
+    )
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    post_ids = []
+    for index, values in enumerate(((100, 300), (200, 500)), start=1):
+        post_id = db.upsert_platform_post(
+            account_id, f"video-{index}", published, published,
+            "video", f"https://rutube.ru/video/{index}/", {},
+        )
+        post_ids.append(post_id)
+        db.insert_platform_snapshot(
+            post_id, published, 0, 5, views_count=values[0],
+            reactions_count=None, comments_count=None, shares_count=None, raw={},
+        )
+        db.insert_platform_snapshot(
+            post_id, published + timedelta(hours=24), 24 * 3600, 60,
+            views_count=values[1], reactions_count=None,
+            comments_count=None, shares_count=None, raw={},
+        )
+    telegram_channel = db.add_channel("telegram_not_rutube")
+    telegram_post = db.add_post(
+        telegram_channel, "m:777", [777], None, published, published,
+        0, True, "text", False,
+    )
+    db.insert_snapshot(
+        telegram_post, published + timedelta(hours=24), 24 * 3600,
+        7777, {"👍": 7777}, [], 60, 15, 2.0, views_count=77777,
+    )
+    client = TestClient(create_app(cfg, db))
+
+    rating = client.get("/rating?platform=rutube&period=7d").text
+    assert "Рейтинг · Rutube" in rating
+    assert "Среднее просмотров" in rating
+    assert "Просмотры всего" in rating
+    assert "Rutube публично отдаёт просмотры" in rating
+    assert "Вовлечённость:" not in rating
+    assert f"/platform-posts/{post_ids[0]}?platform=rutube" in rating
+    assert "77777" not in rating
+
+    comparison = client.get(
+        f"/compare?platform=rutube&submitted=true&institutions={institution_id}&period=24",
+    ).text
+    assert "Сравнение · Rutube" in comparison
+    assert "Типичное накопление просмотров" in comparison
+    assert "metricAxis" in comparison
+    assert '"cohort_size": 2' in comparison
+    assert '"sample_counts": [2, 2' in comparison
+    assert "Вовлечённость от просмотров" not in comparison
+    assert "77777" not in comparison
+
+
 def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp_path):
     cfg = settings(tmp_path)
     db = Database(cfg.database_path)
