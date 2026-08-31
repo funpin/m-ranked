@@ -7,9 +7,16 @@ import pytest
 
 from app.config import Settings
 from app.database import Database
-from app.web.app import create_app
+from app.web.app import create_app, format_platform_post_label
 
 web_app_module = importlib.import_module("app.web.app")
+
+
+def test_platform_post_label_shortens_only_vk_composite_ids():
+    assert format_platform_post_label("-62258607_72068", "vk") == "№72068"
+    assert format_platform_post_label("62258607_72068", "vk") == "№72068"
+    assert format_platform_post_label("video-72068", "rutube") == "video-72068"
+    assert format_platform_post_label("unexpected", "vk") == "unexpected"
 
 
 def settings(tmp_path):
@@ -255,7 +262,10 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     assert f'/platform-posts/{platform_post_id}?platform=vk' in institution
     account = client.get(f"/platform-accounts/{account_id}?platform=vk").text
     assert f'/platform-posts/{platform_post_id}?platform=vk' in account
+    assert ">№20</a>" in account
     publication = client.get(f"/platform-posts/{platform_post_id}?platform=vk").text
+    assert "ВУЗ</a> / <a" in publication
+    assert ">№20</a>" in publication
     assert "Накопление лайков, просмотров, комментариев и репостов" in publication
     assert "Прирост между замерами" in publication
     assert 'id="accumulationLegend"' in publication
@@ -308,9 +318,9 @@ def test_platform_post_page_links_adjacent_account_posts(tmp_path):
     page = client.get(f"/platform-posts/{post_ids[1]}?platform=vk").text
 
     assert f'href="/platform-posts/{post_ids[0]}?platform=vk" rel="prev"' in page
-    assert "-10_101" in page
+    assert "<small>№101</small>" in page
     assert f'href="/platform-posts/{post_ids[2]}?platform=vk" rel="next"' in page
-    assert "-10_103" in page
+    assert "<small>№103</small>" in page
 
 
 def test_vk_comparison_uses_fixed_platform_cohort_and_interactions(tmp_path):

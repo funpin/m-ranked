@@ -144,7 +144,7 @@ class Collector:
         self.db.set_state("poll_last_duration_seconds", f"{duration:.3f}")
         self.db.set_state("poll_last_error_count", str(error_count))
         self.db.set_state("poll_last_channel_count", str(len(channels)))
-        next_poll = completed + timedelta(minutes=self.settings.poll_interval_minutes)
+        next_poll = started + timedelta(minutes=self.settings.poll_interval_minutes)
         self.db.set_state("next_poll", iso(next_poll))
         logger.info(
             "polling complete duration=%.2fs channels=%s errors=%s",

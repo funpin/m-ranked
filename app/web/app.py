@@ -99,6 +99,15 @@ def format_duration(seconds: int | float | None) -> str:
     return " ".join(parts)
 
 
+def format_platform_post_label(external_id: Any, platform: str | None) -> str:
+    value = str(external_id)
+    if normalize_platform(platform) == "vk":
+        owner_id, separator, post_id = value.rpartition("_")
+        if separator and owner_id.lstrip("-").isdigit() and post_id.isdigit():
+            return f"№{post_id}"
+    return value
+
+
 def plural_ru(value: int | float, one: str, few: str, many: str) -> str:
     number = abs(int(value))
     if number % 100 in range(11, 15):
@@ -150,6 +159,7 @@ def create_app(
         if value else "—"
     )
     templates.env.filters["duration"] = format_duration
+    templates.env.filters["platform_post_label"] = format_platform_post_label
     templates.env.filters["plural_ru"] = plural_ru
     basic = HTTPBasic()
     emoji_cache: dict[str, tuple[datetime, bytes, str]] = {}

@@ -12,6 +12,7 @@ from app.public_web import (
     public_post_is_deleted,
     PublicWebCollector,
     snapshot_interval_minutes,
+    snapshot_is_due,
 )
 
 
@@ -77,6 +78,14 @@ def test_exact_subscriber_count_from_public_landing_page():
 def test_public_post_deleted_marker():
     html = '<div class="tgme_widget_message_error">Post not found</div>'
     assert public_post_is_deleted(html) is True
+
+
+def test_snapshot_due_tolerates_small_scheduler_jitter():
+    previous = datetime(2026, 8, 31, 13, 0, tzinfo=timezone.utc)
+    assert snapshot_is_due(previous.isoformat(), previous + timedelta(minutes=4, seconds=31), 5)
+    assert not snapshot_is_due(
+        previous.isoformat(), previous + timedelta(minutes=4, seconds=29), 5,
+    )
 
 
 def test_public_collector_marks_explicitly_missing_post_deleted(tmp_path):
