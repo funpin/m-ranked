@@ -35,7 +35,7 @@ class VkPost:
 
 def normalize_vk_community_ref(value: str) -> str:
     value = value.strip().rstrip("/")
-    value = re.sub(r"^https?://(?:m\.)?vk\.com/", "", value, flags=re.I)
+    value = re.sub(r"^https?://(?:m\.)?vk\.(?:com|ru)/", "", value, flags=re.I)
     value = value.split("?", 1)[0].split("/", 1)[0].lstrip("@")
     if not re.fullmatch(r"(?:club|public)?[A-Za-zА-Яа-яЁё0-9_.-]{2,64}", value):
         raise ValueError("Invalid VK community reference")

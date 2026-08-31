@@ -1090,9 +1090,13 @@ def create_app(
                 db.add_channel(normalize_channel_ref(original), institution_id=institution_id)
                 continue
             if platform == "vk":
-                external_key = normalize_vk_community_ref(original)
+                try:
+                    external_key = normalize_vk_community_ref(original)
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400, detail="Не удалось определить сообщество ВКонтакте",
+                    ) from exc
                 account_url = f"https://vk.com/{external_key}"
-                access_mode, data_quality = "public", "exact"
             else:
                 parsed = urlparse(original if "://" in original else f"https://placeholder/{original}")
                 if "://" in original and (
@@ -1199,7 +1203,12 @@ def create_app(
         if not original:
             raise HTTPException(status_code=400, detail="Укажите аккаунт или ссылку")
         if platform == "vk":
-            external_key = normalize_vk_community_ref(original)
+            try:
+                external_key = normalize_vk_community_ref(original)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400, detail="Не удалось определить сообщество ВКонтакте",
+                ) from exc
             username = external_key
             account_url = url.strip() or f"https://vk.com/{external_key}"
             access_mode, data_quality = "public", "exact"

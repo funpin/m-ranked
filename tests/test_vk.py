@@ -9,6 +9,8 @@ from app.vk import VkApiError, VkClient, normalize_vk_community_ref, parse_vk_po
 
 def test_normalize_vk_community_ref():
     assert normalize_vk_community_ref("https://vk.com/mgumariupolkuindzhi/") == "mgumariupolkuindzhi"
+    assert normalize_vk_community_ref("https://vk.ru/mephi_official") == "mephi_official"
+    assert normalize_vk_community_ref("https://m.vk.ru/zgu_university/") == "zgu_university"
     assert normalize_vk_community_ref("@public123") == "public123"
     with pytest.raises(ValueError):
         normalize_vk_community_ref("https://example.com/not-vk")
