@@ -624,7 +624,7 @@ def create_app(
             "max": {"configured": bool(settings.max_access_token)},
             "rutube": {
                 "configured": settings.rutube_public_api_enabled,
-                "mode": "official_public_feed",
+                "mode": "official_public_api",
             },
         }
         for key in ("vk", "max", "rutube"):
