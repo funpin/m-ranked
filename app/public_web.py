@@ -60,7 +60,11 @@ def public_post_is_deleted(html: str) -> bool:
     return bool(error and "not found" in error.get_text(" ", strip=True).casefold())
 
 
-def snapshot_interval_minutes(age_in_seconds: int, settings: Settings) -> int:
+def snapshot_interval_minutes(
+    age_in_seconds: int, settings: Settings, *, platform: str | None = None,
+) -> int:
+    if platform == "rutube" and age_in_seconds < 72 * 3600:
+        return settings.rutube_first_three_days_poll_interval_minutes
     if age_in_seconds < 24 * 3600:
         return settings.poll_interval_minutes
     if age_in_seconds < 48 * 3600:

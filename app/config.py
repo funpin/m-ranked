@@ -71,6 +71,7 @@ class Settings:
     days_4_to_6_poll_interval_minutes: int = 180
     days_7_to_13_poll_interval_minutes: int = 360
     day_14_plus_poll_interval_minutes: int = 720
+    rutube_first_three_days_poll_interval_minutes: int = 60
     deletion_confirmation_checks: int = 2
     vk_access_token: str | None = None
     vk_api_version: str = "5.199"
@@ -133,6 +134,9 @@ class Settings:
             ),
             day_14_plus_poll_interval_minutes=_int(
                 "DAY_14_PLUS_POLL_INTERVAL_MINUTES", 720
+            ),
+            rutube_first_three_days_poll_interval_minutes=_int(
+                "RUTUBE_FIRST_THREE_DAYS_POLL_INTERVAL_MINUTES", 60
             ),
             deletion_confirmation_checks=_int("DELETION_CONFIRMATION_CHECKS", 2),
             vk_access_token=os.getenv("VK_ACCESS_TOKEN", "").strip() or None,
