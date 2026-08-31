@@ -67,11 +67,14 @@ class Settings:
     subscriber_refresh_hours: int = 24
     archive_dir: Path = Path("data/archives")
     second_day_poll_interval_minutes: int = 15
-    third_day_poll_interval_minutes: int = 60
-    days_4_to_6_poll_interval_minutes: int = 180
-    days_7_to_13_poll_interval_minutes: int = 360
-    day_14_plus_poll_interval_minutes: int = 720
+    third_day_poll_interval_minutes: int = 15
+    days_4_to_6_poll_interval_minutes: int = 30
+    days_7_to_13_poll_interval_minutes: int = 60
+    day_14_plus_poll_interval_minutes: int = 60
     rutube_first_three_days_poll_interval_minutes: int = 60
+    rutube_days_4_to_6_poll_interval_minutes: int = 180
+    rutube_days_7_to_13_poll_interval_minutes: int = 360
+    rutube_day_14_plus_poll_interval_minutes: int = 720
     deletion_confirmation_checks: int = 2
     vk_access_token: str | None = None
     vk_api_version: str = "5.199"
@@ -124,19 +127,28 @@ class Settings:
                 "SECOND_DAY_POLL_INTERVAL_MINUTES", 15
             ),
             third_day_poll_interval_minutes=_int(
-                "THIRD_DAY_POLL_INTERVAL_MINUTES", 60
+                "THIRD_DAY_POLL_INTERVAL_MINUTES", 15
             ),
             days_4_to_6_poll_interval_minutes=_int(
-                "DAYS_4_TO_6_POLL_INTERVAL_MINUTES", 180
+                "DAYS_4_TO_6_POLL_INTERVAL_MINUTES", 30
             ),
             days_7_to_13_poll_interval_minutes=_int(
-                "DAYS_7_TO_13_POLL_INTERVAL_MINUTES", 360
+                "DAYS_7_TO_13_POLL_INTERVAL_MINUTES", 60
             ),
             day_14_plus_poll_interval_minutes=_int(
-                "DAY_14_PLUS_POLL_INTERVAL_MINUTES", 720
+                "DAY_14_PLUS_POLL_INTERVAL_MINUTES", 60
             ),
             rutube_first_three_days_poll_interval_minutes=_int(
                 "RUTUBE_FIRST_THREE_DAYS_POLL_INTERVAL_MINUTES", 60
+            ),
+            rutube_days_4_to_6_poll_interval_minutes=_int(
+                "RUTUBE_DAYS_4_TO_6_POLL_INTERVAL_MINUTES", 180
+            ),
+            rutube_days_7_to_13_poll_interval_minutes=_int(
+                "RUTUBE_DAYS_7_TO_13_POLL_INTERVAL_MINUTES", 360
+            ),
+            rutube_day_14_plus_poll_interval_minutes=_int(
+                "RUTUBE_DAY_14_PLUS_POLL_INTERVAL_MINUTES", 720
             ),
             deletion_confirmation_checks=_int("DELETION_CONFIRMATION_CHECKS", 2),
             vk_access_token=os.getenv("VK_ACCESS_TOKEN", "").strip() or None,

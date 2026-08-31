@@ -281,7 +281,55 @@ def test_platform_migration_backfills_existing_channel_once(tmp_path):
         len(db.list_institutions()), len(db.list_platform_accounts()),
         db.query("SELECT max(version) version FROM schema_migrations")[0]["version"],
     )
-    assert before == after == (1, 1, 9)
+    assert before == after == (1, 1, 10)
     account = db.list_platform_accounts()[0]
     assert account["native_id"] == "123"
     assert account["subscriber_count"] == 1000
+
+
+def test_history_reset_and_vk_joint_id_migration_run_only_once(tmp_path):
+    db = Database(tmp_path / "migration.db")
+    db.migrate()
+    channel_id = db.add_channel("legacy")
+    now = datetime.now(timezone.utc)
+    telegram_post_id = db.add_post(
+        channel_id, "m:1", [1], None, now, now, 0, True, "text", False,
+    )
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(institution_id, "vk", "university")
+    db.set_platform_account_native_id(account_id, "42")
+    platform_post_id = db.upsert_platform_post(
+        account_id, "-900_12", now, now, "photo", None,
+        {
+            "owner_id": -900,
+            "id": 12,
+            "coowners": {
+                "coowner_post_id": {"owner_id": -42, "post_id": 77},
+                "list": [{"owner_id": -900}, {"owner_id": -42}],
+            },
+        },
+        history_complete=True,
+    )
+    with db.connect() as conn:
+        conn.execute("DELETE FROM schema_migrations WHERE version=10")
+    db.migrate()
+
+    telegram = db.query("SELECT * FROM posts WHERE id=?", (telegram_post_id,))[0]
+    platform = db.query("SELECT * FROM platform_posts WHERE id=?", (platform_post_id,))[0]
+    assert (telegram["history_complete"], telegram["history_forced_incomplete"]) == (0, 1)
+    assert (platform["history_complete"], platform["history_forced_incomplete"]) == (0, 1)
+    assert platform["external_id"] == "-42_77"
+    assert platform["source_external_id"] == "-900_12"
+    assert platform["is_joint"] == 1
+    assert platform["additional_author_count"] == 1
+
+    new_platform_id = db.upsert_platform_post(
+        account_id, "-42_78", now, now, "text", None,
+        {"owner_id": -42, "id": 78}, history_complete=True,
+    )
+    db.migrate()
+    new_platform = db.query(
+        "SELECT history_complete, history_forced_incomplete FROM platform_posts WHERE id=?",
+        (new_platform_id,),
+    )[0]
+    assert (new_platform["history_complete"], new_platform["history_forced_incomplete"]) == (1, 0)

@@ -65,8 +65,14 @@ def public_post_is_deleted(html: str) -> bool:
 def snapshot_interval_minutes(
     age_in_seconds: int, settings: Settings, *, platform: str | None = None,
 ) -> int:
-    if platform == "rutube" and age_in_seconds < 72 * 3600:
-        return settings.rutube_first_three_days_poll_interval_minutes
+    if platform == "rutube":
+        if age_in_seconds < 72 * 3600:
+            return settings.rutube_first_three_days_poll_interval_minutes
+        if age_in_seconds < 7 * 24 * 3600:
+            return settings.rutube_days_4_to_6_poll_interval_minutes
+        if age_in_seconds < 14 * 24 * 3600:
+            return settings.rutube_days_7_to_13_poll_interval_minutes
+        return settings.rutube_day_14_plus_poll_interval_minutes
     if age_in_seconds < 24 * 3600:
         return settings.poll_interval_minutes
     if age_in_seconds < 48 * 3600:

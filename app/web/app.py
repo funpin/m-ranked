@@ -582,12 +582,6 @@ def create_app(
         institution: Any,
     ) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
         prepared = _rows_dict(posts)
-        complete_limit = settings.complete_history_max_first_age_minutes * 60
-        for post in prepared:
-            post["history_complete"] = (
-                post.get("first_age") is not None
-                and int(post["first_age"]) <= complete_limit
-            )
         reactions = [
             int(post["latest_reactions"]) for post in prepared
             if post.get("latest_reactions") is not None
@@ -1461,11 +1455,7 @@ def create_app(
             metric_nouns[0] if len(metric_nouns) == 1
             else f"{', '.join(metric_nouns[:-1])} и {metric_nouns[-1]}"
         )
-        complete_limit = settings.complete_history_max_first_age_minutes * 60
-        history_complete = bool(
-            snapshots and snapshots[0].get("age_seconds") is not None
-            and int(snapshots[0]["age_seconds"]) <= complete_limit
-        )
+        history_complete = bool(post["history_complete"])
         return render(
             request, "platform_publication.html", post=post, snapshots=snapshots,
             older_post=older_post[0] if older_post else None,

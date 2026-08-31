@@ -12,6 +12,7 @@ from .config import Settings
 from .database import Database, iso
 from .models import LogicalPost
 from .reactions import choose_album_reactions, parse_message_reactions
+from .public_web import snapshot_interval_minutes, snapshot_is_due
 from .telegram_client import TelegramReader
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,15 @@ class Collector:
         cutoff = now - timedelta(hours=self.settings.track_post_for_hours)
         active = self.db.active_posts(channel["id"], iso(cutoff))
         for post in active:
+            published_at = datetime.fromisoformat(post["published_at"])
+            measured = datetime.now(timezone.utc)
+            interval_minutes = snapshot_interval_minutes(
+                age_seconds(published_at, measured), self.settings,
+            )
+            if not snapshot_is_due(
+                post["last_measured_at"], measured, interval_minutes,
+            ):
+                continue
             ids = self.db.post_message_ids(post["id"])
             fetched = await self.reader.client.get_messages(entity, ids=ids)
             fetched = [message for message in fetched if message is not None]
@@ -208,11 +218,10 @@ class Collector:
                 state, ambiguous = choose_album_reactions(fetched)
             else:
                 state, ambiguous = parse_message_reactions(fetched[0]), False
-            published_at = datetime.fromisoformat(post["published_at"])
             measured = datetime.now(timezone.utc)
             inserted = self.db.insert_snapshot(
                 post["id"], measured, age_seconds(published_at, measured), state.total,
-                state.reactions, state.raw, self.settings.poll_interval_minutes,
+                state.reactions, state.raw, interval_minutes,
                 self.settings.jump_min_abs, self.settings.jump_min_ratio,
                 comments_count=logical_comments(fetched),
                 views_count=logical_views(fetched),

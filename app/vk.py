@@ -17,6 +17,14 @@ class VkCommunity:
 
 
 @dataclass(frozen=True)
+class VkPostIdentity:
+    external_key: str
+    source_external_key: str | None
+    is_joint: bool
+    additional_author_count: int
+
+
+@dataclass(frozen=True)
 class VkPost:
     owner_id: int
     post_id: int
@@ -31,6 +39,50 @@ class VkPost:
     @property
     def external_key(self) -> str:
         return f"{self.owner_id}_{self.post_id}"
+
+    def identity_for_community(self, community_id: int) -> VkPostIdentity | None:
+        return vk_post_identity(
+            {"owner_id": self.owner_id, "id": self.post_id, **self.raw}, community_id,
+        )
+
+
+def vk_post_identity(
+    payload: dict[str, Any], community_id: int,
+) -> VkPostIdentity | None:
+    """Return the post number belonging to the monitored VK community.
+
+    VK returns a joint post under its canonical first author's wall ID.  The
+    monitored community's own number is exposed in coowners.coowner_post_id.
+    """
+    target_owner_id = -abs(int(community_id))
+    canonical_owner_id = int(payload["owner_id"])
+    canonical_post_id = int(payload["id"])
+    canonical_key = f"{canonical_owner_id}_{canonical_post_id}"
+    coowners = payload.get("coowners") if isinstance(payload.get("coowners"), dict) else {}
+    local = coowners.get("coowner_post_id") if isinstance(coowners, dict) else None
+    local_owner_id = canonical_owner_id
+    local_post_id = canonical_post_id
+    if isinstance(local, dict) and int(local.get("owner_id") or 0) == target_owner_id:
+        local_owner_id = target_owner_id
+        local_post_id = int(local["post_id"])
+    elif canonical_owner_id != target_owner_id:
+        return None
+
+    author_ids: set[int] = {canonical_owner_id}
+    raw_authors = coowners.get("list") if isinstance(coowners, dict) else None
+    if isinstance(raw_authors, list):
+        for author in raw_authors:
+            if isinstance(author, dict) and author.get("owner_id") is not None:
+                author_ids.add(int(author["owner_id"]))
+    author_ids.add(target_owner_id)
+    additional_author_count = len(author_ids - {target_owner_id})
+    local_key = f"{local_owner_id}_{local_post_id}"
+    return VkPostIdentity(
+        external_key=local_key,
+        source_external_key=canonical_key if canonical_key != local_key else None,
+        is_joint=additional_author_count > 0,
+        additional_author_count=additional_author_count,
+    )
 
 
 def normalize_vk_community_ref(value: str) -> str:
