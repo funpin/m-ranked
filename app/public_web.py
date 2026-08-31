@@ -17,6 +17,8 @@ from .models import ReactionState
 
 logger = logging.getLogger(__name__)
 
+POLLING_JITTER_TOLERANCE_SECONDS = 30
+
 
 @dataclass(frozen=True)
 class PublicPost:
@@ -88,7 +90,10 @@ def snapshot_is_due(
     previous = datetime.fromisoformat(last_measured_at)
     if previous.tzinfo is None:
         previous = previous.replace(tzinfo=timezone.utc)
-    return (measured_at - previous).total_seconds() >= interval_minutes * 60
+    due_after_seconds = max(
+        0, interval_minutes * 60 - POLLING_JITTER_TOLERANCE_SECONDS,
+    )
+    return (measured_at - previous).total_seconds() >= due_after_seconds
 
 
 def metadata_is_due(
@@ -237,7 +242,7 @@ class PublicWebCollector:
         self.db.set_state("poll_last_error_count", str(error_count))
         self.db.set_state("poll_last_channel_count", str(len(channels)))
         self.db.set_state(
-            "next_poll", iso(completed + timedelta(minutes=self.settings.poll_interval_minutes))
+            "next_poll", iso(started + timedelta(minutes=self.settings.poll_interval_minutes))
         )
         logger.info(
             "public web polling complete duration=%.2fs channels=%s errors=%s",

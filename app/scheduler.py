@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import suppress
 from typing import Any
 
 import uvicorn
@@ -20,21 +19,52 @@ from .web.app import create_app
 logger = logging.getLogger(__name__)
 
 
+def polling_delay_seconds(interval_seconds: float, elapsed_seconds: float) -> float:
+    """Keep cycle starts on the configured cadence without overlapping a collector."""
+    return max(0.0, interval_seconds - elapsed_seconds)
+
+
 async def polling_loop(
     collector: Any,
     settings: Settings,
-    auxiliary_collectors: tuple[Any, ...] = (),
 ) -> None:
+    interval_seconds = settings.poll_interval_minutes * 60
+    collector_name = collector.__class__.__name__
     while True:
+        loop = asyncio.get_running_loop()
+        cycle_started = loop.time()
         try:
             await collector.poll_cycle()
-            for auxiliary in auxiliary_collectors:
-                await auxiliary.poll_cycle()
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception("unhandled polling cycle error")
-        await asyncio.sleep(settings.poll_interval_minutes * 60)
+            logger.exception("unhandled %s polling cycle error", collector_name)
+        elapsed = loop.time() - cycle_started
+        delay = polling_delay_seconds(interval_seconds, elapsed)
+        if not delay:
+            logger.warning(
+                "%s polling cycle exceeded cadence: duration=%.2fs interval=%.2fs",
+                collector_name, elapsed, interval_seconds,
+            )
+        await asyncio.sleep(delay)
+
+
+def start_polling_tasks(
+    collectors: tuple[Any, ...], settings: Settings,
+) -> list[asyncio.Task[None]]:
+    return [
+        asyncio.create_task(
+            polling_loop(collector, settings),
+            name=f"poll-{collector.__class__.__name__.lower()}",
+        )
+        for collector in collectors
+    ]
+
+
+async def stop_polling_tasks(tasks: list[asyncio.Task[None]]) -> None:
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def run_service(settings: Settings, db: Database) -> None:
@@ -47,6 +77,7 @@ async def run_service(settings: Settings, db: Database) -> None:
     )
     if settings.data_source == "public_web":
         collector = PublicWebCollector(settings, db)
+        collectors = (collector, *auxiliary_collectors)
         connected = True
 
         def public_connection_state() -> bool:
@@ -56,19 +87,14 @@ async def run_service(settings: Settings, db: Database) -> None:
         server = uvicorn.Server(
             uvicorn.Config(app, host=settings.web_host, port=settings.web_port, log_config=None)
         )
-        poll_task = asyncio.create_task(
-            polling_loop(collector, settings, auxiliary_collectors)
-        )
+        poll_tasks = start_polling_tasks(collectors, settings)
         try:
             await server.serve()
         finally:
             connected = False
-            poll_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await poll_task
-            await collector.close()
-            for auxiliary in auxiliary_collectors:
-                await auxiliary.close()
+            await stop_polling_tasks(poll_tasks)
+            for active_collector in collectors:
+                await active_collector.close()
         return
 
     api_id, api_hash = settings.require_telegram()
@@ -82,20 +108,17 @@ async def run_service(settings: Settings, db: Database) -> None:
     server = uvicorn.Server(
         uvicorn.Config(app, host=settings.web_host, port=settings.web_port, log_config=None)
     )
-    poll_task: asyncio.Task[None] | None = None
+    poll_tasks: list[asyncio.Task[None]] = []
     try:
         await reader.connect()
         connected = True
-        poll_task = asyncio.create_task(
-            polling_loop(Collector(settings, db, reader), settings, auxiliary_collectors)
+        poll_tasks = start_polling_tasks(
+            (Collector(settings, db, reader), *auxiliary_collectors), settings,
         )
         await server.serve()
     finally:
         connected = False
-        if poll_task:
-            poll_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await poll_task
+        await stop_polling_tasks(poll_tasks)
         await reader.disconnect()
         for auxiliary in auxiliary_collectors:
             await auxiliary.close()
