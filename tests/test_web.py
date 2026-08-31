@@ -984,7 +984,7 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
     linked = client.post(
         f"/manage/institutions/{institution_id}/accounts",
         data={
-            "telegram": "https://t.me/s/new_tg", "vk": "https://vk.com/new_vk",
+            "telegram": "https://t.me/s/new_tg", "vk": "https://vk.ru/new_vk",
             "max_account": "", "rutube": "", "csrf_token": "test-csrf",
         },
         auth=auth,
@@ -1034,3 +1034,14 @@ def test_management_edits_institution_and_bulk_links_social_accounts(tmp_path):
         auth=auth,
     )
     assert rejected.status_code == 400
+
+    invalid_vk = client.post(
+        f"/manage/institutions/{institution_id}/accounts",
+        data={
+            "telegram": "", "vk": "https://example.com/not-vk",
+            "max_account": "", "rutube": "", "csrf_token": "test-csrf",
+        },
+        auth=auth,
+    )
+    assert invalid_vk.status_code == 400
+    assert "Не удалось определить сообщество ВКонтакте" in invalid_vk.text
