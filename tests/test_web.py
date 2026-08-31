@@ -359,7 +359,7 @@ def test_vk_comparison_uses_fixed_platform_cohort_and_interactions(tmp_path):
     assert "Взаимодействия / просмотры, медиана" in page
 
 
-def test_rutube_rating_and_comparison_use_views_only(tmp_path):
+def test_rutube_rating_and_comparison_use_likes_comments_and_views(tmp_path):
     cfg = settings(tmp_path)
     db = Database(cfg.database_path); db.migrate()
     institution_id = db.add_institution("Полный видео-вуз", "ВИДЕОВУЗ")
@@ -369,7 +369,7 @@ def test_rutube_rating_and_comparison_use_views_only(tmp_path):
     )
     published = datetime.now(timezone.utc) - timedelta(days=2)
     post_ids = []
-    for index, values in enumerate(((100, 300), (200, 500)), start=1):
+    for index, values in enumerate(((100, 300, 2, 4, 1, 3), (200, 500, 5, 9, 2, 4)), start=1):
         post_id = db.upsert_platform_post(
             account_id, f"video-{index}", published, published,
             "video", f"https://rutube.ru/video/{index}/", {},
@@ -377,12 +377,13 @@ def test_rutube_rating_and_comparison_use_views_only(tmp_path):
         post_ids.append(post_id)
         db.insert_platform_snapshot(
             post_id, published, 0, 5, views_count=values[0],
-            reactions_count=None, comments_count=None, shares_count=None, raw={},
+            reactions_count=values[2], comments_count=values[4],
+            shares_count=None, raw={},
         )
         db.insert_platform_snapshot(
             post_id, published + timedelta(hours=24), 24 * 3600, 60,
-            views_count=values[1], reactions_count=None,
-            comments_count=None, shares_count=None, raw={},
+            views_count=values[1], reactions_count=values[3],
+            comments_count=values[5], shares_count=None, raw={},
         )
     telegram_channel = db.add_channel("telegram_not_rutube")
     telegram_post = db.add_post(
@@ -397,10 +398,11 @@ def test_rutube_rating_and_comparison_use_views_only(tmp_path):
 
     rating = client.get("/rating?platform=rutube&period=7d").text
     assert "Рейтинг · Rutube" in rating
-    assert "Среднее просмотров" in rating
-    assert "Просмотры всего" in rating
-    assert "Rutube публично отдаёт просмотры" in rating
-    assert "Вовлечённость:" not in rating
+    assert "Среднее лайков" in rating
+    assert "Лайков всего" in rating
+    assert "Комментарии" in rating
+    assert "Вовлечённость:" in rating
+    assert "Репосты" not in rating
     assert f"/platform-posts/{post_ids[0]}?platform=rutube" in rating
     assert "77777" not in rating
 
@@ -408,11 +410,12 @@ def test_rutube_rating_and_comparison_use_views_only(tmp_path):
         f"/compare?platform=rutube&submitted=true&institutions={institution_id}&period=24",
     ).text
     assert "Сравнение · Rutube" in comparison
-    assert "Типичное накопление просмотров" in comparison
+    assert "Типичное накопление лайков" in comparison
     assert "metricAxis" in comparison
     assert '"cohort_size": 2' in comparison
     assert '"sample_counts": [2, 2' in comparison
-    assert "Вовлечённость от просмотров" not in comparison
+    assert "Вовлечённость от просмотров" in comparison
+    assert "лайки + комментарии / просмотры" in comparison
     assert "77777" not in comparison
 
 
@@ -440,13 +443,14 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     )
     db.insert_platform_snapshot(
         post_id, now - timedelta(hours=1), 3600, 5,
-        views_count=100, reactions_count=None,
-        comments_count=2 if platform == "max" else None,
+        views_count=100, reactions_count=3 if platform == "rutube" else None,
+        comments_count=2,
         shares_count=1 if platform == "max" else None, raw={},
     )
     db.insert_platform_snapshot(
-        post_id, now, 7200, 5, views_count=160, reactions_count=None,
-        comments_count=4 if platform == "max" else None,
+        post_id, now, 7200, 5,
+        views_count=160, reactions_count=7 if platform == "rutube" else None,
+        comments_count=4,
         shares_count=2 if platform == "max" else None, raw={},
     )
     client = TestClient(create_app(cfg, db))
@@ -506,12 +510,13 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     assert "Прирост между замерами" in publication
     assert "window.localStorage.setItem(PLATFORM_POST_CHART_PREFERENCES_KEY" in publication
     assert '"key": "views"' in publication
-    assert '"key": "reactions"' not in publication
     if platform == "rutube":
-        assert "Накопление просмотров" in publication
-        assert '"key": "comments"' not in publication
+        assert "Накопление лайков, просмотров и комментариев" in publication
+        assert '"key": "reactions"' in publication
+        assert '"key": "comments"' in publication
         assert '"key": "shares"' not in publication
     else:
+        assert '"key": "reactions"' not in publication
         assert "Накопление просмотров, комментариев и репостов" in publication
         assert '"key": "comments"' in publication
         assert '"key": "shares"' in publication

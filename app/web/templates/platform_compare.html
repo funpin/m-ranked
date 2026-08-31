@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Сравнение · {{ active_platform_label }} · m-ranked{% endblock %}
 {% block content %}
 <h1>Сравнение · {{ active_platform_label }}</h1>
-<p class="lead">{% if has_interactions %}Сравните, как публикации вузов набирают лайки и вовлечённость во ВКонтакте после выхода.{% else %}Сравните, как видео вузов набирают просмотры на Rutube после выхода.{% endif %}</p>
+<p class="lead">Сравните, как публикации вузов набирают лайки и вовлечённость в {{ active_platform_label }} после выхода.</p>
 
 <form class="panel selector-panel compare-selector" method="get" id="compare-form">
   <input type="hidden" name="platform" value="{{ active_platform }}"><input type="hidden" name="submitted" value="true">
@@ -15,7 +15,7 @@
 <section class="help-grid compare-help" aria-label="Как читать сравнение">
   <div class="explain"><b>Типичное накопление {{ 'лайков' if has_interactions else 'просмотров' }}</b>Одна линия — один вуз и одна неизменная выборка публикаций {{ active_platform_label }} на всём горизонте. Точка — медианное число {{ 'лайков' if has_interactions else 'просмотров' }} на соответствующем целом часу.</div>
   {% if has_interactions %}
-  <div class="explain"><b>Вовлечённость от просмотров</b>Для каждого поста: (лайки + комментарии + репосты) / просмотры. На графике показана медиана этих процентов по неизменной выборке.</div>
+  <div class="explain"><b>Вовлечённость от просмотров</b>Для каждой публикации: (лайки + комментарии{% if has_shares %} + репосты{% endif %}) / просмотры. На графике показана медиана этих процентов по неизменной выборке.</div>
   {% else %}<div class="explain"><b>Только доступные данные</b>Rutube публично отдаёт просмотры. Недоступные лайки и комментарии не заменяются нулями.</div>{% endif %}
 </section>
 <p class="notice"><b>Постоянная выборка:</b> публикация участвует во всех точках только при наличии истории до конца выбранного горизонта{% if not include_partial %} и первого замера не позднее {{ settings.complete_history_max_first_age_minutes }} минут после выхода{% endif %}.</p>
@@ -24,7 +24,7 @@
 
 <div class="section"><div class="panel comparison-panel"><div class="rating-panel-head"><div><h2>Типичное накопление {{ 'лайков' if has_interactions else 'просмотров' }}</h2><p class="panel-note">Точка — медиана на конкретном целом часу. Линии можно скрывать в легенде.</p></div><span class="period-badge">Первые {{ comparison_period_label }}</span></div><div class="chart-legend" id="channel-legend" aria-label="Вузы на графике"></div><div class="chart comparison-main-chart"><canvas id="medianChart"></canvas></div></div></div>
 {% if has_interactions %}
-<div class="panel comparison-panel mt"><div class="rating-panel-head"><div><h2>Вовлечённость от просмотров</h2><p class="panel-note">Медиана отношений «лайки + комментарии + репосты / просмотры» у отдельных VK-публикаций.</p></div><span class="period-badge">Первые {{ comparison_period_label }}</span></div><div class="chart comparison-main-chart"><canvas id="conversionChart"></canvas></div></div>
+<div class="panel comparison-panel mt"><div class="rating-panel-head"><div><h2>Вовлечённость от просмотров</h2><p class="panel-note">Медиана отношений «лайки + комментарии{% if has_shares %} + репосты{% endif %} / просмотры» у отдельных публикаций {{ active_platform_label }}.</p></div><span class="period-badge">Первые {{ comparison_period_label }}</span></div><div class="chart comparison-main-chart"><canvas id="conversionChart"></canvas></div></div>
 {% endif %}
 
 <script>

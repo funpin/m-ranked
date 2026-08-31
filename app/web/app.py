@@ -779,25 +779,19 @@ def create_app(
             period, period_delta, period_label, period_short = period_spec(period)
             cutoff = datetime.now(timezone.utc) - period_delta
             institution_rankings, top_posts = platform_rating_data(db, platform, cutoff)
+            institution_keys = {
+                "average": "avg_reactions", "total": "total_reactions",
+                "engagement": "interaction_rate", "views": "total_views",
+                "subscribers": "subscriber_count",
+            }
+            post_keys = {
+                "reactions": "reactions_count", "views": "views_count",
+                "comments": "comments_count",
+                "interactions": "interactions_count", "view_share": "interaction_rate",
+            }
             if platform == "vk":
-                institution_keys = {
-                    "average": "avg_reactions", "total": "total_reactions",
-                    "engagement": "interaction_rate", "views": "total_views",
-                    "subscribers": "subscriber_count",
-                }
-                post_keys = {
-                    "reactions": "reactions_count", "views": "views_count",
-                    "comments": "comments_count", "shares": "shares_count",
-                    "interactions": "interactions_count", "view_share": "interaction_rate",
-                }
-                default_institution_sort, default_post_sort = "engagement", "view_share"
-            else:
-                institution_keys = {
-                    "average_views": "avg_views", "views": "total_views",
-                    "posts": "post_count", "subscribers": "subscriber_count",
-                }
-                post_keys = {"views": "views_count"}
-                default_institution_sort = default_post_sort = "views"
+                post_keys["shares"] = "shares_count"
+            default_institution_sort, default_post_sort = "engagement", "view_share"
             channel_sort = (
                 channel_sort if channel_sort in institution_keys else default_institution_sort
             )
@@ -832,7 +826,8 @@ def create_app(
                 post_sort=post_sort, post_direction=post_direction,
                 active_platform=platform,
                 presentation=PLATFORM_PRESENTATION[platform],
-                has_interactions=platform == "vk",
+                has_interactions=True,
+                has_shares=platform == "vk",
             )
         if platform != "telegram":
             return render(
@@ -990,7 +985,10 @@ def create_app(
             },
             {
                 "platform": "Rutube", "configured": settings.rutube_public_api_enabled,
-                "detail": "Официальный публичный JSON-фид · токен не требуется · просмотры",
+                "detail": (
+                    "Официальные публичные API · токен не требуется · "
+                    "просмотры, лайки, комментарии"
+                ),
             },
         )
         return render(
@@ -1649,20 +1647,12 @@ def create_app(
                     ))
                     primary_rows = [
                         {"age_seconds": row["age_seconds"],
-                         "total_reactions": (
-                             row["reactions_count"] if platform == "vk"
-                             else row["views_count"]
-                         )}
-                        for row in rows if (
-                            row["reactions_count"] if platform == "vk"
-                            else row["views_count"]
-                        ) is not None
+                         "total_reactions": row["reactions_count"]}
+                        for row in rows if row["reactions_count"] is not None
                     ]
                     points = hourly_asof_points(primary_rows, period)
                     if points:
                         raw_points.append(points)
-                    if platform != "vk":
-                        continue
                     conversion_rows = []
                     for row in rows:
                         if row["views_count"] is None or int(row["views_count"]) <= 0:
@@ -1715,7 +1705,8 @@ def create_app(
                 has_points=has_points, submitted=submitted,
                 active_platform=platform,
                 presentation=PLATFORM_PRESENTATION[platform],
-                has_interactions=platform == "vk",
+                has_interactions=True,
+                has_shares=platform == "vk",
             )
         if platform != "telegram":
             return render(

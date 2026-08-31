@@ -10,7 +10,7 @@
 </div></section>
 <section class="panel platform-admin">
   <div class="storage-heading">
-    <div><h2>Вузы и аккаунты в соцсетях</h2><p class="panel-note">VK сохраняет просмотры, лайки, комментарии и репосты. MAX — просмотры и репосты после токена и chat_id. Rutube получает просмотры из официального публичного фида без токена.</p></div>
+    <div><h2>Вузы и аккаунты в соцсетях</h2><p class="panel-note">VK сохраняет просмотры, лайки, комментарии и репосты. MAX — просмотры и репосты после токена и chat_id. Rutube получает просмотры, лайки и комментарии из официальных публичных API без токена.</p></div>
     <span class="period-badge">{{ platform_count }} {{ platform_count|plural_ru('аккаунт','аккаунта','аккаунтов') }} · {{ institutions|length }} {{ institutions|length|plural_ru('вуз','вуза','вузов') }}</span>
   </div>
   {% if platform_status == 'institution-added' %}<p class="notice success-notice">Вуз добавлен.</p>
