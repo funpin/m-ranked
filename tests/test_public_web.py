@@ -90,6 +90,7 @@ def test_public_collector_marks_explicitly_missing_post_deleted(tmp_path):
         days_4_to_6_poll_interval_minutes=180,
         days_7_to_13_poll_interval_minutes=360,
         day_14_plus_poll_interval_minutes=720,
+        rutube_first_three_days_poll_interval_minutes=60,
         complete_history_max_first_age_minutes=6,
         jump_min_abs=15,
         jump_min_ratio=2.0,
@@ -185,6 +186,7 @@ def test_age_based_snapshot_intervals():
         days_4_to_6_poll_interval_minutes=180,
         days_7_to_13_poll_interval_minutes=360,
         day_14_plus_poll_interval_minutes=720,
+        rutube_first_three_days_poll_interval_minutes=60,
     )
     cases = {
         0: 5,
@@ -197,3 +199,16 @@ def test_age_based_snapshot_intervals():
     }
     for age, expected in cases.items():
         assert snapshot_interval_minutes(age, settings) == expected
+
+    rutube_cases = {
+        0: 60,
+        24 * 3600 - 1: 60,
+        24 * 3600: 60,
+        48 * 3600: 60,
+        72 * 3600 - 1: 60,
+        72 * 3600: 180,
+        7 * 24 * 3600: 360,
+        14 * 24 * 3600: 720,
+    }
+    for age, expected in rutube_cases.items():
+        assert snapshot_interval_minutes(age, settings, platform="rutube") == expected

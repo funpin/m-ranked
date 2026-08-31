@@ -27,6 +27,12 @@ class RutubeCollector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        if not snapshot_is_due(
+            self.db.get_state("rutube_poll_last_completed_at"), started,
+            self.settings.rutube_first_three_days_poll_interval_minutes,
+        ):
+            logger.info("RUTUBE polling skipped: hourly interval has not elapsed")
+            return
         accounts = self.db.list_platform_accounts(platform="rutube", enabled_only=True)
         errors = 0
         self.db.set_state("rutube_poll_last_started_at", iso(started))
@@ -76,6 +82,7 @@ class RutubeCollector:
             )
             interval = snapshot_interval_minutes(
                 age_seconds(video.published_at, measured_at), self.settings,
+                platform="rutube",
             )
             if not snapshot_is_due(
                 self.db.latest_platform_snapshot_at(post_id), measured_at, interval,

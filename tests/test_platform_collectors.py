@@ -23,10 +23,14 @@ def settings(tmp_path) -> Settings:
 
 
 class FakeRutube:
+    def __init__(self):
+        self.video_calls = 0
+
     async def resolve_channel(self, reference, url=None):
         return 77
 
     async def videos(self, channel_id, limit=100):
+        self.video_calls += 1
         video = RutubeVideo(
             "video-1", "Видео", datetime.now(timezone.utc) - timedelta(hours=1),
             321, "https://rutube.ru/video/video-1/", {"hits": 321},
@@ -57,10 +61,17 @@ def test_rutube_public_collector_preserves_unavailable_metrics_as_null(tmp_path)
     institution = db.add_institution("Вуз", "ВУЗ")
     db.add_platform_account(institution, "rutube", "vuz", url="https://rutube.ru/u/vuz/")
 
-    asyncio.run(RutubeCollector(cfg, db, FakeRutube()).poll_cycle())
+    client = FakeRutube()
+    collector = RutubeCollector(cfg, db, client)
+    asyncio.run(collector.poll_cycle())
+    asyncio.run(collector.poll_cycle())
 
     snapshot = db.query("SELECT * FROM platform_snapshots")[0]
+    assert client.video_calls == 1
+    assert len(db.query("SELECT * FROM platform_snapshots")) == 1
     assert snapshot["views_count"] == 321
+    measured_at = datetime.fromisoformat(snapshot["measured_at"])
+    assert snapshot["measurement_bucket"] == int(measured_at.timestamp()) // (60 * 60)
     assert snapshot["reactions_count"] is None
     assert snapshot["comments_count"] is None
 
