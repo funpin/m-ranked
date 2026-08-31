@@ -99,6 +99,27 @@ def format_duration(seconds: int | float | None) -> str:
     return " ".join(parts)
 
 
+def format_signed_duration(seconds: int | float | None) -> str:
+    if seconds is None:
+        return "—"
+    rounded = int(round(float(seconds)))
+    sign = "+" if rounded >= 0 else "-"
+    remaining = abs(rounded)
+    days, remaining = divmod(remaining, 24 * 3600)
+    hours, remaining = divmod(remaining, 3600)
+    minutes, seconds_part = divmod(remaining, 60)
+    parts: list[str] = []
+    if days:
+        parts.append(f"{days} д")
+    if hours:
+        parts.append(f"{hours} ч")
+    if minutes:
+        parts.append(f"{minutes} мин")
+    if seconds_part or not parts:
+        parts.append(f"{seconds_part} сек")
+    return f"{sign}{' '.join(parts)}"
+
+
 def format_platform_post_label(external_id: Any, platform: str | None) -> str:
     value = str(external_id)
     if normalize_platform(platform) == "vk":
@@ -1392,8 +1413,10 @@ def create_app(
                 "%d.%m, %H:%M:%S"
             )
             row["age_label"] = f"через {format_duration(row['age_seconds'])}"
-            row["interval_label"] = (
-                format_duration((measured_at - previous_measured_at).total_seconds())
+            row["measurement_delta_label"] = (
+                format_signed_duration(
+                    (measured_at - previous_measured_at).total_seconds()
+                )
                 if previous_measured_at is not None else "—"
             )
             previous_measured_at = measured_at
@@ -1577,6 +1600,9 @@ def create_app(
             row["age_label"] = (
                 "момент публикации" if row.get("synthetic") else
                 f"через {format_duration(row['age_seconds'])}"
+            )
+            row["measurement_delta_label"] = format_signed_duration(
+                row["delta_seconds"]
             )
         return render(
             request, "post.html", post=post, snapshots=snapshots,

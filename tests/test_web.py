@@ -7,7 +7,7 @@ import pytest
 
 from app.config import Settings
 from app.database import Database
-from app.web.app import create_app, format_platform_post_label
+from app.web.app import create_app, format_platform_post_label, format_signed_duration
 
 web_app_module = importlib.import_module("app.web.app")
 
@@ -17,6 +17,14 @@ def test_platform_post_label_shortens_only_vk_composite_ids():
     assert format_platform_post_label("62258607_72068", "vk") == "№72068"
     assert format_platform_post_label("video-72068", "rutube") == "video-72068"
     assert format_platform_post_label("unexpected", "vk") == "unexpected"
+
+
+def test_signed_measurement_duration_keeps_sign_and_seconds():
+    assert format_signed_duration(None) == "—"
+    assert format_signed_duration(20) == "+20 сек"
+    assert format_signed_duration(5 * 60 + 49) == "+5 мин 49 сек"
+    assert format_signed_duration(3600) == "+1 ч"
+    assert format_signed_duration(-90) == "-1 мин 30 сек"
 
 
 def settings(tmp_path):
@@ -49,9 +57,13 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     post_id = db.add_post(
         channel_id, "m:10", [10], None, now, now, 0, True, "text", False
     )
-    db.insert_snapshot(post_id, now, 0, 2, {"👍": 2}, [], 60, 15, 2.0)
     db.insert_snapshot(
-        post_id, now + timedelta(hours=1), 3600, 40, {"👍": 40}, [], 60, 15, 2.0
+        post_id, now, 0, 2, {"👍": 2}, [], 60, 15, 2.0,
+        views_count=100, comments_count=3,
+    )
+    db.insert_snapshot(
+        post_id, now + timedelta(hours=1), 3600, 40, {"👍": 39, "🔥": 1},
+        [], 60, 15, 2.0, views_count=140, comments_count=2,
     )
     client = TestClient(create_app(cfg, db, lambda: True))
 
@@ -119,6 +131,16 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "applyDeltaScaleMode(postChartPreferences.deltaScaleMode,false)" in post_page
     assert 'class="snapshot-history-table"' in post_page
     assert 'class="reaction-cell"' in post_page
+    assert "От прошлого замера" in post_page
+    assert "Δ просмотров" in post_page
+    assert "Δ по типам" in post_page
+    assert "+1 ч" in post_page
+    assert ">+40<" in post_page
+    assert ">-1<" in post_page
+    assert "<b>+37</b>" in post_page
+    assert "штатный замер" not in post_page
+    assert "увеличенный промежуток" not in post_page
+    assert "<th>Интервал</th>" not in post_page
     assert "общая шкала 1:1</small>" not in post_page
     assert 'id="snapshot-' in post_page
     assert "focusSnapshot(elements[0].index)" in post_page
@@ -287,6 +309,11 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     assert "Всего лайков" in publication
     assert "Прирост лайков" in publication
     assert "Прирост просмотров" in publication
+    assert "От прошлого замера" in publication
+    assert "Δ лайков" in publication
+    assert "+1 ч" in publication
+    assert ">+60<" in publication
+    assert "<th>Интервал</th>" not in publication
     assert "1 ч 0 мин" in publication
     assert "wall-10_20" in publication
     assert client.get(
@@ -523,6 +550,12 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     assert 'id="deltaChart"' in publication
     assert "Масштаб по времени" in publication
     assert "Прирост между замерами" in publication
+    assert "От прошлого замера" in publication
+    assert "Δ просмотров" in publication
+    assert "Δ комментариев" in publication
+    assert "+1 ч" in publication
+    assert ">+60<" in publication
+    assert "<th>Интервал</th>" not in publication
     assert "window.localStorage.setItem(PLATFORM_POST_CHART_PREFERENCES_KEY" in publication
     assert '"key": "views"' in publication
     if platform == "rutube":
