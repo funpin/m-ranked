@@ -6,7 +6,7 @@ from app.config import Settings
 from app.database import Database
 from app.max_api import MaxChannel, MaxPost
 from app.max_collector import MaxCollector
-from app.rutube import RutubeChannel, RutubeVideo
+from app.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from app.rutube_collector import RutubeCollector
 
 
@@ -37,6 +37,12 @@ class FakeRutube:
         )
         return RutubeChannel(77, "Вуз на Rutube", "https://rutube.ru/u/vuz/"), [video]
 
+    async def video_metrics(self, video_id):
+        return RutubeVideoMetrics(
+            likes=17, comments=4,
+            raw={"vote": {"positive": 17}, "comments": {"comments_count": 4}},
+        )
+
     async def close(self):
         pass
 
@@ -55,7 +61,7 @@ class FakeMax:
         pass
 
 
-def test_rutube_public_collector_preserves_unavailable_metrics_as_null(tmp_path):
+def test_rutube_public_collector_stores_likes_and_comments(tmp_path):
     cfg = settings(tmp_path)
     db = Database(cfg.database_path); db.migrate()
     institution = db.add_institution("Вуз", "ВУЗ")
@@ -72,8 +78,9 @@ def test_rutube_public_collector_preserves_unavailable_metrics_as_null(tmp_path)
     assert snapshot["views_count"] == 321
     measured_at = datetime.fromisoformat(snapshot["measured_at"])
     assert snapshot["measurement_bucket"] == int(measured_at.timestamp()) // (60 * 60)
-    assert snapshot["reactions_count"] is None
-    assert snapshot["comments_count"] is None
+    assert snapshot["reactions_count"] == 17
+    assert snapshot["comments_count"] == 4
+    assert snapshot["shares_count"] is None
 
 
 def test_max_collector_requires_chat_id_and_stores_supported_counters(tmp_path):

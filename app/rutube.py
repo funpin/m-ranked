@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -25,13 +26,20 @@ class RutubeVideo:
     raw: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class RutubeVideoMetrics:
+    likes: int | None
+    comments: int | None
+    raw: dict[str, Any]
+
+
 def parse_rutube_datetime(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
 
 
 class RutubeClient:
-    """Read the official public RUTUBE JSON feed; it does not require a token."""
+    """Read the official public RUTUBE APIs; they do not require a token."""
 
     def __init__(
         self,
@@ -98,4 +106,41 @@ class RutubeClient:
                 f"https://rutube.ru/video/person/{channel_id}/",
             ),
             result,
+        )
+
+    async def video_metrics(self, video_id: str) -> RutubeVideoMetrics:
+        vote_response, comments_response = await asyncio.gather(
+            self.client.get(f"{self.api_base}/numerator/video/{video_id}/vote"),
+            self.client.get(
+                f"{self.api_base}/v2/comments/video/{video_id}/",
+                params={"client": "wdp", "sort_by": "date_added_desc"},
+            ),
+            return_exceptions=True,
+        )
+
+        vote: dict[str, Any] | None = None
+        comments: dict[str, Any] | None = None
+        if isinstance(vote_response, httpx.Response) and vote_response.is_success:
+            try:
+                payload = vote_response.json()
+                vote = payload if isinstance(payload, dict) else None
+            except ValueError:
+                vote = None
+        if isinstance(comments_response, httpx.Response) and comments_response.is_success:
+            try:
+                payload = comments_response.json()
+                comments = payload if isinstance(payload, dict) else None
+            except ValueError:
+                comments = None
+        return RutubeVideoMetrics(
+            likes=(
+                int(vote["positive"])
+                if vote is not None and vote.get("positive") is not None else None
+            ),
+            comments=(
+                int(comments["comments_count"])
+                if comments is not None and comments.get("comments_count") is not None
+                else None
+            ),
+            raw={"vote": vote, "comments": comments},
         )

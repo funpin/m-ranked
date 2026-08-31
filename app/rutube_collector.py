@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -72,7 +73,7 @@ class RutubeCollector:
             subscriber_count=None, measured_at=measured_at,
         )
         cutoff = measured_at - timedelta(hours=self.settings.track_post_for_hours)
-        inserted = 0
+        due: list[tuple[Any, int, int]] = []
         for video in videos:
             if video.published_at < cutoff:
                 continue
@@ -88,11 +89,24 @@ class RutubeCollector:
                 self.db.latest_platform_snapshot_at(post_id), measured_at, interval,
             ):
                 continue
+            due.append((video, post_id, interval))
+
+        semaphore = asyncio.Semaphore(8)
+
+        async def metrics(video_id: str) -> Any:
+            async with semaphore:
+                return await self.client.video_metrics(video_id)
+
+        measurements = await asyncio.gather(
+            *(metrics(video.id) for video, _, _ in due),
+        )
+        inserted = 0
+        for (video, post_id, interval), engagement in zip(due, measurements):
             if self.db.insert_platform_snapshot(
                 post_id, measured_at, age_seconds(video.published_at, measured_at), interval,
-                views_count=video.views, reactions_count=None,
-                comments_count=None, shares_count=None,
-                raw={"hits": video.views},
+                views_count=video.views, reactions_count=engagement.likes,
+                comments_count=engagement.comments, shares_count=None,
+                raw={"hits": video.views, **engagement.raw},
             ):
                 inserted += 1
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)
