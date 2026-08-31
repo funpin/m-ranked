@@ -113,3 +113,38 @@ def test_vk_collector_refreshes_known_post_outside_wall_page(tmp_path):
     snapshots = db.platform_snapshots(platform_post_id)
     assert len(snapshots) == 2
     assert snapshots[-1]["views_count"] == 120
+
+
+def test_vk_collector_stores_joint_post_under_community_number(tmp_path):
+    cfg = _settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    db.add_platform_account(institution_id, "vk", "university")
+    post = VkPost(
+        owner_id=-900,
+        post_id=12,
+        published_at=datetime.now(timezone.utc) - timedelta(minutes=2),
+        post_type="photo",
+        views=100,
+        likes=5,
+        comments=2,
+        reposts=1,
+        raw={
+            "owner_id": -900,
+            "id": 12,
+            "coowners": {
+                "coowner_post_id": {"owner_id": -42, "post_id": 77},
+                "list": [{"owner_id": -900}, {"owner_id": -42}],
+            },
+        },
+    )
+    asyncio.run(VkCollector(cfg, db, FakeVkClient(post)).poll_cycle())
+
+    stored = db.query("SELECT * FROM platform_posts")[0]
+    assert stored["external_id"] == "-42_77"
+    assert stored["source_external_id"] == "-900_12"
+    assert stored["url"] == "https://vk.com/wall-42_77"
+    assert stored["is_joint"] == 1
+    assert stored["additional_author_count"] == 1
+    assert stored["history_complete"] == 1

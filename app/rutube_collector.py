@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .analytics import age_seconds
+from .analytics import age_seconds, history_is_complete
 from .config import Settings
 from .database import Database, iso
 from .public_web import snapshot_interval_minutes, snapshot_is_due
@@ -77,12 +77,16 @@ class RutubeCollector:
         for video in videos:
             if video.published_at < cutoff:
                 continue
+            first_age = age_seconds(video.published_at, measured_at)
             post_id = self.db.upsert_platform_post(
                 int(account["id"]), video.id, video.published_at,
                 measured_at, "video", video.url, video.raw,
+                history_complete=history_is_complete(
+                    first_age, self.settings.complete_history_max_first_age_minutes,
+                ),
             )
             interval = snapshot_interval_minutes(
-                age_seconds(video.published_at, measured_at), self.settings,
+                first_age, self.settings,
                 platform="rutube",
             )
             if not snapshot_is_due(

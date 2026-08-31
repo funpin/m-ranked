@@ -240,6 +240,7 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     platform_post_id = db.upsert_platform_post(
         account_id, "-10_20", now - timedelta(hours=2), now - timedelta(hours=2),
         "photo", "https://vk.com/wall-10_20", {"id": 20},
+        history_complete=True, is_joint=True, additional_author_count=2,
     )
     db.insert_platform_snapshot(
         platform_post_id, now - timedelta(hours=1), 3600, 5,
@@ -263,9 +264,13 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     account = client.get(f"/platform-accounts/{account_id}?platform=vk").text
     assert f'/platform-posts/{platform_post_id}?platform=vk' in account
     assert ">№20</a>" in account
+    assert "совместная · +2 авт." in account
     publication = client.get(f"/platform-posts/{platform_post_id}?platform=vk").text
     assert "ВУЗ</a> / <a" in publication
     assert ">№20</a>" in publication
+    assert "история полная" in publication
+    assert "совместная публикация" in publication
+    assert "дополнительных авторов: 2" in publication
     assert "Накопление лайков, просмотров, комментариев и репостов" in publication
     assert "Прирост между замерами" in publication
     assert 'id="accumulationLegend"' in publication

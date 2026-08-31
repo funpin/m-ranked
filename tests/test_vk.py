@@ -33,6 +33,29 @@ def test_parse_vk_post_metrics():
     assert post.published_at == datetime.fromtimestamp(1_700_000_000, tz=timezone.utc)
 
 
+def test_joint_vk_post_uses_monitored_community_number():
+    post = parse_vk_post({
+        "owner_id": -164293611,
+        "id": 4949,
+        "date": 1_700_000_000,
+        "coowners": {
+            "coowner_post_id": {"owner_id": -62258607, "post_id": 72020},
+            "list": [
+                {"owner_id": -164293611},
+                {"owner_id": -62258607},
+                {"owner_id": -777},
+            ],
+        },
+    })
+    identity = post.identity_for_community(62258607)
+    assert identity is not None
+    assert identity.external_key == "-62258607_72020"
+    assert identity.source_external_key == "-164293611_4949"
+    assert identity.is_joint
+    assert identity.additional_author_count == 2
+    assert post.identity_for_community(999) is None
+
+
 def test_vk_client_reads_community_and_wall():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("groups.getById"):

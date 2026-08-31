@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .analytics import age_seconds
+from .analytics import age_seconds, history_is_complete
 from .config import Settings
 from .database import Database, iso
 from .public_web import snapshot_interval_minutes, snapshot_is_due
@@ -77,7 +77,11 @@ class VkCollector:
         )
         cutoff = measured_at - timedelta(hours=self.settings.track_post_for_hours)
         inserted = 0
-        wall_keys = {post.external_key for post in posts}
+        wall_keys = {
+            identity.external_key
+            for post in posts
+            if (identity := post.identity_for_community(community.id)) is not None
+        }
         stored = self.db.list_platform_posts(
             platform="vk", account_id=int(account["id"]), published_after=cutoff,
         )
@@ -95,19 +99,31 @@ class VkCollector:
             if snapshot_is_due(
                 self.db.latest_platform_snapshot_at(int(row["id"])), measured_at, interval,
             ):
-                due_ids.append(external_id)
+                due_ids.append(str(row["source_external_id"] or external_id))
         for offset in range(0, len(due_ids), 100):
             posts.extend(await self.client.posts(due_ids[offset:offset + 100]))
+        posts_by_local_key = {}
         for post in posts:
+            identity = post.identity_for_community(community.id)
+            if identity is not None:
+                posts_by_local_key[identity.external_key] = (post, identity)
+        for post, identity in posts_by_local_key.values():
             if post.published_at < cutoff:
                 continue
+            first_age = age_seconds(post.published_at, measured_at)
             post_id = self.db.upsert_platform_post(
-                int(account["id"]), post.external_key, post.published_at,
+                int(account["id"]), identity.external_key, post.published_at,
                 measured_at, post.post_type,
-                f"https://vk.com/wall{post.external_key}", post.raw,
+                f"https://vk.com/wall{identity.external_key}", post.raw,
+                history_complete=history_is_complete(
+                    first_age, self.settings.complete_history_max_first_age_minutes,
+                ),
+                source_external_id=identity.source_external_key,
+                is_joint=identity.is_joint,
+                additional_author_count=identity.additional_author_count,
             )
             interval_minutes = snapshot_interval_minutes(
-                age_seconds(post.published_at, measured_at), self.settings,
+                first_age, self.settings,
             )
             if not snapshot_is_due(
                 self.db.latest_platform_snapshot_at(post_id),
@@ -118,7 +134,7 @@ class VkCollector:
             if self.db.insert_platform_snapshot(
                 post_id,
                 measured_at,
-                age_seconds(post.published_at, measured_at),
+                first_age,
                 interval_minutes,
                 views_count=post.views,
                 reactions_count=post.likes,

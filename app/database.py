@@ -68,6 +68,7 @@ class Database:
                     discovered_at TEXT NOT NULL,
                     first_observation_age_seconds INTEGER NOT NULL,
                     history_complete INTEGER NOT NULL,
+                    history_forced_incomplete INTEGER NOT NULL DEFAULT 0,
                     baseline_from_publication INTEGER NOT NULL DEFAULT 0,
                     post_type TEXT NOT NULL,
                     ambiguous_album_reactions INTEGER NOT NULL DEFAULT 0,
@@ -149,6 +150,11 @@ class Database:
                     url TEXT,
                     deleted_at TEXT,
                     raw_json TEXT,
+                    history_complete INTEGER NOT NULL DEFAULT 0,
+                    history_forced_incomplete INTEGER NOT NULL DEFAULT 0,
+                    source_external_id TEXT,
+                    is_joint INTEGER NOT NULL DEFAULT 0,
+                    additional_author_count INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     UNIQUE(platform_account_id, external_id)
                 );
@@ -322,6 +328,97 @@ class Database:
             conn.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(9, ?)",
                 (iso(utc_now()),),
+            )
+            migration_10_applied = conn.execute(
+                "SELECT 1 FROM schema_migrations WHERE version=10"
+            ).fetchone() is not None
+            post_columns = {row[1] for row in conn.execute("PRAGMA table_info(posts)")}
+            if "history_forced_incomplete" not in post_columns:
+                conn.execute(
+                    "ALTER TABLE posts ADD COLUMN history_forced_incomplete "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
+            platform_post_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(platform_posts)")
+            }
+            for name, sql_type in (
+                ("history_complete", "INTEGER NOT NULL DEFAULT 0"),
+                ("history_forced_incomplete", "INTEGER NOT NULL DEFAULT 0"),
+                ("source_external_id", "TEXT"),
+                ("is_joint", "INTEGER NOT NULL DEFAULT 0"),
+                ("additional_author_count", "INTEGER NOT NULL DEFAULT 0"),
+            ):
+                if name not in platform_post_columns:
+                    conn.execute(f"ALTER TABLE platform_posts ADD COLUMN {name} {sql_type}")
+            if not migration_10_applied:
+                conn.execute(
+                    "UPDATE posts SET history_complete=0, history_forced_incomplete=1"
+                )
+                conn.execute(
+                    "UPDATE platform_posts SET history_complete=0, "
+                    "history_forced_incomplete=1"
+                )
+                self._migrate_vk_joint_post_ids(conn)
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES(10, ?)",
+                    (iso(utc_now()),),
+                )
+
+    @staticmethod
+    def _migrate_vk_joint_post_ids(conn: sqlite3.Connection) -> None:
+        from .vk import vk_post_identity
+
+        rows = list(conn.execute(
+            """SELECT pp.*, pa.native_id FROM platform_posts pp
+               JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+               WHERE pa.platform='vk'"""
+        ))
+        for row in rows:
+            native_id = str(row["native_id"] or "")
+            if not native_id.lstrip("-").isdigit() or not row["raw_json"]:
+                continue
+            try:
+                raw = json.loads(row["raw_json"])
+                identity = vk_post_identity(raw, abs(int(native_id)))
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if identity is None:
+                continue
+            old_external_id = str(row["external_id"])
+            source_external_id = identity.source_external_key
+            if source_external_id is None and old_external_id != identity.external_key:
+                source_external_id = old_external_id
+            conflict = conn.execute(
+                """SELECT id FROM platform_posts
+                   WHERE platform_account_id=? AND external_id=? AND id<>?""",
+                (row["platform_account_id"], identity.external_key, row["id"]),
+            ).fetchone()
+            if conflict is not None:
+                target_id = int(conflict["id"])
+                conn.execute(
+                    """INSERT OR IGNORE INTO platform_snapshots(
+                         platform_post_id, measured_at, measurement_bucket, age_seconds,
+                         views_count, reactions_count, comments_count, shares_count,
+                         raw_json, created_at
+                       ) SELECT ?, measured_at, measurement_bucket, age_seconds,
+                         views_count, reactions_count, comments_count, shares_count,
+                         raw_json, created_at FROM platform_snapshots
+                       WHERE platform_post_id=?""",
+                    (target_id, row["id"]),
+                )
+                conn.execute("DELETE FROM platform_posts WHERE id=?", (row["id"],))
+                post_id = target_id
+            else:
+                post_id = int(row["id"])
+            conn.execute(
+                """UPDATE platform_posts SET external_id=?, url=?,
+                   source_external_id=?, is_joint=?, additional_author_count=?
+                   WHERE id=?""",
+                (
+                    identity.external_key, f"https://vk.com/wall{identity.external_key}",
+                    source_external_id, int(identity.is_joint),
+                    identity.additional_author_count, post_id,
+                ),
             )
 
     def add_institution(self, name: str, short_name: str | None = None) -> int:
@@ -505,20 +602,32 @@ class Database:
         post_type: str,
         url: str | None,
         raw: Any,
+        *,
+        history_complete: bool = False,
+        source_external_id: str | None = None,
+        is_joint: bool = False,
+        additional_author_count: int = 0,
     ) -> int:
         with self.connect() as conn:
             conn.execute(
                 """INSERT INTO platform_posts(
                      platform_account_id, external_id, published_at, discovered_at,
-                     post_type, url, raw_json, created_at
-                   ) VALUES(?,?,?,?,?,?,?,?)
+                     post_type, url, raw_json, history_complete,
+                     source_external_id, is_joint, additional_author_count, created_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(platform_account_id, external_id) DO UPDATE SET
                      post_type=excluded.post_type, url=excluded.url,
-                     raw_json=excluded.raw_json, deleted_at=NULL""",
+                     raw_json=excluded.raw_json,
+                     source_external_id=excluded.source_external_id,
+                     is_joint=excluded.is_joint,
+                     additional_author_count=excluded.additional_author_count,
+                     deleted_at=NULL""",
                 (
                     platform_account_id, external_id, iso(published_at),
                     iso(discovered_at), post_type, url,
-                    json.dumps(raw, ensure_ascii=False, sort_keys=True), iso(utc_now()),
+                    json.dumps(raw, ensure_ascii=False, sort_keys=True),
+                    int(history_complete), source_external_id, int(is_joint),
+                    max(0, int(additional_author_count)), iso(utc_now()),
                 ),
             )
             row = conn.execute(
@@ -1014,9 +1123,14 @@ class Database:
             return False
         with self.connect() as conn:
             post = conn.execute(
-                "SELECT baseline_from_publication FROM posts WHERE id=?", (post_id,)
+                """SELECT baseline_from_publication, history_forced_incomplete
+                   FROM posts WHERE id=?""", (post_id,)
             ).fetchone()
-            if post is None or bool(post["baseline_from_publication"]):
+            if (
+                post is None
+                or bool(post["baseline_from_publication"])
+                or bool(post["history_forced_incomplete"])
+            ):
                 return False
             conn.execute(
                 "UPDATE posts SET baseline_from_publication=1, history_complete=1 WHERE id=?",
@@ -1067,6 +1181,7 @@ class Database:
         with self.connect() as conn:
             conn.execute(
                 """UPDATE posts SET history_complete=CASE
+                   WHEN history_forced_incomplete=1 THEN 0
                    WHEN baseline_from_publication=1
                      OR first_observation_age_seconds<=? THEN 1 ELSE 0 END""",
                 (max_age_seconds,),

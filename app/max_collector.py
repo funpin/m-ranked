@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from .analytics import age_seconds
+from .analytics import age_seconds, history_is_complete
 from .config import Settings
 from .database import Database, iso
 from .max_api import MaxClient
@@ -66,18 +66,22 @@ class MaxCollector:
         for post in posts:
             if post.published_at < cutoff:
                 continue
+            first_age = age_seconds(post.published_at, measured_at)
             post_id = self.db.upsert_platform_post(
                 int(account["id"]), post.id, post.published_at,
                 measured_at, "post", post.url, post.raw,
+                history_complete=history_is_complete(
+                    first_age, self.settings.complete_history_max_first_age_minutes,
+                ),
             )
             interval = snapshot_interval_minutes(
-                age_seconds(post.published_at, measured_at), self.settings,
+                first_age, self.settings,
             )
             if snapshot_is_due(
                 self.db.latest_platform_snapshot_at(post_id), measured_at, interval,
             ):
                 self.db.insert_platform_snapshot(
-                    post_id, measured_at, age_seconds(post.published_at, measured_at), interval,
+                    post_id, measured_at, first_age, interval,
                     views_count=post.views, reactions_count=None,
                     comments_count=post.comments, shares_count=post.reposts,
                     raw={
