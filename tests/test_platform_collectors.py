@@ -168,6 +168,71 @@ def test_max_collector_refreshes_due_known_post_outside_history_page(tmp_path):
     assert (snapshots[-1]["views_count"], snapshots[-1]["reactions_count"]) == (130, 9)
 
 
+def test_max_collector_marks_missing_post_deleted_after_two_point_checks(tmp_path):
+    cfg = replace(settings(tmp_path), discovery_limit=1)
+    db = Database(cfg.database_path); db.migrate()
+    institution = db.add_institution("Вуз", "ВУЗ")
+    account_id = db.add_platform_account(institution, "max", "vuz")
+    db.set_platform_account_native_id(account_id, "-123")
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    post_id = db.upsert_platform_post(
+        account_id, "700", published, published, "text", None,
+        {"text": "Архив MAX"},
+    )
+    db.insert_platform_snapshot(
+        post_id, published + timedelta(hours=1), 3600, 5,
+        views_count=100, reactions_count=5, comments_count=None,
+        shares_count=None, raw={},
+    )
+    fake = FakeMax(discovery_posts=[], point_posts=[])
+    collector = MaxCollector(cfg, db, fake)
+
+    asyncio.run(collector.poll_cycle())
+    pending = db.platform_post(post_id)
+    assert pending is not None
+    assert pending["missing_check_count"] == 1
+    assert pending["deleted_at"] is None
+
+    asyncio.run(collector.poll_cycle())
+    deleted = db.platform_post(post_id)
+    assert deleted is not None
+    assert deleted["missing_check_count"] == 2
+    assert deleted["deleted_at"] is not None
+
+    asyncio.run(collector.poll_cycle())
+    assert fake.requested_ids == ["700", "700"]
+
+
+def test_max_collector_does_not_mark_missing_when_point_lookup_fails(tmp_path):
+    cfg = replace(settings(tmp_path), discovery_limit=1)
+    db = Database(cfg.database_path); db.migrate()
+    institution = db.add_institution("Вуз", "ВУЗ")
+    account_id = db.add_platform_account(institution, "max", "vuz")
+    db.set_platform_account_native_id(account_id, "-123")
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    post_id = db.upsert_platform_post(
+        account_id, "700", published, published, "text", None, {},
+    )
+    db.insert_platform_snapshot(
+        post_id, published + timedelta(hours=1), 3600, 5,
+        views_count=100, reactions_count=5, comments_count=None,
+        shares_count=None, raw={},
+    )
+
+    class ErrorMax(FakeMax):
+        async def posts_by_ids(self, chat_id, message_ids):
+            raise RuntimeError("MAX temporarily unavailable")
+
+    asyncio.run(MaxCollector(
+        cfg, db, ErrorMax(discovery_posts=[]),
+    ).poll_cycle())
+
+    stored = db.platform_post(post_id)
+    assert stored is not None
+    assert stored["missing_check_count"] == 0
+    assert stored["deleted_at"] is None
+
+
 def test_max_repost_requires_forward_from_another_chat():
     assert max_post_is_repost({"link": {"type": "forward", "chat_id": "-456"}}, -123)
     assert not max_post_is_repost(

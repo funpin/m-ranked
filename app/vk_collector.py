@@ -112,8 +112,9 @@ class VkCollector:
         }
         stored = self.db.list_platform_posts(
             platform="vk", account_id=int(account["id"]), published_after=cutoff,
+            include_deleted=False,
         )
-        due_ids: list[str] = []
+        due_rows: dict[str, Any] = {}
         for row in stored:
             external_id = str(row["external_id"])
             if external_id in wall_keys:
@@ -127,23 +128,55 @@ class VkCollector:
             if snapshot_is_due(
                 row["latest_measured_at"], measured_at, interval,
             ):
-                due_ids.append(str(row["source_external_id"] or external_id))
+                probe_id = str(row["source_external_id"] or external_id)
+                due_rows[probe_id] = row
+        available_point_ids: set[int] = set()
+        missing_rows: list[Any] = []
+        due_ids = list(due_rows)
         for offset in range(0, len(due_ids), 100):
-            posts.extend(await self.client.posts(due_ids[offset:offset + 100]))
+            requested_ids = due_ids[offset:offset + 100]
+            refreshed = await self.client.posts(requested_ids)
+            returned_ids = {post.external_key for post in refreshed}
+            available_point_ids.update(
+                int(due_rows[external_id]["id"])
+                for external_id in requested_ids if external_id in returned_ids
+            )
+            missing_rows.extend(
+                due_rows[external_id]
+                for external_id in requested_ids if external_id not in returned_ids
+            )
+            posts.extend(refreshed)
         posts_by_local_key = {}
         for post in posts:
             identity = post.identity_for_community(community.id)
             if identity is not None:
                 posts_by_local_key[identity.external_key] = (post, identity)
         with self.db.connect() as conn:
+            for post_id in available_point_ids:
+                self.db.mark_platform_post_available(post_id, _conn=conn)
+            for row in missing_rows:
+                count, confirmed = self.db.record_platform_post_missing(
+                    int(row["id"]), measured_at,
+                    "vk_wall_get_by_id_not_found_or_deleted",
+                    self.settings.deletion_confirmation_checks,
+                    _conn=conn,
+                )
+                logger.warning(
+                    "VK %s/%s unavailable confirmation=%s/%s deleted=%s",
+                    community.screen_name, row["external_id"], count,
+                    self.settings.deletion_confirmation_checks, confirmed,
+                )
             for post, identity in posts_by_local_key.values():
                 if post.published_at < cutoff:
                     continue
                 first_age = age_seconds(post.published_at, measured_at)
+                public_external_id = (
+                    identity.source_external_key or identity.external_key
+                )
                 post_id = self.db.upsert_platform_post(
                     int(account["id"]), identity.external_key, post.published_at,
                     measured_at, post.post_type,
-                    f"https://vk.ru/wall{identity.external_key}", post.raw,
+                    f"https://vk.ru/wall{public_external_id}", post.raw,
                     history_complete=history_is_complete(
                         first_age, self.settings.complete_history_max_first_age_minutes,
                     ),

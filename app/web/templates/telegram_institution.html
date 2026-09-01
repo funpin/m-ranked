@@ -15,7 +15,7 @@
 </section>
 <section class="panel section"><div class="section-head"><h2>Последние публикации</h2><span class="period-badge">{{ posts|length }}</span></div>
 {% if posts %}<div class="table-wrap"><table><thead><tr><th>Канал</th><th>Опубликовано</th><th>Публикация</th><th>Реакции</th><th>Просмотры</th><th>Комментарии</th></tr></thead><tbody>
-{% for post in posts %}<tr><td><a href="/channels/{{ post.channel_id }}">{{ post.title or ('@' ~ post.username) }}</a></td><td>{{ post.published_at|local_datetime }} МСК</td><td><a href="/posts/{{ post.id }}">№{{ post.telegram_message_id }}</a>{% if post.is_repost %} · <span class="pill">репост</span>{% endif %}</td><td>{{ post.current_total if post.current_total is not none else '—' }}</td><td>{{ post.current_views if post.current_views is not none else '—' }}</td><td>{{ post.current_comments if post.current_comments is not none else '—' }}</td></tr>{% endfor %}
+{% for post in posts %}<tr><td><a href="/channels/{{ post.channel_id }}">{{ post.title or ('@' ~ post.username) }}</a></td><td>{{ post.published_at|local_datetime }} МСК</td><td><a href="/posts/{{ post.id }}">№{{ post.telegram_message_id }}</a>{% if post.is_repost %} · <span class="pill repost">репост</span>{% endif %}</td><td>{{ post.current_total if post.current_total is not none else '—' }}</td><td>{{ post.current_views if post.current_views is not none else '—' }}</td><td>{{ post.current_comments if post.current_comments is not none else '—' }}</td></tr>{% endfor %}
 </tbody></table></div>{% else %}<div class="empty-state">Публикации ещё не собраны.</div>{% endif %}
 </section>
 {% endblock %}
