@@ -120,6 +120,15 @@ def _count(payload: dict[str, Any], key: str) -> int | None:
     return int(value) if value is not None else None
 
 
+def _reaction_count(payload: dict[str, Any]) -> int | None:
+    """Read VK's total engagement counter across old and new payload shapes."""
+    likes = _count(payload, "likes")
+    reactions = _count(payload, "reactions")
+    if likes is None or (likes == 0 and reactions is not None and reactions > 0):
+        return reactions
+    return likes
+
+
 def parse_vk_post(payload: dict[str, Any]) -> VkPost:
     attachments = payload.get("attachments") or []
     types = [str(item.get("type", "")) for item in attachments if isinstance(item, dict)]
@@ -136,7 +145,7 @@ def parse_vk_post(payload: dict[str, Any]) -> VkPost:
         published_at=published,
         post_type=post_type,
         views=_count(payload, "views"),
-        likes=_count(payload, "likes"),
+        likes=_reaction_count(payload),
         comments=_count(payload, "comments"),
         reposts=_count(payload, "reposts"),
         raw=payload,

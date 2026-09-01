@@ -14,6 +14,26 @@ from .vk import VkClient
 logger = logging.getLogger(__name__)
 
 
+def validated_vk_metrics(
+    post: Any,
+    high_watermarks: dict[str, int | None],
+) -> tuple[dict[str, int | None], list[str]]:
+    """Turn VK's transient resets to zero into missing measurements."""
+    metrics = {
+        "views": post.views,
+        "reactions": post.likes,
+        "comments": post.comments,
+        "shares": post.reposts,
+    }
+    ignored: list[str] = []
+    for metric, value in metrics.items():
+        previous_high = high_watermarks.get(metric)
+        if value == 0 and previous_high is not None and previous_high > 0:
+            metrics[metric] = None
+            ignored.append(metric)
+    return metrics, ignored
+
+
 class VkCollector:
     """Collect raw public counters from configured VK communities."""
 
@@ -141,21 +161,34 @@ class VkCollector:
                     interval_minutes,
                 ):
                     continue
+                metrics, ignored_metrics = validated_vk_metrics(
+                    post,
+                    self.db.platform_metric_high_watermarks(post_id, _conn=conn),
+                )
+                if ignored_metrics:
+                    logger.warning(
+                        "VK %s/%s ignored transient zero metrics=%s",
+                        community.screen_name, identity.external_key,
+                        ",".join(ignored_metrics),
+                    )
+                raw_snapshot: dict[str, Any] = {
+                    "views": post.views,
+                    "likes": post.likes,
+                    "comments": post.comments,
+                    "reposts": post.reposts,
+                }
+                if ignored_metrics:
+                    raw_snapshot["ignored_transient_zero_metrics"] = ignored_metrics
                 if self.db.insert_platform_snapshot(
                     post_id,
                     measured_at,
                     first_age,
                     interval_minutes,
-                    views_count=post.views,
-                    reactions_count=post.likes,
-                    comments_count=post.comments,
-                    shares_count=post.reposts,
-                    raw={
-                        "views": post.views,
-                        "likes": post.likes,
-                        "comments": post.comments,
-                        "reposts": post.reposts,
-                    },
+                    views_count=metrics["views"],
+                    reactions_count=metrics["reactions"],
+                    comments_count=metrics["comments"],
+                    shares_count=metrics["shares"],
+                    raw=raw_snapshot,
                     _conn=conn,
                 ):
                     inserted += 1

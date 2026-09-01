@@ -94,6 +94,32 @@ def test_public_post_deleted_marker():
     assert public_post_is_deleted(html) is True
 
 
+def test_public_service_message_placeholder_is_unavailable():
+    html = """
+    <div class="tgme_widget_message text_not_supported_wrap" data-post="example/42">
+      <div class="message_media_not_supported_wrap">
+        <div class="message_media_not_supported_label">Service message</div>
+      </div>
+      <time datetime="2026-09-01T06:45:29+00:00"></time>
+    </div>
+    """
+
+    assert parse_public_page(html, "example") == []
+    assert public_post_is_deleted(html) is True
+
+
+def test_public_feed_service_message_without_label_is_unavailable():
+    html = """
+    <div class="tgme_widget_message text_not_supported_wrap service_message"
+         data-post="example/43">
+      <time datetime="2026-09-01T06:50:29+00:00"></time>
+    </div>
+    """
+
+    assert parse_public_page(html, "example") == []
+    assert public_post_is_deleted(html) is True
+
+
 def test_snapshot_due_tolerates_small_scheduler_jitter():
     previous = datetime(2026, 8, 31, 13, 0, tzinfo=timezone.utc)
     assert snapshot_is_due(previous.isoformat(), previous + timedelta(minutes=4, seconds=31), 5)
@@ -202,6 +228,71 @@ def test_available_post_clears_pending_deletion_confirmation(tmp_path):
     assert row["deleted_at"] is None
     assert row["missing_check_count"] == 0
     assert row["missing_reason"] is None
+
+
+def test_public_collector_enriches_snapshot_with_web_session_comments(tmp_path):
+    now = datetime.now(timezone.utc)
+    settings = SimpleNamespace(
+        subscriber_refresh_hours=24,
+        track_post_for_hours=960,
+        poll_interval_minutes=5,
+        second_day_poll_interval_minutes=15,
+        third_day_poll_interval_minutes=15,
+        days_4_to_6_poll_interval_minutes=30,
+        days_7_to_13_poll_interval_minutes=60,
+        day_14_plus_poll_interval_minutes=60,
+        rutube_first_three_days_poll_interval_minutes=60,
+        rutube_days_4_to_6_poll_interval_minutes=180,
+        rutube_days_7_to_13_poll_interval_minutes=360,
+        rutube_day_14_plus_poll_interval_minutes=720,
+        complete_history_max_first_age_minutes=6,
+        jump_min_abs=15,
+        jump_min_ratio=2.0,
+        deletion_confirmation_checks=2,
+    )
+    db = Database(tmp_path / "comments.db")
+    db.migrate()
+    channel_id = db.add_channel("example")
+    feed_html = f"""
+    <div class="tgme_channel_info_header_title">Example</div>
+    <div class="tgme_widget_message" data-post="example/42">
+      <time datetime="{(now - timedelta(minutes=2)).isoformat()}"></time>
+      <span class="tgme_widget_message_views">100</span>
+    </div>
+    """
+
+    async def fake_fetch(url):
+        if url.endswith("/s/example"):
+            return feed_html
+        if url.endswith("/example"):
+            return '<div class="tgme_page_extra">100 subscribers</div>'
+        raise AssertionError(url)
+
+    class CommentsReader:
+        closed = False
+
+        async def comments(self, username, message_ids):
+            assert username == "example"
+            assert list(message_ids) == [42]
+            return {42: 17}
+
+        async def close(self):
+            self.closed = True
+
+    comments_reader = CommentsReader()
+    collector = PublicWebCollector(settings, db, comments_reader)
+    collector._fetch = fake_fetch
+    try:
+        asyncio.run(collector._poll_channel(db.channel(channel_id)))
+    finally:
+        asyncio.run(collector.close())
+
+    snapshot = db.query(
+        "SELECT comments_count, views_count FROM reaction_snapshots ORDER BY id DESC LIMIT 1"
+    )[0]
+    assert snapshot["comments_count"] == 17
+    assert snapshot["views_count"] == 100
+    assert comments_reader.closed
 
 
 def test_age_based_snapshot_intervals():

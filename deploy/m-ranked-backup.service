@@ -1,0 +1,20 @@
+[Unit]
+Description=m-ranked verified SQLite backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=telegram-monitor
+Group=telegram-monitor
+WorkingDirectory=/opt/telegram-reaction-monitor
+ExecStartPre=+/usr/bin/install -d -o telegram-monitor -g telegram-monitor -m 0700 /opt/telegram-reaction-monitor/data/backups/scheduled
+ExecStart=/opt/telegram-reaction-monitor/.venv/bin/python -m app.backup /opt/telegram-reaction-monitor/data/reactions.db /opt/telegram-reaction-monitor/data/backups/scheduled --keep 3
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/telegram-reaction-monitor/data
+UMask=0077
