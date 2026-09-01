@@ -37,3 +37,29 @@ def test_rutube_video_metrics_keeps_unavailable_counter_as_none():
     metrics = asyncio.run(run())
     assert metrics.likes is None
     assert metrics.comments == 0
+
+
+def test_rutube_subscriber_count_uses_public_channel_page():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url == httpx.URL("https://rutube.ru/channel/123/")
+        return httpx.Response(
+            200,
+            text='<script>{"subscribers_count":2923}</script>',
+        )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            return await RutubeClient("https://rutube.ru/api", http).subscriber_count(123)
+
+    assert asyncio.run(run()) == 2923
+
+
+def test_rutube_subscriber_count_is_optional():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            return await RutubeClient("https://rutube.ru/api", http).subscriber_count(123)
+
+    assert asyncio.run(run()) is None

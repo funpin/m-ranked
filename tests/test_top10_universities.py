@@ -4,9 +4,9 @@ from app.top10_universities import TOP10_UNIVERSITIES, sync_top10_universities
 
 
 def test_top10_manifest_is_complete_and_unique() -> None:
-    assert len(TOP10_UNIVERSITIES) == 40
-    assert len({university.m_rating_code for university in TOP10_UNIVERSITIES}) == 40
-    assert len({university.name.casefold() for university in TOP10_UNIVERSITIES}) == 40
+    assert len(TOP10_UNIVERSITIES) == 42
+    assert len({university.m_rating_code for university in TOP10_UNIVERSITIES}) == 42
+    assert len({university.name.casefold() for university in TOP10_UNIVERSITIES}) == 42
 
     identities: set[tuple[str, str]] = set()
     for university in TOP10_UNIVERSITIES:
@@ -34,9 +34,9 @@ def test_sync_top10_universities_is_idempotent(tmp_path) -> None:
     second = sync_top10_universities(db)
 
     expected_accounts = sum(len(university.accounts()) for university in TOP10_UNIVERSITIES)
-    assert first == {"institutions": 40, "created": 40, "accounts": expected_accounts}
-    assert second == {"institutions": 40, "created": 0, "accounts": expected_accounts}
-    assert len(db.list_institutions()) == 40
-    assert len(db.list_channels()) == 40
+    assert first == {"institutions": 42, "created": 42, "accounts": expected_accounts}
+    assert second == {"institutions": 42, "created": 0, "accounts": expected_accounts}
+    assert len(db.list_institutions()) == 42
+    assert len(db.list_channels()) == 42
     assert len(db.list_platform_accounts()) == expected_accounts
     assert all(row["institution_id"] is not None for row in db.list_channels())

@@ -75,14 +75,21 @@ class RutubeCollector:
                 str(account["external_key"]), str(account["url"] or "") or None,
             )
         )
-        channel, videos = await self.client.videos(
-            native_id, min(self.settings.discovery_limit, 100),
+        (channel, videos), subscriber_count = await asyncio.gather(
+            self.client.videos(native_id, min(self.settings.discovery_limit, 100)),
+            self.client.subscriber_count(
+                native_id, str(account["url"] or "") or None,
+            ),
         )
         self.db.update_platform_account_metadata(
             int(account["id"]), native_id=str(channel.id),
             username=str(account["username"] or account["external_key"]),
             title=channel.name, url=str(account["url"] or channel.url),
-            subscriber_count=None, measured_at=measured_at,
+            subscriber_count=(
+                subscriber_count
+                if subscriber_count is not None else account["subscriber_count"]
+            ),
+            measured_at=measured_at,
         )
         cutoff = measured_at - timedelta(hours=self.settings.track_post_for_hours)
         due: list[tuple[Any, int, int]] = []

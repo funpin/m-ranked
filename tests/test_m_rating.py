@@ -42,6 +42,8 @@ def test_channel_codes_use_official_university_rows():
     assert CHANNEL_TO_M_RATING_CODE["rgsu_life"] == "151"
     assert CHANNEL_TO_M_RATING_CODE["novosti_au"] == "218"
     assert CHANNEL_TO_M_RATING_CODE["mpeiuniversity"] == "122"
+    assert CHANNEL_TO_M_RATING_CODE["rtumirea_official"] == "106"
+    assert CHANNEL_TO_M_RATING_CODE["itmoru"] == "18"
 
 
 def test_latest_social_rankings_builds_five_independent_tables():
