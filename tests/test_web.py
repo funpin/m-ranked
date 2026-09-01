@@ -130,6 +130,10 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "postChartPreferences.deltaViews" in post_page
     assert "applyDeltaScaleMode(postChartPreferences.deltaScaleMode,false)" in post_page
     assert 'class="snapshot-history-table"' in post_page
+    assert 'class="panel mt table-wrap measurement-history"' in post_page
+    assert ".measurement-history{max-height:76vh;overflow:auto" in post_page
+    assert ".measurement-history .snapshot-history-table{width:max-content" in post_page
+    assert "position:sticky;top:0;z-index:4" in post_page
     assert 'class="reaction-cell"' in post_page
     assert "От прошлого замера" in post_page
     assert "Δ просмотров" in post_page
@@ -314,6 +318,7 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     assert "+1 ч" in publication
     assert ">+60<" in publication
     assert "<th>Интервал</th>" not in publication
+    assert 'class="panel mt table-wrap measurement-history"' in publication
     assert "1 ч 0 мин" in publication
     assert "wall-10_20" in publication
     assert client.get(
