@@ -148,3 +148,32 @@ def test_vk_collector_stores_joint_post_under_community_number(tmp_path):
     assert stored["is_joint"] == 1
     assert stored["additional_author_count"] == 1
     assert stored["history_complete"] == 1
+
+
+def test_vk_collector_suppresses_transient_zero_counters(tmp_path):
+    cfg = _settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(institution_id, "vk", "university")
+    published = datetime.now(timezone.utc) - timedelta(hours=1)
+    post_id = db.upsert_platform_post(
+        account_id, "-42_7", published, published, "text", None, {},
+    )
+    db.insert_platform_snapshot(
+        post_id, published + timedelta(minutes=5), 300, 5,
+        views_count=100, reactions_count=5, comments_count=2, shares_count=1,
+        raw={},
+    )
+    reset = VkPost(-42, 7, published, "text", 120, 0, 0, 0, {
+        "owner_id": -42, "id": 7,
+    })
+
+    asyncio.run(VkCollector(cfg, db, FakeVkClient(reset)).poll_cycle())
+
+    snapshot = db.platform_snapshots(post_id)[-1]
+    assert snapshot["views_count"] == 120
+    assert snapshot["reactions_count"] is None
+    assert snapshot["comments_count"] is None
+    assert snapshot["shares_count"] is None
+    assert "ignored_transient_zero_metrics" in snapshot["raw_json"]

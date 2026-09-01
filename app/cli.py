@@ -19,6 +19,7 @@ from .rutube_collector import RutubeCollector
 from .official_accounts import sync_official_accounts
 from .top10_universities import sync_top10_universities
 from .telegram_client import TelegramReader
+from .telegram_web import TelegramWebSession
 from .vk_collector import VkCollector
 from .web.app import create_app
 
@@ -42,6 +43,10 @@ def parser() -> argparse.ArgumentParser:
     command = argparse.ArgumentParser(prog="python -m app", description="m-ranked")
     sub = command.add_subparsers(dest="command", required=True)
     sub.add_parser("auth", help="Authorize the persistent Telegram user session")
+    sub.add_parser(
+        "auth-web",
+        help="Authorize official Telegram Web by phone without an API ID/hash",
+    )
     sub.add_parser("auth-max", help="Authorize the persistent MAX user session")
     sub.add_parser("run", help="Run legacy combined polling and web process")
     sub.add_parser("collect", help="Run polling independently from the web dashboard")
@@ -110,6 +115,18 @@ async def _auth_max(settings: Settings) -> None:
         await client.close()
 
 
+async def _auth_web(settings: Settings) -> None:
+    session = TelegramWebSession(
+        settings.telegram_web_profile_path,
+        headless=True,
+        concurrency=settings.telegram_web_concurrency,
+    )
+    try:
+        await session.authorize_interactive()
+    finally:
+        await session.close()
+
+
 async def _poll(settings: Settings, db: Database) -> None:
     auxiliary_collectors = tuple(
         collector for collector in (
@@ -118,8 +135,15 @@ async def _poll(settings: Settings, db: Database) -> None:
             RutubeCollector(settings, db) if settings.rutube_public_api_enabled else None,
         ) if collector is not None
     )
-    if settings.data_source == "public_web":
-        collector = PublicWebCollector(settings, db)
+    if settings.data_source in {"public_web", "telegram_web"}:
+        comments_reader = None
+        if settings.data_source == "telegram_web":
+            comments_reader = TelegramWebSession(
+                settings.telegram_web_profile_path,
+                concurrency=settings.telegram_web_concurrency,
+            )
+            await comments_reader.connect()
+        collector = PublicWebCollector(settings, db, comments_reader)
         try:
             await asyncio.gather(
                 collector.poll_cycle(),
@@ -147,6 +171,8 @@ def main(argv: list[str] | None = None) -> int:
     settings, db = initialize()
     if args.command == "auth":
         asyncio.run(_auth(settings))
+    elif args.command == "auth-web":
+        asyncio.run(_auth_web(settings))
     elif args.command == "auth-max":
         asyncio.run(_auth_max(settings))
     elif args.command == "run":

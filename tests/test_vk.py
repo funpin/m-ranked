@@ -33,6 +33,18 @@ def test_parse_vk_post_metrics():
     assert post.published_at == datetime.fromtimestamp(1_700_000_000, tz=timezone.utc)
 
 
+def test_parse_vk_post_prefers_nonzero_reactions_during_likes_reset():
+    post = parse_vk_post({
+        "owner_id": -42,
+        "id": 18,
+        "date": 1_700_000_000,
+        "likes": {"count": 0},
+        "reactions": {"count": 7, "items": [{"id": 0, "count": 7}]},
+    })
+
+    assert post.likes == 7
+
+
 def test_joint_vk_post_uses_monitored_community_number():
     post = parse_vk_post({
         "owner_id": -164293611,

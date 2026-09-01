@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily m-ranked SQLite backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 Europe/Moscow
+Persistent=true
+RandomizedDelaySec=10m
+AccuracySec=1m
+Unit=m-ranked-backup.service
+
+[Install]
+WantedBy=timers.target

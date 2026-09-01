@@ -11,6 +11,9 @@ Read-only монитор динамики публикаций вузов в Tel
 Rutube, строит рейтинги и сравнение для поддерживаемых площадок, выгружает
 сырые снимки в CSV и показывает состояние каждого сборщика через `/health`.
 Сборщики запускаются параллельно и не задерживают расписание друг друга.
+Точные комментарии Telegram доступны через авторизованную по номеру сессию
+официального Telegram Web K без приложения на `my.telegram.org` и без внешних
+агрегаторов.
 
 ## Модель данных
 
@@ -26,7 +29,10 @@ Rutube, строит рейтинги и сравнение для поддер�
   статус «неполная история»: будущие замеры не превращают старую историю в
   полную задним числом.
 - Удаление подтверждается двумя последовательными явными ответами Telegram
-  `404/410` или `Post not found`; единичная ошибка только увеличивает счётчик.
+  `404/410`, `Post not found` или HTTP-200 заглушкой `Service message` вместо
+  публикации; единичная ошибка только увеличивает счётчик.
+- Временный нулевой сброс накопительного счётчика VK после положительного
+  замера сохраняется как отсутствующее значение, а не как реальное падение.
 
 ## Формулы интерфейса
 
@@ -106,8 +112,11 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 ```
 
 Для публичных каналов используется `DATA_SOURCE=public_web`; Telegram-сессия
-не нужна. MTProto-режим требует `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` и
-предварительной команды `python -m app auth`.
+не нужна. Режим `DATA_SOURCE=telegram_web` добавляет точные комментарии после
+входа по номеру командой `python -m app auth-web` и не требует приложения на
+`my.telegram.org`. Ему нужен Chromium для Playwright; установка и безопасное
+хранение профиля описаны в [INTEGRATIONS.md](INTEGRATIONS.md). MTProto-режим
+требует `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` и команды `python -m app auth`.
 
 ## Основные команды
 
@@ -119,6 +128,7 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 .venv/bin/python -m app add-platform-account 1 vk university --url https://vk.com/university
 .venv/bin/python -m app sync-official-accounts
 .venv/bin/python -m app refresh-m-rating
+.venv/bin/python -m app auth-web
 .venv/bin/python -m app poll-now
 .venv/bin/python -m app collect
 .venv/bin/python -m app web
@@ -138,6 +148,26 @@ systemctl enable --now m-ranked-collector.service m-ranked-web.service
 Остановка или перезапуск `m-ranked-web.service` не останавливает collectors.
 Команда `python -m app run` сохранена только для локальной разработки и
 обратной совместимости.
+
+### Резервное копирование SQLite
+
+В сборку входит ежедневный online-backup живой SQLite-базы. Копия создаётся
+штатным SQLite Backup API, проверяется через `PRAGMA quick_check`, атомарно
+публикуется с правами `600`; timer хранит три последние плановые копии и не
+удаляет созданные вручную файлы.
+
+```bash
+cp deploy/m-ranked-backup.service deploy/m-ranked-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now m-ranked-backup.timer
+systemctl list-timers m-ranked-backup.timer
+```
+
+Timer запускается ежедневно в 03:15 по Europe/Moscow с небольшим случайным
+сдвигом. Проверить разовый запуск можно командой
+`systemctl start m-ranked-backup.service`; результат хранится только в
+`data/backups/scheduled/`. Профили Telegram Web, MAX-сессия и `.env` этим
+заданием не копируются.
 
 ## Страницы
 
@@ -174,7 +204,10 @@ systemctl enable --now m-ranked-collector.service m-ranked-web.service
 - `RETENTION_DAYS=40` — архивирование и очистка;
 - `DELETION_CONFIRMATION_CHECKS=2` — подтверждения удаления;
 - `SUBSCRIBER_REFRESH_HOURS=24` — обновление подписчиков;
-- `TELEGRAM_CONCURRENCY=6` — одновременно опрашиваемые публичные TG-каналы;
+- `TELEGRAM_CONCURRENCY=6` — одновременно опрашиваемые TG-каналы в WEB- и
+  MTProto-режимах;
+- `TELEGRAM_WEB_CONCURRENCY=3` — число параллельных пакетных запросов точных
+  комментариев через авторизованный официальный Telegram Web;
 - `VK_CONCURRENCY=3` и `VK_REQUESTS_PER_SECOND=3` — параллелизм и общий
   rate limit VK API;
 - `RUTUBE_ACCOUNT_CONCURRENCY=4` и `RUTUBE_REQUEST_CONCURRENCY=8` — лимиты
@@ -190,7 +223,9 @@ systemctl enable --now m-ranked-collector.service m-ranked-web.service
 
 - база: `/opt/telegram-reaction-monitor/data/reactions.db`;
 - пользовательская MAX-сессия: `/opt/telegram-reaction-monitor/data/max.session.db`;
+- профиль Telegram Web: `/opt/telegram-reaction-monitor/data/telegram-web-profile/`;
 - архивы: `/opt/telegram-reaction-monitor/data/archives/`;
+- проверенные копии SQLite: `/opt/telegram-reaction-monitor/data/backups/scheduled/`;
 - логи: `/opt/telegram-reaction-monitor/logs/collector.log` и `web.log`;
 - collectors: `journalctl -u m-ranked-collector`;
 - веб: `journalctl -u m-ranked-web`.
@@ -240,6 +275,8 @@ MAX включается через отдельную пользователь�
 Миграция 11 добавляет признак исходящего репоста публикации. Для Telegram он
 определяется по источнику пересылки, для MAX — по ссылке типа `forward` на другой
 канал. Это отдельный признак публикации, а не числовой счётчик её репостов.
+Миграция 12 очищает подтверждённые временные нулевые провалы VK, когда до и
+после ошибочного ответа API сохранены положительные значения счётчика.
 
 В защищённой панели `/manage` можно создавать вуз и привязывать к нему аккаунты
 Telegram, VK, MAX и Rutube. Существующие ссылки подставляются при выборе вуза;
