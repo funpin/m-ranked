@@ -39,6 +39,9 @@ class FakeRutube:
         )
         return RutubeChannel(77, "Вуз на Rutube", "https://rutube.ru/u/vuz/"), [video]
 
+    async def subscriber_count(self, channel_id, url=None):
+        return 654
+
     async def video_metrics(self, video_id):
         return RutubeVideoMetrics(
             likes=17, comments=4,
@@ -104,6 +107,7 @@ def test_rutube_public_collector_stores_likes_and_comments(tmp_path):
     assert snapshot["reactions_count"] == 17
     assert snapshot["comments_count"] == 4
     assert snapshot["shares_count"] is None
+    assert db.list_platform_accounts(institution_id=institution)[0]["subscriber_count"] == 654
 
 
 def test_max_collector_subscribes_resolves_chat_and_stores_supported_counters(tmp_path):
