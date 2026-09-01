@@ -304,7 +304,7 @@ def test_platform_migration_backfills_existing_channel_once(tmp_path):
         len(db.list_institutions()), len(db.list_platform_accounts()),
         db.query("SELECT max(version) version FROM schema_migrations")[0]["version"],
     )
-    assert before == after == (1, 1, 12)
+    assert before == after == (1, 1, 14)
     account = db.list_platform_accounts()[0]
     assert account["native_id"] == "123"
     assert account["subscriber_count"] == 1000
@@ -347,7 +347,7 @@ def test_history_reset_and_vk_joint_id_migration_run_only_once(tmp_path):
     assert (platform["history_complete"], platform["history_forced_incomplete"]) == (0, 1)
     assert platform["external_id"] == "-74773715_1267"
     assert platform["source_external_id"] == "-74773715_59413"
-    assert platform["url"] == "https://vk.ru/wall-74773715_1267"
+    assert platform["url"] == "https://vk.ru/wall-74773715_59413"
     assert platform["is_joint"] == 1
     assert platform["additional_author_count"] == 2
 
@@ -386,3 +386,70 @@ def test_vk_zero_dip_migration_clears_only_confirmed_transient_values(tmp_path):
     snapshots = db.platform_snapshots(post_id)
     assert [row["reactions_count"] for row in snapshots] == [5, None, 6]
     assert [row["comments_count"] for row in snapshots] == [0, 0, 0]
+
+
+def test_vk_joint_post_url_migration_uses_canonical_source(tmp_path):
+    db = Database(tmp_path / "vk-joint-url.db")
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(institution_id, "vk", "university")
+    now = datetime.now(timezone.utc)
+    joint_id = db.upsert_platform_post(
+        account_id, "-42_72166", now, now, "photo",
+        "https://vk.ru/wall-42_72166", {},
+        source_external_id="-900_4949", is_joint=True,
+        additional_author_count=2,
+    )
+    ordinary_id = db.upsert_platform_post(
+        account_id, "-42_72167", now, now, "photo",
+        "https://vk.ru/wall-42_72167", {},
+    )
+    with db.connect() as conn:
+        conn.execute("DELETE FROM schema_migrations WHERE version=13")
+
+    db.migrate()
+
+    joint = db.platform_post(joint_id)
+    ordinary = db.platform_post(ordinary_id)
+    assert joint is not None
+    assert joint["external_id"] == "-42_72166"
+    assert joint["url"] == "https://vk.ru/wall-900_4949"
+    assert ordinary is not None
+    assert ordinary["url"] == "https://vk.ru/wall-42_72167"
+
+
+def test_platform_post_deletion_requires_confirmation_and_can_recover(tmp_path):
+    db = Database(tmp_path / "platform-deletion.db")
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(institution_id, "vk", "university")
+    now = datetime.now(timezone.utc)
+    post_id = db.upsert_platform_post(
+        account_id, "-42_7", now, now, "text",
+        "https://vk.ru/wall-42_7", {"text": "Сохранённый текст"},
+    )
+
+    first = db.record_platform_post_missing(
+        post_id, now, "vk_not_found", confirmation_checks=2,
+    )
+    pending = db.platform_post(post_id)
+    assert first == (1, False)
+    assert pending is not None
+    assert pending["deleted_at"] is None
+
+    second = db.record_platform_post_missing(
+        post_id, now + timedelta(minutes=5), "vk_not_found",
+        confirmation_checks=2,
+    )
+    deleted = db.platform_post(post_id)
+    assert second == (2, True)
+    assert deleted is not None
+    assert deleted["deleted_at"] is not None
+    assert deleted["missing_reason"] == "vk_not_found"
+
+    db.mark_platform_post_available(post_id)
+    recovered = db.platform_post(post_id)
+    assert recovered is not None
+    assert recovered["deleted_at"] is None
+    assert recovered["missing_check_count"] == 0
+    assert recovered["missing_reason"] is None

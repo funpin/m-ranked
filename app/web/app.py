@@ -141,6 +141,22 @@ def format_platform_post_label(external_id: Any, platform: str | None) -> str:
     return value
 
 
+def archived_platform_post_text(raw_json: Any) -> str | None:
+    if not raw_json:
+        return None
+    try:
+        payload = json.loads(str(raw_json))
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    for key in ("text", "message", "caption"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
 def plural_ru(value: int | float, one: str, few: str, many: str) -> str:
     number = abs(int(value))
     if number % 100 in range(11, 15):
@@ -1640,12 +1656,13 @@ def create_app(
             for row in snapshots
         ]
         history_complete = bool(post["history_complete"])
+        archived_text = archived_platform_post_text(post["raw_json"])
         return render(
             request, "platform_publication.html", post=post, snapshots=snapshots,
             older_post=older_post[0] if older_post else None,
             newer_post=newer_post[0] if newer_post else None,
             available_metrics=available_metrics, metric_phrase=metric_phrase,
-            history_complete=history_complete,
+            history_complete=history_complete, archived_text=archived_text,
             chart_json=json.dumps(
                 chart_rows, ensure_ascii=False, separators=(",", ":"),
             ),
