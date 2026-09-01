@@ -62,7 +62,7 @@ def collector_configured(settings: Settings, platform: str) -> bool:
     if platform == "vk":
         return bool(settings.vk_access_token)
     if platform == "max":
-        return bool(settings.max_access_token)
+        return settings.max_user_session_ready
     if platform == "rutube":
         return settings.rutube_public_api_enabled
     return False
@@ -318,8 +318,14 @@ def platform_activity_cards(
         elif not any(bool(account["enabled"]) for account in selected_accounts):
             status_text, status_kind = "Все аккаунты отключены", "warn"
         elif not configured:
-            token_name = "VK_ACCESS_TOKEN" if platform == "vk" else "MAX_ACCESS_TOKEN"
-            status_text, status_kind = f"Нужен {token_name}", "warn"
+            if platform == "max":
+                status_text = (
+                    "Нужна авторизация MAX: auth-max"
+                    if settings.max_user_phone else "Нужен MAX_USER_PHONE"
+                )
+            else:
+                status_text = "Нужен VK_ACCESS_TOKEN"
+            status_kind = "warn"
         elif any(account["last_error"] for account in selected_accounts):
             status_text, status_kind = "Последний опрос завершился ошибкой", "bad"
         elif any(account["last_checked_at"] for account in selected_accounts):

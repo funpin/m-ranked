@@ -71,7 +71,7 @@ async def run_service(settings: Settings, db: Database) -> None:
     auxiliary_collectors: tuple[Any, ...] = tuple(
         collector for collector in (
             VkCollector(settings, db) if settings.vk_access_token else None,
-            MaxCollector(settings, db) if settings.max_access_token else None,
+            MaxCollector(settings, db) if settings.max_user_session_ready else None,
             RutubeCollector(settings, db) if settings.rutube_public_api_enabled else None,
         ) if collector is not None
     )

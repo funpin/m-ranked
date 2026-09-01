@@ -75,6 +75,17 @@ def normalize_platform(value: str | None) -> str:
     return normalized if normalized in PLATFORM_VALUES else "telegram"
 
 
+def normalize_institution_name(value: Any) -> str:
+    return " ".join(str(value or "").casefold().replace("ё", "е").split())
+
+
+def institution_matches(query: str, *names: Any) -> bool:
+    normalized_query = normalize_institution_name(query)
+    return not normalized_query or any(
+        normalized_query in normalize_institution_name(name) for name in names
+    )
+
+
 def _rows_dict(rows: list[Any]) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
@@ -646,7 +657,12 @@ def create_app(
                 "mode": settings.data_source,
             },
             "vk": {"configured": bool(settings.vk_access_token)},
-            "max": {"configured": bool(settings.max_access_token)},
+            "max": {
+                "configured": settings.max_user_session_ready,
+                "mode": "user_session",
+                "phone_configured": bool(settings.max_user_phone),
+                "session_exists": settings.max_session_path.is_file(),
+            },
             "rutube": {
                 "configured": settings.rutube_public_api_enabled,
                 "mode": "official_public_api",
@@ -721,12 +737,14 @@ def create_app(
         request: Request,
         period: str = Query(default="1d"),
         sort: str = Query(default="median_reactions"),
-        direction: str = Query(default="desc"),
+        direction: str | None = Query(default=None),
         platform: str = Query(default="telegram"),
+        q: str = Query(default="", max_length=200),
     ) -> HTMLResponse:
         platform = normalize_platform(platform)
+        q = q.strip()
         period, period_delta, period_label, period_short = period_spec(period)
-        direction = direction if direction in {"asc", "desc"} else "desc"
+        direction = direction if direction in {"asc", "desc"} else None
         if platform != "telegram":
             now = datetime.now(timezone.utc)
             cards = (
@@ -739,6 +757,7 @@ def create_app(
             )
             if platform == "all":
                 platform_sort_keys = {
+                    "name": "institution_name",
                     "m_rating": "rating_rank",
                     "coverage": "connected_count",
                     "accounts": "account_count",
@@ -746,6 +765,7 @@ def create_app(
                 default_sort = "m_rating"
             else:
                 platform_sort_keys = {
+                    "name": "institution_name",
                     "median_reactions": "median_reactions",
                     "m_rating": "rating_rank",
                     "reactions": "total_reactions",
@@ -754,7 +774,21 @@ def create_app(
                     "subscribers": "subscriber_count",
                 }
                 default_sort = "median_reactions"
+            for card in cards:
+                institution = card["institution"]
+                card["institution_name"] = normalize_institution_name(
+                    institution.get("short_name") or institution.get("name")
+                )
+            cards = [
+                card for card in cards
+                if institution_matches(
+                    q,
+                    card["institution"].get("short_name"),
+                    card["institution"].get("name"),
+                )
+            ]
             sort = sort if sort in platform_sort_keys else default_sort
+            direction = direction or ("asc" if sort == "name" else "desc")
             sort_key = platform_sort_keys[sort]
             available = [card for card in cards if card.get(sort_key) is not None]
             unavailable = [card for card in cards if card.get(sort_key) is None]
@@ -764,17 +798,35 @@ def create_app(
             return render(
                 request, "overview.html", channels=[], platform_cards=available + unavailable,
                 period=period, period_label=period_label, period_short=period_short,
-                sort=sort, direction=direction, active_platform=platform,
+                sort=sort, direction=direction, active_platform=platform, q=q,
             )
         cutoff = datetime.now(timezone.utc) - period_delta
         sort_keys = {
+            "name": "institution_sort_name",
             "subscribers": "subscriber_count", "posts": "post_count",
             "views": "total_views", "reactions": "total_reactions",
             "median_reactions": "median_reactions",
             "m_rating": "m_rating_tg_rank",
         }
         sort = sort if sort in sort_keys else "median_reactions"
+        direction = direction or ("asc" if sort == "name" else "desc")
         channels = channel_activity_stats(cutoff, cutoff - period_delta)
+        for channel in channels:
+            channel["institution_sort_name"] = normalize_institution_name(
+                channel.get("institution_short_name")
+                or channel.get("institution_name")
+                or channel.get("title")
+                or channel.get("username")
+            )
+        channels = [
+            channel for channel in channels
+            if institution_matches(
+                q,
+                channel.get("institution_short_name"),
+                channel.get("institution_name"),
+                channel.get("title"),
+            )
+        ]
         sort_key = sort_keys[sort]
         available = [row for row in channels if row.get(sort_key) is not None]
         unavailable = [row for row in channels if row.get(sort_key) is None]
@@ -786,7 +838,7 @@ def create_app(
             request, "overview.html", channels=channels, period=period,
             period_label=period_label, period_short=period_short,
             sort=sort, direction=direction, active_platform=platform,
-            platform_cards=[],
+            platform_cards=[], q=q,
         )
 
     @app.get("/rating", response_class=HTMLResponse)
@@ -1002,9 +1054,9 @@ def create_app(
                 "detail": "VK_ACCESS_TOKEN · просмотры, лайки, комментарии, репосты",
             },
             {
-                "platform": "MAX", "configured": bool(settings.max_access_token),
+                "platform": "MAX", "configured": settings.max_user_session_ready,
                 "detail": (
-                    f"MAX_ACCESS_TOKEN · chat_id задан у "
+                    f"Пользовательская сессия · chat_id определён у "
                     f"{sum(bool(row['native_id']) for row in max_accounts)} из {len(max_accounts)} аккаунтов"
                 ),
             },
@@ -1131,7 +1183,8 @@ def create_app(
                     raise HTTPException(status_code=400, detail=f"Не удалось определить {platform}")
                 account_url = original if "://" in original else None
             access_mode, data_quality = (
-                ("owner", "exact") if platform == "max" else ("public", "partial")
+                ("user_session", "exact")
+                if platform == "max" else ("public", "partial")
             )
             db.add_platform_account(
                 institution_id, platform, external_key, username=external_key,
@@ -1247,7 +1300,8 @@ def create_app(
             username = external_key
             account_url = url.strip() or (original if "://" in original else None)
             access_mode, data_quality = (
-                ("owner", "exact") if platform == "max" else ("public", "partial")
+                ("user_session", "exact")
+                if platform == "max" else ("public", "partial")
             )
         db.add_platform_account(
             institution_id, platform, external_key, username=username,

@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
@@ -18,7 +19,8 @@ def settings(tmp_path) -> Settings:
         complete_history_max_first_age_minutes=6, jump_min_abs=15, jump_min_ratio=2.0,
         web_host="127.0.0.1", web_port=8080, display_timezone="Europe/Moscow",
         log_path=tmp_path / "app.log", discovery_limit=100, discovery_overlap=20,
-        max_access_token="max-token",
+        max_user_phone="+79990000000",
+        max_session_path=tmp_path / "max.session.db",
     )
 
 
@@ -48,15 +50,35 @@ class FakeRutube:
 
 
 class FakeMax:
-    async def channel(self, chat_id):
-        return MaxChannel(chat_id, "MAX вуза", 456, "https://max.ru/vuz")
+    def __init__(self, discovery_posts=None, point_posts=None):
+        self.discovery_posts = discovery_posts
+        self.point_posts = point_posts or []
+        self.resolved = []
+        self.requested_ids = []
+
+    async def resolve_channel(self, reference, chat_id=None):
+        self.resolved.append((reference, chat_id))
+        return MaxChannel(chat_id or -123, "MAX вуза", 456, "https://max.ru/vuz")
 
     async def posts(self, chat_id, count=100):
+        if self.discovery_posts is not None:
+            return self.discovery_posts
         return [MaxPost(
-            "m1", datetime.now(timezone.utc) - timedelta(hours=1),
-            90, 4, 3, "https://max.ru/vuz/m1", {"message_id": "m1"},
+            id="m1",
+            published_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            views=90,
+            reactions=8,
+            reposts=None,
+            comments=None,
+            url=None,
+            raw={"message_id": "m1"},
+            reaction_breakdown={"LIKE": 5, "FIRE": 3},
             is_repost=True,
         )]
+
+    async def posts_by_ids(self, chat_id, message_ids):
+        self.requested_ids.extend(message_ids)
+        return [post for post in self.point_posts if post.id in message_ids]
 
     async def close(self):
         pass
@@ -84,19 +106,66 @@ def test_rutube_public_collector_stores_likes_and_comments(tmp_path):
     assert snapshot["shares_count"] is None
 
 
-def test_max_collector_requires_chat_id_and_stores_supported_counters(tmp_path):
+def test_max_collector_subscribes_resolves_chat_and_stores_supported_counters(tmp_path):
     cfg = settings(tmp_path)
+    db = Database(cfg.database_path); db.migrate()
+    institution = db.add_institution("Вуз", "ВУЗ")
+    account_id = db.add_platform_account(
+        institution, "max", "vuz", url="https://max.ru/vuz",
+    )
+
+    fake = FakeMax()
+    asyncio.run(MaxCollector(cfg, db, fake).poll_cycle())
+
+    snapshot = db.query("SELECT * FROM platform_snapshots")[0]
+    assert fake.resolved == [("https://max.ru/vuz", None)]
+    assert db.platform_account(account_id)["native_id"] == "-123"
+    assert (snapshot["views_count"], snapshot["reactions_count"]) == (90, 8)
+    assert snapshot["comments_count"] is None
+    assert snapshot["shares_count"] is None
+    assert db.query("SELECT is_repost FROM platform_posts")[0]["is_repost"] == 1
+
+
+def test_max_session_is_ready_only_for_authorized_configured_phone(tmp_path):
+    cfg = settings(tmp_path)
+    assert cfg.max_user_session_ready is False
+    with sqlite3.connect(cfg.max_session_path) as conn:
+        conn.execute("CREATE TABLE sessions(token TEXT, phone TEXT)")
+        conn.execute(
+            "INSERT INTO sessions(token, phone) VALUES(?, ?)",
+            ("saved-login-token", cfg.max_user_phone),
+        )
+    assert cfg.max_user_session_ready is True
+    assert replace(cfg, max_user_phone="+78880000000").max_user_session_ready is False
+
+
+def test_max_collector_refreshes_due_known_post_outside_history_page(tmp_path):
+    cfg = replace(settings(tmp_path), discovery_limit=1)
     db = Database(cfg.database_path); db.migrate()
     institution = db.add_institution("Вуз", "ВУЗ")
     account_id = db.add_platform_account(institution, "max", "vuz")
     db.set_platform_account_native_id(account_id, "-123")
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    post_id = db.upsert_platform_post(
+        account_id, "700", published, published, "text", None, {},
+    )
+    db.insert_platform_snapshot(
+        post_id, published + timedelta(hours=1), 3600, 5,
+        views_count=100, reactions_count=5, comments_count=None,
+        shares_count=None, raw={},
+    )
+    refreshed = MaxPost(
+        id="700", published_at=published, views=130, reactions=9,
+        reposts=None, comments=None, url=None, raw={"id": 700},
+    )
+    fake = FakeMax(discovery_posts=[], point_posts=[refreshed])
 
-    asyncio.run(MaxCollector(cfg, db, FakeMax()).poll_cycle())
+    asyncio.run(MaxCollector(cfg, db, fake).poll_cycle())
 
-    snapshot = db.query("SELECT * FROM platform_snapshots")[0]
-    assert (snapshot["views_count"], snapshot["comments_count"], snapshot["shares_count"]) == (90, 3, 4)
-    assert snapshot["reactions_count"] is None
-    assert db.query("SELECT is_repost FROM platform_posts")[0]["is_repost"] == 1
+    assert fake.requested_ids == ["700"]
+    snapshots = db.platform_snapshots(post_id)
+    assert len(snapshots) == 2
+    assert (snapshots[-1]["views_count"], snapshots[-1]["reactions_count"]) == (130, 9)
 
 
 def test_max_repost_requires_forward_from_another_chat():
@@ -105,3 +174,4 @@ def test_max_repost_requires_forward_from_another_chat():
         {"link": {"type": "forward", "chat_id": "-123"}}, -123,
     )
     assert not max_post_is_repost({"link": {"type": "reply", "chat_id": "-456"}}, -123)
+    assert max_post_is_repost({"link": {"type": "forward", "chatId": "-456"}}, -123)

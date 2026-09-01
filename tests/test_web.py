@@ -79,6 +79,10 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "m-ranked" in overview
     assert "Логотип m-ranked" in overview
     assert 'href="/static/favicon.png"' in overview
+    assert 'id="themeToggle"' in overview
+    assert 'id="menuToggle"' in overview
+    assert 'aria-controls="mainNav"' in overview
+    assert "localStorage.setItem('m-ranked-theme', theme)" in overview
     assert "Telegram Reaction Monitor" not in overview
     assert "Монитор реакций" not in overview
     assert "медиана прироста реакций" in overview
@@ -263,7 +267,7 @@ def test_platform_context_never_falls_back_to_telegram_data(tmp_path):
 
 
 def test_entity_routes_derive_platform_and_redirect_legacy_urls(tmp_path):
-    cfg = replace(settings(tmp_path), max_access_token="token")
+    cfg = replace(settings(tmp_path), max_user_phone="+79990000000")
     db = Database(cfg.database_path); db.migrate()
     institution_id = db.add_institution("Маршрутный вуз", "МВ")
     account_id = db.add_platform_account(
@@ -561,7 +565,7 @@ def test_rutube_rating_and_comparison_use_likes_comments_and_views(tmp_path):
 
 
 @pytest.mark.parametrize(("platform", "token_field"), (
-    ("max", "max_access_token"),
+    ("max", "max_user_phone"),
     ("rutube", None),
 ))
 def test_non_telegram_platforms_reuse_overview_and_channel_layout(
@@ -931,6 +935,49 @@ def test_overview_filters_keep_valid_values_and_reject_removed_period(tmp_path):
     assert 'value="1d" selected' in removed.text
     assert 'value="median_reactions" selected' in removed.text
     assert 'value="desc" selected' in removed.text
+
+
+@pytest.mark.parametrize("platform", ("all", "telegram", "vk", "max", "rutube"))
+def test_overview_searches_institution_names_and_sorts_alphabetically(
+    tmp_path, platform,
+):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    alpha_id = db.add_institution("Альфа федеральный университет", "АФУ")
+    beta_id = db.add_institution("Берёзовый государственный университет", "БГУ")
+    db.add_channel("alpha_university", institution_id=alpha_id)
+    db.add_channel("beta_university", institution_id=beta_id)
+    client = TestClient(create_app(cfg, db, lambda: True))
+
+    alphabetic = client.get(
+        "/",
+        params={"platform": platform, "sort": "name"},
+    )
+    assert alphabetic.status_code == 200
+    assert 'type="search" name="q"' in alphabetic.text
+    assert 'value="name" selected' in alphabetic.text
+    assert 'value="asc" selected' in alphabetic.text
+    assert "Название вуза · алфавит" in alphabetic.text
+    assert alphabetic.text.index(">АФУ<") < alphabetic.text.index(">БГУ<")
+
+    by_short_name = client.get(
+        "/", params={"platform": platform, "q": "афу"},
+    ).text
+    assert ">АФУ<" in by_short_name
+    assert ">БГУ<" not in by_short_name
+
+    by_full_name = client.get(
+        "/", params={"platform": platform, "q": "ФЕДЕРАЛЬНЫЙ"},
+    ).text
+    assert ">АФУ<" in by_full_name
+    assert ">БГУ<" not in by_full_name
+
+    yo_insensitive = client.get(
+        "/", params={"platform": platform, "q": "березовый"},
+    ).text
+    assert ">БГУ<" in yo_insensitive
+    assert ">АФУ<" not in yo_insensitive
 
 
 def test_overview_ascending_sort_keeps_missing_values_last(tmp_path):
