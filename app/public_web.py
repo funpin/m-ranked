@@ -59,9 +59,27 @@ def parse_exact_subscriber_count(html: str) -> int | None:
     return int(re.sub(r"\s+", "", match.group(1))) if match else None
 
 
+def _public_node_is_unavailable(node: Tag) -> bool:
+    """Recognize Telegram's HTTP-200 placeholder for an unavailable post."""
+    classes = set(node.get("class") or [])
+    if "text_not_supported_wrap" not in classes:
+        return False
+    label = node.select_one(".message_media_not_supported_label")
+    return bool(
+        label
+        and label.get_text(" ", strip=True).casefold() == "service message"
+    )
+
+
 def public_post_is_deleted(html: str) -> bool:
-    error = BeautifulSoup(html, "html.parser").select_one(".tgme_widget_message_error")
-    return bool(error and "not found" in error.get_text(" ", strip=True).casefold())
+    soup = BeautifulSoup(html, "html.parser")
+    error = soup.select_one(".tgme_widget_message_error")
+    if error and "not found" in error.get_text(" ", strip=True).casefold():
+        return True
+    return any(
+        _public_node_is_unavailable(node)
+        for node in soup.select("div.tgme_widget_message[data-post]")
+    )
 
 
 def snapshot_interval_minutes(
@@ -168,6 +186,11 @@ def _is_public_repost(node: Tag, username: str) -> bool:
 def _parse_public_page(soup: BeautifulSoup, username: str) -> list[PublicPost]:
     posts: list[PublicPost] = []
     for node in soup.select("div.tgme_widget_message[data-post]"):
+        # Deleted channel posts can keep an embeddable shell with their ID and
+        # timestamp. It contains no counters and must not reset the missing
+        # confirmation merely because it resembles a regular message node.
+        if _public_node_is_unavailable(node):
+            continue
         data_post = str(node.get("data-post", ""))
         if "/" not in data_post or data_post.rsplit("/", 1)[0].lower() != username.lower():
             continue

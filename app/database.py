@@ -416,6 +416,15 @@ class Database:
                     "INSERT INTO schema_migrations(version, applied_at) VALUES(11, ?)",
                     (iso(utc_now()),),
                 )
+            migration_12_applied = conn.execute(
+                "SELECT 1 FROM schema_migrations WHERE version=12"
+            ).fetchone() is not None
+            if not migration_12_applied:
+                self._remove_confirmed_vk_zero_dips(conn)
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES(12, ?)",
+                    (iso(utc_now()),),
+                )
 
     @staticmethod
     def _migrate_vk_joint_post_ids(conn: sqlite3.Connection) -> None:
@@ -495,6 +504,35 @@ class Database:
             conn.execute(
                 "UPDATE platform_posts SET is_repost=? WHERE id=?",
                 (int(max_post_is_repost(raw, int(native_id))), row["id"]),
+            )
+
+    @staticmethod
+    def _remove_confirmed_vk_zero_dips(conn: sqlite3.Connection) -> None:
+        """Clear transient VK zeroes bracketed by positive observations."""
+        for column in (
+            "views_count", "reactions_count", "comments_count", "shares_count",
+        ):
+            conn.execute(
+                f"""UPDATE platform_snapshots AS current
+                    SET {column}=NULL
+                    WHERE current.{column}=0
+                      AND EXISTS (
+                        SELECT 1 FROM platform_posts pp
+                        JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+                        WHERE pp.id=current.platform_post_id AND pa.platform='vk'
+                      )
+                      AND EXISTS (
+                        SELECT 1 FROM platform_snapshots previous
+                        WHERE previous.platform_post_id=current.platform_post_id
+                          AND previous.measured_at<current.measured_at
+                          AND previous.{column}>0
+                      )
+                      AND EXISTS (
+                        SELECT 1 FROM platform_snapshots following
+                        WHERE following.platform_post_id=current.platform_post_id
+                          AND following.measured_at>current.measured_at
+                          AND following.{column}>0
+                      )"""
             )
 
     def add_institution(self, name: str, short_name: str | None = None) -> int:
@@ -727,6 +765,22 @@ class Database:
                 (platform_post_id,),
             ).fetchone()
             return str(row["measured_at"]) if row else None
+
+    def platform_metric_high_watermarks(
+        self, platform_post_id: int, _conn: sqlite3.Connection | None = None,
+    ) -> dict[str, int | None]:
+        """Return prior maxima used to reject impossible transient zeroes."""
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
+            row = conn.execute(
+                """SELECT max(views_count) views, max(reactions_count) reactions,
+                          max(comments_count) comments, max(shares_count) shares
+                   FROM platform_snapshots WHERE platform_post_id=?""",
+                (platform_post_id,),
+            ).fetchone()
+            return {
+                key: (int(row[key]) if row[key] is not None else None)
+                for key in ("views", "reactions", "comments", "shares")
+            }
 
     def list_platform_posts(
         self,
