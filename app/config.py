@@ -90,6 +90,8 @@ class Settings:
     vk_requests_per_second: float = 3.0
     rutube_account_concurrency: int = 4
     rutube_request_concurrency: int = 8
+    telegram_web_profile_path: Path = Path("data/telegram-web-profile")
+    telegram_web_concurrency: int = 3
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -99,8 +101,8 @@ class Settings:
             item.strip() for item in os.getenv("CHANNELS", "").split(",") if item.strip()
         )
         data_source = os.getenv("DATA_SOURCE", "mtproto").strip().lower()
-        if data_source not in {"mtproto", "public_web"}:
-            raise ValueError("DATA_SOURCE must be mtproto or public_web")
+        if data_source not in {"mtproto", "public_web", "telegram_web"}:
+            raise ValueError("DATA_SOURCE must be mtproto, public_web or telegram_web")
         return cls(
             telegram_api_id=int(api_id_raw) if api_id_raw else None,
             telegram_api_hash=os.getenv("TELEGRAM_API_HASH", "").strip() or None,
@@ -181,6 +183,10 @@ class Settings:
             vk_requests_per_second=_float("VK_REQUESTS_PER_SECOND", 3.0),
             rutube_account_concurrency=_int("RUTUBE_ACCOUNT_CONCURRENCY", 4),
             rutube_request_concurrency=_int("RUTUBE_REQUEST_CONCURRENCY", 8),
+            telegram_web_profile_path=Path(
+                os.getenv("TELEGRAM_WEB_PROFILE_PATH", "data/telegram-web-profile")
+            ),
+            telegram_web_concurrency=_int("TELEGRAM_WEB_CONCURRENCY", 3),
         )
 
     def require_telegram(self) -> tuple[int, str]:
@@ -215,3 +221,4 @@ class Settings:
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
         self.archive_dir.mkdir(parents=True, exist_ok=True)
+        self.telegram_web_profile_path.mkdir(parents=True, exist_ok=True)

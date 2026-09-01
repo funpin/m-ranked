@@ -250,9 +250,10 @@ def parse_public_channel(html: str, username: str) -> PublicChannel:
 
 
 class PublicWebCollector:
-    def __init__(self, settings: Settings, db: Database):
+    def __init__(self, settings: Settings, db: Database, comments_reader: Any = None):
         self.settings = settings
         self.db = db
+        self.comments_reader = comments_reader
         self.client = httpx.AsyncClient(
             timeout=30,
             follow_redirects=True,
@@ -261,6 +262,10 @@ class PublicWebCollector:
 
     async def close(self) -> None:
         await self.client.aclose()
+        if self.comments_reader is not None:
+            close = getattr(self.comments_reader, "close", None)
+            if callable(close):
+                await close()
 
     async def _fetch(self, url: str) -> str:
         response = await self.client.get(url)
@@ -365,6 +370,7 @@ class PublicWebCollector:
 
         cutoff = now - timedelta(hours=self.settings.track_post_for_hours)
         active = self.db.active_posts(channel["id"], iso(cutoff))
+        due: list[tuple[Any, datetime, int]] = []
         for stored in active:
             measured = datetime.now(timezone.utc)
             stored_published = datetime.fromisoformat(stored["published_at"])
@@ -375,6 +381,22 @@ class PublicWebCollector:
                 stored["last_measured_at"], measured, interval_minutes
             ):
                 continue
+            due.append((stored, measured, interval_minutes))
+
+        comment_counts: dict[int, int | None] = {}
+        if self.comments_reader is not None and due:
+            try:
+                comment_counts = await self.comments_reader.comments(
+                    username,
+                    (int(stored["telegram_message_id"]) for stored, _measured, _interval in due),
+                )
+                self.db.set_state("telegram_web_last_error", "")
+                self.db.set_state("telegram_web_last_success_at", iso(datetime.now(timezone.utc)))
+            except Exception as exc:
+                self.db.set_state("telegram_web_last_error", str(exc))
+                logger.exception("@%s Telegram Web comment batch failed", username)
+
+        for stored, measured, interval_minutes in due:
             mid = int(stored["telegram_message_id"])
             public_post = current.get(mid)
             if public_post is None:
@@ -411,13 +433,14 @@ class PublicWebCollector:
                     public_post.reactions.total, public_post.reactions.reactions,
                     public_post.reactions.raw, interval_minutes,
                     self.settings.jump_min_abs, self.settings.jump_min_ratio,
+                    comments_count=comment_counts.get(mid),
                     views_count=public_post.views_count, _conn=conn,
                 )
             if inserted:
                 logger.info(
-                    "@%s/%s public snapshot total=%s views=%s interval=%sm",
+                    "@%s/%s public snapshot total=%s views=%s comments=%s interval=%sm",
                     username, mid, public_post.reactions.total,
-                    public_post.views_count, interval_minutes,
+                    public_post.views_count, comment_counts.get(mid), interval_minutes,
                 )
         self.db.finish_channel_check(channel["id"], max_seen)
         logger.info("@%s: %s active public posts", username, len(active))
