@@ -108,6 +108,18 @@ def test_public_service_message_placeholder_is_unavailable():
     assert public_post_is_deleted(html) is True
 
 
+def test_public_feed_service_message_without_label_is_unavailable():
+    html = """
+    <div class="tgme_widget_message text_not_supported_wrap service_message"
+         data-post="example/43">
+      <time datetime="2026-09-01T06:50:29+00:00"></time>
+    </div>
+    """
+
+    assert parse_public_page(html, "example") == []
+    assert public_post_is_deleted(html) is True
+
+
 def test_snapshot_due_tolerates_small_scheduler_jitter():
     previous = datetime(2026, 8, 31, 13, 0, tzinfo=timezone.utc)
     assert snapshot_is_due(previous.isoformat(), previous + timedelta(minutes=4, seconds=31), 5)
