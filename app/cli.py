@@ -10,11 +10,14 @@ from .collector import Collector, normalize_channel_ref
 from .config import Settings
 from .database import Database
 from .max_collector import MaxCollector
+from .max_user_api import MaxUserClient
+from .institution_names import sync_institution_names
 from .m_rating import refresh_m_rating
 from .scheduler import run_service
 from .public_web import PublicWebCollector
 from .rutube_collector import RutubeCollector
 from .official_accounts import sync_official_accounts
+from .top10_universities import sync_top10_universities
 from .telegram_client import TelegramReader
 from .vk_collector import VkCollector
 from .web.app import create_app
@@ -29,7 +32,7 @@ def setup_logging(log_path: Path) -> None:
         return
     console = logging.StreamHandler()
     console.setFormatter(formatter)
-    file_handler = RotatingFileHandler(log_path, maxBytes=10 * 1024 * 1024, backupCount=5)
+    file_handler = RotatingFileHandler(log_path, maxBytes=512 * 1024, backupCount=1)
     file_handler.setFormatter(formatter)
     root.addHandler(console)
     root.addHandler(file_handler)
@@ -39,11 +42,17 @@ def parser() -> argparse.ArgumentParser:
     command = argparse.ArgumentParser(prog="python -m app", description="m-ranked")
     sub = command.add_subparsers(dest="command", required=True)
     sub.add_parser("auth", help="Authorize the persistent Telegram user session")
+    sub.add_parser("auth-max", help="Authorize the persistent MAX user session")
     sub.add_parser("run", help="Run polling scheduler and web dashboard")
     sub.add_parser("poll-now", help="Run exactly one complete polling cycle")
     sub.add_parser("list-channels", help="List configured channels")
     sub.add_parser("list-institutions", help="List universities and their platform accounts")
     sub.add_parser("sync-official-accounts", help="Import the curated official social accounts")
+    sub.add_parser("sync-institution-names", help="Normalize curated university display names")
+    sub.add_parser(
+        "sync-m-rating-top10",
+        help="Import audited universities seen in the recent M-Rating top 10",
+    )
     sub.add_parser("refresh-m-rating", help="Refresh all five official M-Rating social slices")
     institution = sub.add_parser("add-institution", help="Create a university container")
     institution.add_argument("name")
@@ -87,11 +96,23 @@ async def _auth(settings: Settings) -> None:
         await reader.disconnect()
 
 
+async def _auth_max(settings: Settings) -> None:
+    phone = settings.require_max_user()
+    client = MaxUserClient(
+        phone, settings.max_session_path,
+        settings.max_user_first_name, settings.max_user_last_name,
+    )
+    try:
+        await client.authorize_interactive()
+    finally:
+        await client.close()
+
+
 async def _poll(settings: Settings, db: Database) -> None:
     auxiliary_collectors = tuple(
         collector for collector in (
             VkCollector(settings, db) if settings.vk_access_token else None,
-            MaxCollector(settings, db) if settings.max_access_token else None,
+            MaxCollector(settings, db) if settings.max_user_session_ready else None,
             RutubeCollector(settings, db) if settings.rutube_public_api_enabled else None,
         ) if collector is not None
     )
@@ -122,6 +143,8 @@ def main(argv: list[str] | None = None) -> int:
     settings, db = initialize()
     if args.command == "auth":
         asyncio.run(_auth(settings))
+    elif args.command == "auth-max":
+        asyncio.run(_auth_max(settings))
     elif args.command == "run":
         asyncio.run(run_service(settings, db))
     elif args.command == "poll-now":
@@ -146,6 +169,18 @@ def main(argv: list[str] | None = None) -> int:
             f"unmatched curated Telegram accounts: {', '.join(result['missing']) or 'none'}; "
             f"institutions without curated social accounts: "
             f"{', '.join(result['uncovered']) or 'none'}"
+        )
+    elif args.command == "sync-institution-names":
+        result = sync_institution_names(db)
+        print(
+            f"Updated {result['updated']} institution names; "
+            f"unmatched Telegram accounts: {', '.join(result['missing']) or 'none'}"
+        )
+    elif args.command == "sync-m-rating-top10":
+        result = sync_top10_universities(db)
+        print(
+            f"Synced {result['institutions']} institutions and {result['accounts']} accounts; "
+            f"created {result['created']} institutions"
         )
     elif args.command == "refresh-m-rating":
         result = asyncio.run(refresh_m_rating(db))

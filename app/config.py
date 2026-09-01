@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -78,8 +79,10 @@ class Settings:
     deletion_confirmation_checks: int = 2
     vk_access_token: str | None = None
     vk_api_version: str = "5.199"
-    max_access_token: str | None = None
-    max_api_base: str = "https://platform-api2.max.ru"
+    max_user_phone: str | None = None
+    max_user_first_name: str | None = None
+    max_user_last_name: str | None = None
+    max_session_path: Path = Path("data/max.session.db")
     rutube_public_api_enabled: bool = True
     rutube_api_base: str = "https://rutube.ru/api"
 
@@ -153,11 +156,16 @@ class Settings:
             deletion_confirmation_checks=_int("DELETION_CONFIRMATION_CHECKS", 2),
             vk_access_token=os.getenv("VK_ACCESS_TOKEN", "").strip() or None,
             vk_api_version=os.getenv("VK_API_VERSION", "5.199").strip() or "5.199",
-            max_access_token=os.getenv("MAX_ACCESS_TOKEN", "").strip() or None,
-            max_api_base=(
-                os.getenv("MAX_API_BASE", "https://platform-api2.max.ru").strip()
-                or "https://platform-api2.max.ru"
-            ).rstrip("/"),
+            max_user_phone=os.getenv("MAX_USER_PHONE", "").strip() or None,
+            max_user_first_name=(
+                os.getenv("MAX_USER_FIRST_NAME", "").strip() or None
+            ),
+            max_user_last_name=(
+                os.getenv("MAX_USER_LAST_NAME", "").strip() or None
+            ),
+            max_session_path=Path(
+                os.getenv("MAX_SESSION_PATH", "data/max.session.db")
+            ),
             rutube_public_api_enabled=_bool("RUTUBE_PUBLIC_API_ENABLED", True),
             rutube_api_base=(
                 os.getenv("RUTUBE_API_BASE", "https://rutube.ru/api").strip()
@@ -170,7 +178,30 @@ class Settings:
             raise RuntimeError("TELEGRAM_API_ID and TELEGRAM_API_HASH are required")
         return self.telegram_api_id, self.telegram_api_hash
 
+    def require_max_user(self) -> str:
+        if not self.max_user_phone:
+            raise RuntimeError("MAX_USER_PHONE is required")
+        return self.max_user_phone
+
+    @property
+    def max_user_session_ready(self) -> bool:
+        if not self.max_user_phone or not self.max_session_path.is_file():
+            return False
+        try:
+            uri = f"{self.max_session_path.resolve().as_uri()}?mode=ro"
+            with sqlite3.connect(uri, uri=True) as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM sessions WHERE phone=? AND length(token)>0 LIMIT 1",
+                    (self.max_user_phone,),
+                ).fetchone()
+            return row is not None
+        except sqlite3.Error:
+            return False
+
     def ensure_directories(self) -> None:
-        for path in (self.database_path, self.telegram_session_path, self.log_path):
+        for path in (
+            self.database_path, self.telegram_session_path, self.max_session_path,
+            self.log_path,
+        ):
             path.parent.mkdir(parents=True, exist_ok=True)
         self.archive_dir.mkdir(parents=True, exist_ok=True)

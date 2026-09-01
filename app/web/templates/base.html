@@ -3,13 +3,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080c12">
+  <script>
+    (() => {
+      let theme = 'dark';
+      try {
+        const savedTheme = localStorage.getItem('m-ranked-theme');
+        if (savedTheme === 'light' || savedTheme === 'dark') theme = savedTheme;
+      } catch (_) {}
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
   <title>{% block title %}m-ranked{% endblock %}</title>
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script>
+    window.setChartTheme = theme => {
+      if (!window.Chart) return;
+      const light = theme === 'light';
+      Chart.defaults.color = light ? '#667085' : '#98a6ba';
+      Chart.defaults.borderColor = light ? 'rgba(102,112,133,.18)' : 'rgba(152,166,186,.18)';
+      Chart.defaults.plugins.tooltip.backgroundColor = light ? '#161a22' : '#05080d';
+      Chart.defaults.plugins.tooltip.titleColor = '#f4f7fb';
+      Chart.defaults.plugins.tooltip.bodyColor = light ? '#e5eaf2' : '#d8e1ed';
+      Chart.defaults.plugins.tooltip.borderColor = light ? '#344054' : '#33445b';
+      Chart.defaults.plugins.tooltip.borderWidth = 1;
+      Object.values(Chart.instances || {}).forEach(chart => chart.update('none'));
+    };
+    window.setChartTheme(document.documentElement.dataset.theme);
+  </script>
   <style>
-    :root{--bg:#f4f7fb;--panel:#fff;--ink:#161a22;--muted:#667085;--line:#e5eaf2;--blue:#0868df;--green:#087e5b;--amber:#a86200;--red:#c13b4f;--shadow:0 14px 38px rgba(16,24,40,.07)}
+    :root{color-scheme:dark;--bg:#080c12;--panel:#111824;--panel-soft:#151f2d;--panel-raised:#192434;--input:#0c131e;--ink:#f4f7fb;--muted:#98a6ba;--line:#28364a;--blue:#65a9ff;--green:#44d2a0;--amber:#f5b95f;--red:#ff788b;--blue-soft:#142a45;--green-soft:#102a24;--amber-soft:#302515;--red-soft:#311a20;--shadow:0 16px 42px rgba(0,0,0,.28)}
+    :root[data-theme=light]{color-scheme:light;--bg:#f4f7fb;--panel:#fff;--panel-soft:#f7f9fc;--panel-raised:#fff;--input:#fff;--ink:#161a22;--muted:#667085;--line:#e5eaf2;--blue:#0868df;--green:#087e5b;--amber:#a86200;--red:#c13b4f;--blue-soft:#edf5ff;--green-soft:#eefaf5;--amber-soft:#fff3de;--red-soft:#fdecef;--shadow:0 14px 38px rgba(16,24,40,.07)}
     *{box-sizing:border-box}body{margin:0;font:14px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
-    nav{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:24px;padding:10px max(20px,calc((100% - 1320px)/2));background:rgba(255,255,255,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+    nav{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:24px;padding:10px max(20px,calc((100% - 1320px)/2));background:rgba(255,255,255,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
     .brand{display:flex;align-items:center;gap:10px;margin-right:auto;color:var(--ink);font-weight:800;font-size:18px;letter-spacing:-.02em}.brand img{width:42px;height:42px;border-radius:10px;object-fit:cover}.brand span{color:var(--blue)}nav>a:not(.brand){color:#3c4658;font-weight:600}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
     main{max-width:1320px;margin:auto;padding:34px 20px 64px}h1{font-size:32px;line-height:1.15;margin:0 0 8px;letter-spacing:-.03em}h2{font-size:19px;margin:0 0 14px}h3{margin:0 0 5px}.lead{font-size:16px;color:var(--muted);margin:0 0 26px}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}.rank-grid{display:grid;grid-template-columns:1fr;gap:18px}.grid,.rank-grid,.panel,.card{min-width:0}.panel,.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow)}
@@ -38,12 +65,108 @@
     .m-rating-badge.has-tooltip{position:absolute}.m-rating-badge.has-tooltip::after{top:calc(100% + 8px);right:0;bottom:auto;left:auto}.floating-tooltip{position:fixed;z-index:3000;width:max-content;max-width:min(320px,calc(100vw - 24px));padding:8px 10px;border-radius:9px;background:#101828;color:#fff;font-size:12px;font-weight:500;line-height:1.35;box-shadow:0 8px 24px rgba(0,0,0,.2);pointer-events:none}.floating-tooltip.mobile{inset:auto 12px max(12px,env(safe-area-inset-bottom)) 12px!important;width:auto;max-width:none;font-size:13px}
     @media(max-width:780px){body{overflow-x:hidden}nav{gap:14px;padding:8px 12px}.brand{gap:7px}.brand img{width:36px;height:36px}main{padding:22px 12px 50px}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.controls label{min-width:0}.controls input,.controls select,.controls button{width:100%;min-width:0}.card:hover{transform:none}.overview-metrics{gap:12px 14px}.has-tooltip::after,.post-stat-badge.has-tooltip::after{position:fixed!important;inset:auto 12px max(12px,env(safe-area-inset-bottom)) 12px!important;z-index:1000!important;width:auto!important;max-width:none!important;margin:0!important;padding:10px 12px;font-size:13px;line-height:1.35;text-align:left}.has-tooltip:focus::after{opacity:0;visibility:hidden}.has-tooltip.tooltip-open::after{opacity:1;visibility:visible}}
     @media(max-width:430px){.controls{grid-template-columns:1fr}.overview-card{padding-right:16px;padding-left:16px}}
+
+    /* Dark interface surfaces. Kept together so every inherited page uses one palette. */
+    nav{background:rgba(8,12,18,.9)}nav>a:not(.brand){color:#c2ccda}
+    .card:hover{box-shadow:0 20px 52px rgba(0,0,0,.42)}.rank{color:#738196}
+    button,input,select{border-color:#34445a;background:var(--input)}button{background:var(--blue);color:#06111e}button.danger{border-color:#663140;background:var(--red-soft)}
+    .pill,.secondary,.m-rating-badge,.period-badge,.link-purpose,.channel-count-badge,.post-navigation .post-nav-link{border-color:#315d8f;background:var(--blue-soft)}
+    .notice,.choice:has(input:checked){background:var(--blue-soft);color:#dbeaff}.choice{background:var(--panel-soft)}.secondary{color:var(--blue)}
+    .explain,.synthetic-row,.rating-table tbody tr:hover,.rating-table th:has(.sort-direction){background:#121d2b}.explain{border-color:#29435f}
+    .measurement-history .snapshot-history-table th{background:var(--panel)}.table-column-icon{border-color:#34445a;background:var(--panel-soft);color:#dce5f1}.table-column-icon:hover,.table-column-icon:focus{border-color:#5184bd;background:var(--blue-soft)}.snapshot-history-table .reaction-item{background:var(--panel-soft)}
+    .snapshot-row.snapshot-highlight{background:#392f16;box-shadow:inset 4px 0 var(--amber)}@keyframes snapshot-pulse{50%{background:#51401a}}
+    .legend-toggle,.platform-form,.institution-cell form,.scale-mode{background:var(--panel-soft)}.legend-toggle:hover{border-color:#48627f;background:var(--panel-raised)}
+    .boom,.pill.warn,.hidden-points{background:var(--amber-soft);color:var(--amber)}.pill.ok{background:var(--green-soft);color:var(--green)}.pill.deleted,.trend.down{background:var(--red-soft);color:var(--red)}.trend.up{background:var(--green-soft);color:var(--green)}
+    .success-notice{background:var(--green-soft);color:#baf2de}.rating-explanation{background:#121f30;color:#bfccdc}.sort-direction{background:var(--blue-soft)}
+    .platform-chip,.platform-telegram{background:#14395d;color:#72b7ff}.platform-vk{border:1px solid #2187ee;background:#075fbd;color:#f1f7ff}.platform-max{background:#251f3e;color:#b9a9ff}.platform-rutube{background:#351c26;color:#ff9caf}
+    .platform-segments{background:#0b121c}.platform-segments input:checked+span{background:var(--panel-raised);box-shadow:0 1px 6px rgba(0,0,0,.45)}.platform-account-line{background:var(--panel-soft)}
+    .post-nav-link.disabled{background:var(--panel-soft);color:#738196}.scale-mode>div,.storage-track{background:#202c3d}.scale-mode-button{color:var(--muted)}.scale-mode-button.active{background:var(--panel-raised);box-shadow:0 1px 5px rgba(0,0,0,.4)}
+    .dual-range::before{background:#2b3b50}.dual-range input[type=range]::-webkit-slider-thumb{border-color:var(--panel);box-shadow:0 0 0 1px #568ac5}.dual-range input[type=range]::-moz-range-thumb{border-color:var(--panel);box-shadow:0 0 0 1px #568ac5}
+    .has-tooltip::after,.floating-tooltip{border:1px solid #33445b;background:#05080d;color:#f8fafc}.snapshot-jump:hover{color:#9cc7ff}
+    ::selection{background:#24568c;color:#fff}::-webkit-scrollbar{width:11px;height:11px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{border:3px solid var(--bg);border-radius:99px;background:#39495e}::-webkit-scrollbar-thumb:hover{background:#4c6079}
+
+    /* Light palette restores the original surfaces while keeping one shared layout. */
+    [data-theme=light] nav{background:rgba(255,255,255,.94)}[data-theme=light] .nav-links a{color:#3c4658}
+    [data-theme=light] .card:hover{box-shadow:0 18px 45px rgba(16,24,40,.11)}[data-theme=light] .rank{color:#98a2b3}
+    [data-theme=light] button,[data-theme=light] input,[data-theme=light] select{border-color:#cfd7e5;background:#fff}[data-theme=light] button{background:var(--blue);color:#fff}[data-theme=light] button.danger{border-color:#f2c8cf;background:#fff}
+    [data-theme=light] .pill,[data-theme=light] .secondary,[data-theme=light] .m-rating-badge,[data-theme=light] .period-badge,[data-theme=light] .link-purpose,[data-theme=light] .channel-count-badge,[data-theme=light] .post-navigation .post-nav-link{border-color:#cfe0ff;background:#edf4ff}
+    [data-theme=light] .notice,[data-theme=light] .choice:has(input:checked){background:#edf5ff;color:#334155}[data-theme=light] .choice{background:#fbfcfe}
+    [data-theme=light] .explain,[data-theme=light] .synthetic-row,[data-theme=light] .rating-table tbody tr:hover,[data-theme=light] .rating-table th:has(.sort-direction){background:#f8fbff}[data-theme=light] .explain{border-color:#d9e6f7}
+    [data-theme=light] .measurement-history .snapshot-history-table th{background:#fff}[data-theme=light] .table-column-icon{border-color:#d8e1ed;background:#f7f9fc;color:#344054}[data-theme=light] .snapshot-history-table .reaction-item{background:#f5f8fc}
+    [data-theme=light] .snapshot-row.snapshot-highlight{background:#fff3c7;box-shadow:inset 4px 0 #e2a400;animation-name:snapshot-pulse-light}@keyframes snapshot-pulse-light{50%{background:#ffe38a}}
+    [data-theme=light] .legend-toggle,[data-theme=light] .platform-form,[data-theme=light] .institution-cell form,[data-theme=light] .scale-mode{background:#f8fafc}[data-theme=light] .legend-toggle:hover{border-color:#b8c9df;background:#f1f6fd}
+    [data-theme=light] .success-notice{background:#eefaf5;color:#075f46}[data-theme=light] .rating-explanation{background:#f4f8ff;color:#475467}[data-theme=light] .sort-direction{background:#e7f1ff}
+    [data-theme=light] .platform-chip,[data-theme=light] .platform-telegram{background:#e8f3ff;color:#1475c9}[data-theme=light] .platform-vk{border-color:#0066d6;background:#0066d6;color:#fff}[data-theme=light] .platform-max{background:#f0edff;color:#6546c7}[data-theme=light] .platform-rutube{background:#fff0f3;color:#b42345}
+    [data-theme=light] .platform-segments{background:#eef2f8}[data-theme=light] .platform-segments input:checked+span{background:#fff;box-shadow:0 1px 5px rgba(16,24,40,.16)}[data-theme=light] .platform-account-line{background:#f7f9fc}
+    [data-theme=light] .post-nav-link.disabled{background:#f6f8fb;color:#98a2b3}[data-theme=light] .scale-mode>div,[data-theme=light] .storage-track{background:#e8edf5}[data-theme=light] .scale-mode-button{color:#667085}[data-theme=light] .scale-mode-button.active{background:#fff;box-shadow:0 1px 4px rgba(16,24,40,.14)}
+    [data-theme=light] .dual-range::before{background:#dbe5f2}[data-theme=light] .dual-range input[type=range]::-webkit-slider-thumb{border-color:#fff;box-shadow:0 0 0 1px #8eb9ef}[data-theme=light] .dual-range input[type=range]::-moz-range-thumb{border-color:#fff;box-shadow:0 0 0 1px #8eb9ef}[data-theme=light] .snapshot-jump:hover{color:#064fa9}
+    [data-theme=light] ::selection{background:#cfe0ff;color:#101828}[data-theme=light] ::-webkit-scrollbar-track{background:var(--bg)}[data-theme=light] ::-webkit-scrollbar-thumb{border-color:var(--bg);background:#c5cfdd}[data-theme=light] ::-webkit-scrollbar-thumb:hover{background:#aab7c9}
+
+    /* Primary navigation and theme control. */
+    nav .brand{margin-right:auto}.nav-links{display:flex;align-items:center;gap:24px}.nav-links a{color:#c2ccda;font-weight:600;white-space:nowrap}.nav-actions{display:flex;align-items:center;gap:8px}.theme-toggle,.menu-toggle{display:inline-flex;min-height:40px;align-items:center;justify-content:center;gap:7px;padding:8px 11px;border:1px solid var(--line);background:var(--panel-soft);color:var(--ink);line-height:1}.theme-toggle:hover,.menu-toggle:hover{border-color:var(--blue);background:var(--panel-raised)}.theme-toggle-icon{width:17px;font-size:18px;line-height:1}.theme-toggle-label{font-size:12px}.menu-toggle{display:none;width:40px;padding:8px}.menu-toggle-bars{display:grid;gap:4px}.menu-toggle-bars i{display:block;width:18px;height:2px;border-radius:2px;background:currentColor;transition:.18s transform,.18s opacity}.menu-toggle[aria-expanded=true] .menu-toggle-bars i:first-child{transform:translateY(6px) rotate(45deg)}.menu-toggle[aria-expanded=true] .menu-toggle-bars i:nth-child(2){opacity:0}.menu-toggle[aria-expanded=true] .menu-toggle-bars i:last-child{transform:translateY(-6px) rotate(-45deg)}.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+    [data-theme=light] .theme-toggle,[data-theme=light] .menu-toggle{border-color:var(--line);background:#f7f9fc;color:var(--ink)}[data-theme=light] .theme-toggle:hover,[data-theme=light] .menu-toggle:hover{border-color:#82aff1;background:#edf5ff}
+    @media(max-width:780px){nav{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;overflow:visible;padding:8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left))}.brand{grid-column:1;grid-row:1;min-width:0;margin-right:0}.brand strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-actions{grid-column:2;grid-row:1}.theme-toggle{width:40px;padding:8px}.theme-toggle-label{display:none}.menu-toggle{display:inline-flex}.nav-links{display:none;grid-column:1/-1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;padding-top:9px;border-top:1px solid var(--line)}.nav-links.is-open{display:grid}.nav-links a{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel-soft);color:var(--ink);text-align:center;white-space:normal}.nav-links a:hover{border-color:var(--blue);background:var(--panel-raised);text-decoration:none}[data-theme=light] .nav-links a{background:#f7f9fc;color:#3c4658}[data-theme=light] .nav-links a:hover{background:#edf5ff}.rating-controls{top:61px}}
+    @media(max-width:430px){.brand strong{display:none}.nav-links{grid-template-columns:1fr 1fr}.nav-links a:last-child{grid-column:1/-1}}
   </style>
 </head>
 <body>
-<nav><a class="brand" href="{{ nav_urls.overview }}"><img src="/static/logo.png" alt="Логотип m-ranked"><strong><span>m</span>-ranked</strong></a><a href="{{ nav_urls.overview }}">Обзор</a><a href="{{ nav_urls.rating }}">Рейтинг</a><a href="{{ nav_urls.compare }}">Сравнение</a><a href="{{ nav_urls.export }}">Экспорт CSV</a><a href="{{ nav_urls.manage }}">Управление</a></nav>
+<nav aria-label="Основная навигация">
+  <a class="brand" href="{{ nav_urls.overview }}"><img src="/static/logo.png" alt="Логотип m-ranked"><strong><span>m</span>-ranked</strong></a>
+  <div class="nav-links" id="mainNav">
+    <a href="{{ nav_urls.overview }}">Обзор</a><a href="{{ nav_urls.rating }}">Рейтинг</a><a href="{{ nav_urls.compare }}">Сравнение</a><a href="{{ nav_urls.export }}">Экспорт CSV</a><a href="{{ nav_urls.manage }}">Управление</a>
+  </div>
+  <div class="nav-actions">
+    <button class="theme-toggle" id="themeToggle" type="button"><span class="theme-toggle-icon" aria-hidden="true">☾</span><span class="theme-toggle-label">Тёмная</span></button>
+    <button class="menu-toggle" id="menuToggle" type="button" aria-controls="mainNav" aria-expanded="false"><span class="menu-toggle-bars" aria-hidden="true"><i></i><i></i><i></i></span><span class="visually-hidden">Открыть меню</span></button>
+  </div>
+</nav>
 <main>{% block content %}{% endblock %}</main>
 <div id="floatingTooltip" class="floating-tooltip" role="tooltip" hidden></div>
+<script>
+(() => {
+  const root = document.documentElement;
+  const themeToggle = document.getElementById('themeToggle');
+  const themeIcon = themeToggle.querySelector('.theme-toggle-icon');
+  const themeLabel = themeToggle.querySelector('.theme-toggle-label');
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  const menuToggle = document.getElementById('menuToggle');
+  const menu = document.getElementById('mainNav');
+  const mobileMenu = window.matchMedia('(max-width: 780px)');
+
+  function renderTheme(theme) {
+    const dark = theme === 'dark';
+    root.dataset.theme = theme;
+    themeIcon.textContent = dark ? '☾' : '☀';
+    themeLabel.textContent = dark ? 'Тёмная' : 'Светлая';
+    themeToggle.setAttribute('aria-label', dark ? 'Включить светлую тему' : 'Включить тёмную тему');
+    themeToggle.setAttribute('title', dark ? 'Включить светлую тему' : 'Включить тёмную тему');
+    themeMeta.content = dark ? '#080c12' : '#f4f7fb';
+    window.setChartTheme(theme);
+  }
+
+  function closeMenu() {
+    menu.classList.remove('is-open');
+    menuToggle.setAttribute('aria-expanded', 'false');
+    menuToggle.querySelector('.visually-hidden').textContent = 'Открыть меню';
+  }
+
+  renderTheme(root.dataset.theme || 'dark');
+  themeToggle.addEventListener('click', () => {
+    const theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('m-ranked-theme', theme); } catch (_) {}
+    renderTheme(theme);
+  });
+  menuToggle.addEventListener('click', () => {
+    const open = !menu.classList.contains('is-open');
+    menu.classList.toggle('is-open', open);
+    menuToggle.setAttribute('aria-expanded', String(open));
+    menuToggle.querySelector('.visually-hidden').textContent = open ? 'Закрыть меню' : 'Открыть меню';
+  });
+  menu.addEventListener('click', event => { if (mobileMenu.matches && event.target.closest('a')) closeMenu(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMenu(); });
+  mobileMenu.addEventListener?.('change', event => { if (!event.matches) closeMenu(); });
+})();
+</script>
 <script>
 (() => {
   const coarsePointer = window.matchMedia('(hover: none), (pointer: coarse)');

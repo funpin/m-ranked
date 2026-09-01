@@ -7,20 +7,23 @@ from typing import Any
 from .analytics import age_seconds, history_is_complete
 from .config import Settings
 from .database import Database, iso
-from .max_api import MaxClient
+from .max_user_api import MaxUserClient, max_username
 from .public_web import snapshot_interval_minutes, snapshot_is_due
 
 logger = logging.getLogger(__name__)
 
 
 class MaxCollector:
-    def __init__(self, settings: Settings, db: Database, client: MaxClient | None = None):
-        if not settings.max_access_token and client is None:
-            raise ValueError("MAX_ACCESS_TOKEN is required")
+    def __init__(self, settings: Settings, db: Database, client: Any | None = None):
+        if not settings.max_user_phone and client is None:
+            raise ValueError("MAX_USER_PHONE is required")
+        if client is None and not settings.max_user_session_ready:
+            raise ValueError("Authorize MAX first: python -m app auth-max")
         self.settings = settings
         self.db = db
-        self.client = client or MaxClient(
-            settings.max_access_token or "", settings.max_api_base,
+        self.client = client or MaxUserClient(
+            settings.max_user_phone or "", settings.max_session_path,
+            settings.max_user_first_name, settings.max_user_last_name,
         )
 
     async def close(self) -> None:
@@ -50,26 +53,52 @@ class MaxCollector:
 
     async def _poll_account(self, account: Any) -> None:
         native_id = str(account["native_id"] or "").strip()
-        if not native_id or not native_id.lstrip("-").isdigit():
-            raise ValueError("Укажите числовой chat_id MAX после добавления бота в канал")
+        if native_id and not native_id.lstrip("-").isdigit():
+            raise ValueError("MAX chat_id должен быть числом")
         measured_at = datetime.now(timezone.utc)
-        chat_id = int(native_id)
-        channel = await self.client.channel(chat_id)
+        reference = str(account["url"] or account["external_key"])
+        channel = await self.client.resolve_channel(
+            reference, int(native_id) if native_id else None,
+        )
+        chat_id = channel.id
         posts = await self.client.posts(chat_id, min(self.settings.discovery_limit, 100))
         self.db.update_platform_account_metadata(
             int(account["id"]), native_id=str(channel.id),
-            username=str(account["username"] or account["external_key"]),
+            username=max_username(str(account["url"] or account["username"] or account["external_key"])),
             title=channel.title, url=str(account["url"] or channel.link or ""),
             subscriber_count=channel.participants_count, measured_at=measured_at,
         )
         cutoff = measured_at - timedelta(hours=self.settings.track_post_for_hours)
-        for post in posts:
+        discovered_ids = {post.id for post in posts}
+        stored = self.db.list_platform_posts(
+            platform="max", account_id=int(account["id"]), published_after=cutoff,
+        )
+        due_ids: list[str] = []
+        for row in stored:
+            external_id = str(row["external_id"])
+            if external_id in discovered_ids:
+                continue
+            published_at = datetime.fromisoformat(str(row["published_at"]))
+            if published_at.tzinfo is None:
+                published_at = published_at.replace(tzinfo=timezone.utc)
+            interval = snapshot_interval_minutes(
+                age_seconds(published_at, measured_at), self.settings,
+            )
+            if snapshot_is_due(
+                self.db.latest_platform_snapshot_at(int(row["id"])), measured_at, interval,
+            ):
+                due_ids.append(external_id)
+        for offset in range(0, len(due_ids), 100):
+            posts.extend(await self.client.posts_by_ids(
+                chat_id, due_ids[offset:offset + 100],
+            ))
+        for post in {post.id: post for post in posts}.values():
             if post.published_at < cutoff:
                 continue
             first_age = age_seconds(post.published_at, measured_at)
             post_id = self.db.upsert_platform_post(
                 int(account["id"]), post.id, post.published_at,
-                measured_at, "post", post.url, post.raw,
+                measured_at, post.post_type, post.url, post.raw,
                 history_complete=history_is_complete(
                     first_age, self.settings.complete_history_max_first_age_minutes,
                 ),
@@ -83,11 +112,12 @@ class MaxCollector:
             ):
                 self.db.insert_platform_snapshot(
                     post_id, measured_at, first_age, interval,
-                    views_count=post.views, reactions_count=None,
+                    views_count=post.views, reactions_count=post.reactions,
                     comments_count=post.comments, shares_count=post.reposts,
                     raw={
-                        "views": post.views, "comments": post.comments,
-                        "reposts": post.reposts,
+                        "views": post.views, "reactions": post.reactions,
+                        "reaction_breakdown": post.reaction_breakdown,
+                        "comments": post.comments, "reposts": post.reposts,
                     },
                 )
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)

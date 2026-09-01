@@ -4,13 +4,13 @@
 {% if active_platform == 'telegram' %}<p class="lead"><b>Активность всех постов в базе за выбранный период</b> — включая публикации, вышедшие раньше. Это прирост реакций и просмотров внутри временного окна, а не сумма текущих показателей только у новых постов.</p>{% elif active_platform == 'all' %}<p class="lead"><b>Общий контур вуза:</b> официальные аккаунты и общий М‑Рейтинг без сложения несопоставимых метрик разных площадок.</p>{% else %}<p class="lead"><b>Активность всех публикаций в базе за выбранный период</b> — включая публикации, вышедшие раньше. Это прирост доступных метрик {{ active_platform_label }} внутри временного окна, а не сумма текущих показателей только у новых публикаций. Данные других соцсетей в расчёт не попадают.</p>{% endif %}
 <style>
   .post-stat-badges{display:flex;align-items:center;gap:7px;margin-top:9px;white-space:nowrap}
-  .post-stat-badge{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:5px 8px;border:1px solid #d9e5f4;border-radius:9px;background:#f7faff;color:#7b8799;line-height:1}
+  .post-stat-badge{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:9px;background:var(--panel-soft);color:var(--muted);line-height:1}
   .post-stat-badge svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-  .post-stat-badge b{color:#53627a;font-size:15px;line-height:1;font-variant-numeric:tabular-nums}
-  .post-stat-badge.activity{border-color:#d6e5f8;background:#f4f8ff;color:#0868df}
-  .post-stat-badge.activity b{color:#0868df}
-  .post-stat-badge.new{border-color:#d3eee5;background:#f2fbf7}
-  .post-stat-badge.new,.post-stat-badge.new b{color:#087e5b}
+  .post-stat-badge b{color:#c5d0df;font-size:15px;line-height:1;font-variant-numeric:tabular-nums}
+  .post-stat-badge.activity{border-color:#315d8f;background:var(--blue-soft);color:var(--blue)}
+  .post-stat-badge.activity b{color:var(--blue)}
+  .post-stat-badge.new{border-color:#275c4d;background:var(--green-soft)}
+  .post-stat-badge.new,.post-stat-badge.new b{color:var(--green)}
   .overview-card,.overview-header{overflow:visible}
   .overview-header{height:auto;min-height:0}
   .overview-card:has(.has-tooltip:hover),.overview-card:has(.has-tooltip:focus),.overview-card:has(.tooltip-open),.overview-card:has(.institution-title:hover){z-index:50}
@@ -20,16 +20,23 @@
   .overview-header .institution-title{display:inline-flex;align-items:baseline;gap:7px;width:max-content;max-width:100%;min-height:0;margin:0 0 5px}
   .institution-title .title-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .institution-title .title-info{flex:0 0 auto;cursor:help}
+  .overview-search{flex:1 1 100%}.overview-search input{width:100%;min-width:220px}
   @media(max-width:780px){.post-stat-badges{flex-wrap:wrap}}
 </style>
 <form class="panel controls compact" method="get">
+  <label class="overview-search">Поиск вуза<br><input type="search" name="q" value="{{ q }}" placeholder="Сокращение или полное название" aria-label="Поиск вуза по сокращению или полному названию"></label>
   <label>Период<br><select name="period">{% for value,label in [('3h','3 часа'),('1d','Сутки'),('7d','Неделя'),('30d','Последний месяц')] %}<option value="{{ value }}" {{ 'selected' if value==period else '' }}>{{ label }}</option>{% endfor %}</select></label>
   {% set platform_code = {'telegram':'TG','vk':'ВК','max':'MAX','rutube':'RUTUBE'}.get(active_platform, 'Общий') %}
-  <label><span class="control-label has-tooltip" tabindex="0" data-tooltip="{% if active_platform == 'all' %}Общий М‑Рейтинг — отдельный сводный рейтинг вуза.{% else %}М‑Рейтинг {{ platform_code }} учитывает только площадку {{ active_platform_label }}.{% endif %}">Сортировать ⓘ</span><br><select name="sort">{% if active_platform == 'all' %}{% set sort_options = [('m_rating','Общий М‑Рейтинг · место'),('coverage','Подключённые площадки'),('accounts','Количество аккаунтов')] %}{% else %}{% set sort_options = [('median_reactions','Медиана прироста реакций'),('m_rating','М‑Рейтинг ' ~ platform_code ~ ' · место'),('reactions','Прирост реакций'),('views','Прирост просмотров'),('posts','Новые публикации'),('subscribers','Подписчики')] %}{% endif %}{% for value,label in sort_options %}<option value="{{ value }}" {{ 'selected' if value==sort else '' }}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span class="control-label has-tooltip" tabindex="0" data-tooltip="{% if active_platform == 'all' %}Общий М‑Рейтинг — отдельный сводный рейтинг вуза.{% else %}М‑Рейтинг {{ platform_code }} учитывает только площадку {{ active_platform_label }}.{% endif %}">Сортировать ⓘ</span><br><select name="sort">{% if active_platform == 'all' %}{% set sort_options = [('name','Название вуза · алфавит'),('m_rating','Общий М‑Рейтинг · место'),('coverage','Подключённые площадки'),('accounts','Количество аккаунтов')] %}{% else %}{% set sort_options = [('name','Название вуза · алфавит'),('median_reactions','Медиана прироста реакций'),('m_rating','М‑Рейтинг ' ~ platform_code ~ ' · место'),('reactions','Прирост реакций'),('views','Прирост просмотров'),('posts','Новые публикации'),('subscribers','Подписчики')] %}{% endif %}{% for value,label in sort_options %}<option value="{{ value }}" {{ 'selected' if value==sort else '' }}>{{ label }}</option>{% endfor %}</select></label>
   <label>Порядок<br><select name="direction"><option value="desc" {{ 'selected' if direction=='desc' else '' }}>По убыванию</option><option value="asc" {{ 'selected' if direction=='asc' else '' }}>По возрастанию</option></select></label>
   <button type="submit">Применить</button>
   <fieldset class="platform-selector"><span>Площадка</span><div class="platform-segments" aria-label="Выбранная площадка">{% for option in platform_options %}<label><input type="radio" name="platform" value="{{ option.value }}" {{ 'checked' if option.value == active_platform else '' }} onchange="this.form.requestSubmit()"><span>{{ option.label }}</span></label>{% endfor %}</div></fieldset>
 </form>
+<script>
+  document.querySelector('select[name="sort"]').addEventListener('change', event => {
+    if (event.target.value === 'name') event.target.form.elements.direction.value = 'asc';
+  });
+</script>
 {% if active_platform == 'telegram' %}
 <div class="grid section overview-grid">
 {% for channel in channels %}
@@ -67,7 +74,7 @@
       <div class="muted">Последний опрос: {{ channel.last_checked_at|local_datetime if channel.last_checked_at else 'ещё не выполнялся' }}{% if channel.last_checked_at %} МСК{% endif %}</div>
     </div>
   </a>
-{% else %}<div class="panel">За выбранный период публикаций не найдено.</div>{% endfor %}
+{% else %}<div class="panel">{% if q %}По запросу «{{ q }}» вузы не найдены.{% else %}За выбранный период публикаций не найдено.{% endif %}</div>{% endfor %}
 </div>
 <p class="notice section"><b>Как считаются показатели:</b> в карточке показана активность всех отслеживаемых постов, для которых внутри выбранного периода есть сравнимые замеры, а не только новых публикаций. Реакции и просмотры — разница между первым и последним замером внутри окна; прирост до первого замера в период не включается. Для новых постов с полной историей отсчёт идёт от нуля в момент публикации. Медианы — типичный прирост одного поста за это окно и округляются до целого. Плашка у медианы сравнивает типичный прирост с предыдущим таким же периодом и скрывается, если сравнивать не с чем или изменения нет. Метки скачков временно отключены.</p>
 {% else %}
@@ -102,7 +109,7 @@
     <div class="overview-footer"><div class="{{ card.status_kind }}">{{ 'активен' if card.status_kind == 'ok' else card.status_text }}</div><div class="muted">Последний опрос: {{ card.last_checked_at|local_datetime if card.last_checked_at else 'ещё не выполнялся' }}{% if card.last_checked_at %} МСК{% endif %}</div></div>
   </a>
   {% endif %}
-{% else %}<div class="panel">Вузы ещё не добавлены.</div>{% endfor %}
+{% else %}<div class="panel">{% if q %}По запросу «{{ q }}» вузы не найдены.{% else %}Вузы ещё не добавлены.{% endif %}</div>{% endfor %}
 </div>
 {% if active_platform == 'all' %}<p class="notice section"><b>Почему нет общей суммы:</b> лайк, реакция, просмотр видео и просмотр поста имеют разный смысл. Общий режим показывает покрытие и официальный общий М‑Рейтинг; единый межплатформенный индекс будет добавлен только после утверждения формулы.</p>{% else %}<p class="notice section"><b>Как считаются показатели:</b> для каждой публикации берётся разница между первым и последним сравнимым снимком внутри окна. Метрики, которых нет в официальном источнике {{ active_platform_label }}, не заменяются нулями и не подменяются Telegram-данными.</p>{% endif %}
 {% endif %}

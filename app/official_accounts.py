@@ -149,8 +149,14 @@ def sync_official_accounts(db: Database) -> dict[str, int | list[str]]:
                 external_key(account),
                 username=external_key(account),
                 url=account.url,
-                access_mode="public" if account.platform == "vk" else "owner",
-                data_quality="exact" if account.platform == "vk" else "unavailable",
+                access_mode=(
+                    "public" if account.platform == "vk"
+                    else "user_session" if account.platform == "max"
+                    else "public"
+                ),
+                data_quality=(
+                    "exact" if account.platform in {"vk", "max"} else "unavailable"
+                ),
             )
             added += 1
     curated_usernames = {username.casefold() for username in OFFICIAL_ACCOUNTS}
