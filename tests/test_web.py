@@ -45,16 +45,56 @@ def test_post_history_is_limited_but_can_be_expanded(tmp_path):
                 5, 15, 2.0, views_count=point * 10, _conn=conn,
             )
 
+    snapshot_queries: list[str] = []
+    original_query = db.query
+
+    def tracked_query(sql, params=()):
+        if "FROM reaction_snapshots" in sql:
+            snapshot_queries.append(sql)
+        return original_query(sql, params)
+
+    db.query = tracked_query
     client = TestClient(create_app(cfg, db))
     compact = client.get(f"/posts/{post_id}")
     assert compact.status_code == 200
-    assert compact.text.count('class="snapshot-row ') == 200
-    assert "Показаны последние 200 из 201 замеров" in compact.text
+    assert compact.text.count('class="snapshot-row ') == 100
+    assert "Показаны последние 100 из 201 замеров" in compact.text
+    assert len(snapshot_queries) == 2
+    assert "reactions_json" not in snapshot_queries[0]
+    assert "ORDER BY measured_at DESC LIMIT ?" in snapshot_queries[1]
 
     expanded = client.get(f"/posts/{post_id}?history_limit=1000")
     assert expanded.status_code == 200
     assert expanded.text.count('class="snapshot-row ') == 201
     assert "Показаны все 201 замеров" in expanded.text
+
+
+def test_overview_cache_refreshes_after_collector_cycle(tmp_path):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    db.add_channel("cached")
+    db.set_state("poll_last_completed_at", "cycle-1")
+    window_query_count = 0
+    original_query = db.query
+
+    def tracked_query(sql, params=()):
+        nonlocal window_query_count
+        if "WITH bounds AS" in sql:
+            window_query_count += 1
+        return original_query(sql, params)
+
+    db.query = tracked_query
+    client = TestClient(create_app(cfg, db))
+
+    assert client.get("/").status_code == 200
+    assert window_query_count == 2
+    assert client.get("/?sort=name&direction=asc&q=cached").status_code == 200
+    assert window_query_count == 2
+
+    db.set_state("poll_last_completed_at", "cycle-2")
+    assert client.get("/").status_code == 200
+    assert window_query_count == 4
 
 
 def settings(tmp_path):
@@ -146,6 +186,7 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     post_page = client.get(f"/posts/{post_id}").text
     assert "chart.umd.min.js" in post_page
     assert "raw_state_json" not in post_page
+    assert 'const rows=[{"id":' in post_page
     assert "<b>репост</b>" in post_page
     assert '<span class="pill">репост</span>' in client.get(
         f"/channels/{channel_id}",

@@ -7,6 +7,7 @@ import math
 import os
 import secrets
 import shutil
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
@@ -195,6 +196,35 @@ def create_app(
     templates.env.filters["plural_ru"] = plural_ru
     basic = HTTPBasic()
     emoji_cache: dict[str, tuple[datetime, bytes, str]] = {}
+    overview_cache: dict[
+        tuple[str, str, str], tuple[dict[str, Any], ...]
+    ] = {}
+    overview_cache_lock = threading.Lock()
+
+    def cached_overview(
+        platform: str,
+        period: str,
+        state_key: str,
+        loader: Callable[[], list[dict[str, Any]]],
+    ) -> list[dict[str, Any]]:
+        """Reuse expensive aggregates until their collector completes a new cycle."""
+
+        version = db.get_state(state_key)
+        if version is None:
+            return loader()
+        cache_key = (platform, period, version)
+        with overview_cache_lock:
+            cached = overview_cache.get(cache_key)
+            if cached is None:
+                cached = tuple(dict(row) for row in loader())
+                stale_keys = [
+                    key for key in overview_cache
+                    if key[:2] == cache_key[:2] and key != cache_key
+                ]
+                for key in stale_keys:
+                    overview_cache.pop(key, None)
+                overview_cache[cache_key] = cached
+        return [dict(row) for row in cached]
 
     def require_admin(credentials: HTTPBasicCredentials = Depends(basic)) -> str:
         if not settings.admin_password:
@@ -761,9 +791,12 @@ def create_app(
             cards = (
                 platform_overview_cards(platform)
                 if platform == "all"
-                else platform_activity_cards(
-                    db, settings, platform, now - period_delta,
-                    now - period_delta * 2, now,
+                else cached_overview(
+                    platform, period, f"{platform}_poll_last_completed_at",
+                    lambda: platform_activity_cards(
+                        db, settings, platform, now - period_delta,
+                        now - period_delta * 2, now,
+                    ),
                 )
             )
             if platform == "all":
@@ -821,7 +854,10 @@ def create_app(
         }
         sort = sort if sort in sort_keys else "median_reactions"
         direction = direction or ("asc" if sort == "name" else "desc")
-        channels = channel_activity_stats(cutoff, cutoff - period_delta)
+        channels = cached_overview(
+            "telegram", period, "poll_last_completed_at",
+            lambda: channel_activity_stats(cutoff, cutoff - period_delta),
+        )
         for channel in channels:
             channel["institution_sort_name"] = normalize_institution_name(
                 channel.get("institution_short_name")
@@ -1598,7 +1634,9 @@ def create_app(
             newer_post=newer_post[0] if newer_post else None,
             available_metrics=available_metrics, metric_phrase=metric_phrase,
             history_complete=history_complete,
-            chart_json=json.dumps(chart_rows, ensure_ascii=False),
+            chart_json=json.dumps(
+                chart_rows, ensure_ascii=False, separators=(",", ":"),
+            ),
             metric_json=json.dumps(available_metrics, ensure_ascii=False),
             active_platform=post_platform,
         )
@@ -1672,7 +1710,7 @@ def create_app(
     @app.get("/posts/{post_id}", response_class=HTMLResponse)
     def post_page(
         request: Request, post_id: int,
-        history_limit: int = Query(default=200, ge=50, le=1000),
+        history_limit: int = Query(default=100, ge=50, le=1000),
     ) -> HTMLResponse:
         legacy_platform = request.query_params.get("platform")
         if legacy_platform is not None:
@@ -1699,17 +1737,14 @@ def create_app(
                ORDER BY published_at ASC, id ASC LIMIT 1""",
             (post["channel_id"], post["published_at"], post["published_at"], post_id),
         )
-        snapshots = _rows_dict(db.query(
-            "SELECT * FROM reaction_snapshots WHERE post_id=? ORDER BY measured_at", (post_id,)
+        chart_rows = _rows_dict(db.query(
+            """SELECT id, measured_at, age_seconds, total_reactions,
+                      views_count, delta_total, delta_views, synthetic
+               FROM reaction_snapshots
+               WHERE post_id=? ORDER BY measured_at""",
+            (post_id,),
         ))
-        for row in snapshots:
-            row["reactions"] = json.loads(row["reactions_json"])
-            row["delta_reactions"] = json.loads(row["delta_by_reaction_json"] or "{}")
-            row["minimum_people"] = (
-                math.ceil(int(row["delta_total"]) / 3)
-                if row["delta_total"] is not None and int(row["delta_total"]) > 0
-                else (0 if row["delta_total"] is not None else None)
-            )
+        for row in chart_rows:
             row["measured_label"] = _as_datetime(row["measured_at"]).astimezone(tz).strftime(
                 "%d.%m, %H:%M:%S"
             )
@@ -1717,10 +1752,28 @@ def create_app(
                 "момент публикации" if row.get("synthetic") else
                 f"через {format_duration(row['age_seconds'])}"
             )
+        history_rows = _rows_dict(db.query(
+            """SELECT id, measured_at, age_seconds, total_reactions, delta_total,
+                      views_count, delta_views, comments_count, delta_comments,
+                      reactions_json, delta_by_reaction_json, delta_seconds,
+                      spike, synthetic
+               FROM reaction_snapshots
+               WHERE post_id=? ORDER BY measured_at DESC LIMIT ?""",
+            (post_id, history_limit),
+        ))
+        history_rows.reverse()
+        for row in history_rows:
+            row["reactions"] = json.loads(row["reactions_json"])
+            row["delta_reactions"] = json.loads(row["delta_by_reaction_json"] or "{}")
+            row["minimum_people"] = (
+                math.ceil(int(row["delta_total"]) / 3)
+                if row["delta_total"] is not None and int(row["delta_total"]) > 0
+                else (0 if row["delta_total"] is not None else None)
+            )
             row["measurement_delta_label"] = format_signed_duration(
                 row["delta_seconds"]
             )
-        chart_rows = [
+        chart_payload = [
             {
                 "id": row["id"],
                 "measured_label": row["measured_label"],
@@ -1730,17 +1783,18 @@ def create_app(
                 "delta_total": row["delta_total"],
                 "delta_views": row["delta_views"],
             }
-            for row in snapshots
+            for row in chart_rows
         ]
-        history_total = len(snapshots)
-        history_rows = snapshots[-history_limit:]
+        history_total = len(chart_rows)
         return render(
             request, "post.html", post=post, snapshots=history_rows,
             older_post=older_post[0] if older_post else None,
             newer_post=newer_post[0] if newer_post else None,
-            chart_json=json.dumps(chart_rows, ensure_ascii=False),
+            chart_json=json.dumps(
+                chart_payload, ensure_ascii=False, separators=(",", ":"),
+            ),
             history_total=history_total,
-            history_default_limit=200,
+            history_default_limit=100,
             history_expand_limit=min(history_total, 1000),
             active_platform="telegram",
         )
