@@ -76,6 +76,8 @@ def platform_rating_data(
         raise ValueError(f"Unsupported platform rating: {platform}")
     posts = [dict(row) for row in db.query(
         """SELECT pp.id, pp.external_id, pp.url, pp.published_at,
+                  pp.deleted_at, pp.is_joint, pp.additional_author_count,
+                  pp.is_repost,
                   pa.id platform_account_id, pa.institution_id, pa.username,
                   pa.title account_title, i.name institution_name,
                   i.short_name institution_short_name,

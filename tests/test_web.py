@@ -187,8 +187,8 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "chart.umd.min.js" in post_page
     assert "raw_state_json" not in post_page
     assert 'const rows=[{"id":' in post_page
-    assert "<b>репост</b>" in post_page
-    assert '<span class="pill">репост</span>' in client.get(
+    assert '<span class="pill repost">репост</span>' in post_page
+    assert '<span class="pill repost">репост</span>' in client.get(
         f"/channels/{channel_id}",
     ).text
     assert "Масштаб по времени" in post_page
@@ -433,8 +433,10 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     now = datetime.now(timezone.utc).replace(microsecond=0)
     platform_post_id = db.upsert_platform_post(
         account_id, "-10_20", now - timedelta(hours=2), now - timedelta(hours=2),
-        "photo", "https://vk.com/wall-10_20", {"id": 20},
+        "photo", "https://vk.com/wall-10_20",
+        {"id": 20, "text": "Сохранённый текст VK"},
         history_complete=True, is_joint=True, additional_author_count=2,
+        is_repost=True,
     )
     db.insert_platform_snapshot(
         platform_post_id, now - timedelta(hours=1), 3600, 5,
@@ -458,13 +460,17 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     account = client.get(f"/platform-accounts/{account_id}").text
     assert f'/platform-posts/{platform_post_id}' in account
     assert ">№20</a>" in account
-    assert "совместная · +2 авт." in account
+    assert '<span class="pill coauthor">+2 авт.</span>' in account
+    assert '<span class="pill repost">репост</span>' in account
+    assert "совместная" not in account
     publication = client.get(f"/platform-posts/{platform_post_id}").text
     assert "ВУЗ</a> / <a" in publication
     assert ">№20</a>" in publication
     assert "история полная" in publication
-    assert "совместная публикация" in publication
-    assert "дополнительных авторов: 2" in publication
+    assert '<span class="pill coauthor">+2 авт.</span>' in publication
+    assert '<span class="pill repost">репост</span>' in publication
+    assert "совместная публикация" not in publication
+    assert "дополнительных авторов" not in publication
     assert "Накопление лайков, просмотров, комментариев и репостов" in publication
     assert "Прирост между замерами" in publication
     assert 'id="accumulationLegend"' in publication
@@ -504,6 +510,22 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     assert "ВУЗ" in rating
     assert f'/platform-posts/{platform_post_id}' in rating
     assert "Открыть публикацию VK" in rating
+    assert '<span class="pill coauthor">+2 авт.</span>' in rating
+    assert '<span class="pill repost">репост</span>' in rating
+
+    db.record_platform_post_missing(
+        platform_post_id, now, "vk_not_found", confirmation_checks=2,
+    )
+    db.record_platform_post_missing(
+        platform_post_id, now + timedelta(minutes=5),
+        "vk_not_found", confirmation_checks=2,
+    )
+    deleted_account = client.get(f"/platform-accounts/{account_id}").text
+    assert '<span class="pill deleted">удалена</span>' in deleted_account
+    deleted_publication = client.get(f"/platform-posts/{platform_post_id}").text
+    assert '<span class="pill deleted">удалена из ВКонтакте</span>' in deleted_publication
+    assert "Сохранённый текст публикации" in deleted_publication
+    assert "Сохранённый текст VK" in deleted_publication
 
 
 def test_platform_post_page_links_adjacent_account_posts(tmp_path):
@@ -720,7 +742,7 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     assert "Возраст" in institution
     assert "История" in institution
     if platform == "max":
-        assert '<span class="pill">репост</span>' in institution
+        assert '<span class="pill repost">репост</span>' in institution
 
     publication = client.get(
         f"/platform-posts/{post_id}",
@@ -744,7 +766,7 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
         assert '"key": "comments"' in publication
         assert '"key": "shares"' not in publication
     else:
-        assert "<b>репост</b>" in publication
+        assert '<span class="pill repost">репост</span>' in publication
         assert '"key": "reactions"' not in publication
         assert "Накопление просмотров, комментариев и репостов" in publication
         assert '"key": "comments"' in publication

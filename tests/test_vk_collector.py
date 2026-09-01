@@ -115,6 +115,84 @@ def test_vk_collector_refreshes_known_post_outside_wall_page(tmp_path):
     assert snapshots[-1]["views_count"] == 120
 
 
+def test_vk_collector_marks_missing_post_deleted_after_two_point_checks(tmp_path):
+    cfg = replace(_settings(tmp_path), discovery_limit=1)
+    db = Database(cfg.database_path)
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(institution_id, "vk", "university")
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    old_post = VkPost(-42, 7, published, "text", 120, 8, 3, 2, {"id": 7})
+    platform_post_id = db.upsert_platform_post(
+        account_id, old_post.external_key, published, published, "text",
+        "https://vk.ru/wall-42_7", {"text": "Архив VK"},
+    )
+    db.insert_platform_snapshot(
+        platform_post_id, published + timedelta(hours=1), 3600, 5,
+        views_count=100, reactions_count=5, comments_count=2, shares_count=1, raw={},
+    )
+
+    class MissingClient(FakeVkClient):
+        def __init__(self):
+            super().__init__(old_post)
+            self.requested: list[str] = []
+
+        async def wall(self, community_id: int, count: int = 100) -> list[VkPost]:
+            return []
+
+        async def posts(self, post_ids: list[str]) -> list[VkPost]:
+            self.requested.extend(post_ids)
+            return []
+
+    client = MissingClient()
+    collector = VkCollector(cfg, db, client)
+    asyncio.run(collector.poll_cycle())
+    pending = db.platform_post(platform_post_id)
+    assert pending is not None
+    assert pending["missing_check_count"] == 1
+    assert pending["deleted_at"] is None
+
+    asyncio.run(collector.poll_cycle())
+    deleted = db.platform_post(platform_post_id)
+    assert deleted is not None
+    assert deleted["missing_check_count"] == 2
+    assert deleted["deleted_at"] is not None
+
+    asyncio.run(collector.poll_cycle())
+    assert client.requested == ["-42_7", "-42_7"]
+
+
+def test_vk_collector_does_not_mark_missing_when_point_lookup_fails(tmp_path):
+    cfg = replace(_settings(tmp_path), discovery_limit=1)
+    db = Database(cfg.database_path)
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(institution_id, "vk", "university")
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    old_post = VkPost(-42, 7, published, "text", 120, 8, 3, 2, {"id": 7})
+    post_id = db.upsert_platform_post(
+        account_id, "-42_7", published, published, "text", None, {},
+    )
+    db.insert_platform_snapshot(
+        post_id, published + timedelta(hours=1), 3600, 5,
+        views_count=100, reactions_count=5, comments_count=2, shares_count=1, raw={},
+    )
+
+    class ErrorClient(FakeVkClient):
+        async def wall(self, community_id: int, count: int = 100) -> list[VkPost]:
+            return []
+
+        async def posts(self, post_ids: list[str]) -> list[VkPost]:
+            raise RuntimeError("VK temporarily unavailable")
+
+    asyncio.run(VkCollector(cfg, db, ErrorClient(old_post)).poll_cycle())
+
+    stored = db.platform_post(post_id)
+    assert stored is not None
+    assert stored["missing_check_count"] == 0
+    assert stored["deleted_at"] is None
+
+
 def test_vk_collector_stores_joint_post_under_community_number(tmp_path):
     cfg = _settings(tmp_path)
     db = Database(cfg.database_path)
@@ -144,7 +222,7 @@ def test_vk_collector_stores_joint_post_under_community_number(tmp_path):
     stored = db.query("SELECT * FROM platform_posts")[0]
     assert stored["external_id"] == "-42_77"
     assert stored["source_external_id"] == "-900_12"
-    assert stored["url"] == "https://vk.ru/wall-42_77"
+    assert stored["url"] == "https://vk.ru/wall-900_12"
     assert stored["is_joint"] == 1
     assert stored["additional_author_count"] == 1
     assert stored["history_complete"] == 1
