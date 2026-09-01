@@ -118,6 +118,22 @@ def settings(tmp_path):
     )
 
 
+def test_light_theme_non_primary_controls_keep_component_colors(tmp_path):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    page = TestClient(create_app(cfg, db)).get("/").text
+
+    assert "[data-theme=light] .legend-toggle{color:var(--ink)}" in page
+    assert "[data-theme=light] .secondary{color:var(--blue)}" in page
+    assert "button.danger{border-color:#f2c8cf;background:#fff;color:var(--red)}" in page
+    assert ".legend-toggle.is-hidden{opacity:.62}" in page
+    assert ".scale-mode-button{background:transparent;color:#667085}" in page
+    assert ".scale-mode-button.active{background:#fff;color:var(--blue)" in page
+    assert ".snapshot-jump{border:0;background:transparent;color:var(--blue)}" in page
+    assert "[data-theme=light] .post-stat-badge b{color:var(--ink)}" in page
+
+
 def test_dashboard_health_detail_compare_and_exports(tmp_path):
     cfg = settings(tmp_path)
     db = Database(cfg.database_path)
