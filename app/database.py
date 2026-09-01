@@ -174,6 +174,9 @@ class Database:
                     post_type TEXT NOT NULL,
                     url TEXT,
                     deleted_at TEXT,
+                    missing_check_count INTEGER NOT NULL DEFAULT 0,
+                    missing_last_checked_at TEXT,
+                    missing_reason TEXT,
                     raw_json TEXT,
                     history_complete INTEGER NOT NULL DEFAULT 0,
                     history_forced_incomplete INTEGER NOT NULL DEFAULT 0,
@@ -425,6 +428,35 @@ class Database:
                     "INSERT INTO schema_migrations(version, applied_at) VALUES(12, ?)",
                     (iso(utc_now()),),
                 )
+            migration_13_applied = conn.execute(
+                "SELECT 1 FROM schema_migrations WHERE version=13"
+            ).fetchone() is not None
+            if not migration_13_applied:
+                self._backfill_vk_joint_post_urls(conn)
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES(13, ?)",
+                    (iso(utc_now()),),
+                )
+            migration_14_applied = conn.execute(
+                "SELECT 1 FROM schema_migrations WHERE version=14"
+            ).fetchone() is not None
+            if not migration_14_applied:
+                platform_post_columns = {
+                    row[1] for row in conn.execute("PRAGMA table_info(platform_posts)")
+                }
+                for name, sql_type in (
+                    ("missing_check_count", "INTEGER NOT NULL DEFAULT 0"),
+                    ("missing_last_checked_at", "TEXT"),
+                    ("missing_reason", "TEXT"),
+                ):
+                    if name not in platform_post_columns:
+                        conn.execute(
+                            f"ALTER TABLE platform_posts ADD COLUMN {name} {sql_type}"
+                        )
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES(14, ?)",
+                    (iso(utc_now()),),
+                )
 
     @staticmethod
     def _migrate_vk_joint_post_ids(conn: sqlite3.Connection) -> None:
@@ -450,6 +482,7 @@ class Database:
             source_external_id = identity.source_external_key
             if source_external_id is None and old_external_id != identity.external_key:
                 source_external_id = old_external_id
+            public_external_id = source_external_id or identity.external_key
             conflict = conn.execute(
                 """SELECT id FROM platform_posts
                    WHERE platform_account_id=? AND external_id=? AND id<>?""",
@@ -477,11 +510,24 @@ class Database:
                    source_external_id=?, is_joint=?, additional_author_count=?
                    WHERE id=?""",
                 (
-                    identity.external_key, f"https://vk.ru/wall{identity.external_key}",
+                    identity.external_key, f"https://vk.ru/wall{public_external_id}",
                     source_external_id, int(identity.is_joint),
                     identity.additional_author_count, post_id,
                 ),
             )
+
+    @staticmethod
+    def _backfill_vk_joint_post_urls(conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """UPDATE platform_posts
+               SET url='https://vk.ru/wall' || source_external_id
+               WHERE is_joint=1
+                 AND source_external_id IS NOT NULL
+                 AND source_external_id<>external_id
+                 AND platform_account_id IN (
+                     SELECT id FROM platform_accounts WHERE platform='vk'
+                 )"""
+        )
 
     @staticmethod
     def _backfill_max_reposts(conn: sqlite3.Connection) -> None:
@@ -739,7 +785,8 @@ class Database:
                      is_joint=excluded.is_joint,
                      additional_author_count=excluded.additional_author_count,
                      is_repost=excluded.is_repost,
-                     deleted_at=NULL""",
+                     deleted_at=NULL, missing_check_count=0,
+                     missing_last_checked_at=NULL, missing_reason=NULL""",
                 (
                     platform_account_id, external_id, iso(published_at),
                     iso(discovered_at), post_type, url,
@@ -790,6 +837,7 @@ class Database:
         account_id: int | None = None,
         published_after: datetime | None = None,
         limit: int | None = None,
+        include_deleted: bool = True,
     ) -> list[sqlite3.Row]:
         conditions: list[str] = []
         params: list[Any] = []
@@ -805,6 +853,8 @@ class Database:
         if published_after is not None:
             conditions.append("pp.published_at>=?")
             params.append(iso(published_after))
+        if not include_deleted:
+            conditions.append("pp.deleted_at IS NULL")
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         limit_sql = " LIMIT ?" if limit is not None else ""
         if limit is not None:
@@ -838,6 +888,50 @@ class Database:
                     ORDER BY pp.published_at DESC{limit_sql}""",
                 tuple(params),
             ))
+
+    def record_platform_post_missing(
+        self,
+        post_id: int,
+        detected_at: datetime,
+        reason: str,
+        confirmation_checks: int,
+        _conn: sqlite3.Connection | None = None,
+    ) -> tuple[int, bool]:
+        """Record a successful point lookup that did not return a platform post."""
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
+            conn.execute(
+                """UPDATE platform_posts
+                   SET missing_check_count=missing_check_count+1,
+                       missing_last_checked_at=?, missing_reason=?
+                   WHERE id=? AND deleted_at IS NULL""",
+                (iso(detected_at), reason, post_id),
+            )
+            row = conn.execute(
+                "SELECT missing_check_count, deleted_at FROM platform_posts WHERE id=?",
+                (post_id,),
+            ).fetchone()
+            if row is None:
+                return 0, False
+            count = int(row["missing_check_count"])
+            confirmed = count >= max(1, int(confirmation_checks))
+            if confirmed and row["deleted_at"] is None:
+                conn.execute(
+                    "UPDATE platform_posts SET deleted_at=? WHERE id=?",
+                    (iso(detected_at), post_id),
+                )
+            return count, confirmed
+
+    def mark_platform_post_available(
+        self, post_id: int, _conn: sqlite3.Connection | None = None,
+    ) -> None:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
+            conn.execute(
+                """UPDATE platform_posts
+                   SET deleted_at=NULL, missing_check_count=0,
+                       missing_last_checked_at=NULL, missing_reason=NULL
+                   WHERE id=?""",
+                (post_id,),
+            )
 
     def platform_post(self, post_id: int) -> sqlite3.Row | None:
         rows = self.query(
