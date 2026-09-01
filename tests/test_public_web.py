@@ -230,6 +230,71 @@ def test_available_post_clears_pending_deletion_confirmation(tmp_path):
     assert row["missing_reason"] is None
 
 
+def test_public_collector_enriches_snapshot_with_web_session_comments(tmp_path):
+    now = datetime.now(timezone.utc)
+    settings = SimpleNamespace(
+        subscriber_refresh_hours=24,
+        track_post_for_hours=960,
+        poll_interval_minutes=5,
+        second_day_poll_interval_minutes=15,
+        third_day_poll_interval_minutes=15,
+        days_4_to_6_poll_interval_minutes=30,
+        days_7_to_13_poll_interval_minutes=60,
+        day_14_plus_poll_interval_minutes=60,
+        rutube_first_three_days_poll_interval_minutes=60,
+        rutube_days_4_to_6_poll_interval_minutes=180,
+        rutube_days_7_to_13_poll_interval_minutes=360,
+        rutube_day_14_plus_poll_interval_minutes=720,
+        complete_history_max_first_age_minutes=6,
+        jump_min_abs=15,
+        jump_min_ratio=2.0,
+        deletion_confirmation_checks=2,
+    )
+    db = Database(tmp_path / "comments.db")
+    db.migrate()
+    channel_id = db.add_channel("example")
+    feed_html = f"""
+    <div class="tgme_channel_info_header_title">Example</div>
+    <div class="tgme_widget_message" data-post="example/42">
+      <time datetime="{(now - timedelta(minutes=2)).isoformat()}"></time>
+      <span class="tgme_widget_message_views">100</span>
+    </div>
+    """
+
+    async def fake_fetch(url):
+        if url.endswith("/s/example"):
+            return feed_html
+        if url.endswith("/example"):
+            return '<div class="tgme_page_extra">100 subscribers</div>'
+        raise AssertionError(url)
+
+    class CommentsReader:
+        closed = False
+
+        async def comments(self, username, message_ids):
+            assert username == "example"
+            assert list(message_ids) == [42]
+            return {42: 17}
+
+        async def close(self):
+            self.closed = True
+
+    comments_reader = CommentsReader()
+    collector = PublicWebCollector(settings, db, comments_reader)
+    collector._fetch = fake_fetch
+    try:
+        asyncio.run(collector._poll_channel(db.channel(channel_id)))
+    finally:
+        asyncio.run(collector.close())
+
+    snapshot = db.query(
+        "SELECT comments_count, views_count FROM reaction_snapshots ORDER BY id DESC LIMIT 1"
+    )[0]
+    assert snapshot["comments_count"] == 17
+    assert snapshot["views_count"] == 100
+    assert comments_reader.closed
+
+
 def test_age_based_snapshot_intervals():
     settings = SimpleNamespace(
         poll_interval_minutes=5,

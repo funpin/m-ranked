@@ -688,13 +688,20 @@ def create_app(
             except ValueError:
                 collector_fresh = False
         live_connection = bool(telegram_connected and telegram_connected())
+        comments_last_success_at = db.get_state("telegram_web_last_success_at")
+        comments_last_error = db.get_state("telegram_web_last_error")
+        web_session_healthy = bool(
+            collector_fresh and comments_last_success_at and not comments_last_error
+        )
         integrations = {
             "telegram": {
                 "configured": (
-                    settings.data_source == "public_web"
+                    settings.data_source in {"public_web", "telegram_web"}
                     or bool(settings.telegram_api_id and settings.telegram_api_hash)
                 ),
                 "mode": settings.data_source,
+                "comments_last_success_at": comments_last_success_at,
+                "comments_last_error": comments_last_error,
             },
             "vk": {"configured": bool(settings.vk_access_token)},
             "max": {
@@ -721,8 +728,9 @@ def create_app(
             "source_connected": live_connection if telegram_connected else collector_fresh,
             "collector_fresh": collector_fresh,
             "telegram_connected": (
-                live_connection
-                if settings.data_source == "mtproto" else False
+                (live_connection if telegram_connected else web_session_healthy)
+                if settings.data_source == "telegram_web"
+                else (live_connection if settings.data_source == "mtproto" else False)
             ),
             "channels": len(db.list_channels(enabled_only=True)),
             "last_poll": db.get_state("last_poll"),
@@ -1087,13 +1095,17 @@ def create_app(
         integrations = (
             {
                 "platform": "Telegram", "configured": (
-                    settings.data_source == "public_web"
+                    settings.data_source in {"public_web", "telegram_web"}
                     or bool(settings.telegram_api_id and settings.telegram_api_hash)
                 ),
                 "detail": (
                     "Публичный HTML-источник"
                     if settings.data_source == "public_web"
-                    else "MTProto: API ID, API hash и сессия"
+                    else (
+                        "Официальный Telegram Web: вход по номеру, точные комментарии"
+                        if settings.data_source == "telegram_web"
+                        else "MTProto: API ID, API hash и сессия"
+                    )
                 ),
             },
             {

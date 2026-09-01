@@ -13,10 +13,22 @@ from .max_collector import MaxCollector
 from .public_web import PublicWebCollector
 from .rutube_collector import RutubeCollector
 from .telegram_client import TelegramReader
+from .telegram_web import TelegramWebSession
 from .vk_collector import VkCollector
 from .web.app import create_app
 
 logger = logging.getLogger(__name__)
+
+
+async def public_collector(settings: Settings, db: Database) -> PublicWebCollector:
+    comments_reader = None
+    if settings.data_source == "telegram_web":
+        comments_reader = TelegramWebSession(
+            settings.telegram_web_profile_path,
+            concurrency=settings.telegram_web_concurrency,
+        )
+        await comments_reader.connect()
+    return PublicWebCollector(settings, db, comments_reader)
 
 
 def polling_delay_seconds(interval_seconds: float, elapsed_seconds: float) -> float:
@@ -81,15 +93,20 @@ async def run_service(settings: Settings, db: Database) -> None:
             RutubeCollector(settings, db) if settings.rutube_public_api_enabled else None,
         ) if collector is not None
     )
-    if settings.data_source == "public_web":
-        collector = PublicWebCollector(settings, db)
+    if settings.data_source in {"public_web", "telegram_web"}:
+        collector = await public_collector(settings, db)
         collectors = (collector, *auxiliary_collectors)
         connected = True
 
         def public_connection_state() -> bool:
             return connected
 
-        app = create_app(settings, db, public_connection_state)
+        connection_state = (
+            (lambda: bool(collector.comments_reader.connected))
+            if settings.data_source == "telegram_web"
+            else public_connection_state
+        )
+        app = create_app(settings, db, connection_state)
         server = uvicorn.Server(
             uvicorn.Config(app, host=settings.web_host, port=settings.web_port, log_config=None)
         )
@@ -140,8 +157,8 @@ async def run_collector_service(settings: Settings, db: Database) -> None:
         ) if collector is not None
     )
     reader: TelegramReader | None = None
-    if settings.data_source == "public_web":
-        primary: Any = PublicWebCollector(settings, db)
+    if settings.data_source in {"public_web", "telegram_web"}:
+        primary: Any = await public_collector(settings, db)
     else:
         api_id, api_hash = settings.require_telegram()
         reader = TelegramReader(api_id, api_hash, settings.telegram_session_path)
