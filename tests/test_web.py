@@ -55,7 +55,8 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     channel_id = db.add_channel("example")
     now = datetime.now(timezone.utc) - timedelta(minutes=90)
     post_id = db.add_post(
-        channel_id, "m:10", [10], None, now, now, 0, True, "text", False
+        channel_id, "m:10", [10], None, now, now, 0, True, "text", False,
+        is_repost=True,
     )
     db.insert_snapshot(
         post_id, now, 0, 2, {"👍": 2}, [], 60, 15, 2.0,
@@ -85,7 +86,7 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert 'name="platform" value="telegram" checked' in overview
     assert 'name="platform" value="all"' in overview
     assert 'href="/?platform=telegram"' in overview
-    assert 'href="/channels/' in overview and "?platform=telegram" in overview
+    assert f'href="/channels/{channel_id}"' in overview
     assert "включая публикации, вышедшие раньше" in overview
     assert "не сумма текущих показателей только у новых постов" in overview
     telegram_sort = overview.split('<select name="sort">', 1)[1].split("</select>", 1)[0]
@@ -108,6 +109,10 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert ".has-tooltip.tooltip-open::after" in overview
     assert "event.target.closest('.has-tooltip[data-tooltip]')" in overview
     post_page = client.get(f"/posts/{post_id}").text
+    assert "<b>репост</b>" in post_page
+    assert '<span class="pill">репост</span>' in client.get(
+        f"/channels/{channel_id}",
+    ).text
     assert "Масштаб по времени" in post_page
     assert 'aria-label="Минимум людей"' in post_page
     assert "MAX_VISIBLE_POINTS=144" in post_page
@@ -185,9 +190,9 @@ def test_post_page_links_adjacent_channel_posts(tmp_path):
 
     page = client.get(f"/posts/{post_ids[1]}").text
 
-    assert f'href="/posts/{post_ids[0]}?platform=telegram" rel="prev"' in page
+    assert f'href="/posts/{post_ids[0]}" rel="prev"' in page
     assert "№101" in page
-    assert f'href="/posts/{post_ids[2]}?platform=telegram" rel="next"' in page
+    assert f'href="/posts/{post_ids[2]}" rel="next"' in page
     assert "№103" in page
 
 
@@ -248,14 +253,95 @@ def test_platform_context_never_falls_back_to_telegram_data(tmp_path):
     redirect = client.get(
         f"/channels/{channel_id}?platform=vk", follow_redirects=False,
     )
-    assert redirect.status_code == 307
-    assert redirect.headers["location"] == "/?platform=vk"
+    assert redirect.status_code == 404
     assert client.get("/export/snapshots.csv?platform=vk").status_code == 200
     assert client.get("/export/posts.csv?platform=vk").status_code == 200
 
     fallback = client.get("/?platform=unknown").text
     assert "Обзор каналов" in fallback
     assert 'name="platform" value="telegram" checked' in fallback
+
+
+def test_entity_routes_derive_platform_and_redirect_legacy_urls(tmp_path):
+    cfg = replace(settings(tmp_path), max_access_token="token")
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("Маршрутный вуз", "МВ")
+    account_id = db.add_platform_account(
+        institution_id, "max", "max-route", title="MAX маршрутного вуза",
+    )
+    now = datetime.now(timezone.utc)
+    post_id = db.upsert_platform_post(
+        account_id, "max-post", now, now, "text", "https://max.ru/max-route/post", {},
+    )
+    client = TestClient(create_app(cfg, db))
+
+    assert client.get(f"/platform-accounts/{account_id}").status_code == 200
+    assert client.get(f"/platform-posts/{post_id}").status_code == 200
+
+    legacy_account = client.get(
+        f"/platform-accounts/{account_id}?platform=max", follow_redirects=False,
+    )
+    assert legacy_account.status_code == 307
+    assert legacy_account.headers["location"] == f"/platform-accounts/{account_id}"
+    legacy_post = client.get(
+        f"/platform-posts/{post_id}?platform=max", follow_redirects=False,
+    )
+    assert legacy_post.status_code == 307
+    assert legacy_post.headers["location"] == f"/platform-posts/{post_id}"
+
+
+def test_institution_routes_only_aggregate_multiple_accounts(tmp_path):
+    cfg = replace(settings(tmp_path), vk_access_token="token")
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("Многоканальный вуз", "МВУЗ")
+    first_account = db.add_platform_account(
+        institution_id, "vk", "first-vk", username="first_vk", title="Первый VK",
+    )
+    db.add_platform_account(
+        institution_id, "vk", "second-vk", username="second_vk", title="Второй VK",
+    )
+    client = TestClient(create_app(cfg, db))
+
+    overview = client.get("/?platform=vk").text
+    assert f'/institutions/{institution_id}?platform=vk' in overview
+    aggregate = client.get(
+        f"/institutions/{institution_id}?platform=vk", follow_redirects=False,
+    )
+    assert aggregate.status_code == 200
+    assert "@first_vk" in aggregate.text
+    assert "@second_vk" in aggregate.text
+    account = client.get(f"/platform-accounts/{first_account}").text
+    assert "@first_vk" in account
+    assert "@second_vk" not in account
+
+
+def test_telegram_institution_redirects_one_channel_and_aggregates_many(tmp_path):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("Telegram-вуз", "ТГВ")
+    first_channel = db.add_channel("first_channel", institution_id=institution_id)
+    now = datetime.now(timezone.utc)
+    first_post = db.add_post(
+        first_channel, "m:1", [1], None, now, now, 0, True, "text", False,
+    )
+    client = TestClient(create_app(cfg, db, lambda: True))
+
+    single = client.get(
+        f"/institutions/{institution_id}?platform=telegram", follow_redirects=False,
+    )
+    assert single.status_code == 307
+    assert single.headers["location"] == f"/channels/{first_channel}"
+
+    second_channel = db.add_channel("second_channel", institution_id=institution_id)
+    second_post = db.add_post(
+        second_channel, "m:2", [2], None, now, now, 0, True, "text", False,
+    )
+    aggregate = client.get(f"/institutions/{institution_id}?platform=telegram")
+    assert aggregate.status_code == 200
+    assert "@first_channel" in aggregate.text
+    assert "@second_channel" in aggregate.text
+    assert f'href="/posts/{first_post}"' in aggregate.text
+    assert f'href="/posts/{second_post}"' in aggregate.text
 
 
 def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
@@ -285,17 +371,17 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     overview = client.get("/?platform=vk&period=3h").text
     assert "Публикации из БД с активностью за 3 часа" in overview
     assert "60" in overview
-    assert f'/institutions/{institution_id}?platform=vk' in overview
+    assert f'/platform-accounts/{account_id}' in overview
     institution = client.get(f"/institutions/{institution_id}?platform=vk").text
     assert "публикаций в базе" in institution
     assert "с полной историей" in institution
     assert "медиана лайков" in institution
-    assert f'/platform-posts/{platform_post_id}?platform=vk' in institution
-    account = client.get(f"/platform-accounts/{account_id}?platform=vk").text
-    assert f'/platform-posts/{platform_post_id}?platform=vk' in account
+    assert f'/platform-posts/{platform_post_id}' in institution
+    account = client.get(f"/platform-accounts/{account_id}").text
+    assert f'/platform-posts/{platform_post_id}' in account
     assert ">№20</a>" in account
     assert "совместная · +2 авт." in account
-    publication = client.get(f"/platform-posts/{platform_post_id}?platform=vk").text
+    publication = client.get(f"/platform-posts/{platform_post_id}").text
     assert "ВУЗ</a> / <a" in publication
     assert ">№20</a>" in publication
     assert "история полная" in publication
@@ -338,7 +424,7 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     rating = client.get("/rating?platform=vk&period=1d").text
     assert "Рейтинг · ВКонтакте" in rating
     assert "ВУЗ" in rating
-    assert f'/platform-posts/{platform_post_id}?platform=vk' in rating
+    assert f'/platform-posts/{platform_post_id}' in rating
     assert "Открыть публикацию VK" in rating
 
 
@@ -360,11 +446,11 @@ def test_platform_post_page_links_adjacent_account_posts(tmp_path):
     ]
     client = TestClient(create_app(cfg, db))
 
-    page = client.get(f"/platform-posts/{post_ids[1]}?platform=vk").text
+    page = client.get(f"/platform-posts/{post_ids[1]}").text
 
-    assert f'href="/platform-posts/{post_ids[0]}?platform=vk" rel="prev"' in page
+    assert f'href="/platform-posts/{post_ids[0]}" rel="prev"' in page
     assert "<small>№101</small>" in page
-    assert f'href="/platform-posts/{post_ids[2]}?platform=vk" rel="next"' in page
+    assert f'href="/platform-posts/{post_ids[2]}" rel="next"' in page
     assert "<small>№103</small>" in page
 
 
@@ -458,7 +544,7 @@ def test_rutube_rating_and_comparison_use_likes_comments_and_views(tmp_path):
     assert "Комментарии" in rating
     assert "Вовлечённость:" in rating
     assert "Репосты" not in rating
-    assert f"/platform-posts/{post_ids[0]}?platform=rutube" in rating
+    assert f"/platform-posts/{post_ids[0]}" in rating
     assert "77777" not in rating
 
     comparison = client.get(
@@ -495,6 +581,7 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     post_id = db.upsert_platform_post(
         account_id, f"{platform}-post", now - timedelta(hours=2),
         now - timedelta(hours=2), "video", f"https://example.test/{platform}/post", {},
+        is_repost=platform == "max",
     )
     db.insert_platform_snapshot(
         post_id, now - timedelta(hours=1), 3600, 5,
@@ -512,7 +599,7 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
 
     overview = client.get(f"/?platform={platform}&period=3h").text
     assert "Обзор каналов" in overview
-    assert f'href="/institutions/{institution_id}?platform={platform}"' in overview
+    assert f'href="/platform-accounts/{account_id}"' in overview
     assert f"@{platform}_official" in overview
     assert 'aria-label="Публикации за 3 часа"' in overview
     assert "медиана прироста просмотров" in overview
@@ -546,17 +633,19 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     institution = client.get(
         f"/institutions/{institution_id}?platform={platform}",
     ).text
-    assert "ЕДУ" in institution
+    assert f"{platform.upper()} вуза" in institution
     assert f"@{platform}_official" in institution
     assert 'class="metrics channel-metrics"' in institution
     assert "публикаций в базе" in institution
-    assert f'/platform-posts/{post_id}?platform={platform}' in institution
+    assert f'/platform-posts/{post_id}' in institution
     assert "Опубликовано, МСК" in institution
     assert "Возраст" in institution
     assert "История" in institution
+    if platform == "max":
+        assert '<span class="pill">репост</span>' in institution
 
     publication = client.get(
-        f"/platform-posts/{post_id}?platform={platform}",
+        f"/platform-posts/{post_id}",
     ).text
     assert 'class="post-heading"' in publication
     assert 'id="totalChart"' in publication
@@ -577,6 +666,7 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
         assert '"key": "comments"' in publication
         assert '"key": "shares"' not in publication
     else:
+        assert "<b>репост</b>" in publication
         assert '"key": "reactions"' not in publication
         assert "Накопление просмотров, комментариев и репостов" in publication
         assert '"key": "comments"' in publication

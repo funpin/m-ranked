@@ -76,6 +76,21 @@ def logical_comments(messages: Iterable[Any]) -> int | None:
     return max(values) if values else None
 
 
+def is_channel_repost(message: Any) -> bool:
+    """Return whether a Telegram message was forwarded from another channel."""
+    forwarded = getattr(message, "fwd_from", None)
+    source = getattr(forwarded, "from_id", None) if forwarded is not None else None
+    source_channel_id = getattr(source, "channel_id", None)
+    if source_channel_id is None:
+        return False
+    destination = getattr(message, "peer_id", None)
+    destination_channel_id = getattr(destination, "channel_id", None)
+    return (
+        destination_channel_id is None
+        or int(source_channel_id) != int(destination_channel_id)
+    )
+
+
 def group_logical_posts(messages: Iterable[Any]) -> list[LogicalPost]:
     groups: dict[str, list[Any]] = defaultdict(list)
     for message in messages:
@@ -102,7 +117,7 @@ def group_logical_posts(messages: Iterable[Any]) -> list[LogicalPost]:
         logical.append(
             LogicalPost(
                 tuple(message.id for message in group), grouped_id, published_at,
-                kind, state, ambiguous,
+                kind, state, ambiguous, any(is_channel_repost(message) for message in group),
             )
         )
     return sorted(logical, key=lambda item: item.published_at)
@@ -179,6 +194,7 @@ class Collector:
                     first_age, self.settings.complete_history_max_first_age_minutes
                 ),
                 logical.post_type, logical.ambiguous_reactions,
+                is_repost=logical.is_repost,
             )
             self.db.mark_post_available(post_id)
             if logical.ambiguous_reactions:
@@ -214,6 +230,9 @@ class Collector:
                 )
                 continue
             self.db.mark_post_available(post["id"])
+            self.db.set_post_repost(
+                post["id"], any(is_channel_repost(message) for message in fetched),
+            )
             if post["telegram_grouped_id"]:
                 state, ambiguous = choose_album_reactions(fetched)
             else:

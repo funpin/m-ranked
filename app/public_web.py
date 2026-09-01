@@ -27,6 +27,7 @@ class PublicPost:
     post_type: str
     reactions: ReactionState
     views_count: int | None
+    is_repost: bool = False
 
 
 @dataclass(frozen=True)
@@ -151,6 +152,18 @@ def _post_type(node: Tag) -> str:
     return "text"
 
 
+def _is_public_repost(node: Tag, username: str) -> bool:
+    forwarded = node.select_one(".tgme_widget_message_forwarded_from")
+    if forwarded is None:
+        return False
+    source = forwarded.select_one(".tgme_widget_message_forwarded_from_name[href]")
+    if source is None:
+        return True
+    href = str(source.get("href") or "").split("?", 1)[0].rstrip("/")
+    source_username = href.rsplit("/", 1)[-1].lstrip("@").casefold()
+    return not source_username or source_username != username.casefold()
+
+
 def parse_public_page(html: str, username: str) -> list[PublicPost]:
     soup = BeautifulSoup(html, "html.parser")
     posts: list[PublicPost] = []
@@ -184,6 +197,7 @@ def parse_public_page(html: str, username: str) -> list[PublicPost]:
             PublicPost(
                 message_id, published.astimezone(timezone.utc), _post_type(node),
                 ReactionState(reactions, sum(reactions.values()), raw), views_count,
+                _is_public_repost(node, username),
             )
         )
     return sorted(posts, key=lambda post: post.message_id)
@@ -299,7 +313,7 @@ class PublicWebCollector:
             post_id = self.db.add_post(
                 channel["id"], f"m:{post.message_id}", [post.message_id], None,
                 post.published_at, now, first_age, False,
-                post.post_type, False,
+                post.post_type, False, is_repost=post.is_repost,
             )
             self.db.mark_post_available(post_id)
             self.db.ensure_publication_baseline(
@@ -347,6 +361,7 @@ class PublicWebCollector:
                 logger.warning("@%s/%s unavailable in public preview", username, mid)
                 continue
             self.db.mark_post_available(stored["id"])
+            self.db.set_post_repost(stored["id"], public_post.is_repost)
             inserted = self.db.insert_snapshot(
                 stored["id"], measured, age_seconds(public_post.published_at, measured),
                 public_post.reactions.total, public_post.reactions.reactions,

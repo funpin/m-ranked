@@ -1296,6 +1296,9 @@ def create_app(
         platform: str = Query(default="all"),
     ) -> HTMLResponse:
         platform = normalize_platform(platform)
+        institution = db.institution(institution_id)
+        if institution is None:
+            raise HTTPException(status_code=404, detail="Вуз не найден")
         if platform == "telegram":
             telegram_channels = [
                 row for row in db.list_channels_with_institutions()
@@ -1303,15 +1306,46 @@ def create_app(
             ]
             if len(telegram_channels) == 1:
                 return RedirectResponse(
-                    f"/channels/{telegram_channels[0]['id']}?platform=telegram", status_code=307,
+                    f"/channels/{telegram_channels[0]['id']}", status_code=307,
                 )
-        institution = db.institution(institution_id)
-        if institution is None:
-            raise HTTPException(status_code=404, detail="Вуз не найден")
+            channel_ids = [int(channel["id"]) for channel in telegram_channels]
+            telegram_posts: list[Any] = []
+            if channel_ids:
+                placeholders = ",".join("?" for _ in channel_ids)
+                telegram_posts = db.query(
+                    f"""SELECT p.*, c.username, c.title,
+                           (SELECT s.total_reactions FROM reaction_snapshots s
+                            WHERE s.post_id=p.id ORDER BY s.measured_at DESC LIMIT 1)
+                               current_total,
+                           (SELECT s.views_count FROM reaction_snapshots s
+                            WHERE s.post_id=p.id ORDER BY s.measured_at DESC LIMIT 1)
+                               current_views,
+                           (SELECT s.comments_count FROM reaction_snapshots s
+                            WHERE s.post_id=p.id ORDER BY s.measured_at DESC LIMIT 1)
+                               current_comments
+                        FROM posts p JOIN channels c ON c.id=p.channel_id
+                        WHERE p.channel_id IN ({placeholders}) AND p.published_at>=?
+                        ORDER BY p.published_at DESC LIMIT 500""",
+                    (
+                        *channel_ids,
+                        (datetime.now(timezone.utc) - timedelta(
+                            days=settings.retention_days,
+                        )).isoformat(),
+                    ),
+                )
+            return render(
+                request, "telegram_institution.html", institution=institution,
+                channels=telegram_channels, posts=telegram_posts,
+                active_platform="telegram",
+            )
         account_platform = None if platform == "all" else platform
         accounts = db.list_platform_accounts(
             institution_id=institution_id, platform=account_platform,
         )
+        if platform != "all" and len(accounts) == 1:
+            return RedirectResponse(
+                f"/platform-accounts/{accounts[0]['id']}", status_code=307,
+            )
         posts = db.list_platform_posts(
             platform=account_platform, institution_id=institution_id,
             published_after=datetime.now(timezone.utc) - timedelta(days=settings.retention_days),
@@ -1336,9 +1370,7 @@ def create_app(
     @app.get("/platform-accounts/{account_id}", response_class=HTMLResponse)
     async def platform_account_page(
         request: Request, account_id: int,
-        platform: str = Query(default="vk"),
     ) -> HTMLResponse:
-        platform = normalize_platform(platform)
         account = db.platform_account(account_id)
         if account is None:
             raise HTTPException(status_code=404, detail="Аккаунт не найден")
@@ -1349,10 +1381,13 @@ def create_app(
             )
             if channel:
                 return RedirectResponse(
-                    f"/channels/{channel[0]['id']}?platform=telegram", status_code=307,
+                    f"/channels/{channel[0]['id']}", status_code=307,
                 )
-        if platform not in {"all", account_platform}:
-            raise HTTPException(status_code=404, detail="Аккаунт другой площадки")
+        legacy_platform = request.query_params.get("platform")
+        if legacy_platform is not None:
+            if normalize_platform(legacy_platform) not in {"all", account_platform}:
+                raise HTTPException(status_code=404, detail="Аккаунт другой площадки")
+            return RedirectResponse(f"/platform-accounts/{account_id}", status_code=307)
         institution = db.institution(int(account["institution_id"]))
         posts = db.list_platform_posts(
             account_id=account_id,
@@ -1373,15 +1408,16 @@ def create_app(
     @app.get("/platform-posts/{post_id}", response_class=HTMLResponse)
     async def platform_post_page(
         request: Request, post_id: int,
-        platform: str = Query(default="vk"),
     ) -> HTMLResponse:
-        platform = normalize_platform(platform)
         post = db.platform_post(post_id)
         if post is None:
             raise HTTPException(status_code=404, detail="Публикация не найдена")
         post_platform = str(post["platform"])
-        if platform not in {"all", post_platform}:
-            raise HTTPException(status_code=404, detail="Публикация другой площадки")
+        legacy_platform = request.query_params.get("platform")
+        if legacy_platform is not None:
+            if normalize_platform(legacy_platform) not in {"all", post_platform}:
+                raise HTTPException(status_code=404, detail="Публикация другой площадки")
+            return RedirectResponse(f"/platform-posts/{post_id}", status_code=307)
         older_post = db.query(
             """SELECT id, external_id FROM platform_posts
                WHERE platform_account_id=?
@@ -1497,11 +1533,12 @@ def create_app(
     @app.get("/channels/{channel_id}", response_class=HTMLResponse)
     async def channel_page(
         request: Request, channel_id: int,
-        platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
-        platform = normalize_platform(platform)
-        if platform != "telegram":
-            return RedirectResponse(f"/?platform={platform}", status_code=307)
+        legacy_platform = request.query_params.get("platform")
+        if legacy_platform is not None:
+            if normalize_platform(legacy_platform) != "telegram":
+                raise HTTPException(status_code=404, detail="Маршрут доступен только для Telegram")
+            return RedirectResponse(f"/channels/{channel_id}", status_code=307)
         channel = db.channel(channel_id)
         if channel is None:
             return HTMLResponse("Канал не найден", status_code=404)
@@ -1562,11 +1599,12 @@ def create_app(
     @app.get("/posts/{post_id}", response_class=HTMLResponse)
     async def post_page(
         request: Request, post_id: int,
-        platform: str = Query(default="telegram"),
     ) -> HTMLResponse:
-        platform = normalize_platform(platform)
-        if platform != "telegram":
-            return RedirectResponse(f"/?platform={platform}", status_code=307)
+        legacy_platform = request.query_params.get("platform")
+        if legacy_platform is not None:
+            if normalize_platform(legacy_platform) != "telegram":
+                raise HTTPException(status_code=404, detail="Маршрут доступен только для Telegram")
+            return RedirectResponse(f"/posts/{post_id}", status_code=307)
         found = db.query(
             """SELECT p.*, c.username, c.title FROM posts p
                JOIN channels c ON c.id=p.channel_id WHERE p.id=?""",

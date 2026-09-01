@@ -33,7 +33,7 @@
 {% if active_platform == 'telegram' %}
 <div class="grid section overview-grid">
 {% for channel in channels %}
-  <a class="card overview-card" href="/channels/{{ channel.id }}?platform=telegram">
+  <a class="card overview-card" href="/channels/{{ channel.id }}">
     {% if channel.m_rating_tg_rank %}<span class="m-rating-badge has-tooltip" tabindex="0" data-tooltip="Официальное место в М‑Рейтинге TG{% if channel.m_rating_period %} · {{ channel.m_rating_period }}{% endif %}.">М‑Рейтинг TG · №{{ channel.m_rating_tg_rank }}</span>{% endif %}
     <div class="overview-header">
       <div class="card-title-row"><h3 class="institution-title" tabindex="0" data-floating-tooltip="{{ channel.institution_name or channel.title or ('@' ~ channel.username) }}" aria-label="Полное название вуза"><span class="title-text">{{ channel.institution_short_name or channel.institution_name or channel.title or ('@' ~ channel.username) }}</span><span class="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div>
@@ -82,7 +82,7 @@
     <div class="overview-footer"><div class="{{ card.status_kind }}">{{ card.status_text }}</div></div>
   </article>
   {% else %}
-  <a class="card overview-card" href="/institutions/{{ card.institution.id }}?platform={{ active_platform }}">
+  <a class="card overview-card" href="{% if card.account_count == 1 %}/platform-accounts/{{ card.accounts[0].id }}{% else %}/institutions/{{ card.institution.id }}?platform={{ active_platform }}{% endif %}">
     {% if card.rating_rank %}<span class="m-rating-badge has-tooltip" tabindex="0" data-tooltip="Официальное место в М‑Рейтинге {{ active_platform_label }}{% if card.institution.m_rating_period %} · {{ card.institution.m_rating_period }}{% endif %}.">М‑Рейтинг {{ platform_options|selectattr('value','equalto',active_platform)|map(attribute='label')|first }} · №{{ card.rating_rank }}</span>{% endif %}
     <div class="overview-header">
       <div class="card-title-row"><h3 class="institution-title" tabindex="0" data-floating-tooltip="{{ card.institution.name }}" aria-label="Полное название вуза"><span class="title-text">{{ card.institution.short_name or card.institution.name }}</span><span class="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div>

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.config import Settings
 from app.database import Database
-from app.max_api import MaxChannel, MaxPost
+from app.max_api import MaxChannel, MaxPost, max_post_is_repost
 from app.max_collector import MaxCollector
 from app.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from app.rutube_collector import RutubeCollector
@@ -55,6 +55,7 @@ class FakeMax:
         return [MaxPost(
             "m1", datetime.now(timezone.utc) - timedelta(hours=1),
             90, 4, 3, "https://max.ru/vuz/m1", {"message_id": "m1"},
+            is_repost=True,
         )]
 
     async def close(self):
@@ -95,3 +96,12 @@ def test_max_collector_requires_chat_id_and_stores_supported_counters(tmp_path):
     snapshot = db.query("SELECT * FROM platform_snapshots")[0]
     assert (snapshot["views_count"], snapshot["comments_count"], snapshot["shares_count"]) == (90, 3, 4)
     assert snapshot["reactions_count"] is None
+    assert db.query("SELECT is_repost FROM platform_posts")[0]["is_repost"] == 1
+
+
+def test_max_repost_requires_forward_from_another_chat():
+    assert max_post_is_repost({"link": {"type": "forward", "chat_id": "-456"}}, -123)
+    assert not max_post_is_repost(
+        {"link": {"type": "forward", "chat_id": "-123"}}, -123,
+    )
+    assert not max_post_is_repost({"link": {"type": "reply", "chat_id": "-456"}}, -123)

@@ -59,6 +59,20 @@ def test_public_page_reaction_markup_variants():
     assert post.reactions.reactions == {"custom:456": 2, "🔥": 3, "👍": 4}
 
 
+def test_public_page_marks_forward_from_another_channel_as_repost():
+    html = """
+    <div class="tgme_widget_message" data-post="example/78">
+      <div class="tgme_widget_message_forwarded_from">
+        <a class="tgme_widget_message_forwarded_from_name"
+           href="https://t.me/source_channel">Source</a>
+      </div>
+      <time datetime="2026-08-28T08:00:00+00:00"></time>
+    </div>
+    """
+
+    assert parse_public_page(html, "example")[0].is_repost
+
+
 def test_public_channel_metadata():
     html = """
     <div class="tgme_channel_info_header_title">Example University</div>

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from app.collector import group_logical_posts, normalize_channel_ref
+from app.collector import group_logical_posts, is_channel_repost, normalize_channel_ref
 
 
 def message(mid, grouped_id=None, action=None):
@@ -28,3 +28,19 @@ def test_channel_reference_normalization():
     assert normalize_channel_ref("@example") == "example"
     assert normalize_channel_ref("https://t.me/s/naukamsu") == "naukamsu"
     assert normalize_channel_ref("t.me/s/naukamsu/") == "naukamsu"
+
+
+def test_telegram_repost_requires_a_different_source_channel():
+    forwarded = message(20)
+    forwarded.fwd_from = SimpleNamespace(from_id=SimpleNamespace(channel_id=111))
+    forwarded.peer_id = SimpleNamespace(channel_id=222)
+    own_forward = message(21)
+    own_forward.fwd_from = SimpleNamespace(from_id=SimpleNamespace(channel_id=222))
+    own_forward.peer_id = SimpleNamespace(channel_id=222)
+    forwarded_from_user = message(22)
+    forwarded_from_user.fwd_from = SimpleNamespace(from_id=SimpleNamespace(user_id=333))
+
+    assert is_channel_repost(forwarded)
+    assert not is_channel_repost(own_forward)
+    assert not is_channel_repost(forwarded_from_user)
+    assert group_logical_posts([forwarded])[0].is_repost

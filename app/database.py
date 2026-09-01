@@ -72,6 +72,7 @@ class Database:
                     baseline_from_publication INTEGER NOT NULL DEFAULT 0,
                     post_type TEXT NOT NULL,
                     ambiguous_album_reactions INTEGER NOT NULL DEFAULT 0,
+                    is_repost INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     UNIQUE(channel_id, logical_key),
                     UNIQUE(channel_id, telegram_message_id)
@@ -155,6 +156,7 @@ class Database:
                     source_external_id TEXT,
                     is_joint INTEGER NOT NULL DEFAULT 0,
                     additional_author_count INTEGER NOT NULL DEFAULT 0,
+                    is_repost INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     UNIQUE(platform_account_id, external_id)
                 );
@@ -363,6 +365,29 @@ class Database:
                     "INSERT INTO schema_migrations(version, applied_at) VALUES(10, ?)",
                     (iso(utc_now()),),
                 )
+            migration_11_applied = conn.execute(
+                "SELECT 1 FROM schema_migrations WHERE version=11"
+            ).fetchone() is not None
+            if not migration_11_applied:
+                post_columns = {row[1] for row in conn.execute("PRAGMA table_info(posts)")}
+                if "is_repost" not in post_columns:
+                    conn.execute(
+                        "ALTER TABLE posts ADD COLUMN is_repost INTEGER NOT NULL DEFAULT 0"
+                    )
+                platform_post_columns = {
+                    row[1] for row in conn.execute("PRAGMA table_info(platform_posts)")
+                }
+                if "is_repost" not in platform_post_columns:
+                    conn.execute(
+                        "ALTER TABLE platform_posts ADD COLUMN is_repost "
+                        "INTEGER NOT NULL DEFAULT 0"
+                    )
+                self._migrate_vk_joint_post_ids(conn)
+                self._backfill_max_reposts(conn)
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES(11, ?)",
+                    (iso(utc_now()),),
+                )
 
     @staticmethod
     def _migrate_vk_joint_post_ids(conn: sqlite3.Connection) -> None:
@@ -415,10 +440,33 @@ class Database:
                    source_external_id=?, is_joint=?, additional_author_count=?
                    WHERE id=?""",
                 (
-                    identity.external_key, f"https://vk.com/wall{identity.external_key}",
+                    identity.external_key, f"https://vk.ru/wall{identity.external_key}",
                     source_external_id, int(identity.is_joint),
                     identity.additional_author_count, post_id,
                 ),
+            )
+
+    @staticmethod
+    def _backfill_max_reposts(conn: sqlite3.Connection) -> None:
+        from .max_api import max_post_is_repost
+
+        rows = list(conn.execute(
+            """SELECT pp.id, pp.raw_json, pa.native_id
+               FROM platform_posts pp
+               JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+               WHERE pa.platform='max' AND pp.raw_json IS NOT NULL"""
+        ))
+        for row in rows:
+            native_id = str(row["native_id"] or "")
+            if not native_id.lstrip("-").isdigit():
+                continue
+            try:
+                raw = json.loads(row["raw_json"])
+            except (TypeError, json.JSONDecodeError):
+                continue
+            conn.execute(
+                "UPDATE platform_posts SET is_repost=? WHERE id=?",
+                (int(max_post_is_repost(raw, int(native_id))), row["id"]),
             )
 
     def add_institution(self, name: str, short_name: str | None = None) -> int:
@@ -607,27 +655,30 @@ class Database:
         source_external_id: str | None = None,
         is_joint: bool = False,
         additional_author_count: int = 0,
+        is_repost: bool = False,
     ) -> int:
         with self.connect() as conn:
             conn.execute(
                 """INSERT INTO platform_posts(
                      platform_account_id, external_id, published_at, discovered_at,
                      post_type, url, raw_json, history_complete,
-                     source_external_id, is_joint, additional_author_count, created_at
-                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                     source_external_id, is_joint, additional_author_count,
+                     is_repost, created_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(platform_account_id, external_id) DO UPDATE SET
                      post_type=excluded.post_type, url=excluded.url,
                      raw_json=excluded.raw_json,
                      source_external_id=excluded.source_external_id,
                      is_joint=excluded.is_joint,
                      additional_author_count=excluded.additional_author_count,
+                     is_repost=excluded.is_repost,
                      deleted_at=NULL""",
                 (
                     platform_account_id, external_id, iso(published_at),
                     iso(discovered_at), post_type, url,
                     json.dumps(raw, ensure_ascii=False, sort_keys=True),
                     int(history_complete), source_external_id, int(is_joint),
-                    max(0, int(additional_author_count)), iso(utc_now()),
+                    max(0, int(additional_author_count)), int(is_repost), iso(utc_now()),
                 ),
             )
             row = conn.execute(
@@ -995,6 +1046,7 @@ class Database:
         history_complete: bool,
         post_type: str,
         ambiguous: bool,
+        is_repost: bool = False,
     ) -> int:
         representative = min(message_ids)
         with self.connect() as conn:
@@ -1015,6 +1067,10 @@ class Database:
                 (channel_id, logical_key),
             ).fetchone()
             post_id = int(row["id"])
+            conn.execute(
+                "UPDATE posts SET is_repost=? WHERE id=?",
+                (int(is_repost), post_id),
+            )
             conn.executemany(
                 "INSERT OR IGNORE INTO post_messages(post_id, telegram_message_id) VALUES(?,?)",
                 [(post_id, mid) for mid in message_ids],
@@ -1076,6 +1132,13 @@ class Database:
                 """UPDATE posts SET deleted_at=NULL, missing_check_count=0,
                    missing_last_checked_at=NULL, missing_reason=NULL WHERE id=?""",
                 (post_id,),
+            )
+
+    def set_post_repost(self, post_id: int, is_repost: bool) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE posts SET is_repost=? WHERE id=?",
+                (int(is_repost), post_id),
             )
 
     def expired_posts(self, cutoff_iso: str) -> list[sqlite3.Row]:
