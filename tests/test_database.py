@@ -304,7 +304,7 @@ def test_platform_migration_backfills_existing_channel_once(tmp_path):
         len(db.list_institutions()), len(db.list_platform_accounts()),
         db.query("SELECT max(version) version FROM schema_migrations")[0]["version"],
     )
-    assert before == after == (1, 1, 11)
+    assert before == after == (1, 1, 12)
     account = db.list_platform_accounts()[0]
     assert account["native_id"] == "123"
     assert account["subscriber_count"] == 1000
@@ -361,3 +361,28 @@ def test_history_reset_and_vk_joint_id_migration_run_only_once(tmp_path):
         (new_platform_id,),
     )[0]
     assert (new_platform["history_complete"], new_platform["history_forced_incomplete"]) == (1, 0)
+
+
+def test_vk_zero_dip_migration_clears_only_confirmed_transient_values(tmp_path):
+    db = Database(tmp_path / "vk-zero-dip.db")
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(institution_id, "vk", "university")
+    now = datetime.now(timezone.utc)
+    post_id = db.upsert_platform_post(
+        account_id, "-42_7", now, now, "text", None, {},
+    )
+    for offset, reactions in ((0, 5), (5, 0), (10, 6)):
+        db.insert_platform_snapshot(
+            post_id, now + timedelta(minutes=offset), offset * 60, 5,
+            views_count=100 + offset, reactions_count=reactions,
+            comments_count=0, shares_count=0, raw={},
+        )
+    with db.connect() as conn:
+        conn.execute("DELETE FROM schema_migrations WHERE version=12")
+
+    db.migrate()
+
+    snapshots = db.platform_snapshots(post_id)
+    assert [row["reactions_count"] for row in snapshots] == [5, None, 6]
+    assert [row["comments_count"] for row in snapshots] == [0, 0, 0]
