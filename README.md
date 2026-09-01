@@ -120,9 +120,24 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 .venv/bin/python -m app sync-official-accounts
 .venv/bin/python -m app refresh-m-rating
 .venv/bin/python -m app poll-now
-.venv/bin/python -m app run
+.venv/bin/python -m app collect
+.venv/bin/python -m app web
 .venv/bin/pytest -q
 ```
+
+В production сбор данных и веб-интерфейс работают как независимые процессы.
+Установка unit-файлов при переходе со старого объединённого сервиса:
+
+```bash
+systemctl disable --now telegram-reaction-monitor.service || true
+cp deploy/m-ranked-collector.service deploy/m-ranked-web.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now m-ranked-collector.service m-ranked-web.service
+```
+
+Остановка или перезапуск `m-ranked-web.service` не останавливает collectors.
+Команда `python -m app run` сохранена только для локальной разработки и
+обратной совместимости.
 
 ## Страницы
 
@@ -159,6 +174,11 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 - `RETENTION_DAYS=40` — архивирование и очистка;
 - `DELETION_CONFIRMATION_CHECKS=2` — подтверждения удаления;
 - `SUBSCRIBER_REFRESH_HOURS=24` — обновление подписчиков;
+- `TELEGRAM_CONCURRENCY=6` — одновременно опрашиваемые публичные TG-каналы;
+- `VK_CONCURRENCY=3` и `VK_REQUESTS_PER_SECOND=3` — параллелизм и общий
+  rate limit VK API;
+- `RUTUBE_ACCOUNT_CONCURRENCY=4` и `RUTUBE_REQUEST_CONCURRENCY=8` — лимиты
+  параллельного опроса каналов и метрик RUTUBE;
 - `VK_ACCESS_TOKEN` — включает сбор настроенных VK-сообществ;
 - `MAX_USER_PHONE` — включает сбор публичных MAX-каналов через отдельную
   пользовательскую сессию; `MAX_SESSION_PATH` задаёт путь к её файлу;
@@ -171,8 +191,9 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 - база: `/opt/telegram-reaction-monitor/data/reactions.db`;
 - пользовательская MAX-сессия: `/opt/telegram-reaction-monitor/data/max.session.db`;
 - архивы: `/opt/telegram-reaction-monitor/data/archives/`;
-- логи: `/opt/telegram-reaction-monitor/logs/app.log`;
-- systemd: `journalctl -u telegram-reaction-monitor`.
+- логи: `/opt/telegram-reaction-monitor/logs/collector.log` и `web.log`;
+- collectors: `journalctl -u m-ranked-collector`;
+- веб: `journalctl -u m-ranked-web`.
 
 ## Несколько площадок
 

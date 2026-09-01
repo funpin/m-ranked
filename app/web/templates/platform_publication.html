@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}Публикация {{ post.external_id|platform_post_label(active_platform) }} · m-ranked{% endblock %}
+{% extends "base.html" %}{% block chart_library %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>{% endblock %}{% block title %}Публикация {{ post.external_id|platform_post_label(active_platform) }} · m-ranked{% endblock %}
 {% block content %}
 {% set institution_title = post.institution_short_name or post.institution_name %}
 <div class="post-heading"><div><h1><a href="/platform-accounts/{{ post.platform_account_id }}">{{ institution_title }}</a> / {% if post.url %}<a class="external" target="_blank" rel="noopener noreferrer" href="{{ post.url }}">{{ post.external_id|platform_post_label(active_platform) }}</a>{% else %}{{ post.external_id|platform_post_label(active_platform) }}{% endif %}</h1>

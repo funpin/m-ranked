@@ -182,43 +182,34 @@ def platform_activity_cards(
 
     def window_samples(window_start: datetime, window_end: datetime) -> dict[int, list[dict[str, Any]]]:
         rows = [dict(row) for row in db.query(
-            """SELECT pp.id, pp.platform_account_id, pa.institution_id,
+            """WITH bounds AS (
+                   SELECT platform_post_id, MIN(measured_at) first_at,
+                          MAX(measured_at) latest_at
+                   FROM platform_snapshots
+                   WHERE measured_at>? AND measured_at<=?
+                   GROUP BY platform_post_id
+               )
+               SELECT pp.id, pp.platform_account_id, pa.institution_id,
                       pp.published_at, latest.id latest_snapshot_id,
                       latest.views_count, latest.reactions_count,
                       latest.comments_count, latest.shares_count,
-                      (SELECT f.id FROM platform_snapshots f
-                       WHERE f.platform_post_id=pp.id AND f.measured_at>? AND f.measured_at<=?
-                       ORDER BY f.measured_at LIMIT 1) first_snapshot_id,
-                      (SELECT f.age_seconds FROM platform_snapshots f
-                       WHERE f.platform_post_id=pp.id AND f.measured_at>? AND f.measured_at<=?
-                       ORDER BY f.measured_at LIMIT 1) first_age_seconds,
-                      (SELECT f.views_count FROM platform_snapshots f
-                       WHERE f.platform_post_id=pp.id AND f.measured_at>? AND f.measured_at<=?
-                       ORDER BY f.measured_at LIMIT 1) first_views,
-                      (SELECT f.reactions_count FROM platform_snapshots f
-                       WHERE f.platform_post_id=pp.id AND f.measured_at>? AND f.measured_at<=?
-                       ORDER BY f.measured_at LIMIT 1) first_reactions,
-                      (SELECT f.comments_count FROM platform_snapshots f
-                       WHERE f.platform_post_id=pp.id AND f.measured_at>? AND f.measured_at<=?
-                       ORDER BY f.measured_at LIMIT 1) first_comments,
-                      (SELECT f.shares_count FROM platform_snapshots f
-                       WHERE f.platform_post_id=pp.id AND f.measured_at>? AND f.measured_at<=?
-                       ORDER BY f.measured_at LIMIT 1) first_shares
-               FROM platform_posts pp
+                      first.id first_snapshot_id,
+                      first.age_seconds first_age_seconds,
+                      first.views_count first_views,
+                      first.reactions_count first_reactions,
+                      first.comments_count first_comments,
+                      first.shares_count first_shares
+               FROM bounds b
+               JOIN platform_posts pp ON pp.id=b.platform_post_id
                JOIN platform_accounts pa ON pa.id=pp.platform_account_id
-               JOIN platform_snapshots latest ON latest.id=(
-                    SELECT s.id FROM platform_snapshots s
-                    WHERE s.platform_post_id=pp.id
-                      AND s.measured_at>? AND s.measured_at<=?
-                    ORDER BY s.measured_at DESC LIMIT 1)
+               JOIN platform_snapshots first
+                 ON first.platform_post_id=b.platform_post_id
+                AND first.measured_at=b.first_at
+               JOIN platform_snapshots latest
+                 ON latest.platform_post_id=b.platform_post_id
+                AND latest.measured_at=b.latest_at
                WHERE pa.platform=? AND pp.published_at<=?""",
             (
-                window_start.isoformat(), window_end.isoformat(),
-                window_start.isoformat(), window_end.isoformat(),
-                window_start.isoformat(), window_end.isoformat(),
-                window_start.isoformat(), window_end.isoformat(),
-                window_start.isoformat(), window_end.isoformat(),
-                window_start.isoformat(), window_end.isoformat(),
                 window_start.isoformat(), window_end.isoformat(),
                 platform, window_end.isoformat(),
             ),

@@ -85,6 +85,11 @@ class Settings:
     max_session_path: Path = Path("data/max.session.db")
     rutube_public_api_enabled: bool = True
     rutube_api_base: str = "https://rutube.ru/api"
+    telegram_concurrency: int = 6
+    vk_concurrency: int = 3
+    vk_requests_per_second: float = 3.0
+    rutube_account_concurrency: int = 4
+    rutube_request_concurrency: int = 8
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -171,6 +176,11 @@ class Settings:
                 os.getenv("RUTUBE_API_BASE", "https://rutube.ru/api").strip()
                 or "https://rutube.ru/api"
             ).rstrip("/"),
+            telegram_concurrency=_int("TELEGRAM_CONCURRENCY", 6),
+            vk_concurrency=_int("VK_CONCURRENCY", 3),
+            vk_requests_per_second=_float("VK_REQUESTS_PER_SECOND", 3.0),
+            rutube_account_concurrency=_int("RUTUBE_ACCOUNT_CONCURRENCY", 4),
+            rutube_request_concurrency=_int("RUTUBE_REQUEST_CONCURRENCY", 8),
         )
 
     def require_telegram(self) -> tuple[int, str]:

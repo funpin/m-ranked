@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -28,6 +29,7 @@ class VkCollector:
         self.db = db
         self.client = client or VkClient(
             settings.vk_access_token or "", settings.vk_api_version,
+            requests_per_second=settings.vk_requests_per_second,
         )
 
     async def close(self) -> None:
@@ -39,15 +41,21 @@ class VkCollector:
         error_count = 0
         self.db.set_state("vk_poll_last_started_at", iso(started))
         logger.info("VK polling started accounts=%s", len(accounts))
-        for account in accounts:
-            try:
-                await self._poll_account(account)
-            except Exception as exc:
-                error_count += 1
-                self.db.finish_platform_account_check(
-                    int(account["id"]), datetime.now(timezone.utc), str(exc),
-                )
-                logger.exception("VK account %s polling failed", account["external_key"])
+        semaphore = asyncio.Semaphore(max(1, int(self.settings.vk_concurrency)))
+
+        async def poll_account(account: Any) -> int:
+            async with semaphore:
+                try:
+                    await self._poll_account(account)
+                    return 0
+                except Exception as exc:
+                    self.db.finish_platform_account_check(
+                        int(account["id"]), datetime.now(timezone.utc), str(exc),
+                    )
+                    logger.exception("VK account %s polling failed", account["external_key"])
+                    return 1
+
+        error_count = sum(await asyncio.gather(*(poll_account(row) for row in accounts)))
         completed = datetime.now(timezone.utc)
         duration = (completed - started).total_seconds()
         self.db.set_state("vk_poll_last_completed_at", iso(completed))
@@ -97,7 +105,7 @@ class VkCollector:
                 age_seconds(published_at, measured_at), self.settings,
             )
             if snapshot_is_due(
-                self.db.latest_platform_snapshot_at(int(row["id"])), measured_at, interval,
+                row["latest_measured_at"], measured_at, interval,
             ):
                 due_ids.append(str(row["source_external_id"] or external_id))
         for offset in range(0, len(due_ids), 100):
@@ -107,47 +115,50 @@ class VkCollector:
             identity = post.identity_for_community(community.id)
             if identity is not None:
                 posts_by_local_key[identity.external_key] = (post, identity)
-        for post, identity in posts_by_local_key.values():
-            if post.published_at < cutoff:
-                continue
-            first_age = age_seconds(post.published_at, measured_at)
-            post_id = self.db.upsert_platform_post(
-                int(account["id"]), identity.external_key, post.published_at,
-                measured_at, post.post_type,
-                f"https://vk.ru/wall{identity.external_key}", post.raw,
-                history_complete=history_is_complete(
-                    first_age, self.settings.complete_history_max_first_age_minutes,
-                ),
-                source_external_id=identity.source_external_key,
-                is_joint=identity.is_joint,
-                additional_author_count=identity.additional_author_count,
-            )
-            interval_minutes = snapshot_interval_minutes(
-                first_age, self.settings,
-            )
-            if not snapshot_is_due(
-                self.db.latest_platform_snapshot_at(post_id),
-                measured_at,
-                interval_minutes,
-            ):
-                continue
-            if self.db.insert_platform_snapshot(
-                post_id,
-                measured_at,
-                first_age,
-                interval_minutes,
-                views_count=post.views,
-                reactions_count=post.likes,
-                comments_count=post.comments,
-                shares_count=post.reposts,
-                raw={
-                    "views": post.views,
-                    "likes": post.likes,
-                    "comments": post.comments,
-                    "reposts": post.reposts,
-                },
-            ):
-                inserted += 1
+        with self.db.connect() as conn:
+            for post, identity in posts_by_local_key.values():
+                if post.published_at < cutoff:
+                    continue
+                first_age = age_seconds(post.published_at, measured_at)
+                post_id = self.db.upsert_platform_post(
+                    int(account["id"]), identity.external_key, post.published_at,
+                    measured_at, post.post_type,
+                    f"https://vk.ru/wall{identity.external_key}", post.raw,
+                    history_complete=history_is_complete(
+                        first_age, self.settings.complete_history_max_first_age_minutes,
+                    ),
+                    source_external_id=identity.source_external_key,
+                    is_joint=identity.is_joint,
+                    additional_author_count=identity.additional_author_count,
+                    _conn=conn,
+                )
+                interval_minutes = snapshot_interval_minutes(
+                    first_age, self.settings,
+                )
+                if not snapshot_is_due(
+                    self.db.latest_platform_snapshot_at(post_id, _conn=conn),
+                    measured_at,
+                    interval_minutes,
+                ):
+                    continue
+                if self.db.insert_platform_snapshot(
+                    post_id,
+                    measured_at,
+                    first_age,
+                    interval_minutes,
+                    views_count=post.views,
+                    reactions_count=post.likes,
+                    comments_count=post.comments,
+                    shares_count=post.reposts,
+                    raw={
+                        "views": post.views,
+                        "likes": post.likes,
+                        "comments": post.comments,
+                        "reposts": post.reposts,
+                    },
+                    _conn=conn,
+                ):
+                    inserted += 1
         self.db.finish_platform_account_check(
             int(account["id"]), datetime.now(timezone.utc), None,
         )

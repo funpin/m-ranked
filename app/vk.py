@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -154,6 +155,7 @@ class VkClient:
         access_token: str,
         api_version: str = "5.199",
         client: httpx.AsyncClient | None = None,
+        requests_per_second: float | None = None,
     ):
         if not access_token:
             raise ValueError("VK access token is required")
@@ -161,12 +163,26 @@ class VkClient:
         self.api_version = api_version
         self.client = client or httpx.AsyncClient(timeout=30)
         self._owns_client = client is None
+        self._request_interval = (
+            1.0 / float(requests_per_second)
+            if requests_per_second is not None and requests_per_second > 0 else 0.0
+        )
+        self._rate_lock = asyncio.Lock()
+        self._next_request_at = 0.0
 
     async def close(self) -> None:
         if self._owns_client:
             await self.client.aclose()
 
     async def _call(self, method: str, **params: Any) -> Any:
+        if self._request_interval:
+            async with self._rate_lock:
+                loop = asyncio.get_running_loop()
+                now = loop.time()
+                if self._next_request_at > now:
+                    await asyncio.sleep(self._next_request_at - now)
+                    now = loop.time()
+                self._next_request_at = now + self._request_interval
         response = await self.client.post(
             f"https://api.vk.com/method/{method}",
             data={**params, "access_token": self.access_token, "v": self.api_version},

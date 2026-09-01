@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
@@ -29,16 +30,33 @@ class Database:
         conn = sqlite3.connect(self.path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
-        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         try:
             yield conn
             conn.commit()
         finally:
             conn.close()
 
+    @contextmanager
+    def migration_lock(self) -> Iterator[None]:
+        """Serialize schema upgrades when web and collector start together."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = self.path.with_name(f".{self.path.name}.migrate.lock")
+        with lock_path.open("a+") as stream:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
     def migrate(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as conn:
+            # WAL is persistent for the database file.  Setting it once during
+            # migration avoids negotiating the journal mode on every tiny read
+            # or write transaction while still allowing the separate web and
+            # collector processes to operate concurrently.
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -107,8 +125,14 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS idx_posts_channel_published
                     ON posts(channel_id, published_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_posts_published_channel
+                    ON posts(published_at DESC, channel_id);
                 CREATE INDEX IF NOT EXISTS idx_snapshots_post_age
                     ON reaction_snapshots(post_id, age_seconds);
+                CREATE INDEX IF NOT EXISTS idx_snapshots_post_measured
+                    ON reaction_snapshots(post_id, measured_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_snapshots_measured_post
+                    ON reaction_snapshots(measured_at, post_id);
                 CREATE TABLE IF NOT EXISTS app_state (
                     key TEXT PRIMARY KEY, value TEXT NOT NULL
                 );
@@ -179,6 +203,10 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS idx_platform_snapshots_post_age
                     ON platform_snapshots(platform_post_id, age_seconds);
+                CREATE INDEX IF NOT EXISTS idx_platform_snapshots_post_measured
+                    ON platform_snapshots(platform_post_id, measured_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_platform_snapshots_measured_post
+                    ON platform_snapshots(measured_at, platform_post_id);
                 """
             )
             conn.execute(
@@ -656,8 +684,9 @@ class Database:
         is_joint: bool = False,
         additional_author_count: int = 0,
         is_repost: bool = False,
+        _conn: sqlite3.Connection | None = None,
     ) -> int:
-        with self.connect() as conn:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             conn.execute(
                 """INSERT INTO platform_posts(
                      platform_account_id, external_id, published_at, discovered_at,
@@ -688,8 +717,10 @@ class Database:
             ).fetchone()
             return int(row["id"])
 
-    def latest_platform_snapshot_at(self, platform_post_id: int) -> str | None:
-        with self.connect() as conn:
+    def latest_platform_snapshot_at(
+        self, platform_post_id: int, _conn: sqlite3.Connection | None = None,
+    ) -> str | None:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             row = conn.execute(
                 """SELECT measured_at FROM platform_snapshots
                    WHERE platform_post_id=? ORDER BY measured_at DESC LIMIT 1""",
@@ -731,21 +762,12 @@ class Database:
                            pa.username account_username, pa.title account_title,
                            pa.url account_url, i.name institution_name,
                            i.short_name institution_short_name,
-                           (SELECT s.views_count FROM platform_snapshots s
-                            WHERE s.platform_post_id=pp.id
-                            ORDER BY s.measured_at DESC LIMIT 1) latest_views,
-                           (SELECT s.reactions_count FROM platform_snapshots s
-                            WHERE s.platform_post_id=pp.id
-                            ORDER BY s.measured_at DESC LIMIT 1) latest_reactions,
-                           (SELECT s.comments_count FROM platform_snapshots s
-                            WHERE s.platform_post_id=pp.id
-                            ORDER BY s.measured_at DESC LIMIT 1) latest_comments,
-                           (SELECT s.shares_count FROM platform_snapshots s
-                            WHERE s.platform_post_id=pp.id
-                            ORDER BY s.measured_at DESC LIMIT 1) latest_shares,
-                           (SELECT s.age_seconds FROM platform_snapshots s
-                            WHERE s.platform_post_id=pp.id
-                            ORDER BY s.measured_at DESC LIMIT 1) current_age,
+                           latest.views_count latest_views,
+                           latest.reactions_count latest_reactions,
+                           latest.comments_count latest_comments,
+                           latest.shares_count latest_shares,
+                           latest.age_seconds current_age,
+                           latest.measured_at latest_measured_at,
                            (SELECT s.age_seconds FROM platform_snapshots s
                             WHERE s.platform_post_id=pp.id
                             ORDER BY s.measured_at LIMIT 1) first_age,
@@ -754,6 +776,10 @@ class Database:
                     FROM platform_posts pp
                     JOIN platform_accounts pa ON pa.id=pp.platform_account_id
                     JOIN institutions i ON i.id=pa.institution_id
+                    LEFT JOIN platform_snapshots latest ON latest.id=(
+                      SELECT s.id FROM platform_snapshots s
+                      WHERE s.platform_post_id=pp.id
+                      ORDER BY s.measured_at DESC LIMIT 1)
                     {where}
                     ORDER BY pp.published_at DESC{limit_sql}""",
                 tuple(params),
@@ -794,9 +820,10 @@ class Database:
         comments_count: int | None,
         shares_count: int | None,
         raw: Any,
+        _conn: sqlite3.Connection | None = None,
     ) -> bool:
         bucket = int(measured_at.timestamp()) // (poll_interval_minutes * 60)
-        with self.connect() as conn:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             result = conn.execute(
                 """INSERT OR IGNORE INTO platform_snapshots(
                      platform_post_id, measured_at, measurement_bucket, age_seconds,
@@ -1047,9 +1074,10 @@ class Database:
         post_type: str,
         ambiguous: bool,
         is_repost: bool = False,
+        _conn: sqlite3.Connection | None = None,
     ) -> int:
         representative = min(message_ids)
-        with self.connect() as conn:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             conn.execute(
                 """INSERT OR IGNORE INTO posts(
                     channel_id, logical_key, telegram_message_id, telegram_grouped_id,
@@ -1126,16 +1154,21 @@ class Database:
                 )
             return count, confirmed
 
-    def mark_post_available(self, post_id: int) -> None:
-        with self.connect() as conn:
+    def mark_post_available(
+        self, post_id: int, _conn: sqlite3.Connection | None = None,
+    ) -> None:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             conn.execute(
                 """UPDATE posts SET deleted_at=NULL, missing_check_count=0,
                    missing_last_checked_at=NULL, missing_reason=NULL WHERE id=?""",
                 (post_id,),
             )
 
-    def set_post_repost(self, post_id: int, is_repost: bool) -> None:
-        with self.connect() as conn:
+    def set_post_repost(
+        self, post_id: int, is_repost: bool,
+        _conn: sqlite3.Connection | None = None,
+    ) -> None:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             conn.execute(
                 "UPDATE posts SET is_repost=? WHERE id=?",
                 (int(is_repost), post_id),
@@ -1180,11 +1213,12 @@ class Database:
         published_at: datetime,
         first_age_seconds: int,
         max_age_seconds: int,
+        _conn: sqlite3.Connection | None = None,
     ) -> bool:
         """Insert the synthetic zero point only when the post was discovered on time."""
         if first_age_seconds > max_age_seconds:
             return False
-        with self.connect() as conn:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             post = conn.execute(
                 """SELECT baseline_from_publication, history_forced_incomplete
                    FROM posts WHERE id=?""", (post_id,)
@@ -1272,9 +1306,10 @@ class Database:
         jump_min_ratio: float,
         comments_count: int | None = None,
         views_count: int | None = None,
+        _conn: sqlite3.Connection | None = None,
     ) -> bool:
         bucket = int(measured_at.timestamp()) // (poll_interval_minutes * 60)
-        with self.connect() as conn:
+        with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             previous = conn.execute(
                 "SELECT * FROM reaction_snapshots WHERE post_id=? ORDER BY measured_at DESC LIMIT 1",
                 (post_id,),
