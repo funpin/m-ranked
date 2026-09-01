@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass
@@ -164,8 +165,7 @@ def _is_public_repost(node: Tag, username: str) -> bool:
     return not source_username or source_username != username.casefold()
 
 
-def parse_public_page(html: str, username: str) -> list[PublicPost]:
-    soup = BeautifulSoup(html, "html.parser")
+def _parse_public_page(soup: BeautifulSoup, username: str) -> list[PublicPost]:
     posts: list[PublicPost] = []
     for node in soup.select("div.tgme_widget_message[data-post]"):
         data_post = str(node.get("data-post", ""))
@@ -203,6 +203,10 @@ def parse_public_page(html: str, username: str) -> list[PublicPost]:
     return sorted(posts, key=lambda post: post.message_id)
 
 
+def parse_public_page(html: str, username: str) -> list[PublicPost]:
+    return _parse_public_page(BeautifulSoup(html, "html.parser"), username)
+
+
 def parse_public_channel(html: str, username: str) -> PublicChannel:
     soup = BeautifulSoup(html, "html.parser")
     title_node = soup.select_one(".tgme_channel_info_header_title")
@@ -215,7 +219,9 @@ def parse_public_channel(html: str, username: str) -> PublicChannel:
             subscriber_display = value.get_text(strip=True) if value else None
             break
     subscribers = parse_compact_count(subscriber_display) if subscriber_display else None
-    return PublicChannel(title, subscribers, subscriber_display, parse_public_page(html, username))
+    return PublicChannel(
+        title, subscribers, subscriber_display, _parse_public_page(soup, username),
+    )
 
 
 class PublicWebCollector:
@@ -242,13 +248,21 @@ class PublicWebCollector:
         error_count = 0
         self.db.set_state("poll_last_started_at", iso(started))
         logger.info("public web polling started")
-        for channel in channels:
-            try:
-                await self._poll_channel(channel)
-            except Exception as exc:
-                error_count += 1
-                self.db.finish_channel_check(channel["id"], 0, str(exc))
-                logger.exception("@%s public web polling failed", channel["username"])
+        semaphore = asyncio.Semaphore(
+            max(1, int(getattr(self.settings, "telegram_concurrency", 1))),
+        )
+
+        async def poll_channel(channel: Any) -> int:
+            async with semaphore:
+                try:
+                    await self._poll_channel(channel)
+                    return 0
+                except Exception as exc:
+                    self.db.finish_channel_check(channel["id"], 0, str(exc))
+                    logger.exception("@%s public web polling failed", channel["username"])
+                    return 1
+
+        error_count = sum(await asyncio.gather(*(poll_channel(row) for row in channels)))
         try:
             archive_and_purge(self.settings, self.db)
         except Exception:
@@ -308,19 +322,21 @@ class PublicWebCollector:
             self.db.update_channel_title(channel["id"], page.title)
         current = {post.message_id: post for post in feed}
         max_seen = int(channel["last_seen_message_id"])
-        for post in feed:
-            first_age = age_seconds(post.published_at, now)
-            post_id = self.db.add_post(
-                channel["id"], f"m:{post.message_id}", [post.message_id], None,
-                post.published_at, now, first_age, False,
-                post.post_type, False, is_repost=post.is_repost,
-            )
-            self.db.mark_post_available(post_id)
-            self.db.ensure_publication_baseline(
-                post_id, post.published_at, first_age,
-                self.settings.complete_history_max_first_age_minutes * 60,
-            )
-            max_seen = max(max_seen, post.message_id)
+        with self.db.connect() as conn:
+            for post in feed:
+                first_age = age_seconds(post.published_at, now)
+                post_id = self.db.add_post(
+                    channel["id"], f"m:{post.message_id}", [post.message_id], None,
+                    post.published_at, now, first_age, False,
+                    post.post_type, False, is_repost=post.is_repost, _conn=conn,
+                )
+                self.db.mark_post_available(post_id, _conn=conn)
+                self.db.ensure_publication_baseline(
+                    post_id, post.published_at, first_age,
+                    self.settings.complete_history_max_first_age_minutes * 60,
+                    _conn=conn,
+                )
+                max_seen = max(max_seen, post.message_id)
 
         cutoff = now - timedelta(hours=self.settings.track_post_for_hours)
         active = self.db.active_posts(channel["id"], iso(cutoff))
@@ -360,15 +376,18 @@ class PublicWebCollector:
                     continue
                 logger.warning("@%s/%s unavailable in public preview", username, mid)
                 continue
-            self.db.mark_post_available(stored["id"])
-            self.db.set_post_repost(stored["id"], public_post.is_repost)
-            inserted = self.db.insert_snapshot(
-                stored["id"], measured, age_seconds(public_post.published_at, measured),
-                public_post.reactions.total, public_post.reactions.reactions,
-                public_post.reactions.raw, interval_minutes,
-                self.settings.jump_min_abs, self.settings.jump_min_ratio,
-                views_count=public_post.views_count,
-            )
+            with self.db.connect() as conn:
+                self.db.mark_post_available(stored["id"], _conn=conn)
+                self.db.set_post_repost(
+                    stored["id"], public_post.is_repost, _conn=conn,
+                )
+                inserted = self.db.insert_snapshot(
+                    stored["id"], measured, age_seconds(public_post.published_at, measured),
+                    public_post.reactions.total, public_post.reactions.reactions,
+                    public_post.reactions.raw, interval_minutes,
+                    self.settings.jump_min_abs, self.settings.jump_min_ratio,
+                    views_count=public_post.views_count, _conn=conn,
+                )
             if inserted:
                 logger.info(
                     "@%s/%s public snapshot total=%s views=%s interval=%sm",

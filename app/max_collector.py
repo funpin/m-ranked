@@ -85,39 +85,42 @@ class MaxCollector:
                 age_seconds(published_at, measured_at), self.settings,
             )
             if snapshot_is_due(
-                self.db.latest_platform_snapshot_at(int(row["id"])), measured_at, interval,
+                row["latest_measured_at"], measured_at, interval,
             ):
                 due_ids.append(external_id)
         for offset in range(0, len(due_ids), 100):
             posts.extend(await self.client.posts_by_ids(
                 chat_id, due_ids[offset:offset + 100],
             ))
-        for post in {post.id: post for post in posts}.values():
-            if post.published_at < cutoff:
-                continue
-            first_age = age_seconds(post.published_at, measured_at)
-            post_id = self.db.upsert_platform_post(
-                int(account["id"]), post.id, post.published_at,
-                measured_at, post.post_type, post.url, post.raw,
-                history_complete=history_is_complete(
-                    first_age, self.settings.complete_history_max_first_age_minutes,
-                ),
-                is_repost=post.is_repost,
-            )
-            interval = snapshot_interval_minutes(
-                first_age, self.settings,
-            )
-            if snapshot_is_due(
-                self.db.latest_platform_snapshot_at(post_id), measured_at, interval,
-            ):
-                self.db.insert_platform_snapshot(
-                    post_id, measured_at, first_age, interval,
-                    views_count=post.views, reactions_count=post.reactions,
-                    comments_count=post.comments, shares_count=post.reposts,
-                    raw={
-                        "views": post.views, "reactions": post.reactions,
-                        "reaction_breakdown": post.reaction_breakdown,
-                        "comments": post.comments, "reposts": post.reposts,
-                    },
+        with self.db.connect() as conn:
+            for post in {post.id: post for post in posts}.values():
+                if post.published_at < cutoff:
+                    continue
+                first_age = age_seconds(post.published_at, measured_at)
+                post_id = self.db.upsert_platform_post(
+                    int(account["id"]), post.id, post.published_at,
+                    measured_at, post.post_type, post.url, post.raw,
+                    history_complete=history_is_complete(
+                        first_age, self.settings.complete_history_max_first_age_minutes,
+                    ),
+                    is_repost=post.is_repost, _conn=conn,
                 )
+                interval = snapshot_interval_minutes(
+                    first_age, self.settings,
+                )
+                if snapshot_is_due(
+                    self.db.latest_platform_snapshot_at(post_id, _conn=conn),
+                    measured_at, interval,
+                ):
+                    self.db.insert_platform_snapshot(
+                        post_id, measured_at, first_age, interval,
+                        views_count=post.views, reactions_count=post.reactions,
+                        comments_count=post.comments, shares_count=post.reposts,
+                        raw={
+                            "views": post.views, "reactions": post.reactions,
+                            "reaction_breakdown": post.reaction_breakdown,
+                            "comments": post.comments, "reposts": post.reposts,
+                        },
+                        _conn=conn,
+                    )
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)

@@ -22,6 +22,7 @@ class RutubeCollector:
         self.settings = settings
         self.db = db
         self.client = client or RutubeClient(settings.rutube_api_base)
+        self._request_semaphore: asyncio.Semaphore | None = None
 
     async def close(self) -> None:
         await self.client.close()
@@ -37,15 +38,26 @@ class RutubeCollector:
         accounts = self.db.list_platform_accounts(platform="rutube", enabled_only=True)
         errors = 0
         self.db.set_state("rutube_poll_last_started_at", iso(started))
-        for account in accounts:
-            try:
-                await self._poll_account(account)
-            except Exception as exc:
-                errors += 1
-                self.db.finish_platform_account_check(
-                    int(account["id"]), datetime.now(timezone.utc), str(exc),
-                )
-                logger.exception("RUTUBE account %s polling failed", account["external_key"])
+        self._request_semaphore = asyncio.Semaphore(
+            max(1, int(self.settings.rutube_request_concurrency)),
+        )
+        account_semaphore = asyncio.Semaphore(
+            max(1, int(self.settings.rutube_account_concurrency)),
+        )
+
+        async def poll_account(account: Any) -> int:
+            async with account_semaphore:
+                try:
+                    await self._poll_account(account)
+                    return 0
+                except Exception as exc:
+                    self.db.finish_platform_account_check(
+                        int(account["id"]), datetime.now(timezone.utc), str(exc),
+                    )
+                    logger.exception("RUTUBE account %s polling failed", account["external_key"])
+                    return 1
+
+        errors = sum(await asyncio.gather(*(poll_account(row) for row in accounts)))
         completed = datetime.now(timezone.utc)
         self.db.set_state("rutube_poll_last_completed_at", iso(completed))
         self.db.set_state(
@@ -74,30 +86,34 @@ class RutubeCollector:
         )
         cutoff = measured_at - timedelta(hours=self.settings.track_post_for_hours)
         due: list[tuple[Any, int, int]] = []
-        for video in videos:
-            if video.published_at < cutoff:
-                continue
-            first_age = age_seconds(video.published_at, measured_at)
-            post_id = self.db.upsert_platform_post(
-                int(account["id"]), video.id, video.published_at,
-                measured_at, "video", video.url, video.raw,
-                history_complete=history_is_complete(
-                    first_age, self.settings.complete_history_max_first_age_minutes,
-                ),
-            )
-            interval = snapshot_interval_minutes(
-                first_age, self.settings,
-                platform="rutube",
-            )
-            if not snapshot_is_due(
-                self.db.latest_platform_snapshot_at(post_id), measured_at, interval,
-            ):
-                continue
-            due.append((video, post_id, interval))
-
-        semaphore = asyncio.Semaphore(8)
+        with self.db.connect() as conn:
+            for video in videos:
+                if video.published_at < cutoff:
+                    continue
+                first_age = age_seconds(video.published_at, measured_at)
+                post_id = self.db.upsert_platform_post(
+                    int(account["id"]), video.id, video.published_at,
+                    measured_at, "video", video.url, video.raw,
+                    history_complete=history_is_complete(
+                        first_age, self.settings.complete_history_max_first_age_minutes,
+                    ),
+                    _conn=conn,
+                )
+                interval = snapshot_interval_minutes(
+                    first_age, self.settings,
+                    platform="rutube",
+                )
+                if not snapshot_is_due(
+                    self.db.latest_platform_snapshot_at(post_id, _conn=conn),
+                    measured_at, interval,
+                ):
+                    continue
+                due.append((video, post_id, interval))
 
         async def metrics(video_id: str) -> Any:
+            semaphore = self._request_semaphore
+            if semaphore is None:
+                raise RuntimeError("RUTUBE request limiter is not initialized")
             async with semaphore:
                 return await self.client.video_metrics(video_id)
 
@@ -105,13 +121,14 @@ class RutubeCollector:
             *(metrics(video.id) for video, _, _ in due),
         )
         inserted = 0
-        for (video, post_id, interval), engagement in zip(due, measurements):
-            if self.db.insert_platform_snapshot(
-                post_id, measured_at, age_seconds(video.published_at, measured_at), interval,
-                views_count=video.views, reactions_count=engagement.likes,
-                comments_count=engagement.comments, shares_count=None,
-                raw={"hits": video.views, **engagement.raw},
-            ):
-                inserted += 1
+        with self.db.connect() as conn:
+            for (video, post_id, interval), engagement in zip(due, measurements):
+                if self.db.insert_platform_snapshot(
+                    post_id, measured_at, age_seconds(video.published_at, measured_at), interval,
+                    views_count=video.views, reactions_count=engagement.likes,
+                    comments_count=engagement.comments, shares_count=None,
+                    raw={"hits": video.views, **engagement.raw}, _conn=conn,
+                ):
+                    inserted += 1
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)
         logger.info("RUTUBE %s: discovered=%s snapshots=%s", channel.id, len(videos), inserted)

@@ -184,22 +184,23 @@ class Collector:
         ]
         now = datetime.now(timezone.utc)
         max_seen = int(channel["last_seen_message_id"])
-        for logical in group_logical_posts(recent):
-            first_age = age_seconds(logical.published_at, now)
-            key = f"g:{logical.grouped_id}" if logical.grouped_id else f"m:{logical.message_ids[0]}"
-            post_id = self.db.add_post(
-                channel["id"], key, logical.message_ids, logical.grouped_id,
-                logical.published_at, now, first_age,
-                history_is_complete(
-                    first_age, self.settings.complete_history_max_first_age_minutes
-                ),
-                logical.post_type, logical.ambiguous_reactions,
-                is_repost=logical.is_repost,
-            )
-            self.db.mark_post_available(post_id)
-            if logical.ambiguous_reactions:
-                logger.warning("@%s album %s returned inconsistent reaction states", username, key)
-            max_seen = max(max_seen, *logical.message_ids)
+        with self.db.connect() as conn:
+            for logical in group_logical_posts(recent):
+                first_age = age_seconds(logical.published_at, now)
+                key = f"g:{logical.grouped_id}" if logical.grouped_id else f"m:{logical.message_ids[0]}"
+                post_id = self.db.add_post(
+                    channel["id"], key, logical.message_ids, logical.grouped_id,
+                    logical.published_at, now, first_age,
+                    history_is_complete(
+                        first_age, self.settings.complete_history_max_first_age_minutes
+                    ),
+                    logical.post_type, logical.ambiguous_reactions,
+                    is_repost=logical.is_repost, _conn=conn,
+                )
+                self.db.mark_post_available(post_id, _conn=conn)
+                if logical.ambiguous_reactions:
+                    logger.warning("@%s album %s returned inconsistent reaction states", username, key)
+                max_seen = max(max_seen, *logical.message_ids)
 
         cutoff = now - timedelta(hours=self.settings.track_post_for_hours)
         active = self.db.active_posts(channel["id"], iso(cutoff))
@@ -229,27 +230,33 @@ class Collector:
                     self.settings.deletion_confirmation_checks, iso(detected), confirmed,
                 )
                 continue
-            self.db.mark_post_available(post["id"])
-            self.db.set_post_repost(
-                post["id"], any(is_channel_repost(message) for message in fetched),
-            )
             if post["telegram_grouped_id"]:
                 state, ambiguous = choose_album_reactions(fetched)
             else:
                 state, ambiguous = parse_message_reactions(fetched[0]), False
             measured = datetime.now(timezone.utc)
-            inserted = self.db.insert_snapshot(
-                post["id"], measured, age_seconds(published_at, measured), state.total,
-                state.reactions, state.raw, interval_minutes,
-                self.settings.jump_min_abs, self.settings.jump_min_ratio,
-                comments_count=logical_comments(fetched),
-                views_count=logical_views(fetched),
-            )
+            with self.db.connect() as conn:
+                self.db.mark_post_available(post["id"], _conn=conn)
+                self.db.set_post_repost(
+                    post["id"], any(is_channel_repost(message) for message in fetched),
+                    _conn=conn,
+                )
+                inserted = self.db.insert_snapshot(
+                    post["id"], measured, age_seconds(published_at, measured), state.total,
+                    state.reactions, state.raw, interval_minutes,
+                    self.settings.jump_min_abs, self.settings.jump_min_ratio,
+                    comments_count=logical_comments(fetched),
+                    views_count=logical_views(fetched), _conn=conn,
+                )
+                latest = (
+                    conn.execute(
+                        "SELECT delta_total, spike FROM reaction_snapshots "
+                        "WHERE post_id=? ORDER BY measured_at DESC LIMIT 1",
+                        (post["id"],),
+                    ).fetchone()
+                    if inserted else None
+                )
             if inserted:
-                latest = self.db.query(
-                    "SELECT delta_total, spike FROM reaction_snapshots WHERE post_id=? ORDER BY measured_at DESC LIMIT 1",
-                    (post["id"],),
-                )[0]
                 logger.info(
                     "@%s/%s snapshot total=%s delta=%s views=%s comments=%s",
                     username, post["telegram_message_id"], state.total, latest["delta_total"],

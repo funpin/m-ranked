@@ -409,28 +409,28 @@ def create_app(
 
         def window_samples(start: datetime, end: datetime) -> dict[int, list[dict[str, Any]]]:
             rows = _rows_dict(db.query(
-                """SELECT p.id, p.channel_id, p.published_at, p.baseline_from_publication,
-                   latest.id AS latest_snapshot_id,
-                   latest.total_reactions, latest.views_count,
-                   (SELECT f.id FROM reaction_snapshots f
-                    WHERE f.post_id=p.id AND f.synthetic=0 AND f.measured_at>? AND f.measured_at<=?
-                    ORDER BY f.measured_at LIMIT 1) first_snapshot_id,
-                   (SELECT f.total_reactions FROM reaction_snapshots f
-                    WHERE f.post_id=p.id AND f.synthetic=0 AND f.measured_at>? AND f.measured_at<=?
-                    ORDER BY f.measured_at LIMIT 1) first_reactions,
-                   (SELECT f.views_count FROM reaction_snapshots f
-                    WHERE f.post_id=p.id AND f.synthetic=0 AND f.measured_at>? AND f.measured_at<=?
-                    ORDER BY f.measured_at LIMIT 1) first_views
-                   FROM posts p JOIN reaction_snapshots latest ON latest.id=(
-                     SELECT s.id FROM reaction_snapshots s
-                     WHERE s.post_id=p.id AND s.synthetic=0
-                       AND s.measured_at>? AND s.measured_at<=?
-                     ORDER BY s.measured_at DESC LIMIT 1)
+                """WITH bounds AS (
+                     SELECT post_id, MIN(measured_at) first_at,
+                            MAX(measured_at) latest_at
+                     FROM reaction_snapshots
+                     WHERE synthetic=0 AND measured_at>? AND measured_at<=?
+                     GROUP BY post_id
+                   )
+                   SELECT p.id, p.channel_id, p.published_at,
+                          p.baseline_from_publication,
+                          latest.id AS latest_snapshot_id,
+                          latest.total_reactions, latest.views_count,
+                          first.id AS first_snapshot_id,
+                          first.total_reactions AS first_reactions,
+                          first.views_count AS first_views
+                   FROM bounds b
+                   JOIN posts p ON p.id=b.post_id
+                   JOIN reaction_snapshots first
+                     ON first.post_id=b.post_id AND first.measured_at=b.first_at
+                   JOIN reaction_snapshots latest
+                     ON latest.post_id=b.post_id AND latest.measured_at=b.latest_at
                    WHERE p.published_at<=?""",
                 (
-                    start.isoformat(), end.isoformat(),
-                    start.isoformat(), end.isoformat(),
-                    start.isoformat(), end.isoformat(),
                     start.isoformat(), end.isoformat(),
                     end.isoformat(),
                 ),
@@ -647,7 +647,17 @@ def create_app(
         return prepared, stats, " · ".join(labels)
 
     @app.get("/health")
-    async def health() -> dict[str, Any]:
+    def health() -> dict[str, Any]:
+        last_completed_at = db.get_state("poll_last_completed_at")
+        collector_fresh = False
+        if last_completed_at:
+            try:
+                collector_fresh = (
+                    datetime.now(timezone.utc) - _as_datetime(last_completed_at)
+                ).total_seconds() <= max(settings.poll_interval_minutes * 120, 600)
+            except ValueError:
+                collector_fresh = False
+        live_connection = bool(telegram_connected and telegram_connected())
         integrations = {
             "telegram": {
                 "configured": (
@@ -678,9 +688,10 @@ def create_app(
         return {
             "status": "ok",
             "data_source": settings.data_source,
-            "source_connected": bool(telegram_connected and telegram_connected()),
+            "source_connected": live_connection if telegram_connected else collector_fresh,
+            "collector_fresh": collector_fresh,
             "telegram_connected": (
-                bool(telegram_connected and telegram_connected())
+                live_connection
                 if settings.data_source == "mtproto" else False
             ),
             "channels": len(db.list_channels(enabled_only=True)),
@@ -733,7 +744,7 @@ def create_app(
         )
 
     @app.get("/", response_class=HTMLResponse)
-    async def index(
+    def index(
         request: Request,
         period: str = Query(default="1d"),
         sort: str = Query(default="median_reactions"),
@@ -842,7 +853,7 @@ def create_app(
         )
 
     @app.get("/rating", response_class=HTMLResponse)
-    async def rating(
+    def rating(
         request: Request,
         period: str = Query(default="30d"),
         channel_sort: str = Query(default="engagement"),
@@ -967,7 +978,7 @@ def create_app(
         )
 
     @app.get("/manage", response_class=HTMLResponse)
-    async def manage(
+    def manage(
         request: Request,
         m_rating_status: str | None = Query(default=None),
         channel_status: str | None = Query(default=None),
@@ -1345,7 +1356,7 @@ def create_app(
         return RedirectResponse("/manage?channel_status=deleted", status_code=303)
 
     @app.get("/institutions/{institution_id}", response_class=HTMLResponse)
-    async def institution_page(
+    def institution_page(
         request: Request, institution_id: int,
         platform: str = Query(default="all"),
     ) -> HTMLResponse:
@@ -1422,7 +1433,7 @@ def create_app(
         )
 
     @app.get("/platform-accounts/{account_id}", response_class=HTMLResponse)
-    async def platform_account_page(
+    def platform_account_page(
         request: Request, account_id: int,
     ) -> HTMLResponse:
         account = db.platform_account(account_id)
@@ -1460,7 +1471,7 @@ def create_app(
         )
 
     @app.get("/platform-posts/{post_id}", response_class=HTMLResponse)
-    async def platform_post_page(
+    def platform_post_page(
         request: Request, post_id: int,
     ) -> HTMLResponse:
         post = db.platform_post(post_id)
@@ -1572,6 +1583,14 @@ def create_app(
             metric_nouns[0] if len(metric_nouns) == 1
             else f"{', '.join(metric_nouns[:-1])} и {metric_nouns[-1]}"
         )
+        chart_fields = {"id", "measured_label", "age_label"}
+        for metric in available_metrics:
+            chart_fields.add(str(metric["field"]))
+            chart_fields.add(str(metric["delta_field"]))
+        chart_rows = [
+            {field: row.get(field) for field in chart_fields}
+            for row in snapshots
+        ]
         history_complete = bool(post["history_complete"])
         return render(
             request, "platform_publication.html", post=post, snapshots=snapshots,
@@ -1579,13 +1598,13 @@ def create_app(
             newer_post=newer_post[0] if newer_post else None,
             available_metrics=available_metrics, metric_phrase=metric_phrase,
             history_complete=history_complete,
-            chart_json=json.dumps(snapshots, ensure_ascii=False),
+            chart_json=json.dumps(chart_rows, ensure_ascii=False),
             metric_json=json.dumps(available_metrics, ensure_ascii=False),
             active_platform=post_platform,
         )
 
     @app.get("/channels/{channel_id}", response_class=HTMLResponse)
-    async def channel_page(
+    def channel_page(
         request: Request, channel_id: int,
     ) -> HTMLResponse:
         legacy_platform = request.query_params.get("platform")
@@ -1599,15 +1618,15 @@ def create_app(
         retention_cutoff = datetime.now(timezone.utc) - timedelta(days=settings.retention_days)
         posts = db.query(
             """SELECT p.*,
-                (SELECT total_reactions FROM reaction_snapshots s WHERE s.post_id=p.id ORDER BY measured_at DESC LIMIT 1) current_total,
-                (SELECT max(delta_total) FROM reaction_snapshots s WHERE s.post_id=p.id) max_jump,
-                (SELECT max(age_seconds) FROM reaction_snapshots s WHERE s.post_id=p.id) current_age,
-                (SELECT views_count FROM reaction_snapshots s WHERE s.post_id=p.id
-                 ORDER BY measured_at DESC LIMIT 1) current_views,
-                (SELECT comments_count FROM reaction_snapshots s WHERE s.post_id=p.id
-                 ORDER BY measured_at DESC LIMIT 1) current_comments,
-                (SELECT max(spike) FROM reaction_snapshots s WHERE s.post_id=p.id) has_spike
-               FROM posts p WHERE p.channel_id=? AND p.published_at>=?
+                latest.total_reactions current_total,
+                latest.age_seconds current_age,
+                latest.views_count current_views,
+                latest.comments_count current_comments
+               FROM posts p
+               LEFT JOIN reaction_snapshots latest ON latest.id=(
+                 SELECT s.id FROM reaction_snapshots s WHERE s.post_id=p.id
+                 ORDER BY s.measured_at DESC LIMIT 1)
+               WHERE p.channel_id=? AND p.published_at>=?
                ORDER BY p.published_at DESC""",
             (channel_id, retention_cutoff.isoformat()),
         )
@@ -1651,8 +1670,9 @@ def create_app(
         )
 
     @app.get("/posts/{post_id}", response_class=HTMLResponse)
-    async def post_page(
+    def post_page(
         request: Request, post_id: int,
+        history_limit: int = Query(default=200, ge=50, le=1000),
     ) -> HTMLResponse:
         legacy_platform = request.query_params.get("platform")
         if legacy_platform is not None:
@@ -1700,16 +1720,33 @@ def create_app(
             row["measurement_delta_label"] = format_signed_duration(
                 row["delta_seconds"]
             )
+        chart_rows = [
+            {
+                "id": row["id"],
+                "measured_label": row["measured_label"],
+                "age_label": row["age_label"],
+                "total_reactions": row["total_reactions"],
+                "views_count": row["views_count"],
+                "delta_total": row["delta_total"],
+                "delta_views": row["delta_views"],
+            }
+            for row in snapshots
+        ]
+        history_total = len(snapshots)
+        history_rows = snapshots[-history_limit:]
         return render(
-            request, "post.html", post=post, snapshots=snapshots,
+            request, "post.html", post=post, snapshots=history_rows,
             older_post=older_post[0] if older_post else None,
             newer_post=newer_post[0] if newer_post else None,
-            chart_json=json.dumps(snapshots, ensure_ascii=False),
+            chart_json=json.dumps(chart_rows, ensure_ascii=False),
+            history_total=history_total,
+            history_default_limit=200,
+            history_expand_limit=min(history_total, 1000),
             active_platform="telegram",
         )
 
     @app.get("/compare", response_class=HTMLResponse)
-    async def compare(
+    def compare(
         request: Request,
         channels: list[int] = Query(default=[]),
         institutions: list[int] = Query(default=[]),
@@ -1935,7 +1972,7 @@ def create_app(
         )
 
     @app.get("/export/snapshots.csv")
-    async def export_snapshots(
+    def export_snapshots(
         platform: str = Query(default="telegram"),
     ) -> StreamingResponse:
         platform = normalize_platform(platform)
@@ -1980,7 +2017,7 @@ def create_app(
         )
 
     @app.get("/export/posts.csv")
-    async def export_posts(
+    def export_posts(
         platform: str = Query(default="telegram"),
     ) -> StreamingResponse:
         platform = normalize_platform(platform)

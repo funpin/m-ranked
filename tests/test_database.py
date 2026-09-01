@@ -25,6 +25,29 @@ def test_duplicate_snapshot_same_poll_bucket_is_ignored(tmp_path):
     assert len(db.query("SELECT * FROM reaction_snapshots")) == 1
 
 
+def test_snapshot_time_indexes_avoid_temporary_sort(tmp_path):
+    db = Database(tmp_path / "indexes.db")
+    db.migrate()
+    snapshot_indexes = {
+        row[1] for row in db.query("PRAGMA index_list(reaction_snapshots)")
+    }
+    platform_indexes = {
+        row[1] for row in db.query("PRAGMA index_list(platform_snapshots)")
+    }
+    assert "idx_snapshots_post_measured" in snapshot_indexes
+    assert "idx_platform_snapshots_post_measured" in platform_indexes
+
+    plan = db.query(
+        "EXPLAIN QUERY PLAN SELECT id FROM reaction_snapshots "
+        "WHERE post_id=? AND synthetic=0 AND measured_at>? AND measured_at<=? "
+        "ORDER BY measured_at DESC LIMIT 1",
+        (1, "2026-08-31", "2026-09-01"),
+    )
+    details = " ".join(str(row[3]) for row in plan)
+    assert "idx_snapshots_post_measured" in details
+    assert "TEMP B-TREE" not in details
+
+
 def test_snapshots_are_append_only_and_allow_negative_delta(tmp_path):
     db = Database(tmp_path / "test.db")
     db.migrate()

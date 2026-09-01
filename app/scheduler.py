@@ -68,6 +68,12 @@ async def stop_polling_tasks(tasks: list[asyncio.Task[None]]) -> None:
 
 
 async def run_service(settings: Settings, db: Database) -> None:
+    """Run the legacy all-in-one process.
+
+    Production uses ``run_collector_service`` and the CLI ``web`` command as
+    independent processes.  Keeping this entry point makes local development
+    and older deployments backwards compatible.
+    """
     auxiliary_collectors: tuple[Any, ...] = tuple(
         collector for collector in (
             VkCollector(settings, db) if settings.vk_access_token else None,
@@ -122,3 +128,34 @@ async def run_service(settings: Settings, db: Database) -> None:
         await reader.disconnect()
         for auxiliary in auxiliary_collectors:
             await auxiliary.close()
+
+
+async def run_collector_service(settings: Settings, db: Database) -> None:
+    """Run polling independently from the web server until cancelled."""
+    auxiliary_collectors: tuple[Any, ...] = tuple(
+        collector for collector in (
+            VkCollector(settings, db) if settings.vk_access_token else None,
+            MaxCollector(settings, db) if settings.max_user_session_ready else None,
+            RutubeCollector(settings, db) if settings.rutube_public_api_enabled else None,
+        ) if collector is not None
+    )
+    reader: TelegramReader | None = None
+    if settings.data_source == "public_web":
+        primary: Any = PublicWebCollector(settings, db)
+    else:
+        api_id, api_hash = settings.require_telegram()
+        reader = TelegramReader(api_id, api_hash, settings.telegram_session_path)
+        await reader.connect()
+        primary = Collector(settings, db, reader)
+    collectors = (primary, *auxiliary_collectors)
+    tasks = start_polling_tasks(collectors, settings)
+    try:
+        await asyncio.Event().wait()
+    finally:
+        await stop_polling_tasks(tasks)
+        if reader is not None:
+            await reader.disconnect()
+        for active_collector in collectors:
+            close = getattr(active_collector, "close", None)
+            if callable(close):
+                await close()

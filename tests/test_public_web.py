@@ -241,3 +241,35 @@ def test_age_based_snapshot_intervals():
     }
     for age, expected in rutube_cases.items():
         assert snapshot_interval_minutes(age, settings, platform="rutube") == expected
+
+
+def test_public_poll_cycle_respects_channel_concurrency(tmp_path):
+    settings = SimpleNamespace(
+        telegram_concurrency=2,
+        poll_interval_minutes=5,
+        retention_days=40,
+        archive_dir=tmp_path / "archives",
+    )
+    db = Database(tmp_path / "concurrency.db")
+    db.migrate()
+    for index in range(4):
+        db.add_channel(f"channel_{index}")
+
+    collector = PublicWebCollector(settings, db)
+    active = 0
+    peak = 0
+
+    async def fake_poll_channel(channel):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+
+    collector._poll_channel = fake_poll_channel
+    try:
+        asyncio.run(collector.poll_cycle())
+    finally:
+        asyncio.run(collector.close())
+
+    assert peak == 2

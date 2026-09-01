@@ -1,5 +1,5 @@
 [Unit]
-Description=m-ranked
+Description=m-ranked web dashboard
 After=network-online.target
 Wants=network-online.target
 
@@ -9,10 +9,11 @@ User=telegram-monitor
 Group=telegram-monitor
 WorkingDirectory=/opt/telegram-reaction-monitor
 EnvironmentFile=/opt/telegram-reaction-monitor/.env
-ExecStart=/opt/telegram-reaction-monitor/.venv/bin/python -m app run
+Environment=LOG_PATH=/opt/telegram-reaction-monitor/logs/web.log
+ExecStart=/opt/telegram-reaction-monitor/.venv/bin/python -m app web
 Restart=always
-RestartSec=5
-TimeoutStopSec=30
+RestartSec=3
+TimeoutStopSec=20
 KillSignal=SIGINT
 NoNewPrivileges=true
 PrivateTmp=true

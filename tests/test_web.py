@@ -27,6 +27,36 @@ def test_signed_measurement_duration_keeps_sign_and_seconds():
     assert format_signed_duration(-90) == "-1 мин 30 сек"
 
 
+def test_post_history_is_limited_but_can_be_expanded(tmp_path):
+    cfg = settings(tmp_path)
+    db = Database(cfg.database_path)
+    db.migrate()
+    channel_id = db.add_channel("history")
+    published = datetime.now(timezone.utc) - timedelta(days=2)
+    post_id = db.add_post(
+        channel_id, "m:1", [1], None, published, published,
+        0, True, "text", False,
+    )
+    with db.connect() as conn:
+        for point in range(201):
+            measured = published + timedelta(minutes=5 * point)
+            db.insert_snapshot(
+                post_id, measured, point * 300, point, {"👍": point}, [],
+                5, 15, 2.0, views_count=point * 10, _conn=conn,
+            )
+
+    client = TestClient(create_app(cfg, db))
+    compact = client.get(f"/posts/{post_id}")
+    assert compact.status_code == 200
+    assert compact.text.count('class="snapshot-row ') == 200
+    assert "Показаны последние 200 из 201 замеров" in compact.text
+
+    expanded = client.get(f"/posts/{post_id}?history_limit=1000")
+    assert expanded.status_code == 200
+    assert expanded.text.count('class="snapshot-row ') == 201
+    assert "Показаны все 201 замеров" in expanded.text
+
+
 def settings(tmp_path):
     return Settings(
         telegram_api_id=None,
@@ -109,10 +139,13 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     ])
     assert "М‑Рейтинг TG · место" in telegram_sort
     assert "М‑Рейтинг TG учитывает только площадку Telegram" in overview
+    assert "chart.umd.min.js" not in overview
     assert ".overview-header{height:auto;min-height:0}" in overview
     assert ".has-tooltip.tooltip-open::after" in overview
     assert "event.target.closest('.has-tooltip[data-tooltip]')" in overview
     post_page = client.get(f"/posts/{post_id}").text
+    assert "chart.umd.min.js" in post_page
+    assert "raw_state_json" not in post_page
     assert "<b>репост</b>" in post_page
     assert '<span class="pill">репост</span>' in client.get(
         f"/channels/{channel_id}",

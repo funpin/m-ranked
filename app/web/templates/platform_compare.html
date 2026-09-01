@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}Сравнение · {{ active_platform_label }} · m-ranked{% endblock %}
+{% extends "base.html" %}{% block chart_library %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>{% endblock %}{% block title %}Сравнение · {{ active_platform_label }} · m-ranked{% endblock %}
 {% block content %}
 <h1>Сравнение · {{ active_platform_label }}</h1>
 <p class="lead">Сравните, как публикации вузов набирают лайки и вовлечённость в {{ active_platform_label }} после выхода.</p>

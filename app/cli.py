@@ -13,7 +13,7 @@ from .max_collector import MaxCollector
 from .max_user_api import MaxUserClient
 from .institution_names import sync_institution_names
 from .m_rating import refresh_m_rating
-from .scheduler import run_service
+from .scheduler import run_collector_service, run_service
 from .public_web import PublicWebCollector
 from .rutube_collector import RutubeCollector
 from .official_accounts import sync_official_accounts
@@ -43,7 +43,8 @@ def parser() -> argparse.ArgumentParser:
     sub = command.add_subparsers(dest="command", required=True)
     sub.add_parser("auth", help="Authorize the persistent Telegram user session")
     sub.add_parser("auth-max", help="Authorize the persistent MAX user session")
-    sub.add_parser("run", help="Run polling scheduler and web dashboard")
+    sub.add_parser("run", help="Run legacy combined polling and web process")
+    sub.add_parser("collect", help="Run polling independently from the web dashboard")
     sub.add_parser("poll-now", help="Run exactly one complete polling cycle")
     sub.add_parser("list-channels", help="List configured channels")
     sub.add_parser("list-institutions", help="List universities and their platform accounts")
@@ -70,7 +71,7 @@ def parser() -> argparse.ArgumentParser:
     add.add_argument("channel")
     remove = sub.add_parser("remove-channel", help="Disable a channel without deleting history")
     remove.add_argument("channel")
-    web = sub.add_parser("web", help="Run dashboard without Telegram (diagnostics)")
+    web = sub.add_parser("web", help="Run dashboard independently from collectors")
     web.add_argument("--host", default=None)
     web.add_argument("--port", type=int, default=None)
     return command
@@ -81,7 +82,8 @@ def initialize() -> tuple[Settings, Database]:
     settings.ensure_directories()
     setup_logging(settings.log_path)
     db = Database(settings.database_path)
-    db.migrate()
+    with db.migration_lock():
+        db.migrate()
     for channel in settings.initial_channels:
         db.add_channel(normalize_channel_ref(channel))
     return settings, db
@@ -119,20 +121,22 @@ async def _poll(settings: Settings, db: Database) -> None:
     if settings.data_source == "public_web":
         collector = PublicWebCollector(settings, db)
         try:
-            await collector.poll_cycle()
-            for auxiliary in auxiliary_collectors:
-                await auxiliary.poll_cycle()
+            await asyncio.gather(
+                collector.poll_cycle(),
+                *(auxiliary.poll_cycle() for auxiliary in auxiliary_collectors),
+            )
         finally:
             await collector.close()
             for auxiliary in auxiliary_collectors:
                 await auxiliary.close()
         return
     api_id, api_hash = settings.require_telegram()
-    async with TelegramReader(api_id, api_hash, settings.telegram_session_path) as reader:
-        await Collector(settings, db, reader).poll_cycle()
     try:
-        for auxiliary in auxiliary_collectors:
-            await auxiliary.poll_cycle()
+        async with TelegramReader(api_id, api_hash, settings.telegram_session_path) as reader:
+            await asyncio.gather(
+                Collector(settings, db, reader).poll_cycle(),
+                *(auxiliary.poll_cycle() for auxiliary in auxiliary_collectors),
+            )
     finally:
         for auxiliary in auxiliary_collectors:
             await auxiliary.close()
@@ -147,6 +151,8 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(_auth_max(settings))
     elif args.command == "run":
         asyncio.run(run_service(settings, db))
+    elif args.command == "collect":
+        asyncio.run(run_collector_service(settings, db))
     elif args.command == "poll-now":
         asyncio.run(_poll(settings, db))
     elif args.command == "list-channels":
