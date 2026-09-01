@@ -20,3 +20,4 @@ class LogicalPost:
     post_type: str
     reaction_state: ReactionState
     ambiguous_reactions: bool = False
+    is_repost: bool = False

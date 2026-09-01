@@ -80,7 +80,7 @@ def test_vk_collector_stores_post_and_raw_snapshot(tmp_path):
     assert account["last_error"] is None
     stored_post = db.query("SELECT * FROM platform_posts")[0]
     assert stored_post["external_id"] == "-42_7"
-    assert stored_post["url"] == "https://vk.com/wall-42_7"
+    assert stored_post["url"] == "https://vk.ru/wall-42_7"
     snapshot = db.query("SELECT * FROM platform_snapshots")[0]
     assert (snapshot["views_count"], snapshot["reactions_count"]) == (100, 5)
     assert (snapshot["comments_count"], snapshot["shares_count"]) == (2, 1)
@@ -144,7 +144,7 @@ def test_vk_collector_stores_joint_post_under_community_number(tmp_path):
     stored = db.query("SELECT * FROM platform_posts")[0]
     assert stored["external_id"] == "-42_77"
     assert stored["source_external_id"] == "-900_12"
-    assert stored["url"] == "https://vk.com/wall-42_77"
+    assert stored["url"] == "https://vk.ru/wall-42_77"
     assert stored["is_joint"] == 1
     assert stored["additional_author_count"] == 1
     assert stored["history_complete"] == 1

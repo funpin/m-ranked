@@ -24,6 +24,7 @@ class MaxPost:
     comments: int | None
     url: str | None
     raw: dict[str, Any]
+    is_repost: bool = False
 
 
 def _optional_count(payload: dict[str, Any], *keys: str) -> int | None:
@@ -31,6 +32,20 @@ def _optional_count(payload: dict[str, Any], *keys: str) -> int | None:
         if payload.get(key) is not None:
             return int(payload[key])
     return None
+
+
+def max_post_is_repost(payload: dict[str, Any], chat_id: int) -> bool:
+    """Return whether a MAX post is a forward from a different chat/channel."""
+    link = payload.get("link")
+    if not isinstance(link, dict) or str(link.get("type") or "").casefold() != "forward":
+        return False
+    source_chat_id = link.get("chat_id")
+    if source_chat_id is None:
+        return True
+    try:
+        return int(source_chat_id) != int(chat_id)
+    except (TypeError, ValueError):
+        return True
 
 
 class MaxClient:
@@ -86,5 +101,6 @@ class MaxClient:
                     stat, "comments", "comments_count", "comment_count",
                 ),
                 url=item.get("url"), raw=item,
+                is_repost=max_post_is_repost(item, chat_id),
             ))
         return result

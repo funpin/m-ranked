@@ -56,6 +56,53 @@ def test_joint_vk_post_uses_monitored_community_number():
     assert post.identity_for_community(999) is None
 
 
+def test_joint_vk_post_reads_local_number_from_coowner_list():
+    post = parse_vk_post({
+        "owner_id": -164293611,
+        "id": 59413,
+        "date": 1_700_000_000,
+        "coowners": {
+            "list": [
+                {"owner_id": -164293611, "post_id": 59413},
+                {"owner_id": -74773715, "post_id": 1267},
+                {"owner_id": -777, "post_id": 99},
+            ],
+        },
+    })
+
+    identity = post.identity_for_community(74773715)
+
+    assert identity is not None
+    assert identity.external_key == "-74773715_1267"
+    assert identity.source_external_key == "-164293611_59413"
+    assert identity.is_joint
+    assert identity.additional_author_count == 2
+
+
+def test_joint_vk_post_reads_numeric_local_number_for_target_owner():
+    post = parse_vk_post({
+        "owner_id": -74773715,
+        "id": 59413,
+        "date": 1_700_000_000,
+        "coowners": {
+            "coowner_post_id": 1267,
+            "list": [
+                {"owner_id": -164293611},
+                {"owner_id": -74773715},
+                {"owner_id": -777},
+            ],
+        },
+    })
+
+    identity = post.identity_for_community(74773715)
+
+    assert identity is not None
+    assert identity.external_key == "-74773715_1267"
+    assert identity.source_external_key == "-74773715_59413"
+    assert identity.is_joint
+    assert identity.additional_author_count == 2
+
+
 def test_vk_client_reads_community_and_wall():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("groups.getById"):

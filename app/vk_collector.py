@@ -114,7 +114,7 @@ class VkCollector:
             post_id = self.db.upsert_platform_post(
                 int(account["id"]), identity.external_key, post.published_at,
                 measured_at, post.post_type,
-                f"https://vk.com/wall{identity.external_key}", post.raw,
+                f"https://vk.ru/wall{identity.external_key}", post.raw,
                 history_complete=history_is_complete(
                     first_age, self.settings.complete_history_max_first_age_minutes,
                 ),

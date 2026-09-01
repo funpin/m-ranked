@@ -58,22 +58,40 @@ def vk_post_identity(
     canonical_owner_id = int(payload["owner_id"])
     canonical_post_id = int(payload["id"])
     canonical_key = f"{canonical_owner_id}_{canonical_post_id}"
-    coowners = payload.get("coowners") if isinstance(payload.get("coowners"), dict) else {}
-    local = coowners.get("coowner_post_id") if isinstance(coowners, dict) else None
+    raw_coowners = payload.get("coowners")
+    coowners = raw_coowners if isinstance(raw_coowners, dict) else {}
+    local = coowners.get("coowner_post_id")
     local_owner_id = canonical_owner_id
     local_post_id = canonical_post_id
     if isinstance(local, dict) and int(local.get("owner_id") or 0) == target_owner_id:
         local_owner_id = target_owner_id
-        local_post_id = int(local["post_id"])
-    elif canonical_owner_id != target_owner_id:
-        return None
+        local_post_id = int(local.get("post_id") or local.get("id"))
 
     author_ids: set[int] = {canonical_owner_id}
-    raw_authors = coowners.get("list") if isinstance(coowners, dict) else None
+    raw_authors = coowners.get("list") if coowners else raw_coowners
     if isinstance(raw_authors, list):
         for author in raw_authors:
-            if isinstance(author, dict) and author.get("owner_id") is not None:
-                author_ids.add(int(author["owner_id"]))
+            if not isinstance(author, dict):
+                continue
+            author_owner_id = author.get("owner_id")
+            if author_owner_id is None:
+                author_owner_id = author.get("from_id")
+            if author_owner_id is None:
+                continue
+            author_owner_id = int(author_owner_id)
+            author_ids.add(author_owner_id)
+            author_post_id = author.get("post_id") or author.get("coowner_post_id")
+            if author_owner_id == target_owner_id and author_post_id is not None:
+                local_owner_id = target_owner_id
+                local_post_id = int(author_post_id)
+    if (
+        not isinstance(local, dict)
+        and local is not None
+    ):
+        local_owner_id = target_owner_id
+        local_post_id = int(local)
+    if local_owner_id != target_owner_id:
+        return None
     author_ids.add(target_owner_id)
     additional_author_count = len(author_ids - {target_owner_id})
     local_key = f"{local_owner_id}_{local_post_id}"

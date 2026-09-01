@@ -73,6 +73,7 @@ class MaxCollector:
                 history_complete=history_is_complete(
                     first_age, self.settings.complete_history_max_first_age_minutes,
                 ),
+                is_repost=post.is_repost,
             )
             interval = snapshot_interval_minutes(
                 first_age, self.settings,
