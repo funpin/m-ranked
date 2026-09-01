@@ -109,7 +109,7 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "event.target.closest('.has-tooltip[data-tooltip]')" in overview
     post_page = client.get(f"/posts/{post_id}").text
     assert "Масштаб по времени" in post_page
-    assert "Мин. людей" in post_page
+    assert 'aria-label="Минимум людей"' in post_page
     assert "MAX_VISIBLE_POINTS=144" in post_page
     assert "Не отображено точек" in post_page
     assert "Накопление реакций и просмотров" in post_page
@@ -130,14 +130,18 @@ def test_dashboard_health_detail_compare_and_exports(tmp_path):
     assert "postChartPreferences.deltaViews" in post_page
     assert "applyDeltaScaleMode(postChartPreferences.deltaScaleMode,false)" in post_page
     assert 'class="snapshot-history-table"' in post_page
-    assert 'class="panel mt table-wrap measurement-history"' in post_page
-    assert ".measurement-history{max-height:76vh;overflow:auto" in post_page
+    assert 'class="panel mt measurement-history"' in post_page
+    assert 'class="measurement-history-scroll"' in post_page
+    assert ".measurement-history-scroll{max-height:70vh;overflow:auto" in post_page
     assert ".measurement-history .snapshot-history-table{width:max-content" in post_page
-    assert "position:sticky;top:0;z-index:4" in post_page
+    assert "border-collapse:separate" in post_page
+    assert "position:sticky;top:0;z-index:5" in post_page
+    assert 'class="table-column-icon"' in post_page
+    assert 'data-floating-tooltip="Прошло с предыдущего замера"' in post_page
     assert 'class="reaction-cell"' in post_page
     assert "От прошлого замера" in post_page
-    assert "Δ просмотров" in post_page
-    assert "Δ по типам" in post_page
+    assert 'aria-label="Дельта просмотров"' in post_page
+    assert 'aria-label="Дельта реакций по типам"' in post_page
     assert "+1 ч" in post_page
     assert ">+40<" in post_page
     assert ">-1<" in post_page
@@ -314,11 +318,15 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     assert "Прирост лайков" in publication
     assert "Прирост просмотров" in publication
     assert "От прошлого замера" in publication
-    assert "Δ лайков" in publication
+    assert 'aria-label="Дельта лайков"' in publication
     assert "+1 ч" in publication
     assert ">+60<" in publication
     assert "<th>Интервал</th>" not in publication
-    assert 'class="panel mt table-wrap measurement-history"' in publication
+    assert 'class="panel mt measurement-history"' in publication
+    assert 'class="measurement-history-scroll"' in publication
+    assert 'class="table-column-icon"' in publication
+    assert 'aria-label="Всего лайков"' in publication
+    assert 'data-floating-tooltip="Изменение лайков с прошлого замера"' in publication
     assert "1 ч 0 мин" in publication
     assert "wall-10_20" in publication
     assert client.get(
@@ -556,8 +564,8 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     assert "Масштаб по времени" in publication
     assert "Прирост между замерами" in publication
     assert "От прошлого замера" in publication
-    assert "Δ просмотров" in publication
-    assert "Δ комментариев" in publication
+    assert 'aria-label="Дельта просмотров"' in publication
+    assert 'aria-label="Дельта комментариев"' in publication
     assert "+1 ч" in publication
     assert ">+60<" in publication
     assert "<th>Интервал</th>" not in publication
