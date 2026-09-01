@@ -64,6 +64,8 @@ def _public_node_is_unavailable(node: Tag) -> bool:
     classes = set(node.get("class") or [])
     if "text_not_supported_wrap" not in classes:
         return False
+    if "service_message" in classes:
+        return True
     label = node.select_one(".message_media_not_supported_label")
     return bool(
         label
