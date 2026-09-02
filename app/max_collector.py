@@ -7,6 +7,7 @@ from typing import Any
 from .analytics import age_seconds, history_is_complete
 from .config import Settings
 from .database import Database, iso
+from .max_api import max_post_url
 from .max_user_api import MaxUserClient, max_username
 from .public_web import snapshot_interval_minutes, snapshot_is_due
 
@@ -61,6 +62,10 @@ class MaxCollector:
             reference, int(native_id) if native_id else None,
         )
         chat_id = channel.id
+        public_reference = str(
+            account["url"] or account["username"] or channel.link
+            or account["external_key"]
+        )
         posts = await self.client.posts(chat_id, min(self.settings.discovery_limit, 100))
         self.db.update_platform_account_metadata(
             int(account["id"]), native_id=str(channel.id),
@@ -126,7 +131,8 @@ class MaxCollector:
                 first_age = age_seconds(post.published_at, measured_at)
                 post_id = self.db.upsert_platform_post(
                     int(account["id"]), post.id, post.published_at,
-                    measured_at, post.post_type, post.url, post.raw,
+                    measured_at, post.post_type,
+                    max_post_url(public_reference, post.id), post.raw,
                     history_complete=history_is_complete(
                         first_age, self.settings.complete_history_max_first_age_minutes,
                     ),

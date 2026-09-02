@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -13,18 +15,95 @@ def _value(value: Any) -> Any:
     return getattr(value, "value", value)
 
 
-def _model_dict(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
+def _json_safe(value: Any) -> Any:
+    """Convert SDK models to values SQLite's JSON encoder can persist.
+
+    PyMax response models occasionally contain unresolved Pydantic serializers.
+    Falling back to ``vars()`` keeps collection running, but the nested values
+    still need normalizing before they are stored as raw diagnostic payloads.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
         return value
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return _json_safe(value.value)
+    if isinstance(value, dict):
+        return {str(_json_safe(key)): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
     dump = getattr(value, "model_dump", None)
     if callable(dump):
-        return dump(mode="json", by_alias=True)
+        try:
+            return _json_safe(dump(mode="python", by_alias=True))
+        except Exception:
+            pass
     if hasattr(value, "__dict__"):
         return {
-            key: item for key, item in vars(value).items()
+            key: _json_safe(item) for key, item in vars(value).items()
             if not key.startswith("_")
         }
+    return str(value)
+
+
+def _model_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return _json_safe(value)
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        try:
+            return dump(mode="json", by_alias=True)
+        except Exception:
+            # Some PyMax/Pydantic combinations leave a MockValSer placeholder
+            # on nested response models. Raw fields are diagnostic only, so a
+            # normalized vars() representation is an appropriate fallback.
+            pass
+    if hasattr(value, "__dict__"):
+        return _json_safe({
+            key: item for key, item in vars(value).items()
+            if not key.startswith("_")
+        })
     return {}
+
+
+def _install_pymax_decode_compatibility() -> None:
+    """Retry malformed MAX msgpack strings with replacement decoding.
+
+    MAX currently returns a few string-typed fields containing non-UTF-8 bytes.
+    PyMax decodes the entire response strictly, which otherwise discards valid
+    channel/message metrics along with the malformed auxiliary field.
+    """
+    import msgpack
+    from pymax.protocol.tcp.payload import MsgpackPayloadCodec
+
+    if getattr(MsgpackPayloadCodec, "_m_ranked_utf8_compat", False):
+        return
+    strict_decode = MsgpackPayloadCodec.decode
+
+    def decode(codec: Any, payload_bytes: bytes) -> Any:
+        try:
+            return strict_decode(codec, payload_bytes)
+        except UnicodeDecodeError:
+            def ext_hook(code: int, data: bytes) -> Any:
+                if code != codec.WRAPPED_VALUE_EXT_CODE:
+                    return msgpack.ExtType(code, data)
+                return msgpack.unpackb(
+                    data, raw=False, strict_map_key=False,
+                    unicode_errors="replace", ext_hook=ext_hook,
+                )
+
+            try:
+                return msgpack.unpackb(
+                    payload_bytes, raw=False, strict_map_key=False,
+                    unicode_errors="replace", ext_hook=ext_hook,
+                )
+            except msgpack.exceptions.ExtraData as exc:
+                return exc.unpacked
+
+    MsgpackPayloadCodec.decode = decode
+    MsgpackPayloadCodec._m_ranked_utf8_compat = True
 
 
 def _optional_int(value: Any) -> int | None:
@@ -66,6 +145,43 @@ def _post_type(message: Any) -> str:
     return str(kind or "media").casefold()
 
 
+def _comment_count(payload: Any) -> int | None:
+    """Read the comment counter encoded in MAX discussion buttons.
+
+    MAX channel comments are commonly exposed through an inline keyboard.
+    Some providers include the count in the button text, while the explicit
+    "Прокомментировать" call to action represents an open, empty discussion.
+    A generic "Комментарии" button carries no count and must remain unknown.
+    """
+    explicit_counts: list[int] = []
+    empty_discussion = False
+
+    def visit(value: Any, in_buttons: bool = False) -> None:
+        nonlocal empty_discussion
+        if isinstance(value, dict):
+            for key, item in value.items():
+                is_buttons = in_buttons or str(key).casefold() == "buttons"
+                if is_buttons and str(key).casefold() == "text" and isinstance(item, str):
+                    label = item.casefold()
+                    if "коммент" not in label and "comment" not in label:
+                        continue
+                    match = re.search(r"\d[\d\s]*", label)
+                    if match:
+                        explicit_counts.append(int(match.group(0).replace(" ", "")))
+                    elif "прокоммент" in label:
+                        empty_discussion = True
+                else:
+                    visit(item, is_buttons)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                visit(item, in_buttons)
+
+    visit(payload)
+    if explicit_counts:
+        return max(explicit_counts)
+    return 0 if empty_discussion else None
+
+
 def _is_repost(message: Any, chat_id: int) -> bool:
     link = getattr(message, "link", None)
     if link is None:
@@ -81,6 +197,7 @@ def _message_post(
     message: Any,
     chat_id: int,
     reactions: dict[str, Any] | None = None,
+    views: dict[str, int | None] | None = None,
 ) -> MaxPost:
     message_id = int(getattr(message, "id"))
     timestamp = int(getattr(message, "time"))
@@ -89,19 +206,30 @@ def _message_post(
         tz=timezone.utc,
     )
     stats = getattr(message, "stats", None) or {}
+    if not isinstance(stats, dict):
+        stats = _model_dict(stats)
+    view_count = _optional_int(stats.get("views"))
+    if view_count is None and views:
+        view_count = views.get(str(message_id), views.get(message_id))
     reaction_info = None
     if reactions:
         reaction_info = reactions.get(str(message_id)) or reactions.get(message_id)
     reaction_info = reaction_info or getattr(message, "reaction_info", None)
     reaction_total, breakdown = _reaction_state(reaction_info)
     raw = _model_dict(message)
+    if view_count is not None:
+        raw_stats = raw.get("stats")
+        if not isinstance(raw_stats, dict):
+            raw_stats = {}
+            raw["stats"] = raw_stats
+        raw_stats["views"] = view_count
     return MaxPost(
         id=str(message_id),
         published_at=published_at,
-        views=_optional_int(stats.get("views")),
+        views=view_count,
         reactions=reaction_total,
         reposts=None,
-        comments=None,
+        comments=_comment_count(raw),
         url=None,
         raw=raw,
         reaction_breakdown=breakdown,
@@ -142,6 +270,7 @@ class MaxUserClient:
             raise RuntimeError(
                 "MAX user client is not installed; install project requirements"
             ) from exc
+        _install_pymax_decode_compatibility()
         self.client = Client(
             phone=phone,
             work_dir=str(self.session_path.parent),
@@ -194,6 +323,9 @@ class MaxUserClient:
     def _reference_url(reference: str) -> str:
         value = reference.strip()
         if "://" in value:
+            parsed = urlparse(value)
+            if parsed.netloc.casefold() == "web.max.ru":
+                return parsed._replace(netloc="max.ru").geturl()
             return value
         return f"https://max.ru/{value.lstrip('@/')}"
 
@@ -223,10 +355,49 @@ class MaxUserClient:
         if not messages:
             return []
         message_ids = [int(getattr(message, "id")) for message in messages]
+        missing_view_ids = [
+            message_id for message_id, message in zip(message_ids, messages)
+            if _optional_int(
+                (_model_dict(getattr(message, "stats", None))
+                 if not isinstance(getattr(message, "stats", None), dict)
+                 else (getattr(message, "stats", None) or {})).get("views")
+            ) is None
+        ]
+        views = await self._message_views(chat_id, missing_view_ids)
         reactions = await self._request(
             self.client.get_reactions, chat_id, message_ids,
         )
-        return [_message_post(message, chat_id, reactions) for message in messages]
+        return [
+            _message_post(message, chat_id, reactions, views)
+            for message in messages
+        ]
+
+    async def _message_views(
+        self,
+        chat_id: int,
+        message_ids: list[int],
+    ) -> dict[str, int | None]:
+        if not message_ids:
+            return {}
+        getter = getattr(self.client, "get_message_stats", None)
+        if callable(getter):
+            response = await self._request(getter, chat_id, message_ids)
+        else:
+            from pymax.protocol.enums import Opcode
+
+            response = await self._request(
+                self.client._app.invoke,
+                Opcode.MSG_GET_STAT,
+                {"chatId": chat_id, "messageIds": message_ids},
+            )
+        payload = response if isinstance(response, dict) else getattr(response, "payload", None)
+        stats = (payload or {}).get("stats") or {}
+        result: dict[str, int | None] = {}
+        for message_id, values in stats.items():
+            if not isinstance(values, dict):
+                values = _model_dict(values)
+            result[str(message_id)] = _optional_int(values.get("views"))
+        return result
 
     async def posts(self, chat_id: int, count: int = 100) -> list[MaxPost]:
         messages = await self._request(
