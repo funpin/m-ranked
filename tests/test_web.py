@@ -544,6 +544,59 @@ def test_vk_vertical_pages_and_exports_use_only_vk_snapshots(tmp_path):
     assert "Сохранённый текст VK" in deleted_publication
 
 
+def test_max_pages_link_public_post_and_show_reaction_breakdown(tmp_path):
+    cfg = replace(settings(tmp_path), max_user_phone="+79990000000")
+    db = Database(cfg.database_path); db.migrate()
+    institution_id = db.add_institution("МГТУ", "МГТУ")
+    account_id = db.add_platform_account(
+        institution_id, "max", "bmstu1830", username="bmstu1830",
+        title="МГТУ в MAX", url="https://max.ru/bmstu1830",
+    )
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    post_id = db.upsert_platform_post(
+        account_id, "117200531645733298", now - timedelta(hours=1),
+        now - timedelta(hours=1), "text",
+        "https://max.ru/bmstu1830/AaBhQzg7GbI", {},
+        history_complete=False,
+    )
+    db.insert_platform_snapshot(
+        post_id, now - timedelta(minutes=5), 3300, 5,
+        views_count=1900, reactions_count=85, comments_count=1,
+        shares_count=None,
+        raw={"reaction_breakdown": {"🔥": 55, "👍": 21, "❤️": 9}},
+    )
+    db.insert_platform_snapshot(
+        post_id, now, 3600, 5,
+        views_count=1910, reactions_count=87, comments_count=1,
+        shares_count=None,
+        raw={"reaction_breakdown": {"🔥": 56, "👍": 20, "❤️": 11}},
+    )
+    client = TestClient(create_app(cfg, db))
+
+    account = client.get(f"/platform-accounts/{account_id}").text
+    assert 'title="Внутренний ID сообщения MAX"' in account
+    assert 'href="https://max.ru/bmstu1830/AaBhQzg7GbI">MAX</a>' in account
+    assert '<span class="pill warn">неполная</span>' in account
+
+    publication = client.get(f"/platform-posts/{post_id}").text
+    assert 'href="https://max.ru/bmstu1830/AaBhQzg7GbI"' in publication
+    assert 'aria-label="Реакции по типам"' in publication
+    assert 'aria-label="Дельта реакций по типам"' in publication
+    assert publication.index('aria-label="Всего просмотров"') < publication.index(
+        'aria-label="Реакции по типам"'
+    )
+    assert publication.index('aria-label="Всего комментариев"') < publication.index(
+        'aria-label="Реакции по типам"'
+    )
+    assert "🔥 <b>56</b>" in publication
+    assert "👍 <b>20</b>" in publication
+    assert "❤️ <b>11</b>" in publication
+    assert "🔥 <b>+1</b>" in publication
+    assert "👍 <b>-1</b>" in publication
+    assert "❤️ <b>+2</b>" in publication
+    assert "история неполная" in publication
+
+
 def test_platform_post_page_links_adjacent_account_posts(tmp_path):
     cfg = replace(settings(tmp_path), vk_access_token="token")
     db = Database(cfg.database_path); db.migrate()
@@ -701,15 +754,15 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     )
     db.insert_platform_snapshot(
         post_id, now - timedelta(hours=1), 3600, 5,
-        views_count=100, reactions_count=3 if platform == "rutube" else None,
+        views_count=100, reactions_count=3,
         comments_count=2,
-        shares_count=1 if platform == "max" else None, raw={},
+        shares_count=None, raw={},
     )
     db.insert_platform_snapshot(
         post_id, now, 7200, 5,
-        views_count=160, reactions_count=7 if platform == "rutube" else None,
+        views_count=160, reactions_count=7,
         comments_count=4,
-        shares_count=2 if platform == "max" else None, raw={},
+        shares_count=None, raw={},
     )
     client = TestClient(create_app(cfg, db))
 
@@ -770,23 +823,25 @@ def test_non_telegram_platforms_reuse_overview_and_channel_layout(
     assert "Прирост между замерами" in publication
     assert "От прошлого замера" in publication
     assert 'aria-label="Дельта просмотров"' in publication
-    assert 'aria-label="Дельта комментариев"' in publication
     assert "+1 ч" in publication
     assert ">+60<" in publication
     assert "<th>Интервал</th>" not in publication
     assert "window.localStorage.setItem(PLATFORM_POST_CHART_PREFERENCES_KEY" in publication
     assert '"key": "views"' in publication
     if platform == "rutube":
+        assert 'aria-label="Дельта комментариев"' in publication
         assert "Накопление лайков, просмотров и комментариев" in publication
         assert '"key": "reactions"' in publication
         assert '"key": "comments"' in publication
         assert '"key": "shares"' not in publication
     else:
         assert '<span class="pill repost">репост</span>' in publication
-        assert '"key": "reactions"' not in publication
-        assert "Накопление просмотров, комментариев и репостов" in publication
+        assert 'aria-label="Дельта реакций"' in publication
+        assert 'aria-label="Дельта комментариев"' in publication
+        assert "Накопление реакций, просмотров и комментариев" in publication
+        assert '"key": "reactions"' in publication
         assert '"key": "comments"' in publication
-        assert '"key": "shares"' in publication
+        assert '"key": "shares"' not in publication
 
 
 def test_overview_period_keeps_channels_without_posts_and_labels_new_medians(tmp_path):

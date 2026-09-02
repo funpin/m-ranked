@@ -457,6 +457,22 @@ class Database:
                     "INSERT INTO schema_migrations(version, applied_at) VALUES(14, ?)",
                     (iso(utc_now()),),
                 )
+            migration_15_applied = conn.execute(
+                "SELECT 1 FROM schema_migrations WHERE version=15"
+            ).fetchone() is not None
+            if not migration_15_applied:
+                self._backfill_max_post_urls(conn)
+                conn.execute(
+                    """UPDATE platform_posts
+                       SET history_complete=0, history_forced_incomplete=1
+                       WHERE platform_account_id IN (
+                           SELECT id FROM platform_accounts WHERE platform='max'
+                       )"""
+                )
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES(15, ?)",
+                    (iso(utc_now()),),
+                )
 
     @staticmethod
     def _migrate_vk_joint_post_ids(conn: sqlite3.Connection) -> None:
@@ -551,6 +567,29 @@ class Database:
                 "UPDATE platform_posts SET is_repost=? WHERE id=?",
                 (int(max_post_is_repost(raw, int(native_id))), row["id"]),
             )
+
+    @staticmethod
+    def _backfill_max_post_urls(conn: sqlite3.Connection) -> None:
+        from .max_api import max_post_url
+
+        rows = list(conn.execute(
+            """SELECT pp.id, pp.external_id, pa.username, pa.url, pa.external_key
+               FROM platform_posts pp
+               JOIN platform_accounts pa ON pa.id=pp.platform_account_id
+               WHERE pa.platform='max'"""
+        ))
+        for row in rows:
+            reference = str(
+                row["url"] or row["username"] or row["external_key"] or ""
+            )
+            try:
+                url = max_post_url(reference, str(row["external_id"]))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if url:
+                conn.execute(
+                    "UPDATE platform_posts SET url=? WHERE id=?", (url, row["id"]),
+                )
 
     @staticmethod
     def _remove_confirmed_vk_zero_dips(conn: sqlite3.Connection) -> None:

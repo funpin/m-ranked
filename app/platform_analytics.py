@@ -28,7 +28,7 @@ PLATFORM_PRESENTATION: dict[str, dict[str, Any]] = {
         "views": "просмотров",
         "comments": "комментариев",
         "shares": "репостов",
-        "capabilities": {"views", "comments", "shares"},
+        "capabilities": {"views", "reactions", "comments"},
     },
     "rutube": {
         "label": "Rutube",
