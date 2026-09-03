@@ -32,6 +32,7 @@ class MaxCollector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        self._cycle_started_at = started
         accounts = self.db.list_platform_accounts(platform="max", enabled_only=True)
         errors = 0
         self.db.set_state("max_poll_last_started_at", iso(started))
@@ -57,6 +58,7 @@ class MaxCollector:
         if native_id and not native_id.lstrip("-").isdigit():
             raise ValueError("MAX chat_id должен быть числом")
         measured_at = datetime.now(timezone.utc)
+        scheduled_at = getattr(self, "_cycle_started_at", measured_at)
         reference = str(account["url"] or account["external_key"])
         channel = await self.client.resolve_channel(
             reference, int(native_id) if native_id else None,
@@ -91,7 +93,8 @@ class MaxCollector:
                 age_seconds(published_at, measured_at), self.settings,
             )
             if snapshot_is_due(
-                row["latest_measured_at"], measured_at, interval,
+                row["latest_measured_at"], scheduled_at, interval,
+                last_measurement_bucket=row["latest_measurement_bucket"],
             ):
                 due_rows[external_id] = row
         available_point_ids: set[int] = set()
@@ -141,9 +144,12 @@ class MaxCollector:
                 interval = snapshot_interval_minutes(
                     first_age, self.settings,
                 )
+                last_measured_at, last_bucket = (
+                    self.db.latest_platform_snapshot_timing(post_id, _conn=conn)
+                )
                 if snapshot_is_due(
-                    self.db.latest_platform_snapshot_at(post_id, _conn=conn),
-                    measured_at, interval,
+                    last_measured_at, scheduled_at, interval,
+                    last_measurement_bucket=last_bucket,
                 ):
                     self.db.insert_platform_snapshot(
                         post_id, measured_at, first_age, interval,
@@ -154,6 +160,6 @@ class MaxCollector:
                             "reaction_breakdown": post.reaction_breakdown,
                             "comments": post.comments, "reposts": post.reposts,
                         },
-                        _conn=conn,
+                        bucket_at=scheduled_at, _conn=conn,
                     )
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)

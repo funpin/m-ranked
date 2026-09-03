@@ -18,9 +18,6 @@ from .models import ReactionState
 
 logger = logging.getLogger(__name__)
 
-POLLING_JITTER_TOLERANCE_SECONDS = 30
-
-
 @dataclass(frozen=True)
 class PublicPost:
     message_id: int
@@ -110,18 +107,34 @@ def snapshot_interval_minutes(
 
 def snapshot_is_due(
     last_measured_at: str | None,
-    measured_at: datetime,
+    scheduled_at: datetime,
     interval_minutes: int,
+    *,
+    last_measurement_bucket: int | None = None,
 ) -> bool:
+    """Return whether a new wall-clock collection slot has started.
+
+    Collectors pass their common cycle start as ``scheduled_at``.  Comparing
+    slots instead of elapsed time prevents a channel that moves slightly
+    earlier within the next cycle from being postponed for a whole cycle.
+    """
     if not last_measured_at:
         return True
     previous = datetime.fromisoformat(last_measured_at)
     if previous.tzinfo is None:
         previous = previous.replace(tzinfo=timezone.utc)
-    due_after_seconds = max(
-        0, interval_minutes * 60 - POLLING_JITTER_TOLERANCE_SECONDS,
-    )
-    return (measured_at - previous).total_seconds() >= due_after_seconds
+    slot_seconds = interval_minutes * 60
+    previous_slot_for_interval = int(previous.timestamp()) // slot_seconds
+    previous_slot = previous_slot_for_interval
+    if last_measurement_bucket is not None:
+        stored_slot = int(last_measurement_bucket)
+        # Buckets created with another age-based interval have a different
+        # scale.  A one-slot difference is still the same interval: it means
+        # processing crossed a wall-clock boundary after the cycle started.
+        if abs(stored_slot - previous_slot_for_interval) <= 1:
+            previous_slot = stored_slot
+    scheduled_slot = int(scheduled_at.timestamp()) // slot_seconds
+    return scheduled_slot > previous_slot
 
 
 def metadata_is_due(
@@ -274,6 +287,7 @@ class PublicWebCollector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        self._cycle_started_at = started
         channels = self.db.list_channels(enabled_only=True)
         error_count = 0
         self.db.set_state("poll_last_started_at", iso(started))
@@ -334,6 +348,7 @@ class PublicWebCollector:
         if not feed:
             raise ValueError("no public posts found; channel may be private or unavailable")
         now = datetime.now(timezone.utc)
+        scheduled_at = getattr(self, "_cycle_started_at", now)
         if metadata_is_due(
             channel["subscriber_measured_at"], now, self.settings.subscriber_refresh_hours
         ):
@@ -378,7 +393,8 @@ class PublicWebCollector:
                 age_seconds(stored_published, measured), self.settings
             )
             if not snapshot_is_due(
-                stored["last_measured_at"], measured, interval_minutes
+                stored["last_measured_at"], scheduled_at, interval_minutes,
+                last_measurement_bucket=stored["last_measurement_bucket"],
             ):
                 continue
             due.append((stored, measured, interval_minutes))
@@ -434,7 +450,8 @@ class PublicWebCollector:
                     public_post.reactions.raw, interval_minutes,
                     self.settings.jump_min_abs, self.settings.jump_min_ratio,
                     comments_count=comment_counts.get(mid),
-                    views_count=public_post.views_count, _conn=conn,
+                    views_count=public_post.views_count,
+                    bucket_at=scheduled_at, _conn=conn,
                 )
             if inserted:
                 logger.info(

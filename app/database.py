@@ -844,13 +844,23 @@ class Database:
     def latest_platform_snapshot_at(
         self, platform_post_id: int, _conn: sqlite3.Connection | None = None,
     ) -> str | None:
+        measured_at, _bucket = self.latest_platform_snapshot_timing(
+            platform_post_id, _conn=_conn,
+        )
+        return measured_at
+
+    def latest_platform_snapshot_timing(
+        self, platform_post_id: int, _conn: sqlite3.Connection | None = None,
+    ) -> tuple[str | None, int | None]:
         with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             row = conn.execute(
-                """SELECT measured_at FROM platform_snapshots
+                """SELECT measured_at, measurement_bucket FROM platform_snapshots
                    WHERE platform_post_id=? ORDER BY measured_at DESC LIMIT 1""",
                 (platform_post_id,),
             ).fetchone()
-            return str(row["measured_at"]) if row else None
+            if row is None:
+                return None, None
+            return str(row["measured_at"]), int(row["measurement_bucket"])
 
     def platform_metric_high_watermarks(
         self, platform_post_id: int, _conn: sqlite3.Connection | None = None,
@@ -911,6 +921,7 @@ class Database:
                            latest.shares_count latest_shares,
                            latest.age_seconds current_age,
                            latest.measured_at latest_measured_at,
+                           latest.measurement_bucket latest_measurement_bucket,
                            (SELECT s.age_seconds FROM platform_snapshots s
                             WHERE s.platform_post_id=pp.id
                             ORDER BY s.measured_at LIMIT 1) first_age,
@@ -1007,9 +1018,11 @@ class Database:
         comments_count: int | None,
         shares_count: int | None,
         raw: Any,
+        bucket_at: datetime | None = None,
         _conn: sqlite3.Connection | None = None,
     ) -> bool:
-        bucket = int(measured_at.timestamp()) // (poll_interval_minutes * 60)
+        bucket_source = bucket_at or measured_at
+        bucket = int(bucket_source.timestamp()) // (poll_interval_minutes * 60)
         with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             result = conn.execute(
                 """INSERT OR IGNORE INTO platform_snapshots(
@@ -1299,7 +1312,10 @@ class Database:
                     """SELECT p.*,
                        (SELECT measured_at FROM reaction_snapshots s
                         WHERE s.post_id=p.id AND s.synthetic=0
-                        ORDER BY measured_at DESC LIMIT 1) last_measured_at
+                        ORDER BY measured_at DESC LIMIT 1) last_measured_at,
+                       (SELECT measurement_bucket FROM reaction_snapshots s
+                        WHERE s.post_id=p.id AND s.synthetic=0
+                        ORDER BY measured_at DESC LIMIT 1) last_measurement_bucket
                        FROM posts p WHERE p.channel_id=? AND p.published_at>=?
                          AND p.deleted_at IS NULL
                        ORDER BY p.published_at""",
@@ -1493,9 +1509,11 @@ class Database:
         jump_min_ratio: float,
         comments_count: int | None = None,
         views_count: int | None = None,
+        bucket_at: datetime | None = None,
         _conn: sqlite3.Connection | None = None,
     ) -> bool:
-        bucket = int(measured_at.timestamp()) // (poll_interval_minutes * 60)
+        bucket_source = bucket_at or measured_at
+        bucket = int(bucket_source.timestamp()) // (poll_interval_minutes * 60)
         with (self.connect() if _conn is None else nullcontext(_conn)) as conn:
             previous = conn.execute(
                 "SELECT * FROM reaction_snapshots WHERE post_id=? ORDER BY measured_at DESC LIMIT 1",

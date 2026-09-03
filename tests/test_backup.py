@@ -31,6 +31,15 @@ def test_create_backup_copies_live_wal_database_and_verifies_it(tmp_path):
         assert conn.execute("PRAGMA quick_check").fetchone()[0] == "ok"
         assert conn.execute("SELECT value FROM sample").fetchone()[0] == "preserved"
 
+    create_backup(
+        source,
+        destination,
+        now=datetime(2026, 9, 2, 0, 15, tzinfo=timezone.utc),
+    )
+    assert [path.name for path in destination.glob("reactions-*.db")] == [
+        "reactions-20260902T001500Z.db"
+    ]
+
 
 def test_create_backup_rotates_only_scheduled_backups(tmp_path):
     source = tmp_path / "source.db"
