@@ -1571,6 +1571,7 @@ def create_app(
         previous: dict[str, int | None] = {
             "views": None, "reactions": None, "comments": None, "shares": None,
         }
+        previous_reaction_breakdown: dict[str, int] | None = None
         previous_measured_at: datetime | None = None
         for row in snapshots:
             measured_at = _as_datetime(row["measured_at"])
@@ -1592,6 +1593,36 @@ def create_app(
                     if value is not None and previous[metric] is not None else None
                 )
                 previous[metric] = int(value) if value is not None else None
+            raw_snapshot: dict[str, Any] = {}
+            try:
+                decoded_raw = json.loads(str(row.get("raw_json") or "{}"))
+                if isinstance(decoded_raw, dict):
+                    raw_snapshot = decoded_raw
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+            raw_breakdown = raw_snapshot.get("reaction_breakdown")
+            reaction_breakdown: dict[str, int] = {}
+            if isinstance(raw_breakdown, dict):
+                for reaction, count in raw_breakdown.items():
+                    try:
+                        reaction_breakdown[str(reaction)] = int(count)
+                    except (TypeError, ValueError):
+                        continue
+            row["reaction_breakdown"] = reaction_breakdown
+            if previous_reaction_breakdown is None:
+                row["delta_reaction_breakdown"] = None
+            else:
+                reaction_order = list(dict.fromkeys(
+                    [*reaction_breakdown, *previous_reaction_breakdown]
+                ))
+                row["delta_reaction_breakdown"] = {
+                    reaction: reaction_breakdown.get(reaction, 0)
+                    - previous_reaction_breakdown.get(reaction, 0)
+                    for reaction in reaction_order
+                    if reaction_breakdown.get(reaction, 0)
+                    != previous_reaction_breakdown.get(reaction, 0)
+                }
+            previous_reaction_breakdown = reaction_breakdown
         presentation = PLATFORM_PRESENTATION[post_platform]
         reaction_label = "Лайки" if post_platform == "vk" else "Реакции"
         metric_catalog = (

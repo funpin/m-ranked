@@ -64,7 +64,7 @@ class Settings:
     medium_post_hours: int = 168
     medium_poll_interval_minutes: int = 15
     old_poll_interval_minutes: int = 180
-    retention_days: int = 40
+    retention_days: int = 70
     subscriber_refresh_hours: int = 24
     archive_dir: Path = Path("data/archives")
     second_day_poll_interval_minutes: int = 15
@@ -130,7 +130,7 @@ class Settings:
             medium_post_hours=_int("MEDIUM_POST_HOURS", 168),
             medium_poll_interval_minutes=_int("MEDIUM_POLL_INTERVAL_MINUTES", 15),
             old_poll_interval_minutes=_int("OLD_POLL_INTERVAL_MINUTES", 180),
-            retention_days=_int("RETENTION_DAYS", 40),
+            retention_days=_int("RETENTION_DAYS", 70),
             subscriber_refresh_hours=_int("SUBSCRIBER_REFRESH_HOURS", 24),
             archive_dir=Path(os.getenv("ARCHIVE_DIR", "data/archives")),
             second_day_poll_interval_minutes=_int(

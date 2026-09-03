@@ -120,11 +120,58 @@ def test_public_feed_service_message_without_label_is_unavailable():
     assert public_post_is_deleted(html) is True
 
 
-def test_snapshot_due_tolerates_small_scheduler_jitter():
-    previous = datetime(2026, 8, 31, 13, 0, tzinfo=timezone.utc)
-    assert snapshot_is_due(previous.isoformat(), previous + timedelta(minutes=4, seconds=31), 5)
+def test_snapshot_due_uses_stable_wall_clock_slots():
+    previous = datetime(2026, 8, 31, 13, 5, 49, tzinfo=timezone.utc)
+
+    assert snapshot_is_due(
+        previous.isoformat(),
+        datetime(2026, 8, 31, 13, 10, 15, tzinfo=timezone.utc),
+        5,
+    )
     assert not snapshot_is_due(
-        previous.isoformat(), previous + timedelta(minutes=4, seconds=29), 5,
+        previous.isoformat(),
+        datetime(2026, 8, 31, 13, 9, 59, tzinfo=timezone.utc),
+        5,
+    )
+
+
+def test_snapshot_due_respects_longer_interval_slots():
+    previous = datetime(2026, 8, 31, 13, 5, tzinfo=timezone.utc)
+
+    assert not snapshot_is_due(
+        previous.isoformat(),
+        datetime(2026, 8, 31, 13, 14, 59, tzinfo=timezone.utc),
+        15,
+    )
+    assert snapshot_is_due(
+        previous.isoformat(),
+        datetime(2026, 8, 31, 13, 15, tzinfo=timezone.utc),
+        15,
+    )
+
+
+def test_snapshot_due_keeps_cycle_slot_when_processing_crossed_boundary():
+    scheduled_previous = datetime(2026, 8, 31, 13, 5, tzinfo=timezone.utc)
+    measured_previous = datetime(2026, 8, 31, 13, 10, 2, tzinfo=timezone.utc)
+    previous_bucket = int(scheduled_previous.timestamp()) // (5 * 60)
+
+    assert snapshot_is_due(
+        measured_previous.isoformat(),
+        datetime(2026, 8, 31, 13, 10, 15, tzinfo=timezone.utc),
+        5,
+        last_measurement_bucket=previous_bucket,
+    )
+
+
+def test_snapshot_due_ignores_stored_bucket_from_previous_interval_scale():
+    previous = datetime(2026, 8, 31, 13, 10, tzinfo=timezone.utc)
+    five_minute_bucket = int(previous.timestamp()) // (5 * 60)
+
+    assert snapshot_is_due(
+        previous.isoformat(),
+        datetime(2026, 8, 31, 13, 15, tzinfo=timezone.utc),
+        15,
+        last_measurement_bucket=five_minute_bucket,
     )
 
 

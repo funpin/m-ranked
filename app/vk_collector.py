@@ -57,6 +57,7 @@ class VkCollector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        self._cycle_started_at = started
         accounts = self.db.list_platform_accounts(platform="vk", enabled_only=True)
         error_count = 0
         self.db.set_state("vk_poll_last_started_at", iso(started))
@@ -89,6 +90,7 @@ class VkCollector:
 
     async def _poll_account(self, account: Any) -> None:
         measured_at = datetime.now(timezone.utc)
+        scheduled_at = getattr(self, "_cycle_started_at", measured_at)
         reference = str(account["external_key"])
         community = await self.client.community(reference)
         self.db.update_platform_account_metadata(
@@ -126,7 +128,8 @@ class VkCollector:
                 age_seconds(published_at, measured_at), self.settings,
             )
             if snapshot_is_due(
-                row["latest_measured_at"], measured_at, interval,
+                row["latest_measured_at"], scheduled_at, interval,
+                last_measurement_bucket=row["latest_measurement_bucket"],
             ):
                 probe_id = str(row["source_external_id"] or external_id)
                 due_rows[probe_id] = row
@@ -188,10 +191,12 @@ class VkCollector:
                 interval_minutes = snapshot_interval_minutes(
                     first_age, self.settings,
                 )
+                last_measured_at, last_bucket = (
+                    self.db.latest_platform_snapshot_timing(post_id, _conn=conn)
+                )
                 if not snapshot_is_due(
-                    self.db.latest_platform_snapshot_at(post_id, _conn=conn),
-                    measured_at,
-                    interval_minutes,
+                    last_measured_at, scheduled_at, interval_minutes,
+                    last_measurement_bucket=last_bucket,
                 ):
                     continue
                 metrics, ignored_metrics = validated_vk_metrics(
@@ -222,7 +227,7 @@ class VkCollector:
                     comments_count=metrics["comments"],
                     shares_count=metrics["shares"],
                     raw=raw_snapshot,
-                    _conn=conn,
+                    bucket_at=scheduled_at, _conn=conn,
                 ):
                     inserted += 1
         self.db.finish_platform_account_check(

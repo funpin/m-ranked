@@ -7,6 +7,7 @@ from typing import Any
 from .analytics import age_seconds, history_is_complete
 from .config import Settings
 from .database import Database, iso
+from .max_api import max_post_url
 from .max_user_api import MaxUserClient, max_username
 from .public_web import snapshot_interval_minutes, snapshot_is_due
 
@@ -31,6 +32,7 @@ class MaxCollector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        self._cycle_started_at = started
         accounts = self.db.list_platform_accounts(platform="max", enabled_only=True)
         errors = 0
         self.db.set_state("max_poll_last_started_at", iso(started))
@@ -56,11 +58,16 @@ class MaxCollector:
         if native_id and not native_id.lstrip("-").isdigit():
             raise ValueError("MAX chat_id должен быть числом")
         measured_at = datetime.now(timezone.utc)
+        scheduled_at = getattr(self, "_cycle_started_at", measured_at)
         reference = str(account["url"] or account["external_key"])
         channel = await self.client.resolve_channel(
             reference, int(native_id) if native_id else None,
         )
         chat_id = channel.id
+        public_reference = str(
+            account["url"] or account["username"] or channel.link
+            or account["external_key"]
+        )
         posts = await self.client.posts(chat_id, min(self.settings.discovery_limit, 100))
         self.db.update_platform_account_metadata(
             int(account["id"]), native_id=str(channel.id),
@@ -86,7 +93,8 @@ class MaxCollector:
                 age_seconds(published_at, measured_at), self.settings,
             )
             if snapshot_is_due(
-                row["latest_measured_at"], measured_at, interval,
+                row["latest_measured_at"], scheduled_at, interval,
+                last_measurement_bucket=row["latest_measurement_bucket"],
             ):
                 due_rows[external_id] = row
         available_point_ids: set[int] = set()
@@ -126,7 +134,8 @@ class MaxCollector:
                 first_age = age_seconds(post.published_at, measured_at)
                 post_id = self.db.upsert_platform_post(
                     int(account["id"]), post.id, post.published_at,
-                    measured_at, post.post_type, post.url, post.raw,
+                    measured_at, post.post_type,
+                    max_post_url(public_reference, post.id), post.raw,
                     history_complete=history_is_complete(
                         first_age, self.settings.complete_history_max_first_age_minutes,
                     ),
@@ -135,9 +144,12 @@ class MaxCollector:
                 interval = snapshot_interval_minutes(
                     first_age, self.settings,
                 )
+                last_measured_at, last_bucket = (
+                    self.db.latest_platform_snapshot_timing(post_id, _conn=conn)
+                )
                 if snapshot_is_due(
-                    self.db.latest_platform_snapshot_at(post_id, _conn=conn),
-                    measured_at, interval,
+                    last_measured_at, scheduled_at, interval,
+                    last_measurement_bucket=last_bucket,
                 ):
                     self.db.insert_platform_snapshot(
                         post_id, measured_at, first_age, interval,
@@ -148,6 +160,6 @@ class MaxCollector:
                             "reaction_breakdown": post.reaction_breakdown,
                             "comments": post.comments, "reposts": post.reposts,
                         },
-                        _conn=conn,
+                        bucket_at=scheduled_at, _conn=conn,
                     )
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)

@@ -69,6 +69,18 @@ class RutubeClient:
             raise ValueError(f"RUTUBE channel id was not found at {url}")
         return int(match.group(1))
 
+    async def subscriber_count(self, channel_id: int, url: str | None = None) -> int | None:
+        """Read the public subscriber counter embedded in the channel page."""
+        try:
+            response = await self.client.get(
+                url or f"https://rutube.ru/channel/{channel_id}/",
+            )
+            response.raise_for_status()
+        except httpx.HTTPError:
+            return None
+        match = re.search(r'"subscribers_count"\s*:\s*(\d+)', response.text)
+        return int(match.group(1)) if match else None
+
     async def videos(self, channel_id: int, limit: int = 100) -> tuple[RutubeChannel, list[RutubeVideo]]:
         result: list[RutubeVideo] = []
         page = 1

@@ -1,7 +1,16 @@
 import asyncio
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from app.max_user_api import MaxUserClient, max_username
+import pytest
+
+from app.max_user_api import (
+    MaxUserClient,
+    _comment_count,
+    _install_pymax_decode_compatibility,
+    _model_dict,
+    max_username,
+)
 
 
 class FakeSdkClient:
@@ -10,13 +19,14 @@ class FakeSdkClient:
         self.closed = False
         self.joined = []
         self.reaction_calls = []
+        self.stats_calls = []
         self.connect_calls = 0
         self.message = SimpleNamespace(
             id=700,
             time=1_750_000_000_000,
             type="message",
             attaches=[SimpleNamespace(type=SimpleNamespace(value="PHOTO"))],
-            stats={"views": 321},
+            stats=None,
             reaction_info=None,
             link=SimpleNamespace(type=SimpleNamespace(value="forward"), chat_id=-999),
         )
@@ -63,6 +73,10 @@ class FakeSdkClient:
             ),
         }
 
+    async def get_message_stats(self, chat_id, ids):
+        self.stats_calls.append((chat_id, ids))
+        return {"stats": {str(message_id): {"views": 321} for message_id in ids}}
+
 
 def test_max_user_client_resolves_channel_and_parses_metrics(tmp_path):
     sdk = FakeSdkClient()
@@ -81,6 +95,7 @@ def test_max_user_client_resolves_channel_and_parses_metrics(tmp_path):
     assert post.post_type == "photo"
     assert post.is_repost is True
     assert sdk.reaction_calls == [(-123, [700])]
+    assert sdk.stats_calls == [(-123, [700])]
     assert sdk.closed is True
 
 
@@ -91,8 +106,19 @@ def test_max_user_client_fetches_due_messages_by_id(tmp_path):
     posts = asyncio.run(client.posts_by_ids(-123, ["700"]))
 
     assert [post.id for post in posts] == ["700"]
+    assert posts[0].views == 321
+    assert sdk.stats_calls == [(-123, [700])]
     assert max_username("https://max.ru/example") == "example"
     assert max_username("@example") == "example"
+
+
+def test_max_user_client_normalizes_web_channel_links(tmp_path):
+    sdk = FakeSdkClient()
+    client = MaxUserClient("", tmp_path / "max.session.db", client=sdk)
+
+    asyncio.run(client.resolve_channel("https://web.max.ru/example"))
+
+    assert sdk.joined == ["https://max.ru/example"]
 
 
 def test_max_user_client_reconnects_after_request_failure(tmp_path):
@@ -118,3 +144,62 @@ def test_max_user_client_reconnects_after_request_failure(tmp_path):
 
     assert channel.id == -123
     assert sdk.connect_calls == 2
+
+
+def test_model_dict_falls_back_when_pydantic_serializer_is_unresolved():
+    class BrokenModel:
+        visible = "ignored class attribute"
+
+        def __init__(self):
+            self.payload = SimpleNamespace(
+                created_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
+                opaque=b"\xff\x00",
+            )
+
+        def model_dump(self, **kwargs):
+            raise TypeError("'MockValSer' object is not an instance of 'SchemaSerializer'")
+
+    raw = _model_dict(BrokenModel())
+
+    assert raw == {
+        "payload": {
+            "created_at": "2026-09-02T00:00:00+00:00",
+            "opaque": "ff00",
+        },
+    }
+
+
+def test_pymax_decoder_retries_malformed_utf8_strings():
+    pytest.importorskip("pymax")
+    from pymax.protocol.tcp.payload import MsgpackPayloadCodec
+
+    _install_pymax_decode_compatibility()
+
+    assert MsgpackPayloadCodec().decode(b"\xa1\xff") == "\ufffd"
+
+
+def test_comment_count_reads_explicit_max_discussion_buttons():
+    assert _comment_count({
+        "attaches": [{"keyboard": {"buttons": [[{
+            "text": "💬 8 комментариев →", "type": "OPEN_APP",
+        }]]}}],
+    }) == 8
+    assert _comment_count({
+        "attaches": [{"keyboard": {"buttons": [[{
+            "text": "💬 Комментарии (12)", "type": "OPEN_APP",
+        }]]}}],
+    }) == 12
+
+
+def test_comment_count_distinguishes_empty_unknown_and_disabled_discussions():
+    assert _comment_count({
+        "attaches": [{"keyboard": {"buttons": [[{
+            "text": "💬 Прокомментировать →", "type": "OPEN_APP",
+        }]]}}],
+    }) == 0
+    assert _comment_count({
+        "attaches": [{"keyboard": {"buttons": [[{
+            "text": "💬 Комментарии", "type": "OPEN_APP",
+        }]]}}],
+    }) is None
+    assert _comment_count({"attaches": []}) is None
