@@ -25,6 +25,25 @@ def test_duplicate_snapshot_same_poll_bucket_is_ignored(tmp_path):
     assert len(db.query("SELECT * FROM reaction_snapshots")) == 1
 
 
+def test_snapshot_bucket_is_anchored_to_common_cycle_start(tmp_path):
+    db = Database(tmp_path / "cycle-slot.db")
+    db.migrate()
+    post_id = _post(db)
+    cycle_started = datetime(2026, 8, 27, 14, 5, 10, tzinfo=timezone.utc)
+    measured = datetime(2026, 8, 27, 14, 10, 2, tzinfo=timezone.utc)
+
+    assert db.insert_snapshot(
+        post_id, measured, 600, 2, {"👍": 2}, [], 5, 15, 2.0,
+        bucket_at=cycle_started,
+    )
+
+    snapshot = db.query(
+        "SELECT measurement_bucket FROM reaction_snapshots WHERE post_id=?",
+        (post_id,),
+    )[0]
+    assert snapshot["measurement_bucket"] == int(cycle_started.timestamp()) // 300
+
+
 def test_snapshot_time_indexes_avoid_temporary_sort(tmp_path):
     db = Database(tmp_path / "indexes.db")
     db.migrate()
@@ -304,7 +323,7 @@ def test_platform_migration_backfills_existing_channel_once(tmp_path):
         len(db.list_institutions()), len(db.list_platform_accounts()),
         db.query("SELECT max(version) version FROM schema_migrations")[0]["version"],
     )
-    assert before == after == (1, 1, 14)
+    assert before == after == (1, 1, 15)
     account = db.list_platform_accounts()[0]
     assert account["native_id"] == "123"
     assert account["subscriber_count"] == 1000
@@ -416,6 +435,39 @@ def test_vk_joint_post_url_migration_uses_canonical_source(tmp_path):
     assert joint["url"] == "https://vk.ru/wall-900_4949"
     assert ordinary is not None
     assert ordinary["url"] == "https://vk.ru/wall-42_72167"
+
+
+def test_max_url_and_incomplete_history_migration_run_only_once(tmp_path):
+    db = Database(tmp_path / "max-post-url.db")
+    db.migrate()
+    institution_id = db.add_institution("University", "UNI")
+    account_id = db.add_platform_account(
+        institution_id, "max", "bmstu1830", username="bmstu1830",
+        url="https://max.ru/bmstu1830",
+    )
+    now = datetime.now(timezone.utc)
+    existing_id = db.upsert_platform_post(
+        account_id, "117200531645733298", now, now, "text", None, {},
+        history_complete=True,
+    )
+    with db.connect() as conn:
+        conn.execute("DELETE FROM schema_migrations WHERE version=15")
+
+    db.migrate()
+
+    existing = db.platform_post(existing_id)
+    assert existing is not None
+    assert existing["url"] == "https://max.ru/bmstu1830/AaBhQzg7GbI"
+    assert (existing["history_complete"], existing["history_forced_incomplete"]) == (0, 1)
+
+    new_id = db.upsert_platform_post(
+        account_id, "117200531645733299", now, now, "text", None, {},
+        history_complete=True,
+    )
+    db.migrate()
+    new = db.platform_post(new_id)
+    assert new is not None
+    assert (new["history_complete"], new["history_forced_incomplete"]) == (1, 0)
 
 
 def test_platform_post_deletion_requires_confirmation_and_can_recover(tmp_path):

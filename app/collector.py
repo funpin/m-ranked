@@ -131,6 +131,7 @@ class Collector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        self._cycle_started_at = started
         channels = self.db.list_channels(enabled_only=True)
         self.db.set_state("poll_last_started_at", iso(started))
         logger.info("polling started")
@@ -201,6 +202,7 @@ class Collector:
             if getattr(message, "id", None) is not None
         }
         now = datetime.now(timezone.utc)
+        scheduled_at = getattr(self, "_cycle_started_at", now)
         max_seen = int(channel["last_seen_message_id"])
         with self.db.connect() as conn:
             for logical in group_logical_posts(recent):
@@ -230,7 +232,8 @@ class Collector:
                 age_seconds(published_at, measured), self.settings,
             )
             if not snapshot_is_due(
-                post["last_measured_at"], measured, interval_minutes,
+                post["last_measured_at"], scheduled_at, interval_minutes,
+                last_measurement_bucket=post["last_measurement_bucket"],
             ):
                 continue
             ids = self.db.post_message_ids(post["id"])
@@ -288,7 +291,8 @@ class Collector:
                     state.reactions, state.raw, interval_minutes,
                     self.settings.jump_min_abs, self.settings.jump_min_ratio,
                     comments_count=logical_comments(fetched),
-                    views_count=logical_views(fetched), _conn=conn,
+                    views_count=logical_views(fetched),
+                    bucket_at=scheduled_at, _conn=conn,
                 )
                 latest = (
                     conn.execute(

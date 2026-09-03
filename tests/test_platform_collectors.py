@@ -5,7 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 from app.config import Settings
 from app.database import Database
-from app.max_api import MaxChannel, MaxPost, max_post_is_repost
+from app.max_api import (
+    MaxChannel, MaxPost, max_post_is_repost, max_post_slug, max_post_url,
+)
 from app.max_collector import MaxCollector
 from app.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from app.rutube_collector import RutubeCollector
@@ -39,6 +41,9 @@ class FakeRutube:
         )
         return RutubeChannel(77, "Вуз на Rutube", "https://rutube.ru/u/vuz/"), [video]
 
+    async def subscriber_count(self, channel_id, url=None):
+        return 654
+
     async def video_metrics(self, video_id):
         return RutubeVideoMetrics(
             likes=17, comments=4,
@@ -64,14 +69,14 @@ class FakeMax:
         if self.discovery_posts is not None:
             return self.discovery_posts
         return [MaxPost(
-            id="m1",
+            id="117200531645733298",
             published_at=datetime.now(timezone.utc) - timedelta(hours=1),
             views=90,
             reactions=8,
             reposts=None,
             comments=None,
             url=None,
-            raw={"message_id": "m1"},
+            raw={"message_id": "117200531645733298"},
             reaction_breakdown={"LIKE": 5, "FIRE": 3},
             is_repost=True,
         )]
@@ -104,6 +109,7 @@ def test_rutube_public_collector_stores_likes_and_comments(tmp_path):
     assert snapshot["reactions_count"] == 17
     assert snapshot["comments_count"] == 4
     assert snapshot["shares_count"] is None
+    assert db.list_platform_accounts(institution_id=institution)[0]["subscriber_count"] == 654
 
 
 def test_max_collector_subscribes_resolves_chat_and_stores_supported_counters(tmp_path):
@@ -123,7 +129,19 @@ def test_max_collector_subscribes_resolves_chat_and_stores_supported_counters(tm
     assert (snapshot["views_count"], snapshot["reactions_count"]) == (90, 8)
     assert snapshot["comments_count"] is None
     assert snapshot["shares_count"] is None
-    assert db.query("SELECT is_repost FROM platform_posts")[0]["is_repost"] == 1
+    stored_post = db.query("SELECT * FROM platform_posts")[0]
+    assert stored_post["is_repost"] == 1
+    assert stored_post["url"] == "https://max.ru/vuz/AaBhQzg7GbI"
+
+
+def test_max_public_post_url_is_base64url_encoded_unsigned_message_id():
+    assert max_post_slug(117200531645733298) == "AaBhQzg7GbI"
+    assert max_post_url(
+        "https://max.ru/bmstu1830", 117200531645733298,
+    ) == "https://max.ru/bmstu1830/AaBhQzg7GbI"
+    assert max_post_url(
+        "https://max.ru/bmstu1830/old-slug", 117200531645733298,
+    ) == "https://max.ru/bmstu1830/AaBhQzg7GbI"
 
 
 def test_max_session_is_ready_only_for_authorized_configured_phone(tmp_path):
