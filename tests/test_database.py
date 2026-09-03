@@ -25,6 +25,25 @@ def test_duplicate_snapshot_same_poll_bucket_is_ignored(tmp_path):
     assert len(db.query("SELECT * FROM reaction_snapshots")) == 1
 
 
+def test_snapshot_bucket_is_anchored_to_common_cycle_start(tmp_path):
+    db = Database(tmp_path / "cycle-slot.db")
+    db.migrate()
+    post_id = _post(db)
+    cycle_started = datetime(2026, 8, 27, 14, 5, 10, tzinfo=timezone.utc)
+    measured = datetime(2026, 8, 27, 14, 10, 2, tzinfo=timezone.utc)
+
+    assert db.insert_snapshot(
+        post_id, measured, 600, 2, {"👍": 2}, [], 5, 15, 2.0,
+        bucket_at=cycle_started,
+    )
+
+    snapshot = db.query(
+        "SELECT measurement_bucket FROM reaction_snapshots WHERE post_id=?",
+        (post_id,),
+    )[0]
+    assert snapshot["measurement_bucket"] == int(cycle_started.timestamp()) // 300
+
+
 def test_snapshot_time_indexes_avoid_temporary_sort(tmp_path):
     db = Database(tmp_path / "indexes.db")
     db.migrate()

@@ -29,6 +29,7 @@ class RutubeCollector:
 
     async def poll_cycle(self) -> None:
         started = datetime.now(timezone.utc)
+        self._cycle_started_at = started
         if not snapshot_is_due(
             self.db.get_state("rutube_poll_last_completed_at"), started,
             self.settings.rutube_first_three_days_poll_interval_minutes,
@@ -68,6 +69,7 @@ class RutubeCollector:
 
     async def _poll_account(self, account: Any) -> None:
         measured_at = datetime.now(timezone.utc)
+        scheduled_at = getattr(self, "_cycle_started_at", measured_at)
         native_id = (
             int(account["native_id"])
             if account["native_id"] and str(account["native_id"]).isdigit()
@@ -110,9 +112,12 @@ class RutubeCollector:
                     first_age, self.settings,
                     platform="rutube",
                 )
+                last_measured_at, last_bucket = (
+                    self.db.latest_platform_snapshot_timing(post_id, _conn=conn)
+                )
                 if not snapshot_is_due(
-                    self.db.latest_platform_snapshot_at(post_id, _conn=conn),
-                    measured_at, interval,
+                    last_measured_at, scheduled_at, interval,
+                    last_measurement_bucket=last_bucket,
                 ):
                     continue
                 due.append((video, post_id, interval))
@@ -134,7 +139,8 @@ class RutubeCollector:
                     post_id, measured_at, age_seconds(video.published_at, measured_at), interval,
                     views_count=video.views, reactions_count=engagement.likes,
                     comments_count=engagement.comments, shares_count=None,
-                    raw={"hits": video.views, **engagement.raw}, _conn=conn,
+                    raw={"hits": video.views, **engagement.raw},
+                    bucket_at=scheduled_at, _conn=conn,
                 ):
                     inserted += 1
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)

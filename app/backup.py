@@ -27,7 +27,7 @@ def create_backup(
     source: str | Path,
     destination_dir: str | Path,
     *,
-    keep: int = 7,
+    keep: int = 1,
     now: datetime | None = None,
 ) -> Path:
     """Create and verify a transactionally consistent online SQLite backup."""
@@ -88,7 +88,7 @@ def parser() -> argparse.ArgumentParser:
     )
     command.add_argument("source", type=Path)
     command.add_argument("destination", type=Path)
-    command.add_argument("--keep", type=int, default=7)
+    command.add_argument("--keep", type=int, default=1)
     return command
 
 
