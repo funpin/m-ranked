@@ -1,0 +1,81 @@
+# Схема базы
+
+Схема описана набором пронумерованных SQL-файлов в `migrations/`. Они применяются
+по порядку и дают пустую базу, готовую принимать данные. Партиции создаются в
+рантайме функцией `ops_and_admin.ensure_publication_metric_partition(date)`, а не DDL.
+
+    for f in db/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -f "$f"; done
+
+## Почему не дамп
+
+Прежняя схема была выводом `pg_dump` на 25 087 строк. Из них около 20 тысяч —
+механика партиционирования: 124 `CREATE TABLE ..._YYYY_MM`, 186 индексов на детях,
+567 `ATTACH PARTITION`, 441 `ALTER INDEX ... ATTACH` и 63 внешних ключа на
+`reaction_breakdown`, по одному на каждую целевую партицию. Файл прирастал шестью
+строками DDL за каждый новый месяц.
+
+Здесь индексы и внешние ключи объявлены на **родительских** партиционированных
+таблицах без `ONLY`. PostgreSQL сам заводит и подшивает их к каждой партиции,
+существующей и будущей. Новая партиция получает все шесть индексов и внешний ключ
+без единой строки в миграциях.
+
+## Что убрано по сравнению с прежней схемой
+
+| Объект | Почему |
+|---|---|
+| `analytics.publication_hourly` (1802 МБ) | материализованная проекция; чтение переведено на живые запросы по `ingest` с обязательным предикатом `published_month` |
+| `analytics.comparison_publication_hourly` (550 МБ) | то же |
+| `analytics.comparison_metric_point` (339 МБ) | то же |
+| `analytics.projection_state` | состояние пересборки проекций, которых больше нет |
+| `rebuild_core_projections` и шесть его версий v2/v5/v6/v9/v11/v13 | ~99 КБ исходников ради publisher |
+| `rebuild_serving_projections` | единственным вызывающим был `projection-publisher.sh` |
+| `latest_fully_published_dataset_revision` | см. ниже |
+| `refresh_publication_content` | обслуживала проекции |
+| `compact_new_metric_evidence`, `intern_metric_evidence`, `compact_metric_evidence_batch` | интернирование evidence перенесено в код коллектора |
+| триггер `zz_compact_metric_evidence` | построчный триггер на самом горячем пути записи |
+| `drop_publication_metric_partition(date, uuid)` | заглушка рядом с рабочей `_v21` |
+| схема `flyway` | остаток; CI и без того требует её отсутствия |
+
+Итого: 4 отношения, 14 функций, 7 индексов, 1 триггер, 132 ограничения.
+Добавлена одна функция — `analytics.latest_dataset_revision`.
+
+## Барьер публикации
+
+`latest_fully_published_dataset_revision()` возвращала не последнюю ревизию, а
+последнюю, для которой **все семь** проекций имели статус `ready`. Пока publisher не
+отрабатывал, свежие собранные данные не показывались наружу. Проекций больше нет,
+барьеру нечего ждать: `analytics.latest_dataset_revision()` отдаёт последнюю
+зафиксированную ревизию. То же изменение внесено в `ops_and_admin.public_health_snapshot`
+и в триггер `analytics.guard_legacy_period_policy`.
+
+Там же события `projection.rebuild.requested` заменены на `cache.invalidated`:
+после изменения справочника или рейтинга сбрасывается кэш, а не запускается пересборка.
+
+## Отпечаток источника
+
+`source_fingerprint` был `text` и хранил sha256 в виде 64 hex-символов — 65 байт в
+куче и 65 байт в ключе индекса `publication_snapshot_exact_replay`. Стал `bytea` с
+`CHECK (octet_length(...) = 32)`. Наружу контракт отдаёт прежний hex: `encode(source_fingerprint,'hex')`.
+
+## Индексы на ingest.publication_metric_snapshot
+
+Каждый обоснован замером на копии прода (7 492 177 строк):
+
+| Индекс | Размер | Кто выбирает |
+|---|---:|---|
+| `publication_snapshot_correction_sequence` | 591 МБ | горячее пакетное чтение: Index Only Scan, `Incremental Sort` с `Presorted Key` |
+| `publication_metric_snapshot_publication_observed_idx` | 501 МБ | последнее наблюдение, когда месяц неизвестен: `MergeAppend`, 2 буфера на партицию |
+| `publication_metric_snapshot_pkey` | 264 МБ | ключ и цель внешнего ключа из `reaction_breakdown` |
+| `publication_snapshot_exact_replay` | 1275 → ~730 МБ | ни один путь чтения; идемпотентность повторного прогона |
+| `*_collected_brin`, `*_observed_brin` | 3.2 МБ | отсечение по времени |
+
+`publication_metric_snapshot_run_idx` в прежнем `final-schema.sql` описан, но в базе
+отсутствует — файл схемы отставал от неё.
+
+## Воспроизведение
+
+`tools/` содержит скрипты, которыми набор получен из каталога эталонной базы:
+`split.py` разбирает дамп на объекты, `gen.py` применяет список удалений,
+`emit.py` раскладывает по файлам и вносит правки, `grants.py` собирает права,
+`inventory.sql` снимает каталог для сверки. Они нужны для повторной сверки со
+слепком прода, а не для повседневной работы: миграции правятся руками.
