@@ -1,0 +1,45 @@
+- navigation "Основная навигация":
+  - link "Логотип m-ranked m-ranked":
+    - /url: /?platform=telegram
+    - img "Логотип m-ranked"
+    - strong: m-ranked
+  - link "Обзор":
+    - /url: /?platform=telegram
+  - link "Рейтинг":
+    - /url: /rating?platform=telegram
+  - link "Сравнение":
+    - /url: /compare?platform=telegram
+  - link "Экспорт CSV":
+    - /url: /export/snapshots.csv?platform=telegram
+  - link "Управление":
+    - /url: /manage?platform=telegram
+  - button "Включить светлую тему":
+    - generic: ☾
+    - generic: Тёмная
+- main:
+  - heading "rtumirea_official @rtumirea_official" [level=1]
+  - paragraph: "Данные ниже — по всем публикациям, которые сейчас хранятся в базе: за последние 70 дней. Метки скачков временно отключены; реакции и просмотры продолжают накапливаться для настройки алгоритма."
+  - generic: "0"
+  - generic: публикаций в базе
+  - generic: "0"
+  - generic: с полной историей
+  - generic: —
+  - generic: медиана реакций ⓘ
+  - generic: —
+  - generic: медиана просмотров ⓘ
+  - generic: —
+  - generic: медиана комментариев ⓘ
+  - generic: №167
+  - generic: М‑Рейтинг TG ⓘ · Июль 2026
+  - table:
+    - rowgroup:
+      - row "Публикация Опубликовано, МСК Возраст История Реакции Просмотры Комментарии Тип":
+        - columnheader "Публикация"
+        - columnheader "Опубликовано, МСК"
+        - columnheader "Возраст"
+        - columnheader "История"
+        - columnheader "Реакции"
+        - columnheader "Просмотры"
+        - columnheader "Комментарии"
+        - columnheader "Тип"
+    - rowgroup

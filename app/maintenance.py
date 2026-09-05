@@ -8,8 +8,9 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from .clock import iso_utc
 from .config import Settings
-from .database import Database, iso
+from .ports import TelegramObservationRepository
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,16 @@ def _archive_path(root: Path, post: object) -> Path:
     return root / month / f"{safe_username}-{post['telegram_message_id']}.csv.gz"
 
 
-def archive_and_purge(settings: Settings, db: Database, now: datetime | None = None) -> int:
+def archive_and_purge(
+    settings: Settings,
+    db: TelegramObservationRepository,
+    now: datetime | None = None,
+) -> int:
     """Archive every expired post atomically, then remove it from live SQLite."""
     moment = now or datetime.now(timezone.utc)
     cutoff = moment - timedelta(days=settings.retention_days)
     removed = 0
-    for post in db.expired_posts(iso(cutoff)):
+    for post in db.expired_posts(iso_utc(cutoff)):
         target = _archive_path(settings.archive_dir, post)
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():

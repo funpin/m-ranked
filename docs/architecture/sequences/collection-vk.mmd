@@ -1,0 +1,43 @@
+---
+title: M-Ranked — VK collection sequence
+---
+sequenceDiagram
+    autonumber
+    participant S as Scheduler
+    participant DB as PostgreSQL
+    participant V as VK adapter
+    participant VK as VK API
+    participant P as Canonical pipeline
+    participant R as Redis
+
+    S->>R: Acquire vk partition lease
+    S->>DB: Start collection_run and load enabled VK accounts
+    loop For each account within account concurrency limit
+        S->>V: collect(account)
+        V->>VK: groups.getById(fields=members_count)
+        VK-->>V: Community ID, screen name, title, members
+        V->>VK: wall.get(owner, max 100, without pinned)
+        VK-->>V: Recent wall posts and counters
+        V->>V: Resolve ordinary vs joint-post canonical identity
+        V->>DB: Load bounded circular tracked page + refresh cursor
+        V->>V: Select due posts absent from current wall page, independently capped
+        loop Batches up to 100 IDs
+            V->>VK: wall.getById(source external IDs)
+            VK-->>V: Existing posts, deleted/missing omitted
+        end
+        V->>P: Discovered + refreshed posts and missing probes
+        P->>P: Normalize views, likes, comments and reposts
+        P->>P: Convert transient positive-to-zero reset into NULL + quality flag
+        P->>P: Preserve measured zero when no reset evidence exists
+        P->>P: Increment only after successful authoritative wall.getById omission
+        P->>DB: Transactional metadata, snapshots, probes and refresh cursor
+        DB-->>P: Commit with dataset revision
+        P->>R: Publish revision.changed after commit
+        P->>DB: Complete account result
+    end
+    S->>DB: Complete collection_run with API/error counts
+    S->>R: Release/expire lease
+
+    Note over V,VK: VK rate limiter serializes API calls to the configured requests-per-second limit.
+    Note over P,DB: source_external_id is retained for joint posts and stable public URLs.
+    Note over V,DB: wall.get omission and auth/rate/transport failures never mean deletion.

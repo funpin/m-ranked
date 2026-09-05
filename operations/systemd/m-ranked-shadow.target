@@ -1,0 +1,10 @@
+[Unit]
+Description=M-Ranked target shadow read path
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+Requires=m-ranked-target-api.service m-ranked-target-web.service
+Requires=m-ranked-target-projection-publisher.service
+Wants=m-ranked-target-cache-outbox.service
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target

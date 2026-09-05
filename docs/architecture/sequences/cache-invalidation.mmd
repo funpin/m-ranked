@@ -1,0 +1,57 @@
+---
+title: M-Ranked — cache invalidation sequence
+---
+sequenceDiagram
+    autonumber
+    participant W as Collector / Analytics writer
+    participant PG as PostgreSQL
+    participant R as Redis
+    participant A as Spring API
+    participant L1 as Caffeine L1
+    participant N as Next.js
+    participant C as Browser / CDN
+
+    rect rgb(232, 245, 233)
+        W->>PG: BEGIN&#59; write observations/projections
+        W->>PG: INSERT dataset_revision and outbox event
+        W->>PG: COMMIT
+        PG-->>W: committed revision R42
+        W->>R: SET current_revision=R42 and PUBLISH revision.changed
+        R-->>A: revision.changed(R42, affected tags)
+        A->>L1: invalidate affected local entries
+        A->>N: authenticated revalidate tags request
+        N->>N: mark affected route/data cache stale
+        Note over R: L2 values with old revision are not deleted synchronously&#59;<br/>they become unreachable and expire by bounded TTL.
+    end
+
+    rect rgb(227, 242, 253)
+        C->>N: GET institution page
+        N->>A: GET /api/v1/institutions/{id}
+        A->>R: GET current_revision
+        R-->>A: R42
+        A->>L1: GET institution:R42:queryHash
+        alt L1 hit
+            L1-->>A: response
+        else L1 miss
+            A->>R: GET institution:R42:queryHash
+            alt L2 hit
+                R-->>A: response
+                A->>L1: PUT bounded local entry
+            else L2 miss
+                A->>PG: SELECT published projection at R42
+                PG-->>A: response rows
+                A->>R: SET response with TTL
+                A->>L1: PUT response
+            end
+        end
+        A-->>N: JSON + ETag(dataset R42)
+        N-->>C: HTML/RSC + Cache-Control + ETag
+    end
+
+    opt Pub/Sub event lost
+        A->>R: periodic revision check
+        A->>PG: fallback authoritative revision check
+        Note over A,L1: New revision changes cache key&#59; stale L1 is cleared on mismatch.
+    end
+
+    Note over A,C: Admin, authentication, health and unbounded exports use no-store.

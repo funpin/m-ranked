@@ -1,0 +1,56 @@
+- link "Перейти к содержимому":
+  - /url: "#main-content"
+- banner:
+  - link "m-ranked — обзор":
+    - /url: /
+    - strong: m-ranked
+  - navigation "Основная навигация":
+    - link "Обзор":
+      - /url: /
+    - link "Рейтинг":
+      - /url: /rating
+    - link "Сравнение":
+      - /url: /compare
+    - link "Экспорт CSV":
+      - /url: /export/snapshots.csv
+    - link "Управление":
+      - /url: /manage
+  - button "Включить светлую тему":
+    - generic: ☾
+    - generic: Тёмная
+- main:
+  - navigation "Хлебные крошки":
+    - link "Обзор":
+      - /url: /
+    - generic: /
+    - link "Альфа":
+      - /url: /institutions/910001?platform=telegram
+    - generic: /
+    - generic: Альфа — Telegram
+  - paragraph: Telegram · канал
+  - heading "Альфа — Telegram" [level=1]
+  - paragraph: Альфа Институт · @alpha_rehearsal
+  - generic: активен
+  - paragraph: Сводка
+  - heading "Состояние аккаунта" [level=2]
+  - generic: ID 920001
+  - strong: "1"
+  - generic: публикаций в проекции
+  - term: Площадка
+  - definition: Telegram
+  - term: Режим доступа
+  - definition: mtproto
+  - term: Внешний ID
+  - definition: "-100900300101"
+  - term: Последний замер
+  - definition: 03.09.2026, 15:00 МСК
+  - term: Ревизия
+  - definition: "#9003001"
+  - term: Актуальность
+  - definition: 03.09.2026, 15:00 МСК
+  - complementary: "Карточка использует account-level проекцию. Список публикаций не подменяется агрегатами: он появится после отдельного bounded endpoint."
+  - link "Открыть на площадке":
+    - /url: https://t.me/alpha_rehearsal
+  - link "Карточка вуза":
+    - /url: /institutions/910001?platform=telegram
+- alert

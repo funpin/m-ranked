@@ -1,0 +1,42 @@
+@startuml MRanked_API_Components
+!include <C4/C4_Component>
+
+title M-Ranked — C4 Level 3: Core backend / Public API
+LAYOUT_LEFT_RIGHT()
+
+Container_Ext(web, "Next.js web", "TypeScript", "SSR/ISR и browser UI")
+Container_Ext(edge, "Nginx", "Edge", "Rate limits и маршрутизация")
+ContainerDb_Ext(pg, "PostgreSQL", "PostgreSQL", "Source of truth и read projections")
+ContainerDb_Ext(redis, "Redis", "Redis", "Shared cache и dataset revision")
+Container_Ext(obs, "Observability", "Prometheus/logs", "Метрики и события")
+
+Container_Boundary(api, "Core backend — Spring Boot") {
+  Component(public_controller, "Public API controllers", "Spring MVC", "Версионированные /api/v1 endpoints, ETag и Cache-Control")
+  Component(query_service, "Query application service", "Java", "Оркестрирует чтение, права, freshness и cache policy")
+  Component(projection_repo, "Projection repository", "jOOQ / JdbcClient", "Оптимизированные SQL, keyset pagination, streaming reads")
+  Component(export_service, "Export service", "Java", "Ограниченные синхронные и фоновые экспорты без загрузки всего набора в память")
+  Component(contract_mapper, "API contract mapper", "Java records + OpenAPI", "Отделяет transport DTO от хранения и домена")
+  Component(error_policy, "Error and validation policy", "Bean Validation / RFC 9457", "Единые ошибки, request id и безопасные сообщения")
+  Component(revision_cache, "Revision-aware cache facade", "Spring Cache", "L1/L2 cache с ключом dataset revision")
+  Component(analytics_facade, "Analytics facade", "Java", "Запускает утвержденные read-only расчеты и объяснения")
+  Component(health, "Health and metrics", "Actuator / Micrometer", "DB/cache/freshness readiness и latency")
+}
+
+Rel(edge, public_controller, "Проксирует API", "HTTP/JSON")
+Rel(web, public_controller, "Получает данные страниц", "HTTP/JSON")
+Rel(public_controller, query_service, "Передает валидированный запрос")
+Rel(query_service, revision_cache, "Читает/заполняет cache")
+Rel(query_service, projection_repo, "Читает projection")
+Rel(query_service, analytics_facade, "Запрашивает расчет")
+Rel(query_service, contract_mapper, "Формирует DTO")
+Rel(public_controller, export_service, "Создает/скачивает export")
+Rel(export_service, projection_repo, "Читает потоками")
+Rel(projection_repo, pg, "SQL read", "JDBC")
+Rel(revision_cache, redis, "GET/SET/PUBSUB", "RESP")
+Rel(error_policy, public_controller, "Обрабатывает exceptions")
+Rel(health, pg, "Health query")
+Rel(health, redis, "Health query")
+Rel(health, obs, "Публикует метрики")
+
+SHOW_LEGEND()
+@enduml

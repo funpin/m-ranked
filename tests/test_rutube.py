@@ -1,8 +1,31 @@
 import asyncio
+from datetime import datetime, timezone
 
 import httpx
 
 from app.rutube import RutubeClient
+
+
+def test_rutube_exact_video_lookup_uses_identity_endpoint():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/video/video-1/"
+        assert request.url.params["format"] == "json"
+        return httpx.Response(200, json={
+            "id": "video-1",
+            "title": "Exact video",
+            "publication_ts": "2026-09-03T08:00:00Z",
+            "hits": 42,
+            "video_url": "https://rutube.ru/video/video-1/",
+        })
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            return await RutubeClient("https://rutube.ru/api", http).video("video-1")
+
+    video = asyncio.run(run())
+    assert video.id == "video-1"
+    assert video.views == 42
+    assert video.published_at == datetime(2026, 9, 3, 8, 0, tzinfo=timezone.utc)
 
 
 def test_rutube_video_metrics_uses_vote_and_comments_endpoints():

@@ -1,0 +1,442 @@
+@startuml MRanked_Target_PostgreSQL_ERD
+title M-Ranked — целевая ERD PostgreSQL (TO-BE)
+
+hide circle
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam entity {
+  BackgroundColor White
+  BorderColor #37474F
+}
+left to right direction
+
+package "catalog" {
+  entity institution {
+    * id : uuid <<PK>>
+    --
+    canonical_name : text
+    short_name : text?
+    status : institution_status
+    created_at : timestamptz
+    updated_at : timestamptz
+  }
+
+  entity institution_external_id {
+    * id : uuid <<PK>>
+    --
+    institution_id : uuid <<FK>>
+    namespace : text
+    external_id : text
+    valid_from : timestamptz
+    valid_to : timestamptz?
+    verified_at : timestamptz?
+    --
+    UQ(namespace, external_id, valid_from)
+    UQ(namespace, external_id) WHERE valid_to IS NULL
+  }
+
+  entity platform_account {
+    * id : uuid <<PK>>
+    --
+    institution_id : uuid <<FK>>
+    platform : platform_code
+    canonical_external_id : text
+    current_username : text?
+    current_title : text?
+    current_url : text?
+    access_mode : access_mode
+    enabled : boolean
+    created_at : timestamptz
+    updated_at : timestamptz
+    --
+    UQ(platform, canonical_external_id)
+  }
+
+  entity account_identity_history {
+    * id : bigint <<PK>>
+    --
+    platform_account_id : uuid <<FK>>
+    username : text?
+    title : text?
+    url : text?
+    valid_from : timestamptz
+    valid_to : timestamptz?
+    source_run_id : uuid? <<FK>>
+  }
+
+  entity account_verification {
+    * id : uuid <<PK>>
+    --
+    platform_account_id : uuid <<FK>>
+    status : verification_status
+    method : text
+    evidence_url : text?
+    verified_by_subject : text?
+    verified_at : timestamptz
+    expires_at : timestamptz?
+  }
+}
+
+package "ingest" {
+  entity collection_run {
+    * id : uuid <<PK>>
+    --
+    platform : platform_code
+    partition_key : text
+    collector_version : text
+    started_at : timestamptz
+    completed_at : timestamptz?
+    status : run_status
+    account_count : integer
+    error_count : integer
+    correlation_id : uuid
+  }
+
+  entity collection_account_result {
+    * id : bigint <<PK>>
+    --
+    collection_run_id : uuid <<FK>>
+    platform_account_id : uuid <<FK>>
+    started_at : timestamptz
+    completed_at : timestamptz?
+    status : run_status
+    discovered_count : integer
+    snapshot_count : integer
+    sanitized_error_code : text?
+  }
+
+  entity account_metric_snapshot {
+    * id : bigint <<PK>>
+    --
+    platform_account_id : uuid <<FK>>
+    collection_run_id : uuid <<FK>>
+    observed_at : timestamptz
+    subscriber_count : bigint?
+    subscriber_display : text?
+    quality : observation_quality
+    source_fingerprint : text
+    --
+    UQ(platform_account_id, observed_at, source_fingerprint)
+  }
+
+  entity content_group {
+    * id : uuid <<PK>>
+    --
+    group_type : text
+    created_at : timestamptz
+  }
+
+  entity publication {
+    * id : uuid <<PK>>
+    --
+    primary_account_id : uuid <<FK>>
+    content_group_id : uuid? <<FK>>
+    published_at : timestamptz
+    discovered_at : timestamptz
+    publication_type : text
+    is_repost : boolean
+    history_completeness : completeness
+    deleted_at : timestamptz?
+    created_at : timestamptz
+  }
+
+  entity publication_identity {
+    * id : bigint <<PK>>
+    --
+    publication_id : uuid <<FK>>
+    platform_account_id : uuid <<FK>>
+    external_id : text
+    source_external_id : text?
+    role : publication_account_role
+    public_url : text?
+    --
+    UQ(platform_account_id, external_id)
+  }
+
+  entity publication_metric_snapshot <<monthly partitioned by published_month>> {
+    * published_month : date <<PK, partition key>>
+    * id : bigint <<PK>>
+    --
+    publication_id : uuid <<FK>>
+    collection_run_id : uuid <<FK>>
+    observed_at : timestamptz
+    age_seconds : integer
+    sampling_bucket : bigint
+    views_count : bigint?
+    reactions_count : bigint?
+    comments_count : bigint?
+    shares_count : bigint?
+    quality : observation_quality
+    interval_uncertain : boolean
+    source_fingerprint : text
+    --
+    UQ(published_month, publication_id, sampling_bucket)
+  }
+
+  entity reaction_breakdown {
+    * snapshot_published_month : date <<PK, FK>>
+    * snapshot_id : bigint <<PK, FK>>
+    * reaction_key : text <<PK>>
+    --
+    reaction_count : bigint
+  }
+
+  entity deletion_observation {
+    * id : bigint <<PK>>
+    --
+    publication_id : uuid <<FK>>
+    collection_run_id : uuid <<FK>>
+    observed_at : timestamptz
+    outcome : deletion_probe_outcome
+    reason_code : text
+    consecutive_missing : integer
+  }
+
+  entity raw_payload <<short retention>> {
+    * id : uuid <<PK>>
+    --
+    collection_run_id : uuid <<FK>>
+    owner_type : raw_owner_type
+    owner_id : uuid
+    collected_at : timestamptz
+    sha256 : text
+    content_encoding : text
+    payload : bytea?
+    external_ref : text?
+    purge_after : timestamptz
+  }
+}
+
+package "analytics" {
+  entity dataset_revision {
+    * id : bigint <<PK>>
+    --
+    committed_at : timestamptz
+    cause : revision_cause
+    correlation_id : uuid
+  }
+
+  entity institution_metric_aggregate {
+    * id : bigint <<PK>>
+    --
+    institution_id : uuid <<FK>>
+    dataset_revision_id : bigint <<FK>>
+    platform : platform_code?
+    metric_key : text
+    aggregation : aggregation_code
+    window_start : timestamptz
+    window_end : timestamptz
+    value : numeric?
+    sample_size : integer
+    coverage : numeric
+    quality : observation_quality
+  }
+
+  entity anomaly_event {
+    * id : uuid <<PK>>
+    --
+    institution_id : uuid <<FK>>
+    platform_account_id : uuid? <<FK>>
+    publication_id : uuid? <<FK>>
+    dataset_revision_id : bigint <<FK>>
+    signal_type : text
+    severity : numeric
+    detected_at : timestamptz
+    detector_version : text
+    evidence : jsonb
+    status : anomaly_status
+  }
+
+  entity anomaly_review {
+    * id : uuid <<PK>>
+    --
+    anomaly_event_id : uuid <<FK>>
+    reviewer_subject : text
+    decision : review_decision
+    comment : text?
+    reviewed_at : timestamptz
+  }
+}
+
+package "rating" {
+  entity population_observation {
+    * id : uuid <<PK>>
+    --
+    institution_id : uuid <<FK>>
+    population_type : text
+    value : bigint
+    observed_for : date
+    source_url : text
+    quality : observation_quality
+    imported_at : timestamptz
+  }
+
+  entity formula_definition {
+    * id : uuid <<PK>>
+    --
+    formula_key : text
+    version : integer
+    status : formula_status
+    effective_from : timestamptz
+    definition : jsonb
+    source_hash : text
+    created_at : timestamptz
+    --
+    UQ(formula_key, version)
+  }
+
+  entity formula_component {
+    * id : uuid <<PK>>
+    --
+    formula_definition_id : uuid <<FK>>
+    component_code : text
+    numerator_metric : text
+    denominator_key : text?
+    weight : numeric
+    normalization : text
+    missing_policy : text
+    --
+    UQ(formula_definition_id, component_code)
+  }
+
+  entity rating_run {
+    * id : uuid <<PK>>
+    --
+    formula_definition_id : uuid <<FK>>
+    dataset_revision_id : bigint <<FK>>
+    as_of : timestamptz
+    window_start : timestamptz
+    window_end : timestamptz
+    status : run_status
+    started_at : timestamptz
+    completed_at : timestamptz?
+    input_hash : text
+  }
+
+  entity rating_result {
+    * id : uuid <<PK>>
+    --
+    rating_run_id : uuid <<FK>>
+    institution_id : uuid <<FK>>
+    score : numeric?
+    rank : integer?
+    quality : observation_quality
+    explanation : jsonb
+    --
+    UQ(rating_run_id, institution_id)
+  }
+
+  entity rating_component_result {
+    * id : bigint <<PK>>
+    --
+    rating_result_id : uuid <<FK>>
+    formula_component_id : uuid <<FK>>
+    numerator : numeric?
+    denominator : numeric?
+    normalized_value : numeric?
+    weighted_value : numeric?
+    warnings : jsonb
+  }
+
+  entity official_rating_observation {
+    * id : uuid <<PK>>
+    --
+    institution_id : uuid <<FK>>
+    category : text
+    period : text
+    rank : integer?
+    score : numeric?
+    source_url : text
+    source_hash : text
+    fetched_at : timestamptz
+    --
+    UQ(institution_id, category, period, source_hash)
+  }
+}
+
+package "ops_and_admin" {
+  entity audit_log <<append-only>> {
+    * id : uuid <<PK>>
+    --
+    occurred_at : timestamptz
+    subject : text
+    action : text
+    target_type : text
+    target_id : uuid?
+    correlation_id : uuid
+    before_state : jsonb?
+    after_state : jsonb?
+    outcome : text
+  }
+
+  entity archive_manifest {
+    * id : uuid <<PK>>
+    --
+    dataset_type : text
+    partition_start : timestamptz
+    partition_end : timestamptz
+    object_uri : text
+    sha256 : text
+    row_count : bigint
+    created_at : timestamptz
+    verified_at : timestamptz?
+    purge_after : timestamptz?
+  }
+}
+
+institution ||--o{ institution_external_id
+institution ||--o{ platform_account
+platform_account ||--o{ account_identity_history
+platform_account ||--o{ account_verification
+platform_account ||--o{ account_metric_snapshot
+collection_run |o--o{ account_identity_history : source_run_id
+collection_run ||--o{ collection_account_result
+platform_account ||--o{ collection_account_result
+collection_run ||--o{ account_metric_snapshot
+platform_account ||--o{ publication : primary account
+content_group |o--o{ publication
+publication ||--o{ publication_identity
+platform_account ||--o{ publication_identity
+publication ||--o{ publication_metric_snapshot
+collection_run ||--o{ publication_metric_snapshot
+publication_metric_snapshot ||--o{ reaction_breakdown
+publication ||--o{ deletion_observation
+collection_run ||--o{ deletion_observation
+collection_run ||--o{ raw_payload
+
+institution ||--o{ institution_metric_aggregate
+dataset_revision ||--o{ institution_metric_aggregate
+institution ||--o{ anomaly_event
+platform_account |o--o{ anomaly_event
+publication |o--o{ anomaly_event
+dataset_revision ||--o{ anomaly_event
+anomaly_event ||--o{ anomaly_review
+
+institution ||--o{ population_observation
+formula_definition ||--|{ formula_component
+formula_definition ||--o{ rating_run
+dataset_revision ||--o{ rating_run
+rating_run ||--o{ rating_result
+institution ||--o{ rating_result
+rating_result ||--|{ rating_component_result
+formula_component ||--o{ rating_component_result
+institution ||--o{ official_rating_observation
+
+note bottom of publication_metric_snapshot
+  Partition key повторяет месяц publication.published_at.
+  Composite PK/FK нужен из-за правил unique constraint PostgreSQL.
+  Partition остается hot до завершения 40-дневного tracking всех posts.
+  Перед DROP partition создается и проверяется archive_manifest.
+  raw_payload удаляется раньше и не нужен для обычной аналитики.
+end note
+
+note bottom of rating_run
+  input_hash + formula version + dataset revision
+  делают расчет воспроизводимым и объяснимым.
+end note
+
+note right of anomaly_event
+  event означает статистический сигнал,
+  а не доказательство искусственной активности.
+end note
+@enduml

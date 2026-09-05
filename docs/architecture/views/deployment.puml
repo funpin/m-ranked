@@ -1,0 +1,74 @@
+@startuml MRanked_Target_Deployment
+title M-Ranked — Deployment TO-BE
+
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+
+cloud "Internet" as internet
+cloud "Telegram / VK / MAX / Rutube\nm-rating.ru / OIDC" as external
+
+node "Primary server\nLinux, 30 GB storage" as primary #E3F2FD {
+  node "Public edge" as edge {
+    artifact "Nginx\nTLS, gzip/brotli, rate limits" as nginx
+  }
+
+  node "Application runtime\nsystemd units" as apps {
+    artifact "m-ranked-web\nNext.js standalone" as next
+    artifact "m-ranked-api\nSpring Boot JVM" as api
+    artifact "m-ranked-collector@{platform}\n4 isolated Python systemd units" as collectors
+    artifact "m-ranked-maintenance\narchive/aggregate jobs" as jobs
+  }
+
+  database "PostgreSQL primary\nprivate port\npartitioned hot data" as pg
+  database "Redis\nprivate socket/port\ncache + leases" as redis
+  folder "Local spool\nWAL archive queue\nshort-lived exports" as spool
+  artifact "Metrics/log agent" as agent
+}
+
+node "Secondary DR server\nseparate host/failure domain" as dr #E8F5E9 {
+  database "PostgreSQL hot standby\nread-only, async streaming" as standby
+  folder "Backup repository\nencrypted base backups + WAL" as backups
+  folder "Cold archive\nParquet + Zstandard + manifests" as cold
+  artifact "Restore verification job\nchecksums + scheduled drill" as verify
+}
+
+cloud "Optional third backup location\nimmutable/offline copy" as third #FFF8E1
+node "Operator workstation" as operator
+
+internet --> nginx : HTTPS 443
+nginx --> next : HTTP localhost
+nginx --> api : /api, /downloads\nHTTP localhost
+next --> api : server-side HTTP localhost
+api --> pg : JDBC localhost
+api --> redis : RESP localhost
+collectors --> pg : psycopg localhost\ningest-only role
+collectors --> redis : lease/revision
+jobs --> pg : aggregate/archive
+jobs --> spool : stage verified files
+collectors --> external : outbound only\nplatform-specific adapter
+api --> external : M-Rating/OIDC outbound
+
+pg --> standby : TLS/WireGuard\nasync streaming replication
+pg --> spool : WAL archive_command
+spool --> backups : encrypted WAL shipping
+jobs --> cold : SFTP/rsync over private tunnel
+standby --> backups : scheduled base backup
+backups --> verify : isolated restore
+cold --> verify : checksum/sample query
+backups --> third : optional encrypted copy
+agent --> operator : metrics/log alerts\nno secrets
+verify --> operator : drill result
+
+note right of primary
+  PostgreSQL и Redis не публикуются в Internet.
+  JVM heap, PostgreSQL shared buffers, WAL и disk quotas
+  задаются после измерения RAM/CPU/IOPS.
+end note
+
+note bottom of dr
+  Standby не заменяет backup:
+  ошибочное DELETE реплицируется.
+  Восстановление подтверждается drill, а не наличием файлов.
+end note
+@enduml

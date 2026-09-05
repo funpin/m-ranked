@@ -1,0 +1,12 @@
+[Unit]
+Description=Run bounded M-Ranked target maintenance hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=5min
+AccuracySec=1min
+Unit=m-ranked-target-maintenance.service
+
+[Install]
+WantedBy=timers.target

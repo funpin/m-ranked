@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
 
 from .analytics import delta_by_reaction, interval_uncertain
+from .ports import SnapshotDelta
 
 
 def utc_now() -> datetime:
@@ -36,6 +37,12 @@ class Database:
             conn.commit()
         finally:
             conn.close()
+
+    @contextmanager
+    def transaction(self) -> Iterator[SqliteObservationTransaction]:
+        """Expose the legacy SQLite transaction through a storage-neutral port."""
+        with self.connect() as conn:
+            yield SqliteObservationTransaction(self, conn)
 
     @contextmanager
     def migration_lock(self) -> Iterator[None]:
@@ -1574,3 +1581,201 @@ class Database:
     def query(self, sql: str, params: Sequence[Any] = ()) -> list[sqlite3.Row]:
         with self.connect() as conn:
             return list(conn.execute(sql, params))
+
+
+class SqliteObservationTransaction:
+    """Private-connection adapter implementing the observation transaction ports."""
+
+    def __init__(self, database: Database, connection: sqlite3.Connection):
+        self._database = database
+        self._connection = connection
+
+    def add_post(
+        self,
+        channel_id: int,
+        logical_key: str,
+        message_ids: Sequence[int],
+        grouped_id: int | None,
+        published_at: datetime,
+        discovered_at: datetime,
+        first_age_seconds: int,
+        history_complete: bool,
+        post_type: str,
+        ambiguous: bool,
+        is_repost: bool = False,
+    ) -> int:
+        return self._database.add_post(
+            channel_id,
+            logical_key,
+            message_ids,
+            grouped_id,
+            published_at,
+            discovered_at,
+            first_age_seconds,
+            history_complete,
+            post_type,
+            ambiguous,
+            is_repost=is_repost,
+            _conn=self._connection,
+        )
+
+    def mark_post_available(self, post_id: int) -> None:
+        self._database.mark_post_available(post_id, _conn=self._connection)
+
+    def ensure_publication_baseline(
+        self,
+        post_id: int,
+        published_at: datetime,
+        first_age_seconds: int,
+        max_age_seconds: int,
+    ) -> bool:
+        return self._database.ensure_publication_baseline(
+            post_id,
+            published_at,
+            first_age_seconds,
+            max_age_seconds,
+            _conn=self._connection,
+        )
+
+    def set_post_repost(self, post_id: int, is_repost: bool) -> None:
+        self._database.set_post_repost(
+            post_id, is_repost, _conn=self._connection,
+        )
+
+    def insert_snapshot(
+        self,
+        post_id: int,
+        measured_at: datetime,
+        age_seconds: int,
+        total: int,
+        reactions: Mapping[str, int],
+        raw_state: Any,
+        poll_interval_minutes: int,
+        jump_min_abs: int,
+        jump_min_ratio: float,
+        comments_count: int | None = None,
+        views_count: int | None = None,
+        bucket_at: datetime | None = None,
+    ) -> bool:
+        return self._database.insert_snapshot(
+            post_id,
+            measured_at,
+            age_seconds,
+            total,
+            reactions,
+            raw_state,
+            poll_interval_minutes,
+            jump_min_abs,
+            jump_min_ratio,
+            comments_count=comments_count,
+            views_count=views_count,
+            bucket_at=bucket_at,
+            _conn=self._connection,
+        )
+
+    def latest_snapshot_delta(self, post_id: int) -> SnapshotDelta | None:
+        row = self._connection.execute(
+            "SELECT delta_total, spike FROM reaction_snapshots "
+            "WHERE post_id=? ORDER BY measured_at DESC LIMIT 1",
+            (post_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return SnapshotDelta(
+            delta_total=(int(row["delta_total"]) if row["delta_total"] is not None else None),
+            spike=bool(row["spike"]),
+        )
+
+    def mark_platform_post_available(self, post_id: int) -> None:
+        self._database.mark_platform_post_available(
+            post_id, _conn=self._connection,
+        )
+
+    def record_platform_post_missing(
+        self,
+        post_id: int,
+        detected_at: datetime,
+        reason: str,
+        confirmation_checks: int,
+    ) -> tuple[int, bool]:
+        return self._database.record_platform_post_missing(
+            post_id,
+            detected_at,
+            reason,
+            confirmation_checks,
+            _conn=self._connection,
+        )
+
+    def upsert_platform_post(
+        self,
+        platform_account_id: int,
+        external_id: str,
+        published_at: datetime,
+        discovered_at: datetime,
+        post_type: str,
+        url: str | None,
+        raw: Any,
+        *,
+        history_complete: bool = False,
+        source_external_id: str | None = None,
+        is_joint: bool = False,
+        additional_author_count: int = 0,
+        is_repost: bool = False,
+    ) -> int:
+        return self._database.upsert_platform_post(
+            platform_account_id,
+            external_id,
+            published_at,
+            discovered_at,
+            post_type,
+            url,
+            raw,
+            history_complete=history_complete,
+            source_external_id=source_external_id,
+            is_joint=is_joint,
+            additional_author_count=additional_author_count,
+            is_repost=is_repost,
+            _conn=self._connection,
+        )
+
+    def latest_platform_snapshot_timing(
+        self, platform_post_id: int,
+    ) -> tuple[str | None, int | None]:
+        return self._database.latest_platform_snapshot_timing(
+            platform_post_id, _conn=self._connection,
+        )
+
+    def platform_metric_high_watermarks(
+        self, platform_post_id: int,
+    ) -> dict[str, int | None]:
+        return self._database.platform_metric_high_watermarks(
+            platform_post_id, _conn=self._connection,
+        )
+
+    def insert_platform_snapshot(
+        self,
+        platform_post_id: int,
+        measured_at: datetime,
+        age_seconds: int,
+        poll_interval_minutes: int,
+        *,
+        views_count: int | None,
+        reactions_count: int | None,
+        comments_count: int | None,
+        shares_count: int | None,
+        raw: Any,
+        bucket_at: datetime | None = None,
+    ) -> bool:
+        return self._database.insert_platform_snapshot(
+            platform_post_id,
+            measured_at,
+            age_seconds,
+            poll_interval_minutes,
+            views_count=views_count,
+            reactions_count=reactions_count,
+            comments_count=comments_count,
+            shares_count=shares_count,
+            raw=raw,
+            bucket_at=bucket_at,
+            _conn=self._connection,
+        )

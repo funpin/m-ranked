@@ -1,0 +1,11 @@
+# Install as /etc/m-ranked/credentials/flyway.conf, owner root:m-ranked-deploy,
+# mode 0640. This credential is used only during a migration gate.
+flyway.url=jdbc:postgresql://127.0.0.1:5432/mranked
+flyway.user=migration_owner
+flyway.password=REPLACE_WITH_MIGRATION_OWNER_SECRET
+flyway.defaultSchema=flyway
+flyway.schemas=flyway
+flyway.connectRetries=5
+flyway.lockRetryCount=10
+flyway.validateMigrationNaming=true
+flyway.cleanDisabled=true

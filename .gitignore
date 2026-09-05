@@ -6,5 +6,7 @@ logs/
 __pycache__/
 .venv/
 .pytest_cache/
+.pnpm-store/
+backend/target/
 *.pyc
 .DS_Store

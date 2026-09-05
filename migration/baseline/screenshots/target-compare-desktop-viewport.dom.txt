@@ -1,0 +1,86 @@
+- link "Перейти к содержимому":
+  - /url: "#main-content"
+- banner:
+  - link "m-ranked — обзор":
+    - /url: /
+    - strong: m-ranked
+  - navigation "Основная навигация":
+    - link "Обзор":
+      - /url: /
+    - link "Рейтинг":
+      - /url: /rating
+    - link "Сравнение":
+      - /url: /compare
+    - link "Экспорт CSV":
+      - /url: /export/snapshots.csv
+    - link "Управление":
+      - /url: /manage
+  - button "Включить светлую тему":
+    - generic: ☾
+    - generic: Тёмная
+- main:
+  - heading "Сравнение каналов" [level=1]
+  - paragraph: Сравните реакцию аудитории вузов по одному согласованному срезу данных.
+  - generic: выбрано 2 из 2
+  - form "Настройка сравнения":
+    - paragraph: Настройка
+    - heading "Выберите вузы" [level=2]
+    - generic: до 200 из API
+    - generic: Поиск вуза
+    - searchbox "Поиск вуза"
+    - generic: На одном графике — до 50 рядов
+    - checkbox "Альфа Альфа Институт · ID 910001" [checked]
+    - strong: Альфа
+    - generic: Альфа Институт · ID 910001
+    - checkbox "Бета Бета Академия · ID 910002" [checked]
+    - strong: Бета
+    - generic: Бета Академия · ID 910002
+    - generic: Период после публикации
+    - combobox "Период после публикации":
+      - option "24 часа" [selected]
+      - option "48 часов"
+      - option "72 часа"
+      - option "7 дней"
+      - option "14 дней"
+    - generic: Площадка
+    - combobox "Площадка":
+      - option "Общий"
+      - option "TG" [selected]
+      - option "ВК"
+      - option "MAX"
+      - option "RUTUBE"
+    - generic: Метрика
+    - combobox "Метрика":
+      - option "Реакции" [selected]
+      - option "Просмотры"
+      - option "Комментарии"
+      - option "Репосты"
+    - generic: Агрегация
+    - combobox "Агрегация":
+      - option "Медиана" [selected]
+      - option "Сумма"
+    - checkbox "Неполная история"
+    - text: Неполная история
+    - button "Показать сравнение"
+  - complementary: Кривые читаются из фиксированной cohort‑проекции для горизонта 24 ч; состав выборки не меняется между точками. Поиск кандидатов использует bounded‑срез «1d», а не raw snapshots.
+  - paragraph: Фиксированная выборка · медиана
+  - heading "Реакции по часам" [level=2]
+  - generic: "ревизия #9003001"
+  - 'img "Реакции по часам: почасовые кривые по 2 вузам"':
+    - generic: "130"
+    - generic: 97,5
+    - generic: "65"
+    - generic: 32,5
+    - generic: "0"
+    - generic: 0 ч
+    - generic: 6 ч
+    - generic: 12 ч
+    - generic: 18 ч
+    - generic: 24 ч
+  - list "Легенда графика":
+    - strong: Альфа
+    - generic: 130 · выборка 1 · покрытие 100%
+    - strong: Бета
+    - generic: 80 · выборка 1 · покрытие 100%
+  - paragraph: Cohort 25350497-a1f2-6406-53ef-f0a1d5f760b1 · 2 публикаций · только полные ряды
+- alert

@@ -1,0 +1,99 @@
+- link "Перейти к содержимому":
+  - /url: "#main-content"
+- banner:
+  - link "m-ranked — обзор":
+    - /url: /
+  - button "Включить светлую тему":
+    - generic: ☾
+  - button "Открыть меню"
+- main:
+  - heading "Обзор каналов" [level=1]
+  - paragraph: Активность публикаций за выбранный период — с размером выборки, покрытием и качеством исходных данных.
+  - generic: "ревизия #9003001"
+  - form "Фильтры обзора":
+    - generic: Поиск вуза
+    - searchbox "Поиск вуза"
+    - generic: Период
+    - combobox "Период":
+      - option "3 часа"
+      - option "Сутки" [selected]
+      - option "7 дней"
+      - option "30 дней"
+    - generic: Сортировать
+    - combobox "Сортировать":
+      - option "Медиана реакций" [selected]
+      - option "Реакции всего"
+      - option "Просмотры всего"
+      - option "Покрытие"
+      - option "Размер выборки"
+      - option "Название"
+    - generic: Порядок
+    - combobox "Порядок":
+      - option "По убыванию" [selected]
+      - option "По возрастанию"
+    - button "Применить"
+    - group "Площадка":
+      - generic: Площадка
+      - radio "Общий"
+      - generic: Общий
+      - radio "TG" [checked]
+      - generic: TG
+      - radio "ВК"
+      - generic: ВК
+      - radio "MAX"
+      - generic: MAX
+      - radio "RUTUBE"
+      - generic: RUTUBE
+  - region "Вузы":
+    - article:
+      - paragraph: TG · Сутки
+      - heading "Альфа" [level=2]:
+        - link "Альфа":
+          - /url: /institutions/910001?platform=telegram&period=1d
+      - paragraph: Альфа Институт
+      - generic: "#910001"
+      - strong: "0"
+      - generic: реакций за период
+      - strong: "0"
+      - generic: просмотров за период
+      - strong: —
+      - generic: медиана реакций
+      - strong: —
+      - generic: медиана просмотров
+      - term: Качество
+      - definition: unknown
+      - term: Выборка
+      - definition: 0 публикаций
+      - term: Покрытие
+      - definition: 0%
+      - term: Актуальность
+      - definition: 03.09.2026, 15:05 МСК
+    - article:
+      - paragraph: TG · Сутки
+      - heading "Бета" [level=2]:
+        - link "Бета":
+          - /url: /institutions/910002?platform=telegram&period=1d
+      - paragraph: Бета Академия
+      - generic: "#910002"
+      - strong: "0"
+      - generic: реакций за период
+      - strong: "0"
+      - generic: просмотров за период
+      - strong: —
+      - generic: медиана реакций
+      - strong: —
+      - generic: медиана просмотров
+      - term: Качество
+      - definition: unknown
+      - term: Выборка
+      - definition: 0 публикаций
+      - term: Покрытие
+      - definition: 0%
+      - term: Актуальность
+      - definition: 03.09.2026, 15:05 МСК
+  - generic: "Согласованный срез: 03.09.2026, 15:05 МСК"
+  - generic: "Показано: 2 · период Сутки"
+  - complementary:
+    - strong: "Как читать показатели:"
+    - text: сумма отражает активность измеряемой выборки, медиана — типичную публикацию. Покрытие и качество помогают понять, насколько вывод репрезентативен.
+- alert

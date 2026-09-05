@@ -1,0 +1,12 @@
+[Unit]
+Description=Monthly M-Ranked encrypted base backup (12 restore points)
+
+[Timer]
+OnCalendar=*-*-01 04:15:00 UTC
+Persistent=true
+RandomizedDelaySec=10min
+AccuracySec=1min
+Unit=m-ranked-target-backup@monthly.service
+
+[Install]
+WantedBy=timers.target

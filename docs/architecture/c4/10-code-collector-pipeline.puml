@@ -1,0 +1,203 @@
+@startuml MRanked_Collector_Pipeline_Code
+title M-Ranked — C4 Level 4: Collector pipeline (TO-BE)
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+package "collector.application" {
+  class PollCycleCoordinator {
+    -CollectorLease lease
+    -AccountRepository accounts
+    -Map<Platform, PlatformCollector> collectors
+    -CollectionRunRepository runs
+    +run(Platform, PartitionKey): CollectionRunId
+  }
+
+  interface PlatformCollector {
+    +collect(Account, CollectionContext): CollectionBatch
+  }
+
+  interface CollectorLease {
+    +acquire(Platform, PartitionKey, Duration): Lease
+  }
+
+  interface AccountRepository {
+    +enabled(Platform, PartitionKey): List<Account>
+  }
+
+  interface CollectionRunRepository {
+    +start(RunMetadata): CollectionRunId
+    +recordAccountResult(CollectionRunId, AccountResult): void
+    +finish(CollectionRunId, RunSummary): void
+  }
+}
+
+package "collector.platform" {
+  class TelegramCollector {
+    -TelegramGateway gateway
+    -CollectorPipeline pipeline
+  }
+  class VkCollector {
+    -VkGateway gateway
+    -CollectorPipeline pipeline
+  }
+  class MaxCollector {
+    -MaxGateway gateway
+    -CollectorPipeline pipeline
+  }
+  class RutubeCollector {
+    -RutubeGateway gateway
+    -CollectorPipeline pipeline
+  }
+
+  interface PlatformGateway {
+    +resolve(AccountRef): RemoteAccount
+    +discover(RemoteAccount, Cursor): List<RemotePublication>
+    +refresh(RemoteAccount, List<ExternalId>): PointLookupBatch
+    +measure(RemotePublication): RemoteMetrics
+  }
+  interface TelegramGateway
+  interface VkGateway
+  interface MaxGateway
+  interface RutubeGateway
+
+  TelegramGateway -|> PlatformGateway
+  VkGateway -|> PlatformGateway
+  MaxGateway -|> PlatformGateway
+  RutubeGateway -|> PlatformGateway
+}
+
+package "collector.pipeline" {
+  class CollectorPipeline {
+    -PublicationIdentityResolver identity
+    -SamplingPolicy sampling
+    -MetricNormalizer normalizer
+    -QualityValidator quality
+    -DeletionPolicy deletion
+    -IngestionRepository ingestion
+    +process(Account, RemoteBatch, Instant): AccountResult
+  }
+
+  interface PublicationIdentityResolver {
+    +resolve(Platform, RemotePublication): CanonicalIdentity
+  }
+
+  interface SamplingPolicy {
+    +isDue(PublicationState, Instant): boolean
+    +interval(PublicationAge, Platform): Duration
+  }
+
+  interface TrackedPublicationReader {
+    +circularPage(Account, Cutoff, ScanLimit): List<TrackedPublication>
+  }
+
+  interface MetricNormalizer {
+    +normalize(Platform, RemoteMetrics): List<MetricObservation>
+  }
+
+  interface QualityValidator {
+    +validate(List<MetricObservation>, PreviousObservation): ValidatedObservations
+  }
+
+  interface DeletionPolicy {
+    +apply(MissingProbe, PreviousMissingState): DeletionDecision
+  }
+
+  interface IngestionRepository {
+    +persist(AccountMetadata, List<PublicationEnvelope>, CollectionRunId): IngestionResult
+  }
+
+  class CollectionBatch <<immutable>> {
+    +RemoteAccount account
+    +List<RemotePublication> discovered
+    +List<RemotePublication> refreshed
+    +List<DeletionProbe> deletionProbes
+    +String refreshCursor
+    +Instant observedAt
+    +SourceMetadata source
+  }
+
+  class PublicationEnvelope <<immutable>> {
+    +CanonicalIdentity identity
+    +PublicationMetadata publication
+    +List<MetricObservation> observations
+    +QualityAssessment quality
+    +RawPayloadRef rawPayload
+  }
+
+  class MetricObservation <<immutable>> {
+    +MetricKey metric
+    +Long value
+    +Instant observedAt
+    +ObservationQuality quality
+    +String sourceField
+  }
+}
+
+package "collector.infrastructure" {
+  class PostgresIngestionRepository {
+    +persist(...): IngestionResult
+  }
+  class RedisCollectorLease {
+    +acquire(...): Lease
+  }
+  class PostgresCollectionRunRepository
+  class DatasetRevisionPublisher {
+    +afterCommit(IngestionResult): void
+  }
+}
+
+PollCycleCoordinator --> CollectorLease
+PollCycleCoordinator --> AccountRepository
+PollCycleCoordinator --> PlatformCollector
+PollCycleCoordinator --> CollectionRunRepository
+TelegramCollector ..|> PlatformCollector
+VkCollector ..|> PlatformCollector
+MaxCollector ..|> PlatformCollector
+RutubeCollector ..|> PlatformCollector
+TelegramCollector --> TelegramGateway
+VkCollector --> VkGateway
+MaxCollector --> MaxGateway
+RutubeCollector --> RutubeGateway
+TelegramCollector --> CollectorPipeline
+VkCollector --> CollectorPipeline
+MaxCollector --> CollectorPipeline
+RutubeCollector --> CollectorPipeline
+PlatformCollector --> CollectionBatch
+CollectorPipeline --> PublicationIdentityResolver
+CollectorPipeline --> SamplingPolicy
+CollectorPipeline --> TrackedPublicationReader
+CollectorPipeline --> MetricNormalizer
+CollectorPipeline --> QualityValidator
+CollectorPipeline --> DeletionPolicy
+CollectorPipeline --> IngestionRepository
+CollectorPipeline --> PublicationEnvelope
+PublicationEnvelope "1" *-- "*" MetricObservation
+PostgresIngestionRepository ..|> IngestionRepository
+RedisCollectorLease ..|> CollectorLease
+PostgresCollectionRunRepository ..|> CollectionRunRepository
+PostgresIngestionRepository --> DatasetRevisionPublisher : notify after commit
+
+note right of PostgresIngestionRepository
+  Одна account batch = одна транзакция.
+  Idempotency: platform + account + external_id,
+  snapshot bucket и collection_run_id.
+  Revision публикуется только после COMMIT.
+  Refresh cursor и deletion evidence входят
+  в ту же account-транзакцию.
+end note
+
+note right of DeletionPolicy
+  Только authoritative point lookup может
+  увеличить consecutive_missing. Feed omission,
+  auth/rate/transport/5xx не являются deletion.
+end note
+
+note bottom of QualityValidator
+  Не исправляет источник молча:
+  подозрительный reset → NULL + quality flag;
+  измеренный ноль остается 0;
+  raw provenance сохраняется отдельно и краткосрочно.
+end note
+@enduml

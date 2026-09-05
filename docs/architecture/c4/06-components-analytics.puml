@@ -1,0 +1,44 @@
+@startuml MRanked_Analytics_Components
+!include <C4/C4_Component>
+
+title M-Ranked — C4 Level 3: Analytics
+LAYOUT_LEFT_RIGHT()
+
+Container_Ext(api, "API application services", "Spring Boot", "Запрашивают результаты и объяснения")
+ContainerDb_Ext(pg, "PostgreSQL", "PostgreSQL", "Observations, definitions, runs и projections")
+ContainerDb_Ext(redis, "Redis", "Redis", "Revision and cache")
+System_Ext(mrating, "m-rating.ru", "Official published results")
+
+Container_Boundary(analytics, "Analytics module — core backend") {
+  Component(window, "Observation window builder", "Java + SQL", "Фиксирует as-of, cohort, horizon и freshness")
+  Component(semantics, "Metric semantics registry", "Java", "Единицы, capability, NULL/zero и quality rules")
+  Component(aggregator, "Aggregate calculator", "Java + SQL", "Totals, medians, deltas, rates и cohort coverage")
+  Component(formula, "Formula engine", "Pure Java", "Версионированная и детерминированная оценка")
+  Component(ranker, "Ranking and sensitivity", "Pure Java", "Rank, ties, elasticity и scenario comparison")
+  Component(anomaly, "Anomaly signal engine", "Java", "Статистические сигналы без вывода о намерении")
+  Component(official_import, "Official rating importer", "Spring HTTP client", "Сохраняет оригинальный источник и историю")
+  Component(run, "Calculation run coordinator", "Spring scheduling", "Идемпотентный run, status, retries и provenance")
+  Component(projection, "Projection writer", "jOOQ / JdbcClient", "Материализует dashboard/ranking/anomaly read models")
+  Component(explainer, "Result explainer", "Java", "Компоненты балла, warnings, formula version и data quality")
+}
+
+Rel(api, run, "Запускает разрешенный manual run")
+Rel(api, explainer, "Читает объяснение")
+Rel(run, window, "Формирует immutable input")
+Rel(window, pg, "Читает observations as-of", "SQL")
+Rel(window, semantics, "Проверяет capability/quality")
+Rel(run, aggregator, "Считает aggregates")
+Rel(aggregator, formula, "Передает metric inputs")
+Rel(formula, ranker, "Передает score components")
+Rel(window, anomaly, "Передает time series")
+Rel(run, official_import, "Импортирует official observation")
+Rel(official_import, mrating, "GET config/data", "HTTPS")
+Rel(formula, explainer, "Передает trace")
+Rel(ranker, projection, "Результаты и scenarios")
+Rel(anomaly, projection, "Signals")
+Rel(official_import, projection, "Official rating observations")
+Rel(projection, pg, "Atomic publish", "SQL transaction")
+Rel(projection, redis, "Увеличивает dataset revision после commit", "RESP")
+
+SHOW_LEGEND()
+@enduml

@@ -1,0 +1,56 @@
+---
+title: M-Ranked — Rutube collection sequence
+---
+sequenceDiagram
+    autonumber
+    participant S as Scheduler
+    participant DB as PostgreSQL
+    participant U as Rutube adapter
+    participant RT as Rutube Public API
+    participant P as Canonical pipeline
+    participant R as Redis
+
+    S->>DB: Read last completed Rutube run
+    alt Rutube cadence has not elapsed
+        S->>DB: Record skipped run reason
+    else Collection is due
+        S->>R: Acquire rutube partition lease
+        S->>DB: Start collection_run and load enabled accounts
+        loop For each account within account concurrency limit
+            S->>U: collect(account)
+            opt Native channel ID is missing
+                U->>RT: GET configured public channel page
+                RT-->>U: HTML containing numeric video/person ID
+            end
+            loop Paginated until discovery limit
+                U->>RT: GET /api/video/person/{channelId}
+                RT-->>U: Videos, publication time and views
+            end
+            U->>DB: Load bounded circular tracked page + refresh cursor
+            U->>U: Select due videos, capped independently from discovery
+            opt Due tracked video is outside discovery page
+                U->>RT: GET /api/video/{videoId}?format=json
+                RT-->>U: Exact video, 404/410, or non-authoritative error
+            end
+            par For each due video within request concurrency
+                U->>RT: GET /api/numerator/video/{videoId}/vote
+                RT-->>U: Positive votes or unavailable
+            and
+                U->>RT: GET /api/v2/comments/video/{videoId}
+                RT-->>U: Comment count or unavailable
+            end
+            U->>P: Channel, discovered/refreshed videos, metrics and probes
+            P->>P: Normalize absent likes/comments to NULL
+            P->>P: Mark shares as unsupported NULL
+            P->>P: Confirm deletion only from repeated exact-video 404/410
+            P->>DB: Transactional metadata, snapshots, probes and refresh cursor
+            DB-->>P: Commit with dataset revision
+            P->>R: Publish revision.changed after commit
+            P->>DB: Complete account result
+        end
+        S->>DB: Complete collection_run
+        S->>R: Release/expire lease
+    end
+
+    Note over U,RT: Vote and comments requests fail independently,<br/>one unavailable metric must not erase another valid observation.
+    Note over U,DB: Channel-list omission never means deletion.<br/>Auth/rate/transport/5xx keep the pending count unchanged.

@@ -26,15 +26,16 @@ from ..analytics import (
     fixed_cohort_median_curve,
     hourly_asof_points,
 )
+from ..clock import CallableUtcClock, UtcClock
 from ..config import Settings
 from ..collector import normalize_channel_ref
 from ..database import Database
 from ..m_rating import refresh_m_rating
 from ..platform_analytics import (
+    LegacyAnalyticsQueryService,
     PLATFORM_PRESENTATION,
-    platform_activity_cards,
-    platform_rating_data,
 )
+from ..ports import AnalyticsQueryService
 from ..reactions import custom_emoji_asset
 from ..vk import normalize_vk_community_ref
 
@@ -198,7 +199,16 @@ def create_app(
     settings: Settings,
     db: Database,
     telegram_connected: Callable[[], bool] | None = None,
+    *,
+    clock: UtcClock | None = None,
+    analytics_queries: AnalyticsQueryService | None = None,
 ) -> FastAPI:
+    # Keep compatibility with legacy tests/operators patching this module's
+    # datetime while allowing an explicit deterministic clock at the boundary.
+    utc_clock = clock or CallableUtcClock(lambda: datetime.now(timezone.utc))
+    query_service = analytics_queries or LegacyAnalyticsQueryService(
+        db, settings, utc_clock,
+    )
     app = FastAPI(title="m-ranked")
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
     templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -450,7 +460,7 @@ def create_app(
     ) -> list[dict[str, Any]]:
         """Aggregate actual post changes during a time window for the overview."""
 
-        now = datetime.now(timezone.utc)
+        now = utc_clock.now()
         channels = _rows_dict(db.list_channels_with_institutions(enabled_only=True))
 
         def window_samples(start: datetime, end: datetime) -> dict[int, list[dict[str, Any]]]:
@@ -699,7 +709,7 @@ def create_app(
         if last_completed_at:
             try:
                 collector_fresh = (
-                    datetime.now(timezone.utc) - _as_datetime(last_completed_at)
+                    utc_clock.now() - _as_datetime(last_completed_at)
                 ).total_seconds() <= max(settings.poll_interval_minutes * 120, 600)
             except ValueError:
                 collector_fresh = False
@@ -766,7 +776,7 @@ def create_app(
         if not emoji_id.isdigit() or len(emoji_id) > 32:
             raise HTTPException(status_code=404, detail="Реакция не найдена")
         cached = emoji_cache.get(emoji_id)
-        now = datetime.now(timezone.utc)
+        now = utc_clock.now()
         if cached and cached[0] > now:
             return Response(
                 cached[1], media_type=cached[2],
@@ -811,15 +821,14 @@ def create_app(
         period, period_delta, period_label, period_short = period_spec(period)
         direction = direction if direction in {"asc", "desc"} else None
         if platform != "telegram":
-            now = datetime.now(timezone.utc)
+            now = utc_clock.now()
             cards = (
                 platform_overview_cards(platform)
                 if platform == "all"
                 else cached_overview(
                     platform, period, f"{platform}_poll_last_completed_at",
-                    lambda: platform_activity_cards(
-                        db, settings, platform, now - period_delta,
-                        now - period_delta * 2, now,
+                    lambda: query_service.activity_cards(
+                        platform, now - period_delta, now - period_delta * 2, now,
                     ),
                 )
             )
@@ -868,7 +877,7 @@ def create_app(
                 period=period, period_label=period_label, period_short=period_short,
                 sort=sort, direction=direction, active_platform=platform, q=q,
             )
-        cutoff = datetime.now(timezone.utc) - period_delta
+        cutoff = utc_clock.now() - period_delta
         sort_keys = {
             "name": "institution_sort_name",
             "subscribers": "subscriber_count", "posts": "post_count",
@@ -925,8 +934,8 @@ def create_app(
         platform = normalize_platform(platform)
         if platform in {"vk", "rutube"}:
             period, period_delta, period_label, period_short = period_spec(period)
-            cutoff = datetime.now(timezone.utc) - period_delta
-            institution_rankings, top_posts = platform_rating_data(db, platform, cutoff)
+            cutoff = utc_clock.now() - period_delta
+            institution_rankings, top_posts = query_service.rating_data(platform, cutoff)
             institution_keys = {
                 "average": "avg_reactions", "total": "total_reactions",
                 "engagement": "interaction_rate", "views": "total_views",
@@ -990,7 +999,7 @@ def create_app(
         }
         channel_sort = channel_sort if channel_sort in channel_keys else "engagement"
         channel_direction = channel_direction if channel_direction in {"asc", "desc"} else "desc"
-        cutoff = datetime.now(timezone.utc) - period_delta
+        cutoff = utc_clock.now() - period_delta
         channel_rankings = channel_period_stats(cutoff)
         channel_rankings.sort(
             key=lambda row: (
@@ -1457,7 +1466,7 @@ def create_app(
                         ORDER BY p.published_at DESC LIMIT 500""",
                     (
                         *channel_ids,
-                        (datetime.now(timezone.utc) - timedelta(
+                        (utc_clock.now() - timedelta(
                             days=settings.retention_days,
                         )).isoformat(),
                     ),
@@ -1477,7 +1486,7 @@ def create_app(
             )
         posts = db.list_platform_posts(
             platform=account_platform, institution_id=institution_id,
-            published_after=datetime.now(timezone.utc) - timedelta(days=settings.retention_days),
+            published_after=utc_clock.now() - timedelta(days=settings.retention_days),
             limit=500,
         )
         if platform != "all":
@@ -1520,7 +1529,7 @@ def create_app(
         institution = db.institution(int(account["institution_id"]))
         posts = db.list_platform_posts(
             account_id=account_id,
-            published_after=datetime.now(timezone.utc) - timedelta(days=settings.retention_days),
+            published_after=utc_clock.now() - timedelta(days=settings.retention_days),
             limit=500,
         )
         prepared_posts, stats, account_label = platform_channel_stats(
@@ -1713,7 +1722,7 @@ def create_app(
         channel = db.channel(channel_id)
         if channel is None:
             return HTMLResponse("Канал не найден", status_code=404)
-        retention_cutoff = datetime.now(timezone.utc) - timedelta(days=settings.retention_days)
+        retention_cutoff = utc_clock.now() - timedelta(days=settings.retention_days)
         posts = db.query(
             """SELECT p.*,
                 latest.total_reactions current_total,

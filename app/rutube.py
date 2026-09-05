@@ -120,6 +120,35 @@ class RutubeClient:
             result,
         )
 
+    async def video(self, video_id: str) -> RutubeVideo:
+        """Read one exact video resource for refresh/deletion confirmation."""
+
+        response = await self.client.get(
+            f"{self.api_base}/video/{video_id}/",
+            params={"format": "json"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("RUTUBE video response must be an object")
+        external_id = str(payload.get("id") or "").strip()
+        published = payload.get("publication_ts") or payload.get("created_ts")
+        if not external_id or not published:
+            raise ValueError("RUTUBE video response is incomplete")
+        if external_id != str(video_id):
+            raise ValueError("RUTUBE video response identity mismatch")
+        return RutubeVideo(
+            id=external_id,
+            title=str(payload.get("title") or external_id),
+            published_at=parse_rutube_datetime(str(published)),
+            views=int(payload["hits"]) if payload.get("hits") is not None else None,
+            url=str(
+                payload.get("video_url")
+                or f"https://rutube.ru/video/{external_id}/"
+            ),
+            raw=payload,
+        )
+
     async def video_metrics(self, video_id: str) -> RutubeVideoMetrics:
         vote_response, comments_response = await asyncio.gather(
             self.client.get(f"{self.api_base}/numerator/video/{video_id}/vote"),

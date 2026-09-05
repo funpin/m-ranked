@@ -1,0 +1,2 @@
+psycopg[binary]==3.3.5
+pyarrow==25.0.1

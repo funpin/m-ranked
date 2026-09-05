@@ -1,0 +1,50 @@
+---
+title: M-Ranked — Data lifecycle (TO-BE)
+---
+flowchart LR
+    source[Публичный источник] --> collect[Сбор<br/>collection_run]
+    collect --> raw[Raw payload<br/>encrypted / restricted]
+    collect --> normalize[Нормализация<br/>identity + metric semantics]
+    normalize --> quality{Валидно?}
+    quality -- нет --> quarantine[Ошибка качества<br/>run result + sanitized evidence]
+    quality -- да --> commit[Транзакционный commit<br/>publication + snapshots]
+    commit --> revision[Новая dataset revision]
+    revision --> hot[Hot PostgreSQL<br/>полная детализация]
+    revision --> project[Агрегаты и projections]
+    project --> cache[Redis / HTTP / Next cache]
+    project --> rating[Formula and rating runs]
+    project --> anomaly[Anomaly signals]
+
+    raw --> raw7{Прошло 7 дней?}
+    raw7 -- нет --> raw
+    raw7 -- да --> rawpurge[Безвозвратное удаление payload]
+
+    hot --> day40{Прошло 40 дней?}
+    day40 -- нет --> hot
+    day40 -- да --> export[Parquet + Zstandard<br/>partition export]
+    export --> verify[Row count + checksum<br/>sample read]
+    verify -- ошибка --> alert[Остановить purge<br/>уведомить оператора]
+    verify -- успешно --> manifest[Archive manifest]
+    manifest --> drop[DROP старой hot partition]
+    drop --> cold[Cold archive]
+
+    rating --> long[Долговременное хранение<br/>aggregates, ratings, lineage]
+    anomaly --> long
+    project --> long
+    cold --> expiry{Истек утвержденный<br/>срок cold retention?}
+    expiry -- нет --> cold
+    expiry -- да --> delete[Удаление объекта и manifest tombstone]
+
+    admin[Admin command] --> audit[Append-only audit]
+    audit --> long
+    subject[Запрос на исправление] --> correction[Новая корректирующая запись<br/>исходное наблюдение не переписывается]
+    correction --> revision
+
+    classDef external fill:#fff3e0,stroke:#ef6c00,color:#4e342e;
+    classDef hot fill:#e3f2fd,stroke:#1565c0,color:#0d47a1;
+    classDef cold fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20;
+    classDef danger fill:#ffebee,stroke:#c62828,color:#b71c1c;
+    class source,admin,subject external;
+    class hot,commit,revision,project,cache hot;
+    class cold,manifest,long cold;
+    class rawpurge,delete,alert danger;

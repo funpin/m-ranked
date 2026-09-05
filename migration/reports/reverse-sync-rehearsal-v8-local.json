@@ -1,0 +1,45 @@
+{
+  "database": "mranked_reverse_it",
+  "duplicates": {
+    "identityCount": 0,
+    "observationCount": 0,
+    "primaryIdentityCount": 0,
+    "snapshotCount": 0
+  },
+  "environment": "disposable-postgresql-integration",
+  "flyway": {
+    "migrationCount": 8,
+    "schemaVersion": 8
+  },
+  "forwardReconciliation": {
+    "criticalMismatches": 0,
+    "status": "pass"
+  },
+  "generatedAt": "2026-09-04T20:53:45.621112+00:00",
+  "platforms": [
+    "max",
+    "rutube",
+    "telegram",
+    "vk"
+  ],
+  "preservation": {
+    "aliasMismatches": 0,
+    "identityMismatches": 0,
+    "publicationMismatches": 0,
+    "snapshotMismatches": 0
+  },
+  "replay": {
+    "idempotent": true,
+    "runCount": 4
+  },
+  "reverseSync": {
+    "fixedRevisionCount": 4,
+    "planSha256": "b5d82c2e8c390191bc6be4a5f2a2acfe4590e2df309d755de9466d522dacdc1d",
+    "status": "stopped"
+  },
+  "sFinal": {
+    "batchId": "67eab8df-e1d3-545f-9f8b-d8b6044a7992",
+    "gate": "pass"
+  },
+  "status": "pass"
+}

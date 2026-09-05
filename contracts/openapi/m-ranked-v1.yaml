@@ -1,0 +1,1924 @@
+openapi: 3.1.0
+info:
+  title: M-Ranked API
+  version: 1.0.0
+  description: >-
+    Public reads are backed by revision-pinned projections and legacy identifier aliases.
+    Administrative status and account commands are authenticated, role-scoped and never cached.
+tags:
+  - name: Operations
+  - name: Query
+  - name: Media
+  - name: Export
+  - name: Admin
+paths:
+  /api/v1/health/live:
+    get:
+      tags: [Operations]
+      operationId: getLiveness
+      summary: Process liveness
+      security: []
+      responses:
+        '200':
+          description: The process can serve HTTP requests.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Liveness'
+  /api/v1/health/ready:
+    get:
+      tags: [Operations]
+      operationId: getReadiness
+      summary: Database and dataset readiness
+      security: []
+      responses:
+        '200':
+          description: Database access and the current dataset revision are available.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+        '503':
+          description: A required dependency is unavailable.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+  /api/v1/emoji/{emojiId}:
+    get:
+      tags: [Media]
+      operationId: getCustomEmoji
+      summary: Resolve a Telegram custom emoji to a browser-renderable image
+      description: >-
+        Compatibility media endpoint for the legacy `/emoji/{emoji_id}` route. Successful images
+        are cached in-process for six hours. Metadata, selected assets, and every redirect are
+        restricted to HTTPS Telegram hosts; image bodies larger than 2,000,000 bytes are rejected.
+      security: []
+      parameters:
+        - name: emojiId
+          in: path
+          required: true
+          description: Legacy Telegram custom-emoji document identifier.
+          schema:
+            type: string
+            pattern: '^[0-9]{1,32}$'
+      responses:
+        '200':
+          description: Exact upstream image bytes in a browser-renderable format.
+          headers:
+            Cache-Control:
+              description: Six-hour public browser cache matching the legacy route.
+              schema:
+                type: string
+                const: 'public, max-age=21600'
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/gif:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/overview:
+    get:
+      tags: [Query]
+      operationId: getOverview
+      summary: Page through institution metrics
+      description: >-
+        Uses an opaque keyset cursor over a globally sorted legacy-card projection. Missing sort
+        values stay last in both directions. Results and validators are pinned to the dataset
+        revision selected at the beginning of the request.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Platform'
+        - $ref: '#/components/parameters/Period'
+        - name: q
+          in: query
+          description: Case-insensitive institution-name fragment.
+          schema:
+            type: string
+            maxLength: 200
+            default: ''
+        - name: sort
+          in: query
+          description: >-
+            Legacy sort key. `coverage` and `accounts` apply only to `all`; `posts` and
+            `subscribers` apply only to a concrete platform. Unsupported combinations normalize
+            to `m_rating` for `all` and `median_reactions` otherwise.
+          schema:
+            type: string
+            enum: [name, median_reactions, m_rating, reactions, views, posts, subscribers, coverage, accounts]
+            default: median_reactions
+        - name: direction
+          in: query
+          description: Defaults to ascending for `name`, descending otherwise.
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: Opaque cursor returned as `nextCursor` by a previous response.
+          schema:
+            type: string
+            maxLength: 512
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: A revision-pinned page of metrics.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewPage'
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/institutions/{legacyId}:
+    get:
+      tags: [Query]
+      operationId: getInstitution
+      summary: Resolve a legacy institution id and return its metrics
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/LegacyId'
+        - $ref: '#/components/parameters/Platform'
+        - $ref: '#/components/parameters/Period'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Institution and revision-pinned metrics.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Institution'
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/publications/{legacyId}:
+    get:
+      tags: [Query]
+      operationId: getPublication
+      summary: Resolve a legacy publication id and return latest independent counters
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/LegacyId'
+        - name: legacyType
+          in: query
+          description: Namespace of the legacy identifier.
+          schema:
+            type: string
+            enum: [posts, platform_posts]
+            default: posts
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Publication identity and its latest revision-pinned counters.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/rating:
+    get:
+      tags: [Query]
+      operationId: getRating
+      summary: Read the legacy activity rating for one platform and period
+      description: >-
+        Returns activity entities plus the top 50 publications from one dataset revision. Telegram
+        ranks enabled channels and keeps channels without publications; VK and RUTUBE aggregate
+        institutions that have publications. Metrics come from each publication's coherent latest
+        non-synthetic cumulative snapshot. Entities are intentionally bounded by `entityLimit`;
+        `entitiesTruncated` reports when this target API cannot return the legacy page's unbounded
+        tail. Unknown period values accepted by the browser route fall back to `1d`; omission is
+        `30d`. This endpoint is separate from official rating observations and derived rating runs.
+      security: []
+      parameters:
+        - name: platform
+          in: query
+          schema:
+            type: string
+            enum: [telegram, vk, rutube]
+            default: telegram
+        - name: period
+          in: query
+          schema:
+            $ref: '#/components/schemas/PeriodValue'
+          description: Omission selects 30d; the server retains the legacy invalid-value fallback to 1d.
+        - name: channel_sort
+          in: query
+          schema:
+            type: string
+            enum: [average, total, engagement, views, subscribers]
+            default: engagement
+        - name: channel_direction
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: post_sort
+          in: query
+          schema:
+            type: string
+            enum: [reactions, subscriber_share, view_share, views, comments, shares, interactions]
+            default: view_share
+        - name: post_direction
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: entityLimit
+          in: query
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+            default: 200
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: A bounded, revision-pinned activity rating and top-publication result.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/compare:
+    get:
+      tags: [Query]
+      operationId: getComparison
+      summary: Read one fixed-cohort comparison
+      description: >-
+        Executes one set-based query over the ready comparison projection. The response is bounded
+        by a fixed horizon and at most 50 series. For Telegram, repeating `channels` selects legacy
+        channel IDs; for VK, MAX, and RUTUBE, repeating `institutions` selects legacy institution
+        IDs. Only the parameter matching the selected platform is read; the other legacy namespace
+        is ignored for browser compatibility. Duplicate relevant IDs are de-duplicated in first
+        occurrence order, and unmapped IDs are ignored without replacing them. When the
+        platform-specific selection parameter is absent, `institutionLimit` bounds the
+        deterministic default slice. Invalid or excess relevant values fail as an invalid request
+        and are never replaced by another series. Every series also includes a companion
+        engagement curve calculated as a median of per-publication percentages (never a ratio of
+        aggregate medians). Telegram uses reactions/views and starts that curve at hour 1; VK and
+        RUTUBE use the available reactions, comments, and shares from the same source observation
+        divided by views. Metric and engagement cohorts are independently fixed by their valid
+        start/end observations, and intermediate hours only carry earlier valid observations
+        forward; future observations are never carried backward.
+      security: []
+      parameters:
+        - name: platform
+          in: query
+          schema:
+            type: string
+            enum: [telegram, vk, max, rutube]
+            default: telegram
+        - name: horizonHours
+          in: query
+          schema:
+            type: integer
+            enum: [24, 48, 72, 168, 336]
+            default: 72
+        - name: includePartial
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [views, reactions, comments, shares]
+            default: reactions
+        - name: aggregation
+          in: query
+          schema:
+            type: string
+            enum: [sum, median]
+            default: median
+        - name: institutionLimit
+          in: query
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 50
+            default: 25
+          description: Bounds the default slice when the platform-specific selection is absent.
+        - name: channels
+          in: query
+          description: Ordered legacy channel IDs for Telegram; ignored for every other platform.
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 50
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+        - name: institutions
+          in: query
+          description: Ordered legacy institution IDs for VK, MAX, or RUTUBE; ignored for Telegram.
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 50
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: One ready, revision-pinned fixed cohort.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comparison'
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/accounts/{legacyId}:
+    get:
+      tags: [Query]
+      operationId: getAccount
+      summary: Resolve a legacy channel or platform-account id
+      description: >-
+        Returns canonical catalog metadata and a small aggregate from `publication_latest`.
+        Subscriber history is intentionally absent because no account-latest projection exists.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/LegacyId'
+        - name: legacyType
+          in: query
+          schema:
+            type: string
+            enum: [channels, platform_accounts]
+            default: platform_accounts
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Alias-backed account metadata and projection summary.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/exports/publications.csv:
+    get:
+      tags: [Export]
+      operationId: streamPublicationCsv
+      summary: Stream a revision-pinned publication CSV
+      description: Rows are forwarded from the database cursor and are not materialized as a collection.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Platform'
+      responses:
+        '200':
+          description: UTF-8 CSV with CRLF records and a header row.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Content-Disposition:
+              description: Attachment filename containing the selected platform.
+              schema:
+                type: string
+            X-Dataset-Revision:
+              description: Revision used by every row in the export.
+              schema:
+                type: integer
+                format: int64
+                minimum: 0
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/csrf:
+    get:
+      tags: [Admin]
+      operationId: getAdminCsrf
+      summary: Issue a double-submit CSRF token for an authenticated admin client
+      security:
+        - basicAuth: []
+      responses:
+        '200':
+          description: Token metadata; the matching XSRF-TOKEN cookie is also issued.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCsrf'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/jobs:
+    get:
+      tags: [Admin]
+      operationId: getAdminJobs
+      summary: Read bounded collection-run status
+      description: Requires VIEWER, EDITOR or ADMIN. No raw response or payload is returned.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: platform
+          in: query
+          schema:
+            type: string
+            enum: [telegram, vk, max, rutube]
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/RunStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Newest collection runs matching the allowlisted filters.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminJobPage'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/jobs/{jobId}:
+    get:
+      tags: [Admin]
+      operationId: getAdminJob
+      summary: Read one collection run and bounded per-account outcomes
+      description: Requires VIEWER, EDITOR or ADMIN. Errors are limited to sanitized codes.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: accountResultLimit
+          in: query
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        '200':
+          description: Collection run plus bounded account outcomes.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminJobDetail'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/platform-accounts/{accountId}:
+    get:
+      tags: [Admin]
+      operationId: getAdminPlatformAccount
+      summary: Read the current administrative state of one platform account
+      description: >-
+        Requires VIEWER, EDITOR or ADMIN. Returns only the account UUID, platform, enabled flag,
+        optimistic row version and update time from the dedicated administrative database
+        connection. External identifiers, URLs, credentials and raw collector evidence are omitted.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current state suitable for preparing an optimistic admin command.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPlatformAccountState'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/platform-accounts/{accountId}/enabled:
+    put:
+      tags: [Admin]
+      operationId: setAdminPlatformAccountEnabled
+      summary: Set the collector-enabled state of one platform account
+      description: >-
+        Requires EDITOR or ADMIN. The command uses optimistic locking and is idempotent when the
+        requested desired state is already current. Success, replay, conflict and not-found outcomes
+        are written to append-only audit with only enabled/rowVersion state. A changed command
+        rebuilds and publishes its revision-pinned projections in the same database transaction.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-XSRF-TOKEN
+          in: header
+          required: true
+          description: Token returned by getAdminCsrf; the matching XSRF-TOKEN cookie is required.
+          schema:
+            type: string
+        - name: X-Correlation-Id
+          in: header
+          required: false
+          description: Optional caller UUID; the server generates one when absent.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSetEnabledRequest'
+      responses:
+        '200':
+          description: Updated state or an idempotent no-op.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Correlation-Id:
+              description: Correlation UUID used by audit and revision lineage.
+              schema:
+                type: string
+                format: uuid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSetEnabledResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/OptimisticLockConflict'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: >-
+        Transitional stateless admin authentication. Store only bcrypt hashes in runtime
+        configuration and expose this surface exclusively behind TLS. OIDC remains a later slice.
+  parameters:
+    Platform:
+      name: platform
+      in: query
+      schema:
+        type: string
+        enum: [all, telegram, vk, max, rutube]
+        default: all
+    Period:
+      name: period
+      in: query
+      schema:
+        type: string
+        enum: [3h, 1d, 7d, 30d]
+        default: 1d
+    LegacyId:
+      name: legacyId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      description: Current or weak ETag; wildcard matching is supported.
+      schema:
+        type: string
+  headers:
+    ETag:
+      description: >-
+        Validator derived from the same API namespace, authoritative PostgreSQL dataset revision,
+        and normalized-query fingerprint used by the public response cache.
+      schema:
+        type: string
+    PublicCache:
+      description: Public response cache policy.
+      schema:
+        type: string
+        const: max-age=30, must-revalidate, public
+    NoStore:
+      description: Response must not be stored.
+      schema:
+        type: string
+        const: no-store
+  responses:
+    InvalidRequest:
+      description: A query, path parameter, or cursor is invalid.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: No alias-backed resource exists at this dataset revision.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: An unexpected failure occurred before the response was committed.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Authentication is missing or invalid.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        WWW-Authenticate:
+          description: Basic authentication challenge for the transitional admin surface.
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: The authenticated role cannot perform the requested operation or CSRF failed.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    OptimisticLockConflict:
+      description: The supplied expected row version is stale.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    AdminUnavailable:
+      description: The dedicated administrative database connection is disabled or unavailable.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Liveness:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: UP
+    Readiness:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN]
+        datasetRevision:
+          type: integer
+          format: int64
+          minimum: 0
+    Metrics:
+      type: object
+      additionalProperties: false
+      required:
+        - totalReactions
+        - totalViews
+        - medianReactions
+        - medianViews
+        - sampleSize
+        - coverage
+        - quality
+      properties:
+        totalReactions:
+          type: [number, 'null']
+        totalViews:
+          type: [number, 'null']
+        medianReactions:
+          type: [number, 'null']
+        medianViews:
+          type: [number, 'null']
+        sampleSize:
+          type: integer
+          format: int32
+          minimum: 0
+        coverage:
+          type: [number, 'null']
+        quality:
+          type: [string, 'null']
+    OverviewMetric:
+      type: object
+      additionalProperties: false
+      required: [total, median, previousTotal, previousMedian, totalTrend, medianTrend]
+      properties:
+        total:
+          type: [number, 'null']
+        median:
+          type: [number, 'null']
+        previousTotal:
+          type: [number, 'null']
+        previousMedian:
+          type: [number, 'null']
+        totalTrend:
+          type: [number, 'null']
+        medianTrend:
+          type: [number, 'null']
+    OverviewAccount:
+      type: object
+      additionalProperties: false
+      required:
+        - accountId
+        - legacyId
+        - legacyRoute
+        - platform
+        - canonicalExternalId
+        - username
+        - title
+        - url
+        - accessMode
+        - enabled
+        - subscriberCount
+        - subscriberDisplay
+        - subscriberObservedAt
+        - latestPollStartedAt
+        - latestPollCompletedAt
+        - latestPollStatus
+        - latestErrorCode
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        legacyId:
+          type: [integer, 'null']
+          format: int64
+        legacyRoute:
+          type: [string, 'null']
+        platform:
+          type: string
+          enum: [telegram, vk, max, rutube]
+        canonicalExternalId:
+          type: string
+        username:
+          type: [string, 'null']
+        title:
+          type: [string, 'null']
+        url:
+          type: [string, 'null']
+          format: uri
+        accessMode:
+          type: string
+        enabled:
+          type: boolean
+        subscriberCount:
+          type: [integer, 'null']
+          format: int64
+        subscriberDisplay:
+          type: [string, 'null']
+        subscriberObservedAt:
+          type: [string, 'null']
+          format: date-time
+        latestPollStartedAt:
+          type: [string, 'null']
+          format: date-time
+        latestPollCompletedAt:
+          type: [string, 'null']
+          format: date-time
+        latestPollStatus:
+          type: [string, 'null']
+        latestErrorCode:
+          type: [string, 'null']
+    OverviewRow:
+      type: object
+      additionalProperties: false
+      required:
+        - entityId
+        - entityType
+        - legacyId
+        - legacyRoute
+        - institutionId
+        - institutionLegacyId
+        - canonicalName
+        - shortName
+        - platform
+        - period
+        - accounts
+        - accountCount
+        - enabledAccountCount
+        - connectedPlatformCount
+        - subscriberCount
+        - lastCheckedAt
+        - lastErrorCode
+        - statusCode
+        - ratingRank
+        - ratingScore
+        - ratingPeriod
+        - ratingFetchedAt
+        - totalPublicationCount
+        - activityPublicationCount
+        - newPublicationCount
+        - views
+        - reactions
+        - comments
+        - shares
+        - asOf
+      properties:
+        entityId:
+          type: string
+          format: uuid
+        entityType:
+          type: string
+          enum: [channels, institutions]
+        legacyId:
+          type: integer
+          format: int64
+        legacyRoute:
+          type: [string, 'null']
+        institutionId:
+          type: string
+          format: uuid
+        institutionLegacyId:
+          type: integer
+          format: int64
+        canonicalName:
+          type: string
+        shortName:
+          type: [string, 'null']
+        platform:
+          $ref: '#/components/schemas/PlatformValue'
+        period:
+          $ref: '#/components/schemas/PeriodValue'
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverviewAccount'
+        accountCount:
+          type: integer
+          format: int32
+          minimum: 0
+        enabledAccountCount:
+          type: integer
+          format: int32
+          minimum: 0
+        connectedPlatformCount:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 4
+        subscriberCount:
+          type: [integer, 'null']
+          format: int64
+        lastCheckedAt:
+          type: [string, 'null']
+          format: date-time
+        lastErrorCode:
+          type: [string, 'null']
+        statusCode:
+          type: string
+          enum: [no_account, all_accounts_disabled, last_poll_failed, polling, awaiting_first_poll, connected]
+        ratingRank:
+          type: [integer, 'null']
+          format: int32
+          minimum: 1
+        ratingScore:
+          type: [number, 'null']
+        ratingPeriod:
+          type: [string, 'null']
+        ratingFetchedAt:
+          type: [string, 'null']
+          format: date-time
+        totalPublicationCount:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        activityPublicationCount:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        newPublicationCount:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        views:
+          $ref: '#/components/schemas/OverviewMetric'
+        reactions:
+          $ref: '#/components/schemas/OverviewMetric'
+        comments:
+          $ref: '#/components/schemas/OverviewMetric'
+        shares:
+          $ref: '#/components/schemas/OverviewMetric'
+        asOf:
+          type: string
+          format: date-time
+    OverviewPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor, datasetRevision, asOf]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverviewRow'
+        nextCursor:
+          type: [string, 'null']
+        datasetRevision:
+          type: integer
+          format: int64
+          minimum: 0
+        asOf:
+          type: string
+          format: date-time
+    Institution:
+      type: object
+      additionalProperties: false
+      required:
+        - institutionId
+        - legacyId
+        - canonicalName
+        - shortName
+        - platform
+        - period
+        - metrics
+        - datasetRevision
+        - asOf
+      properties:
+        institutionId:
+          type: string
+          format: uuid
+        legacyId:
+          type: integer
+          format: int64
+        canonicalName:
+          type: string
+        shortName:
+          type: [string, 'null']
+        platform:
+          $ref: '#/components/schemas/PlatformValue'
+        period:
+          $ref: '#/components/schemas/PeriodValue'
+        metrics:
+          $ref: '#/components/schemas/Metrics'
+        datasetRevision:
+          type: integer
+          format: int64
+          minimum: 0
+        asOf:
+          type: string
+          format: date-time
+    CounterMetric:
+      type: object
+      additionalProperties: false
+      required: [value, observedAt, quality]
+      properties:
+        value:
+          type: [integer, 'null']
+          format: int64
+        observedAt:
+          type: [string, 'null']
+          format: date-time
+        quality:
+          type: [string, 'null']
+    Publication:
+      type: object
+      additionalProperties: false
+      required:
+        - publicationId
+        - legacyId
+        - legacyType
+        - institutionId
+        - platform
+        - publishedAt
+        - publicationType
+        - deletedAt
+        - views
+        - reactions
+        - comments
+        - shares
+        - quality
+        - intervalUncertain
+        - synthetic
+        - historyCompleteness
+        - datasetRevision
+        - asOf
+      properties:
+        publicationId:
+          type: string
+          format: uuid
+        legacyId:
+          type: integer
+          format: int64
+        legacyType:
+          type: string
+          enum: [posts, platform_posts]
+        institutionId:
+          type: string
+          format: uuid
+        platform:
+          $ref: '#/components/schemas/PlatformValue'
+        publishedAt:
+          type: string
+          format: date-time
+        publicationType:
+          type: string
+        deletedAt:
+          type: [string, 'null']
+          format: date-time
+        views:
+          $ref: '#/components/schemas/CounterMetric'
+        reactions:
+          $ref: '#/components/schemas/CounterMetric'
+        comments:
+          $ref: '#/components/schemas/CounterMetric'
+        shares:
+          $ref: '#/components/schemas/CounterMetric'
+        quality:
+          type: [string, 'null']
+        intervalUncertain:
+          type: boolean
+        synthetic:
+          type: boolean
+        historyCompleteness:
+          type: [string, 'null']
+        datasetRevision:
+          type: integer
+          format: int64
+          minimum: 0
+        asOf:
+          type: string
+          format: date-time
+    ActivityRatingEntity:
+      type: object
+      additionalProperties: false
+      required:
+        - entityId
+        - entityType
+        - legacyId
+        - legacyRoute
+        - institutionId
+        - institutionLegacyId
+        - canonicalName
+        - shortName
+        - username
+        - title
+        - publicationCount
+        - averageReactions
+        - averageViews
+        - totalReactions
+        - totalViews
+        - totalComments
+        - totalShares
+        - totalInteractions
+        - engagementRate
+        - subscriberCount
+      properties:
+        entityId:
+          type: string
+          format: uuid
+        entityType:
+          type: string
+          enum: [channels, institutions]
+        legacyId:
+          type: integer
+          format: int64
+          minimum: 1
+        legacyRoute:
+          type: string
+        institutionId:
+          type: string
+          format: uuid
+        institutionLegacyId:
+          type: [integer, 'null']
+          format: int64
+        canonicalName:
+          type: string
+        shortName:
+          type: [string, 'null']
+        username:
+          type: [string, 'null']
+        title:
+          type: [string, 'null']
+        publicationCount:
+          type: integer
+          format: int32
+          minimum: 0
+        averageReactions:
+          type: [number, 'null']
+        averageViews:
+          type: [number, 'null']
+        totalReactions:
+          type: integer
+          format: int64
+          minimum: 0
+        totalViews:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        totalComments:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        totalShares:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        totalInteractions:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        engagementRate:
+          type: [number, 'null']
+        subscriberCount:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+    ActivityRatingPublication:
+      type: object
+      additionalProperties: false
+      required:
+        - publicationId
+        - legacyId
+        - legacyType
+        - legacyRoute
+        - institutionId
+        - institutionLegacyId
+        - institutionCanonicalName
+        - institutionShortName
+        - accountId
+        - accountLegacyId
+        - accountUsername
+        - accountTitle
+        - externalId
+        - publicUrl
+        - publishedAt
+        - deletedAt
+        - joint
+        - additionalAuthorCount
+        - repost
+        - views
+        - reactions
+        - comments
+        - shares
+        - interactions
+        - subscriberShare
+        - viewShare
+      properties:
+        publicationId:
+          type: string
+          format: uuid
+        legacyId:
+          type: [integer, 'null']
+          format: int64
+        legacyType:
+          type: string
+          enum: [posts, platform_posts]
+        legacyRoute:
+          type: [string, 'null']
+        institutionId:
+          type: string
+          format: uuid
+        institutionLegacyId:
+          type: integer
+          format: int64
+        institutionCanonicalName:
+          type: string
+        institutionShortName:
+          type: [string, 'null']
+        accountId:
+          type: string
+          format: uuid
+        accountLegacyId:
+          type: [integer, 'null']
+          format: int64
+        accountUsername:
+          type: [string, 'null']
+        accountTitle:
+          type: [string, 'null']
+        externalId:
+          type: [string, 'null']
+        publicUrl:
+          type: [string, 'null']
+        publishedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type: [string, 'null']
+          format: date-time
+        joint:
+          type: boolean
+        additionalAuthorCount:
+          type: integer
+          format: int32
+          minimum: 0
+        repost:
+          type: boolean
+        views:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        reactions:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        comments:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        shares:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        interactions:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        subscriberShare:
+          type: [number, 'null']
+        viewShare:
+          type: [number, 'null']
+    Rating:
+      type: object
+      additionalProperties: false
+      required:
+        - platform
+        - period
+        - entityType
+        - publicationLegacyType
+        - channelSort
+        - channelDirection
+        - postSort
+        - postDirection
+        - entities
+        - publications
+        - entityLimit
+        - entitiesTruncated
+        - datasetRevision
+        - asOf
+      properties:
+        platform:
+          type: string
+          enum: [telegram, vk, rutube]
+        period:
+          $ref: '#/components/schemas/PeriodValue'
+        entityType:
+          type: string
+          enum: [channels, institutions]
+        publicationLegacyType:
+          type: string
+          enum: [posts, platform_posts]
+        channelSort:
+          type: string
+        channelDirection:
+          type: string
+          enum: [asc, desc]
+        postSort:
+          type: string
+        postDirection:
+          type: string
+          enum: [asc, desc]
+        entities:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ActivityRatingEntity'
+        publications:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ActivityRatingPublication'
+        entityLimit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 200
+        entitiesTruncated:
+          type: boolean
+        datasetRevision:
+          type: integer
+          format: int64
+          minimum: 0
+        asOf:
+          type: string
+          format: date-time
+    ComparisonPoint:
+      type: object
+      additionalProperties: false
+      required: [hourOffset, value, sampleSize, coverage, quality]
+      properties:
+        hourOffset:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 336
+        value:
+          type: [number, 'null']
+        sampleSize:
+          type: integer
+          format: int32
+          minimum: 0
+        coverage:
+          type: number
+          minimum: 0
+          maximum: 1
+        quality:
+          type: string
+    ComparisonSeries:
+      type: object
+      additionalProperties: false
+      required:
+        - selectionId
+        - selectionType
+        - selectionLegacyId
+        - selectionLabel
+        - institutionId
+        - legacyId
+        - canonicalName
+        - shortName
+        - primaryCohortSize
+        - engagementCohortSize
+        - points
+        - engagementPoints
+      properties:
+        selectionId:
+          type: string
+          format: uuid
+          description: Institution UUID for institution selection, platform-account UUID for channel selection.
+        selectionType:
+          type: string
+          enum: [channels, institutions]
+        selectionLegacyId:
+          type: integer
+          format: int64
+          minimum: 1
+        selectionLabel:
+          type: string
+          minLength: 1
+        institutionId:
+          type: string
+          format: uuid
+        legacyId:
+          type: integer
+          format: int64
+          description: Legacy institution ID that owns this series.
+        canonicalName:
+          type: string
+        shortName:
+          type: [string, 'null']
+        primaryCohortSize:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Publications with a valid requested metric at both primary boundary hours.
+        engagementCohortSize:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Publications with a valid per-publication ratio at both engagement boundary hours.
+        points:
+          type: array
+          maxItems: 337
+          description: Requested metric over its metric-specific fixed cohort.
+          items:
+            $ref: '#/components/schemas/ComparisonPoint'
+        engagementPoints:
+          type: array
+          maxItems: 337
+          description: >-
+            Median per-publication percentages. A null value means no valid earlier ratio was
+            known for that hour; the API does not interpolate or carry future values backward.
+          items:
+            $ref: '#/components/schemas/ComparisonPoint'
+    Comparison:
+      type: object
+      additionalProperties: false
+      required:
+        - cohortId
+        - platform
+        - horizonHours
+        - includePartial
+        - metric
+        - aggregation
+        - selectionType
+        - cohortSampleSize
+        - series
+        - datasetRevision
+        - asOf
+      properties:
+        cohortId:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [telegram, vk, max, rutube]
+        horizonHours:
+          type: integer
+          enum: [24, 48, 72, 168, 336]
+        includePartial:
+          type: boolean
+        metric:
+          type: string
+          enum: [views, reactions, comments, shares]
+        aggregation:
+          type: string
+          enum: [sum, median]
+        selectionType:
+          type: string
+          enum: [channels, institutions]
+        cohortSampleSize:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Size of the generic revision/horizon cohort before per-series metric boundaries.
+        series:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ComparisonSeries'
+        datasetRevision:
+          type: integer
+          format: int64
+          minimum: 1
+        asOf:
+          type: string
+          format: date-time
+    Account:
+      type: object
+      additionalProperties: false
+      required:
+        - accountId
+        - legacyId
+        - legacyType
+        - channelLegacyId
+        - platformAccountLegacyId
+        - institutionId
+        - institutionLegacyId
+        - institutionName
+        - institutionShortName
+        - platform
+        - canonicalExternalId
+        - username
+        - title
+        - url
+        - accessMode
+        - enabled
+        - publicationCount
+        - latestObservedAt
+        - datasetRevision
+        - asOf
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        legacyId:
+          type: integer
+          format: int64
+        legacyType:
+          type: string
+          enum: [channels, platform_accounts]
+        channelLegacyId:
+          type: [integer, 'null']
+          format: int64
+          minimum: 1
+          description: Legacy Telegram channel id when that alias exists for this account.
+        platformAccountLegacyId:
+          type: [integer, 'null']
+          format: int64
+          minimum: 1
+          description: Generic legacy platform-account id when that alias exists.
+        institutionId:
+          type: string
+          format: uuid
+        institutionLegacyId:
+          type: integer
+          format: int64
+        institutionName:
+          type: string
+        institutionShortName:
+          type: [string, 'null']
+        platform:
+          type: string
+          enum: [telegram, vk, max, rutube]
+        canonicalExternalId:
+          type: string
+        username:
+          type: [string, 'null']
+        title:
+          type: [string, 'null']
+        url:
+          type: [string, 'null']
+          format: uri
+        accessMode:
+          type: string
+        enabled:
+          type: boolean
+        publicationCount:
+          type: integer
+          format: int64
+          minimum: 0
+        latestObservedAt:
+          type: [string, 'null']
+          format: date-time
+        datasetRevision:
+          type: integer
+          format: int64
+          minimum: 0
+        asOf:
+          type: string
+          format: date-time
+    AdminCsrf:
+      type: object
+      additionalProperties: false
+      required: [headerName, parameterName, token]
+      properties:
+        headerName:
+          type: string
+          const: X-XSRF-TOKEN
+        parameterName:
+          type: string
+          const: _csrf
+        token:
+          type: string
+          minLength: 1
+    RunStatus:
+      type: string
+      enum: [pending, running, succeeded, partial, failed, skipped, cancelled]
+    AdminJob:
+      type: object
+      additionalProperties: false
+      required:
+        - jobId
+        - kind
+        - platform
+        - scheduledAt
+        - startedAt
+        - completedAt
+        - status
+        - accountCount
+        - errorCount
+        - correlationId
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          const: collection
+        platform:
+          type: string
+          enum: [telegram, vk, max, rutube]
+        scheduledAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+        status:
+          $ref: '#/components/schemas/RunStatus'
+        accountCount:
+          type: integer
+          format: int32
+          minimum: 0
+        errorCount:
+          type: integer
+          format: int32
+          minimum: 0
+        correlationId:
+          type: string
+          format: uuid
+    AdminJobPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AdminJob'
+    AdminAccountResult:
+      type: object
+      additionalProperties: false
+      required:
+        - resultId
+        - platformAccountId
+        - startedAt
+        - completedAt
+        - status
+        - discoveredCount
+        - snapshotCount
+        - sanitizedErrorCode
+      properties:
+        resultId:
+          type: integer
+          format: int64
+          minimum: 1
+        platformAccountId:
+          type: string
+          format: uuid
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+        status:
+          $ref: '#/components/schemas/RunStatus'
+        discoveredCount:
+          type: integer
+          format: int32
+          minimum: 0
+        snapshotCount:
+          type: integer
+          format: int32
+          minimum: 0
+        sanitizedErrorCode:
+          type: [string, 'null']
+    AdminJobDetail:
+      type: object
+      additionalProperties: false
+      required: [job, accountResults, accountResultsTruncated]
+      properties:
+        job:
+          $ref: '#/components/schemas/AdminJob'
+        accountResults:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/AdminAccountResult'
+        accountResultsTruncated:
+          type: boolean
+    AdminSetEnabledRequest:
+      type: object
+      additionalProperties: false
+      required: [enabled, expectedRowVersion]
+      properties:
+        enabled:
+          type: boolean
+        expectedRowVersion:
+          type: integer
+          format: int64
+          minimum: 0
+    AdminPlatformAccountState:
+      type: object
+      additionalProperties: false
+      required: [accountId, platform, enabled, rowVersion, updatedAt]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [telegram, vk, max, rutube]
+        enabled:
+          type: boolean
+        rowVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        updatedAt:
+          type: string
+          format: date-time
+    AdminSetEnabledResponse:
+      type: object
+      additionalProperties: false
+      required: [account, changed, datasetRevision, correlationId, outcome]
+      properties:
+        account:
+          $ref: '#/components/schemas/AdminPlatformAccountState'
+        changed:
+          type: boolean
+        datasetRevision:
+          type: [integer, 'null']
+          format: int64
+          minimum: 1
+          description: New ready configuration revision; null for an idempotent no-op.
+        correlationId:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum: [updated, idempotent]
+    PlatformValue:
+      type: string
+      enum: [all, telegram, vk, max, rutube]
+    PeriodValue:
+      type: string
+      enum: [3h, 1d, 7d, 30d]
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference

@@ -1,0 +1,936 @@
+{
+  "batch_id": "55c54be9-432d-54ff-871c-783395f1fc96",
+  "bridge": {
+    "batch_id": "55c54be9-432d-54ff-871c-783395f1fc96",
+    "dry_run": false,
+    "finished_at": "2026-09-03T15:50:51.989225+00:00",
+    "projection_rebuild": {
+      "comparison": 5224,
+      "dataset_revision_id": 112,
+      "institution_daily_metrics": 64,
+      "institution_monthly_metrics": 56,
+      "institution_period_metrics": 480,
+      "publication_hourly": 2535,
+      "publication_latest": 4
+    },
+    "rows_by_stream": {
+      "app_state": 2,
+      "channels": 1,
+      "institutions": 2,
+      "platform_accounts": 4,
+      "platform_posts": 2,
+      "platform_snapshots": 3,
+      "post_messages": 3,
+      "posts": 1,
+      "reaction_snapshots": 4,
+      "schema_migrations": 15
+    },
+    "rows_read": 37,
+    "rows_written": 146,
+    "schema_version": 15,
+    "source_sha256": "fd29264fb594fddd7e2ee3bca0a72a3b81092b919e5bd10bafd81d7bf286d5a9",
+    "started_at": "2026-09-03T15:50:51.406473+00:00",
+    "warnings": []
+  },
+  "checks": [
+    {
+      "actual": 15,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "eeb15b6da62a2c2ab43078d7a69df0abc8e1e6587fec24f45a39a19d9e2a5d2a"
+      },
+      "expected": 15,
+      "scope": "schema_migrations",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 15,
+        "sha256": "8912601c382fcda221b9c2813c46737406fe8e2f56b2acfad5c822b77875ed5f"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 15,
+        "sha256": "8912601c382fcda221b9c2813c46737406fe8e2f56b2acfad5c822b77875ed5f"
+      },
+      "scope": "schema_migrations",
+      "status": "pass"
+    },
+    {
+      "actual": 2,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "8daf6ca8b9814938e25795523e6577ca2581a029c068bee6a64728c80b299f39"
+      },
+      "expected": 2,
+      "scope": "app_state",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 2,
+        "sha256": "ae6fc8aafbf48978093984a0162dd70258cf4ac938db791f101c7a44974505bc"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 2,
+        "sha256": "ae6fc8aafbf48978093984a0162dd70258cf4ac938db791f101c7a44974505bc"
+      },
+      "scope": "app_state",
+      "status": "pass"
+    },
+    {
+      "actual": 2,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "1900b1feed1ce17d253cd9211a847e42e7b5b0b86962790a39466f20aa31b609"
+      },
+      "expected": 2,
+      "scope": "institutions",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 2,
+        "sha256": "54b5dbbe848b62ecaba2106e7195e89e89a568fc9df1023edf3e53b6620a4007"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 2,
+        "sha256": "54b5dbbe848b62ecaba2106e7195e89e89a568fc9df1023edf3e53b6620a4007"
+      },
+      "scope": "institutions",
+      "status": "pass"
+    },
+    {
+      "actual": 4,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "2c1566240a5144f545be6eccd37366c5148221f8a45cead863da9d7cbcd5db09"
+      },
+      "expected": 4,
+      "scope": "platform_accounts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 4,
+        "sha256": "c69aa087111ec0eb7dfafa19f8c48e70979a75ac92d70a77f5f4d76b9e859619"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 4,
+        "sha256": "c69aa087111ec0eb7dfafa19f8c48e70979a75ac92d70a77f5f4d76b9e859619"
+      },
+      "scope": "platform_accounts",
+      "status": "pass"
+    },
+    {
+      "actual": 1,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "f2d53dfc43aa89dbbcdd96bef0da715fabf92a922a9b37a9ae69a4a0e174805d"
+      },
+      "expected": 1,
+      "scope": "channels",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 1,
+        "sha256": "c874fa03591c0b9696d57a97befd9d6fe56abcc7b9ff86ee7108db7870f5a3c0"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 1,
+        "sha256": "c874fa03591c0b9696d57a97befd9d6fe56abcc7b9ff86ee7108db7870f5a3c0"
+      },
+      "scope": "channels",
+      "status": "pass"
+    },
+    {
+      "actual": 2,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "90136fc86c273ab3b1f07e714474c16b0a182bffd6870733b752b18757b02b06"
+      },
+      "expected": 2,
+      "scope": "platform_posts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 2,
+        "sha256": "3d82cf22b9676a1109d6649a9ce2231cde1a1817dfd7dff1d8965e6f580b6b7f"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 2,
+        "sha256": "3d82cf22b9676a1109d6649a9ce2231cde1a1817dfd7dff1d8965e6f580b6b7f"
+      },
+      "scope": "platform_posts",
+      "status": "pass"
+    },
+    {
+      "actual": 1,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "d6f764136ac1f8828ecf08ff57eab016445cd06250a31e4f131c03264a7dcce1"
+      },
+      "expected": 1,
+      "scope": "posts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 1,
+        "sha256": "c65678cc8417271f66c56cc7962d412cfa227ffa8893b1009e0f409f280539e1"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 1,
+        "sha256": "c65678cc8417271f66c56cc7962d412cfa227ffa8893b1009e0f409f280539e1"
+      },
+      "scope": "posts",
+      "status": "pass"
+    },
+    {
+      "actual": 3,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "914d10ae9eae12e7f47dbfc112d27157d93afcf56203511344f811e6008bc67f"
+      },
+      "expected": 3,
+      "scope": "post_messages",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 3,
+        "sha256": "6ec71ecbd70b8811efc9fbf8db7233bfbe0507a6fb20953e3e39a5a203392b71"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 3,
+        "sha256": "6ec71ecbd70b8811efc9fbf8db7233bfbe0507a6fb20953e3e39a5a203392b71"
+      },
+      "scope": "post_messages",
+      "status": "pass"
+    },
+    {
+      "actual": 3,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "94b3050bd9ebc00af0ca242b9029b06b85c9de3d7788a6567441787e2409c944"
+      },
+      "expected": 3,
+      "scope": "platform_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 3,
+        "sha256": "3e780320a5dd96ef2422976338a6d8d68e53c4ba9fb9fa773e03a47c2b0bacfa"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 3,
+        "sha256": "3e780320a5dd96ef2422976338a6d8d68e53c4ba9fb9fa773e03a47c2b0bacfa"
+      },
+      "scope": "platform_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 4,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "f8fae1f4d098b4193a59ff777c07f923d322e8b1ddeca1661913aa1d6d165029"
+      },
+      "expected": 4,
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 4,
+        "sha256": "60b4beb126e2d12309057b51526dfba309fea6037e5cff7b5e0760e5817839a1"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 4,
+        "sha256": "60b4beb126e2d12309057b51526dfba309fea6037e5cff7b5e0760e5817839a1"
+      },
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 2,
+      "check": "source_rows_missing_since_prior_batch",
+      "critical": true,
+      "details": {
+        "policy": "never delete automatically; operator must explain hard delete"
+      },
+      "expected": 0,
+      "scope": "all",
+      "status": "fail"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_institutions",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_accounts",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_account_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_publications",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_publication_identities",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_official_ratings",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "default_snapshot_partition_rows",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "default_reaction_partition_rows",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "unvalidated_constraints",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "comments": 0,
+        "comments_null": 2,
+        "comments_zero": 1,
+        "max_observed_at": "2026-08-01T11:55:00+00:00",
+        "min_observed_at": "2026-07-29T13:00:00+00:00",
+        "reactions": 51,
+        "reactions_null": 1,
+        "reactions_zero": 0,
+        "rows": 3,
+        "shares": 0,
+        "shares_null": 0,
+        "shares_zero": 3,
+        "synthetic": 0,
+        "uncertain": 0,
+        "views": 1005,
+        "views_null": 0,
+        "views_zero": 1
+      },
+      "check": "snapshot_metrics",
+      "critical": true,
+      "details": {
+        "null_and_zero_are_compared_separately": true
+      },
+      "expected": {
+        "comments": 0,
+        "comments_null": 2,
+        "comments_zero": 1,
+        "max_observed_at": "2026-08-01T11:55:00+00:00",
+        "min_observed_at": "2026-07-29T13:00:00+00:00",
+        "reactions": 51,
+        "reactions_null": 1,
+        "reactions_zero": 0,
+        "rows": 3,
+        "shares": 0,
+        "shares_null": 0,
+        "shares_zero": 3,
+        "synthetic": 0,
+        "uncertain": 0,
+        "views": 1005,
+        "views_null": 0,
+        "views_zero": 1
+      },
+      "scope": "platform_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "comments": 6,
+        "comments_null": 0,
+        "comments_zero": 1,
+        "max_observed_at": "2026-07-30T15:00:00+00:00",
+        "min_observed_at": "2026-07-30T12:00:00+00:00",
+        "reactions": 37,
+        "reactions_null": 0,
+        "reactions_zero": 1,
+        "rows": 4,
+        "shares": null,
+        "shares_null": 4,
+        "shares_zero": 0,
+        "synthetic": 1,
+        "uncertain": 0,
+        "views": 330,
+        "views_null": 0,
+        "views_zero": 1
+      },
+      "check": "snapshot_metrics",
+      "critical": true,
+      "details": {
+        "null_and_zero_are_compared_separately": true
+      },
+      "expected": {
+        "comments": 6,
+        "comments_null": 0,
+        "comments_zero": 1,
+        "max_observed_at": "2026-07-30T15:00:00+00:00",
+        "min_observed_at": "2026-07-30T12:00:00+00:00",
+        "reactions": 37,
+        "reactions_null": 0,
+        "reactions_zero": 1,
+        "rows": 4,
+        "shares": null,
+        "shares_null": 4,
+        "shares_zero": 0,
+        "synthetic": 1,
+        "uncertain": 0,
+        "views": 330,
+        "views_null": 0,
+        "views_zero": 1
+      },
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "breakdown_rows": 6,
+        "breakdown_sum": 37,
+        "breakdown_total_mismatch": 0
+      },
+      "check": "reaction_breakdown",
+      "critical": true,
+      "expected": {
+        "breakdown_rows": 6,
+        "breakdown_sum": 37,
+        "breakdown_total_mismatch": 0
+      },
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "reaction_breakdown_parse",
+      "critical": true,
+      "expected": 0,
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "album_posts": 1,
+        "albums": 1,
+        "ambiguous_albums": 1,
+        "deleted": 1,
+        "forced_incomplete": 0,
+        "incomplete": 0,
+        "reposts": 1,
+        "rows": 1
+      },
+      "check": "publication_semantics",
+      "critical": true,
+      "expected": {
+        "album_posts": 1,
+        "albums": 1,
+        "ambiguous_albums": 1,
+        "deleted": 1,
+        "forced_incomplete": 0,
+        "incomplete": 0,
+        "reposts": 1,
+        "rows": 1
+      },
+      "scope": "posts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "deleted": 1,
+        "forced_incomplete": 0,
+        "incomplete": 1,
+        "reposts": 1,
+        "rows": 2
+      },
+      "check": "publication_semantics",
+      "critical": true,
+      "expected": {
+        "deleted": 1,
+        "forced_incomplete": 0,
+        "incomplete": 1,
+        "reposts": 1,
+        "rows": 2
+      },
+      "scope": "platform_posts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 3,
+        "subscribers": 32345,
+        "subscribers_null": 0,
+        "subscribers_zero": 1
+      },
+      "check": "account_snapshot_metrics",
+      "critical": true,
+      "expected": {
+        "rows": 3,
+        "subscribers": 32345,
+        "subscribers_null": 0,
+        "subscribers_zero": 1
+      },
+      "scope": "accounts",
+      "status": "pass"
+    },
+    {
+      "actual": 6,
+      "check": "official_rating_count",
+      "critical": true,
+      "expected": 6,
+      "scope": "all",
+      "status": "pass"
+    }
+  ],
+  "gate": {
+    "critical_mismatches": 1,
+    "status": "fail"
+  },
+  "generated_at": "2026-09-03T15:50:51.987752+00:00",
+  "mismatches": [
+    {
+      "actual": 2,
+      "check": "source_rows_missing_since_prior_batch",
+      "critical": true,
+      "details": {
+        "policy": "never delete automatically; operator must explain hard delete"
+      },
+      "expected": 0,
+      "scope": "all",
+      "status": "fail"
+    }
+  ],
+  "report_type": "post-import-reconciliation",
+  "report_version": 1,
+  "source": {
+    "captured_at": "2026-09-03T15:50:51.406185+00:00",
+    "foreign_key_violations": 0,
+    "quick_check": "ok",
+    "schema_version": 15,
+    "source_path": "/private/tmp/mranked-golden-deletion.db",
+    "source_sha256": "fd29264fb594fddd7e2ee3bca0a72a3b81092b919e5bd10bafd81d7bf286d5a9",
+    "source_size_bytes": 135168,
+    "tables": [
+      {
+        "canonical_hash": "eeb15b6da62a2c2ab43078d7a69df0abc8e1e6587fec24f45a39a19d9e2a5d2a",
+        "columns": [
+          "version",
+          "applied_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-08-01T12:00:00+00:00",
+        "name": "schema_migrations",
+        "row_count": 15
+      },
+      {
+        "canonical_hash": "8daf6ca8b9814938e25795523e6577ca2581a029c068bee6a64728c80b299f39",
+        "columns": [
+          "key",
+          "value"
+        ],
+        "max_timestamp": null,
+        "min_timestamp": null,
+        "name": "app_state",
+        "row_count": 2
+      },
+      {
+        "canonical_hash": "1900b1feed1ce17d253cd9211a847e42e7b5b0b86962790a39466f20aa31b609",
+        "columns": [
+          "id",
+          "name",
+          "short_name",
+          "created_at",
+          "m_rating_social_rank",
+          "m_rating_social_score",
+          "m_rating_tg_rank",
+          "m_rating_tg_score",
+          "m_rating_vk_rank",
+          "m_rating_vk_score",
+          "m_rating_max_rank",
+          "m_rating_max_score",
+          "m_rating_rutube_rank",
+          "m_rating_rutube_score",
+          "m_rating_period",
+          "m_rating_measured_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-08-01T12:00:00+00:00",
+        "name": "institutions",
+        "row_count": 2
+      },
+      {
+        "canonical_hash": "2c1566240a5144f545be6eccd37366c5148221f8a45cead863da9d7cbcd5db09",
+        "columns": [
+          "id",
+          "institution_id",
+          "platform",
+          "external_key",
+          "native_id",
+          "username",
+          "title",
+          "url",
+          "enabled",
+          "access_mode",
+          "data_quality",
+          "subscriber_count",
+          "subscriber_count_display",
+          "subscriber_measured_at",
+          "last_checked_at",
+          "last_error",
+          "added_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-08-01T12:00:00+00:00",
+        "name": "platform_accounts",
+        "row_count": 4
+      },
+      {
+        "canonical_hash": "f2d53dfc43aa89dbbcdd96bef0da715fabf92a922a9b37a9ae69a4a0e174805d",
+        "columns": [
+          "id",
+          "telegram_id",
+          "username",
+          "title",
+          "enabled",
+          "added_at",
+          "last_seen_message_id",
+          "last_checked_at",
+          "last_error",
+          "subscriber_count",
+          "subscriber_count_display",
+          "subscriber_measured_at",
+          "m_rating_tg_rank",
+          "m_rating_tg_score",
+          "m_rating_period",
+          "m_rating_measured_at",
+          "institution_id",
+          "platform_account_id"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-08-01T12:00:00+00:00",
+        "name": "channels",
+        "row_count": 1
+      },
+      {
+        "canonical_hash": "90136fc86c273ab3b1f07e714474c16b0a182bffd6870733b752b18757b02b06",
+        "columns": [
+          "id",
+          "platform_account_id",
+          "external_id",
+          "published_at",
+          "discovered_at",
+          "post_type",
+          "url",
+          "deleted_at",
+          "missing_check_count",
+          "missing_last_checked_at",
+          "missing_reason",
+          "raw_json",
+          "history_complete",
+          "history_forced_incomplete",
+          "source_external_id",
+          "is_joint",
+          "additional_author_count",
+          "is_repost",
+          "created_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-07-29T12:00:00+00:00",
+        "name": "platform_posts",
+        "row_count": 2
+      },
+      {
+        "canonical_hash": "d6f764136ac1f8828ecf08ff57eab016445cd06250a31e4f131c03264a7dcce1",
+        "columns": [
+          "id",
+          "channel_id",
+          "logical_key",
+          "telegram_message_id",
+          "telegram_grouped_id",
+          "published_at",
+          "discovered_at",
+          "first_observation_age_seconds",
+          "history_complete",
+          "history_forced_incomplete",
+          "baseline_from_publication",
+          "post_type",
+          "ambiguous_album_reactions",
+          "is_repost",
+          "created_at",
+          "deleted_at",
+          "missing_check_count",
+          "missing_last_checked_at",
+          "missing_reason"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-07-30T12:00:00+00:00",
+        "name": "posts",
+        "row_count": 1
+      },
+      {
+        "canonical_hash": "914d10ae9eae12e7f47dbfc112d27157d93afcf56203511344f811e6008bc67f",
+        "columns": [
+          "post_id",
+          "telegram_message_id"
+        ],
+        "max_timestamp": null,
+        "min_timestamp": null,
+        "name": "post_messages",
+        "row_count": 3
+      },
+      {
+        "canonical_hash": "94b3050bd9ebc00af0ca242b9029b06b85c9de3d7788a6567441787e2409c944",
+        "columns": [
+          "id",
+          "platform_post_id",
+          "measured_at",
+          "measurement_bucket",
+          "age_seconds",
+          "views_count",
+          "reactions_count",
+          "comments_count",
+          "shares_count",
+          "raw_json",
+          "created_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-07-29T13:00:00+00:00",
+        "name": "platform_snapshots",
+        "row_count": 3
+      },
+      {
+        "canonical_hash": "f8fae1f4d098b4193a59ff777c07f923d322e8b1ddeca1661913aa1d6d165029",
+        "columns": [
+          "id",
+          "post_id",
+          "measured_at",
+          "measurement_bucket",
+          "age_seconds",
+          "total_reactions",
+          "reactions_json",
+          "raw_state_json",
+          "delta_total",
+          "delta_by_reaction_json",
+          "delta_seconds",
+          "rate_per_hour",
+          "interval_uncertain",
+          "spike",
+          "comments_count",
+          "delta_comments",
+          "views_count",
+          "delta_views",
+          "synthetic",
+          "created_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-07-30T12:00:00+00:00",
+        "name": "reaction_snapshots",
+        "row_count": 4
+      }
+    ],
+    "totals": {
+      "account_metric_snapshot.rows": 3,
+      "account_metric_snapshot.subscribers": 32345,
+      "account_metric_snapshot.subscribers_null": 0,
+      "account_metric_snapshot.subscribers_zero": 1,
+      "app_state.rows": 2,
+      "channels.rows": 1,
+      "institutions.rows": 2,
+      "official_rating_observation.rows": 6,
+      "platform_accounts.rows": 4,
+      "platform_posts.additional_authors": 2,
+      "platform_posts.deleted": 1,
+      "platform_posts.distinct_natural_keys": 2,
+      "platform_posts.forced_incomplete": 0,
+      "platform_posts.incomplete": 1,
+      "platform_posts.joint_posts": 1,
+      "platform_posts.reposts": 1,
+      "platform_posts.rows": 2,
+      "platform_snapshots.comments": 0,
+      "platform_snapshots.comments_null": 2,
+      "platform_snapshots.comments_zero": 1,
+      "platform_snapshots.max_observed_at": "2026-08-01T11:55:00+00:00",
+      "platform_snapshots.min_observed_at": "2026-07-29T13:00:00+00:00",
+      "platform_snapshots.reactions": 51,
+      "platform_snapshots.reactions_null": 1,
+      "platform_snapshots.reactions_zero": 0,
+      "platform_snapshots.rows": 3,
+      "platform_snapshots.shares": 0,
+      "platform_snapshots.shares_null": 0,
+      "platform_snapshots.shares_zero": 3,
+      "platform_snapshots.synthetic": 0,
+      "platform_snapshots.uncertain": 0,
+      "platform_snapshots.views": 1005,
+      "platform_snapshots.views_null": 0,
+      "platform_snapshots.views_zero": 1,
+      "post_messages.distinct_natural_keys": 3,
+      "post_messages.rows": 3,
+      "posts.album_posts": 1,
+      "posts.albums": 1,
+      "posts.ambiguous_albums": 1,
+      "posts.deleted": 1,
+      "posts.distinct_natural_keys": 1,
+      "posts.forced_incomplete": 0,
+      "posts.incomplete": 0,
+      "posts.reposts": 1,
+      "posts.rows": 1,
+      "reaction_snapshots.breakdown_invalid": 0,
+      "reaction_snapshots.breakdown_rows": 6,
+      "reaction_snapshots.breakdown_sum": 37,
+      "reaction_snapshots.breakdown_total_mismatch": 0,
+      "reaction_snapshots.comments": 6,
+      "reaction_snapshots.comments_null": 0,
+      "reaction_snapshots.comments_zero": 1,
+      "reaction_snapshots.max_observed_at": "2026-07-30T15:00:00+00:00",
+      "reaction_snapshots.min_observed_at": "2026-07-30T12:00:00+00:00",
+      "reaction_snapshots.negative_comment_transitions": 1,
+      "reaction_snapshots.negative_reaction_transitions": 1,
+      "reaction_snapshots.negative_view_transitions": 1,
+      "reaction_snapshots.reactions": 37,
+      "reaction_snapshots.reactions_null": 0,
+      "reaction_snapshots.reactions_zero": 1,
+      "reaction_snapshots.rows": 4,
+      "reaction_snapshots.shares_null": 4,
+      "reaction_snapshots.shares_zero": 0,
+      "reaction_snapshots.synthetic": 1,
+      "reaction_snapshots.uncertain": 0,
+      "reaction_snapshots.views": 330,
+      "reaction_snapshots.views_null": 0,
+      "reaction_snapshots.views_zero": 1,
+      "schema_migrations.rows": 15
+    }
+  }
+}

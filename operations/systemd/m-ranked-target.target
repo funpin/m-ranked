@@ -1,0 +1,15 @@
+[Unit]
+Description=M-Ranked target runtime after writer cutover
+Documentation=file:/opt/m-ranked/current/operations/runbooks/CUTOVER.md
+Requires=m-ranked-shadow.target
+Wants=m-ranked-target-projection-publisher.service
+Wants=m-ranked-target-collector@telegram.service
+Wants=m-ranked-target-collector@vk.service
+Wants=m-ranked-target-collector@max.service
+Wants=m-ranked-target-collector@rutube.service
+Wants=m-ranked-target-maintenance.timer
+After=m-ranked-shadow.target network-online.target
+After=m-ranked-target-projection-publisher.service
+
+[Install]
+WantedBy=multi-user.target

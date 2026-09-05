@@ -6,8 +6,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .analytics import age_seconds, history_is_complete
+from .clock import SystemUtcClock, UtcClock, iso_utc
 from .config import Settings
-from .database import Database, iso
+from .ports import PlatformObservationRepository
 from .public_web import snapshot_interval_minutes, snapshot_is_due
 from .rutube import RutubeClient
 
@@ -16,11 +17,13 @@ logger = logging.getLogger(__name__)
 
 class RutubeCollector:
     def __init__(
-        self, settings: Settings, db: Database,
+        self, settings: Settings, db: PlatformObservationRepository,
         client: RutubeClient | None = None,
+        clock: UtcClock | None = None,
     ):
         self.settings = settings
         self.db = db
+        self.clock = clock or SystemUtcClock()
         self.client = client or RutubeClient(settings.rutube_api_base)
         self._request_semaphore: asyncio.Semaphore | None = None
 
@@ -28,7 +31,7 @@ class RutubeCollector:
         await self.client.close()
 
     async def poll_cycle(self) -> None:
-        started = datetime.now(timezone.utc)
+        started = self.clock.now()
         self._cycle_started_at = started
         if not snapshot_is_due(
             self.db.get_state("rutube_poll_last_completed_at"), started,
@@ -38,7 +41,7 @@ class RutubeCollector:
             return
         accounts = self.db.list_platform_accounts(platform="rutube", enabled_only=True)
         errors = 0
-        self.db.set_state("rutube_poll_last_started_at", iso(started))
+        self.db.set_state("rutube_poll_last_started_at", iso_utc(started))
         self._request_semaphore = asyncio.Semaphore(
             max(1, int(self.settings.rutube_request_concurrency)),
         )
@@ -53,14 +56,14 @@ class RutubeCollector:
                     return 0
                 except Exception as exc:
                     self.db.finish_platform_account_check(
-                        int(account["id"]), datetime.now(timezone.utc), str(exc),
+                        int(account["id"]), self.clock.now(), str(exc),
                     )
                     logger.exception("RUTUBE account %s polling failed", account["external_key"])
                     return 1
 
         errors = sum(await asyncio.gather(*(poll_account(row) for row in accounts)))
-        completed = datetime.now(timezone.utc)
-        self.db.set_state("rutube_poll_last_completed_at", iso(completed))
+        completed = self.clock.now()
+        self.db.set_state("rutube_poll_last_completed_at", iso_utc(completed))
         self.db.set_state(
             "rutube_poll_last_duration_seconds", f"{(completed - started).total_seconds():.3f}",
         )
@@ -68,7 +71,7 @@ class RutubeCollector:
         self.db.set_state("rutube_poll_last_account_count", str(len(accounts)))
 
     async def _poll_account(self, account: Any) -> None:
-        measured_at = datetime.now(timezone.utc)
+        measured_at = self.clock.now()
         scheduled_at = getattr(self, "_cycle_started_at", measured_at)
         native_id = (
             int(account["native_id"])
@@ -95,25 +98,24 @@ class RutubeCollector:
         )
         cutoff = measured_at - timedelta(hours=self.settings.track_post_for_hours)
         due: list[tuple[Any, int, int]] = []
-        with self.db.connect() as conn:
+        with self.db.transaction() as transaction:
             for video in videos:
                 if video.published_at < cutoff:
                     continue
                 first_age = age_seconds(video.published_at, measured_at)
-                post_id = self.db.upsert_platform_post(
+                post_id = transaction.upsert_platform_post(
                     int(account["id"]), video.id, video.published_at,
                     measured_at, "video", video.url, video.raw,
                     history_complete=history_is_complete(
                         first_age, self.settings.complete_history_max_first_age_minutes,
                     ),
-                    _conn=conn,
                 )
                 interval = snapshot_interval_minutes(
                     first_age, self.settings,
                     platform="rutube",
                 )
                 last_measured_at, last_bucket = (
-                    self.db.latest_platform_snapshot_timing(post_id, _conn=conn)
+                    transaction.latest_platform_snapshot_timing(post_id)
                 )
                 if not snapshot_is_due(
                     last_measured_at, scheduled_at, interval,
@@ -133,14 +135,14 @@ class RutubeCollector:
             *(metrics(video.id) for video, _, _ in due),
         )
         inserted = 0
-        with self.db.connect() as conn:
+        with self.db.transaction() as transaction:
             for (video, post_id, interval), engagement in zip(due, measurements):
-                if self.db.insert_platform_snapshot(
+                if transaction.insert_platform_snapshot(
                     post_id, measured_at, age_seconds(video.published_at, measured_at), interval,
                     views_count=video.views, reactions_count=engagement.likes,
                     comments_count=engagement.comments, shares_count=None,
                     raw={"hits": video.views, **engagement.raw},
-                    bucket_at=scheduled_at, _conn=conn,
+                    bucket_at=scheduled_at,
                 ):
                     inserted += 1
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)

@@ -1,0 +1,124 @@
+- link "Перейти к содержимому":
+  - /url: "#main-content"
+- banner:
+  - link "m-ranked — обзор":
+    - /url: /
+    - strong: m-ranked
+  - navigation "Основная навигация":
+    - link "Обзор":
+      - /url: /
+    - link "Рейтинг":
+      - /url: /rating
+    - link "Сравнение":
+      - /url: /compare
+    - link "Экспорт CSV":
+      - /url: /export/snapshots.csv
+    - link "Управление":
+      - /url: /manage
+  - button "Включить светлую тему":
+    - generic: ☾
+    - generic: Тёмная
+- main:
+  - heading "Рейтинг каналов и публикаций" [level=1]
+  - paragraph: Рейтинг активности вузов по последней согласованной проекции за выбранный период.
+  - generic: период Сутки
+  - form "Настройка рейтинга":
+    - generic: Период
+    - combobox "Период":
+      - option "3 часа"
+      - option "Сутки" [selected]
+      - option "7 дней"
+      - option "30 дней"
+    - generic: Площадка
+    - combobox "Площадка":
+      - option "Общий"
+      - option "TG" [selected]
+      - option "ВК"
+      - option "MAX"
+      - option "RUTUBE"
+    - generic: Показатель
+    - combobox "Показатель":
+      - option "Средние реакции" [selected]
+      - option "Реакции всего"
+      - option "Просмотры"
+      - option "Покрытие"
+      - option "Размер выборки"
+    - button "Применить"
+  - paragraph: Версионированная формула
+  - heading "M‑Рейтинг" [level=2]
+  - generic: "ревизия #9003001"
+  - table "Результаты M‑Рейтинга по опубликованной версии формулы":
+    - caption: Результаты M‑Рейтинга по опубликованной версии формулы
+    - rowgroup:
+      - row "Место Вуз Балл Формула Качество":
+        - columnheader "Место"
+        - columnheader "Вуз"
+        - columnheader "Балл"
+        - columnheader "Формула"
+        - columnheader "Качество"
+    - rowgroup:
+      - row "1 Альфа Альфа Институт 87,5 m-ranked-rehearsal · v1 exact":
+        - cell "1"
+        - cell "Альфа Альфа Институт":
+          - link "Альфа":
+            - /url: /institutions/910001?platform=telegram&period=1d
+          - generic: Альфа Институт
+        - cell "87,5":
+          - strong: 87,5
+        - cell "m-ranked-rehearsal · v1"
+        - cell "exact"
+      - row "2 Бета Бета Академия 72,3 m-ranked-rehearsal · v1 exact":
+        - cell "2"
+        - cell "Бета Бета Академия":
+          - link "Бета":
+            - /url: /institutions/910002?platform=telegram&period=1d
+          - generic: Бета Академия
+        - cell "72,3":
+          - strong: 72,3
+        - cell "m-ranked-rehearsal · v1"
+        - cell "exact"
+  - complementary: Таблица ниже ранжирует только наблюдаемую активность по выбранному показателю и не выдаёт её за официальный M‑Рейтинг.
+  - paragraph: Вузы
+  - heading "Рейтинг активности" [level=2]
+  - generic: "ревизия #9003001"
+  - table "Вузы по выбранному показателю активности":
+    - caption: Вузы по выбранному показателю активности
+    - rowgroup:
+      - row "# Вуз Медиана реакций Реакции Просмотры Выборка Покрытие":
+        - columnheader "#"
+        - columnheader "Вуз"
+        - columnheader "Медиана реакций"
+        - columnheader "Реакции"
+        - columnheader "Просмотры"
+        - columnheader "Выборка"
+        - columnheader "Покрытие"
+    - rowgroup:
+      - row "1 Альфа Альфа Институт — 0 0 0 0%":
+        - cell "1"
+        - cell "Альфа Альфа Институт":
+          - link "Альфа":
+            - /url: /institutions/910001?platform=telegram&period=1d
+          - generic: Альфа Институт
+        - cell "—":
+          - strong: —
+        - cell "0"
+        - cell "0"
+        - cell "0"
+        - cell "0%"
+      - row "2 Бета Бета Академия — 0 0 0 0%":
+        - cell "2"
+        - cell "Бета Бета Академия":
+          - link "Бета":
+            - /url: /institutions/910002?platform=telegram&period=1d
+          - generic: Бета Академия
+        - cell "—":
+          - strong: —
+        - cell "0"
+        - cell "0"
+        - cell "0"
+        - cell "0%"
+  - paragraph: Публикации
+  - heading "Рейтинг публикаций" [level=2]
+  - paragraph: Публикационный рейтинг ожидает отдельный Spring API endpoint.
+  - paragraph: Frontend не обращается к SQLite и не восстанавливает список из агрегатов.
+- alert

@@ -1,0 +1,54 @@
+---
+title: M-Ranked — MAX collection sequence
+---
+sequenceDiagram
+    autonumber
+    participant S as Scheduler
+    participant DB as PostgreSQL
+    participant M as MAX adapter
+    participant MAX as MAX User API
+    participant P as Canonical pipeline
+    participant R as Redis
+
+    S->>R: Acquire max partition lease
+    S->>DB: Start collection_run and load enabled MAX accounts
+    loop For each account within controlled concurrency
+        S->>M: collect(account, persistent session reference)
+        M->>M: Ensure authorized session&#59; session file mode 0600
+        alt Native chat ID is known
+            M->>MAX: get_chat(chatId)
+        else First resolution
+            M->>MAX: join_channel(canonical URL)
+        end
+        MAX-->>M: Channel identity, title and participant count
+        M->>MAX: fetch_history(backward up to 100)
+        MAX-->>M: Recent messages and view statistics
+        M->>MAX: get_reactions(chatId, messageIds)
+        MAX-->>M: Reaction totals and breakdown
+        M->>DB: Load bounded circular tracked page + refresh cursor
+        M->>M: Select due rows absent from discovery, capped independently
+        opt Due historical IDs exist
+            M->>MAX: get_messages(chatId, IDs)
+            MAX-->>M: Existing messages
+            M->>MAX: get_reactions(chatId, returned IDs)
+            MAX-->>M: Reaction totals and breakdown
+        end
+        M->>P: Channel, messages, counters and missing probes
+        P->>P: Normalize message type, repost, views and reactions
+        P->>P: Keep unsupported comments/shares as NULL, never zero
+        P->>P: Confirm only repeated omissions from successful exact get_messages
+        P->>DB: Transactional metadata, snapshots, probes and refresh cursor
+        DB-->>P: Commit with dataset revision
+        P->>R: Publish revision.changed after commit
+        P->>DB: Complete account result
+        opt Session/network exception
+            M->>M: Close runtime and mark disconnected
+            M->>DB: Store sanitized failure&#59; reconnect next cycle
+        end
+    end
+    S->>DB: Complete collection_run
+    S->>R: Release/expire lease
+
+    Note over M,MAX: MAX uses a user session, not a stable public server API&#59;<br/>credentials/session are secrets and never enter raw payload or logs.
+    Note over P,DB: Platform capability is versioned because fields exposed by MAX may change.
+    Note over M,DB: History omission and auth/rate/transport failures never increment missing.

@@ -1,0 +1,47 @@
+[Unit]
+Description=M-Ranked encrypted %i base backup from DR repository host
+Documentation=file:/opt/m-ranked/current/operations/runbooks/BACKUP_RESTORE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-backup
+Group=m-ranked-backup-readers
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/backup.env
+LoadCredential=pgbackrest.conf:/etc/m-ranked/credentials/pgbackrest-repository.conf
+Environment=PGBACKREST_CONFIG=%d/pgbackrest.conf
+Environment=TZ=UTC
+ExecStart=/opt/m-ranked/current/operations/scripts/backup.sh --tier %i
+TimeoutStartSec=6h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=-/var/spool/m-ranked/pgbackrest -/var/lib/m-ranked/backup-reports -/srv/m-ranked/pgbackrest
+RuntimeDirectory=m-ranked-backup
+RuntimeDirectoryMode=0700
+UMask=0077
+LimitNOFILE=32768
+TasksMax=128

@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from app.collector import group_logical_posts, is_channel_repost, normalize_channel_ref
 
 
@@ -21,6 +23,11 @@ def test_album_grouping_and_service_message_exclusion():
     album = next(post for post in posts if post.grouped_id == 777)
     assert album.message_ids == (10, 11)
     assert album.post_type == "album"
+
+
+def test_grouping_rejects_noncanonical_telegram_group_identity():
+    with pytest.raises(ValueError, match="canonical positive integer"):
+        group_logical_posts([message(10, 0)])
 
 
 def test_channel_reference_normalization():

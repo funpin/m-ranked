@@ -1,0 +1,29 @@
+[global]
+archive-async=y
+archive-timeout=900
+log-level-console=info
+log-level-file=off
+process-max=2
+spool-path=/var/spool/m-ranked/pgbackrest
+start-fast=y
+
+# PostgreSQL hosts use this file only for archive-push and remote backup
+# protocol calls. The backup command runs on the DR repository host with
+# pgbackrest-repository.conf; pgBackRest rejects backup on a remote-repo client.
+# Keep the remote config paths identical on the DR host.
+repo1-host=m-ranked-dr.internal
+repo1-host-user=m-ranked-backup
+repo1-host-config=/etc/m-ranked/credentials/pgbackrest-repository.conf
+
+repo2-host=m-ranked-dr.internal
+repo2-host-user=m-ranked-backup
+repo2-host-config=/etc/m-ranked/credentials/pgbackrest-repository.conf
+
+repo3-host=m-ranked-dr.internal
+repo3-host-user=m-ranked-backup
+repo3-host-config=/etc/m-ranked/credentials/pgbackrest-repository.conf
+
+[m-ranked]
+pg1-path=/var/lib/postgresql/18/main
+pg1-port=5432
+pg1-socket-path=/var/run/postgresql

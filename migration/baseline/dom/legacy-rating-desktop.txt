@@ -1,0 +1,112 @@
+- navigation "Основная навигация":
+  - link "Логотип m-ranked m-ranked":
+    - /url: /?platform=telegram
+    - img "Логотип m-ranked"
+    - strong: m-ranked
+  - link "Обзор":
+    - /url: /?platform=telegram
+  - link "Рейтинг":
+    - /url: /rating?platform=telegram
+  - link "Сравнение":
+    - /url: /compare?platform=telegram
+  - link "Экспорт CSV":
+    - /url: /export/snapshots.csv?platform=telegram
+  - link "Управление":
+    - /url: /manage?platform=telegram
+  - button "Включить светлую тему":
+    - generic: ☾
+    - generic: Тёмная
+- main:
+  - heading "Рейтинг каналов и публикаций" [level=1]
+  - paragraph: Для каждой публикации берётся её последний замер за выбранный период.
+  - text: Период ⓘ
+  - combobox "Период ⓘ":
+    - option "3 часа"
+    - option "Сутки"
+    - option "Неделя"
+    - option "Последний месяц" [selected]
+  - button "Применить"
+  - heading "Каналы" [level=2]
+  - paragraph: Типичная и общая активность каналов в сравнении с размером аудитории.
+  - generic: "Период: 30 дней"
+  - generic: "По умолчанию: выше показаны каналы с большей долей среднего числа реакций от текущего числа подписчиков."
+  - table:
+    - rowgroup:
+      - row "# Канал Среднее реакций ⓘ Реакций всего ⓘ Реакции / подписчики ⓘ ↓ Подписчики ⓘ":
+        - columnheader "#"
+        - columnheader "Канал"
+        - columnheader "Среднее реакций ⓘ":
+          - link "Среднее реакций ⓘ":
+            - /url: "?platform=telegram&period=30d&channel_sort=average&channel_direction=desc&post_sort=view_share&post_direction=desc"
+            - text: Среднее реакций
+            - generic: ⓘ
+        - columnheader "Реакций всего ⓘ":
+          - link "Реакций всего ⓘ":
+            - /url: "?platform=telegram&period=30d&channel_sort=total&channel_direction=desc&post_sort=view_share&post_direction=desc"
+            - text: Реакций всего
+            - generic: ⓘ
+        - columnheader "Реакции / подписчики ⓘ ↓":
+          - link "Реакции / подписчики ⓘ ↓":
+            - /url: "?platform=telegram&period=30d&channel_sort=engagement&channel_direction=asc&post_sort=view_share&post_direction=desc"
+            - text: Реакции / подписчики
+            - generic: ⓘ
+            - generic: ↓
+        - columnheader "Подписчики ⓘ":
+          - link "Подписчики ⓘ":
+            - /url: "?platform=telegram&period=30d&channel_sort=subscribers&channel_direction=desc&post_sort=view_share&post_direction=desc"
+            - text: Подписчики
+            - generic: ⓘ
+    - rowgroup:
+      - row "1 @itmoru @itmoru · 0 публикаций 0.0 0 — —":
+        - cell "1"
+        - cell "@itmoru @itmoru · 0 публикаций":
+          - link "@itmoru":
+            - /url: /channels/36
+          - generic: "@itmoru · 0 публикаций"
+        - cell "0.0"
+        - cell "0"
+        - cell "—"
+        - cell "—"
+      - row "2 @rtumirea_official @rtumirea_official · 0 публикаций 0.0 0 — —":
+        - cell "2"
+        - cell "@rtumirea_official @rtumirea_official · 0 публикаций":
+          - link "@rtumirea_official":
+            - /url: /channels/35
+          - generic: "@rtumirea_official · 0 публикаций"
+        - cell "0.0"
+        - cell "0"
+        - cell "—"
+        - cell "—"
+  - heading "Публикации" [level=2]
+  - paragraph: Сравнение отдельных постов по реакциям, просмотрам и их соотношению.
+  - generic: "Период: 30 дней"
+  - generic: Название вуза открывает внутреннюю статистику. Ссылка «Открыть пост в Telegram ↗» ведёт на оригинал в новой вкладке.
+  - table:
+    - rowgroup:
+      - row "# Публикация Реакции ⓘ Просмотры ⓘ Реакции / подписчики ⓘ Реакции / просмотры ⓘ ↓":
+        - columnheader "#"
+        - columnheader "Публикация"
+        - columnheader "Реакции ⓘ":
+          - link "Реакции ⓘ":
+            - /url: "?platform=telegram&period=30d&channel_sort=engagement&channel_direction=desc&post_sort=reactions&post_direction=desc"
+            - text: Реакции
+            - generic: ⓘ
+        - columnheader "Просмотры ⓘ":
+          - link "Просмотры ⓘ":
+            - /url: "?platform=telegram&period=30d&channel_sort=engagement&channel_direction=desc&post_sort=views&post_direction=desc"
+            - text: Просмотры
+            - generic: ⓘ
+        - columnheader "Реакции / подписчики ⓘ":
+          - link "Реакции / подписчики ⓘ":
+            - /url: "?platform=telegram&period=30d&channel_sort=engagement&channel_direction=desc&post_sort=subscriber_share&post_direction=desc"
+            - text: Реакции / подписчики
+            - generic: ⓘ
+        - columnheader "Реакции / просмотры ⓘ ↓":
+          - link "Реакции / просмотры ⓘ ↓":
+            - /url: "?platform=telegram&period=30d&channel_sort=engagement&channel_direction=desc&post_sort=view_share&post_direction=asc"
+            - text: Реакции / просмотры
+            - generic: ⓘ
+            - generic: ↓
+    - rowgroup:
+      - row "Пока нет замеров.":
+        - cell "Пока нет замеров."

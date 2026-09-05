@@ -6,8 +6,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .analytics import age_seconds, history_is_complete
+from .clock import SystemUtcClock, UtcClock, iso_utc
 from .config import Settings
-from .database import Database, iso
+from .ports import PlatformObservationRepository
 from .public_web import snapshot_interval_minutes, snapshot_is_due
 from .vk import VkClient
 
@@ -40,13 +41,15 @@ class VkCollector:
     def __init__(
         self,
         settings: Settings,
-        db: Database,
+        db: PlatformObservationRepository,
         client: VkClient | None = None,
+        clock: UtcClock | None = None,
     ):
         if not settings.vk_access_token and client is None:
             raise ValueError("VK_ACCESS_TOKEN is required")
         self.settings = settings
         self.db = db
+        self.clock = clock or SystemUtcClock()
         self.client = client or VkClient(
             settings.vk_access_token or "", settings.vk_api_version,
             requests_per_second=settings.vk_requests_per_second,
@@ -56,11 +59,11 @@ class VkCollector:
         await self.client.close()
 
     async def poll_cycle(self) -> None:
-        started = datetime.now(timezone.utc)
+        started = self.clock.now()
         self._cycle_started_at = started
         accounts = self.db.list_platform_accounts(platform="vk", enabled_only=True)
         error_count = 0
-        self.db.set_state("vk_poll_last_started_at", iso(started))
+        self.db.set_state("vk_poll_last_started_at", iso_utc(started))
         logger.info("VK polling started accounts=%s", len(accounts))
         semaphore = asyncio.Semaphore(max(1, int(self.settings.vk_concurrency)))
 
@@ -71,15 +74,15 @@ class VkCollector:
                     return 0
                 except Exception as exc:
                     self.db.finish_platform_account_check(
-                        int(account["id"]), datetime.now(timezone.utc), str(exc),
+                        int(account["id"]), self.clock.now(), str(exc),
                     )
                     logger.exception("VK account %s polling failed", account["external_key"])
                     return 1
 
         error_count = sum(await asyncio.gather(*(poll_account(row) for row in accounts)))
-        completed = datetime.now(timezone.utc)
+        completed = self.clock.now()
         duration = (completed - started).total_seconds()
-        self.db.set_state("vk_poll_last_completed_at", iso(completed))
+        self.db.set_state("vk_poll_last_completed_at", iso_utc(completed))
         self.db.set_state("vk_poll_last_duration_seconds", f"{duration:.3f}")
         self.db.set_state("vk_poll_last_error_count", str(error_count))
         self.db.set_state("vk_poll_last_account_count", str(len(accounts)))
@@ -89,7 +92,7 @@ class VkCollector:
         )
 
     async def _poll_account(self, account: Any) -> None:
-        measured_at = datetime.now(timezone.utc)
+        measured_at = self.clock.now()
         scheduled_at = getattr(self, "_cycle_started_at", measured_at)
         reference = str(account["external_key"])
         community = await self.client.community(reference)
@@ -154,15 +157,14 @@ class VkCollector:
             identity = post.identity_for_community(community.id)
             if identity is not None:
                 posts_by_local_key[identity.external_key] = (post, identity)
-        with self.db.connect() as conn:
+        with self.db.transaction() as transaction:
             for post_id in available_point_ids:
-                self.db.mark_platform_post_available(post_id, _conn=conn)
+                transaction.mark_platform_post_available(post_id)
             for row in missing_rows:
-                count, confirmed = self.db.record_platform_post_missing(
+                count, confirmed = transaction.record_platform_post_missing(
                     int(row["id"]), measured_at,
                     "vk_wall_get_by_id_not_found_or_deleted",
                     self.settings.deletion_confirmation_checks,
-                    _conn=conn,
                 )
                 logger.warning(
                     "VK %s/%s unavailable confirmation=%s/%s deleted=%s",
@@ -176,7 +178,7 @@ class VkCollector:
                 public_external_id = (
                     identity.source_external_key or identity.external_key
                 )
-                post_id = self.db.upsert_platform_post(
+                post_id = transaction.upsert_platform_post(
                     int(account["id"]), identity.external_key, post.published_at,
                     measured_at, post.post_type,
                     f"https://vk.ru/wall{public_external_id}", post.raw,
@@ -186,13 +188,12 @@ class VkCollector:
                     source_external_id=identity.source_external_key,
                     is_joint=identity.is_joint,
                     additional_author_count=identity.additional_author_count,
-                    _conn=conn,
                 )
                 interval_minutes = snapshot_interval_minutes(
                     first_age, self.settings,
                 )
                 last_measured_at, last_bucket = (
-                    self.db.latest_platform_snapshot_timing(post_id, _conn=conn)
+                    transaction.latest_platform_snapshot_timing(post_id)
                 )
                 if not snapshot_is_due(
                     last_measured_at, scheduled_at, interval_minutes,
@@ -201,7 +202,7 @@ class VkCollector:
                     continue
                 metrics, ignored_metrics = validated_vk_metrics(
                     post,
-                    self.db.platform_metric_high_watermarks(post_id, _conn=conn),
+                    transaction.platform_metric_high_watermarks(post_id),
                 )
                 if ignored_metrics:
                     logger.warning(
@@ -217,7 +218,7 @@ class VkCollector:
                 }
                 if ignored_metrics:
                     raw_snapshot["ignored_transient_zero_metrics"] = ignored_metrics
-                if self.db.insert_platform_snapshot(
+                if transaction.insert_platform_snapshot(
                     post_id,
                     measured_at,
                     first_age,
@@ -227,11 +228,11 @@ class VkCollector:
                     comments_count=metrics["comments"],
                     shares_count=metrics["shares"],
                     raw=raw_snapshot,
-                    bucket_at=scheduled_at, _conn=conn,
+                    bucket_at=scheduled_at,
                 ):
                     inserted += 1
         self.db.finish_platform_account_check(
-            int(account["id"]), datetime.now(timezone.utc), None,
+            int(account["id"]), self.clock.now(), None,
         )
         logger.info(
             "VK %s: discovered=%s snapshots=%s",

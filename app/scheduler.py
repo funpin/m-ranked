@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 
 import uvicorn
 
@@ -10,6 +9,11 @@ from .collector import Collector
 from .config import Settings
 from .database import Database
 from .max_collector import MaxCollector
+from .ports import (
+    ClosableCollectorAdapter,
+    CollectorAdapter,
+    TelegramObservationRepository,
+)
 from .public_web import PublicWebCollector
 from .rutube_collector import RutubeCollector
 from .telegram_client import TelegramReader
@@ -20,7 +24,9 @@ from .web.app import create_app
 logger = logging.getLogger(__name__)
 
 
-async def public_collector(settings: Settings, db: Database) -> PublicWebCollector:
+async def public_collector(
+    settings: Settings, db: TelegramObservationRepository,
+) -> PublicWebCollector:
     comments_reader = None
     if settings.data_source == "telegram_web":
         comments_reader = TelegramWebSession(
@@ -37,7 +43,7 @@ def polling_delay_seconds(interval_seconds: float, elapsed_seconds: float) -> fl
 
 
 async def polling_loop(
-    collector: Any,
+    collector: CollectorAdapter,
     settings: Settings,
 ) -> None:
     interval_seconds = settings.poll_interval_minutes * 60
@@ -62,7 +68,7 @@ async def polling_loop(
 
 
 def start_polling_tasks(
-    collectors: tuple[Any, ...], settings: Settings,
+    collectors: tuple[CollectorAdapter, ...], settings: Settings,
 ) -> list[asyncio.Task[None]]:
     return [
         asyncio.create_task(
@@ -86,7 +92,7 @@ async def run_service(settings: Settings, db: Database) -> None:
     independent processes.  Keeping this entry point makes local development
     and older deployments backwards compatible.
     """
-    auxiliary_collectors: tuple[Any, ...] = tuple(
+    auxiliary_collectors: tuple[ClosableCollectorAdapter, ...] = tuple(
         collector for collector in (
             VkCollector(settings, db) if settings.vk_access_token else None,
             MaxCollector(settings, db) if settings.max_user_session_ready else None,
@@ -149,7 +155,7 @@ async def run_service(settings: Settings, db: Database) -> None:
 
 async def run_collector_service(settings: Settings, db: Database) -> None:
     """Run polling independently from the web server until cancelled."""
-    auxiliary_collectors: tuple[Any, ...] = tuple(
+    auxiliary_collectors: tuple[ClosableCollectorAdapter, ...] = tuple(
         collector for collector in (
             VkCollector(settings, db) if settings.vk_access_token else None,
             MaxCollector(settings, db) if settings.max_user_session_ready else None,
@@ -158,7 +164,7 @@ async def run_collector_service(settings: Settings, db: Database) -> None:
     )
     reader: TelegramReader | None = None
     if settings.data_source in {"public_web", "telegram_web"}:
-        primary: Any = await public_collector(settings, db)
+        primary: CollectorAdapter = await public_collector(settings, db)
     else:
         api_id, api_hash = settings.require_telegram()
         reader = TelegramReader(api_id, api_hash, settings.telegram_session_path)

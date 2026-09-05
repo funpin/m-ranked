@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from statistics import median
 from typing import Any
 
+from .clock import SystemUtcClock, UtcClock
 from .config import Settings
-from .database import Database
+from .ports import AnalyticsReadRepository
 
 
 PLATFORM_PRESENTATION: dict[str, dict[str, Any]] = {
@@ -69,7 +71,7 @@ def collector_configured(settings: Settings, platform: str) -> bool:
 
 
 def platform_rating_data(
-    db: Database, platform: str, cutoff: datetime,
+    db: AnalyticsReadRepository, platform: str, cutoff: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return institution and publication ratings isolated to one platform."""
     if platform not in PLATFORM_PRESENTATION:
@@ -165,7 +167,7 @@ def platform_rating_data(
 
 
 def platform_activity_cards(
-    db: Database,
+    db: AnalyticsReadRepository,
     settings: Settings,
     platform: str,
     start: datetime,
@@ -341,3 +343,33 @@ def platform_activity_cards(
             **metrics,
         })
     return cards
+
+
+@dataclass(slots=True)
+class LegacyAnalyticsQueryService:
+    """Compatibility adapter that keeps the current SQL and analytics formulas."""
+
+    repository: AnalyticsReadRepository
+    settings: Settings
+    clock: UtcClock = field(default_factory=SystemUtcClock)
+
+    def rating_data(
+        self, platform: str, cutoff: datetime,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        return platform_rating_data(self.repository, platform, cutoff)
+
+    def activity_cards(
+        self,
+        platform: str,
+        start: datetime,
+        previous_start: datetime,
+        end: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        return platform_activity_cards(
+            self.repository,
+            self.settings,
+            platform,
+            start,
+            previous_start,
+            end if end is not None else self.clock.now(),
+        )

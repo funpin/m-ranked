@@ -1,0 +1,66 @@
+---
+title: M-Ranked — Telegram collection sequence
+---
+sequenceDiagram
+    autonumber
+    participant S as Scheduler
+    participant DB as PostgreSQL
+    participant T as Telegram adapter
+    participant API as MTProto
+    participant WEB as t.me public web
+    participant TW as Telegram Web comments
+    participant P as Canonical pipeline
+    participant R as Redis
+
+    S->>R: Acquire telegram partition lease
+    S->>DB: Start collection_run and load enabled accounts
+    loop For each account within concurrency limit
+        S->>T: collect(account, access_mode, cursor)
+        alt access_mode = mtproto
+            T->>API: get_entity(username)
+            API-->>T: channel identity and metadata
+            T->>API: iter_messages(limit, min_id with overlap)
+            API-->>T: recent messages
+            T->>T: Group albums and resolve logical publication identity
+            T->>DB: Load bounded circular tracked page + member IDs + cursor
+            opt Due IDs are outside recent window
+                T->>API: get_messages(ids)
+                API-->>T: refreshed messages or missing IDs
+            end
+            opt FloodWait
+                API-->>T: FloodWait(seconds)
+                T->>T: Wait once, retry account, then record failure
+            end
+        else access_mode = public_web
+            T->>WEB: GET /s/{username}
+            WEB-->>T: Preview page, posts and rounded subscribers
+            opt Subscriber metadata is due
+                T->>WEB: GET /{username}
+                WEB-->>T: Exact count when exposed, otherwise rounded value
+            end
+            T->>DB: Load bounded circular tracked page + refresh cursor
+            opt Due publication is outside preview
+                T->>WEB: GET /{username}/{messageId}?embed=1
+                WEB-->>T: Post or 404/410/not-found marker
+            end
+            opt Telegram Web comments session enabled
+                T->>TW: Batch-read comments for due message IDs
+                TW-->>T: Counts or isolated comments error
+            end
+        end
+
+        T->>P: Raw account, publications, counters and source metadata
+        P->>P: Normalize IDs, reaction breakdown, views and comments
+        P->>P: Apply sampling/completeness and NULL-vs-zero rules
+        P->>P: Confirm only repeated authoritative point-lookup misses
+        P->>DB: Transactional publications, snapshots, probes and refresh cursor
+        DB-->>P: Commit with dataset revision
+        P->>R: Publish revision.changed after commit
+        P->>DB: Complete account result
+    end
+    S->>DB: Complete collection_run
+    S->>R: Release/expire lease
+
+    Note over T,P: Public preview is lower-quality evidence than MTProto,<br/>quality and access_mode remain attached to observations.
+    Note over P,DB: Album ambiguity is preserved as a quality flag, not silently guessed.
+    Note over T,DB: Discovery/feed omission never means deletion.<br/>Auth/rate/transport/5xx leave pending missing unchanged.

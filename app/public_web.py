@@ -11,10 +11,12 @@ import httpx
 from bs4 import BeautifulSoup, Tag
 
 from .analytics import age_seconds
+from .clock import SystemUtcClock, UtcClock, iso_utc
 from .config import Settings
-from .database import Database, iso
 from .maintenance import archive_and_purge
 from .models import ReactionState
+from .ports import TelegramObservationRepository
+from .telegram_identity import telegram_message_external_id
 
 logger = logging.getLogger(__name__)
 
@@ -263,10 +265,17 @@ def parse_public_channel(html: str, username: str) -> PublicChannel:
 
 
 class PublicWebCollector:
-    def __init__(self, settings: Settings, db: Database, comments_reader: Any = None):
+    def __init__(
+        self,
+        settings: Settings,
+        db: TelegramObservationRepository,
+        comments_reader: Any = None,
+        clock: UtcClock | None = None,
+    ):
         self.settings = settings
         self.db = db
         self.comments_reader = comments_reader
+        self.clock = clock or SystemUtcClock()
         self.client = httpx.AsyncClient(
             timeout=30,
             follow_redirects=True,
@@ -286,11 +295,11 @@ class PublicWebCollector:
         return response.text
 
     async def poll_cycle(self) -> None:
-        started = datetime.now(timezone.utc)
+        started = self.clock.now()
         self._cycle_started_at = started
         channels = self.db.list_channels(enabled_only=True)
         error_count = 0
-        self.db.set_state("poll_last_started_at", iso(started))
+        self.db.set_state("poll_last_started_at", iso_utc(started))
         logger.info("public web polling started")
         semaphore = asyncio.Semaphore(
             max(1, int(getattr(self.settings, "telegram_concurrency", 1))),
@@ -308,19 +317,19 @@ class PublicWebCollector:
 
         error_count = sum(await asyncio.gather(*(poll_channel(row) for row in channels)))
         try:
-            archive_and_purge(self.settings, self.db)
+            archive_and_purge(self.settings, self.db, now=self.clock.now())
         except Exception:
             error_count += 1
             logger.exception("post archive and retention cleanup failed")
-        completed = datetime.now(timezone.utc)
+        completed = self.clock.now()
         duration = (completed - started).total_seconds()
-        self.db.set_state("last_poll", iso(completed))
-        self.db.set_state("poll_last_completed_at", iso(completed))
+        self.db.set_state("last_poll", iso_utc(completed))
+        self.db.set_state("poll_last_completed_at", iso_utc(completed))
         self.db.set_state("poll_last_duration_seconds", f"{duration:.3f}")
         self.db.set_state("poll_last_error_count", str(error_count))
         self.db.set_state("poll_last_channel_count", str(len(channels)))
         self.db.set_state(
-            "next_poll", iso(started + timedelta(minutes=self.settings.poll_interval_minutes))
+            "next_poll", iso_utc(started + timedelta(minutes=self.settings.poll_interval_minutes))
         )
         logger.info(
             "public web polling complete duration=%.2fs channels=%s errors=%s",
@@ -337,7 +346,7 @@ class PublicWebCollector:
         logger.warning(
             "@%s/%s missing check=%s/%s reason=%s detected_at=%s confirmed=%s",
             username, message_id, count, self.settings.deletion_confirmation_checks,
-            reason, iso(measured), confirmed,
+            reason, iso_utc(measured), confirmed,
         )
         return confirmed
 
@@ -347,7 +356,7 @@ class PublicWebCollector:
         feed = page.posts
         if not feed:
             raise ValueError("no public posts found; channel may be private or unavailable")
-        now = datetime.now(timezone.utc)
+        now = self.clock.now()
         scheduled_at = getattr(self, "_cycle_started_at", now)
         if metadata_is_due(
             channel["subscriber_measured_at"], now, self.settings.subscriber_refresh_hours
@@ -367,27 +376,27 @@ class PublicWebCollector:
             self.db.update_channel_title(channel["id"], page.title)
         current = {post.message_id: post for post in feed}
         max_seen = int(channel["last_seen_message_id"])
-        with self.db.connect() as conn:
+        with self.db.transaction() as transaction:
             for post in feed:
                 first_age = age_seconds(post.published_at, now)
-                post_id = self.db.add_post(
-                    channel["id"], f"m:{post.message_id}", [post.message_id], None,
+                post_id = transaction.add_post(
+                    channel["id"], telegram_message_external_id(post.message_id),
+                    [post.message_id], None,
                     post.published_at, now, first_age, False,
-                    post.post_type, False, is_repost=post.is_repost, _conn=conn,
+                    post.post_type, False, is_repost=post.is_repost,
                 )
-                self.db.mark_post_available(post_id, _conn=conn)
-                self.db.ensure_publication_baseline(
+                transaction.mark_post_available(post_id)
+                transaction.ensure_publication_baseline(
                     post_id, post.published_at, first_age,
                     self.settings.complete_history_max_first_age_minutes * 60,
-                    _conn=conn,
                 )
                 max_seen = max(max_seen, post.message_id)
 
         cutoff = now - timedelta(hours=self.settings.track_post_for_hours)
-        active = self.db.active_posts(channel["id"], iso(cutoff))
+        active = self.db.active_posts(channel["id"], iso_utc(cutoff))
         due: list[tuple[Any, datetime, int]] = []
         for stored in active:
-            measured = datetime.now(timezone.utc)
+            measured = self.clock.now()
             stored_published = datetime.fromisoformat(stored["published_at"])
             interval_minutes = snapshot_interval_minutes(
                 age_seconds(stored_published, measured), self.settings
@@ -407,7 +416,7 @@ class PublicWebCollector:
                     (int(stored["telegram_message_id"]) for stored, _measured, _interval in due),
                 )
                 self.db.set_state("telegram_web_last_error", "")
-                self.db.set_state("telegram_web_last_success_at", iso(datetime.now(timezone.utc)))
+                self.db.set_state("telegram_web_last_success_at", iso_utc(self.clock.now()))
             except Exception as exc:
                 self.db.set_state("telegram_web_last_error", str(exc))
                 logger.exception("@%s Telegram Web comment batch failed", username)
@@ -439,19 +448,19 @@ class PublicWebCollector:
                     continue
                 logger.warning("@%s/%s unavailable in public preview", username, mid)
                 continue
-            with self.db.connect() as conn:
-                self.db.mark_post_available(stored["id"], _conn=conn)
-                self.db.set_post_repost(
-                    stored["id"], public_post.is_repost, _conn=conn,
+            with self.db.transaction() as transaction:
+                transaction.mark_post_available(stored["id"])
+                transaction.set_post_repost(
+                    stored["id"], public_post.is_repost,
                 )
-                inserted = self.db.insert_snapshot(
+                inserted = transaction.insert_snapshot(
                     stored["id"], measured, age_seconds(public_post.published_at, measured),
                     public_post.reactions.total, public_post.reactions.reactions,
                     public_post.reactions.raw, interval_minutes,
                     self.settings.jump_min_abs, self.settings.jump_min_ratio,
                     comments_count=comment_counts.get(mid),
                     views_count=public_post.views_count,
-                    bucket_at=scheduled_at, _conn=conn,
+                    bucket_at=scheduled_at,
                 )
             if inserted:
                 logger.info(

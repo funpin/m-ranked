@@ -1,0 +1,53 @@
+[Unit]
+Description=M-Ranked target Next.js frontend
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target m-ranked-target-api.service
+Wants=network-online.target
+Requires=m-ranked-target-api.service
+
+[Service]
+Type=simple
+User=m-ranked-web
+Group=m-ranked-web
+WorkingDirectory=/opt/m-ranked/current/frontend
+EnvironmentFile=/etc/m-ranked/web.env
+Environment=NODE_ENV=production
+Environment=TZ=UTC
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3000
+ExecStart=/usr/bin/node /opt/m-ranked/current/frontend/server.js
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=-/var/lib/m-ranked/web-cache
+BindPaths=/var/lib/m-ranked/web-cache:/opt/m-ranked/current/frontend/.next/cache
+RuntimeDirectory=m-ranked-web
+RuntimeDirectoryMode=0750
+UMask=0077
+LimitNOFILE=32768
+TasksMax=256
+
+[Install]
+WantedBy=m-ranked-shadow.target

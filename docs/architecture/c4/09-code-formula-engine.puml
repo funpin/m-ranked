@@ -1,0 +1,169 @@
+@startuml MRanked_Formula_Engine_Code
+title M-Ranked — C4 Level 4: Formula engine (TO-BE)
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+package "domain.formula" {
+  class FormulaDefinition <<immutable aggregate>> {
+    +FormulaId id
+    +FormulaVersion version
+    +Instant effectiveFrom
+    +FormulaStatus status
+    +List<FormulaComponent> components
+    +TiePolicy tiePolicy
+    +RoundingPolicy roundingPolicy
+    +String sourceHash
+    +validate(): ValidationResult
+  }
+
+  class FormulaComponent <<value object>> {
+    +String code
+    +MetricKey numerator
+    +DenominatorKey denominator
+    +BigDecimal weight
+    +NormalizationPolicy normalization
+    +MissingValuePolicy missingValue
+    +QualityThreshold minimumQuality
+  }
+
+  interface FormulaDefinitionRepository {
+    +findPublished(FormulaId, FormulaVersion): FormulaDefinition
+  }
+
+  interface FormulaEvaluator {
+    +evaluate(FormulaDefinition, EvaluationInput): ScoreTrace
+  }
+
+  class DeterministicFormulaEvaluator {
+    -MetricSemanticsRegistry semantics
+    -DenominatorResolver denominators
+    -Normalizer normalizer
+    +evaluate(FormulaDefinition, EvaluationInput): ScoreTrace
+  }
+
+  interface Normalizer {
+    +normalize(BigDecimal, PopulationStats, NormalizationPolicy): BigDecimal
+  }
+
+  interface DenominatorResolver {
+    +resolve(DenominatorKey, InstitutionInput): QualifiedValue
+  }
+
+  class MetricSemanticsRegistry {
+    +definition(MetricKey): MetricDefinition
+    +assertCompatible(QualifiedValue, MetricKey): void
+  }
+
+  class MetricDefinition <<value object>> {
+    +MetricKey key
+    +MetricKind kind
+    +Unit unit
+    +Set<Platform> supportedPlatforms
+    +AggregationPolicy aggregation
+    +CounterResetPolicy resetPolicy
+  }
+
+  class EvaluationInput <<immutable>> {
+    +Instant asOf
+    +Window window
+    +CohortId cohortId
+    +List<InstitutionInput> institutions
+    +DatasetRevision revision
+    +DataLineage lineage
+  }
+
+  class InstitutionInput <<immutable>> {
+    +InstitutionId institutionId
+    +Map<MetricKey, QualifiedValue> metrics
+    +Map<DenominatorKey, QualifiedValue> denominators
+  }
+
+  class QualifiedValue <<value object>> {
+    +BigDecimal value
+    +Quality quality
+    +Coverage coverage
+    +Instant observedAt
+    +boolean isMissing()
+  }
+
+  class ScoreTrace <<immutable result>> {
+    +InstitutionId institutionId
+    +FormulaVersion formulaVersion
+    +BigDecimal total
+    +List<ComponentTrace> components
+    +List<Warning> warnings
+    +DataLineage lineage
+  }
+
+  class ComponentTrace <<value object>> {
+    +String componentCode
+    +QualifiedValue numerator
+    +QualifiedValue denominator
+    +BigDecimal normalized
+    +BigDecimal weighted
+    +String explanationCode
+  }
+
+  class RankingCalculator {
+    +rank(List<ScoreTrace>, TiePolicy): RankingResult
+  }
+
+  class SensitivityAnalyzer {
+    +compare(FormulaDefinition, EvaluationInput, List<Scenario>): SensitivityReport
+  }
+
+  class Scenario <<value object>> {
+    +String name
+    +Map<InstitutionId, MetricPerturbation> changes
+  }
+}
+
+package "application.rating" {
+  class RatingRunService {
+    -FormulaDefinitionRepository definitions
+    -FormulaEvaluator evaluator
+    -RankingCalculator ranking
+    -RatingRunRepository runs
+    +execute(RatingRunCommand): RatingRunId
+  }
+
+  interface RatingRunRepository {
+    +begin(RatingRunMetadata): RatingRunId
+    +publish(RatingRunId, RankingResult, List<ScoreTrace>): void
+    +fail(RatingRunId, Failure): void
+  }
+}
+
+FormulaDefinition "1" *-- "1..*" FormulaComponent
+MetricSemanticsRegistry "1" o-- "*" MetricDefinition
+EvaluationInput "1" *-- "1..*" InstitutionInput
+InstitutionInput "1" *-- "*" QualifiedValue
+ScoreTrace "1" *-- "1..*" ComponentTrace
+DeterministicFormulaEvaluator ..|> FormulaEvaluator
+DeterministicFormulaEvaluator --> MetricSemanticsRegistry
+DeterministicFormulaEvaluator --> DenominatorResolver
+DeterministicFormulaEvaluator --> Normalizer
+DeterministicFormulaEvaluator --> ScoreTrace : produces
+RatingRunService --> FormulaDefinitionRepository
+RatingRunService --> FormulaEvaluator
+RatingRunService --> RankingCalculator
+RatingRunService --> RatingRunRepository
+SensitivityAnalyzer --> FormulaEvaluator : reuses exact evaluator
+SensitivityAnalyzer --> Scenario
+
+note right of DeterministicFormulaEvaluator
+  Инварианты:
+  * decimal arithmetic, explicit scale;
+  * одинаковый input + version = одинаковый result;
+  * NULL не преобразуется в 0;
+  * каждое исключение отражается в trace;
+  * запрещена network/clock зависимость внутри evaluate().
+end note
+
+note bottom of FormulaDefinition
+  Published version immutable.
+  Любое изменение создает новую version и sourceHash.
+end note
+@enduml

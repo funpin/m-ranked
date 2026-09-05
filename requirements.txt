@@ -8,4 +8,5 @@ httpx==0.28.1
 beautifulsoup4==4.13.4
 playwright==1.62.0
 python-multipart==0.0.20
+psycopg[binary]==3.3.5
 git+https://github.com/MaxApiTeam/PyMax.git@53103f0c8df32f36110cbe0bcbfc3ad82173808a#egg=maxapi-python

@@ -1,0 +1,67 @@
+---
+title: M-Ranked — migration and cutover sequence
+---
+sequenceDiagram
+    autonumber
+    actor O as Operator
+    participant L as Legacy FastAPI + SQLite
+    participant I as Idempotent importer
+    participant PG as PostgreSQL
+    participant C as Target Python collectors
+    participant A as Spring API
+    participant N as Next.js / Nginx
+    participant V as Verification suite
+
+    Note over O,V: Gate 0: feature inventory, metric semantics, ADRs, golden dataset and rollback owner approved
+    O->>PG: Apply Flyway target schema
+    O->>L: Freeze legacy DDL, keep reads and collection running
+    L-->>I: Online SQLite backup snapshot S0
+    I->>PG: Initial load using natural keys and idempotency constraints
+    I->>PG: Record migration batch, source hash and row counts
+    V->>L: Read golden/current samples
+    V->>PG: Compare identities, counts, NULL/zero and time series
+
+    loop Catch-up until lag is below threshold
+        I->>L: Read rows newer than last migration watermark
+        I->>PG: Upsert/append incremental batch
+        V->>PG: Check lag and reconciliation report
+    end
+
+    O->>A: Deploy Spring API in shadow mode
+    O->>N: Deploy Next.js on non-public route
+    V->>L: Execute legacy contract queries
+    V->>A: Execute equivalent API queries
+    V->>V: Compare normalized responses and performance budget
+
+    Note over O,V: Cutover window begins, public legacy reads remain available
+    O->>L: Stop legacy collector only
+    L-->>I: Final consistent SQLite backup S-final
+    I->>PG: Final catch-up transaction
+    V->>PG: Validate row counts, constraints, aggregates and freshness
+
+    alt Validation failed
+        O->>L: Restart legacy collector
+        O->>N: Keep legacy route
+        Note over O,PG: PostgreSQL remains shadow, investigate without data loss.
+    else Validation passed
+        O->>C: Start target collectors against PostgreSQL
+        C->>PG: First controlled collection run
+        V->>PG: Verify no duplicates and revision advance
+        O->>N: Switch public upstream to Next.js + Spring API
+        N->>A: Production traffic
+        A->>PG: Production reads
+        O->>I: Start temporary PG → legacy compatibility sync
+
+        alt SLO or correctness regression during rollback window
+            O->>N: Switch upstream back to legacy web
+            O->>C: Stop target collectors
+            I->>L: Complete compatibility sync to rollback SQLite
+            O->>L: Restart legacy collector
+        else Stable through rollback window
+            O->>I: Stop compatibility sync
+            O->>L: Archive final SQLite and make legacy stack offline
+            O->>PG: Mark migration complete
+        end
+    end
+
+    Note over O,V: Never combine cutover with a new formula or changed metric semantics.

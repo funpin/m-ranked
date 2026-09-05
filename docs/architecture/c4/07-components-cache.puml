@@ -1,0 +1,44 @@
+@startuml MRanked_Cache_Components
+!include <C4/C4_Component>
+
+title M-Ranked — C4 Level 3: Cache
+LAYOUT_LEFT_RIGHT()
+
+Container_Ext(client, "Browser / CDN", "HTTP cache", "ETag, Cache-Control и immutable assets")
+Container_Ext(web, "Next.js", "SSR/ISR", "Route/data cache")
+Container_Ext(api, "API query services", "Spring Boot", "Cacheable queries")
+Container_Ext(writer, "Collector / analytics writer", "Python/Java", "Фиксирует новую ревизию после commit")
+ContainerDb_Ext(pg, "PostgreSQL", "PostgreSQL", "Authoritative dataset_revision и projections")
+ContainerDb_Ext(redis, "Redis", "Redis", "Shared L2 and pub/sub")
+
+Container_Boundary(cache, "Cache module — core backend") {
+  Component(policy, "Cache policy registry", "Java", "TTL, visibility, vary dimensions и maximum payload")
+  Component(revision, "Dataset revision provider", "Java", "Читает монотонную ревизию набора")
+  Component(keys, "Canonical key builder", "Java", "namespace:revision:query-hash; исключает secrets")
+  Component(l1, "L1 cache", "Caffeine", "Малый process-local cache и request coalescing")
+  Component(l2, "L2 cache", "Spring Data Redis", "Общий cache между экземплярами API")
+  Component(bus, "Revision subscriber", "Redis Pub/Sub", "Очищает только L1 и уведомляет Next.js")
+  Component(http, "HTTP cache policy", "Spring MVC", "ETag/304, public/private/no-store и stale-while-revalidate")
+  Component(guard, "Cache safety guard", "Java", "Не кэширует admin, health, auth и unbounded export")
+}
+
+Rel(writer, pg, "COMMIT data + revision", "SQL")
+Rel(writer, redis, "PUBLISH revision", "RESP")
+Rel(api, policy, "Запрашивает policy")
+Rel(api, revision, "Получает revision")
+Rel(revision, redis, "GET revision")
+Rel(revision, pg, "Fallback authoritative read", "SQL")
+Rel(api, keys, "Строит cache key")
+Rel(api, guard, "Проверяет cacheability")
+Rel(api, l1, "GET/PUT")
+Rel(l1, l2, "Miss → GET/PUT")
+Rel(l2, redis, "Хранит values", "RESP")
+Rel(redis, bus, "Revision event")
+Rel(bus, l1, "Invalidate local entries")
+Rel(bus, web, "Revalidate affected tags", "Internal authenticated HTTP")
+Rel(api, http, "Формирует validators")
+Rel(http, web, "Cache headers/ETag", "HTTP")
+Rel(web, client, "Cacheable response", "HTTPS")
+
+SHOW_LEGEND()
+@enduml

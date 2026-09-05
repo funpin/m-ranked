@@ -92,6 +92,8 @@ class Settings:
     rutube_request_concurrency: int = 8
     telegram_web_profile_path: Path = Path("data/telegram-web-profile")
     telegram_web_concurrency: int = 3
+    collector_refresh_limit: int = 100
+    collector_refresh_scan_limit: int = 400
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -187,6 +189,10 @@ class Settings:
                 os.getenv("TELEGRAM_WEB_PROFILE_PATH", "data/telegram-web-profile")
             ),
             telegram_web_concurrency=_int("TELEGRAM_WEB_CONCURRENCY", 3),
+            collector_refresh_limit=_int("COLLECTOR_REFRESH_LIMIT", 100),
+            collector_refresh_scan_limit=_int(
+                "COLLECTOR_REFRESH_SCAN_LIMIT", 400
+            ),
         )
 
     def require_telegram(self) -> tuple[int, str]:

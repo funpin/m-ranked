@@ -1,0 +1,34 @@
+@startuml MRanked_System_Context
+!include <C4/C4_Context>
+
+title M-Ranked — C4 Level 1: System Context (TO-BE)
+LAYOUT_LEFT_RIGHT()
+
+Person(visitor, "Посетитель", "Сравнивает университеты, динамику метрик и рейтинговые сценарии")
+Person(researcher, "Исследователь / журналист", "Проверяет методику, выгружает публичные данные и ссылки на источники")
+Person(admin, "Администратор", "Управляет вузами и официальными аккаунтами, проверяет качество данных")
+Person(operator, "Оператор", "Следит за свежестью, ошибками, ресурсами, backup и restore")
+
+System(mranked, "M-Ranked", "Наблюдает публичные счетчики соцсетей университетов, строит воспроизводимые агрегаты, сценарные рейтинги и признаки аномальной динамики")
+
+System_Ext(telegram, "Telegram", "Каналы, публикации, просмотры, реакции, комментарии и подписчики")
+System_Ext(vk, "VK", "Сообщества, публикации, просмотры, реакции, комментарии, репосты и подписчики")
+System_Ext(max, "MAX", "Каналы, публикации и доступные публичные счетчики")
+System_Ext(rutube, "Rutube", "Каналы, видео, просмотры, лайки и комментарии")
+System_Ext(mrating, "Официальный M-Рейтинг", "Опубликованные периоды, места и баллы; полная формула не контролируется M-Ranked")
+System_Ext(identity, "Провайдер идентификации", "Будущий OIDC/OAuth2 для админов; опционально")
+
+Rel(visitor, mranked, "Просматривает страницы и графики", "HTTPS")
+Rel(researcher, mranked, "Использует API и экспорты", "HTTPS/JSON/CSV")
+Rel(admin, mranked, "Изменяет справочники и подтверждает качество", "HTTPS")
+Rel(operator, mranked, "Получает метрики и предупреждения", "HTTPS/Prometheus")
+
+Rel(mranked, telegram, "Периодически читает доступные публичные данные", "MTProto/HTTPS/Telegram Web")
+Rel(mranked, vk, "Периодически читает данные", "VK API/HTTPS")
+Rel(mranked, max, "Периодически читает данные", "User API/HTTPS")
+Rel(mranked, rutube, "Периодически читает данные", "Public API/HTTPS")
+Rel(mranked, mrating, "Импортирует опубликованные результаты", "HTTPS/JSON")
+Rel(mranked, identity, "Аутентифицирует администраторов", "OIDC/OAuth2")
+
+SHOW_LEGEND()
+@enduml

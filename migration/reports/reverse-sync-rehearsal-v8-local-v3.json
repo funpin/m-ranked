@@ -1,0 +1,119 @@
+{
+  "changeTicket": "TEST-WRITER-GATE-W",
+  "database": "mranked_reverse_gate_v3_it",
+  "duplicates": {
+    "identityCount": 0,
+    "observationCount": 0,
+    "primaryIdentityCount": 0,
+    "snapshotCount": 0
+  },
+  "environment": "disposable-postgresql-integration",
+  "flyway": {
+    "databaseMigrations": [
+      {
+        "checksum": -1636077697,
+        "script": "V1__target_baseline.sql",
+        "success": true,
+        "version": "1"
+      },
+      {
+        "checksum": 839607018,
+        "script": "V2__rebuild_core_projections.sql",
+        "success": true,
+        "version": "2"
+      },
+      {
+        "checksum": -1456658399,
+        "script": "V3__collector_observation_times_and_identity_grants.sql",
+        "success": true,
+        "version": "3"
+      },
+      {
+        "checksum": 1318350062,
+        "script": "V4__admin_collection_run_status_grants.sql",
+        "success": true,
+        "version": "4"
+      },
+      {
+        "checksum": -1313754193,
+        "script": "V5__legacy_activity_period_projection.sql",
+        "success": true,
+        "version": "5"
+      },
+      {
+        "checksum": -290358219,
+        "script": "V6__comparison_valid_observation_hourly_projection.sql",
+        "success": true,
+        "version": "6"
+      },
+      {
+        "checksum": -1228913579,
+        "script": "V7__activity_rating_read_grants.sql",
+        "success": true,
+        "version": "7"
+      },
+      {
+        "checksum": -574188650,
+        "script": "V8__legacy_overview_projection.sql",
+        "success": true,
+        "version": "8"
+      }
+    ],
+    "fileSha256": {
+      "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1",
+      "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd",
+      "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1",
+      "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82",
+      "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41",
+      "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64",
+      "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb",
+      "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c"
+    },
+    "migrationCount": 8,
+    "schemaVersion": 8
+  },
+  "forwardReconciliation": {
+    "criticalMismatches": 0,
+    "status": "pass"
+  },
+  "generatedAt": "2026-09-04T22:21:53.529199+00:00",
+  "operator": "pytest-reverse-sync",
+  "platforms": [
+    "max",
+    "rutube",
+    "telegram",
+    "vk"
+  ],
+  "preservation": {
+    "aliasMismatches": 0,
+    "identityMismatches": 0,
+    "publicationMismatches": 0,
+    "snapshotMismatches": 0
+  },
+  "release": {
+    "id": "local-unbound",
+    "sha256SumsSha256": "b681882b99e9f2e2d31ec9360b3e5ce9be483cbc184bb984a7c85bf2c31017d9"
+  },
+  "replay": {
+    "idempotent": true,
+    "runCount": 4
+  },
+  "reportType": "reverse-sync-rehearsal",
+  "reportVersion": 3,
+  "reverseSync": {
+    "baselineRevisionCount": 22,
+    "baselineRevisionSetSha256": "e86976b60c35ef9628970f39df2e1e81cc4185de212fa355a8ba8a5662f751ed",
+    "fixedRevisionCount": 4,
+    "fixedRevisionSetSha256": "e9d542717cac852b40dfbe9cdf6d1692e1c1ce9c1ac1fcc6dbd68126d0b262fa",
+    "journalStateVersion": 3,
+    "planSha256": "529862ba8a7ecfcedb9d792bcdace2b37273c72f45686363e16f0a72a72a4113",
+    "status": "stopped"
+  },
+  "sFinal": {
+    "batchId": "c6472c39-0f59-54fc-84c0-3862e7069161",
+    "gate": "pass",
+    "sourceSha256": "b316979027a7f96c4587613f94f149dacfd67444b101eee8b823b09c15e9849d"
+  },
+  "sourceNamespace": "pytest-reverse-sync-c49d593c-a88c-4bcd-9288-8fc1e0d500ff",
+  "status": "pass"
+}

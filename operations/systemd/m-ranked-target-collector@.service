@@ -1,0 +1,63 @@
+[Unit]
+Description=M-Ranked target %i collector
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+AssertPathExists=/etc/m-ranked/collector-%i.env
+Requires=m-ranked-target-projection-publisher.service
+After=network-online.target m-ranked-target-projection-publisher.service
+Wants=network-online.target
+StartLimitIntervalSec=15min
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=m-ranked-collector-%i
+Group=m-ranked-collector
+WorkingDirectory=/opt/m-ranked/current
+LoadCredential=platform-auth:/etc/m-ranked/credentials/collector-%i-auth.env
+EnvironmentFile=/etc/m-ranked/collector-common.env
+EnvironmentFile=/etc/m-ranked/collector-%i.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/collector-pgpass
+Environment=PGPASSFILE=%d/pgpass
+Environment=COLLECTOR_PLATFORM_AUTH_FILE=%d/platform-auth
+Environment=TELEGRAM_SESSION_PATH=/var/lib/m-ranked/collectors/%i/telegram.session
+Environment=TELEGRAM_WEB_PROFILE_PATH=/var/lib/m-ranked/collectors/%i/telegram-web-profile
+Environment=MAX_SESSION_PATH=/var/lib/m-ranked/collectors/%i/max.session.db
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=UTC
+ExecStartPre=/opt/m-ranked/current/operations/scripts/collector-preflight.sh %i
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m collector_target --platform %i --partition default
+Restart=on-failure
+RestartSec=15s
+TimeoutStartSec=60s
+TimeoutStopSec=60s
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=-/var/lib/m-ranked/collectors/%i
+RuntimeDirectory=m-ranked-collector-%i
+RuntimeDirectoryMode=0700
+UMask=0077
+LimitNOFILE=32768
+TasksMax=256
+
+[Install]
+WantedBy=m-ranked-target.target

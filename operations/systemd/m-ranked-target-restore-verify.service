@@ -1,0 +1,47 @@
+[Unit]
+Description=Verify latest M-Ranked backup by isolated restore
+Documentation=file:/opt/m-ranked/current/operations/runbooks/BACKUP_RESTORE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-restore
+Group=m-ranked-restore
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/restore-verify.env
+LoadCredential=pgbackrest.conf:/etc/m-ranked/credentials/pgbackrest-restore.conf
+Environment=PGBACKREST_CONFIG=%d/pgbackrest.conf
+Environment=TZ=UTC
+ExecStart=/opt/m-ranked/current/operations/scripts/restore-verify.sh --mode latest --repo 1
+TimeoutStartSec=2h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=false
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=-/var/lib/m-ranked/restore-verify -/var/lib/m-ranked/restore-reports
+RuntimeDirectory=m-ranked-restore
+RuntimeDirectoryMode=0700
+UMask=0077
+LimitNOFILE=32768
+TasksMax=256

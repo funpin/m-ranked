@@ -1,0 +1,46 @@
+@startuml MRanked_Containers_Target
+!include <C4/C4_Container>
+
+title M-Ranked — C4 Level 2: Containers TO-BE
+LAYOUT_LEFT_RIGHT()
+
+Person(visitor, "Посетитель", "Страницы и графики")
+Person(researcher, "Исследователь", "API и воспроизводимые экспорты")
+Person(admin, "Администратор", "Справочники, источники, проверки")
+Person(operator, "Оператор", "SLO, backup и restore")
+
+System_Ext(networks, "Telegram / VK / MAX / Rutube", "Публичные данные и API")
+System_Ext(mrating, "m-rating.ru", "Официальные опубликованные результаты")
+System_Ext(idp, "OIDC provider", "Опциональная идентификация админов")
+
+System_Boundary(system, "M-Ranked TO-BE — единый release train") {
+  Container(edge, "Edge", "Nginx", "TLS, compression, static cache, rate limits и reverse proxy")
+  Container(web, "Web application", "Next.js, TypeScript", "SSR/ISR, публичные и административные интерфейсы; минимум client JavaScript")
+  Container(api, "Core backend", "Java, Spring Boot, Spring MVC", "Public/Admin API, безопасность, exports, формулы, агрегаты и аудит")
+  Container(collectors, "Collectors", "Python, asyncio", "Изолированные платформенные адаптеры, нормализация и idempotent ingestion")
+  ContainerDb(pg, "PostgreSQL primary", "PostgreSQL", "Source of truth, partitioned snapshots, formulas, runs, audit и projections")
+  ContainerDb(redis, "Shared cache", "Redis", "L2 cache, dataset revision, locks и короткоживущие export jobs")
+  ContainerDb(cold, "Cold archive", "Parquet + Zstandard", "Архив полных снимков и manifests вне hot storage")
+  Container(obs, "Observability", "Prometheus-compatible metrics + structured logs", "Freshness, latency, errors, capacity и audit alerts")
+}
+
+Rel(visitor, edge, "Открывает сайт", "HTTPS")
+Rel(researcher, edge, "Запрашивает API/экспорт", "HTTPS")
+Rel(admin, edge, "Работает с админкой", "HTTPS")
+Rel(edge, web, "SSR/static", "HTTP")
+Rel(edge, api, "Публичный API и download", "HTTP/JSON")
+Rel(web, api, "Читает/изменяет данные", "HTTP/JSON, OpenAPI")
+Rel(api, idp, "Аутентификация", "OIDC/OAuth2")
+Rel(api, pg, "Транзакции, запросы и агрегаты", "JDBC")
+Rel(api, redis, "Cache-aside и revision publish", "RESP/TLS")
+Rel(collectors, networks, "Опрашивает", "HTTPS/MTProto")
+Rel(collectors, pg, "Пишет только ingestion-owned tables", "psycopg/TLS")
+Rel(collectors, redis, "Lease/lock и сигнал новой ревизии", "RESP/TLS")
+Rel(api, mrating, "Импортирует опубликованные результаты", "HTTPS/JSON")
+Rel(api, cold, "Архивирует и читает по manifest", "filesystem/SFTP")
+Rel(api, obs, "Метрики и логи", "Micrometer/JSON")
+Rel(collectors, obs, "Метрики и логи", "Prometheus/JSON")
+Rel(operator, obs, "Наблюдает и получает alerts", "HTTPS")
+
+SHOW_LEGEND()
+@enduml

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+umask 077
+
+: "${LEGACY_SQLITE_PATH:?LEGACY_SQLITE_PATH is required}"
+: "${REVERSE_SYNC_JOURNAL_PATH:?REVERSE_SYNC_JOURNAL_PATH is required}"
+: "${MIGRATION_SOURCE_NAMESPACE:?MIGRATION_SOURCE_NAMESPACE is required}"
+: "${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL is required}"
+: "${MIGRATION_PGPASSFILE:?MIGRATION_PGPASSFILE is required}"
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+project_root="$(cd -- "$script_dir/../.." && pwd -P)"
+python_bin="$project_root/.venv/bin/python"
+if [[ ! -x "$python_bin" || ! -r "$MIGRATION_PGPASSFILE" ]]; then
+  echo '{"status":"failed","errorCode":"ConfigurationError"}' >&2
+  exit 69
+fi
+
+export PGPASSFILE="$MIGRATION_PGPASSFILE"
+export REVERSE_SYNC_DATABASE_URL="${REVERSE_SYNC_DATABASE_URL:-$MIGRATION_DATABASE_URL}"
+exec "$python_bin" -m operations.reverse_sync "$@"

@@ -1,0 +1,69 @@
+@startuml MRanked_Replication_Backup
+title M-Ranked — replication, backup and restore (TO-BE)
+
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+
+node "Primary server" as primary #E3F2FD {
+  database "PostgreSQL primary" as pg
+  folder "WAL spool\nbounded" as walspool
+  component "Backup/retention agent" as agent
+  folder "Cold export staging" as staging
+}
+
+node "Private encrypted channel\nWireGuard + TLS" as tunnel
+
+node "Secondary DR server" as secondary #E8F5E9 {
+  database "Hot standby" as standby
+  folder "WAL archive" as wal
+  folder "Base backups" as base
+  folder "Cold Parquet archive" as cold
+  component "Restore verifier" as verifier
+  database "Ephemeral restore target" as restored
+}
+
+cloud "Optional immutable copy" as immutable #FFF8E1
+actor "Operator" as operator
+
+pg --> tunnel : async streaming WAL
+tunnel --> standby : replay continuously
+pg --> walspool : archive_command
+walspool --> tunnel : encrypted WAL segments
+tunnel --> wal : append + checksum
+agent --> pg : pg_basebackup / backup tool
+agent --> tunnel : encrypted base backup
+tunnel --> base : store + retention
+agent --> staging : verified partition export
+staging --> tunnel : Parquet + manifest
+tunnel --> cold : store + checksum
+base --> immutable : scheduled encrypted copy
+wal --> immutable : scheduled encrypted copy
+
+base --> verifier : selected backup
+wal --> verifier : WAL through target time
+verifier --> restored : restore + PITR
+verifier --> restored : schema/count/checksum queries
+verifier --> operator : signed drill report
+standby --> operator : lag and replay alerts
+walspool --> operator : queue/disk alerts
+
+note top of standby
+  Цель: оперативное переключение чтения/восстановления.
+  Реплика не является защитой от логической ошибки.
+end note
+
+note bottom of base
+  Proposed SLO:
+  RPO <= 15 min
+  RTO <= 2 h
+  daily automated verification
+  quarterly full restore drill
+end note
+
+note bottom of cold
+  Удаление hot partition разрешено только если:
+  manifest создан, checksum совпал,
+  row_count проверен и sample read успешен.
+end note
+@enduml

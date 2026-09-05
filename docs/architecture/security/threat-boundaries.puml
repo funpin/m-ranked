@@ -1,0 +1,70 @@
+@startuml MRanked_Threat_Boundaries
+title M-Ranked — threat boundaries and protected assets
+
+skinparam componentStyle rectangle
+skinparam linetype ortho
+left to right direction
+
+actor "Anonymous user\nor automated client" as user
+actor "Administrator" as admin
+cloud "Untrusted upstreams\nSocial networks / m-rating.ru / IdP" as upstream #FFEBEE
+
+rectangle "TB-1 Internet edge" as tb1 #FFF3E0 {
+  component "Nginx\nTLS, request limits" as edge
+}
+
+rectangle "TB-2 Application trust zone" as tb2 #E3F2FD {
+  component "Next.js" as web
+  component "Spring API" as api
+  component "Python collectors" as collectors
+  component "Maintenance jobs" as jobs
+}
+
+rectangle "TB-3 Data trust zone" as tb3 #E8EAF6 {
+  database "PostgreSQL\nmetrics, formulas, audit" as pg
+  database "Redis\ncache, leases" as redis
+  folder "Secret store / session files" as secrets
+}
+
+rectangle "TB-4 DR trust zone\nseparate server" as tb4 #E8F5E9 {
+  database "Standby" as standby
+  folder "Encrypted backups + WAL" as backup
+  folder "Cold archive" as cold
+}
+
+user --> edge : untrusted HTTPS input
+admin --> edge : authenticated HTTPS commands
+edge --> web : constrained proxy
+edge --> api : constrained proxy
+web --> api : internal API + revalidation
+api --> pg : least-privilege JDBC roles
+api --> redis : namespaced cache
+collectors --> pg : ingest-only DB role
+collectors --> redis : lease/revision
+collectors --> secrets : read platform credentials
+collectors --> upstream : outbound requests; untrusted responses
+api --> upstream : OIDC / rating import; untrusted responses
+jobs --> pg : aggregate/archive role
+jobs --> cold : verified exports
+pg --> standby : encrypted streaming replication
+pg --> backup : encrypted WAL/base backups
+
+note top of tb1
+  Validate host/path/query/body/size.
+  No direct Internet access to PG, Redis or management endpoints.
+end note
+
+note bottom of tb3
+  High-value assets:
+  credentials and sessions;
+  metric history and lineage;
+  formula definitions and mappings;
+  admin identity and append-only audit;
+  dataset revision/cache correctness.
+end note
+
+note bottom of tb4
+  Replication transports destructive changes too.
+  Restore drill and immutable backup copy are separate controls.
+end note
+@enduml

@@ -1,0 +1,39 @@
+@startuml MRanked_Containers_Current
+!include <C4/C4_Container>
+
+title M-Ranked — C4 Level 2: Containers AS-IS
+LAYOUT_LEFT_RIGHT()
+
+Person(visitor, "Посетитель", "Просматривает статистику")
+Person(admin, "Администратор", "Управляет вузами и аккаунтами через Basic Auth")
+Person(operator, "Оператор", "Управляет systemd и резервными копиями")
+
+System_Ext(networks, "Telegram / VK / MAX / Rutube", "Внешние источники")
+System_Ext(mrating, "m-rating.ru", "Публикует готовые места и баллы")
+
+System_Boundary(system, "M-Ranked AS-IS") {
+  Container(nginx, "Nginx / HAProxy", "Reverse proxy", "TLS и маршрутизация к web-процессу")
+  Container(web, "Web", "Python, FastAPI, Jinja2, Uvicorn", "SSR-страницы, админка, CSV, аналитика в HTTP-запросе, process-local cache")
+  Container(collector, "Collector service", "Python, asyncio", "Параллельные циклы Telegram, VK, MAX и Rutube")
+  ContainerDb(sqlite, "SQLite", "SQLite + WAL", "Общая БД; legacy Telegram и generic platform tables; schema version 14")
+  Container(archive, "Архив Telegram", "CSV.GZ files", "Выгруженные legacy Telegram posts старше retention")
+  Container(backup, "Backup timer", "systemd + Python sqlite backup API", "Проверенная локальная копия SQLite, ротация файлов")
+  Container(session, "Session files", "Telethon / browser / MAX session", "Учетные данные и состояние внешних сессий")
+}
+
+Rel(visitor, nginx, "Открывает публичные страницы", "HTTPS")
+Rel(admin, nginx, "Открывает /manage", "HTTPS + Basic Auth")
+Rel(nginx, web, "Проксирует", "HTTP")
+Rel(web, sqlite, "Читает и изменяет", "sqlite3")
+Rel(web, mrating, "По команде импортирует рейтинг", "HTTPS")
+Rel(collector, networks, "Опрашивает", "HTTPS/MTProto")
+Rel(collector, sqlite, "Пишет posts, snapshots и app_state", "sqlite3")
+Rel(collector, session, "Читает/изменяет сессии", "local files")
+Rel(collector, archive, "Только public Telegram: архивирует legacy posts", "filesystem")
+Rel(backup, sqlite, "Создает online backup", "SQLite backup API")
+Rel(operator, backup, "Запускает и проверяет", "systemd")
+
+UpdateRelStyle(web, sqlite, $textColor="#b71c1c", $lineColor="#b71c1c")
+UpdateRelStyle(collector, sqlite, $textColor="#b71c1c", $lineColor="#b71c1c")
+SHOW_LEGEND()
+@enduml

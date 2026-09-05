@@ -1,0 +1,43 @@
+@startuml MRanked_Admin_Components
+!include <C4/C4_Component>
+
+title M-Ranked — C4 Level 3: Admin
+LAYOUT_LEFT_RIGHT()
+
+Person(admin, "Администратор", "Управляет университетами и источниками")
+Container_Ext(web, "Next.js admin UI", "TypeScript", "Формы, validation и audit views")
+System_Ext(idp, "OIDC provider", "Identity", "Опциональный внешний IdP")
+System_Ext(mrating, "m-rating.ru", "HTTPS", "Источник официальных рейтингов")
+ContainerDb_Ext(pg, "PostgreSQL", "PostgreSQL", "Configuration, history, audit и official observations")
+ContainerDb_Ext(redis, "Redis", "Redis", "Revision publish")
+
+Container_Boundary(backend, "Core backend — admin module") {
+  Component(controller, "Admin API controller", "Spring MVC", "Команды без business logic")
+  Component(auth, "Authentication and RBAC", "Spring Security", "ADMIN/EDITOR/VIEWER, CSRF и method authorization")
+  Component(commands, "Admin command service", "Java", "Транзакции создания, изменения, enable/disable и удаления")
+  Component(account_validation, "Account verifier", "Java/Python boundary", "Нормализует reference и проверяет доступность без автоматической привязки по fuzzy name")
+  Component(mapping, "External identity mapping", "Java", "Явные коды официальных рейтингов с validity interval")
+  Component(importer, "Official rating importer", "Java", "Idempotent import, source hash и immutable history")
+  Component(audit, "Audit service", "Java", "Кто, когда, что изменил; before/after без secrets")
+  Component(revision, "Configuration revision publisher", "Java", "Публикует новую revision только после commit")
+}
+
+Rel(admin, web, "Работает с админкой", "HTTPS")
+Rel(web, controller, "Commands/queries", "HTTPS/JSON")
+Rel(controller, auth, "Проверяет identity/role")
+Rel(auth, idp, "OIDC flow", "HTTPS")
+Rel(controller, commands, "Передает validated command")
+Rel(commands, account_validation, "Проверяет account candidate")
+Rel(commands, mapping, "Изменяет explicit mapping")
+Rel(commands, audit, "Записывает outcome")
+Rel(commands, pg, "Транзакционно изменяет config", "JDBC")
+Rel(audit, pg, "Append-only audit", "JDBC")
+Rel(controller, importer, "Запускает import с idempotency key")
+Rel(importer, mrating, "GET", "HTTPS")
+Rel(importer, pg, "Append official observations", "JDBC")
+Rel(commands, revision, "After commit")
+Rel(importer, revision, "After commit")
+Rel(revision, redis, "PUBLISH revision", "RESP")
+
+SHOW_LEGEND()
+@enduml

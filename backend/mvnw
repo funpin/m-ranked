@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+MAVEN_VERSION=3.9.11
+WRAPPER_HOME=${MAVEN_USER_HOME:-"${HOME}/.m2"}/wrapper/dists/apache-maven-${MAVEN_VERSION}
+MAVEN_BIN=${WRAPPER_HOME}/apache-maven-${MAVEN_VERSION}/bin/mvn
+
+if [ ! -x "${MAVEN_BIN}" ]; then
+  ARCHIVE=${WRAPPER_HOME}/apache-maven-${MAVEN_VERSION}-bin.tar.gz
+  mkdir -p "${WRAPPER_HOME}"
+  if [ ! -f "${ARCHIVE}" ]; then
+    URL=$(sed -n 's/^distributionUrl=//p' "${BASE_DIR}/.mvn/wrapper/maven-wrapper.properties")
+    curl --fail --location --silent --show-error "${URL}" --output "${ARCHIVE}"
+  fi
+  EXPECTED_SHA256=$(sed -n 's/^distributionSha256Sum=//p' "${BASE_DIR}/.mvn/wrapper/maven-wrapper.properties")
+  ACTUAL_SHA256=$(shasum -a 256 "${ARCHIVE}" | awk '{print $1}')
+  if [ "${ACTUAL_SHA256}" != "${EXPECTED_SHA256}" ]; then
+    echo "Maven distribution checksum verification failed" >&2
+    exit 1
+  fi
+  tar -xzf "${ARCHIVE}" -C "${WRAPPER_HOME}"
+fi
+
+exec "${MAVEN_BIN}" -f "${BASE_DIR}/pom.xml" "$@"

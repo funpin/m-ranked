@@ -8,12 +8,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 from .analytics import age_seconds, history_is_complete
+from .clock import SystemUtcClock, UtcClock, iso_utc
 from .config import Settings
-from .database import Database, iso
 from .models import LogicalPost
+from .ports import TelegramObservationRepository
 from .reactions import choose_album_reactions, parse_message_reactions
 from .public_web import snapshot_interval_minutes, snapshot_is_due
 from .telegram_client import TelegramReader
+from .telegram_identity import telegram_publication_external_id
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +99,7 @@ def group_logical_posts(messages: Iterable[Any]) -> list[LogicalPost]:
         if not is_published_post(message):
             continue
         grouped_id = getattr(message, "grouped_id", None)
-        key = f"g:{grouped_id}" if grouped_id is not None else f"m:{message.id}"
+        key = telegram_publication_external_id(message.id, grouped_id)
         groups[key].append(message)
 
     logical: list[LogicalPost] = []
@@ -124,16 +126,23 @@ def group_logical_posts(messages: Iterable[Any]) -> list[LogicalPost]:
 
 
 class Collector:
-    def __init__(self, settings: Settings, db: Database, reader: TelegramReader):
+    def __init__(
+        self,
+        settings: Settings,
+        db: TelegramObservationRepository,
+        reader: TelegramReader,
+        clock: UtcClock | None = None,
+    ):
         self.settings = settings
         self.db = db
         self.reader = reader
+        self.clock = clock or SystemUtcClock()
 
     async def poll_cycle(self) -> None:
-        started = datetime.now(timezone.utc)
+        started = self.clock.now()
         self._cycle_started_at = started
         channels = self.db.list_channels(enabled_only=True)
-        self.db.set_state("poll_last_started_at", iso(started))
+        self.db.set_state("poll_last_started_at", iso_utc(started))
         logger.info("polling started")
 
         semaphore = asyncio.Semaphore(
@@ -147,15 +156,15 @@ class Collector:
         error_count = sum(
             await asyncio.gather(*(poll_channel(row) for row in channels))
         )
-        completed = datetime.now(timezone.utc)
+        completed = self.clock.now()
         duration = (completed - started).total_seconds()
-        self.db.set_state("last_poll", iso(completed))
-        self.db.set_state("poll_last_completed_at", iso(completed))
+        self.db.set_state("last_poll", iso_utc(completed))
+        self.db.set_state("poll_last_completed_at", iso_utc(completed))
         self.db.set_state("poll_last_duration_seconds", f"{duration:.3f}")
         self.db.set_state("poll_last_error_count", str(error_count))
         self.db.set_state("poll_last_channel_count", str(len(channels)))
         next_poll = started + timedelta(minutes=self.settings.poll_interval_minutes)
-        self.db.set_state("next_poll", iso(next_poll))
+        self.db.set_state("next_poll", iso_utc(next_poll))
         logger.info(
             "polling complete duration=%.2fs channels=%s errors=%s",
             duration, len(channels), error_count,
@@ -201,33 +210,35 @@ class Collector:
             int(message.id): message for message in recent
             if getattr(message, "id", None) is not None
         }
-        now = datetime.now(timezone.utc)
+        now = self.clock.now()
         scheduled_at = getattr(self, "_cycle_started_at", now)
         max_seen = int(channel["last_seen_message_id"])
-        with self.db.connect() as conn:
+        with self.db.transaction() as transaction:
             for logical in group_logical_posts(recent):
                 first_age = age_seconds(logical.published_at, now)
-                key = f"g:{logical.grouped_id}" if logical.grouped_id else f"m:{logical.message_ids[0]}"
-                post_id = self.db.add_post(
+                key = telegram_publication_external_id(
+                    logical.message_ids[0], logical.grouped_id,
+                )
+                post_id = transaction.add_post(
                     channel["id"], key, logical.message_ids, logical.grouped_id,
                     logical.published_at, now, first_age,
                     history_is_complete(
                         first_age, self.settings.complete_history_max_first_age_minutes
                     ),
                     logical.post_type, logical.ambiguous_reactions,
-                    is_repost=logical.is_repost, _conn=conn,
+                    is_repost=logical.is_repost,
                 )
-                self.db.mark_post_available(post_id, _conn=conn)
+                transaction.mark_post_available(post_id)
                 if logical.ambiguous_reactions:
                     logger.warning("@%s album %s returned inconsistent reaction states", username, key)
                 max_seen = max(max_seen, *logical.message_ids)
 
         cutoff = now - timedelta(hours=self.settings.track_post_for_hours)
-        active = self.db.active_posts(channel["id"], iso(cutoff))
+        active = self.db.active_posts(channel["id"], iso_utc(cutoff))
         due: list[tuple[Any, datetime, int, list[int]]] = []
         for post in active:
             published_at = datetime.fromisoformat(post["published_at"])
-            measured = datetime.now(timezone.utc)
+            measured = self.clock.now()
             interval_minutes = snapshot_interval_minutes(
                 age_seconds(published_at, measured), self.settings,
             )
@@ -263,7 +274,7 @@ class Collector:
                 if message_id in fetched_by_id
             ]
             if not fetched:
-                detected = datetime.now(timezone.utc)
+                detected = self.clock.now()
                 count, confirmed = self.db.record_post_missing(
                     post["id"], detected, "mtproto_empty_get_messages",
                     self.settings.deletion_confirmation_checks,
@@ -272,43 +283,38 @@ class Collector:
                     "@%s/%s missing check=%s/%s reason=mtproto_empty_get_messages "
                     "detected_at=%s confirmed=%s",
                     username, post["telegram_message_id"], count,
-                    self.settings.deletion_confirmation_checks, iso(detected), confirmed,
+                    self.settings.deletion_confirmation_checks, iso_utc(detected), confirmed,
                 )
                 continue
             if post["telegram_grouped_id"]:
                 state, ambiguous = choose_album_reactions(fetched)
             else:
                 state, ambiguous = parse_message_reactions(fetched[0]), False
-            measured = datetime.now(timezone.utc)
-            with self.db.connect() as conn:
-                self.db.mark_post_available(post["id"], _conn=conn)
-                self.db.set_post_repost(
+            measured = self.clock.now()
+            with self.db.transaction() as transaction:
+                transaction.mark_post_available(post["id"])
+                transaction.set_post_repost(
                     post["id"], any(is_channel_repost(message) for message in fetched),
-                    _conn=conn,
                 )
-                inserted = self.db.insert_snapshot(
+                inserted = transaction.insert_snapshot(
                     post["id"], measured, age_seconds(published_at, measured), state.total,
                     state.reactions, state.raw, interval_minutes,
                     self.settings.jump_min_abs, self.settings.jump_min_ratio,
                     comments_count=logical_comments(fetched),
                     views_count=logical_views(fetched),
-                    bucket_at=scheduled_at, _conn=conn,
+                    bucket_at=scheduled_at,
                 )
                 latest = (
-                    conn.execute(
-                        "SELECT delta_total, spike FROM reaction_snapshots "
-                        "WHERE post_id=? ORDER BY measured_at DESC LIMIT 1",
-                        (post["id"],),
-                    ).fetchone()
+                    transaction.latest_snapshot_delta(post["id"])
                     if inserted else None
                 )
             if inserted:
                 logger.info(
                     "@%s/%s snapshot total=%s delta=%s views=%s comments=%s",
-                    username, post["telegram_message_id"], state.total, latest["delta_total"],
+                    username, post["telegram_message_id"], state.total, latest.delta_total,
                     logical_views(fetched), logical_comments(fetched),
                 )
-                if latest["spike"]:
+                if latest.spike:
                     logger.warning("@%s/%s reaction spike detected", username, post["telegram_message_id"])
             if ambiguous:
                 logger.warning("@%s/%s ambiguous album reaction state", username, post["telegram_message_id"])

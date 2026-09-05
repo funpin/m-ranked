@@ -1,0 +1,23 @@
+#!/bin/bash -p
+set -Eeuo pipefail
+
+umask 077
+PATH=/usr/bin:/bin
+export PATH
+unset BASH_ENV CDPATH ENV PYTHONHOME PYTHONPATH __PYVENV_LAUNCHER__
+
+script_path="${BASH_SOURCE[0]}"
+if [[ "$script_path" != /* || -L "$script_path" ]]; then
+  echo '{"status":"fail","error":"wrapper must be invoked by its absolute non-symlink path"}' >&2
+  exit 69
+fi
+script_dir="${script_path%/*}"
+script_dir="$(cd -- "$script_dir" && pwd -P)"
+project_root="$(cd -- "$script_dir/../.." && pwd -P)"
+python_bin="$project_root/.venv/bin/python"
+if [[ ! -x "$python_bin" ]]; then
+  echo '{"status":"fail","error":"release Python is unavailable"}' >&2
+  exit 69
+fi
+
+exec "$python_bin" -I "$project_root/operations/collector_parity_evidence.py" "$@"

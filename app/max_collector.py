@@ -5,23 +5,31 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .analytics import age_seconds, history_is_complete
+from .clock import SystemUtcClock, UtcClock, iso_utc
 from .config import Settings
-from .database import Database, iso
 from .max_api import max_post_url
 from .max_user_api import MaxUserClient, max_username
+from .ports import PlatformObservationRepository
 from .public_web import snapshot_interval_minutes, snapshot_is_due
 
 logger = logging.getLogger(__name__)
 
 
 class MaxCollector:
-    def __init__(self, settings: Settings, db: Database, client: Any | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        db: PlatformObservationRepository,
+        client: Any | None = None,
+        clock: UtcClock | None = None,
+    ):
         if not settings.max_user_phone and client is None:
             raise ValueError("MAX_USER_PHONE is required")
         if client is None and not settings.max_user_session_ready:
             raise ValueError("Authorize MAX first: python -m app auth-max")
         self.settings = settings
         self.db = db
+        self.clock = clock or SystemUtcClock()
         self.client = client or MaxUserClient(
             settings.max_user_phone or "", settings.max_session_path,
             settings.max_user_first_name, settings.max_user_last_name,
@@ -31,22 +39,22 @@ class MaxCollector:
         await self.client.close()
 
     async def poll_cycle(self) -> None:
-        started = datetime.now(timezone.utc)
+        started = self.clock.now()
         self._cycle_started_at = started
         accounts = self.db.list_platform_accounts(platform="max", enabled_only=True)
         errors = 0
-        self.db.set_state("max_poll_last_started_at", iso(started))
+        self.db.set_state("max_poll_last_started_at", iso_utc(started))
         for account in accounts:
             try:
                 await self._poll_account(account)
             except Exception as exc:
                 errors += 1
                 self.db.finish_platform_account_check(
-                    int(account["id"]), datetime.now(timezone.utc), str(exc),
+                    int(account["id"]), self.clock.now(), str(exc),
                 )
                 logger.exception("MAX account %s polling failed", account["external_key"])
-        completed = datetime.now(timezone.utc)
-        self.db.set_state("max_poll_last_completed_at", iso(completed))
+        completed = self.clock.now()
+        self.db.set_state("max_poll_last_completed_at", iso_utc(completed))
         self.db.set_state("max_poll_last_error_count", str(errors))
         self.db.set_state("max_poll_last_account_count", str(len(accounts)))
         self.db.set_state(
@@ -57,7 +65,7 @@ class MaxCollector:
         native_id = str(account["native_id"] or "").strip()
         if native_id and not native_id.lstrip("-").isdigit():
             raise ValueError("MAX chat_id должен быть числом")
-        measured_at = datetime.now(timezone.utc)
+        measured_at = self.clock.now()
         scheduled_at = getattr(self, "_cycle_started_at", measured_at)
         reference = str(account["url"] or account["external_key"])
         channel = await self.client.resolve_channel(
@@ -113,15 +121,14 @@ class MaxCollector:
                 for external_id in requested_ids if external_id not in returned_ids
             )
             posts.extend(refreshed)
-        with self.db.connect() as conn:
+        with self.db.transaction() as transaction:
             for post_id in available_point_ids:
-                self.db.mark_platform_post_available(post_id, _conn=conn)
+                transaction.mark_platform_post_available(post_id)
             for row in missing_rows:
-                count, confirmed = self.db.record_platform_post_missing(
+                count, confirmed = transaction.record_platform_post_missing(
                     int(row["id"]), measured_at,
                     "max_get_messages_not_found_or_deleted",
                     self.settings.deletion_confirmation_checks,
-                    _conn=conn,
                 )
                 logger.warning(
                     "MAX %s/%s unavailable confirmation=%s/%s deleted=%s",
@@ -132,26 +139,26 @@ class MaxCollector:
                 if post.published_at < cutoff:
                     continue
                 first_age = age_seconds(post.published_at, measured_at)
-                post_id = self.db.upsert_platform_post(
+                post_id = transaction.upsert_platform_post(
                     int(account["id"]), post.id, post.published_at,
                     measured_at, post.post_type,
                     max_post_url(public_reference, post.id), post.raw,
                     history_complete=history_is_complete(
                         first_age, self.settings.complete_history_max_first_age_minutes,
                     ),
-                    is_repost=post.is_repost, _conn=conn,
+                    is_repost=post.is_repost,
                 )
                 interval = snapshot_interval_minutes(
                     first_age, self.settings,
                 )
                 last_measured_at, last_bucket = (
-                    self.db.latest_platform_snapshot_timing(post_id, _conn=conn)
+                    transaction.latest_platform_snapshot_timing(post_id)
                 )
                 if snapshot_is_due(
                     last_measured_at, scheduled_at, interval,
                     last_measurement_bucket=last_bucket,
                 ):
-                    self.db.insert_platform_snapshot(
+                    transaction.insert_platform_snapshot(
                         post_id, measured_at, first_age, interval,
                         views_count=post.views, reactions_count=post.reactions,
                         comments_count=post.comments, shares_count=post.reposts,
@@ -160,6 +167,6 @@ class MaxCollector:
                             "reaction_breakdown": post.reaction_breakdown,
                             "comments": post.comments, "reposts": post.reposts,
                         },
-                        bucket_at=scheduled_at, _conn=conn,
+                        bucket_at=scheduled_at,
                     )
         self.db.finish_platform_account_check(int(account["id"]), measured_at, None)

@@ -1,0 +1,58 @@
+@startuml MRanked_Collector_Components
+!include <C4/C4_Component>
+
+title M-Ranked — C4 Level 3: Collectors
+LAYOUT_LEFT_RIGHT()
+
+System_Ext(telegram, "Telegram", "MTProto, public web и optional Telegram Web")
+System_Ext(vk, "VK", "VK API")
+System_Ext(max, "MAX", "User API")
+System_Ext(rutube, "Rutube", "Public API")
+ContainerDb_Ext(pg, "PostgreSQL", "PostgreSQL", "Accounts, publications, observations и collection runs")
+ContainerDb_Ext(redis, "Redis", "Redis", "Distributed lease и revision signal")
+Container_Ext(obs, "Observability", "Metrics/logs", "Freshness и errors")
+
+Container_Boundary(collectors, "Python collector runtime") {
+  Component(scheduler, "Poll scheduler", "asyncio", "Запускает независимые циклы без overlap, применяет cadence и concurrency")
+  Component(lease, "Collector lease", "Python", "Не допускает два активных цикла одной платформы/partition")
+  Component(registry, "Account registry", "Repository", "Возвращает включенные аккаунты и access mode")
+  Component(tg_adapter, "Telegram adapter", "Telethon/httpx/Playwright", "MTProto или public web; optional comments")
+  Component(vk_adapter, "VK adapter", "httpx", "Community, wall и posts-by-id")
+  Component(max_adapter, "MAX adapter", "PyMax", "Channel и messages-by-id")
+  Component(rt_adapter, "Rutube adapter", "httpx", "Channel videos и per-video metrics")
+  Component(normalizer, "Normalizer", "Pure Python", "Преобразует platform DTO в canonical observations без потери provenance")
+  Component(identity, "Publication identity resolver", "Pure Python", "Albums, VK joint posts, reposts и platform external IDs")
+  Component(due_policy, "Sampling and deletion policy", "Pure Python", "Независимый refresh budget, круговой cursor, cutoff, authoritative missing confirmation")
+  Component(validator, "Quality validator", "Pure Python", "NULL vs zero, counter reset, rounded/exact, completeness")
+  Component(writer, "Idempotent ingestion writer", "psycopg", "Identity + snapshots + deletion probes + refresh cursor в одной транзакции")
+  Component(runlog, "Collection run recorder", "Python", "Run/account status, counts, durations и sanitized errors")
+}
+
+Rel(scheduler, lease, "Запрашивает lease")
+Rel(lease, redis, "SET NX + TTL", "RESP")
+Rel(scheduler, registry, "Получает accounts")
+Rel(registry, pg, "SELECT", "SQL")
+Rel(scheduler, tg_adapter, "Запускает Telegram cycle")
+Rel(scheduler, vk_adapter, "Запускает VK cycle")
+Rel(scheduler, max_adapter, "Запускает MAX cycle")
+Rel(scheduler, rt_adapter, "Запускает Rutube cycle")
+Rel(tg_adapter, telegram, "Читает")
+Rel(vk_adapter, vk, "Читает")
+Rel(max_adapter, max, "Читает")
+Rel(rt_adapter, rutube, "Читает")
+Rel(tg_adapter, normalizer, "Raw DTO")
+Rel(vk_adapter, normalizer, "Raw DTO")
+Rel(max_adapter, normalizer, "Raw DTO")
+Rel(rt_adapter, normalizer, "Raw DTO")
+Rel(normalizer, identity, "Canonical post candidate")
+Rel(identity, due_policy, "Resolved publication")
+Rel(due_policy, validator, "Due observations")
+Rel(validator, writer, "Validated batch")
+Rel(writer, pg, "Transactional UPSERT/INSERT", "SQL")
+Rel(writer, redis, "Публикует dataset revision после commit", "RESP")
+Rel(scheduler, runlog, "Открывает/завершает run")
+Rel(runlog, pg, "INSERT/UPDATE", "SQL")
+Rel(runlog, obs, "Метрики и structured logs")
+
+SHOW_LEGEND()
+@enduml
