@@ -59,3 +59,6 @@ td>a:not(.entity-link):not(.telegram-link),.overview-footer p>a { text-decoratio
 .native-id-editor>form input { min-width:0;width:100%;margin-bottom:8px; }
 
 .institution-accounts .overview-footer p>a,.institution-publications td>a { text-decoration:none; }
+
+.measurement-history .history-toggle { background:none;border:0;padding:0;color:var(--blue);font:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer; }
+.snapshot-highlight .snapshot-jump { color:var(--ink); }

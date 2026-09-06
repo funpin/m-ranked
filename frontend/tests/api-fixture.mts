@@ -30,7 +30,8 @@ function account(id:number,legacyType:"channels"|"platform_accounts"="channels")
     stats:{retentionDays:70,postCount:2,monitored:1,medianReactions:aggregate(5),medianViews:aggregate(50),medianComments:aggregate(0),ratingRank:2,ratingPeriod:"2026-Q2",subscriberCount:100,lastError:null,lastCheckedAt:asOf}};
 }
 function publication(id:number,type:"posts"|"platform_posts"="posts"):Schema["Publication"] {
-  return {publicationId:uuid(type === "posts" ? 5 : 6,id),legacyId:id,legacyType:type,institutionId:"institution-1",platform:type === "posts" ? "telegram" : "max",publishedAt:"2026-07-01T00:00:00Z",publicationType:"album",deletedAt:id === 1 ? asOf : null,views:counter(50),reactions:counter(5),comments:counter(0),shares:counter(null),quality:"exact",intervalUncertain:false,synthetic:false,historyCompleteness:"complete",datasetRevision:revision,asOf,accountLegacyId:type === "posts" ? 1 : 3,accountLegacyType:type === "posts" ? "channels" : "platform_accounts",accountName:names[0]!,accountUsername:"fixture_1",externalId:String(id+100),displayExternalId:String(id+100),repost:false,joint:false,additionalAuthorCount:0,ambiguousAlbumReactions:false,publicUrl:`https://example.test/post/${id}`};
+  const platform=type === "posts" ? "telegram" : id === 21 ? "vk" : id === 41 ? "rutube" : "max";
+  return {publicationId:uuid(type === "posts" ? 5 : 6,id),legacyId:id,legacyType:type,institutionId:"institution-1",platform,publishedAt:"2026-07-01T00:00:00Z",publicationType:"album",deletedAt:id === 1 ? asOf : null,views:counter(50),reactions:counter(5),comments:counter(0),shares:counter(null),quality:"exact",intervalUncertain:false,synthetic:false,historyCompleteness:"complete",datasetRevision:revision,asOf,accountLegacyId:platform === "telegram" || platform === "vk" ? 1 : platform === "rutube" ? 4 : 3,accountLegacyType:type === "posts" ? "channels" : "platform_accounts",accountName:names[0]!,accountUsername:"fixture_1",externalId:String(id+100),displayExternalId:String(id+100),repost:false,joint:false,additionalAuthorCount:0,ambiguousAlbumReactions:false,publicUrl:`https://example.test/post/${id}`};
 }
 function postItem(id:number,type:"posts"|"platform_posts"):Schema["PublicationListItem"] {
   const p=publication(id,type);
@@ -68,7 +69,24 @@ const server = createServer((request, response) => {
   if(pubId) return json(publication(Number(pubId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts"));
   if(/^\/api\/v1\/accounts\/\d+\/publications$/.test(url.pathname)) return json({items:[postItem(1,url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts"),postItem(2,"posts")],nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);
   const historyId=/^\/api\/v1\/publications\/(\d+)\/history$/.exec(url.pathname);
-  if(historyId) return json({publication:publication(Number(historyId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts"),items:historyRows,nextCursor:null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
+  if(historyId) {
+    const p=publication(Number(historyId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts");
+    const sourceRows=p.legacyId===99 ? Array.from({length:1205},(_,index)=>({...historyRows[index%historyRows.length]!,
+      snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,
+      reactions:counter(index),views:counter(index*10),deltaReactions:index?1:null,deltaViews:index?10:null,synthetic:index===0,
+    })) : historyRows;
+    const items=sourceRows.map((row,index)=>({...row,
+      comments:p.platform === "rutube" ? counter(null) : row.comments,
+      deltaComments:p.platform === "rutube" ? null : row.deltaComments,
+      shares:p.platform === "vk" ? counter(index*2) : row.shares,
+      deltaShares:p.platform === "vk" ? index ? 2 : null : row.deltaShares,
+      reactionsBreakdown:p.platform === "vk" || p.platform === "rutube" ? {} : row.reactionsBreakdown,
+      reactionsBreakdownEntries:p.platform === "vk" || p.platform === "rutube" ? [] : row.reactionsBreakdownEntries,
+      deltaReactionsBreakdown:p.platform === "vk" || p.platform === "rutube" ? null : row.deltaReactionsBreakdown,
+      deltaReactionsBreakdownEntries:p.platform === "vk" || p.platform === "rutube" ? null : row.deltaReactionsBreakdownEntries,
+    }));
+    return json({publication:p,items,nextCursor:null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
+  }
   const institutionId=/^\/api\/v1\/institutions\/(\d+)$/.exec(url.pathname);
   if(institutionId) return json({institutionId:`institution-${institutionId[1]}`,legacyId:Number(institutionId[1]),canonicalName:names[0]!,shortName:null,platform,period:"30d",metrics:{totalReactions:10,totalViews:100,medianReactions:5,medianViews:50,quality:"exact",sampleSize:2,coverage:1,aggregates:{totalReactions:aggregate(10),totalViews:aggregate(100),medianReactions:aggregate(5),medianViews:aggregate(50)}},datasetRevision:revision,asOf} satisfies Schema["Institution"]);
   const accountsId=/^\/api\/v1\/institutions\/(\d+)\/accounts$/.exec(url.pathname);

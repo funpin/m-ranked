@@ -123,7 +123,7 @@ for(const path of ["/posts/1","/platform-posts/1"]) {
     await page.keyboard.press("Escape");
     const auto=page.getByRole("button",{name:"Авто",exact:true}).first();await auto.click();await expect(auto).toHaveAttribute("aria-pressed","true");await page.reload();await expect(page.getByRole("button",{name:"Авто",exact:true}).first()).toHaveAttribute("aria-pressed","true");
     await page.locator(".snapshot-jump").last().click();await expect(page.locator(".snapshot-highlight")).toHaveCount(1);
-    if(path === "/posts/1") {await expect(page.locator("tbody tr")).toHaveCount(100);await page.getByRole("link",{name:"показать всю историю"}).click();await expect(page.locator("tbody tr")).toHaveCount(160);}
+    if(path === "/posts/1") {await expect(page.locator("tbody tr")).toHaveCount(100);await page.getByRole("button",{name:"показать всю историю"}).click();await expect(page.locator("tbody tr")).toHaveCount(160);}
     expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
   });
 }

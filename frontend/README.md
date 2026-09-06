@@ -33,6 +33,22 @@ page, without selecting an old namespace from the page's platform filter.
 Historical visual/HTTP parity reports below describe the previous URL contract.
 Their old status/redirect expectations do not establish acceptance of this change.
 
+## Shared publication charts
+
+All four platforms use `PublicationMeasurements` with one metric definition list.
+Available observations determine which counters and reaction breakdown columns
+appear; platform-specific wording and Telegram's minimum-people estimate remain
+presentation options. Accumulation tooltips include the reaction/like-to-view
+percentage from that exact observation. Growth bars, pointer tooltips, keyboard
+text and table cells use the stored interval delta, including negative corrections
+and NULL; chart sampling and zoom never recalculate a delta between displayed points.
+
+The history table starts with the same bounded view on every platform. Selecting
+a chart point with a click or Enter/Space expands the table far enough to include
+its exact snapshot, scrolls to the row and focuses its timestamp. Show-all/collapse
+controls run locally against the already loaded history, without a 1,000-row
+ceiling on revealing a point. Changing publication resets range and selection.
+
 ## Compatibility implementation
 
 - Overview keeps repeated scalar last-value semantics, raw Unicode query validation, sort/direction fields, platform autosubmit and browser history restoration.
