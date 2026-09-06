@@ -123,7 +123,10 @@ class ExportJobPostgresIntegrationTest {
                             COMMIT;
                             """);
                     } finally { mutated.countDown(); }
-                    var ready = ExportJobServiceTest.finished(jobs, "editor", job.id());
+                    // A 150,001-row PostgreSQL export has the production job
+                    // deadline, not the tiny in-memory unit fixture's 15s wait.
+                    var ready = ExportJobServiceTest.finished(jobs, "editor", job.id(),
+                            ExportJobPolicy.defaults().maxDuration().plusSeconds(5));
                     assertThat(ready.state()).isEqualTo(ExportJobService.State.succeeded);
                     assertThat(ready.rowsWritten()).isEqualTo(ROWS);
                     assertThat(ready.bytesWritten()).isGreaterThan(32L * 1024 * 1024);

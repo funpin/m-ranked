@@ -12,7 +12,7 @@ from uuid import UUID, uuid5
 # This namespace is immutable migration protocol state. Changing it would change every
 # imported business identity and is therefore a breaking migration format change.
 BRIDGE_NAMESPACE = UUID("45f74b35-89b2-5f43-82f2-f7c5d9db6d34")
-BRIDGE_VERSION = "1.3.0"
+BRIDGE_VERSION = "1.3.1"
 
 
 def utc_now() -> datetime:

@@ -55,6 +55,7 @@ EXPECTED_MIGRATIONS = (
     ('27', 'V27__retained_disabled_platform_period_metrics.sql', '95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97', -1466195806),
     ('28', 'V28__identity_command_receipt_verifier_acl.sql', '215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020', 1374125493),
     ('29', 'V29__monotonic_native_identity_transitions.sql', 'b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de', -1547328464),
+    ('30', 'V30__preserve_legacy_forced_history_baseline.sql', '79b4fa544c534f5c6794f99addd33827452300c55435721658799c1a8ae9ce46', 178291902),
 )
 
 PLATFORMS = ("max", "rutube", "telegram", "vk")
@@ -797,7 +798,7 @@ def _parse_release_manifest(release_path: Path) -> tuple[str, dict[str, str]]:
     if {entry.name for entry in migration_entries} != expected_migration_names or any(
         not entry.is_file(follow_symlinks=False) for entry in migration_entries
     ):
-        _fail("active migration directory must contain exactly regular V1-V29 files")
+        _fail("active migration directory must contain exactly regular V1-V30 files")
     _recheck_snapshot_path(manifest, manifest_snapshot, "active release SHA256SUMS")
     return manifest_snapshot.digest, entries
 
@@ -883,10 +884,10 @@ def _release_binding(
     flyway = deploy.get("flyway")
     if not isinstance(flyway, dict):
         _fail("deploy flyway evidence must be an object")
-    if flyway.get("schemaVersion") != "29":
-        _fail("deploy Flyway schema is not the exact V1-V29 set")
-    if _integer(flyway.get("migrationCount"), "deploy flyway.migrationCount", 29) != 29:
-        _fail("deploy Flyway schema is not the exact V1-V29 set")
+    if flyway.get("schemaVersion") != "30":
+        _fail("deploy Flyway schema is not the exact V1-V30 set")
+    if _integer(flyway.get("migrationCount"), "deploy flyway.migrationCount", 30) != 30:
+        _fail("deploy Flyway schema is not the exact V1-V30 set")
     _true(flyway.get("validated"), "deploy flyway.validated")
     for version, _filename, expected_hash, _checksum in EXPECTED_MIGRATIONS:
         if flyway.get(f"v{version}Sha256") != expected_hash:
@@ -959,7 +960,7 @@ def _validate_migration_rows(value: Any, label: str) -> list[dict[str, Any]]:
     rows = _array(value, label)
     expected = _expected_database_migrations()
     if len(rows) != len(expected):
-        _fail(f"{label} must be exactly the successful frozen V1-V29 rows")
+        _fail(f"{label} must be exactly the successful frozen V1-V30 rows")
     normalized: list[dict[str, Any]] = []
     for index, (row_value, expected_row) in enumerate(zip(rows, expected)):
         row = _object(
@@ -978,7 +979,7 @@ def _validate_migration_rows(value: Any, label: str) -> list[dict[str, Any]]:
             "version": version,
         }
         if normalized_row != expected_row:
-            _fail(f"{label} must be exactly the successful frozen V1-V29 rows")
+            _fail(f"{label} must be exactly the successful frozen V1-V30 rows")
         normalized.append(normalized_row)
     return normalized
 
@@ -1471,18 +1472,18 @@ def _validate_report_body(
     )
     schema_version = _integer(flyway["schemaVersion"], "flyway.schemaVersion", 1)
     migration_count = _integer(flyway["migrationCount"], "flyway.migrationCount", 1)
-    if schema_version != 29 or migration_count != 29:
-        _fail("collector report Flyway version/count must be exactly V1-V29")
+    if schema_version != 30 or migration_count != 30:
+        _fail("collector report Flyway version/count must be exactly V1-V30")
     if flyway["fileSha256"] != _expected_file_hashes():
-        _fail("collector report Flyway file hashes do not match frozen V1-V29")
+        _fail("collector report Flyway file hashes do not match frozen V1-V30")
     migrations = _validate_migration_rows(flyway["databaseMigrations"], "flyway.databaseMigrations")
     normalized.update(
         {
             "flyway": {
                 "databaseMigrations": migrations,
                 "fileSha256": _expected_file_hashes(),
-                "migrationCount": 29,
-                "schemaVersion": 29,
+                "migrationCount": 30,
+                "schemaVersion": 30,
             },
             "generatedAt": body["generatedAt"],
             "release": dict(release),
@@ -1625,8 +1626,8 @@ def seal_report(
         "flyway": {
             "databaseMigrations": migrations,
             "fileSha256": _expected_file_hashes(),
-            "migrationCount": 29,
-            "schemaVersion": 29,
+            "migrationCount": 30,
+            "schemaVersion": 30,
         },
         "generatedAt": _format_timestamp(now),
         "release": release,

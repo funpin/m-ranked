@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Обновление сервиса · m-ranked</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100svh;background:#10151b;color:#edf2f7;font:16px/1.6 system-ui,sans-serif;display:grid;place-items:center;padding:28px}main{width:100%;max-width:760px}.brand{color:#8abcf5;font-weight:750;letter-spacing:.04em}h1{font-size:clamp(30px,5vw,46px);line-height:1.15;letter-spacing:-.035em;margin:24px 0 18px}p{color:#b8c3d0}.status{display:inline-flex;align-items:center;gap:9px;color:#d7e7fb;font-size:14px;background:#1b2a3b;border:1px solid #30445d;padding:6px 12px;border-radius:99px}.status:before{content:"";width:7px;height:7px;background:#8abcf5;border-radius:50%}.counts{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:30px 0 22px}.count{border-top:1px solid #33404f;padding-top:14px}.count span{display:block;color:#9eacbd;font-size:13px}.count strong{display:block;font-size:clamp(21px,4vw,30px);font-variant-numeric:tabular-nums;line-height:1.5}.bar{height:10px;border-radius:8px;background:#263342;overflow:hidden}.fill{width:0;height:100%;background:#80b6f6;transition:width .5s}.meta{display:flex;justify-content:space-between;gap:20px;color:#9eacbd;font-size:13px;margin:12px 0 25px}.note{border-top:1px solid #33404f;margin-top:30px;padding-top:20px;font-size:14px}#connection{color:#ffd29d;font-size:14px;min-height:1.6em}#details{min-height:3.2em}a{color:#9dc9ff;text-underline-offset:4px}@media(max-width:480px){body{padding:22px}.counts{gap:12px}.count strong{font-size:21px}.meta{display:block}.meta span{display:block;margin-top:6px}}
+</style>
+<style>
+.progress-row{display:flex;align-items:center;gap:20px}.progress-row .bar{flex:1}.eta{flex:0 0 auto;min-width:112px;text-align:right;line-height:1.4}.eta span{display:block;color:#9eacbd;font-size:12px}.eta strong{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:.02em}@media(max-width:480px){.progress-row{gap:14px}.eta{min-width:98px}.eta strong{font-size:20px}.eta span{font-size:11px}}
+</style>
+<main>
+  <div class="brand">m-ranked</div>
+  <h1>Обновляем сервис<br>и переносим данные</h1>
+  <div class="status" id="stage">Проверяем статус</div>
+  <p id="details">Загружаем подтверждённые показатели переноса.</p>
+  <div class="counts" aria-live="polite" aria-atomic="true">
+    <div class="count"><span>Перенесено записей</span><strong id="done">—</strong></div>
+    <div class="count"><span>Осталось записей</span><strong id="remaining">—</strong></div>
+    <div class="count"><span>Всего в снимке</span><strong id="total">—</strong></div>
+  </div>
+  <div class="progress-row">
+    <div class="bar" id="bar" role="progressbar" aria-label="Перенос записей" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div>
+    <div class="eta" title="Оценка времени загрузки текущего снимка по фактической скорости. Догрузка новых замеров и проверка выполняются после загрузки."><span>Примерно осталось</span><strong id="eta" role="timer" aria-label="Ориентировочное время загрузки текущего снимка">—:—:—</strong></div>
+  </div>
+  <div class="meta"><span id="percent">Ожидаем данные</span><span id="updated">Обновление статуса каждые 10 секунд</span></div>
+  <div id="connection" role="status"></div>
+  <p id="collection"></p>
+  <p class="note">Счётчики относятся к зафиксированному снимку базы. Новые данные, собранные во время переноса, будут включены в заключительную синхронизацию. После переноса всех записей отдельно проверим полноту данных и работу сервиса.</p>
+  <noscript><p>Для автоматического обновления счётчиков включите JavaScript. <a href="/migration-status.json">Текущий статус в JSON</a>.</p></noscript>
+</main>
+<script>
+const format=new Intl.NumberFormat('ru-RU');
+const stages={preparing:'Подготовка переноса',importing:'Перенос данных',catch_up:'Синхронизация новых данных',verifying:'Проверка полноты данных',blocked:'Устраняем препятствие для переноса',complete:'Перенос проверен'};
+const el=id=>document.getElementById(id);
+let etaDeadline=null,etaUpdatedAt=null;
+function updateTimer(){
+  if(etaDeadline===null||Date.now()-etaUpdatedAt>45000){el('eta').textContent='—:—:—';return}
+  const seconds=Math.max(0,Math.ceil((etaDeadline-Date.now())/1000));
+  const hours=Math.floor(seconds/3600),minutes=Math.floor(seconds%3600/60),rest=seconds%60;
+  el('eta').textContent=[hours,minutes,rest].map(value=>String(value).padStart(2,'0')).join(':');
+}
+setInterval(updateTimer,1000);
+async function update(){
+  try{
+    const response=await fetch('/migration-status.json',{cache:'no-store',signal:AbortSignal.timeout(8000)});
+    if(!response.ok)throw new Error('status');
+    const data=await response.json();
+    if(!Object.hasOwn(stages,data.phase)||!Number.isSafeInteger(data.total)||data.total<0||!Number.isSafeInteger(data.transferred)||data.transferred<0||data.transferred>data.total||!Number.isFinite(Date.parse(data.updatedAt)))throw new Error('invalid');
+    const percent=data.total?data.transferred/data.total*100:0;
+    etaUpdatedAt=Date.parse(data.updatedAt);
+    etaDeadline=data.progressAvailable!==false&&Number.isFinite(data.estimatedRemainingSeconds)&&data.estimatedRemainingSeconds>=0&&['importing','catch_up'].includes(data.phase)?etaUpdatedAt+data.estimatedRemainingSeconds*1000:null;
+    updateTimer();
+    el('stage').textContent=stages[data.phase];
+    el('details').textContent=data.message;
+    el('done').textContent=format.format(data.transferred);
+    el('remaining').textContent=format.format(data.total-data.transferred);
+    el('total').textContent=format.format(data.total);
+    el('fill').style.width=percent+'%';
+    el('bar').setAttribute('aria-valuenow',percent.toFixed(2));
+    el('percent').textContent=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(percent)+'% записей перенесено';
+    el('updated').textContent='Статус на '+new Date(data.updatedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК';
+    el('collection').textContent=data.collectionMessage||'';
+    el('connection').textContent=data.progressAvailable===false?'Новые счётчики временно недоступны. Показаны последние подтверждённые значения.':'';
+  }catch{
+    etaDeadline=null;updateTimer();
+    el('connection').textContent='Не удалось обновить статус. Повторим через 10 секунд; показанные значения не изменены.';
+  }finally{setTimeout(update,10000)}
+}
+update();
+</script>
+</html>

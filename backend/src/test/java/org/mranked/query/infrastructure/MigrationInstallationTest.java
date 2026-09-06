@@ -1,6 +1,7 @@
 package org.mranked.query.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.sql.DriverManager;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -21,12 +22,51 @@ class MigrationInstallationTest {
         Flyway.configure().dataSource(upgrade, user, password).defaultSchema("flyway")
                 .locations("classpath:db/migration").target("8").cleanDisabled(true).load().migrate();
         seedPublishedV8(upgrade, user, password);
+        // The deployed import fix is V30. Exercise the actual V29 boundary as
+        // well as the original V8 upgrade path, with retained publication facts.
+        Flyway.configure().dataSource(upgrade, user, password).defaultSchema("flyway")
+                .locations("classpath:db/migration").target("29").cleanDisabled(true).load().migrate();
+        try (var connection = DriverManager.getConnection(upgrade, user, password);
+             var statement = connection.createStatement()) {
+            statement.execute("""
+                INSERT INTO ingest.publication(primary_account_id,published_at,discovered_at,
+                    publication_type,history_completeness,synthetic_baseline_allowed)
+                SELECT id,now(),now(),'v29-retained','forced_incomplete',false
+                FROM catalog.platform_account WHERE canonical_external_id='upgrade-fixture'
+                """);
+            assertThatThrownBy(() -> statement.execute(
+                    "UPDATE ingest.publication SET synthetic_baseline_allowed=true WHERE publication_type='v29-retained'"))
+                    .isInstanceOf(java.sql.SQLException.class)
+                    .satisfies(error -> assertThat(((java.sql.SQLException) error).getSQLState()).isEqualTo("23514"));
+        }
         var cleanFlyway = flyway(clean, user, password);
         var upgradeFlyway = flyway(upgrade, user, password);
         cleanFlyway.migrate();
         upgradeFlyway.migrate();
         cleanFlyway.validate();
         upgradeFlyway.validate();
+        try (var connection = DriverManager.getConnection(upgrade, user, password);
+             var statement = connection.createStatement()) {
+            try (var rows = statement.executeQuery("""
+                    SELECT history_completeness::text,synthetic_baseline_allowed
+                    FROM ingest.publication WHERE publication_type='v29-retained'
+                    """)) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("forced_incomplete");
+                assertThat(rows.getBoolean(2)).as("upgrade must not infer an old baseline").isFalse();
+                assertThat(rows.next()).isFalse();
+            }
+            assertThat(statement.executeUpdate("""
+                    UPDATE ingest.publication SET synthetic_baseline_allowed=true
+                    WHERE publication_type='v29-retained'
+                    """)).as("V30 permits the independently retained legacy baseline").isEqualTo(1);
+            assertThatThrownBy(() -> statement.execute("""
+                    UPDATE ingest.publication SET history_completeness='incomplete'
+                    WHERE publication_type='v29-retained'
+                    """))
+                    .isInstanceOf(java.sql.SQLException.class)
+                    .satisfies(error -> assertThat(((java.sql.SQLException) error).getSQLState()).isEqualTo("23514"));
+        }
         try (var connection = DriverManager.getConnection(upgrade,user,password);
              var statement = connection.createStatement();
              var rows = statement.executeQuery("SELECT value,quality::text FROM analytics.account_latest")) {

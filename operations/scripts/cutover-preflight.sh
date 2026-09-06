@@ -318,10 +318,10 @@ check_reverse_sync_rehearsal_gate() {
       and (.flyway | type == "object" and keys == [
         "databaseMigrations", "fileSha256", "migrationCount", "schemaVersion"
       ])
-      and .flyway.schemaVersion == 29
-      and .flyway.migrationCount == 29
-      and (.flyway.fileSha256 | type == "object" and keys == ["V10__consistent_public_queries_and_formula_guards.sql", "V11__bridge_identity_lineage_and_reconciliation.sql", "V12__detail_history_projection.sql", "V13__immutable_account_identity_history.sql", "V14__public_archived_publication_text.sql", "V15__verified_source_preservation.sql", "V16__audited_catalog_commands.sql", "V17__legacy_csv_compatibility_projection.sql", "V18__official_rating_commands.sql", "V19__safe_health_operational_snapshot.sql", "V1__target_baseline.sql", "V20__catalog_url_and_version_compatibility.sql", "V21__legacy_period_first_observation_policy.sql", "V22__durable_legacy_csv_archive_facts.sql", "V23__official_rating_entity_context.sql", "V24__ordered_history_reaction_details.sql", "V25__safe_legacy_account_presentation.sql", "V26__independent_projection_verifier_reads.sql", "V27__retained_disabled_platform_period_metrics.sql", "V28__identity_command_receipt_verifier_acl.sql", "V29__monotonic_native_identity_transitions.sql", "V2__rebuild_core_projections.sql", "V3__collector_observation_times_and_identity_grants.sql", "V4__admin_collection_run_status_grants.sql", "V5__legacy_activity_period_projection.sql", "V6__comparison_valid_observation_hourly_projection.sql", "V7__activity_rating_read_grants.sql", "V8__legacy_overview_projection.sql", "V9__immutable_observations_quality_archive_fence.sql"])
-      and .flyway.fileSha256 == {"V10__consistent_public_queries_and_formula_guards.sql": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b", "V11__bridge_identity_lineage_and_reconciliation.sql": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff", "V12__detail_history_projection.sql": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100", "V13__immutable_account_identity_history.sql": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0", "V14__public_archived_publication_text.sql": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6", "V15__verified_source_preservation.sql": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941", "V16__audited_catalog_commands.sql": "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad", "V17__legacy_csv_compatibility_projection.sql": "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83", "V18__official_rating_commands.sql": "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9", "V19__safe_health_operational_snapshot.sql": "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503", "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1", "V20__catalog_url_and_version_compatibility.sql": "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2", "V21__legacy_period_first_observation_policy.sql": "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8", "V22__durable_legacy_csv_archive_facts.sql": "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f", "V23__official_rating_entity_context.sql": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c", "V24__ordered_history_reaction_details.sql": "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db", "V25__safe_legacy_account_presentation.sql": "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1", "V26__independent_projection_verifier_reads.sql": "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8", "V27__retained_disabled_platform_period_metrics.sql": "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97", "V28__identity_command_receipt_verifier_acl.sql": "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020", "V29__monotonic_native_identity_transitions.sql": "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de", "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd", "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1", "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82", "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41", "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64", "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb", "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c", "V9__immutable_observations_quality_archive_fence.sql": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"}
+      and .flyway.schemaVersion == 30
+      and .flyway.migrationCount == 30
+      and (.flyway.fileSha256 | type == "object" and keys == ["V10__consistent_public_queries_and_formula_guards.sql", "V11__bridge_identity_lineage_and_reconciliation.sql", "V12__detail_history_projection.sql", "V13__immutable_account_identity_history.sql", "V14__public_archived_publication_text.sql", "V15__verified_source_preservation.sql", "V16__audited_catalog_commands.sql", "V17__legacy_csv_compatibility_projection.sql", "V18__official_rating_commands.sql", "V19__safe_health_operational_snapshot.sql", "V1__target_baseline.sql", "V20__catalog_url_and_version_compatibility.sql", "V21__legacy_period_first_observation_policy.sql", "V22__durable_legacy_csv_archive_facts.sql", "V23__official_rating_entity_context.sql", "V24__ordered_history_reaction_details.sql", "V25__safe_legacy_account_presentation.sql", "V26__independent_projection_verifier_reads.sql", "V27__retained_disabled_platform_period_metrics.sql", "V28__identity_command_receipt_verifier_acl.sql", "V29__monotonic_native_identity_transitions.sql", "V2__rebuild_core_projections.sql", "V30__preserve_legacy_forced_history_baseline.sql", "V3__collector_observation_times_and_identity_grants.sql", "V4__admin_collection_run_status_grants.sql", "V5__legacy_activity_period_projection.sql", "V6__comparison_valid_observation_hourly_projection.sql", "V7__activity_rating_read_grants.sql", "V8__legacy_overview_projection.sql", "V9__immutable_observations_quality_archive_fence.sql"])
+      and .flyway.fileSha256 == {"V10__consistent_public_queries_and_formula_guards.sql": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b", "V11__bridge_identity_lineage_and_reconciliation.sql": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff", "V12__detail_history_projection.sql": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100", "V13__immutable_account_identity_history.sql": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0", "V14__public_archived_publication_text.sql": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6", "V15__verified_source_preservation.sql": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941", "V16__audited_catalog_commands.sql": "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad", "V17__legacy_csv_compatibility_projection.sql": "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83", "V18__official_rating_commands.sql": "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9", "V19__safe_health_operational_snapshot.sql": "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503", "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1", "V20__catalog_url_and_version_compatibility.sql": "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2", "V21__legacy_period_first_observation_policy.sql": "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8", "V22__durable_legacy_csv_archive_facts.sql": "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f", "V23__official_rating_entity_context.sql": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c", "V24__ordered_history_reaction_details.sql": "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db", "V25__safe_legacy_account_presentation.sql": "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1", "V26__independent_projection_verifier_reads.sql": "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8", "V27__retained_disabled_platform_period_metrics.sql": "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97", "V28__identity_command_receipt_verifier_acl.sql": "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020", "V29__monotonic_native_identity_transitions.sql": "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de", "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd", "V30__preserve_legacy_forced_history_baseline.sql": "79b4fa544c534f5c6794f99addd33827452300c55435721658799c1a8ae9ce46", "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1", "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82", "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41", "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64", "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb", "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c", "V9__immutable_observations_quality_archive_fence.sql": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"}
       and .flyway.databaseMigrations == [
         {version:"1",script:"V1__target_baseline.sql",checksum:-1636077697,success:true},
         {version:"2",script:"V2__rebuild_core_projections.sql",checksum:839607018,success:true},
@@ -351,7 +351,8 @@ check_reverse_sync_rehearsal_gate() {
         {version:"26",script:"V26__independent_projection_verifier_reads.sql",checksum:-1482835665,success:true},
         {version:"27",script:"V27__retained_disabled_platform_period_metrics.sql",checksum:-1466195806,success:true},
         {version:"28",script:"V28__identity_command_receipt_verifier_acl.sql",checksum:1374125493,success:true},
-        {version:"29",script:"V29__monotonic_native_identity_transitions.sql",checksum:-1547328464,success:true}
+        {version:"29",script:"V29__monotonic_native_identity_transitions.sql",checksum:-1547328464,success:true},
+        {version:"30",script:"V30__preserve_legacy_forced_history_baseline.sql",checksum:178291902,success:true}
       ]
       and (.platforms | type) == "array"
       and (.platforms | length) == 4
@@ -865,8 +866,8 @@ check_active_release_gate() {
       and .releaseManifestSha256 == $manifestSha256
       and (.releaseManifestSha256 | test("^[0-9a-f]{64}$"))
       and .flyway.validated == true
-      and .flyway.schemaVersion == "29"
-      and .flyway.migrationCount == 29
+      and .flyway.schemaVersion == "30"
+      and .flyway.migrationCount == 30
       and .flyway.v1Sha256 == "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1"
       and .flyway.v2Sha256 == "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd"
       and .flyway.v3Sha256 == "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1"
@@ -896,6 +897,7 @@ check_active_release_gate() {
       and .flyway.v27Sha256 == "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97"
       and .flyway.v28Sha256 == "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020"
       and .flyway.v29Sha256 == "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de"
+      and .flyway.v30Sha256 == "79b4fa544c534f5c6794f99addd33827452300c55435721658799c1a8ae9ce46"
       and .projectionPublisherActive == true
     ' "$report_path" >/dev/null; then
     fail "shadow deployment, active release or Flyway checksum evidence is invalid"
@@ -926,7 +928,7 @@ check_active_release_gate() {
     deploy_release_id="$release_id"
     deploy_manifest_sha256="$manifest_sha256"
     deploy_release_path="$current_release_path"
-    pass "shadow deployment is bound to the active immutable release and frozen V1-V29"
+    pass "shadow deployment is bound to the active immutable release and frozen V1-V30"
     return 0
   fi
   return 1
@@ -1039,8 +1041,8 @@ if require_readable "$RESTORE_VERIFICATION_REPORT" "restore verification report"
       and (.database.datasetRevision as $revision
           | all(.database.projectionStates[];
               .status == "ready" and .datasetRevision == $revision))
-      and .database.flywaySchemaVersion == 29
-      and .database.flywayMigrationCount == 29
+      and .database.flywaySchemaVersion == 30
+      and .database.flywayMigrationCount == 30
       and .database.flywayMigrations == [
           {version:"1",script:"V1__target_baseline.sql",checksum:-1636077697},
           {version:"2",script:"V2__rebuild_core_projections.sql",checksum:839607018},
@@ -1070,11 +1072,12 @@ if require_readable "$RESTORE_VERIFICATION_REPORT" "restore verification report"
           {version:"26",script:"V26__independent_projection_verifier_reads.sql",checksum:-1482835665},
           {version:"27",script:"V27__retained_disabled_platform_period_metrics.sql",checksum:-1466195806},
           {version:"28",script:"V28__identity_command_receipt_verifier_acl.sql",checksum:1374125493},
-          {version:"29",script:"V29__monotonic_native_identity_transitions.sql",checksum:-1547328464}
+          {version:"29",script:"V29__monotonic_native_identity_transitions.sql",checksum:-1547328464},
+          {version:"30",script:"V30__preserve_legacy_forced_history_baseline.sql",checksum:178291902}
       ]
   ' \
       "$RESTORE_VERIFICATION_REPORT" >/dev/null; then
-    pass "latest backup has a successful V1-V29 restore verification"
+    pass "latest backup has a successful V1-V30 restore verification"
   else
     fail "latest backup restore verification is incomplete or failed"
   fi

@@ -90,7 +90,11 @@ the target runtime does not perform an interactive login.
   while history remains `complete`. Later discovery stays `incomplete` and has
   no synthetic row. Telegram MTProto never creates a publication baseline.
 - `forced_incomplete` is monotonic: neither a later `complete` observation nor
-  a later synthetic input may upgrade it or enable a publication-time baseline.
+  a later synthetic input may upgrade it or create a publication-time baseline.
+  V30 allows an independently retained legacy baseline on an already
+  forced-incomplete publication; refresh and replay preserve that stored fact.
+  Imported publications keep their original UUID, including snapshot writes
+  and presence/deletion probes when a provider record resolves to an imported ID.
 - `NULL` remains “unsupported/unavailable”; zero remains an observed zero. VK
   positive-to-zero regressions are persisted as `NULL` with
   `suspected_reset` quality.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 from pathlib import Path
@@ -365,11 +366,18 @@ class BridgeService:
             writes = 0
             used_runs: set[UUID] = set()
             with self.target.transaction():
+                ensured_months = set()
                 for row, publication_id in zip(rows, publication_ids, strict=True):
                     published_at, platform = contexts[publication_id]
                     run_id = self.runs[platform]
                     used_runs.add(run_id)
-                    self.target.ensure_partition(published_at)
+                    month = published_at.date().replace(day=1)
+                    if month not in ensured_months:
+                        # The partition helper holds a transaction-scoped lock
+                        # and repairs grants. Repeat it for every new batch,
+                        # including retries, rather than for every observation.
+                        self.target.ensure_partition(published_at)
+                        ensured_months.add(month)
                     writes += self._import_snapshot(
                         stream,
                         row,
@@ -706,7 +714,7 @@ class BridgeService:
                     category,
                     period,
                     rank,
-                    score,
+                    Decimal(str(score)) if score is not None else None,
                     rating_digest,
                     fetched_at,
                 ),
@@ -1124,7 +1132,7 @@ class BridgeService:
                     institution_id,
                     period,
                     rating_rank,
-                    rating_score,
+                    Decimal(str(rating_score)) if rating_score is not None else None,
                     rating_digest,
                     as_utc(
                         row.get("m_rating_measured_at"),

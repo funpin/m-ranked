@@ -13,7 +13,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "typecheck:contract": "tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM,DOM.Iterable ../contracts/openapi/m-ranked-v1-client.ts",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check": "pnpm lint && pnpm typecheck && pnpm check:api && pnpm test && pnpm test:e2e && pnpm test:visual && pnpm build && pnpm check:bundle",
+    "check": "pnpm lint && pnpm typecheck && pnpm check:api && pnpm test && pnpm test:e2e && pnpm build && pnpm check:bundle",
     "generate:api": "node scripts/generate-openapi.mjs",
     "check:api": "node scripts/generate-openapi.mjs --check",
     "lint": "eslint .",

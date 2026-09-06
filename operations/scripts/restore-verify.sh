@@ -201,9 +201,9 @@ BEGIN
       FROM flyway.flyway_schema_history
      WHERE version IS NOT NULL
        AND success;
-    IF migration_count <> 29 OR latest_migration <> 29
+    IF migration_count <> 30 OR latest_migration <> 30
        OR migration_versions IS DISTINCT FROM
-          ARRAY['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29']::text[]
+          ARRAY['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30']::text[]
        OR EXISTS (
            SELECT 1 FROM flyway.flyway_schema_history
             WHERE version IS NOT NULL AND NOT success
@@ -243,7 +243,8 @@ BEGIN
                  ('26', 'V26__independent_projection_verifier_reads.sql', -1482835665),
                  ('27', 'V27__retained_disabled_platform_period_metrics.sql', -1466195806),
                  ('28', 'V28__identity_command_receipt_verifier_acl.sql', 1374125493),
-                 ('29', 'V29__monotonic_native_identity_transitions.sql', -1547328464)
+                 ('29', 'V29__monotonic_native_identity_transitions.sql', -1547328464),
+                 ('30', 'V30__preserve_legacy_forced_history_baseline.sql', 178291902)
              ) AS expected(version, script, checksum)
              FULL JOIN (
                  SELECT version, script, checksum
@@ -256,7 +257,7 @@ BEGIN
                OR actual.script IS DISTINCT FROM expected.script
                OR actual.checksum IS DISTINCT FROM expected.checksum
        ) THEN
-        RAISE EXCEPTION 'restored Flyway history does not match frozen V1-V29';
+        RAISE EXCEPTION 'restored Flyway history does not match frozen V1-V30';
     END IF;
     SELECT max(id) INTO latest_revision FROM analytics.dataset_revision;
     IF latest_revision IS NULL THEN

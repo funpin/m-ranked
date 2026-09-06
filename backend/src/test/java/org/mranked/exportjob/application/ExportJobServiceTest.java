@@ -42,13 +42,16 @@ class ExportJobServiceTest {
         return new ExportJobService(new ExportJobGenerator(revisions, rows), revisions, directory, policy, clock);
     }
     static ExportJobService.JobView finished(ExportJobService service, String owner, UUID id) throws Exception {
-        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        return finished(service, owner, id, Duration.ofSeconds(15));
+    }
+    static ExportJobService.JobView finished(ExportJobService service, String owner, UUID id, Duration timeout) throws Exception {
+        long end = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < end) {
             var result = service.status(owner, id);
             if (result.state() != ExportJobService.State.queued && result.state() != ExportJobService.State.running) return result;
             Thread.sleep(5);
         }
-        throw new AssertionError("Export did not finish");
+        throw new AssertionError("Export did not finish within " + timeout + ": " + service.status(owner, id));
     }
 
     @Test

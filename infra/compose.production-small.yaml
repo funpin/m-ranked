@@ -1,0 +1,39 @@
+# Bounded PostgreSQL footprint for the existing 2 GiB production host.
+# Overlay: compose.yaml + this file. Start postgres alone during backfill.
+services:
+  postgres:
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.65
+    shm_size: 128mb
+    command:
+      - postgres
+      - -c
+      - shared_buffers=96MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=30
+      - -c
+      - max_parallel_workers_per_gather=0
+      - -c
+      - max_parallel_maintenance_workers=0
+      - -c
+      - max_wal_size=512MB
+      - -c
+      - min_wal_size=80MB
+      - -c
+      - wal_compression=on
+      - -c
+      - temp_file_limit=512MB
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  redis:
+    mem_limit: 80m
+    memswap_limit: 80m
+    cpus: 0.10

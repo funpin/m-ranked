@@ -48,3 +48,24 @@ def test_failed_spring_command_retains_diagnostics_before_raising(tmp_path):
         gate.command('spring',[sys.executable,'-c','raise SystemExit(1)'])
     assert 'opaque-secret' not in (tmp_path/'spring-junit/TEST-failed.xml').read_text()
     assert gate.results[-1]['exitCode']==1
+
+
+def test_private_temp_root_is_used_for_pytest_without_lengthening_browser_ipc_paths(tmp_path):
+    from migration.integration.run import Gate
+    gate = Gate(tmp_path / 'evidence')
+    private = tmp_path / 'private-provenance-runtime'
+    private.mkdir(mode=0o700)
+    gate.pytest_tmpdir = str(private)
+    probe = tmp_path / 'test_temp_probe.py'
+    probe.write_text(
+        'import os, tempfile\nfrom pathlib import Path\n'
+        'def test_root():\n'
+        '    assert Path(tempfile.gettempdir()).resolve() == Path(os.environ["EXPECTED_TEMP"]).resolve()\n'
+    )
+    env = {'EXPECTED_TEMP': str(private)}
+    gate.command('python-probe', [sys.executable, '-m', 'pytest', '-q', str(probe)], env=env)
+    # Non-pytest children (Node, Playwright, Java) keep their normal short temp
+    # root; Unix-domain socket paths have a much smaller limit than file paths.
+    gate.command('browser-probe', [sys.executable, '-c',
+        'import os,tempfile; assert tempfile.gettempdir() != os.environ["EXPECTED_TEMP"]'], env=env)
+    assert [result['exitCode'] for result in gate.results] == [0, 0]

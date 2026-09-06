@@ -1290,7 +1290,9 @@ def _script_native_csv(connection,publication_id,month,snapshot_id,evidence):
     connection.execute("INSERT INTO analytics.legacy_native_export_lexeme VALUES (%s,%s)",(month,snapshot_id))
 
 
-def test_repository_commits_observation_lineage_revision_and_outbox_atomically(monkeypatch) -> None:
+def test_repository_commits_observation_lineage_revision_and_outbox_atomically(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
     monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv",_script_native_csv)
     connection = _ScriptedConnection()
     repository = PostgresCollectorRepository(connection_factory=lambda: connection)
@@ -1331,7 +1333,9 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     assert "UPDATE ingest.collection_account_result" in sql
 
 
-def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch) -> None:
+def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
     monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv",_script_native_csv)
     connection = _ScriptedConnection(fail_on_outbox=True)
     repository = PostgresCollectorRepository(connection_factory=lambda: connection)

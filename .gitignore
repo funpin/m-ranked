@@ -9,6 +9,7 @@ __pycache__/
 .pnpm-store/
 backend/target/
 migration/reports/**/backend-build/
+migration/reports/**/mranked-integration-*/
 operations/**/evidence/**/backend-build/
 operations/**/evidence/**/test-runtime/
 *.pyc

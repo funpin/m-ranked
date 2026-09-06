@@ -356,6 +356,7 @@ required_files=(
   backend/src/main/resources/db/migration/V27__retained_disabled_platform_period_metrics.sql
   backend/src/main/resources/db/migration/V28__identity_command_receipt_verifier_acl.sql
   backend/src/main/resources/db/migration/V29__monotonic_native_identity_transitions.sql
+  backend/src/main/resources/db/migration/V30__preserve_legacy_forced_history_baseline.sql
   frontend/server.js
   .venv/bin/python
   collector_target/__main__.py
@@ -477,6 +478,7 @@ expected_migration_files="$(printf '%s\n' \
   V28__identity_command_receipt_verifier_acl.sql \
   V29__monotonic_native_identity_transitions.sql \
   V2__rebuild_core_projections.sql \
+  V30__preserve_legacy_forced_history_baseline.sql \
   V3__collector_observation_times_and_identity_grants.sql \
   V4__admin_collection_run_status_grants.sql \
   V5__legacy_activity_period_projection.sql \
@@ -489,7 +491,7 @@ actual_migration_files="$(
   find . -mindepth 1 -maxdepth 1 -print | sed 's#^\./##' | sort
 )"
 if [[ "$actual_migration_files" != "$expected_migration_files" ]]; then
-  echo "Flyway migration directory does not match the frozen V1-V29 manifest" >&2
+  echo "Flyway migration directory does not match the frozen V1-V30 manifest" >&2
   exit 65
 fi
 
@@ -745,6 +747,7 @@ capture_frozen_release_provenance() {
   captured_v27_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V27__retained_disabled_platform_period_metrics.sql" | cut -d' ' -f1)"
   captured_v28_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V28__identity_command_receipt_verifier_acl.sql" | cut -d' ' -f1)"
   captured_v29_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V29__monotonic_native_identity_transitions.sql" | cut -d' ' -f1)"
+  captured_v30_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V30__preserve_legacy_forced_history_baseline.sql" | cut -d' ' -f1)"
   if [[ "$captured_v1_sha256" != dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1 \
         || "$captured_v2_sha256" != 113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd \
         || "$captured_v3_sha256" != 5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1 \
@@ -773,8 +776,9 @@ capture_frozen_release_provenance() {
         || "$captured_v26_sha256" != 1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8 \
         || "$captured_v27_sha256" != 95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97 \
         || "$captured_v28_sha256" != 215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020 \
-        || "$captured_v29_sha256" != b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de ]]; then
-    echo "frozen Flyway V1-V29 checksum mismatch" >&2
+        || "$captured_v29_sha256" != b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de \
+        || "$captured_v30_sha256" != 79b4fa544c534f5c6794f99addd33827452300c55435721658799c1a8ae9ce46 ]]; then
+    echo "frozen Flyway V1-V30 checksum mismatch" >&2
     return 65
   fi
 }
@@ -940,6 +944,7 @@ v26_hash="$captured_v26_sha256"
 v27_hash="$captured_v27_sha256"
 v28_hash="$captured_v28_sha256"
 v29_hash="$captured_v29_sha256"
+v30_hash="$captured_v30_sha256"
 assert_installed_release_stable
 
 if [[ "$activate_shadow" == false ]]; then
@@ -989,14 +994,14 @@ flyway_info_json="$(
 )"
 assert_installed_release_stable
 if ! jq -e '
-    .schemaVersion == "29"
+    .schemaVersion == "30"
     and (.migrations | type) == "array"
-    and (.migrations | length) == 29
+    and (.migrations | length) == 30
     and ([.migrations[] | .version] | sort)
-        == ["1", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "2", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "3", "4", "5", "6", "7", "8", "9"]
+        == ["1", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "2", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "3", "30", "4", "5", "6", "7", "8", "9"]
     and all(.migrations[]; .category == "Versioned" and .state == "Success")
   ' <<<"$flyway_info_json" >/dev/null; then
-  echo "Flyway schema version/count/state does not match frozen V1-V29" >&2
+  echo "Flyway schema version/count/state does not match frozen V1-V30" >&2
   exit 65
 fi
 flyway_engine_version="$(jq -r '.flywayVersion // empty' <<<"$flyway_info_json")"
@@ -1102,6 +1107,7 @@ if [[ "$activation_failed" == false ]]; then
     v27_hash="$captured_v27_sha256"
     v28_hash="$captured_v28_sha256"
     v29_hash="$captured_v29_sha256"
+    v30_hash="$captured_v30_sha256"
   fi
 fi
 
@@ -1168,13 +1174,14 @@ jq -n \
   --arg v27Sha256 "$v27_hash" \
   --arg v28Sha256 "$v28_hash" \
   --arg v29Sha256 "$v29_hash" \
+  --arg v30Sha256 "$v30_hash" \
   --arg flywayVersion "$flyway_engine_version" \
   '{status:$status,releaseId:$releaseId,
     releaseManifestSha256:$releaseManifestSha256,releasePath:$releasePath,
     previousRelease:(if $previousRelease=="" then null else $previousRelease end),
     operator:$operator,changeTicket:$ticket,finishedAt:$finishedAt,
-    flyway:{schemaVersion:"29",migrationCount:29,engineVersion:$flywayVersion,
-      v1Sha256:$v1Sha256,v2Sha256:$v2Sha256,v3Sha256:$v3Sha256,v4Sha256:$v4Sha256,v5Sha256:$v5Sha256,v6Sha256:$v6Sha256,v7Sha256:$v7Sha256,v8Sha256:$v8Sha256,v9Sha256:$v9Sha256,v10Sha256:$v10Sha256,v11Sha256:$v11Sha256,v12Sha256:$v12Sha256,v13Sha256:$v13Sha256,v14Sha256:$v14Sha256,v15Sha256:$v15Sha256,v16Sha256:$v16Sha256,v17Sha256:$v17Sha256,v18Sha256:$v18Sha256,v19Sha256:$v19Sha256,v20Sha256:$v20Sha256,v21Sha256:$v21Sha256,v22Sha256:$v22Sha256,v23Sha256:$v23Sha256,v24Sha256:$v24Sha256,v25Sha256:$v25Sha256,v26Sha256:$v26Sha256,v27Sha256:$v27Sha256,v28Sha256:$v28Sha256,v29Sha256:$v29Sha256,validated:true},
+    flyway:{schemaVersion:"30",migrationCount:30,engineVersion:$flywayVersion,
+      v1Sha256:$v1Sha256,v2Sha256:$v2Sha256,v3Sha256:$v3Sha256,v4Sha256:$v4Sha256,v5Sha256:$v5Sha256,v6Sha256:$v6Sha256,v7Sha256:$v7Sha256,v8Sha256:$v8Sha256,v9Sha256:$v9Sha256,v10Sha256:$v10Sha256,v11Sha256:$v11Sha256,v12Sha256:$v12Sha256,v13Sha256:$v13Sha256,v14Sha256:$v14Sha256,v15Sha256:$v15Sha256,v16Sha256:$v16Sha256,v17Sha256:$v17Sha256,v18Sha256:$v18Sha256,v19Sha256:$v19Sha256,v20Sha256:$v20Sha256,v21Sha256:$v21Sha256,v22Sha256:$v22Sha256,v23Sha256:$v23Sha256,v24Sha256:$v24Sha256,v25Sha256:$v25Sha256,v26Sha256:$v26Sha256,v27Sha256:$v27Sha256,v28Sha256:$v28Sha256,v29Sha256:$v29Sha256,v30Sha256:$v30Sha256,validated:true},
     projectionPublisherActive:true,
     publicRoutingChanged:false,legacyUnitsChanged:false}' >"$report_tmp"
 chmod 0600 "$report_tmp"

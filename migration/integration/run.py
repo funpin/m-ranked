@@ -50,9 +50,14 @@ class Gate:
     def command(self, name, args, *, env=None, cwd=ROOT, timeout=900):
         print(f'[{name}] started', flush=True)
         start = time.monotonic()
+        command_env=self.environment | (env or {})
+        if args[1:3] == ['-m','pytest'] and hasattr(self, 'pytest_tmpdir'):
+            # Only provenance fixtures need the private ancestry. Browser/Node
+            # IPC sockets must retain the host's short system temporary path.
+            command_env['TMPDIR']=self.pytest_tmpdir
         with (self.output / f'{name}.log').open('w') as log:
             try:
-                result = subprocess.run(args, cwd=cwd, env=self.environment | (env or {}),
+                result = subprocess.run(args, cwd=cwd, env=command_env,
                                         stdout=log, stderr=subprocess.STDOUT, timeout=timeout)
                 code = result.returncode
             except subprocess.TimeoutExpired:
@@ -87,7 +92,7 @@ class Gate:
         if not cases or any(list(c.iter('skipped')) for c in cases):
             raise RuntimeError(f'{path.name}: required integration tests were skipped')
 
-    def run(self, *, python, maven, visual=False):
+    def run(self, *, python, maven, visual=False, semantic_only=False):
         resolved_python=shutil.which(python)
         if resolved_python is None:
             raise FileNotFoundError('integration Python executable is unavailable')
@@ -95,11 +100,15 @@ class Gate:
         project = 'mranked-ci-'+uuid.uuid4().hex[:12]
         pg_port, redis_port = free_port(), free_port()
         self.secrets = {key:secrets.token_hex(24) for key in PASSWORDS}
-        with tempfile.TemporaryDirectory(prefix='mranked-integration-') as directory:
+        # Provenance fixtures deliberately reject any world-writable ancestor
+        # (including /tmp). Keep disposable runtime files below the private run
+        # directory and give pytest children the same trusted temporary root.
+        with tempfile.TemporaryDirectory(prefix='mranked-integration-', dir=self.output) as directory:
             # macOS exposes its temp directory through /var -> /private/var.
             # Resolve this already-owned directory before handing its path to
             # producers that intentionally reject symlinked storage ancestors.
             directory=str(Path(directory).resolve())
+            self.pytest_tmpdir=directory
             self.environment['MRANKED_IDENTITY_RECEIPT_DIR']=str(Path(directory)/'identity-receipts')
             envfile = Path(directory)/'services.env'
             envfile.write_text('\n'.join(k+'='+v for k,v in self.secrets.items())+
@@ -107,7 +116,8 @@ class Gate:
             envfile.chmod(0o600)
             compose=['docker','compose','--project-name',project,'--env-file',str(envfile),'-f',str(ROOT/'infra/compose.yaml')]
             container=project+'-postgres-1'
-            dbnames=('clean_it','upgrade_it','bridge_it','collector_it','reverse_it','ledger_it','catalog_it','native_it','history_it')
+            dbnames=(('clean_it','upgrade_it','bridge_it') if visual or semantic_only else
+                     ('clean_it','upgrade_it','bridge_it','collector_it','reverse_it','ledger_it','catalog_it','native_it','history_it','partition_it'))
             def url(db): return f'jdbc:postgresql://127.0.0.1:{pg_port}/{db}'
             def dsn(db,role,key):
                 return f'host=127.0.0.1 port={pg_port} dbname={db} user={role} password={self.secrets[key]}'
@@ -120,17 +130,24 @@ class Gate:
                 self.command('services',compose+['up','-d','--wait','postgres','redis'])
                 for db in dbnames:
                     self.command('create-'+db,['docker','exec',container,'psql','-U','mranked_bootstrap','-d','postgres','-v','ON_ERROR_STOP=1','-c',f'CREATE DATABASE {db} OWNER migration_owner'])
-                self.command('create-golden_it',['docker','exec',container,'psql','-U','mranked_bootstrap','-d','postgres','-v','ON_ERROR_STOP=1','-c','CREATE DATABASE golden_it OWNER migration_owner'])
+                if not (visual or semantic_only):
+                    self.command('create-golden_it',['docker','exec',container,'psql','-U','mranked_bootstrap','-d','postgres','-v','ON_ERROR_STOP=1','-c','CREATE DATABASE golden_it OWNER migration_owner'])
                 self.command('flyway-clean-upgrade',mvn+['-Pmigration-integration','-Dtest=MigrationInstallationTest#cleanInstallationAndFrozenV8UpgradeHaveTheSameManifest','test'],env=migration_env,cwd=ROOT/'backend')
                 for db in dbnames[2:]:
                     self.command('flyway-'+db,mvn+['-Pmigration-integration','-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase','test'],env=migration_env|{'MRANKED_REHEARSAL_INSTALL_URL':url(db)},cwd=ROOT/'backend')
                 self.command('redis-ping',['docker','exec',project+'-redis-1','sh','-c','REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning ping'])
-                if visual:
+                if visual or semantic_only:
                     self.visual(python=python,mvn=mvn,directory=Path(directory),database_url=url('bridge_it'),
-                                bridge_dsn=dsn('bridge_it','migration_bridge','MIGRATION_BRIDGE_DB_PASSWORD'))
+                                bridge_dsn=dsn('bridge_it','migration_bridge','MIGRATION_BRIDGE_DB_PASSWORD'),
+                                inspect_dsn=dsn('bridge_it','migration_owner','MIGRATION_DB_PASSWORD'),
+                                capture_visual=not semantic_only)
                     return
                 pg=dsn('bridge_it','migration_bridge','MIGRATION_BRIDGE_DB_PASSWORD')
                 admin=dsn('bridge_it','mranked_bootstrap','POSTGRES_SUPERUSER_PASSWORD')
+                # Performance fixtures import their own source namespaces. Keep
+                # them out of the exact identity-history and query-plan corpus.
+                self.command('partition-batches',[python,'-m','pytest','-q','tests/test_migration_partition_postgres.py','--junitxml='+str(self.output/'partition-batches.xml')],env={'MRANKED_TEST_POSTGRES_DSN':dsn('partition_it','migration_bridge','MIGRATION_BRIDGE_DB_PASSWORD')})
+                self.junit_no_skip(self.output/'partition-batches.xml')
                 self.command('bridge',[python,'-m','pytest','-q','tests/test_migration_bridge_postgres.py','tests/test_bridge_actual_target_postgres.py','-k','not missing_source_row and not cleared_native_identity','--junitxml='+str(self.output/'bridge.xml')],env={'MRANKED_TEST_POSTGRES_DSN':pg,'MRANKED_TEST_POSTGRES_ADMIN_DSN':admin})
                 self.junit_no_skip(self.output/'bridge.xml')
                 # Native clear/re-enrollment starts from its own accepted source.
@@ -196,11 +213,12 @@ class Gate:
                 # Names are random and created by this invocation; no external volumes accepted.
                 self.command('cleanup',compose+['down','--volumes','--remove-orphans'])
 
-    def visual(self, *, python, mvn, directory, database_url, bridge_dsn):
+    def visual(self, *, python, mvn, directory, database_url, bridge_dsn, inspect_dsn, capture_visual=True):
         """One browser runtime, two real servers, one immutable fixture and clock."""
         fixture=directory/'visual.sqlite'
         producer=ROOT/'frontend/scripts/legacy-fixture.py'
-        self.command('visual-fixture',[python,str(producer),'--database',str(fixture)])
+        self.command('visual-fixture',[python,str(producer),'--database',str(fixture),
+                                      *(['--overview-status-only'] if not capture_visual else [])])
         manifest=fixture.with_suffix('.manifest.json')
         clock=json.loads(manifest.read_text())['clock']
         epoch=datetime.fromisoformat(clock).timestamp()
@@ -265,7 +283,10 @@ class Gate:
                 revision=json.load(response)
             runtime_path=self.output/'visual-runtime.json'
             runtime={'apiBaseUrl':api,'sourceSha256':hashlib.sha256(fixture.read_bytes()).hexdigest(),
-                     'database':inspect_database(bridge_dsn),'revision':revision,
+                     # The bridge role cannot read every analytics projection.
+                     # The inspector enforces a read-only transaction while
+                     # reading counts and Flyway history through the owner.
+                     'database':inspect_database(inspect_dsn),'revision':revision,
                      'jarSha256':hashlib.sha256((self.output/'backend-build/m-ranked-backend-0.1.0-SNAPSHOT.jar').read_bytes()).hexdigest(),
                      'productionAcceptance':False,'writerGate':'CLOSED'}
             runtime_path.write_text(json.dumps(runtime,indent=2)+'\n')
@@ -276,8 +297,9 @@ class Gate:
                 'LEGACY_BASE_URL':legacy,'TARGET_BASE_URL':target,'VISUAL_FIXTURE_MANIFEST':str(manifest),
                 'VISUAL_RUNTIME_EVIDENCE':str(runtime_path),'NEXT_DIST_DIR':dist,
                 'VISUAL_OUTPUT':str(self.output/'visual'),'SEMANTIC_OUTPUT':str(self.output/'overview-semantics')}|auth
-            self.command('overview-semantics',['pnpm','exec','tsx','scripts/overview-semantic-parity.mts'],cwd=ROOT/'frontend',env=visual_env,timeout=1200)
-            self.command('visual-parity',['pnpm','test:visual'],cwd=ROOT/'frontend',env=visual_env,timeout=2400)
+            self.command('overview-semantics',['node','--import','tsx','scripts/overview-semantic-parity.mts'],cwd=ROOT/'frontend',env=visual_env,timeout=1200)
+            if capture_visual:
+                self.command('visual-parity',['pnpm','test:visual'],cwd=ROOT/'frontend',env=visual_env,timeout=2400)
         finally:
             for server in reversed(servers):
                 server.terminate()
@@ -292,10 +314,12 @@ def main():
     parser.add_argument('--output',type=Path,default=ROOT/'migration/reports'/('integration-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')))
     parser.add_argument('--python',default=sys.executable)
     parser.add_argument('--maven',default=str(ROOT/'backend/mvnw'))
-    parser.add_argument('--visual-only',action='store_true',help='Run real frozen dataset visual gate in its own disposable services')
+    browser_mode=parser.add_mutually_exclusive_group()
+    browser_mode.add_argument('--visual-only',action='store_true',help='Audit historical legacy pixels in disposable services; intentional UI changes can differ')
+    browser_mode.add_argument('--semantic-only',action='store_true',help='Verify public data semantics against the frozen legacy corpus without requiring historical pixels')
     args=parser.parse_args()
     from migration.legacy_reference import reference_root
     reference_root()  # Fail before provisioning services if the oracle is absent.
-    Gate(args.output).run(python=args.python,maven=args.maven,visual=args.visual_only)
+    Gate(args.output).run(python=args.python,maven=args.maven,visual=args.visual_only,semantic_only=args.semantic_only)
 
 if __name__=='__main__': main()

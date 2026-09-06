@@ -61,7 +61,19 @@ ceiling on revealing a point. Changing publication resets range and selection.
 
 ## Reproducible checks
 
-`pnpm lint`, `pnpm typecheck`, `pnpm check:api`, `pnpm test`, `pnpm test:e2e`, `pnpm build`, `pnpm check:bundle`.
+`pnpm check` runs lint, typecheck, OpenAPI drift, unit tests, browser tests,
+production build and bundle budgets. It provisions its own browser API fixture
+and does not require a running legacy server. Use Node 24 and the pinned pnpm;
+install Chromium once with `pnpm exec playwright install chromium`.
+
+The required real PostgreSQL/Spring comparison runs separately through
+`migration.integration.run --semantic-only`; see the
+[integration instructions](../migration/integration/README.md). It compares all
+overview statuses and resolves legacy destinations to their current canonical
+identities. `pnpm test:visual` remains an explicit historical pixel audit and is
+excluded from `pnpm check`: the current UUID routes and shared publication charts
+intentionally differ from the old Python UI. Historical reports below retain
+their original scope and results.
 
 Playwright starts an explicit contract-shaped API test double on 18091 and a fresh standalone production Next build on 18092. It checks interactions, validation, continuation, history, back/forward, menu, theme, private catalog role/form behavior, cache headers and axe AA at 1440×900 and 390×844. That run proves frontend behavior, not PG mutations or legacy numeric parity. Reports are under `test-results/`; `PLAYWRIGHT_REPORT` selects a distinct report file. `PLAYWRIGHT_PRODUCTION=false` enables the development server for diagnostics, but its SSR cache-header behavior cannot establish the private production cache gate.
 

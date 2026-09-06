@@ -2,6 +2,15 @@ import type { Page } from "@playwright/test";
 
 export type OverviewStatus = { title:string; href:string|null; text:string; kind:string };
 
+// The old card destination may now redirect to /accounts/{uuid}. Resolve that
+// exact old identity through the compatibility route before comparing links;
+// never drop hrefs or accept an arbitrary UUID with the right display name.
+export async function canonicalOverviewStatuses(rows:OverviewStatus[],resolveHref:(href:string)=>Promise<string>):Promise<OverviewStatus[]> {
+  const result:OverviewStatus[]=[];
+  for(const row of rows) result.push({...row,href:row.href===null?null:await resolveHref(row.href)});
+  return result;
+}
+
 // Read user-visible state independently from the API and its rendering helper.
 export async function readOverviewStatuses(page:Page):Promise<OverviewStatus[]> {
   return page.locator(".overview-grid .overview-card").evaluateAll((cards)=>cards.map((card)=>{

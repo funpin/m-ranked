@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timedelta
 import re
 import os
@@ -496,20 +497,29 @@ class PostgresCollectorRepository:
                     }
                     identity_receipt = IdentityEvidenceStore(configured_root()/"collector"/batch.context.platform.value).put(receipt)
 
+            persisted_ids = {}
             for publication in batch.publications:
-                discovered, snapshot, publication_changed = self._persist_publication(
+                publication_id, discovered, snapshot, publication_changed = self._persist_publication(
                     connection, batch, publication,
                 )
+                persisted_ids[publication.id] = publication_id
                 discovered_count += int(discovered)
                 snapshot_count += int(snapshot)
                 changed = changed or publication_changed
 
-            explicit_probe_ids = {
-                probe.publication_id for probe in batch.deletion_probes
-            }
+            # Imported publications retain their legacy UUID. Use the identity
+            # resolved while persisting, including when suppressing presence
+            # probes in favor of an explicit probe from the tracked record.
+            explicit_probes = tuple(
+                replace(probe, publication_id=persisted_ids.get(
+                    probe.publication_id, probe.publication_id,
+                ))
+                for probe in batch.deletion_probes
+            )
+            explicit_probe_ids = {probe.publication_id for probe in explicit_probes}
             presence_probes = tuple(
                 CanonicalDeletionProbe(
-                    publication.id,
+                    persisted_ids[publication.id],
                     publication.snapshot.observed_at,
                     DeletionProbeOutcome.PRESENT,
                     f"{batch.context.platform.value}_publication_observed",
@@ -517,11 +527,11 @@ class PostgresCollectorRepository:
                 )
                 for publication in batch.publications
                 if (
-                    publication.id not in explicit_probe_ids
+                    persisted_ids[publication.id] not in explicit_probe_ids
                     and not publication.snapshot.synthetic
                 )
             )
-            for probe in (*presence_probes, *batch.deletion_probes):
+            for probe in (*presence_probes, *explicit_probes):
                 probe_changed = self._persist_deletion_probe(
                     connection, batch, probe,
                 )
@@ -765,7 +775,7 @@ class PostgresCollectorRepository:
         connection: Any,
         batch: CanonicalAccountBatch,
         publication: CanonicalPublication,
-    ) -> tuple[bool, bool, bool]:
+    ) -> tuple[UUID, bool, bool, bool]:
         if publication.account_id != batch.account.id:
             raise ValueError("publication account does not match batch account")
         lock_name = f"publication:{batch.account.id}:{publication.external_id}"
@@ -827,7 +837,8 @@ class PostgresCollectorRepository:
                    END,
                    synthetic_baseline_allowed=CASE
                        WHEN current.history_completeness='forced_incomplete'
-                         OR excluded.history_completeness='forced_incomplete'
+                           THEN current.synthetic_baseline_allowed
+                       WHEN excluded.history_completeness='forced_incomplete'
                            THEN false
                        ELSE current.synthetic_baseline_allowed
                            OR excluded.synthetic_baseline_allowed
@@ -866,7 +877,8 @@ class PostgresCollectorRepository:
                        END,
                        CASE
                            WHEN current.history_completeness='forced_incomplete'
-                             OR excluded.history_completeness='forced_incomplete'
+                               THEN current.synthetic_baseline_allowed
+                           WHEN excluded.history_completeness='forced_incomplete'
                                THEN false
                            ELSE current.synthetic_baseline_allowed
                                OR excluded.synthetic_baseline_allowed
@@ -1022,6 +1034,7 @@ class PostgresCollectorRepository:
             from .legacy_csv import persist_native_csv
             persist_native_csv(connection,publication_id,snapshot.published_month,snapshot_id,snapshot.sanitized_source)
         return (
+            publication_id,
             not known,
             snapshot_inserted,
             publication_changed or identity_changed or snapshot_inserted,

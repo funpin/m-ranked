@@ -1384,7 +1384,8 @@ _mranked_transition_lock_acquire "$2" "$3" "$4" "$5" "$6"
   source "$1"
   _mranked_transition_lock_acquire "$2" "$3" "$4" "$5" "$6"
 ' transition-lock-nested "$1" "$2" "$3" "$4" "$5" "$6"
-printf nested-ok >"$7"
+printf nested-ok >"$7.tmp"
+mv -- "$7.tmp" "$7"
 IFS= read -r _
 """
     clean_env = os.environ.copy()

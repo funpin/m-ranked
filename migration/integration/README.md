@@ -2,7 +2,7 @@
 
 `run.py` creates a randomly named Docker Compose project, private credentials,
 empty PostgreSQL databases and Redis. It runs real Flyway clean installation and
-the frozen V1–V8 upgrade, then bridge, native identity, complete identity history,
+the frozen V8 → V29 → V30 upgrade, then bridge, native identity, complete identity history,
 owner-preserved source, archive, collectors, observation integrity, operational
 projection guards, metrics, Spring, query plans, the full Python suite and reverse
 sync. Each mutation-heavy fixture receives its own database when its retained
@@ -11,6 +11,18 @@ reject skipped tests. The no-service Python pass may skip those same tests, whic
 already run with real credentials in the preceding mandatory steps.
 
 From the repository root with Docker, Java 21, Maven and Python 3.13 dependencies:
+
+Operational shell tests also require Bash, GNU coreutils, GNU awk and `jq`.
+CI explicitly installs `gawk`/`jq` and creates `.venv`, which is also used by the
+release's isolated Python wrappers. The runner places temporary fixtures below
+its private output directory: provenance tests intentionally reject a writable
+ancestor such as `/tmp`. Use an output directory under a trusted checkout.
+Temporary runtime directories are removed on exit, ignored by Git and excluded
+from CI artifact uploads, including interrupted runs; private service credentials
+must never become retained test evidence.
+
+Set `MRANKED_LEGACY_REFERENCE_ROOT` to the separate trusted checkout described in
+[legacy-reference.md](../legacy-reference.md) before either integration command.
 
 ```sh
 rtk proxy .venv/bin/python -m migration.integration.run \
@@ -24,20 +36,42 @@ No developer-local `.venv` path is required in CI. Failed attempts retain their
 logs and reports. The runner removes only its own containers, databases and
 volumes in `finally`; output paths must be new for every invocation.
 
-For the real browser baseline, install frontend dependencies and Playwright's
-pinned Chromium, then run the self-provisioned visual mode:
+For the required real-browser overview status/identity comparison, install Node
+24, frontend dependencies and Playwright's pinned Chromium, then run:
+
+```sh
+rtk proxy .venv/bin/python -m migration.integration.run --semantic-only \
+  --output migration/reports/unique-browser-semantics-run
+```
+
+The comparison follows each old card's destination through the target's
+compatibility redirects before checking its canonical UUID link. Text, warning
+state, order, counts and every continuation page still have to match. Numeric,
+CSV, mutation and history integrity remain mandatory in the PostgreSQL/Spring
+suite; frontend route/chart interactions are covered by `pnpm check`.
+The `overview-status` fixture profile keeps all 207 institutions and more than
+200 accounts per platform, using short histories for added accounts. It is not
+a performance or long-horizon chart corpus. The default `legacy-visual` profile
+retains the historical 16-day histories and over 8 million comparison points.
+
+The historical pixel comparison is a separate diagnostic audit:
 
 ```sh
 rtk proxy .venv/bin/python -m migration.integration.run --visual-only \
   --output migration/reports/unique-visual-run
 ```
 
-The producer creates the representative original SQLite fixture, imports it,
+Both browser modes create the representative original SQLite fixture, import it,
 starts the original legacy application and the packaged Spring/Next servers,
-and captures both in one browser runtime. Authentication is confined to private
+and inspect both in one browser runtime. Authentication is confined to private
 fixture credentials. Browser form mutation tests must use a separate disposable
 database, leaving the visual/performance corpus frozen. Frontend lint, typecheck,
 OpenAPI drift, unit and route tests also run in `.github/workflows/migration.yml`.
+CI requires the current stack checks and `--semantic-only`. The old 0.5% pixel
+threshold targets the Python UI before canonical routes and shared history
+charts; it is not an acceptance criterion for those intentional changes.
+`--visual-only` and the manual workflow input `legacy_pixel_audit` preserve that
+historical audit without silently relaxing its threshold or rewriting evidence.
 
 ## Verify an existing frozen corpus without writing PostgreSQL
 

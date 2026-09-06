@@ -12,6 +12,7 @@ from app.public_web import PublicChannel
 from collector_target.adapters import telegram_public_batch
 from collector_target.model import (
     AccountRef,
+    CanonicalDeletionProbe,
     CollectionContext,
     DeletionProbeOutcome,
     HistoryCompleteness,
@@ -33,7 +34,8 @@ def _dsn(name: str) -> str:
     return value
 
 
-def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible() -> None:
+@pytest.mark.parametrize("retained_legacy_baseline", [False, True])
+def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible(retained_legacy_baseline: bool) -> None:
     psycopg = pytest.importorskip("psycopg")
     from psycopg.rows import dict_row
 
@@ -265,6 +267,17 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible() 
             forced_context, forced_context.started_at,
         ).status.value == "succeeded"
 
+        # V30 also accepts the independent decision stored in legacy SQLite.
+        # Import supplies it verbatim; future collection must not erase it.
+        # The False case continues to exercise native forced-incomplete history,
+        # where even a later synthetic/complete input cannot create a baseline.
+        if retained_legacy_baseline:
+            admin.execute(
+                """UPDATE ingest.publication SET synthetic_baseline_allowed=true
+                   WHERE primary_account_id=%s AND history_completeness='forced_incomplete'""",
+                (account_id,),
+            )
+
         contradictory_raw = telegram_public_batch(
             account=account,
             channel=PublicChannel(
@@ -315,7 +328,7 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible() 
         ).fetchone()
         assert merged_state == {
             "history_completeness": "forced_incomplete",
-            "synthetic_baseline_allowed": False,
+            "synthetic_baseline_allowed": retained_legacy_baseline,
         }
         assert admin.execute(
             """SELECT count(*) AS count
@@ -409,7 +422,8 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible() 
             admin.close()
 
 
-def test_real_postgres_account_transaction_is_idempotent_and_atomic() -> None:
+@pytest.mark.parametrize("imported_publication_id", [False, True])
+def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_publication_id: bool) -> None:
     psycopg = pytest.importorskip("psycopg")
     from psycopg.rows import dict_row
 
@@ -524,6 +538,10 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic() -> None:
             "1",
         )
         batch = CanonicalNormalizer().normalize(raw, context)
+        if imported_publication_id:
+            # Legacy identities point to an existing UUID different from the
+            # native deterministic UUID produced on subsequent collections.
+            batch = replace(batch, publications=(replace(batch.publications[0], id=uuid4()),))
         first = repository.persist_account_batch(batch)
         second = repository.persist_account_batch(batch)
         assert first.snapshot_count == 1
@@ -800,6 +818,18 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic() -> None:
             "consecutive_missing": 0,
             "deleted_at": None,
         }
+        # A foreign/unknown probe must still fail atomically after resolving
+        # publication identities; identity reuse cannot bypass ownership.
+        with pytest.raises(RuntimeError, match="not owned by account"):
+            repository.persist_account_batch(replace(
+                CanonicalNormalizer().normalize(recovery_raw, recovery_context),
+                deletion_probes=(
+                    CanonicalDeletionProbe(
+                        uuid4(), recovery_context.started_at,
+                        DeletionProbeOutcome.PRESENT, 'foreign_probe', 2,
+                    ),
+                ),
+            ))
         tracked = repository.tracked_publications(
             account,
             published_after=scheduled - timedelta(days=1),

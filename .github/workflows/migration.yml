@@ -4,6 +4,11 @@ on:
   push:
     branches: [alpha, main]
   workflow_dispatch:
+    inputs:
+      legacy_pixel_audit:
+        description: Compare pixels with the historical Python UI (intentional changes may fail)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,68 +21,83 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - run: sudo apt-get update && sudo apt-get install -y gawk jq
+      - uses: actions/checkout@v6
         with:
           ref: 8475074f4a41cd9d8e13b623f1c51adf30426c00
           path: .legacy-reference
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: python -m pip install -r requirements.txt -r operations/requirements.txt
-      - run: python -m migration.integration.run --output migration/reports/ci-integrity
-      - uses: actions/upload-artifact@v4
+      - run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements.txt -r operations/requirements.txt
+      - run: .venv/bin/python -m migration.integration.run --output migration/reports/ci-integrity
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: canonical-integrity-evidence
           path: |
             migration/reports/ci-integrity
             !migration/reports/ci-integrity/backend-build
+            !migration/reports/ci-integrity/mranked-integration-*/**
   browser-parity:
+    # Keep the job ID stable for existing required-check settings.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           ref: 8475074f4a41cd9d8e13b623f1c51adf30426c00
           path: .legacy-reference
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         with:
           package_json_file: frontend/package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      - run: python -m pip install -r requirements.txt -r operations/requirements.txt
+      - run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements.txt -r operations/requirements.txt
       - run: pnpm install --frozen-lockfile
         working-directory: frontend
       - run: pnpm exec playwright install --with-deps chromium
         working-directory: frontend
       - run: pnpm lint && pnpm typecheck && pnpm check:api && pnpm test && pnpm test:e2e
         working-directory: frontend
-      - run: python -m migration.integration.run --visual-only --output migration/reports/ci-visual
-      - uses: actions/upload-artifact@v4
+      - run: .venv/bin/python -m migration.integration.run --semantic-only --output migration/reports/ci-browser-semantics
+      - run: pnpm build && pnpm check:bundle
+        working-directory: frontend
+      - if: github.event_name == 'workflow_dispatch' && inputs.legacy_pixel_audit
+        run: .venv/bin/python -m migration.integration.run --visual-only --output migration/reports/ci-legacy-pixel-audit
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: browser-parity-evidence
+          name: current-browser-evidence
           path: |
             frontend/test-results
-            migration/reports/ci-visual
-            !migration/reports/ci-visual/backend-build
+            migration/reports/ci-browser-semantics
+            migration/reports/ci-legacy-pixel-audit
+            !migration/reports/ci-browser-semantics/backend-build
+            !migration/reports/ci-legacy-pixel-audit/backend-build
+            !migration/reports/ci-browser-semantics/mranked-integration-*/**
+            !migration/reports/ci-legacy-pixel-audit/mranked-integration-*/**
