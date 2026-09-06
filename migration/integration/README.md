@@ -50,7 +50,9 @@ state, order, counts and every continuation page still have to match. Numeric,
 CSV, mutation and history integrity remain mandatory in the PostgreSQL/Spring
 suite; frontend route/chart interactions are covered by `pnpm check`.
 The `overview-status` fixture profile keeps all 207 institutions and more than
-200 accounts per platform, using short histories for added accounts. It is not
+200 accounts per platform. Short histories on cards 50/100/150/200/205 exercise
+observed and empty cards across continuation boundaries; repeating the same
+history on every card unnecessarily multiplies the overview aggregation. It is not
 a performance or long-horizon chart corpus. The default `legacy-visual` profile
 retains the historical 16-day histories and over 8 million comparison points.
 

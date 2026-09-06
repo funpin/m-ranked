@@ -69,3 +69,22 @@ def test_private_temp_root_is_used_for_pytest_without_lengthening_browser_ipc_pa
     gate.command('browser-probe', [sys.executable, '-c',
         'import os,tempfile; assert tempfile.gettempdir() != os.environ["EXPECTED_TEMP"]'], env=env)
     assert [result['exitCode'] for result in gate.results] == [0, 0]
+
+
+def test_failed_command_shows_exception_before_long_sql_context_and_redacts_both_ends(tmp_path, capsys):
+    from migration.integration.run import Gate
+    gate = Gate(tmp_path)
+    gate.secrets = {'TEST_PASSWORD': 'fixture-secret'}
+    script = (
+        'import os; print("QueryCanceled: statement timeout " + os.environ["TEST_PASSWORD"]);'
+        'print("SQL context " * 1000);'
+        'print("diagnostic-end " + os.environ["TEST_PASSWORD"]); raise SystemExit(1)'
+    )
+    with pytest.raises(RuntimeError, match='import failed'):
+        gate.command('import', [sys.executable, '-c', script], env=gate.secrets)
+    output = capsys.readouterr().out
+    assert 'QueryCanceled: statement timeout [redacted]' in output
+    assert 'diagnostic-end [redacted]' in output
+    assert 'fixture-secret' not in output
+    assert len(output) < 6500
+    assert (tmp_path / 'import.log').read_text().count('SQL context') == 1000

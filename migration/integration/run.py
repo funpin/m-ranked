@@ -73,11 +73,12 @@ class Gate:
         if name in ('spring', 'query-plans') and any((self.output/'backend-build/surefire-reports').glob('TEST-*.xml')):
             retain_spring_junit(self.output, getattr(self, 'secrets', {}).values())
         if code:
-            # Print a bounded tail, scrub secret values before emitting diagnostics.
-            tail = (self.output / f'{name}.log').read_text(errors='replace')[-6000:]
-            for secret in getattr(self, 'secrets', {}).values():
-                tail = tail.replace(secret, '[redacted]')
-            print(tail, flush=True)
+            # PostgreSQL appends long SQL context after the actual exception.
+            # Retain both ends within the same bounded, already-redacted log.
+            excerpt = contents if len(contents) <= 6000 else (
+                contents[:4000] + '\n[... full diagnostic in retained log ...]\n' + contents[-2000:]
+            )
+            print(excerpt, flush=True)
             raise RuntimeError(f'{name} failed; see retained log')
 
     def save(self):

@@ -28,17 +28,25 @@ def build(destination: Path, *, overview_status_only: bool = False) -> dict:
     hours = [0, 1, 2] if overview_status_only else [0, 1, 24, 48, 72, 168, 336, 360, 381, 383, 384]
     # 205 additional institutions per platform exercise continuation past 200.
     for index in range(1, 206):
+        # Card count drives pagination; dense observation coverage belongs to
+        # the golden/projection suites. Put observed and empty cards on every
+        # continuation page, including the final page, without multiplying the
+        # expensive overview aggregation by hundreds of identical histories.
+        with_history = not overview_status_only or index % 50 == 0 or index == 205
         institution = db.add_institution(f"Университет {index:03d}", f"ВУЗ {index:03d}")
         channel = db.add_channel(f"fixture_{index:03d}", institution)
         db.update_channel_public_metadata(channel, f"Университет {index:03d}", index * 100, str(index * 100))
-        post = db.add_post(channel, f"message:{index}", [index], None, published, published + timedelta(minutes=2), 120, True, "text", False)
-        for hour in hours:
-            db.insert_snapshot(post, published + timedelta(hours=hour), hour * 3600, index + hour,
-                {"👍": index + hour}, {"message": "Учебный корпус", "text": "Открытие кампуса"}, 60, 100, 5.0,
-                comments_count=0 if index % 3 else None, views_count=index * 10 + hour * 5)
+        if with_history:
+            post = db.add_post(channel, f"message:{index}", [index], None, published, published + timedelta(minutes=2), 120, True, "text", False)
+            for hour in hours:
+                db.insert_snapshot(post, published + timedelta(hours=hour), hour * 3600, index + hour,
+                    {"👍": index + hour}, {"message": "Учебный корпус", "text": "Открытие кампуса"}, 60, 100, 5.0,
+                    comments_count=0 if index % 3 else None, views_count=index * 10 + hour * 5)
         for platform in ["vk", "max", "rutube"]:
             account = db.add_platform_account(institution, platform, f"fixture-{platform}-{index}", title=f"Университет {index:03d}", url=f"https://example.invalid/{platform}/{index}")
             db.update_platform_account_metadata(account, native_id=None, username=None, title=f"Университет {index:03d}", url=f"https://example.invalid/{platform}/{index}", subscriber_count=0 if index == 1 else index * 100, measured_at=FIXTURE_ANCHOR)
+            if not with_history:
+                continue
             publication = db.upsert_platform_post(account, f"publication-{index}", published, published + timedelta(minutes=2), "video" if platform == "rutube" else "post", f"https://example.invalid/{platform}/{index}/post", {"text": "Учебный корпус"}, history_complete=True)
             for hour in hours:
                 db.insert_platform_snapshot(publication, published + timedelta(hours=hour), hour * 3600, 60,

@@ -21,6 +21,9 @@ def test_overview_status_corpus_keeps_continuation_and_all_platforms(tmp_path):
         assert counts == {"telegram": 206, "vk": 206, "max": 206, "rutube": 206}
         # The additional accounts exercise five overview pages per platform
         # without entering the minimum 24-hour comparison cohort.
-        assert db.execute("SELECT count(*) FROM posts WHERE published_at='2026-08-01T10:00:00+00:00'").fetchone() == (205,)
-        assert manifest["counts"]["reaction_snapshots"] == 618
-        assert manifest["counts"]["platform_snapshots"] == 1848
+        assert db.execute("SELECT count(*) FROM posts WHERE published_at='2026-08-01T10:00:00+00:00'").fetchone() == (5,)
+        observed = db.execute("""SELECT c.username FROM channels c JOIN posts p ON p.channel_id=c.id
+            WHERE p.published_at='2026-08-01T10:00:00+00:00' ORDER BY c.username""").fetchall()
+        assert observed == [(f"fixture_{index:03d}",) for index in [50, 100, 150, 200, 205]]
+        assert manifest["counts"]["reaction_snapshots"] == 18
+        assert manifest["counts"]["platform_snapshots"] == 48
