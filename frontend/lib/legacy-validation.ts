@@ -7,7 +7,7 @@ export function legacyQueryErrors(url: URL): object[] {
   if (url.pathname === "/" && q !== undefined && [...q].length > 200) {
     errors.push({ type: "string_too_long", loc: ["query", "q"], msg: "String should have at most 200 characters", input: q, ctx: { max_length: 200 } });
   }
-  if (/^\/posts\/[^/]+$/.test(url.pathname) && url.searchParams.has("history_limit")) {
+  if (/^\/(posts|publications)\/[^/]+$/.test(url.pathname) && url.searchParams.has("history_limit")) {
     const raw = first(url.searchParams.getAll("history_limit"))!;
     try { normalizeHistoryLimit(raw); } catch {
       const value = Number(raw);

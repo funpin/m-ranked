@@ -5,30 +5,32 @@ import type { components } from "../../contracts/openapi/m-ranked-v1-client";
 type Schema = components["schemas"];
 const asOf = "2026-08-01T12:00:00Z";
 const revision = 17;
+const uuid = (kind: number, id: number) => `${String(kind).padStart(8,"0")}-0000-4000-8000-${String(id).padStart(12,"0")}`;
+
 const names = ["Альфа Университет", "Бета Институт"];
 const aggregate = (value: number | null, size = 2): Schema["AggregateMetric"] => ({ value, asOf, datasetRevision: revision, sampleSize: size, coverage: size / 2, quality: value === null ? "unsupported" : "exact" });
 const metric: Schema["OverviewMetric"] = { total: 12, median: 6, previousTotal: 10, previousMedian: 5, totalTrend: 2, medianTrend: 1,
   totalMetadata: aggregate(12), medianMetadata: aggregate(6), previousTotalMetadata: aggregate(10), previousMedianMetadata: aggregate(5) };
 function item(id: number, platform: Schema["PlatformValue"]): Schema["OverviewRow"] {
-  return { entityId: `${platform}-${id}`, entityType: platform === "telegram" ? "channels" : "institutions", legacyId: id, legacyRoute: `/institutions/${id}`, institutionId: `institution-${id}`, institutionLegacyId: id,
+  return { entityId: platform === "telegram" ? uuid(1,id) : uuid(9,id), entityType: platform === "telegram" ? "channels" : "institutions", legacyId: id, legacyRoute: `/institutions/${id}`, institutionId: `institution-${id}`, institutionLegacyId: id,
     canonicalName: names[id - 1]!, shortName: null, platform, period: "1d", accounts: [], accountCount: 1, enabledAccountCount: 1, connectedPlatformCount: 1,
     subscriberCount: 100, lastCheckedAt: asOf, lastErrorCode: null, statusCode: "connected", ratingRank: id, ratingScore: 90,
     ratingPeriod: "2026-Q2", ratingFetchedAt: asOf, totalPublicationCount: 2, activityPublicationCount: 2, newPublicationCount: 0,
     views: metric, reactions: metric, comments: { ...metric, total: 0, totalMetadata: aggregate(0, 1) }, shares: { ...metric, total: null, totalMetadata: aggregate(null, 0) }, asOf };
 }
 function entity(id: number, platform: "telegram" | "vk" | "rutube"): Schema["ActivityRatingEntity"] {
-  return { entityId: `${platform}-${id}`, entityType: platform === "telegram" ? "channels" : "institutions", legacyId: id, legacyRoute: platform === "telegram" ? `/channels/${id}` : `/institutions/${id}`,
+  return { entityId: platform === "telegram" ? uuid(1,id) : uuid(9,id), entityType: platform === "telegram" ? "channels" : "institutions", legacyId: id, legacyRoute: platform === "telegram" ? `/channels/${id}` : `/institutions/${id}`,
     institutionId: `institution-${id}`, institutionLegacyId: id, canonicalName: `Университет ${String(id).padStart(3, "0")}`, shortName: null, username: `fixture_${id}`, title: `Университет ${String(id).padStart(3, "0")}`,
     publicationCount: 1, averageReactions: id, averageViews: id * 10, totalReactions: id, totalViews: id * 10, totalComments: id % 2 ? 0 : null, totalShares: null, totalInteractions: id, engagementRate: 1, subscriberCount: 100 };
 }
 const counter = (value:number|null):Schema["CounterMetric"] => ({value,observedAt:asOf,quality:value === null ? "unsupported" : "exact"});
 function account(id:number,legacyType:"channels"|"platform_accounts"="channels"):Schema["Account"] {
   const platform=legacyType === "channels" ? "telegram" : id === 3 ? "max" : id === 4 ? "rutube" : "vk";
-  return {accountId:`account-${id}`,legacyId:id,legacyType,channelLegacyId:platform === "telegram" ? id : null,platformAccountLegacyId:id,institutionId:`institution-${id}`,institutionLegacyId:id,institutionName:names[0]!,institutionShortName:null,platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Канал ${id}`,url:`https://example.test/account/${id}`,accessMode:"public",enabled:true,publicationCount:2,latestObservedAt:asOf,datasetRevision:revision,asOf,
+  return {accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id),legacyId:id,legacyType,channelLegacyId:platform === "telegram" ? id : null,platformAccountLegacyId:id,institutionId:`institution-${id}`,institutionLegacyId:id,institutionName:names[0]!,institutionShortName:null,platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Канал ${id}`,url:`https://example.test/account/${id}`,accessMode:"public",enabled:true,publicationCount:2,latestObservedAt:asOf,datasetRevision:revision,asOf,
     stats:{retentionDays:70,postCount:2,monitored:1,medianReactions:aggregate(5),medianViews:aggregate(50),medianComments:aggregate(0),ratingRank:2,ratingPeriod:"2026-Q2",subscriberCount:100,lastError:null,lastCheckedAt:asOf}};
 }
 function publication(id:number,type:"posts"|"platform_posts"="posts"):Schema["Publication"] {
-  return {publicationId:`${type}-${id}`,legacyId:id,legacyType:type,institutionId:"institution-1",platform:type === "posts" ? "telegram" : "max",publishedAt:"2026-07-01T00:00:00Z",publicationType:"album",deletedAt:id === 1 ? asOf : null,views:counter(50),reactions:counter(5),comments:counter(0),shares:counter(null),quality:"exact",intervalUncertain:false,synthetic:false,historyCompleteness:"complete",datasetRevision:revision,asOf,accountLegacyId:type === "posts" ? 1 : 3,accountLegacyType:type === "posts" ? "channels" : "platform_accounts",accountName:names[0]!,accountUsername:"fixture_1",externalId:String(id+100),displayExternalId:String(id+100),repost:false,joint:false,additionalAuthorCount:0,ambiguousAlbumReactions:false,publicUrl:`https://example.test/post/${id}`};
+  return {publicationId:uuid(type === "posts" ? 5 : 6,id),legacyId:id,legacyType:type,institutionId:"institution-1",platform:type === "posts" ? "telegram" : "max",publishedAt:"2026-07-01T00:00:00Z",publicationType:"album",deletedAt:id === 1 ? asOf : null,views:counter(50),reactions:counter(5),comments:counter(0),shares:counter(null),quality:"exact",intervalUncertain:false,synthetic:false,historyCompleteness:"complete",datasetRevision:revision,asOf,accountLegacyId:type === "posts" ? 1 : 3,accountLegacyType:type === "posts" ? "channels" : "platform_accounts",accountName:names[0]!,accountUsername:"fixture_1",externalId:String(id+100),displayExternalId:String(id+100),repost:false,joint:false,additionalAuthorCount:0,ambiguousAlbumReactions:false,publicUrl:`https://example.test/post/${id}`};
 }
 function postItem(id:number,type:"posts"|"platform_posts"):Schema["PublicationListItem"] {
   const p=publication(id,type);
@@ -37,6 +39,15 @@ function postItem(id:number,type:"posts"|"platform_posts"):Schema["PublicationLi
 const historyRows:Schema["HistorySnapshot"][] = Array.from({length:160},(_,index) => ({snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,views:counter(index*10),reactions:counter(index === 159 ? 155 : index),comments:counter(0),shares:counter(null),deltaViews:index ? 10 : null,deltaReactions:index ? index === 159 ? -3 : 1 : null,deltaComments:index ? 0 : null,deltaShares:null,reactionsBreakdown:{"👍":index,"custom:123456":1},reactionsBreakdownEntries:[{reaction:"👍",count:index},{reaction:"custom:123456",count:1}],deltaReactionsBreakdown:index?{"👍":1}:null,deltaReactionsBreakdownEntries:index?[{reaction:"👍",count:1}]:null,synthetic:index === 0,intervalUncertain:index === 40,quality:"exact",rawEvidence:{fingerprint:`fixture-${index}`}}));
 const server = createServer((request, response) => {
   const url = new URL(request.url!, "http://127.0.0.1");
+  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history))?$/.exec(url.pathname);
+  if (canonical) {
+    const id = Number(canonical[2]!.slice(-12));
+    const kind = Number(canonical[2]!.slice(0,8));
+    const validKind = canonical[1] === "accounts" ? kind >= 1 && kind <= 4 : kind === 5 || kind === 6;
+    if (!validKind || id < 1 || id > 1000) { response.writeHead(404,{"Content-Type":"application/json"});response.end(JSON.stringify({status:404}));return; }
+    url.pathname = `/api/v1/${canonical[1]}/${id}${canonical[3] ?? ""}`;
+    url.searchParams.set("legacyType", canonical[1] === "accounts" ? kind === 1 ? "channels" : "platform_accounts" : kind === 5 ? "posts" : "platform_posts");
+  }
   const platform = (url.searchParams.get("platform") ?? "telegram") as Schema["PlatformValue"];
   function json(data: unknown, status = 200) { response.writeHead(status, { "Content-Type": "application/json", ETag: `"fixture-${revision}-${url.search}"`, "Cache-Control": "no-store" }); response.end(JSON.stringify(data)); }
   if (url.pathname === "/api/v1/revision") return json({ datasetRevision: revision, asOf, representationVersion: "a".repeat(64) });

@@ -90,19 +90,19 @@ export function createApiClient(options: ApiClientOptions = {}) {
     institution(legacyId: number, platform: Platform, period: Period) {
       return client.GET("/api/v1/institutions/{legacyId}", { params: { path: { legacyId }, query: { platform, period } } }).then(unwrap);
     },
-    publication(legacyId: number, legacyType: LegacyPublicationType) {
+    publication(legacyId: number | string, legacyType?: LegacyPublicationType) {
       return client.GET("/api/v1/publications/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
     },
-    account(legacyId: number, legacyType: LegacyAccountType) {
+    account(legacyId: number | string, legacyType?: LegacyAccountType) {
       return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
     },
-    accountPublications(legacyId: number, legacyType: LegacyAccountType, cursor?: string) {
+    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, cursor?: string) {
       return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: 200, cursor } } }).then(unwrap);
     },
     institutionAccounts(legacyId: number, platform: Platform, cursor?: string) {
       return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: 200, cursor } } }).then(unwrap);
     },
-    publicationHistory(legacyId: number, legacyType: LegacyPublicationType, cursor?: string) {
+    publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, cursor?: string) {
       return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: 2000, cursor } } }).then(unwrap);
     },
     comparisonCandidates(platform: Exclude<Platform, "all">, cursor?: string) {

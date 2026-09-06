@@ -287,7 +287,7 @@ paths:
       summary: Resolve a legacy publication id and return latest independent counters
       security: []
       parameters:
-        - $ref: '#/components/parameters/LegacyId'
+        - $ref: '#/components/parameters/EntityId'
         - name: legacyType
           in: query
           description: Namespace of the legacy identifier.
@@ -571,7 +571,7 @@ paths:
         Subscriber history is intentionally absent because no account-latest projection exists.
       security: []
       parameters:
-        - $ref: '#/components/parameters/LegacyId'
+        - $ref: '#/components/parameters/EntityId'
         - name: legacyType
           in: query
           schema:
@@ -1576,13 +1576,7 @@ paths:
       operationId: getAccountPublications
       summary: Revision-pinned bounded account detail continuation
       parameters:
-      - name: legacyId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-          minimum: 1
+      - $ref: '#/components/parameters/EntityId'
       - name: limit
         in: query
         schema:
@@ -1659,13 +1653,7 @@ paths:
       operationId: getPublicationHistory
       summary: Revision-pinned bounded publication detail continuation
       parameters:
-      - name: legacyId
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-          minimum: 1
+      - $ref: '#/components/parameters/EntityId'
       - name: limit
         in: query
         schema:
@@ -1894,6 +1882,18 @@ components:
         type: integer
         format: int64
         minimum: 1
+    EntityId:
+      name: legacyId
+      in: path
+      required: true
+      description: Canonical UUID for every platform. Positive legacy integers remain supported with legacyType; legacyType is ignored for UUIDs.
+      schema:
+        oneOf:
+        - type: string
+          format: uuid
+        - type: integer
+          format: int64
+          minimum: 1
     IfNoneMatch:
       name: If-None-Match
       in: header

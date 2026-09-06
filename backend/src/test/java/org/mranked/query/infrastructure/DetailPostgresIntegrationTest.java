@@ -120,6 +120,19 @@ class DetailPostgresIntegrationTest {
                 assertThat(genericTail.nextCursor()).isNull();
                 assertThatThrownBy(()->service.accountPublicationsAtRevision(seed+1,LegacyEntityType.CHANNELS,1,generic.nextCursor(),pinned))
                         .isInstanceOf(org.mranked.query.application.InvalidCursorException.class);
+                // UUID reads select canonical identity regardless of supplied legacy namespace.
+                assertThat(service.accountAtRevision(account.toString(),LegacyEntityType.PLATFORM_ACCOUNTS,pinned).id()).isEqualTo(account);
+                assertThat(service.publicationAtRevision(publication.toString(),LegacyEntityType.PLATFORM_POSTS,pinned).publication().id()).isEqualTo(publication);
+                var canonicalHistory=service.publicationHistoryAtRevision(publication.toString(),LegacyEntityType.PLATFORM_POSTS,2,null,pinned);
+                assertThat(canonicalHistory.items()).isEqualTo(first.items());
+                assertThat(service.publicationHistoryAtRevision(publication.toString(),LegacyEntityType.POSTS,2,canonicalHistory.nextCursor(),pinned).items()).isEqualTo(tail.items());
+                assertThatThrownBy(()->service.publicationHistoryAtRevision(newer.toString(),LegacyEntityType.POSTS,2,canonicalHistory.nextCursor(),pinned))
+                        .isInstanceOf(org.mranked.query.application.InvalidCursorException.class);
+                var canonicalPage=service.accountPublicationsAtRevision(account.toString(),LegacyEntityType.PLATFORM_ACCOUNTS,2,null,pinned);
+                assertThat(canonicalPage.items()).isEqualTo(page.items());
+                assertThat(service.accountPublicationsAtRevision(account.toString(),LegacyEntityType.CHANNELS,2,canonicalPage.nextCursor(),pinned).items()).isEqualTo(rest.items());
+                assertThat(repository.findAccount(UUID.randomUUID(),revision)).isEmpty();
+                assertThat(repository.findPublication(UUID.randomUUID(),revision)).isEmpty();
                 var stats=service.accountAtRevision(seed+1,LegacyEntityType.CHANNELS,pinned).stats();
                 assertThat(stats.retentionDays()).isEqualTo(70);assertThat(stats.postCount()).isEqualTo(3);assertThat(stats.monitored()).isEqualTo(3);
                 assertThat(stats.medianViews().value()).isEqualByComparingTo("20");assertThat(stats.medianViews().sampleSize()).isEqualTo(1);
@@ -131,6 +144,27 @@ class DetailPostgresIntegrationTest {
                 assertThat(moreAccounts.items()).hasSize(1);assertThat(moreAccounts.nextCursor()).isNull();
                 assertThat(moreAccounts.items().getFirst().id()).isNotEqualTo(accounts.items().getFirst().id());
                 assertThat(service.institutionAccountsAtRevision(seed,Platform.VK,1,null,pinned).items()).isEmpty();
+                for (String platform : java.util.List.of("vk","max","rutube")) {
+                    UUID platformAccount=UUID.randomUUID(),platformPublication=UUID.randomUUID();
+                    long aliasId=seed+100+java.util.List.of("vk","max","rutube").indexOf(platform);
+                    // VK uses a number already occupied by a Telegram channel and post.
+                    long accountAlias=platform.equals("vk")?seed+2:aliasId;
+                    long postAlias=platform.equals("vk")?seed+11:aliasId;
+                    jdbc.sql("INSERT INTO catalog.platform_account(id,institution_id,platform,canonical_external_id,access_mode) VALUES(:id,:institution,CAST(:platform AS catalog.platform_code),:external,'public_web')")
+                            .param("id",platformAccount).param("institution",institution).param("platform",platform).param("external",platformAccount.toString()).update();
+                    jdbc.sql("INSERT INTO catalog.legacy_entity_alias(entity_type,legacy_id,target_uuid) VALUES('platform_accounts',:legacy,:id)")
+                            .param("legacy",accountAlias).param("id",platformAccount).update();
+                    jdbc.sql("INSERT INTO ingest.publication(id,primary_account_id,published_at,discovered_at,publication_type,history_completeness) VALUES(:id,:account,now(),now(),'post','incomplete')")
+                            .param("id",platformPublication).param("account",platformAccount).update();
+                    jdbc.sql("INSERT INTO catalog.legacy_entity_alias(entity_type,legacy_id,target_uuid) VALUES('platform_posts',:legacy,:id)")
+                            .param("legacy",postAlias).param("id",platformPublication).update();
+                    assertThat(service.accountAtRevision(platformAccount.toString(),LegacyEntityType.CHANNELS,pinned).platform().databaseValue()).isEqualTo(platform);
+                    assertThat(service.publicationAtRevision(platformPublication.toString(),LegacyEntityType.POSTS,pinned).publication().id()).isEqualTo(platformPublication);
+                    assertThat(service.accountAtRevision(Long.toString(accountAlias),LegacyEntityType.PLATFORM_ACCOUNTS,pinned).id()).isEqualTo(platformAccount);
+                    assertThat(service.publicationAtRevision(Long.toString(postAlias),LegacyEntityType.PLATFORM_POSTS,pinned).publication().id()).isEqualTo(platformPublication);
+                }
+                assertThat(service.publicationAtRevision(Long.toString(seed+11),LegacyEntityType.POSTS,pinned).publication().id()).isEqualTo(publication);
+
             } finally {connection.rollback();}
         }
     }

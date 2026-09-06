@@ -17,6 +17,9 @@ import org.mranked.query.domain.OverviewQuery;
 import org.mranked.query.domain.PublicationView;
 
 public interface PublicQueryRepository {
+    default Optional<AccountView> findAccount(UUID id, long revision) { return Optional.empty(); }
+    default Optional<PublicationView> findPublication(UUID id, long revision) { return Optional.empty(); }
+
     List<OverviewCard> findOverview(
             OverviewQuery query,
             int fetchLimit,

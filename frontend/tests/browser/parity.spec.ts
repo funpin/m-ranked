@@ -129,7 +129,7 @@ for(const path of ["/posts/1","/platform-posts/1"]) {
 }
 test("account list and institutional zero/one/many routes preserve identity",async({page}) => {
   await page.goto("/channels/1");await expect(page.locator("tbody tr")).toHaveCount(2);
-  await page.goto("/institutions/1?platform=telegram");await expect(page).toHaveURL(/\/channels\/1$/);
+  await page.goto("/institutions/1?platform=telegram");await expect(page).toHaveURL(/\/accounts\/00000001-0000-4000-8000-000000000001$/);
   await page.goto("/institutions/3?platform=telegram");await expect(page.getByText("Telegram-каналы вуза не добавлены.")).toBeVisible();
   await page.goto("/institutions/2?platform=telegram");await expect(page.locator(".platform-overview-card")).toHaveCount(2);
   await page.goto("/platform-accounts/3");await expect(page.locator(".brand")).toHaveAttribute("href","/?platform=max");

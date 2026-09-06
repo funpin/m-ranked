@@ -1,3 +1,4 @@
+import { accountHref } from "@/lib/entity-routes";
 import type { Metadata } from "next";
 import { collectPages, uniqueRows } from "@/lib/continuation";
 import { loadAccountPublications } from "@/lib/detail-data";
@@ -68,17 +69,16 @@ export default async function InstitutionPage({ params, searchParams }: Institut
   } catch { return <ApiFailureState retryHref={queryHref(`/institutions/${legacyId}`,{platform})} />; }
   if(platform !== "all" && accounts.length === 1) {
     const account=accounts[0]!;
-    redirect(account.platform === "telegram" && account.channelLegacyId ? `/channels/${account.channelLegacyId}` : `/platform-accounts/${account.platformAccountLegacyId ?? account.legacyId}`);
+    redirect(accountHref(account.accountId));
   }
   const posts = [];
   try {
     for(const [index,account] of accounts.entries()) {
-      const id=platform === "telegram" ? account.channelLegacyId ?? account.legacyId : account.platformAccountLegacyId ?? account.legacyId;
-      const type=platform === "telegram" ? "channels" : "platform_accounts";
-      const enriched=await api.account(id,type);
+      const id=account.accountId;
+      const enriched=await api.account(id);
       if(enriched.datasetRevision!==institution.datasetRevision) throw new Error("Revision changed");
       accounts[index]={...account,stats:enriched.stats};
-      const page=await loadAccountPublications(id,type);
+      const page=await loadAccountPublications(id);
       if(page.datasetRevision !== institution.datasetRevision) throw new Error("Revision changed");
       posts.push(...page.items.map((post) => ({...post,account})));
     }

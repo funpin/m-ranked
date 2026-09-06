@@ -744,6 +744,17 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
     }
 
     @Override
+    public Optional<PublicationView> findPublication(UUID id, long revision) {
+        String sql = PUBLICATION_SQL.replace(
+                "alias.entity_type = :legacyType",
+                "alias.entity_type = CASE WHEN account.platform = 'telegram' THEN 'posts' ELSE 'platform_posts' END")
+                .replace("alias.legacy_id = :legacyId", "alias.target_uuid = :id");
+        return jdbcClient.sql(sql).param("id", id).param("revision", revision)
+                .query((rs, row) -> publication(rs, LegacyEntityType.fromApiValue(rs.getString("entity_type"))))
+                .optional();
+    }
+
+    @Override
     public ActivityRatingResult findActivityRating(
             ActivityRatingQuery query,
             int entityLimit,
@@ -929,14 +940,27 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             LegacyEntityType legacyEntityType,
             long datasetRevision
     ) {
-        return jdbcClient.sql(ACCOUNT_SQL)
+        return accountQuery(jdbcClient.sql(ACCOUNT_SQL)
                 .param("revision", datasetRevision)
                 .param("legacyType", legacyEntityType.databaseValue())
-                .param("legacyId", legacyId)
+                .param("legacyId", legacyId), datasetRevision);
+    }
+
+    @Override
+    public Optional<AccountView> findAccount(UUID id, long revision) {
+        String sql = ACCOUNT_SQL.replace(
+                "account_alias.entity_type = :legacyType",
+                "account_alias.entity_type = CASE WHEN account.platform = 'telegram' THEN 'channels' ELSE 'platform_accounts' END")
+                .replace("account_alias.legacy_id = :legacyId", "account.id = :id");
+        return accountQuery(jdbcClient.sql(sql).param("id", id).param("revision", revision), revision);
+    }
+
+    private Optional<AccountView> accountQuery(JdbcClient.StatementSpec query, long datasetRevision) {
+        return query
                 .query((resultSet, rowNumber) -> new AccountView(
                         resultSet.getObject("account_id", UUID.class),
                         resultSet.getLong("legacy_id"),
-                        legacyEntityType,
+                        LegacyEntityType.accountFromApiValue(resultSet.getString("entity_type")),
                         nullableLong(resultSet, "channel_legacy_id"),
                         nullableLong(resultSet, "platform_account_legacy_id"),
                         new InstitutionIdentity(

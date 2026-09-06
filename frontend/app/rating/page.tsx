@@ -1,3 +1,4 @@
+import { accountHref, publicationHref } from "@/lib/entity-routes";
 import { PlatformPending } from "@/components/platform-pending";
 import { RatingFilterForm } from "@/components/rating-filter-form";
 import type { Metadata } from "next";
@@ -96,7 +97,7 @@ function TelegramEntityTable({ query, rows, offset }: {
         </tr></thead>
         <tbody>{rows.map((row, index) => <tr key={row.entityId}>
           <td className="rank rank-cell">{offset + index + 1}</td>
-          <td className="entity-cell"><Link className="entity-link" href={row.legacyRoute}>{row.title || `@${row.username}`}</Link><div className="muted">@{row.username} · {row.publicationCount} публикаций</div></td>
+          <td className="entity-cell"><Link className="entity-link" href={accountHref(row.entityId)}>{row.title || `@${row.username}`}</Link><div className="muted">@{row.username} · {row.publicationCount} публикаций</div></td>
           <td><strong>{formatMetric(row.averageReactions, true)}</strong></td>
           <td>{formatMetric(row.totalReactions)}</td>
           <td><strong>{formatPercentage(row.engagementRate, 3)}</strong></td>
@@ -155,7 +156,7 @@ function TelegramPublicationTable({ query, rows }: {
           const label = `${row.accountTitle || `@${row.accountUsername}`} · №${row.externalId ?? "—"}`;
           return <tr key={row.publicationId}>
             <td className="rank rank-cell">{index + 1}</td>
-            <td className="entity-cell">{row.legacyRoute ? <Link className="entity-link" href={row.legacyRoute}>{label}</Link> : <strong>{label}</strong>}
+            <td className="entity-cell">{row.publicationId ? <Link className="entity-link" href={publicationHref(row.publicationId)}>{label}</Link> : <strong>{label}</strong>}
               {external ? <a href={external} target="_blank" rel="noopener noreferrer">{row.deletedAt ? "Открыть сохранённую публикацию в TGStat" : "Открыть пост в Telegram"} ↗</a> : null}
               {row.deletedAt ? <span>удалена из Telegram</span> : null}
             </td>
@@ -198,7 +199,7 @@ function PlatformPublicationRow({ row, index, showInteractions, showShares=false
   const label = `${row.institutionShortName || row.institutionCanonicalName} · ${publicationLabel(row.externalId ?? "",showShares ? "vk" : "rutube")}`;
   return <tr>
     <td className="rank rank-cell">{index + 1}</td>
-    <td className="entity-cell">{row.legacyRoute ? <Link className="entity-link" href={row.legacyRoute}>{label}</Link> : <strong>{label}</strong>}
+    <td className="entity-cell">{row.publicationId ? <Link className="entity-link" href={publicationHref(row.publicationId)}>{label}</Link> : <strong>{label}</strong>}
       {row.deletedAt ? <span className="pill deleted">удалена</span> : null}
       {row.joint ? <span className="pill coauthor">+{row.additionalAuthorCount} авт.</span> : null}
       {row.repost ? <span className="pill repost">репост</span> : null}

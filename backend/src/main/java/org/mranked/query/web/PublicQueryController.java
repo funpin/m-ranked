@@ -60,7 +60,7 @@ public class PublicQueryController {
     }
 
     @GetMapping("/accounts/{legacyId}/publications")
-    public ResponseEntity<?> accountPublications(@PathVariable @Positive long legacyId,
+    public ResponseEntity<?> accountPublications(@PathVariable String legacyId,
             @RequestParam(defaultValue="platform_accounts") @Pattern(regexp="channels|platform_accounts") String legacyType,
             @RequestParam(defaultValue="50") @Min(1) @Max(200) int limit,
             @RequestParam(required=false) @Size(max=512) String cursor,
@@ -84,7 +84,7 @@ public class PublicQueryController {
                 revision->PublicApiModels.institutionAccounts(queryService.institutionAccountsAtRevision(legacyId,parsed,limit,cursor,revision)));
     }
     @GetMapping("/publications/{legacyId}/history")
-    public ResponseEntity<?> publicationHistory(@PathVariable @Positive long legacyId,
+    public ResponseEntity<?> publicationHistory(@PathVariable String legacyId,
             @RequestParam(defaultValue="posts") @Pattern(regexp="posts|platform_posts") String legacyType,
             @RequestParam(defaultValue="200") @Min(1) @Max(2000) int limit,
             @RequestParam(required=false) @Size(max=512) String cursor,
@@ -168,12 +168,11 @@ public class PublicQueryController {
 
     @GetMapping("/publications/{legacyId}")
     public ResponseEntity<?> publication(
-            @PathVariable @Positive long legacyId,
+            @PathVariable String legacyId,
             @RequestParam(defaultValue = "posts")
             @Pattern(regexp = "posts|platform_posts") String legacyType,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
     ) {
-        validateLegacyId(legacyId);
         LegacyEntityType parsedLegacyType = LegacyEntityType.fromApiValue(legacyType);
         PublicCacheRequest cacheRequest = responseCache.prepare("publication", Map.of(
                 "legacyId", legacyId,
@@ -284,12 +283,11 @@ public class PublicQueryController {
 
     @GetMapping("/accounts/{legacyId}")
     public ResponseEntity<?> account(
-            @PathVariable @Positive long legacyId,
+            @PathVariable String legacyId,
             @RequestParam(defaultValue = "platform_accounts")
             @Pattern(regexp = "channels|platform_accounts") String legacyType,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
     ) {
-        validateLegacyId(legacyId);
         LegacyEntityType parsedLegacyType = LegacyEntityType.accountFromApiValue(legacyType);
         PublicCacheRequest cacheRequest = responseCache.prepare("account", Map.of(
                 "legacyId", legacyId,

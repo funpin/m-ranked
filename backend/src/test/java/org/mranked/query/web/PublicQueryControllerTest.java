@@ -276,6 +276,14 @@ class PublicQueryControllerTest {
                 .andExpect(jsonPath("$.historyCompleteness").value("incomplete"))
                 .andExpect(jsonPath("$.datasetRevision").value(88))
                 .andExpect(jsonPath("$.asOf").value("2026-09-03T10:00:00Z"));
+        String canonical="/api/v1/publications/"+publicationId;
+        String etag=mvc.perform(get(canonical)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicationId").value(publicationId.toString()))
+                .andExpect(jsonPath("$.platform").value("vk")).andReturn().getResponse().getHeader(HttpHeaders.ETAG);
+        mvc.perform(get(canonical).header(HttpHeaders.IF_NONE_MATCH,etag)).andExpect(status().isNotModified());
+        mvc.perform(get(canonical+"/history")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.publication.publicationId").value(publicationId.toString()));
+
     }
 
     @Test
@@ -559,9 +567,32 @@ class PublicQueryControllerTest {
                 .andExpect(jsonPath("$.institutionLegacyId").value(13))
                 .andExpect(jsonPath("$.publicationCount").value(9))
                 .andExpect(jsonPath("$.datasetRevision").value(88));
+        String canonical="/api/v1/accounts/"+repository.account.orElseThrow().id();
+        mvc.perform(get(canonical)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.platform").value("telegram"));
+        mvc.perform(get(canonical+"/publications")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.datasetRevision").value(88));
+
+    }
+
+    @Test
+    void invalidAndMissingCanonicalIdsReturnProtocolErrors() throws Exception {
+        for (String resource : List.of("accounts", "publications")) {
+            mvc.perform(get("/api/v1/"+resource+"/not-a-uuid"))
+                    .andExpect(status().isBadRequest()).andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+            mvc.perform(get("/api/v1/"+resource+"/"+UUID.randomUUID()))
+                    .andExpect(status().isNotFound()).andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        }
     }
 
     private static final class StubRepository implements PublicQueryRepository {
+        @Override public Optional<AccountView> findAccount(UUID id, long revision) {
+            return account.filter(value -> value.id().equals(id));
+        }
+        @Override public Optional<PublicationView> findPublication(UUID id, long revision) {
+            return publication.filter(value -> value.publication().id().equals(id));
+        }
+
         private List<OverviewCard> overview = List.of();
         private RuntimeException overviewFailure;
         private ActivityRatingResult rating = new ActivityRatingResult(

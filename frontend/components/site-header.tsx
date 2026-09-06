@@ -26,7 +26,7 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
   const pathname = usePathname();
   const search = useSearchParams();
   const detailPlatform = useSyncExternalStore(subscribePlatform, () => normalizePlatform(document.querySelector<HTMLElement>("main [data-active-platform]")?.dataset.activePlatform, initialPlatform), () => initialPlatform);
-  const platform = normalizePlatform(search.getAll("platform"), pathname.startsWith("/institutions/") ? "all" : /^\/(platform-posts|platform-accounts)\//.test(pathname) ? detailPlatform : "telegram");
+  const platform = /^\/(accounts|publications)\//.test(pathname) ? detailPlatform : normalizePlatform(search.getAll("platform"), pathname.startsWith("/institutions/") ? "all" : /^\/(platform-posts|platform-accounts)\//.test(pathname) ? detailPlatform : "telegram");
   const [menuOpen, setMenuOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
   const navigation = useRef<HTMLDivElement>(null);

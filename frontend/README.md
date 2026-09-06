@@ -18,14 +18,29 @@ Legacy comparison commands below require an explicit
 - `NEXT_PUBLIC_DATA_CACHE=disabled` bypasses the Next data cache and retains HTTP ETag revalidation. Admin/auth/exports are excluded from both public Next cache keys and SSR credentials.
 - `NEXT_DIST_DIR=.next-visual` isolates a visual development server from the normal build/test directory. Production uses `output: standalone`; copy `.next/static` beside its server.
 
+## Canonical detail routing
+
+All platforms share `/accounts/{uuid}` and `/publications/{uuid}`. Public API
+account/publication detail, list and history endpoints accept the same UUIDs
+without `legacyType`; numeric IDs retain the old namespace contract. Legacy
+`/channels`, `/platform-accounts`, `/posts` and `/platform-posts` detail URLs
+redirect with 308 and preserve viewing parameters. Internal detail links,
+metadata and previous/next navigation use UUIDs. Institution pages keep their
+aggregation role; a single selected-platform account redirects to its UUID.
+Canonical account loading also includes Telegram on the all-platform institution
+page, without selecting an old namespace from the page's platform filter.
+
+Historical visual/HTTP parity reports below describe the previous URL contract.
+Their old status/redirect expectations do not establish acceptance of this change.
+
 ## Compatibility implementation
 
 - Overview keeps repeated scalar last-value semantics, raw Unicode query validation, sort/direction fields, platform autosubmit and browser history restoration.
 - Header destinations retain the selected platform. Canonical detail identity supplies platform on SSR and subsequent client navigation.
 - Comparison uses `/compare/candidates` and continuation over bounded 50-series responses, never substitutes missing selections. Telegram channel IDs and institution IDs retain their distinct namespaces. Default VK/Rutube selections are populated. A single legend controls both locally imported `@mranked/legacy-chart@0.1.0` plots (workspace dependency pinned in the lockfile); keyboard focus exposes point values and sample sizes. MAX/all retain the actual legacy pending branch.
 - Rating continues beyond 200 entities, preserving global row positions and canonical query. A stale cursor offers a restart from the new revision. Sort links preserve browser scroll.
-- Account publication lists, institution accounts and publication history use bounded dedicated endpoints with revision-consistent continuation. Institution zero/one/many routing retains canonical redirects. Histories expose same-observation counters, corrections, reaction breakdown, archive text when provided, links to neighbours, 144-point chart sampling, time-range controls, shared/independent scales and persisted legacy chart preferences. Chart sampling does not remove observations from the history table. Reaction chips and signed deltas use the API’s retained ordered entries; an unavailable stored delta stays unknown instead of being inferred from adjacent canonical observations.
-- `/posts` validates `history_limit` from 50 through 1000 exactly at the HTTP boundary. Unknown observations, unsupported metrics and absent archive text remain absent; quality metadata does not borrow another metric's sample.
+- Account publication lists, institution accounts and publication history use bounded dedicated endpoints with revision-consistent continuation. Institution zero/one/many routing uses the shared UUID account route. Histories expose same-observation counters, corrections, reaction breakdown, archive text when provided, links to neighbours, 144-point chart sampling, time-range controls, shared/independent scales and persisted legacy chart preferences. Chart sampling does not remove observations from the history table. Reaction chips and signed deltas use the API’s retained ordered entries; an unavailable stored delta stays unknown instead of being inferred from adjacent canonical observations.
+- `/posts` and `/publications` validate `history_limit` from 50 through 1000 exactly at the HTTP boundary. Unknown observations, unsupported metrics and absent archive text remain absent; quality metadata does not borrow another metric's sample.
 - `/manage` renders the legacy catalog forms and tables through the generated private catalog API. Its per-request reader follows institution and nested account continuation and forwards only incoming Authorization/Cookie with `no-store`. The server facade verifies the session and supplies role flags and CSRF tokens; credentials never enter URLs, persistent storage, SSR markup or client component props. Forms retain legacy actions and include CSRF, correlation IDs and optimistic row versions, including all account versions for the account matrix. Unknown integration, M-Rating and storage status is displayed explicitly. Actual database mutations, conflict handling and authorization remain separate integration gates from the browser fixture tests.
 
 ## Reproducible checks

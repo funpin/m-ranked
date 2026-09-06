@@ -1,3 +1,4 @@
+import { accountHref } from "@/lib/entity-routes";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { legacyDate, legacyNumber, PERIOD_SHORT, PLATFORM_LABELS } from "@/lib/format";
@@ -109,10 +110,10 @@ function AllPlatformsBody({ item }: { item: OverviewItem }) {
 
 function activityHref(item: OverviewItem): string {
   if (item.platform === "telegram") {
-    return item.legacyRoute || `/channels/${item.legacyId}`;
+    return accountHref(item.entityId);
   }
-  if (item.accountCount === 1 && item.accounts[0]?.legacyId) {
-    return item.accounts[0].legacyRoute || `/platform-accounts/${item.accounts[0].legacyId}`;
+  if (item.accountCount === 1 && item.accounts[0]?.accountId) {
+    return accountHref(item.accounts[0].accountId);
   }
   return queryHref(item.legacyRoute || `/institutions/${item.institutionLegacyId}`, {
     platform: item.platform,

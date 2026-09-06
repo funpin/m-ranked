@@ -259,7 +259,11 @@ public class PublicQueryService {
     public PageResult<org.mranked.query.domain.PublicationListItem> accountPublicationsAtRevision(
             long legacyId,LegacyEntityType type,int limit,String cursor,DatasetRevision revision) {
         var account=accountAtRevision(legacyId,type,revision);
-        String dimensions="account-publications:"+legacyId+":"+type;
+        return accountPublications(account,type,limit,cursor,revision,"account-publications:"+legacyId+":"+type);
+    }
+
+    private PageResult<org.mranked.query.domain.PublicationListItem> accountPublications(
+            AccountView account,LegacyEntityType type,int limit,String cursor,DatasetRevision revision,String dimensions) {
         UUID after=cursorCodec.decodeRating(cursor,revision.id(),dimensions);
         var rows=repository.findAccountPublications(account.id(),type,limit+1,after,revision.id());
         boolean more=rows.size()>limit;var visible=rows.subList(0,Math.min(limit,rows.size()));
@@ -284,7 +288,11 @@ public class PublicQueryService {
     public org.mranked.query.domain.PublicationHistoryView publicationHistoryAtRevision(
             long legacyId,LegacyEntityType type,int limit,String cursor,DatasetRevision revision) {
         var publication=publicationAtRevision(legacyId,type,revision);
-        String dimensions="publication-history:"+legacyId+":"+type;
+        return publicationHistory(publication,type,limit,cursor,revision,"publication-history:"+legacyId+":"+type);
+    }
+
+    private org.mranked.query.domain.PublicationHistoryView publicationHistory(
+            PublicationView publication,LegacyEntityType type,int limit,String cursor,DatasetRevision revision,String dimensions) {
         UUID after=cursorCodec.decodeRating(cursor,revision.id(),dimensions);
         if(after!=null&&(after.getMostSignificantBits()!=0||after.getLeastSignificantBits()<=0))throw new InvalidCursorException();
         var rows=repository.findPublicationHistory(publication.publication().id(),limit+1,
@@ -294,6 +302,52 @@ public class PublicQueryService {
         return new org.mranked.query.domain.PublicationHistoryView(publication,visible,
                 more?cursorCodec.encodeRating(new UUID(0,Long.parseLong(visible.getLast().snapshotId())),revision.id(),dimensions):null,
                 neighbours.get(0),neighbours.get(1),repository.findPublicationArchivedText(publication.publication().id(),revision.id()),revision.id(),revision.committedAt());
+    }
+
+    /** UUID is canonical; positive integers retain the old namespace contract. */
+    private static UUID canonicalId(String id) {
+        if (!id.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+            throw new IllegalArgumentException("invalid entity ID");
+        return UUID.fromString(id);
+    }
+
+    private static boolean legacyId(String id) {
+        return id.matches("[1-9][0-9]*");
+    }
+
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public AccountView accountAtRevision(String id, LegacyEntityType type, DatasetRevision revision) {
+        if (legacyId(id)) return accountAtRevision(Long.parseLong(id), type, revision);
+        return repository.findAccount(canonicalId(id), revision.id())
+                .map(value -> value.withFallbackAsOf(revision.committedAt()))
+                .orElseThrow(() -> new ResourceNotFoundException("account not found"));
+    }
+
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public PublicationView publicationAtRevision(String id, LegacyEntityType type, DatasetRevision revision) {
+        if (legacyId(id)) return publicationAtRevision(Long.parseLong(id), type, revision);
+        return repository.findPublication(canonicalId(id), revision.id())
+                .map(value -> value.withFallbackAsOf(revision.committedAt()))
+                .orElseThrow(() -> new ResourceNotFoundException("publication not found"));
+    }
+
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public PageResult<org.mranked.query.domain.PublicationListItem> accountPublicationsAtRevision(
+            String id, LegacyEntityType type, int limit, String cursor, DatasetRevision revision) {
+        if (legacyId(id)) return accountPublicationsAtRevision(Long.parseLong(id), type, limit, cursor, revision);
+        var account = accountAtRevision(id, type, revision);
+        return accountPublications(account, account.legacyEntityType(), limit, cursor, revision,
+                "account-publications:" + account.id());
+    }
+
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public org.mranked.query.domain.PublicationHistoryView publicationHistoryAtRevision(
+            String id, LegacyEntityType type, int limit, String cursor, DatasetRevision revision) {
+        if (legacyId(id)) return publicationHistoryAtRevision(Long.parseLong(id), type, limit, cursor, revision);
+        var publication = publicationAtRevision(id, type, revision);
+        var canonicalType = publication.platform() == Platform.TELEGRAM ? LegacyEntityType.POSTS : LegacyEntityType.PLATFORM_POSTS;
+        return publicationHistory(publication, canonicalType, limit, cursor, revision,
+                "publication-history:" + publication.publication().id());
     }
 
     public DatasetRevision currentRevision() {

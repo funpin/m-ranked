@@ -54,10 +54,10 @@ const themeScript = `(() => {
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const path = (await headers()).get("x-mranked-path") ?? "/";
   let activePlatform: Platform = path.startsWith("/institutions/") ? "all" : "telegram";
-  const identity = /^\/(platform-accounts|platform-posts)\/(\d+)$/.exec(path);
+  const identity = /^\/(accounts|publications)\/([0-9a-f-]{36})$/i.exec(path);
   if (identity) {
     try {
-      const value = identity[1] === "platform-accounts" ? await api.account(Number(identity[2]),"platform_accounts") : await api.publication(Number(identity[2]),"platform_posts");
+      const value = identity[1] === "accounts" ? await api.account(identity[2]) : await api.publication(identity[2]);
       activePlatform = value.platform;
     } catch { /* The page owns unavailable/404 handling; header remains usable. */ }
   }
