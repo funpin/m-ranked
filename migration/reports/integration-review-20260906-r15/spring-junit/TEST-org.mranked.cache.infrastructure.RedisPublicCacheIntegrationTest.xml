@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.cache.infrastructure.RedisPublicCacheIntegrationTest" time="1.591" tests="1" errors="0" skipped="0" failures="0" flakes="0">
-  <testcase name="realRedisEmptyColdLostEventIsolationCorruptionAndUnavailable" classname="org.mranked.cache.infrastructure.RedisPublicCacheIntegrationTest" time="1.59">
-    <system-out>16:25:06.517 [main] WARN io.netty.resolver.dns.DnsServerAddressStreamProviders -- Can not find io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider in the classpath, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'
-</system-out>
-  </testcase>
-</testsuite>

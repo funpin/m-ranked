@@ -100,7 +100,7 @@ the unchanged rollback route fragments and the shipped worker-generation
 barrier in Nginx 1.28.3. It preserved 159 continuous reads with zero failures
 (p95 4.382 ms) and rejected 46 mutation/admin requests. A held prior POST
 completed before the 0.702-second freeze admission; the old keepalive connection
-was closed. The [initial failed probe](evidence/local-v29-nginx-failed-r1/probe.log)
+was closed. The [initial failed probe](https://github.com/funpin/m-ranked/blob/1e52f415fbdedc15f10e3d992e5126b8b7c92925/operations/http_transition/evidence/local-v29-nginx-failed-r1/probe.log)
 is retained: it exposed a mutation accepted by an old worker after reload.
 
 Reproduce that bounded routing check independently:

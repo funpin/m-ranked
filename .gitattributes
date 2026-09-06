@@ -1,0 +1,5 @@
+# Historical validation summaries are generated data, not application source.
+frontend/evidence/** linguist-generated=true
+migration/reports/** linguist-generated=true
+operations/**/evidence/** linguist-generated=true
+frontend/test-results/** linguist-generated=true

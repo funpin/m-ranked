@@ -15,3 +15,9 @@ operations/**/evidence/**/test-runtime/
 *.pyc
 .DS_Store
 .legacy-reference/
+
+# Generated validation runs stay local or in CI artifacts. Existing tracked
+# summaries remain versioned; do not add raw captures or new run directories.
+/frontend/evidence/
+/migration/reports/
+/operations/**/evidence/

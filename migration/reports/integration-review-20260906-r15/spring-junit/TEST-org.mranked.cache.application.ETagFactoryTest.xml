@@ -1,5 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.cache.application.ETagFactoryTest" time="0.016" tests="2" errors="0" skipped="0" failures="0" flakes="0">
-  <testcase name="acceptsWildcardWeakAndCommaSeparatedValidators" classname="org.mranked.cache.application.ETagFactoryTest" time="0.002" />
-  <testcase name="etagIsStableAndRevisionAware" classname="org.mranked.cache.application.ETagFactoryTest" time="0.002" />
-</testsuite>
