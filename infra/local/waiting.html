@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Подготовка данных · m-ranked</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10151b;color:#edf2f7;font:16px/1.6 system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:24px}main{max-width:650px;width:100%}.brand{color:#84b8f5;font-weight:750;letter-spacing:.04em}h1{font-size:clamp(28px,5vw,42px);line-height:1.2;margin:24px 0 16px}p{color:#b5c0ce}.bar{height:10px;border-radius:9px;background:#293543;overflow:hidden;margin:30px 0 12px}.fill{width:0;height:100%;background:#77adf1;transition:width .6s}#amount{font-variant-numeric:tabular-nums;font-weight:650}small{display:block;color:#92a0b3;margin-top:8px}a{color:#95c5ff;text-underline-offset:4px}.note{border-top:1px solid #2b3643;margin-top:30px;padding-top:20px;font-size:14px}
+</style></head><body><main><div class="brand">m-ranked · локальная версия</div>
+<h1>Запускаем локальный интерфейс</h1>
+<p>Перенос остановлен. Используем только уже загруженные 97 000 замеров из реальной базы. Интерфейс откроется здесь автоматически после запуска.</p>
+<div class="bar" role="progressbar" aria-label="Подготовка интерфейса"><div class="fill" style="width:100%"></div></div>
+<div id="amount" aria-live="polite">97 000 замеров сохранены · дальнейший импорт отключён</div><small id="estimate"></small>
+<p class="note">Изменения в локальной версии не затрагивают production.</p>
+</main><script>
+async function update(){
+  try{
+    const ready=await fetch('/',{cache:'no-store'});const done=ready.ok&&!ready.headers.has('X-Local-Warming');await ready.body?.cancel();if(done)location.reload();
+  }catch{}
+}
+update();setInterval(update,15000);
+</script></body></html>

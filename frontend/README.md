@@ -2,6 +2,11 @@
 
 Next.js 16 App Router reads the typed public Spring API; it never reads SQLite or PostgreSQL.
 
+This is alpha's only shipped interface. Logo and favicon are owned by
+`frontend/assets/`; no runtime or build dependency on the removed Python UI remains.
+Legacy comparison commands below require an explicit
+[`MRANKED_LEGACY_REFERENCE_ROOT`](../migration/legacy-reference.md) checkout.
+
 ## Runtime and cache
 
 - Node 24, pnpm 11.19.0; install with `pnpm install --frozen-lockfile`.

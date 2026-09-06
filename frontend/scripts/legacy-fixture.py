@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app.clock import FrozenUtcClock
 from app.config import Settings
 from app.database import Database
-from app.web.app import create_app
+from migration.legacy_reference import create_app
 from migration.bridge.fixture import FIXTURE_ANCHOR, build_golden_fixture
 
 

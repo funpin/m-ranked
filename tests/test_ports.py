@@ -2,8 +2,6 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from fastapi.testclient import TestClient
-
 from app.clock import CallableUtcClock, FrozenUtcClock, SystemUtcClock, UtcClock
 from app.collector import Collector
 from app.config import Settings
@@ -19,7 +17,6 @@ from app.ports import (
     TelegramObservationRepository,
     TransactionBoundary,
 )
-from app.web.app import create_app
 
 
 def _settings(tmp_path) -> Settings:
@@ -152,43 +149,6 @@ def test_collector_uses_injected_clock_for_cycle_state(tmp_path):
     assert db.get_state("poll_last_completed_at") == instant.isoformat()
     assert db.get_state("poll_last_duration_seconds") == "0.000"
     assert db.get_state("next_poll") == (instant + timedelta(minutes=5)).isoformat()
-
-
-def test_web_uses_injected_analytics_service_and_request_clock(tmp_path):
-    cfg = _settings(tmp_path)
-    db = Database(cfg.database_path)
-    db.migrate()
-    instant = datetime(2026, 9, 3, 12, tzinfo=timezone.utc)
-
-    class RecordingAnalytics:
-        def __init__(self):
-            self.rating_calls = []
-            self.activity_calls = []
-
-        def rating_data(self, platform, cutoff):
-            self.rating_calls.append((platform, cutoff))
-            return [], []
-
-        def activity_cards(self, platform, start, previous_start, end=None):
-            self.activity_calls.append((platform, start, previous_start, end))
-            return []
-
-    analytics = RecordingAnalytics()
-    assert isinstance(analytics, AnalyticsQueryService)
-    client = TestClient(create_app(
-        cfg,
-        db,
-        clock=FrozenUtcClock(instant),
-        analytics_queries=analytics,
-    ))
-
-    assert client.get("/?platform=vk&period=1d").status_code == 200
-    assert analytics.activity_calls == [(
-        "vk", instant - timedelta(days=1), instant - timedelta(days=2), instant,
-    )]
-
-    assert client.get("/rating?platform=vk&period=30d").status_code == 200
-    assert analytics.rating_calls == [("vk", instant - timedelta(days=30))]
 
 
 def test_default_analytics_adapter_satisfies_service_port(tmp_path):

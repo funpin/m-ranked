@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import type { Platform } from "@/lib/types";
 import type { Metadata, Viewport } from "next";
 import { Suspense, type ReactNode } from "react";
-import favicon from "../../app/web/static/favicon.png";
+import favicon from "../assets/favicon.png";
 import { SiteHeader } from "@/components/site-header";
 import { publicOrigin } from "@/lib/deployment";
 import "./globals.css";

@@ -15,7 +15,7 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from fastapi.testclient import TestClient
 from app.config import Settings
 from app.database import Database
-from app.web.app import create_app
+from migration.legacy_reference import create_app
 from collector_target.evidence import ImmutableEvidenceStore
 from collector_target.model import CollectionContext,Platform,RawPublication,RawCollectionBatch
 from collector_target.normalize import CanonicalNormalizer

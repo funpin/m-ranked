@@ -13,3 +13,4 @@ operations/**/evidence/**/backend-build/
 operations/**/evidence/**/test-runtime/
 *.pyc
 .DS_Store
+.legacy-reference/

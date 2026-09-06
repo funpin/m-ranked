@@ -76,7 +76,7 @@ class LegacyServer:
         import uvicorn
         from app.config import Settings
         from app.database import Database
-        from app.web.app import create_app
+        from migration.legacy_reference import create_app
         from dataclasses import replace
         self.socket = socket.socket()
         self.socket.bind(("127.0.0.1", 0))

@@ -8,12 +8,20 @@ on:
 permissions:
   contents: read
 
+env:
+  MRANKED_LEGACY_REFERENCE_ROOT: ${{ github.workspace }}/.legacy-reference
+
 jobs:
   canonical-integrity:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 8475074f4a41cd9d8e13b623f1c51adf30426c00
+          path: .legacy-reference
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -36,6 +44,11 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 8475074f4a41cd9d8e13b623f1c51adf30426c00
+          path: .legacy-reference
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'

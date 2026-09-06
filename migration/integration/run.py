@@ -294,6 +294,8 @@ def main():
     parser.add_argument('--maven',default=str(ROOT/'backend/mvnw'))
     parser.add_argument('--visual-only',action='store_true',help='Run real frozen dataset visual gate in its own disposable services')
     args=parser.parse_args()
+    from migration.legacy_reference import reference_root
+    reference_root()  # Fail before provisioning services if the oracle is absent.
     Gate(args.output).run(python=args.python,maven=args.maven,visual=args.visual_only)
 
 if __name__=='__main__': main()

@@ -1,0 +1,114 @@
+# Run alongside compose.yaml with --env-file local/compose.env.
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: ${LOCAL_DATABASE_NAME:-mranked}
+
+  api:
+    mem_limit: 1536m
+    build:
+      context: ..
+      dockerfile: infra/local/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${LOCAL_DATABASE_NAME:-mranked}
+      SPRING_DATASOURCE_USERNAME: api_read
+      SPRING_DATASOURCE_PASSWORD: ${API_READ_DB_PASSWORD}
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/${LOCAL_DATABASE_NAME:-mranked}
+      SPRING_FLYWAY_USER: migration_owner
+      SPRING_FLYWAY_PASSWORD: ${MIGRATION_DB_PASSWORD}
+      SPRING_FLYWAY_DEFAULT_SCHEMA: flyway
+      SPRING_FLYWAY_SCHEMAS: flyway
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MRANKED_ADMIN_DATABASE_ENABLED: "true"
+      MRANKED_ADMIN_DATABASE_URL: jdbc:postgresql://postgres:5432/${LOCAL_DATABASE_NAME:-mranked}
+      MRANKED_ADMIN_DATABASE_USERNAME: api_write_admin
+      MRANKED_ADMIN_DATABASE_PASSWORD: ${API_WRITE_ADMIN_DB_PASSWORD}
+      MRANKED_ADMIN_OFFICIAL_RATING_ENABLED: "false"
+      MRANKED_IDENTITY_RECEIPT_DIR: /state/identity-receipts
+      MRANKED_EXPORTS_SPOOL_DIRECTORY: /state/exports
+      SPRING_APPLICATION_JSON: >-
+        {"mranked.admin.auth.users":[{"username":"admin","password-hash":"{bcrypt}$$2a$$10$$3P6XJBtkor5EEWC7uK9i4.xQC3ZLjEnCGjdhxOeUCkf860gh9fZja","roles":["ADMIN"]}]}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - api_state:/state
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  seed:
+    build:
+      context: ..
+      dockerfile: infra/local/seed.Dockerfile
+    environment:
+      LOCAL_BOOTSTRAP_DSN: postgresql://mranked_bootstrap:${POSTGRES_SUPERUSER_PASSWORD}@postgres:5432/${LOCAL_DATABASE_NAME:-mranked}
+      BRIDGE_DATABASE_URL: postgresql://migration_bridge:${MIGRATION_BRIDGE_DB_PASSWORD}@postgres:5432/${LOCAL_DATABASE_NAME:-mranked}
+      LOCAL_SOURCE_FILE: ${LOCAL_SOURCE_FILE:-source.sqlite}
+      LOCAL_SOURCE_NAMESPACE: ${LOCAL_SOURCE_NAMESPACE:-docker-local-production-copy}
+      LOCAL_IMPORT_ENABLED: ${LOCAL_IMPORT_ENABLED:-false}
+    volumes:
+      - import_10_state:/state
+      - ../data/local-review:/source:ro
+    depends_on:
+      api:
+        condition: service_started
+    restart: "no"
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/local/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://api:8080
+      NEXT_PUBLIC_DATA_CACHE: disabled
+    ports:
+      - "127.0.0.1:3002:3000"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: infra/local/gateway.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - progress_state:/progress:ro
+
+  progress:
+    profiles: ["import-progress"]
+    build:
+      context: ..
+      dockerfile: infra/local/seed.Dockerfile
+    command: ["python", "infra/local/progress.py"]
+    restart: unless-stopped
+    environment:
+      BRIDGE_DATABASE_URL: postgresql://migration_bridge:${MIGRATION_BRIDGE_DB_PASSWORD}@postgres:5432/${LOCAL_DATABASE_NAME:-mranked}
+      LOCAL_SOURCE_FILE: ${LOCAL_SOURCE_FILE:-source.sqlite}
+    volumes:
+      - ../data/local-review:/source:ro
+      - import_10_state:/import:ro
+      - progress_state:/progress
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  api_state:
+  import_10_state:
+  progress_state:

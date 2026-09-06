@@ -1,5 +1,12 @@
 # m-ranked
 
+В ветке `alpha` единственный интерфейс — **Next.js (`frontend/`) + Spring
+(`backend/`)**. Старый Python-интерфейс, его шаблоны и команды `web`/`run`
+удалены. [Локальный Docker-стенд](infra/local/README.md) открывается на
+http://localhost:3000. Python-код сборщиков и миграции данных сохранён.
+Для сравнительных проверок используется
+[отдельная эталонная версия](migration/legacy-reference.md).
+
 Read-only монитор динамики публикаций вузов в Telegram, VK, MAX и Rutube.
 Приложение хранит сырые UTC-замеры в SQLite, группирует альбомы Telegram в
 логические публикации и пересчитывает показатели интерфейса из этих замеров.
@@ -29,7 +36,7 @@ MAX подключён через отдельную пользовательс�
 [отчёт после ревью alpha](migration/reports/review-v29-20260906.md),
 [запуск обязательных локальных проверок](migration/integration/README.md),
 [эксплуатация](operations/README.md). Локальные результаты не разрешают
-production-переключение или удаление legacy.
+production-переключение или удаление установленной там legacy-версии.
 
 ## Модель данных
 
@@ -152,28 +159,26 @@ chown -R telegram-monitor:telegram-monitor /opt/telegram-reaction-monitor
 .venv/bin/python -m app auth-web
 .venv/bin/python -m app poll-now
 .venv/bin/python -m app collect
-.venv/bin/python -m app web
 .venv/bin/pytest -q
 ```
 
-В production сбор данных и веб-интерфейс работают как независимые процессы.
-Установка unit-файлов при переходе со старого объединённого сервиса:
+Python-команда `collect` запускает только сбор данных. Для интерфейса alpha
+используйте Next.js и Spring; старые команды `web` и `run` больше недоступны.
+Сохранившийся unit сборщика можно установить отдельно:
 
 ```bash
-systemctl disable --now telegram-reaction-monitor.service || true
-cp deploy/m-ranked-collector.service deploy/m-ranked-web.service /etc/systemd/system/
+cp deploy/m-ranked-collector.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now m-ranked-collector.service m-ranked-web.service
+systemctl enable --now m-ranked-collector.service
 ```
 
-Остановка или перезапуск `m-ranked-web.service` не останавливает collectors.
-Команда `python -m app run` сохранена только для локальной разработки и
-обратной совместимости.
+Конфигурация целевого интерфейса находится в `operations/systemd/` и
+`infra/compose.local.yaml`. Удаление старого кода из ветки не меняет
+запущенный production и не заменяет его сохранённый артефакт отката.
 
-Публичный production-вход обслуживает только `m.funpin.org`: HAProxy направляет
-TLS по SNI в конфигурацию `deploy/m.funpin.org.nginx.conf`, а nginx проксирует
-запросы в локальный веб-процесс. Старые домены в актуальную конфигурацию не
-входят.
+Публичный production-вход `m.funpin.org` использует конфигурацию сохранённого
+production-релиза. Конфигурации запуска старого веб-интерфейса больше не входят
+в alpha. Маршрутизация перехода на целевой стек описана в `operations/nginx/`.
 
 ### Резервное копирование SQLite
 

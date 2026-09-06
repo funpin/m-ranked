@@ -21,7 +21,7 @@ from starlette.requests import Request
 from app.clock import CallableUtcClock
 from app.config import Settings
 from app.database import Database
-from app.web.app import create_app
+from migration.legacy_reference import create_app, reference_metadata
 from .reconciliation import compare_rows
 from .source import sha256_file
 from .projection_source import projection_source,ProjectionSourceError
@@ -297,7 +297,8 @@ def verify_projections(source: Path, connection, *, source_name: str, expected_s
             "oracleSource":source_metadata,
             "datasetRevision": revision_id, "asOf": anchor.isoformat(),
             "firstAgeLimitSeconds": first_age_limit_seconds, "horizons": list(horizons),
-            "oracle": "unchanged app.web.app.create_app endpoints with injected clock",
+            "oracle": "external legacy release endpoints with injected clock",
+            "oracleImplementation": reference_metadata(),
             "serialization": "NULL-distinct; exact decimal counters; engagement rounded to 8 decimal places",
             "checks": checks}
 

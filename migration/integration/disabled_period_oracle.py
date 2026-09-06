@@ -10,7 +10,7 @@ import sqlite3
 import psycopg
 from app.database import Database
 from app.clock import CallableUtcClock
-from app.web.app import create_app
+from migration.legacy_reference import create_app
 from migration.bridge.fixture import FIXTURE_ANCHOR
 from migration.bridge.model import BridgeOptions
 from migration.bridge.projection_reconciliation import ReadOnlyLegacyDatabase,_settings,_source_period_metrics,_target_period_metrics

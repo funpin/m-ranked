@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { normalizePlatform, queryHref } from "@/lib/params";
 import type { Platform } from "@/lib/types";
-import logo from "../../app/web/static/logo.png";
+import logo from "../assets/logo.png";
 import { ThemeToggle } from "./theme-toggle";
 
 const links = [

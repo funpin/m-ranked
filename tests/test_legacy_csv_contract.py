@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.database import Database
-from app.web.app import create_app
+from migration.legacy_reference import create_app, reference_root, LegacyReferenceUnavailable
 
 
 UTC = timezone.utc
@@ -36,6 +37,10 @@ def _settings(root: Path) -> Settings:
 
 
 def _client(tmp_path: Path) -> tuple[Database, TestClient]:
+    try:
+        reference_root()
+    except LegacyReferenceUnavailable as error:
+        pytest.skip(str(error))
     settings = _settings(tmp_path)
     database = Database(settings.database_path)
     database.migrate()

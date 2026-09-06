@@ -13,7 +13,7 @@ from .max_collector import MaxCollector
 from .max_user_api import MaxUserClient
 from .institution_names import sync_institution_names
 from .m_rating import refresh_m_rating
-from .scheduler import run_collector_service, run_service
+from .scheduler import run_collector_service
 from .public_web import PublicWebCollector
 from .rutube_collector import RutubeCollector
 from .official_accounts import sync_official_accounts
@@ -21,7 +21,6 @@ from .top10_universities import sync_top10_universities
 from .telegram_client import TelegramReader
 from .telegram_web import TelegramWebSession
 from .vk_collector import VkCollector
-from .web.app import create_app
 
 
 def setup_logging(log_path: Path) -> None:
@@ -48,7 +47,6 @@ def parser() -> argparse.ArgumentParser:
         help="Authorize official Telegram Web by phone without an API ID/hash",
     )
     sub.add_parser("auth-max", help="Authorize the persistent MAX user session")
-    sub.add_parser("run", help="Run legacy combined polling and web process")
     sub.add_parser("collect", help="Run polling independently from the web dashboard")
     sub.add_parser("poll-now", help="Run exactly one complete polling cycle")
     sub.add_parser("list-channels", help="List configured channels")
@@ -76,9 +74,6 @@ def parser() -> argparse.ArgumentParser:
     add.add_argument("channel")
     remove = sub.add_parser("remove-channel", help="Disable a channel without deleting history")
     remove.add_argument("channel")
-    web = sub.add_parser("web", help="Run dashboard independently from collectors")
-    web.add_argument("--host", default=None)
-    web.add_argument("--port", type=int, default=None)
     return command
 
 
@@ -175,8 +170,6 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(_auth_web(settings))
     elif args.command == "auth-max":
         asyncio.run(_auth_max(settings))
-    elif args.command == "run":
-        asyncio.run(run_service(settings, db))
     elif args.command == "collect":
         asyncio.run(run_collector_service(settings, db))
     elif args.command == "poll-now":
@@ -238,11 +231,4 @@ def main(argv: list[str] | None = None) -> int:
         if not db.disable_channel(username):
             parser().error(f"channel @{username} is not configured")
         print(f"Disabled @{username}; existing history was preserved")
-    elif args.command == "web":
-        import uvicorn
-        uvicorn.run(
-            create_app(settings, db),
-            host=args.host or settings.web_host,
-            port=args.port or settings.web_port,
-        )
     return 0

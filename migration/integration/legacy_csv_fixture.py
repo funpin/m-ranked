@@ -12,7 +12,7 @@ import sqlite3
 from fastapi.testclient import TestClient
 from app.config import Settings
 from app.database import Database
-from app.web.app import create_app
+from migration.legacy_reference import create_app
 from migration.bridge.fixture import FIXTURE_ANCHOR, build_golden_fixture
 from migration.bridge.model import BridgeOptions
 from migration.bridge.service import BridgeService

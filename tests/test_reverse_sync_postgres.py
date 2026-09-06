@@ -1543,7 +1543,7 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
     from fastapi.testclient import TestClient
     from app.config import Settings
     from app.database import Database
-    from app.web.app import create_app
+    from migration.legacy_reference import create_app
     settings = Settings(None,None,tmp_path/"telegram.session",legacy_target,(),60,336,90,15,2.0,
                         "127.0.0.1",8080,"Europe/Moscow",tmp_path/"legacy.log",200,20)
     restarted_routes = []

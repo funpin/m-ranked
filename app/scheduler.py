@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 
-import uvicorn
-
 from .collector import Collector
 from .config import Settings
 from .database import Database
@@ -19,7 +17,6 @@ from .rutube_collector import RutubeCollector
 from .telegram_client import TelegramReader
 from .telegram_web import TelegramWebSession
 from .vk_collector import VkCollector
-from .web.app import create_app
 
 logger = logging.getLogger(__name__)
 
@@ -83,74 +80,6 @@ async def stop_polling_tasks(tasks: list[asyncio.Task[None]]) -> None:
     for task in tasks:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
-
-
-async def run_service(settings: Settings, db: Database) -> None:
-    """Run the legacy all-in-one process.
-
-    Production uses ``run_collector_service`` and the CLI ``web`` command as
-    independent processes.  Keeping this entry point makes local development
-    and older deployments backwards compatible.
-    """
-    auxiliary_collectors: tuple[ClosableCollectorAdapter, ...] = tuple(
-        collector for collector in (
-            VkCollector(settings, db) if settings.vk_access_token else None,
-            MaxCollector(settings, db) if settings.max_user_session_ready else None,
-            RutubeCollector(settings, db) if settings.rutube_public_api_enabled else None,
-        ) if collector is not None
-    )
-    if settings.data_source in {"public_web", "telegram_web"}:
-        collector = await public_collector(settings, db)
-        collectors = (collector, *auxiliary_collectors)
-        connected = True
-
-        def public_connection_state() -> bool:
-            return connected
-
-        connection_state = (
-            (lambda: bool(collector.comments_reader.connected))
-            if settings.data_source == "telegram_web"
-            else public_connection_state
-        )
-        app = create_app(settings, db, connection_state)
-        server = uvicorn.Server(
-            uvicorn.Config(app, host=settings.web_host, port=settings.web_port, log_config=None)
-        )
-        poll_tasks = start_polling_tasks(collectors, settings)
-        try:
-            await server.serve()
-        finally:
-            connected = False
-            await stop_polling_tasks(poll_tasks)
-            for active_collector in collectors:
-                await active_collector.close()
-        return
-
-    api_id, api_hash = settings.require_telegram()
-    reader = TelegramReader(api_id, api_hash, settings.telegram_session_path)
-    connected = False
-
-    def connection_state() -> bool:
-        return connected and bool(reader.client.is_connected())
-
-    app = create_app(settings, db, connection_state)
-    server = uvicorn.Server(
-        uvicorn.Config(app, host=settings.web_host, port=settings.web_port, log_config=None)
-    )
-    poll_tasks: list[asyncio.Task[None]] = []
-    try:
-        await reader.connect()
-        connected = True
-        poll_tasks = start_polling_tasks(
-            (Collector(settings, db, reader), *auxiliary_collectors), settings,
-        )
-        await server.serve()
-    finally:
-        connected = False
-        await stop_polling_tasks(poll_tasks)
-        await reader.disconnect()
-        for auxiliary in auxiliary_collectors:
-            await auxiliary.close()
 
 
 async def run_collector_service(settings: Settings, db: Database) -> None:
