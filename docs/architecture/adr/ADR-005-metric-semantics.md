@@ -173,3 +173,4 @@ Semantic registry, formula definition и API contract имеют версии. R
 - появляется новый источник или canonical metric;
 - официальная методика требует иной baseline/missing policy;
 - исследование доказывает более корректную cross-platform normalization.
+

@@ -83,13 +83,6 @@
 | TM-19 | R | UI или отчет называет сигнал доказанной «накруткой» | M/H | ADR-006 terminology, explanation/evidence, human review, publication checklist | content tests and review gate |
 | TM-20 | R/I | Подробные ошибки/health раскрывают внутренние пути, версии или account IDs | M/M | Публичный health минимален, details только оператору, sanitized error codes, request ID | unauthenticated endpoint review |
 
-Для отдельного целевого API `GET /api/v1/exports/publications.csv` TM-13
-реализован в потоковом writer: перед RFC 4180 quoting любая непустая ячейка,
-начинающаяся с `=`, `+`, `-` или `@`, получает префикс `'`. Legacy-маршруты
-`/export/snapshots.csv` и `/export/posts.csv` намеренно не меняются этим
-контролем: их побайтовый контракт заморожен, и до отдельного совместимого
-решения они остаются на legacy upstream.
-
 ## Ключевые abuse cases
 
 ### Публичный API

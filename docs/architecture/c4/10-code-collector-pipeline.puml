@@ -54,7 +54,7 @@ package "collector.platform" {
   interface PlatformGateway {
     +resolve(AccountRef): RemoteAccount
     +discover(RemoteAccount, Cursor): List<RemotePublication>
-    +refresh(RemoteAccount, List<ExternalId>): PointLookupBatch
+    +refresh(RemoteAccount, List<ExternalId>): List<RemotePublication>
     +measure(RemotePublication): RemoteMetrics
   }
   interface TelegramGateway
@@ -88,10 +88,6 @@ package "collector.pipeline" {
     +interval(PublicationAge, Platform): Duration
   }
 
-  interface TrackedPublicationReader {
-    +circularPage(Account, Cutoff, ScanLimit): List<TrackedPublication>
-  }
-
   interface MetricNormalizer {
     +normalize(Platform, RemoteMetrics): List<MetricObservation>
   }
@@ -112,8 +108,6 @@ package "collector.pipeline" {
     +RemoteAccount account
     +List<RemotePublication> discovered
     +List<RemotePublication> refreshed
-    +List<DeletionProbe> deletionProbes
-    +String refreshCursor
     +Instant observedAt
     +SourceMetadata source
   }
@@ -167,7 +161,6 @@ RutubeCollector --> CollectorPipeline
 PlatformCollector --> CollectionBatch
 CollectorPipeline --> PublicationIdentityResolver
 CollectorPipeline --> SamplingPolicy
-CollectorPipeline --> TrackedPublicationReader
 CollectorPipeline --> MetricNormalizer
 CollectorPipeline --> QualityValidator
 CollectorPipeline --> DeletionPolicy
@@ -184,14 +177,6 @@ note right of PostgresIngestionRepository
   Idempotency: platform + account + external_id,
   snapshot bucket и collection_run_id.
   Revision публикуется только после COMMIT.
-  Refresh cursor и deletion evidence входят
-  в ту же account-транзакцию.
-end note
-
-note right of DeletionPolicy
-  Только authoritative point lookup может
-  увеличить consecutive_missing. Feed omission,
-  auth/rate/transport/5xx не являются deletion.
 end note
 
 note bottom of QualityValidator

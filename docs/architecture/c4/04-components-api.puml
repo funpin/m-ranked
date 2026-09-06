@@ -40,3 +40,4 @@ Rel(health, obs, "Публикует метрики")
 
 SHOW_LEGEND()
 @enduml
+

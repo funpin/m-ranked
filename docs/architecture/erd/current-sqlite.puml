@@ -208,3 +208,4 @@ note right of platform_snapshots
   Retention/архивирование для этой таблицы сейчас отсутствует.
 end note
 @enduml
+

@@ -96,3 +96,4 @@ Budgets проверяются на production-like dataset, а не на пус
 - Node runtime становится главным эксплуатационным bottleneck;
 - большинство страниц полностью статичны и framework не дает измеримой пользы;
 - другой frontend нужен для отдельного клиента, но versioned API сохраняется.
+

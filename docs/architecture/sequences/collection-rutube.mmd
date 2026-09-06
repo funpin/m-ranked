@@ -26,12 +26,7 @@ sequenceDiagram
                 U->>RT: GET /api/video/person/{channelId}
                 RT-->>U: Videos, publication time and views
             end
-            U->>DB: Load bounded circular tracked page + refresh cursor
-            U->>U: Select due videos, capped independently from discovery
-            opt Due tracked video is outside discovery page
-                U->>RT: GET /api/video/{videoId}?format=json
-                RT-->>U: Exact video, 404/410, or non-authoritative error
-            end
+            U->>DB: Load last observations and apply sampling policy
             par For each due video within request concurrency
                 U->>RT: GET /api/numerator/video/{videoId}/vote
                 RT-->>U: Positive votes or unavailable
@@ -39,11 +34,10 @@ sequenceDiagram
                 U->>RT: GET /api/v2/comments/video/{videoId}
                 RT-->>U: Comment count or unavailable
             end
-            U->>P: Channel, discovered/refreshed videos, metrics and probes
+            U->>P: Channel, videos, views, likes and comments
             P->>P: Normalize absent likes/comments to NULL
             P->>P: Mark shares as unsupported NULL
-            P->>P: Confirm deletion only from repeated exact-video 404/410
-            P->>DB: Transactional metadata, snapshots, probes and refresh cursor
+            P->>DB: Transactional metadata, publications and snapshots
             DB-->>P: Commit with dataset revision
             P->>R: Publish revision.changed after commit
             P->>DB: Complete account result
@@ -53,4 +47,4 @@ sequenceDiagram
     end
 
     Note over U,RT: Vote and comments requests fail independently,<br/>one unavailable metric must not erase another valid observation.
-    Note over U,DB: Channel-list omission never means deletion.<br/>Auth/rate/transport/5xx keep the pending count unchanged.
+    Note over P,DB: Current Rutube adapter has no reliable deletion probe.<br/>deleted_at remains NULL until a supported confirmation strategy is approved.

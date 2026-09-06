@@ -125,3 +125,4 @@ PostgreSQL dataset revision; событие можно потерять без �
 - требования безопасности или регулирования требуют отдельной data boundary;
 - общий PostgreSQL исчерпал измеренный capacity после оптимизации/реплики;
 - failure одного модуля нельзя изолировать process boundary и resource limits.
+

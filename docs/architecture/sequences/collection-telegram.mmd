@@ -22,7 +22,7 @@ sequenceDiagram
             T->>API: iter_messages(limit, min_id with overlap)
             API-->>T: recent messages
             T->>T: Group albums and resolve logical publication identity
-            T->>DB: Load bounded circular tracked page + member IDs + cursor
+            T->>DB: Load active due publications and member message IDs
             opt Due IDs are outside recent window
                 T->>API: get_messages(ids)
                 API-->>T: refreshed messages or missing IDs
@@ -38,7 +38,7 @@ sequenceDiagram
                 T->>WEB: GET /{username}
                 WEB-->>T: Exact count when exposed, otherwise rounded value
             end
-            T->>DB: Load bounded circular tracked page + refresh cursor
+            T->>DB: Load active due publications
             opt Due publication is outside preview
                 T->>WEB: GET /{username}/{messageId}?embed=1
                 WEB-->>T: Post or 404/410/not-found marker
@@ -52,8 +52,8 @@ sequenceDiagram
         T->>P: Raw account, publications, counters and source metadata
         P->>P: Normalize IDs, reaction breakdown, views and comments
         P->>P: Apply sampling/completeness and NULL-vs-zero rules
-        P->>P: Confirm only repeated authoritative point-lookup misses
-        P->>DB: Transactional publications, snapshots, probes and refresh cursor
+        P->>P: Confirm deletion only after configured consecutive misses
+        P->>DB: Transactional upsert publication and append snapshots
         DB-->>P: Commit with dataset revision
         P->>R: Publish revision.changed after commit
         P->>DB: Complete account result
@@ -63,4 +63,3 @@ sequenceDiagram
 
     Note over T,P: Public preview is lower-quality evidence than MTProto,<br/>quality and access_mode remain attached to observations.
     Note over P,DB: Album ambiguity is preserved as a quality flag, not silently guessed.
-    Note over T,DB: Discovery/feed omission never means deletion.<br/>Auth/rate/transport/5xx leave pending missing unchanged.

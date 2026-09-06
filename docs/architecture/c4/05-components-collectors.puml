@@ -22,9 +22,9 @@ Container_Boundary(collectors, "Python collector runtime") {
   Component(rt_adapter, "Rutube adapter", "httpx", "Channel videos и per-video metrics")
   Component(normalizer, "Normalizer", "Pure Python", "Преобразует platform DTO в canonical observations без потери provenance")
   Component(identity, "Publication identity resolver", "Pure Python", "Albums, VK joint posts, reposts и platform external IDs")
-  Component(due_policy, "Sampling and deletion policy", "Pure Python", "Независимый refresh budget, круговой cursor, cutoff, authoritative missing confirmation")
+  Component(due_policy, "Sampling and deletion policy", "Pure Python", "Интервал наблюдения, cutoff, missing confirmation")
   Component(validator, "Quality validator", "Pure Python", "NULL vs zero, counter reset, rounded/exact, completeness")
-  Component(writer, "Idempotent ingestion writer", "psycopg", "Identity + snapshots + deletion probes + refresh cursor в одной транзакции")
+  Component(writer, "Idempotent ingestion writer", "psycopg", "Upsert identity + append snapshots в одной транзакции")
   Component(runlog, "Collection run recorder", "Python", "Run/account status, counts, durations и sanitized errors")
 }
 
@@ -56,3 +56,4 @@ Rel(runlog, obs, "Метрики и structured logs")
 
 SHOW_LEGEND()
 @enduml
+

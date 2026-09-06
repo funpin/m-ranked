@@ -167,3 +167,4 @@ note bottom of FormulaDefinition
   Любое изменение создает новую version и sourceHash.
 end note
 @enduml
+

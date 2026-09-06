@@ -37,3 +37,4 @@ UpdateRelStyle(web, sqlite, $textColor="#b71c1c", $lineColor="#b71c1c")
 UpdateRelStyle(collector, sqlite, $textColor="#b71c1c", $lineColor="#b71c1c")
 SHOW_LEGEND()
 @enduml
+

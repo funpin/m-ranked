@@ -19,8 +19,8 @@ sequenceDiagram
         V->>VK: wall.get(owner, max 100, without pinned)
         VK-->>V: Recent wall posts and counters
         V->>V: Resolve ordinary vs joint-post canonical identity
-        V->>DB: Load bounded circular tracked page + refresh cursor
-        V->>V: Select due posts absent from current wall page, independently capped
+        V->>DB: Load active stored publications and last snapshots
+        V->>V: Select due posts absent from current wall page
         loop Batches up to 100 IDs
             V->>VK: wall.getById(source external IDs)
             VK-->>V: Existing posts, deleted/missing omitted
@@ -29,8 +29,8 @@ sequenceDiagram
         P->>P: Normalize views, likes, comments and reposts
         P->>P: Convert transient positive-to-zero reset into NULL + quality flag
         P->>P: Preserve measured zero when no reset evidence exists
-        P->>P: Increment only after successful authoritative wall.getById omission
-        P->>DB: Transactional metadata, snapshots, probes and refresh cursor
+        P->>P: Increment missing confirmation, mark deleted only at threshold
+        P->>DB: Transactional account metadata, publications, snapshots and deletion probes
         DB-->>P: Commit with dataset revision
         P->>R: Publish revision.changed after commit
         P->>DB: Complete account result
@@ -40,4 +40,3 @@ sequenceDiagram
 
     Note over V,VK: VK rate limiter serializes API calls to the configured requests-per-second limit.
     Note over P,DB: source_external_id is retained for joint posts and stable public URLs.
-    Note over V,DB: wall.get omission and auth/rate/transport failures never mean deletion.

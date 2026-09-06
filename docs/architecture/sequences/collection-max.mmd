@@ -25,8 +25,7 @@ sequenceDiagram
         MAX-->>M: Recent messages and view statistics
         M->>MAX: get_reactions(chatId, messageIds)
         MAX-->>M: Reaction totals and breakdown
-        M->>DB: Load bounded circular tracked page + refresh cursor
-        M->>M: Select due rows absent from discovery, capped independently
+        M->>DB: Load active due publications absent from recent history
         opt Due historical IDs exist
             M->>MAX: get_messages(chatId, IDs)
             MAX-->>M: Existing messages
@@ -36,8 +35,8 @@ sequenceDiagram
         M->>P: Channel, messages, counters and missing probes
         P->>P: Normalize message type, repost, views and reactions
         P->>P: Keep unsupported comments/shares as NULL, never zero
-        P->>P: Confirm only repeated omissions from successful exact get_messages
-        P->>DB: Transactional metadata, snapshots, probes and refresh cursor
+        P->>P: Confirm deletion only after consecutive missing probes
+        P->>DB: Transactional metadata, publications and snapshots
         DB-->>P: Commit with dataset revision
         P->>R: Publish revision.changed after commit
         P->>DB: Complete account result
@@ -51,4 +50,3 @@ sequenceDiagram
 
     Note over M,MAX: MAX uses a user session, not a stable public server API&#59;<br/>credentials/session are secrets and never enter raw payload or logs.
     Note over P,DB: Platform capability is versioned because fields exposed by MAX may change.
-    Note over M,DB: History omission and auth/rate/transport failures never increment missing.
