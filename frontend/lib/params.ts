@@ -21,7 +21,8 @@ export type OverviewSort =
   | "accounts";
 
 export function first(value: SearchValue): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+  // Starlette QueryParams.get() selects the final repeated scalar value.
+  return Array.isArray(value) ? value.at(-1) : value;
 }
 
 export function many(value: SearchValue): string[] {
@@ -30,7 +31,11 @@ export function many(value: SearchValue): string[] {
 }
 
 export function comparisonSelectionIsExplicit(submitted: SearchValue): boolean {
-  return first(submitted) === "true";
+  return legacyBoolean(submitted);
+}
+
+export function legacyBoolean(value: SearchValue): boolean {
+  return ["true", "1", "yes", "on", "t", "y"].includes((first(value) ?? "").toLowerCase());
 }
 
 export type ComparisonSelectionIssue =
@@ -126,7 +131,10 @@ export function normalizeHistoryLimit(value: SearchValue): number {
   const raw = first(value);
   if (raw === undefined) return 100;
   const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed >= 50 && parsed <= 1_000 ? parsed : 100;
+  if (!/^[+-]?\d+(?:\.0+)?$/.test(raw.trim()) || !Number.isInteger(parsed) || parsed < 50 || parsed > 1_000) {
+    throw new RangeError("history_limit must be an integer between 50 and 1000");
+  }
+  return parsed;
 }
 
 export function legacyPlatformDecision(

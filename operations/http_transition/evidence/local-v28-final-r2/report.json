@@ -1,0 +1,8 @@
+{
+  "status": "fail",
+  "reason": "After clear, admin native interval begins before closed collector intervals with future observed_at; investigation required.",
+  "writerFence": "passed including inherited api_read privileges; scoped read login cleaned",
+  "actualJavaAdminCommands": 4,
+  "ownedComposeResourcesRemoved": true,
+  "productionAcceptance": false
+}

@@ -1,0 +1,105 @@
+{
+  "status": "pass",
+  "checks": [
+    "private0700_0400_owner_only",
+    "incomplete_permission_conversion_rejected",
+    "fenced_metadata_only_adoption_content_and_retry_unchanged",
+    "actual_java_and_python_writers_inherit_reader_gid_with_umask0077",
+    "existing_private_and_new_shared_subtrees_coexist_without_implicit_widening",
+    "separate_reverse_and_backup_users_read_both_producers",
+    "writers_cannot_read_or_write_each_others_receipts",
+    "readers_cannot_modify_remove_or_publish",
+    "outsider_cannot_read",
+    "non_setgid_group_writable_or_public_directories_rejected",
+    "public_or_wrong_owner_objects_rejected",
+    "wrong_inherited_gid_rejected_even_for_owner",
+    "symlink_ancestor_rejected_by_both_implementations"
+  ],
+  "identities": {
+    "23001": {
+      "uid": 23001,
+      "gid": 23001,
+      "groups": []
+    },
+    "23002": {
+      "uid": 23002,
+      "gid": 23002,
+      "groups": []
+    },
+    "23003": {
+      "uid": 23003,
+      "gid": 23003,
+      "groups": [
+        25000
+      ]
+    },
+    "23004": {
+      "uid": 23004,
+      "gid": 23004,
+      "groups": [
+        25000
+      ]
+    },
+    "23005": {
+      "uid": 23005,
+      "gid": 23005,
+      "groups": []
+    }
+  },
+  "beforeAdoption": [
+    {
+      "uid": 23001,
+      "gid": 23001,
+      "mode": "0o400",
+      "sha256": "09a3902b04f598e6d059934aeecb9ecdd3c74d4f441e588bc07a4cc931697408"
+    },
+    {
+      "uid": 23002,
+      "gid": 23002,
+      "mode": "0o400",
+      "sha256": "8fe82ed4f621da0257e259636f36ec8cd1da07b8244630b0655216463b067ce7"
+    }
+  ],
+  "afterAdoption": [
+    {
+      "uid": 23001,
+      "gid": 25000,
+      "mode": "0o440",
+      "sha256": "09a3902b04f598e6d059934aeecb9ecdd3c74d4f441e588bc07a4cc931697408"
+    },
+    {
+      "uid": 23002,
+      "gid": 25000,
+      "mode": "0o440",
+      "sha256": "8fe82ed4f621da0257e259636f36ec8cd1da07b8244630b0655216463b067ce7"
+    }
+  ],
+  "finalObjects": [
+    {
+      "uid": 23001,
+      "gid": 25000,
+      "mode": "0o440",
+      "sha256": "09a3902b04f598e6d059934aeecb9ecdd3c74d4f441e588bc07a4cc931697408"
+    },
+    {
+      "uid": 23002,
+      "gid": 25000,
+      "mode": "0o440",
+      "sha256": "8fe82ed4f621da0257e259636f36ec8cd1da07b8244630b0655216463b067ce7"
+    },
+    {
+      "uid": 23001,
+      "gid": 25000,
+      "mode": "0o440",
+      "sha256": "e124a0f396fd92bdda2bb37747bf86568357b38bc2fa491177d6b1ac5f1f2869"
+    },
+    {
+      "uid": 23002,
+      "gid": 25000,
+      "mode": "0o440",
+      "sha256": "f424634ff8b3c4315f055239cf6cd1ec162eb9745763ac3893391cd4cd9f309b"
+    }
+  ],
+  "pythonVersion": "3.14.4 (main, Jun 18 2026, 14:25:02) [GCC 15.2.0]",
+  "system": "Linux"
+}

@@ -1,0 +1,733 @@
+{
+  "reportVersion": 1,
+  "retainedAt": "2026-09-06T13:31:40.687251+00:00",
+  "source": "backend-build/surefire-reports",
+  "destination": "spring-junit",
+  "sanitization": {
+    "knownSecretValuesSupplied": 9,
+    "jvmPropertiesRemoved": true,
+    "structuredCredentialsRedacted": true
+  },
+  "files": [
+    {
+      "file": "TEST-org.mranked.ArchitectureTest.xml",
+      "sourceSha256": "75acb16699485d75e4c6f89c9e14409df2279fc36c283166acf8544654d98725",
+      "sha256": "b348432d376c9ab15e626e62e9e4f7176c7b1d112e27125348fd9ab3704d5ce6",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.application.AccountReferenceTest.xml",
+      "sourceSha256": "8a1da62cb2fabb18c06f83e54dc7a27bc8e5d3eae3a438cce3eb87d4566bca3e",
+      "sha256": "bc6f38f115374a754c5ed7e762855e7aaa5687e2f925145fcec0a08ae80ffb6e",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.application.AdminServiceTest.xml",
+      "sourceSha256": "a8a5952ff4f0bd11ca7d4478c949d83332cbdb7ef3507b73a816406fe1afb93e",
+      "sha256": "96e97ca186f9a794fabe670c05213fa15c6e7a17c480b1ca97b087200262c458",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.application.LegacyCatalogServiceTest.xml",
+      "sourceSha256": "c94b7ed2326222a227a98bd10d81c0bdfd144dcb746b2fe0cf9821f815896398",
+      "sha256": "91d9aa5b76857b289ca56f73aff5916e49644e564ae1bf31979f7055f3d86b86",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.AdminConfigurationTest.xml",
+      "sourceSha256": "637ffd8cb87503ef8c77ea76603e795c52493b087bc155f6a4356d1af593a1a7",
+      "sha256": "6c5ea4454c6d1e9c5aefd626ee164c322b8da67a38a622d39ac6629673f350a0",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.AdminPostgresIntegrationTest.xml",
+      "sourceSha256": "a104e93ea846fa3a3417c0726ade544d6c26078d2aa518fea8c52a37746879eb",
+      "sha256": "263f51ce8dc66776936c918293f89b38b52862d04b5581df935b02e63aaa77a5",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.ApiSecurityConfigurationTest.xml",
+      "sourceSha256": "2c78231f426205bfc4be0b9c72ff2411fb029481456d7a3de9afca6f26a18165",
+      "sha256": "49160998fce8efe5eaec3f6b05a5417be0738cf816eeebe8898ed5ac6a4fdd7f",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.CatalogHttpPostgresIntegrationTest.xml",
+      "sourceSha256": "b9b5bd5aff85a6a0d40a9ba5aa89d55dd8de3ff75a5c942935e9364f739bda9b",
+      "sha256": "90dd3b217962d2c13a0f99c87bd27eb108667279a0ffa7c48ec8a8265e1516f5",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest.xml",
+      "sourceSha256": "3b62118d3fa758f0a62b0d7012b1868e25e4f4487d625e22ebc5740e1c1937f7",
+      "sha256": "a9f1d65ee173ece0a9c83718af99189a002661a12ed33a5f439997c3850b9e69",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.HttpOfficialRatingSourceTest.xml",
+      "sourceSha256": "22586187a1b8b5beace38e6e7816dae59e3cfd50ec4954e2a1fc0f48797acc6e",
+      "sha256": "07fc9c2b60fbad8a45593ddb22139da4fb1307ae58be92eadbeb8c24928404bc",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.IdentityCommandEvidenceTest.xml",
+      "sourceSha256": "586b38048e6ef6a1dc7df30b89e6b3df878e595dd04879c9b029ed080afa29a0",
+      "sha256": "c4e7962233f6d3a4607853e561bfd6277f923b56967c985c16271f1fbaa2b976",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.IdentityCommandPostgresIntegrationTest.xml",
+      "sourceSha256": "85a38259d5fa25287453a48b3451fb547b95351b433be16846374bc024d0f027",
+      "sha256": "a7bcefd9f6ee705c11a7450ada4e028ff36b986af4c53dc234523a2809fb8e50",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.JdbcAdminSqlTest.xml",
+      "sourceSha256": "6fe7a6f3a6f5974bda053aacaa38588495b03b69be29fc9e177fc4696fe4734d",
+      "sha256": "d47cc0c4b3738b8954f85aa2abef393c9633e08638236e3ccd85c818f38e6a54",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.LegacyAccountPresentationPostgresIntegrationTest.xml",
+      "sourceSha256": "99fb34b069e53bfb54e7b7780342c83b9ba133db693936d460bba297fc394ea5",
+      "sha256": "ba9acca30f3168b37629d71a15708cefd4ab2c2ebcdf97c50d0f116ccb12b04e",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.LegacyFormPostgresIntegrationTest.xml",
+      "sourceSha256": "2c99205dfd5ae852feb713813380a90f56eb028d3f909dc1113ccf571d670c59",
+      "sha256": "108cb1db59ea62581f35dbfacce80ec357e2254558c147c91754c79eca3ac4b1",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.OfficialRatingContextPostgresIntegrationTest.xml",
+      "sourceSha256": "37f3eeb2961cd5e7f5684dc83ed88231c345b8ec5b9adb7472eaa4f3c3093675",
+      "sha256": "80f57d8a3da1a6627b3ed1f62a2bd7e989d11956efb1a78b3e1bffebc3e0fe89",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.infrastructure.OfficialRatingParserTest.xml",
+      "sourceSha256": "4ddcbaefff877e3ba70ce63f2917e1b3210c491a196deed6c47f42bef80b2d3c",
+      "sha256": "e383fc4280ebcb3955da7084bf8a0ef2eba8727fd300adedd3c0729e5eeb9b28",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.web.AdminControllerTest.xml",
+      "sourceSha256": "3ce5cd1f1ea01d486cb7dca36ad2ec321c4ecbfb1f651b29eba9c3e6dcade093",
+      "sha256": "64659e2c4c135aced51fc8510ae00730b08d1725fa5682164b3217602f2bb831",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.admin.web.LegacyFormExceptionHandlerTest.xml",
+      "sourceSha256": "63c8cf3f01f54ec06e39e48b95573ff96d87aca1668c990316d65a551850641a",
+      "sha256": "ce18efde44a389b6f2efa82e4f337c38fe5961cd917a3d970539876ee8d79c6b",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.cache.application.ETagFactoryTest.xml",
+      "sourceSha256": "96e629ee85d62aa0d8f887288179a46befeff5208b26cc7766a6268f3a658483",
+      "sha256": "52d2d642a20fb7b0c7f7b05f5877d51dd42b3dbf59b2b6216121470422f339d6",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.cache.application.PublicCacheKeyFactoryTest.xml",
+      "sourceSha256": "b80676417c649621a16406875221c31cf060cfdcc998563ce7d9476d8453943f",
+      "sha256": "22a969bfd54a2b769fb32623c2e91bf24fca491f1089e08c340bf224ba85af7b",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.cache.application.PublicDtoCacheTest.xml",
+      "sourceSha256": "9fc481b443f5ba5e2aa5872b5be4007bc026d631c8e4076550d4ce96923e9c93",
+      "sha256": "de23a1ce80341d33308614710ab356fcceaf951afccf1c835bdb119cb8a24a44",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.cache.infrastructure.JdbcDatasetRevisionProviderTest.xml",
+      "sourceSha256": "3098152a509aef176fd1aa8f7c1341aa9debd84ced1857240e37077c45b1c972",
+      "sha256": "8603189297f35fc07df77231397dfb3ab6bd3c7c71d419c71fb7c0c15a63ffa2",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.cache.infrastructure.RedisPublicCacheIntegrationTest.xml",
+      "sourceSha256": "420cfb009c213c11644fb8de7858f5bfcc669b9b76af4a8aa9c23eab47de7f50",
+      "sha256": "3bdce044133eae4e76683b6cc927fddb8dfd513dd73eb9be49c2a6b8063bb70b",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.cache.infrastructure.RedisRevisionInvalidationSubscriberTest.xml",
+      "sourceSha256": "c547e16821d2073798a7aeecf87c1b1c629bf05d5835b987fa04f20a845d5fdc",
+      "sha256": "3f97870ab46d2dc3b817d42ec18b4cb56428183cad3960b2ec13cfe520c2aab7",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.contract.OpenApiContractTest.xml",
+      "sourceSha256": "98e19bfbf71c9ae2606513bb91b62357e911e814d4f7db3a0e99559441634c7a",
+      "sha256": "c1f9015023cfbc340fb2e3cdbbd90e176c44b0dc54562a45dea4fa9c0e585459",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.emoji.application.CustomEmojiServiceTest.xml",
+      "sourceSha256": "c8ff8fbcddbe9a440ca13c37feb1c9dada6753829eb851e9ae5c952c6ab39d4e",
+      "sha256": "d467e656a5b7cf6876905bb66ced0c6c5b50a80fb12660e613da30d14ef2c4aa",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.emoji.application.CustomEmojiWiringTest.xml",
+      "sourceSha256": "3128e55997aaf3e19fc8ef9dd747e7c3c0a62a6c7afb0aa59a82cd1dfa89e58c",
+      "sha256": "39c67b0bebe6b897d822500eb1a52d3db866fd34ac9dd148e74395eddd4293f6",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.emoji.infrastructure.TelegramEmojiHttpGatewayTest.xml",
+      "sourceSha256": "1966fd0b88ce92eec4463413b0b8b47a26369230312753ac9e44ce0aa8c6c97f",
+      "sha256": "8e02153dd2d7310863e3eadc726eb4057830349157a269514fedf0ff1fdacff1",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.emoji.web.CustomEmojiControllerTest.xml",
+      "sourceSha256": "b953f0c578791000de29fce896f3fc4be246b050e1689898a8743718fe7ecabd",
+      "sha256": "92e2c9a139951a50de61c21f0a3ca4ad0f99d2260299ec1ec7c5d8cb7a4ec4ad",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.exportjob.application.ExportJobPostgresIntegrationTest.xml",
+      "sourceSha256": "2e7186311288c1dbc8e926f4a7222a1efcb6eb6c600a7c8ff7eb82ce0e487afa",
+      "sha256": "d7802e3c8ee50668c562ba4b5cae906f422d0163f470fe8eda66ecc995f9e262",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.exportjob.application.ExportJobServiceTest.xml",
+      "sourceSha256": "212421adf7d35ca2030dcf8df1defe0647b3f5d859614b25ca08e2e16d035e53",
+      "sha256": "d4124e656bbe0690c5d39a61f727f27f4e3e10a88a2932ebcc149c1da4436c9e",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.exportjob.web.ExportJobSecurityTest.xml",
+      "sourceSha256": "9802f3a71af9e2a564566526616fca36a0ac4156ce5f518a590dec910e3f6f1d",
+      "sha256": "44576be3b8210aa2f9d13e24f0d8d33c2a2f7de0b9b06412780491188962ef97",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.legacyexport.application.LegacyCsvServiceTest.xml",
+      "sourceSha256": "bc290e27f5e0e2f57aafdc4e6cd624f371d13d7211a7083cc8c30f6201a78de3",
+      "sha256": "2246ffec011e8f52b0f19fb1a7b62545582838b0925c64a94000ccf4547179e2",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.legacyexport.infrastructure.LegacyCsvArchivePostgresIntegrationTest.xml",
+      "sourceSha256": "ef9196e7da34a1df7955ab67a4f66a076a8c9f4f516b9edcfd6e336643bba3f4",
+      "sha256": "4be279476b2bd93cbbe5c19243010a4c7e0b48976c5027502659ea5a5410728d",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.legacyexport.infrastructure.LegacyCsvPostgresIntegrationTest.xml",
+      "sourceSha256": "a451e767947c810ebfa8edad62d255894c66a166b722c82f5acd4f30e2de0ce3",
+      "sha256": "b09f585935082981d109c9b8b6e5d2e9ce05d5736290812836426b42649e09d5",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.operations.application.ReadinessServiceTest.xml",
+      "sourceSha256": "02f9d9348f45db67d1e516765569762f50d4667d7bbd50508759e6b38ef7f59d",
+      "sha256": "5f6f6a6b56bef533f282a6f1445bdf310b4d4dc49519e63c82af2d63ddeebf68",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.operations.infrastructure.JdbcQueryMetricsConfigurationTest.xml",
+      "sourceSha256": "1230f548cf506645bd6bea9bfe8822c3b49744194266d7942136ff21c689d946",
+      "sha256": "2ac7c231f20edd469b3e26ac20758d3247cce76f2e187f4697472eea746040d8",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.operations.infrastructure.JdbcReadinessProbeTest.xml",
+      "sourceSha256": "a27a805a2342c7e296f077f5c074d8c8b77d81df1cc622acdf563cb3395f5f6f",
+      "sha256": "f77586b62b96be1f5779be1ad1090fd845b49f9c466f75568bd909b189f8b436",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.operations.infrastructure.LegacyHealthPostgresIntegrationTest.xml",
+      "sourceSha256": "2244af89e9beeb209e0f562502ac9567902c64537ec410c7dbed6c57c8b9f4b4",
+      "sha256": "8e231e841bb30fc9d2923008084f881d62104184f6362e27472617de68eab65e",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.operations.infrastructure.ManagementSecurityConfigurationTest.xml",
+      "sourceSha256": "3a100e2072c5fa38a14b34fc5352dc0a5ee8e3bbcf4f54b8529cc5935aa7a299",
+      "sha256": "d96cb23971704cc7e6819ab0b9bf7d3904b1adde2d1d42f96258972c018d016c",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.operations.infrastructure.PinnedHttpsClientNetworkTest.xml",
+      "sourceSha256": "a9b7aad5cde2cfb5d2014f321236683e6b5bce2de06565c3be91bacdeeb0f7d9",
+      "sha256": "dc33ae77a9f45456665bb4b69f94d135a11e34518293d52f0b50f4db1b07718b",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.operations.web.HealthControllerTest.xml",
+      "sourceSha256": "8a9ad27c2b65dbf0f00e05af31deb7d20d9104ebc117ba0a40293aac54bac76d",
+      "sha256": "bd39122ed741de14c020b0c385f0c4ded976e5e8538d8f502c57d042e53057cb",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.application.CsvExportServiceTest.xml",
+      "sourceSha256": "25c8389134c28199717691bd1fa8de0e06ba8a70459dbdf5dd9a6daa2b000ad5",
+      "sha256": "d6f3623e03dc248f860da4405b24b2efca2e1a9c02b67ba3e51edb4da056b1c5",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.application.CursorCodecTest.xml",
+      "sourceSha256": "2d6d41bd25995ed7783e7497ed1ea69a3e7de8168794d1d6ec79616caddac912",
+      "sha256": "ba29be3bb5c2cbad1455dc98d0b642843c12bd08f681eaba69722047bb8318b1",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.application.ProviderConfigurationTest.xml",
+      "sourceSha256": "5b4a295e55b1465cc8e71c0ab5e58587bd8584ed07a6f2917d11f183fa6b5571",
+      "sha256": "e73b2b0695e104e23867750f69f9cb896005bd20a83fd495e4d4df438050e0af",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.application.PublicQueryServiceTest.xml",
+      "sourceSha256": "bb7044a76b3ed25f9442179f0646691f0747c1999175685a0f9cdac2efed49ef",
+      "sha256": "00c737000227b26028cf3e82faf6bc041147585212c056ef2fd07b8b875b2b0f",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.domain.ActivityRatingQueryTest.xml",
+      "sourceSha256": "32405e8a07e62e38a5d174dbf066a803c2a1a01d00fa95798b65cd2a53c01c7b",
+      "sha256": "4e2265889841e568bc46a73bbbf7d5229c0f94867bcc910df40a04d88b206537",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.domain.ComparisonSelectionTest.xml",
+      "sourceSha256": "762f9e3037c7792e4e51464d40e1fa2391272af330231e549e270ae506584467",
+      "sha256": "d03cd88e4b87a7cc7c3ddcb6b39794d470ffd35c933961271d2a5c7bb2844457",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.domain.ComparisonSeriesTest.xml",
+      "sourceSha256": "396b7e4e6a1089dea1846551aac97a9b3b0ce574880b5f797021ba9803718176",
+      "sha256": "a96b0b1be6f55ab3a074b4642c7b9995b3ab11f261abd8c7c5b5785d7dd818d7",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.domain.OverviewQueryTest.xml",
+      "sourceSha256": "65f0c6f616ec3a44123035605598abac29b1a33d9ad12b221224e753f8504f09",
+      "sha256": "5b0681a187b5b287e0205c80fec483768e67dc9fe5051fd72d8a8e5018d8beae",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.ActivityRatingGrantMigrationTest.xml",
+      "sourceSha256": "0d72ef061359af6bff65b9d0b69e0a42083b19480f925d84b6af35cdba828e1c",
+      "sha256": "bb4e18ae74731d862bcfcc252360d0277f958494ec92cced10fc84f16587ea69",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.ActivityRatingPostgresIntegrationTest.xml",
+      "sourceSha256": "cdecaa210407692473d8d52dc6d0c67ee2248f7af32cca4b85dd01d47545cf2c",
+      "sha256": "0c793bdace82cb42c80485928cb083f386eb85a73baa0d157d88e58e6fcce3a7",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest.xml",
+      "sourceSha256": "f9e8b7dbc2478fe5f434795bd99879e4ddbbae2630dc41f6e8249fbb70f9e71b",
+      "sha256": "6008f427d398afd518bcd5e342dfa1919bf205dcfc51ab838105ee1917b754d7",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.ComparisonPostgresIntegrationTest.xml",
+      "sourceSha256": "25b7e71662fe4c001c9be183a8446809d45925df964261718ce78767ef54444d",
+      "sha256": "00ea9b35f6e395d171b162306c8b9d8f1c3884c61f46511c986f05dc106ee791",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.ComparisonProjectionMigrationTest.xml",
+      "sourceSha256": "8865646062ec97ca5066d03a3272b4e153019bce19b393f15d1269d4ad685e89",
+      "sha256": "aeacef0bf3900e5be50f22e6645db2648c27ce45b2bde8ec57afc1a93c3c49f3",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.ComparisonSqlTest.xml",
+      "sourceSha256": "e8c2353cd52e167c754069fb398a07cecedf1dc4969904738e2afc91e82c7e14",
+      "sha256": "a1e965ea6eaeadf1b3f274af4e3674d174590b45f446f202a39cb1ae081af45c",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.DetailFallbackPostgresIntegrationTest.xml",
+      "sourceSha256": "c18836e054a825daec9cd5eb1ff55807a0f150d414a1625e5c0137d3e134dcda",
+      "sha256": "47f6c8fa2a3fbfca7b68d4ef9cb932d0336fbd5f5cb58e0cc103ed8beebaeea0",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.DetailPostgresIntegrationTest.xml",
+      "sourceSha256": "a209f9c76c8c938ec7e3e54723058aef52ad333f78e380d048eeeb7b99c2d92e",
+      "sha256": "9e1117dce55177bad47ae26066f53f7c578f043ef0c400fa1c0374139809ca42",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.DisabledPeriodPostgresIntegrationTest.xml",
+      "sourceSha256": "5bef3edd00232c9cf1486823bdfc324bb5959aca72415f59592d953b8d5e56b6",
+      "sha256": "af17b4134f3f8c313ee090e6b251cbb2074123ff5c4fe7962029733a5fb6bb2c",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.HistoryReactionDetailsPostgresIntegrationTest.xml",
+      "sourceSha256": "f670aafd35228b8dda41e5deb11eea20513fb011bac5a26544fad5b4d931d97e",
+      "sha256": "d93806acedaff6ab967607639dcaf47de9ce70fcc05651f5451c0772e8a9ad5d",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.LegacyGoldenProjectionIntegrationTest.xml",
+      "sourceSha256": "f9b43d7134f39f3692eafeea93219b47620d3d1f566a5df4e3b230de745befc6",
+      "sha256": "9c9b01988ce3a2fd1f17b3e61864c68a4012f1c12e13b0f219a993fc20f3e80a",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.LegacyOverviewProjectionMigrationTest.xml",
+      "sourceSha256": "3e58344ed8e50a55c96e71f1decfeb7e7af5302043eade63d75af62a12122301",
+      "sha256": "8d71d30db95113af3456c0b6bd4243823068e30afd61b67be0829d8103a94b8b",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.LegacyPeriodOraclePostgresIntegrationTest.xml",
+      "sourceSha256": "d685517e32b2996f677e5dc9088e0e7d957dbf3750381063217008eefd47a2c7",
+      "sha256": "66732f79eb4dea1981f72f0a099bd5ec5395c3971e49f3d4ed37fc3ea4ede1eb",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.MigrationInstallationTest.xml",
+      "sourceSha256": "2cc57ff3fd41214b9de74c64bbde34c3ae04026b0e83d83e95057f6a05cce192",
+      "sha256": "4897047debb9ac2880cc16bcac4ed43626a5ebd23c0de8f4f85f13f8358a6fb6",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.OverviewPostgresIntegrationTest.xml",
+      "sourceSha256": "5c5c5efc00163fb6d1270cdf70a424e6fbe77ce6e716983716060e33f2ae15a2",
+      "sha256": "39b3598b116849bde4f82519592ecb6709a6c1ebcfcbe1e6c1817cbc11d99cae",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest.xml",
+      "sourceSha256": "62879735fb20f0137d202836c69faf2a7fdf5fef64332b44763191a9614c936b",
+      "sha256": "6d21d1e94df0d4ddb5299f2b96a745724faf4360d114d399be04c58cf991956f",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.ProjectionSchemaContractTest.xml",
+      "sourceSha256": "642e79b73b6909d339ee1ddf63c0cbaac6a693b0e212999058d64534c249a219",
+      "sha256": "a3bece458ff61a783debf44d19a8ffb8a5feb49ae0f2ed73367fef8cd03baa9c",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.ProjectionSqlTest.xml",
+      "sourceSha256": "8e0b3f2315181a530b6fa7091a5890302ee6155721e76d022bfe87cf0529be9e",
+      "sha256": "4e7995088e03bcb49bbc0a50a5507e1a3627e3ef4df3f3b1b63b4e54ced5af5e",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.infrastructure.QueryPlanEvidenceTest.xml",
+      "sourceSha256": "c795a722b4665abd39758495ac605b06fa7a21b6636d868cfd1a6b818193bf82",
+      "sha256": "8013230b6e9f64af19519954f2a503f4a969d252217c7f73cccf20b38dc1e152",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.web.CsvExportControllerTest.xml",
+      "sourceSha256": "291ab547eaf2f5740dde92b7b911dea98a4f6ff4cad11c233a1fbc6a2fc116f0",
+      "sha256": "c525cd6fe8a8d8878af85d6430282aee9bdcddabe1bacfb052a397fb68ca2783",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-org.mranked.query.web.PublicQueryControllerTest.xml",
+      "sourceSha256": "6bce795ee1d0da704395d750567f26dd5acbffe740e8c0ff5124ad96c2d61a69",
+      "sha256": "e62e91fbe342a740ce4226d6b509a3b1064608cacca78f3fd425735dc34dab53",
+      "jvmPropertySectionsRemoved": 1,
+      "tests": 18,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

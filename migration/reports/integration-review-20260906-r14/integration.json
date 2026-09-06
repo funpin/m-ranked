@@ -1,0 +1,509 @@
+{
+  "reportVersion": 1,
+  "environment": "disposable-local-compose",
+  "generatedAt": "2026-09-06T13:10:12.591140+00:00",
+  "productionAcceptance": false,
+  "checks": [
+    {
+      "name": "services",
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "mranked-ci-a8e4bf1daed0",
+        "--env-file",
+        "/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/mranked-integration-2p7luboo/services.env",
+        "-f",
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/infra/compose.yaml",
+        "up",
+        "-d",
+        "--wait",
+        "postgres",
+        "redis"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 6.61
+    },
+    {
+      "name": "create-clean_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE clean_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.336
+    },
+    {
+      "name": "create-upgrade_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE upgrade_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.384
+    },
+    {
+      "name": "create-bridge_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE bridge_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.228
+    },
+    {
+      "name": "create-collector_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE collector_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.223
+    },
+    {
+      "name": "create-reverse_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE reverse_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.38
+    },
+    {
+      "name": "create-ledger_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE ledger_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.17
+    },
+    {
+      "name": "create-catalog_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE catalog_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.172
+    },
+    {
+      "name": "create-native_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE native_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.17
+    },
+    {
+      "name": "create-history_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE history_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.177
+    },
+    {
+      "name": "create-golden_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE golden_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.173
+    },
+    {
+      "name": "flyway-clean-upgrade",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#cleanInstallationAndFrozenV8UpgradeHaveTheSameManifest",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 11.885
+    },
+    {
+      "name": "flyway-bridge_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 5.71
+    },
+    {
+      "name": "flyway-collector_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 7.082
+    },
+    {
+      "name": "flyway-reverse_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 5.647
+    },
+    {
+      "name": "flyway-ledger_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 6.002
+    },
+    {
+      "name": "flyway-catalog_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 5.249
+    },
+    {
+      "name": "flyway-native_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 4.657
+    },
+    {
+      "name": "flyway-history_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 6.426
+    },
+    {
+      "name": "redis-ping",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-a8e4bf1daed0-redis-1",
+        "sh",
+        "-c",
+        "REDISCLI_AUTH=\"$REDIS_PASSWORD\" redis-cli --no-auth-warning ping"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.183
+    },
+    {
+      "name": "bridge",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_migration_bridge_postgres.py",
+        "tests/test_bridge_actual_target_postgres.py",
+        "-k",
+        "not missing_source_row and not cleared_native_identity",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/bridge.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 23.918
+    },
+    {
+      "name": "native-identity",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_bridge_actual_target_postgres.py::test_cleared_native_identity_closes_history_and_reenrollment_appends",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/native-identity.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 20.26
+    },
+    {
+      "name": "identity-history",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_identity_history_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/identity-history.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 13.336
+    },
+    {
+      "name": "preserved-source",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_bridge_actual_target_postgres.py::test_missing_source_row_requires_verified_owner_ledger_and_remains_checked",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/preserved-source.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 10.265
+    },
+    {
+      "name": "archive",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cold_archive_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/archive.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.998
+    },
+    {
+      "name": "collectors",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_target_collectors_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/collectors.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.977
+    },
+    {
+      "name": "observation-integrity",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_observation_integrity_postgres.py",
+        "tests/test_operational_projection_guards.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/observations.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 37.328
+    },
+    {
+      "name": "operations-metrics",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_operations_metrics_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/metrics.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.084
+    },
+    {
+      "name": "spring",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Dtest=!QueryPlanEvidenceTest",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 162.52
+    },
+    {
+      "name": "query-plans",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Dtest=QueryPlanEvidenceTest",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 4.679
+    },
+    {
+      "name": "python",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 42.563
+    },
+    {
+      "name": "reverse-rehearsal",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_reverse_sync_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r14/reverse.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 14.08
+    },
+    {
+      "name": "cleanup",
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "mranked-ci-a8e4bf1daed0",
+        "--env-file",
+        "/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/mranked-integration-2p7luboo/services.env",
+        "-f",
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/infra/compose.yaml",
+        "down",
+        "--volumes",
+        "--remove-orphans"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.14
+    }
+  ]
+}

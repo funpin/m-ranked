@@ -1,0 +1,1369 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] --------------------< org.mranked:m-ranked-backend >--------------------
+[INFO] Building m-ranked backend 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- enforcer:3.6.2:enforce (require-java-21) @ m-ranked-backend ---
+[INFO] Rule 0: org.apache.maven.enforcer.rules.version.RequireJavaVersion passed
+[INFO] 
+[INFO] --- spring-boot:4.0.8:build-info (public-representation-build-identity) @ m-ranked-backend ---
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ m-ranked-backend ---
+[INFO] Copying 27 resources from src/main/resources to ../migration/reports/integration-review-20260905-r7/backend-build/classes
+[INFO] Copying 1 resource from ../contracts/openapi to ../migration/reports/integration-review-20260905-r7/backend-build/classes/contract
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ m-ranked-backend ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ m-ranked-backend ---
+[INFO] Copying 1 resource from src/test/resources to ../migration/reports/integration-review-20260905-r7/backend-build/test-classes
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ m-ranked-backend ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ m-ranked-backend ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running org.mranked.contract.OpenApiContractTest
+[ERROR] Tests run: 2, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.233 s <<< FAILURE! -- in org.mranked.contract.OpenApiContractTest
+[ERROR] org.mranked.contract.OpenApiContractTest.checkedInContractIsValidYamlAndListsOnlyImplementedRoutes -- Time elapsed: 0.045 s <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting actual:
+  ["/api/v1/health/live",
+    "/api/v1/health/ready",
+    "/api/v1/health/legacy",
+    "/api/v1/health/freshness",
+    "/api/v1/emoji/{emojiId}",
+    "/api/v1/revision",
+    "/api/v1/overview",
+    "/api/v1/institutions/{legacyId}",
+    "/api/v1/publications/{legacyId}",
+    "/api/v1/rating",
+    "/api/v1/compare/candidates",
+    "/api/v1/compare",
+    "/api/v1/accounts/{legacyId}",
+    "/api/v1/legacy-exports/{kind}.csv",
+    "/api/v1/exports/publications.csv",
+    "/api/v1/admin/catalog/session",
+    "/api/v1/admin/catalog/status",
+    "/api/v1/admin/catalog/institutions",
+    "/api/v1/admin/catalog/institutions/{id}/accounts",
+    "/api/v1/admin/catalog/institutions/{id}",
+    "/api/v1/admin/catalog/accounts",
+    "/api/v1/admin/catalog/accounts/{id}",
+    "/api/v1/admin/catalog/accounts/{id}/enable",
+    "/api/v1/admin/catalog/accounts/{id}/disable",
+    "/api/v1/admin/catalog/accounts/{id}/native-id",
+    "/api/v1/admin/catalog/legacy-command",
+    "/api/v1/admin/csrf",
+    "/api/v1/admin/jobs",
+    "/api/v1/admin/jobs/{jobId}",
+    "/api/v1/admin/platform-accounts/{accountId}",
+    "/api/v1/admin/platform-accounts/{accountId}/enabled",
+    "/api/v1/accounts/{legacyId}/publications",
+    "/api/v1/institutions/{legacyId}/accounts",
+    "/api/v1/publications/{legacyId}/history",
+    "/api/v1/admin/exports",
+    "/api/v1/admin/exports/{id}",
+    "/api/v1/admin/exports/{id}/download"]
+to contain exactly in any order:
+  ["/api/v1/health/live",
+    "/api/v1/health/ready",
+    "/api/v1/emoji/{emojiId}",
+    "/api/v1/overview",
+    "/api/v1/revision",
+    "/api/v1/institutions/{legacyId}",
+    "/api/v1/publications/{legacyId}",
+    "/api/v1/rating",
+    "/api/v1/compare",
+    "/api/v1/compare/candidates",
+    "/api/v1/accounts/{legacyId}",
+    "/api/v1/accounts/{legacyId}/publications",
+    "/api/v1/institutions/{legacyId}/accounts",
+    "/api/v1/publications/{legacyId}/history",
+    "/api/v1/exports/publications.csv",
+    "/api/v1/legacy-exports/{kind}.csv",
+    "/api/v1/admin/catalog/session",
+    "/api/v1/admin/catalog/status",
+    "/api/v1/admin/catalog/institutions",
+    "/api/v1/admin/catalog/institutions/{id}/accounts",
+    "/api/v1/admin/catalog/institutions/{id}",
+    "/api/v1/admin/catalog/accounts",
+    "/api/v1/admin/catalog/accounts/{id}",
+    "/api/v1/admin/catalog/accounts/{id}/enable",
+    "/api/v1/admin/catalog/accounts/{id}/disable",
+    "/api/v1/admin/catalog/accounts/{id}/native-id",
+    "/api/v1/admin/catalog/legacy-command",
+    "/api/v1/admin/csrf",
+    "/api/v1/admin/exports",
+    "/api/v1/admin/exports/{id}",
+    "/api/v1/admin/exports/{id}/download",
+    "/api/v1/admin/jobs",
+    "/api/v1/admin/jobs/{jobId}",
+    "/api/v1/admin/platform-accounts/{accountId}",
+    "/api/v1/admin/platform-accounts/{accountId}/enabled"]
+but the following elements were unexpected:
+  ["/api/v1/health/legacy", "/api/v1/health/freshness"]
+
+	at org.mranked.contract.OpenApiContractTest.checkedInContractIsValidYamlAndListsOnlyImplementedRoutes(OpenApiContractTest.java:31)
+
+[INFO] Running org.mranked.cache.application.PublicDtoCacheTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.210 s -- in org.mranked.cache.application.PublicDtoCacheTest
+[INFO] Running org.mranked.cache.application.PublicCacheKeyFactoryTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.008 s -- in org.mranked.cache.application.PublicCacheKeyFactoryTest
+[INFO] Running org.mranked.cache.application.ETagFactoryTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s -- in org.mranked.cache.application.ETagFactoryTest
+[INFO] Running org.mranked.cache.infrastructure.JdbcDatasetRevisionProviderTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in org.mranked.cache.infrastructure.JdbcDatasetRevisionProviderTest
+[INFO] Running org.mranked.cache.infrastructure.RedisRevisionInvalidationSubscriberTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s -- in org.mranked.cache.infrastructure.RedisRevisionInvalidationSubscriberTest
+[INFO] Running org.mranked.cache.infrastructure.RedisPublicCacheIntegrationTest
+09:36:45.760 [main] WARN io.netty.resolver.dns.DnsServerAddressStreamProviders -- Can not find io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider in the classpath, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.409 s -- in org.mranked.cache.infrastructure.RedisPublicCacheIntegrationTest
+[INFO] Running org.mranked.admin.web.LegacyFormExceptionHandlerTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.014 s -- in org.mranked.admin.web.LegacyFormExceptionHandlerTest
+[INFO] Running org.mranked.admin.web.AdminControllerTest
+09:36:47.096 [main] INFO org.hibernate.validator.internal.util.Version -- HV000001: Hibernate Validator 9.0.1.Final
+09:36:47.340 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:47.340 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:47.341 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+09:36:47.434 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:47.434 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:47.434 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:36:47.453 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:47.453 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:47.453 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:36:47.489 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:47.489 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:47.489 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.425 s -- in org.mranked.admin.web.AdminControllerTest
+[INFO] Running org.mranked.admin.application.LegacyCatalogServiceTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.008 s -- in org.mranked.admin.application.LegacyCatalogServiceTest
+[INFO] Running org.mranked.admin.application.AccountReferenceTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in org.mranked.admin.application.AccountReferenceTest
+[INFO] Running org.mranked.admin.application.AdminServiceTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.007 s -- in org.mranked.admin.application.AdminServiceTest
+[INFO] Running org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.265 s -- in org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest
+[INFO] Running org.mranked.admin.infrastructure.JdbcAdminSqlTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in org.mranked.admin.infrastructure.JdbcAdminSqlTest
+[INFO] Running org.mranked.admin.infrastructure.AdminPostgresIntegrationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.519 s -- in org.mranked.admin.infrastructure.AdminPostgresIntegrationTest
+[INFO] Running org.mranked.admin.infrastructure.HttpOfficialRatingSourceTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.006 s -- in org.mranked.admin.infrastructure.HttpOfficialRatingSourceTest
+[INFO] Running org.mranked.admin.infrastructure.AdminConfigurationTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.015 s -- in org.mranked.admin.infrastructure.AdminConfigurationTest
+[INFO] Running org.mranked.admin.infrastructure.LegacyFormPostgresIntegrationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.385 s -- in org.mranked.admin.infrastructure.LegacyFormPostgresIntegrationTest
+[INFO] Running org.mranked.admin.infrastructure.ApiSecurityConfigurationTest
+09:36:53.300 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+09:36:53.391 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:53.391 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:53.392 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+09:36:53.683 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+09:36:53.706 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:53.706 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:53.707 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:36:53.977 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+09:36:53.991 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:53.991 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:53.992 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+09:36:54.288 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+09:36:54.306 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:54.306 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:54.306 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:36:55.222 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+09:36:55.236 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:55.236 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:55.237 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:36:55.507 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+09:36:55.523 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:55.523 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:55.523 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.825 s -- in org.mranked.admin.infrastructure.ApiSecurityConfigurationTest
+[INFO] Running org.mranked.admin.infrastructure.OfficialRatingParserTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.016 s -- in org.mranked.admin.infrastructure.OfficialRatingParserTest
+[INFO] Running org.mranked.admin.infrastructure.LegacyAccountPresentationPostgresIntegrationTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.153 s -- in org.mranked.admin.infrastructure.LegacyAccountPresentationPostgresIntegrationTest
+[INFO] Running org.mranked.admin.infrastructure.CatalogHttpPostgresIntegrationTest
+09:36:55.763 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+09:36:55.805 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:36:55.805 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:36:55.805 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.260 s -- in org.mranked.admin.infrastructure.CatalogHttpPostgresIntegrationTest
+[INFO] Running org.mranked.admin.infrastructure.OfficialRatingContextPostgresIntegrationTest
+09:36:57.236 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_official_17f98e119dea49fe893aa634cf88d8ca_it (PostgreSQL 18.6)
+09:36:57.273 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:36:57.278 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:36:57.319 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:36:57.363 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:36:57.594 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:36:57.652 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:36:57.676 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:36:57.710 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:36:57.725 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:36:57.755 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:36:57.780 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:36:57.803 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:36:57.868 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:36:57.967 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:36:58.001 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:36:58.030 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:36:58.050 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:36:58.062 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:36:58.085 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:36:58.106 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:36:58.142 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:36:58.181 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:36:58.208 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:36:58.224 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:36:58.242 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:36:58.267 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:36:58.305 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:36:58.323 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:36:58.341 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:36:58.362 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 25 migrations to schema "flyway", now at version v25 (execution time 00:00.710s)
+09:36:59.915 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_official_ad2aef917e1c407d8f2f8f468fdf10a2_it (PostgreSQL 18.6)
+09:36:59.927 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:36:59.930 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:36:59.955 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:36:59.970 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:00.189 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:00.246 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:00.269 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:00.299 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:00.311 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:00.328 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:00.350 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:00.369 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:00.426 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:00.548 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:00.580 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:00.619 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:00.639 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:00.650 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:00.667 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:00.688 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:00.729 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:00.771 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:00.800 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:00.816 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:00.836 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:00.861 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:00.893 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 22 migrations to schema "flyway", now at version v22 (execution time 00:00.679s)
+09:37:01.942 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_official_ad2aef917e1c407d8f2f8f468fdf10a2_it (PostgreSQL 18.6)
+09:37:01.957 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 26 migrations (execution time 00:00.008s)
+09:37:01.972 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": 22
+09:37:01.974 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:37:02.059 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: schema "pg_temp" does not exist, skipping
+09:37:02.060 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_lexeme" does not exist, skipping
+09:37:02.060 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_publication" does not exist, skipping
+09:37:02.060 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_snapshot" does not exist, skipping
+09:37:02.076 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:37:02.098 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:37:02.110 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 3 migrations to schema "flyway", now at version v25 (execution time 00:00.104s)
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.245 s -- in org.mranked.admin.infrastructure.OfficialRatingContextPostgresIntegrationTest
+[INFO] Running org.mranked.emoji.web.CustomEmojiControllerTest
+09:37:02.220 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:02.220 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:02.220 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:02.228 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:02.228 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:02.228 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in org.mranked.emoji.web.CustomEmojiControllerTest
+[INFO] Running org.mranked.emoji.application.CustomEmojiWiringTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.093 s -- in org.mranked.emoji.application.CustomEmojiWiringTest
+[INFO] Running org.mranked.emoji.application.CustomEmojiServiceTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.032 s -- in org.mranked.emoji.application.CustomEmojiServiceTest
+[INFO] Running org.mranked.emoji.infrastructure.TelegramEmojiHttpGatewayTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.013 s -- in org.mranked.emoji.infrastructure.TelegramEmojiHttpGatewayTest
+[INFO] Running org.mranked.operations.web.HealthControllerTest
+09:37:02.380 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:02.380 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:02.380 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:02.386 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:02.387 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:02.387 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:02.391 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:02.391 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:02.391 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.018 s -- in org.mranked.operations.web.HealthControllerTest
+[INFO] Running org.mranked.operations.application.ReadinessServiceTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in org.mranked.operations.application.ReadinessServiceTest
+[INFO] Running org.mranked.operations.infrastructure.PinnedHttpsClientNetworkTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.987 s -- in org.mranked.operations.infrastructure.PinnedHttpsClientNetworkTest
+[INFO] Running org.mranked.operations.infrastructure.JdbcQueryMetricsConfigurationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.011 s -- in org.mranked.operations.infrastructure.JdbcQueryMetricsConfigurationTest
+[INFO] Running org.mranked.operations.infrastructure.JdbcReadinessProbeTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.001 s -- in org.mranked.operations.infrastructure.JdbcReadinessProbeTest
+[INFO] Running org.mranked.operations.infrastructure.ManagementSecurityConfigurationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.001 s -- in org.mranked.operations.infrastructure.ManagementSecurityConfigurationTest
+[INFO] Running org.mranked.operations.infrastructure.LegacyHealthPostgresIntegrationTest
+09:37:03.471 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_health_81be33bbd51a4992a186d8ba56e944c5_it (PostgreSQL 18.6)
+09:37:03.492 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:37:03.494 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:37:03.521 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:37:03.536 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:03.729 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:03.781 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:03.803 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:03.834 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:03.846 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:03.865 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:03.886 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:03.902 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:03.950 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:04.051 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:04.076 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:04.102 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:04.123 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:04.134 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:04.149 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:04.168 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:04.203 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:04.234 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:04.256 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:04.271 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:04.285 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:04.307 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:04.342 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:37:04.359 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:37:04.377 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:37:04.387 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 25 migrations to schema "flyway", now at version v25 (execution time 00:00.610s)
+09:37:04.395 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:04.395 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:04.395 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:04.633 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:04.633 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:04.634 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.304 s -- in org.mranked.operations.infrastructure.LegacyHealthPostgresIntegrationTest
+[INFO] Running org.mranked.exportjob.web.ExportJobSecurityTest
+09:37:07.786 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (/private/tmp/mranked-maven-repository/net/bytebuddy/byte-buddy-agent/1.17.8/byte-buddy-agent-1.17.8.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+09:37:08.374 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:08.374 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:08.375 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+09:37:08.382 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:08.382 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:08.383 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:08.412 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:08.412 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:08.412 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.728 s -- in org.mranked.exportjob.web.ExportJobSecurityTest
+[INFO] Running org.mranked.exportjob.application.ExportJobServiceTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.625 s -- in org.mranked.exportjob.application.ExportJobServiceTest
+[INFO] Running org.mranked.exportjob.application.ExportJobPostgresIntegrationTest
+09:37:10.133 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_export_289dda61add24772815dcee7a2fbd93e_it (PostgreSQL 18.6)
+09:37:10.145 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:37:10.148 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:37:10.172 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:37:10.188 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:10.404 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:10.457 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:10.485 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:10.515 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:10.529 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:10.548 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:10.570 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:10.584 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:10.652 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:10.760 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:10.807 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:10.839 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:10.857 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:10.869 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:10.890 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:10.909 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:10.942 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:10.975 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:11.002 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:11.016 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:11.031 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:11.056 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:11.091 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:37:11.106 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:37:11.123 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:37:11.133 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 25 migrations to schema "flyway", now at version v25 (execution time 00:00.695s)
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 12.16 s -- in org.mranked.exportjob.application.ExportJobPostgresIntegrationTest
+[INFO] Running org.mranked.query.web.CsvExportControllerTest
+09:37:22.238 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.238 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.238 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.244 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.244 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.245 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+09:37:22.251 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.251 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.251 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.041 s -- in org.mranked.query.web.CsvExportControllerTest
+[INFO] Running org.mranked.query.web.PublicQueryControllerTest
+09:37:22.270 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.270 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.270 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.281 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.281 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.281 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.298 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.298 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.298 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.314 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.314 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.314 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.330 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.330 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.330 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.347 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.347 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.347 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.354 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.354 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.354 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.367 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.367 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.367 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.374 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.374 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.374 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.381 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.381 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.381 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.401 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.402 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.402 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.408 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.408 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.408 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.420 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.420 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.420 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.431 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.431 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.431 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.433 [main] ERROR org.mranked.query.web.Rfc9457ExceptionHandler -- Unhandled API failure for /api/v1/overview errorType=java.lang.IllegalStateException
+09:37:22.439 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.440 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.440 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.472 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.472 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.472 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:22.488 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:22.488 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:22.488 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.236 s -- in org.mranked.query.web.PublicQueryControllerTest
+[INFO] Running org.mranked.query.application.CsvExportServiceTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.612 s -- in org.mranked.query.application.CsvExportServiceTest
+[INFO] Running org.mranked.query.application.CursorCodecTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in org.mranked.query.application.CursorCodecTest
+[INFO] Running org.mranked.query.application.PublicQueryServiceTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s -- in org.mranked.query.application.PublicQueryServiceTest
+[INFO] Running org.mranked.query.application.ProviderConfigurationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0 s -- in org.mranked.query.application.ProviderConfigurationTest
+[INFO] Running org.mranked.query.infrastructure.ProjectionSchemaContractTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in org.mranked.query.infrastructure.ProjectionSchemaContractTest
+[INFO] Running org.mranked.query.infrastructure.ActivityRatingPostgresIntegrationTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.259 s -- in org.mranked.query.infrastructure.ActivityRatingPostgresIntegrationTest
+[INFO] Running org.mranked.query.infrastructure.DetailPostgresIntegrationTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.249 s -- in org.mranked.query.infrastructure.DetailPostgresIntegrationTest
+[INFO] Running org.mranked.query.infrastructure.ComparisonPostgresIntegrationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.047 s -- in org.mranked.query.infrastructure.ComparisonPostgresIntegrationTest
+[INFO] Running org.mranked.query.infrastructure.HistoryReactionDetailsPostgresIntegrationTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.154 s -- in org.mranked.query.infrastructure.HistoryReactionDetailsPostgresIntegrationTest
+[INFO] Running org.mranked.query.infrastructure.MigrationInstallationTest
+[WARNING] Tests run: 4, Failures: 0, Errors: 0, Skipped: 4, Time elapsed: 0.001 s -- in org.mranked.query.infrastructure.MigrationInstallationTest
+[INFO] Running org.mranked.query.infrastructure.ComparisonProjectionMigrationTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in org.mranked.query.infrastructure.ComparisonProjectionMigrationTest
+[INFO] Running org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest
+09:37:23.955 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_projection_5e4f5c5221ae4cb1a8b5aef89cff4a32_it (PostgreSQL 18.6)
+09:37:23.970 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:37:23.973 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:37:23.995 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:37:24.014 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:24.226 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:24.281 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:24.305 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:24.344 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:24.355 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:24.378 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:24.400 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:24.415 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:24.463 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:24.550 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:24.579 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:24.601 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:24.618 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:24.628 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:24.645 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:24.667 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:24.702 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:24.735 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:24.760 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:24.776 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:24.792 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:24.817 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:24.848 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:37:24.864 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:37:24.881 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:37:24.892 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 25 migrations to schema "flyway", now at version v25 (execution time 00:00.626s)
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 6.485 s <<< FAILURE! -- in org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest
+[ERROR] org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest.independentEndpointOracleDetectsDerivedValuesAndMembershipTampering -- Time elapsed: 6.484 s <<< FAILURE!
+java.lang.AssertionError: 
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/integration/projection_oracle_fixture.py", line 110, in <module>
+    arguments=parser.parse_args();print(json.dumps(run(arguments.output,os.environ['MRANKED_LEGACY_CSV_DSN']),ensure_ascii=False))
+                                                   ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/integration/projection_oracle_fixture.py", line 100, in run
+    bridge=verify_projections(frozen,connection,**arguments)
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/bridge/projection_reconciliation.py", line 276, in verify_projections
+    "periodMetrics": compare_rows(_source_period_metrics(app), _target_period_metrics(connection,revision_id)),
+                     ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/bridge/reconciliation.py", line 58, in compare_rows
+    db.executemany("INSERT INTO row_digest VALUES(?,?,?)",
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   ((side, encode(key), encode(row)) for key, row in rows))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/bridge/reconciliation.py", line 59, in <genexpr>
+    ((side, encode(key), encode(row)) for key, row in rows))
+                                                      ^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/bridge/projection_reconciliation.py", line 125, in _target_period_metrics
+    cursor.execute("""SELECT metric.platform::text,metric.period_key,alias.legacy_id,
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        metric.metric_key,metric.aggregation,metric.value
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE metric.dataset_revision_id=%s AND metric.platform IN ('vk','max','rutube')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          AND metric.metric_key IN ('views','reactions','comments','shares') AND metric.aggregation IN ('sum','median')""", (revision,))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/lib/python3.13/site-packages/psycopg/_server_cursor.py", line 98, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.InsufficientPrivilege: permission denied for table institution_period_metrics
+
+	at org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest.independentEndpointOracleDetectsDerivedValuesAndMembershipTampering(ProjectionReconciliationPostgresIntegrationTest.java:37)
+
+[INFO] Running org.mranked.query.infrastructure.LegacyOverviewProjectionMigrationTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in org.mranked.query.infrastructure.LegacyOverviewProjectionMigrationTest
+[INFO] Running org.mranked.query.infrastructure.ProjectionSqlTest
+[ERROR] Tests run: 4, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.003 s <<< FAILURE! -- in org.mranked.query.infrastructure.ProjectionSqlTest
+[ERROR] org.mranked.query.infrastructure.ProjectionSqlTest.parityQueriesAreSetBasedRevisionPinnedAndBounded -- Time elapsed: 0.002 s <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting actual:
+  "WITH account_metrics AS (
+    SELECT latest.platform_account_id,
+           count(*) AS publication_count,
+           max(latest.observed_at) AS latest_observed_at
+    FROM analytics.publication_latest latest
+    WHERE latest.dataset_revision_id = :revision
+    GROUP BY latest.platform_account_id
+), account_aliases AS (
+    SELECT alias.target_uuid,
+           min(alias.legacy_id) FILTER (
+               WHERE alias.entity_type = 'channels'
+           ) AS channel_legacy_id,
+           min(alias.legacy_id) FILTER (
+               WHERE alias.entity_type = 'platform_accounts'
+           ) AS platform_account_legacy_id
+    FROM catalog.legacy_entity_alias alias
+    WHERE alias.entity_type IN ('channels', 'platform_accounts')
+    GROUP BY alias.target_uuid
+)
+SELECT account.id AS account_id,
+       account_alias.legacy_id,
+       account_alias.entity_type,
+       aliases.channel_legacy_id,
+       aliases.platform_account_legacy_id,
+       institution.id AS institution_id,
+       institution_alias.legacy_id AS institution_legacy_id,
+       institution.canonical_name,
+       institution.short_name,
+       account.platform::text AS platform,
+       account.canonical_external_id,
+       account.current_username,
+       account.current_title,
+       account.current_url,
+       account.access_mode::text AS access_mode,
+       account.enabled,
+       coalesce(metrics.publication_count, 0) AS publication_count,
+       metrics.latest_observed_at
+FROM catalog.legacy_entity_alias account_alias
+JOIN catalog.visible_platform_account account ON account.id = account_alias.target_uuid
+JOIN catalog.visible_institution institution ON institution.id = account.institution_id
+JOIN catalog.legacy_entity_alias institution_alias
+  ON institution_alias.target_uuid = institution.id
+ AND institution_alias.entity_type = 'institutions'
+LEFT JOIN account_aliases aliases ON aliases.target_uuid = account.id
+LEFT JOIN account_metrics metrics ON metrics.platform_account_id = account.id
+WHERE account_alias.entity_type = :legacyType
+  AND account_alias.legacy_id = :legacyId
+"
+to contain:
+  "catalog.platform_account" 
+	at org.mranked.query.infrastructure.ProjectionSqlTest.parityQueriesAreSetBasedRevisionPinnedAndBounded(ProjectionSqlTest.java:135)
+
+[ERROR] org.mranked.query.infrastructure.ProjectionSqlTest.detailQueriesResolveLegacyAliasesAndExactProjectionRevision -- Time elapsed: 0.001 s <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting actual:
+  "SELECT p.id AS publication_id,
+       alias.legacy_id,
+       alias.entity_type,
+       account.institution_id,
+       account_alias.legacy_id AS account_legacy_id,account_alias.entity_type AS account_legacy_type,
+       account.current_title AS account_name,account.current_username AS account_username,
+       primary_identity.external_id,primary_identity.public_url,
+       p.published_at,
+       p.publication_type,p.is_repost,p.quality_flags AS presentation_flags,
+       (SELECT count(*) FROM ingest.publication_identity i WHERE i.publication_id=p.id AND i.role='joint_author') AS joint_authors,
+       p.deleted_at,
+       account.platform::text AS platform,
+       latest.views_count,
+       latest.views_observed_at,
+       latest.views_quality::text AS views_quality,
+       latest.reactions_count,
+       latest.reactions_observed_at,
+       latest.reactions_quality::text AS reactions_quality,
+       latest.comments_count,
+       latest.comments_observed_at,
+       latest.comments_quality::text AS comments_quality,
+       latest.shares_count,
+       latest.shares_observed_at,
+       latest.shares_quality::text AS shares_quality,
+       latest.quality::text AS quality,
+       coalesce(latest.interval_uncertain, false) AS interval_uncertain,
+       coalesce(latest.synthetic, false) AS synthetic,
+       coalesce(
+           latest.history_completeness::text,
+           p.history_completeness::text
+       ) AS history_completeness,
+       latest.observed_at,
+       :revision AS dataset_revision_id
+FROM catalog.legacy_entity_alias alias
+JOIN ingest.visible_publication p ON p.id = alias.target_uuid
+JOIN catalog.visible_platform_account account ON account.id = p.primary_account_id
+LEFT JOIN LATERAL (SELECT a.* FROM catalog.legacy_entity_alias a
+    WHERE a.target_uuid=account.id AND a.entity_type IN ('channels','platform_accounts')
+    ORDER BY CASE WHEN a.entity_type='channels' AND account.platform='telegram' THEN 0 ELSE 1 END LIMIT 1) account_alias ON true
+LEFT JOIN LATERAL (SELECT i.external_id,i.public_url FROM ingest.publication_identity i
+    WHERE i.publication_id=p.id AND i.role='primary' ORDER BY i.id LIMIT 1) primary_identity ON true
+LEFT JOIN analytics.publication_latest latest
+  ON latest.publication_id = p.id
+ AND latest.dataset_revision_id = :revision
+WHERE alias.entity_type = :legacyType
+  AND alias.legacy_id = :legacyId
+"
+to contain:
+  "JOIN ingest.publication p ON p.id = alias.target_uuid" 
+	at org.mranked.query.infrastructure.ProjectionSqlTest.detailQueriesResolveLegacyAliasesAndExactProjectionRevision(ProjectionSqlTest.java:33)
+
+[INFO] Running org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest
+[ERROR] Tests run: 7, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 10.16 s <<< FAILURE! -- in org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest
+[ERROR] org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest.rebuiltOverviewKeepsTenViewsCandidatesAndOneRoundedReactionCandidate -- Time elapsed: 2.495 s <<< FAILURE!
+org.assertj.core.error.AssertJMultipleFailuresError: 
+
+[List check single element] (1 failure)
+-- failure 1 --
+Expecting actual not to be null
+at BackendConsistencyPostgresIntegrationTest.lambda$rebuiltOverviewKeepsTenViewsCandidatesAndOneRoundedReactionCandidate$0(BackendConsistencyPostgresIntegrationTest.java:160)
+	at org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest.rebuiltOverviewKeepsTenViewsCandidatesAndOneRoundedReactionCandidate(BackendConsistencyPostgresIntegrationTest.java:159)
+
+[INFO] Running org.mranked.query.infrastructure.OverviewPostgresIntegrationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.098 s -- in org.mranked.query.infrastructure.OverviewPostgresIntegrationTest
+[INFO] Running org.mranked.query.infrastructure.DetailFallbackPostgresIntegrationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.050 s -- in org.mranked.query.infrastructure.DetailFallbackPostgresIntegrationTest
+[INFO] Running org.mranked.query.infrastructure.ComparisonSqlTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.003 s -- in org.mranked.query.infrastructure.ComparisonSqlTest
+[INFO] Running org.mranked.query.infrastructure.LegacyPeriodOraclePostgresIntegrationTest
+09:37:40.750 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_period_a1077468534d4908b2867e277d76d3c9_it (PostgreSQL 18.6)
+09:37:40.764 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:37:40.769 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:37:40.812 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:37:40.825 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:41.200 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:41.271 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:41.298 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:41.359 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:41.378 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:41.400 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:41.431 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:41.452 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:41.521 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:41.634 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:41.665 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:41.694 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:41.719 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:41.736 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:41.756 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:41.777 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:41.813 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:41.856 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:41.891 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:41.907 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:41.925 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:41.957 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:41.996 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:37:42.019 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:37:42.037 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:37:42.048 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+09:37:42.059 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 26 migrations to schema "flyway", now at version v26 (execution time 00:00.912s)
+09:37:45.553 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_period_8701c954a8ee4c2e8624e9c9da50a720_it (PostgreSQL 18.6)
+09:37:45.563 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:37:45.566 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:37:45.608 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:37:45.635 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:45.868 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:45.930 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:45.960 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:45.996 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:46.009 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:46.028 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:46.058 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:46.074 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:46.127 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:46.227 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:46.253 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:46.279 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:46.297 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:46.307 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:46.321 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:46.338 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:46.379 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:46.420 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:46.454 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:46.468 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:46.483 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 20 migrations to schema "flyway", now at version v20 (execution time 00:00.632s)
+09:37:48.210 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_period_8701c954a8ee4c2e8624e9c9da50a720_it (PostgreSQL 18.6)
+09:37:48.225 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 27 migrations (execution time 00:00.007s)
+09:37:48.240 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": 20
+09:37:48.243 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:48.489 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: schema "pg_temp" does not exist, skipping
+09:37:48.489 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_lexeme" does not exist, skipping
+09:37:48.489 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_publication" does not exist, skipping
+09:37:48.489 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_snapshot" does not exist, skipping
+09:37:48.507 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:48.540 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_lexeme" does not exist, skipping
+09:37:48.540 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_publication" does not exist, skipping
+09:37:48.540 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_snapshot" does not exist, skipping
+09:37:48.551 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:37:48.755 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_projection_snapshot" does not exist, skipping
+09:37:48.755 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_lexeme" does not exist, skipping
+09:37:48.755 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_publication" does not exist, skipping
+09:37:48.755 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_snapshot" does not exist, skipping
+09:37:48.780 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:37:48.807 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:37:48.818 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+09:37:48.825 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 6 migrations to schema "flyway", now at version v26 (execution time 00:00.514s)
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 9.306 s -- in org.mranked.query.infrastructure.LegacyPeriodOraclePostgresIntegrationTest
+[INFO] Running org.mranked.query.infrastructure.LegacyGoldenProjectionIntegrationTest
+09:37:49.977 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/golden_it (PostgreSQL 18.6)
+09:37:49.987 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:37:49.991 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:37:50.014 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:37:50.027 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:50.219 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:50.264 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:50.288 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:50.318 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:50.331 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:50.351 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:50.373 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:50.388 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:50.437 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:50.559 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:50.597 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:50.626 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:50.645 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:50.657 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:50.675 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:50.693 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:50.729 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:50.767 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:50.796 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:50.810 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:50.827 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:50.852 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:50.887 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:37:50.905 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:37:50.923 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:37:50.936 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+09:37:50.945 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 26 migrations to schema "flyway", now at version v26 (execution time 00:00.655s)
+[ERROR] Tests run: 2, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 1.419 s <<< FAILURE! -- in org.mranked.query.infrastructure.LegacyGoldenProjectionIntegrationTest
+[ERROR] org.mranked.query.infrastructure.LegacyGoldenProjectionIntegrationTest.legacyActivityWindowAndOverviewGoldenValuesSurviveLatestMigration -- Time elapsed: 0.202 s <<< ERROR!
+org.postgresql.util.PSQLException: 
+ERROR: V8 Telegram card lost exact current/previous activity, aliases, rating, or revision-pinned account state
+  Где: PL/pgSQL function inline_code_block line 146 at RAISE
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2993)
+	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2656)
+	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:446)
+	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:533)
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:449)
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:371)
+	at org.postgresql.jdbc.PgStatement.executeCachedSql(PgStatement.java:356)
+	at org.postgresql.jdbc.PgStatement.executeWithFlags(PgStatement.java:332)
+	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:327)
+	at org.mranked.query.infrastructure.LegacyGoldenProjectionIntegrationTest.run(LegacyGoldenProjectionIntegrationTest.java:48)
+	at org.mranked.query.infrastructure.LegacyGoldenProjectionIntegrationTest.legacyActivityWindowAndOverviewGoldenValuesSurviveLatestMigration(LegacyGoldenProjectionIntegrationTest.java:23)
+
+[INFO] Running org.mranked.query.infrastructure.ActivityRatingGrantMigrationTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in org.mranked.query.infrastructure.ActivityRatingGrantMigrationTest
+[INFO] Running org.mranked.query.domain.OverviewQueryTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.003 s -- in org.mranked.query.domain.OverviewQueryTest
+[INFO] Running org.mranked.query.domain.ComparisonSeriesTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.003 s -- in org.mranked.query.domain.ComparisonSeriesTest
+[INFO] Running org.mranked.query.domain.ComparisonSelectionTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in org.mranked.query.domain.ComparisonSelectionTest
+[INFO] Running org.mranked.query.domain.ActivityRatingQueryTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in org.mranked.query.domain.ActivityRatingQueryTest
+[INFO] Running org.mranked.legacyexport.application.LegacyCsvServiceTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.296 s -- in org.mranked.legacyexport.application.LegacyCsvServiceTest
+[INFO] Running org.mranked.legacyexport.infrastructure.LegacyCsvPostgresIntegrationTest
+09:37:53.741 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_csv_02fe8a9c36a3468fbb0bbc3721bd1eba_it (PostgreSQL 18.6)
+09:37:53.749 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:37:53.752 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:37:53.774 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:37:53.785 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:54.003 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:54.051 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:54.069 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:54.096 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:54.107 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:54.125 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:54.145 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:54.161 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:54.207 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:54.290 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:54.317 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:54.339 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:54.355 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:54.367 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:54.382 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:54.403 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:54.434 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:54.468 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:54.493 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:54.508 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:54.523 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:54.546 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:54.578 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:37:54.598 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:37:54.614 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:37:54.632 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+09:37:54.640 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 26 migrations to schema "flyway", now at version v26 (execution time 00:00.603s)
+09:37:55.914 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:55.915 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:55.915 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:37:58.546 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:37:58.546 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:37:58.546 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.392 s -- in org.mranked.legacyexport.infrastructure.LegacyCsvPostgresIntegrationTest
+[INFO] Running org.mranked.legacyexport.infrastructure.LegacyCsvArchivePostgresIntegrationTest
+09:37:59.128 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_csv_archive_3d4d49cb293f4765b2070ddecf72ced2_it (PostgreSQL 18.6)
+09:37:59.137 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:37:59.140 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:37:59.163 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:37:59.174 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:37:59.363 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:37:59.416 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:37:59.437 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:37:59.468 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:37:59.487 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:37:59.504 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:37:59.524 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:37:59.539 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:37:59.583 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:37:59.660 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:37:59.692 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:37:59.713 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:37:59.726 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:37:59.734 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:37:59.750 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:37:59.767 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:37:59.810 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:37:59.847 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:37:59.875 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:37:59.898 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:37:59.920 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:37:59.955 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:37:59.999 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:38:00.023 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:38:00.039 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:38:00.049 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+09:38:00.056 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 26 migrations to schema "flyway", now at version v26 (execution time 00:00.608s)
+09:38:02.090 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:38:02.091 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:38:02.091 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:38:02.871 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:38:02.871 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:38:02.871 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:38:03.183 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_csv_archive_da52cad472464c73a3e2f206d25b5b91_it (PostgreSQL 18.6)
+09:38:03.192 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:38:03.194 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:38:03.219 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:38:03.231 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:38:03.444 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:38:03.500 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:38:03.518 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:38:03.544 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:38:03.554 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:38:03.569 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:38:03.593 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:38:03.607 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:38:03.652 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:38:03.733 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:38:03.761 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:38:03.782 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:38:03.798 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:38:03.809 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:38:03.825 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:38:03.845 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:38:03.880 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:38:03.910 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:38:03.932 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:38:03.944 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:38:03.966 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:38:03.992 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:38:04.022 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:38:04.042 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:38:04.058 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:38:04.067 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+09:38:04.074 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 26 migrations to schema "flyway", now at version v26 (execution time 00:00.606s)
+09:38:08.467 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:38:08.467 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:38:08.467 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:38:09.104 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:38:09.104 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:38:09.104 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:38:09.340 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_csv_archive_21863edfb4d04528b20b5871e5cdae29_it (PostgreSQL 18.6)
+09:38:09.348 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+09:38:09.350 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+09:38:09.372 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+09:38:09.389 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+09:38:09.581 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+09:38:09.628 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+09:38:09.645 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+09:38:09.672 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+09:38:09.685 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+09:38:09.703 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+09:38:09.719 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+09:38:09.733 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+09:38:09.777 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+09:38:09.867 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+09:38:09.894 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+09:38:09.914 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+09:38:09.931 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+09:38:09.941 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+09:38:09.955 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+09:38:09.973 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+09:38:10.009 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+09:38:10.040 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+09:38:10.065 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+09:38:10.076 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+09:38:10.093 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+09:38:10.113 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 21 migrations to schema "flyway", now at version v21 (execution time 00:00.526s)
+09:38:12.055 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:38:12.055 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:38:12.055 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:38:12.707 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:49647/mranked_csv_archive_21863edfb4d04528b20b5871e5cdae29_it (PostgreSQL 18.6)
+09:38:12.718 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 27 migrations (execution time 00:00.005s)
+09:38:12.731 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": 21
+09:38:12.735 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+09:38:12.772 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: schema "pg_temp" does not exist, skipping
+09:38:12.772 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_publication" does not exist, skipping
+09:38:12.772 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_snapshot" does not exist, skipping
+09:38:12.784 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+09:38:12.844 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_projection_snapshot" does not exist, skipping
+09:38:12.844 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_lexeme" does not exist, skipping
+09:38:12.844 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_publication" does not exist, skipping
+09:38:12.844 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- DB: table "mranked_csv_snapshot" does not exist, skipping
+09:38:12.857 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+09:38:12.873 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+09:38:12.884 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+09:38:12.891 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 5 migrations to schema "flyway", now at version v26 (execution time 00:00.118s)
+09:38:12.898 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:38:12.898 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:38:12.898 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+09:38:13.271 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+09:38:13.271 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+09:38:13.271 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 14.41 s -- in org.mranked.legacyexport.infrastructure.LegacyCsvArchivePostgresIntegrationTest
+[INFO] Running org.mranked.ArchitectureTest
+09:38:13.500 [main] INFO com.tngtech.archunit.core.PluginLoader -- Detected Java version 21
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.714 s -- in org.mranked.ArchitectureTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   OpenApiContractTest.checkedInContractIsValidYamlAndListsOnlyImplementedRoutes:31 
+Expecting actual:
+  ["/api/v1/health/live",
+    "/api/v1/health/ready",
+    "/api/v1/health/legacy",
+    "/api/v1/health/freshness",
+    "/api/v1/emoji/{emojiId}",
+    "/api/v1/revision",
+    "/api/v1/overview",
+    "/api/v1/institutions/{legacyId}",
+    "/api/v1/publications/{legacyId}",
+    "/api/v1/rating",
+    "/api/v1/compare/candidates",
+    "/api/v1/compare",
+    "/api/v1/accounts/{legacyId}",
+    "/api/v1/legacy-exports/{kind}.csv",
+    "/api/v1/exports/publications.csv",
+    "/api/v1/admin/catalog/session",
+    "/api/v1/admin/catalog/status",
+    "/api/v1/admin/catalog/institutions",
+    "/api/v1/admin/catalog/institutions/{id}/accounts",
+    "/api/v1/admin/catalog/institutions/{id}",
+    "/api/v1/admin/catalog/accounts",
+    "/api/v1/admin/catalog/accounts/{id}",
+    "/api/v1/admin/catalog/accounts/{id}/enable",
+    "/api/v1/admin/catalog/accounts/{id}/disable",
+    "/api/v1/admin/catalog/accounts/{id}/native-id",
+    "/api/v1/admin/catalog/legacy-command",
+    "/api/v1/admin/csrf",
+    "/api/v1/admin/jobs",
+    "/api/v1/admin/jobs/{jobId}",
+    "/api/v1/admin/platform-accounts/{accountId}",
+    "/api/v1/admin/platform-accounts/{accountId}/enabled",
+    "/api/v1/accounts/{legacyId}/publications",
+    "/api/v1/institutions/{legacyId}/accounts",
+    "/api/v1/publications/{legacyId}/history",
+    "/api/v1/admin/exports",
+    "/api/v1/admin/exports/{id}",
+    "/api/v1/admin/exports/{id}/download"]
+to contain exactly in any order:
+  ["/api/v1/health/live",
+    "/api/v1/health/ready",
+    "/api/v1/emoji/{emojiId}",
+    "/api/v1/overview",
+    "/api/v1/revision",
+    "/api/v1/institutions/{legacyId}",
+    "/api/v1/publications/{legacyId}",
+    "/api/v1/rating",
+    "/api/v1/compare",
+    "/api/v1/compare/candidates",
+    "/api/v1/accounts/{legacyId}",
+    "/api/v1/accounts/{legacyId}/publications",
+    "/api/v1/institutions/{legacyId}/accounts",
+    "/api/v1/publications/{legacyId}/history",
+    "/api/v1/exports/publications.csv",
+    "/api/v1/legacy-exports/{kind}.csv",
+    "/api/v1/admin/catalog/session",
+    "/api/v1/admin/catalog/status",
+    "/api/v1/admin/catalog/institutions",
+    "/api/v1/admin/catalog/institutions/{id}/accounts",
+    "/api/v1/admin/catalog/institutions/{id}",
+    "/api/v1/admin/catalog/accounts",
+    "/api/v1/admin/catalog/accounts/{id}",
+    "/api/v1/admin/catalog/accounts/{id}/enable",
+    "/api/v1/admin/catalog/accounts/{id}/disable",
+    "/api/v1/admin/catalog/accounts/{id}/native-id",
+    "/api/v1/admin/catalog/legacy-command",
+    "/api/v1/admin/csrf",
+    "/api/v1/admin/exports",
+    "/api/v1/admin/exports/{id}",
+    "/api/v1/admin/exports/{id}/download",
+    "/api/v1/admin/jobs",
+    "/api/v1/admin/jobs/{jobId}",
+    "/api/v1/admin/platform-accounts/{accountId}",
+    "/api/v1/admin/platform-accounts/{accountId}/enabled"]
+but the following elements were unexpected:
+  ["/api/v1/health/legacy", "/api/v1/health/freshness"]
+
+[ERROR]   BackendConsistencyPostgresIntegrationTest.rebuiltOverviewKeepsTenViewsCandidatesAndOneRoundedReactionCandidate:159 
+[List check single element] (1 failure)
+-- failure 1 --
+Expecting actual not to be null
+at BackendConsistencyPostgresIntegrationTest.lambda$rebuiltOverviewKeepsTenViewsCandidatesAndOneRoundedReactionCandidate$0(BackendConsistencyPostgresIntegrationTest.java:160)
+[ERROR]   ProjectionReconciliationPostgresIntegrationTest.independentEndpointOracleDetectsDerivedValuesAndMembershipTampering:37 Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/integration/projection_oracle_fixture.py", line 110, in <module>
+    arguments=parser.parse_args();print(json.dumps(run(arguments.output,os.environ['MRANKED_LEGACY_CSV_DSN']),ensure_ascii=False))
+                                                   ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/integration/projection_oracle_fixture.py", line 100, in run
+    bridge=verify_projections(frozen,connection,**arguments)
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/bridge/projection_reconciliation.py", line 276, in verify_projections
+    "periodMetrics": compare_rows(_source_period_metrics(app), _target_period_metrics(connection,revision_id)),
+                     ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/bridge/reconciliation.py", line 58, in compare_rows
+    db.executemany("INSERT INTO row_digest VALUES(?,?,?)",
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   ((side, encode(key), encode(row)) for key, row in rows))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/bridge/reconciliation.py", line 59, in <genexpr>
+    ((side, encode(key), encode(row)) for key, row in rows))
+                                                      ^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/bridge/projection_reconciliation.py", line 125, in _target_period_metrics
+    cursor.execute("""SELECT metric.platform::text,metric.period_key,alias.legacy_id,
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        metric.metric_key,metric.aggregation,metric.value
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        WHERE metric.dataset_revision_id=%s AND metric.platform IN ('vk','max','rutube')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          AND metric.metric_key IN ('views','reactions','comments','shares') AND metric.aggregation IN ('sum','median')""", (revision,))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/lib/python3.13/site-packages/psycopg/_server_cursor.py", line 98, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.InsufficientPrivilege: permission denied for table institution_period_metrics
+
+[ERROR]   ProjectionSqlTest.detailQueriesResolveLegacyAliasesAndExactProjectionRevision:33 
+Expecting actual:
+  "SELECT p.id AS publication_id,
+       alias.legacy_id,
+       alias.entity_type,
+       account.institution_id,
+       account_alias.legacy_id AS account_legacy_id,account_alias.entity_type AS account_legacy_type,
+       account.current_title AS account_name,account.current_username AS account_username,
+       primary_identity.external_id,primary_identity.public_url,
+       p.published_at,
+       p.publication_type,p.is_repost,p.quality_flags AS presentation_flags,
+       (SELECT count(*) FROM ingest.publication_identity i WHERE i.publication_id=p.id AND i.role='joint_author') AS joint_authors,
+       p.deleted_at,
+       account.platform::text AS platform,
+       latest.views_count,
+       latest.views_observed_at,
+       latest.views_quality::text AS views_quality,
+       latest.reactions_count,
+       latest.reactions_observed_at,
+       latest.reactions_quality::text AS reactions_quality,
+       latest.comments_count,
+       latest.comments_observed_at,
+       latest.comments_quality::text AS comments_quality,
+       latest.shares_count,
+       latest.shares_observed_at,
+       latest.shares_quality::text AS shares_quality,
+       latest.quality::text AS quality,
+       coalesce(latest.interval_uncertain, false) AS interval_uncertain,
+       coalesce(latest.synthetic, false) AS synthetic,
+       coalesce(
+           latest.history_completeness::text,
+           p.history_completeness::text
+       ) AS history_completeness,
+       latest.observed_at,
+       :revision AS dataset_revision_id
+FROM catalog.legacy_entity_alias alias
+JOIN ingest.visible_publication p ON p.id = alias.target_uuid
+JOIN catalog.visible_platform_account account ON account.id = p.primary_account_id
+LEFT JOIN LATERAL (SELECT a.* FROM catalog.legacy_entity_alias a
+    WHERE a.target_uuid=account.id AND a.entity_type IN ('channels','platform_accounts')
+    ORDER BY CASE WHEN a.entity_type='channels' AND account.platform='telegram' THEN 0 ELSE 1 END LIMIT 1) account_alias ON true
+LEFT JOIN LATERAL (SELECT i.external_id,i.public_url FROM ingest.publication_identity i
+    WHERE i.publication_id=p.id AND i.role='primary' ORDER BY i.id LIMIT 1) primary_identity ON true
+LEFT JOIN analytics.publication_latest latest
+  ON latest.publication_id = p.id
+ AND latest.dataset_revision_id = :revision
+WHERE alias.entity_type = :legacyType
+  AND alias.legacy_id = :legacyId
+"
+to contain:
+  "JOIN ingest.publication p ON p.id = alias.target_uuid" 
+[ERROR]   ProjectionSqlTest.parityQueriesAreSetBasedRevisionPinnedAndBounded:135 
+Expecting actual:
+  "WITH account_metrics AS (
+    SELECT latest.platform_account_id,
+           count(*) AS publication_count,
+           max(latest.observed_at) AS latest_observed_at
+    FROM analytics.publication_latest latest
+    WHERE latest.dataset_revision_id = :revision
+    GROUP BY latest.platform_account_id
+), account_aliases AS (
+    SELECT alias.target_uuid,
+           min(alias.legacy_id) FILTER (
+               WHERE alias.entity_type = 'channels'
+           ) AS channel_legacy_id,
+           min(alias.legacy_id) FILTER (
+               WHERE alias.entity_type = 'platform_accounts'
+           ) AS platform_account_legacy_id
+    FROM catalog.legacy_entity_alias alias
+    WHERE alias.entity_type IN ('channels', 'platform_accounts')
+    GROUP BY alias.target_uuid
+)
+SELECT account.id AS account_id,
+       account_alias.legacy_id,
+       account_alias.entity_type,
+       aliases.channel_legacy_id,
+       aliases.platform_account_legacy_id,
+       institution.id AS institution_id,
+       institution_alias.legacy_id AS institution_legacy_id,
+       institution.canonical_name,
+       institution.short_name,
+       account.platform::text AS platform,
+       account.canonical_external_id,
+       account.current_username,
+       account.current_title,
+       account.current_url,
+       account.access_mode::text AS access_mode,
+       account.enabled,
+       coalesce(metrics.publication_count, 0) AS publication_count,
+       metrics.latest_observed_at
+FROM catalog.legacy_entity_alias account_alias
+JOIN catalog.visible_platform_account account ON account.id = account_alias.target_uuid
+JOIN catalog.visible_institution institution ON institution.id = account.institution_id
+JOIN catalog.legacy_entity_alias institution_alias
+  ON institution_alias.target_uuid = institution.id
+ AND institution_alias.entity_type = 'institutions'
+LEFT JOIN account_aliases aliases ON aliases.target_uuid = account.id
+LEFT JOIN account_metrics metrics ON metrics.platform_account_id = account.id
+WHERE account_alias.entity_type = :legacyType
+  AND account_alias.legacy_id = :legacyId
+"
+to contain:
+  "catalog.platform_account" 
+[ERROR] Errors: 
+[ERROR]   LegacyGoldenProjectionIntegrationTest.legacyActivityWindowAndOverviewGoldenValuesSurviveLatestMigration:23->run:48 » PSQL ERROR: V8 Telegram card lost exact current/previous activity, aliases, rating, or revision-pinned account state
+  Где: PL/pgSQL function inline_code_block line 146 at RAISE
+[INFO] 
+[ERROR] Tests run: 207, Failures: 5, Errors: 1, Skipped: 4
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  01:31 min
+[INFO] Finished at: 2026-09-05T09:38:15+03:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.6:test (default-test) on project m-ranked-backend: There are test failures.
+[ERROR] 
+[ERROR] See /Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260905-r7/backend-build/surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

@@ -9,6 +9,7 @@ Conflicts=m-ranked-collector.service
 Type=simple
 User=telegram-monitor
 Group=telegram-monitor
+SupplementaryGroups=m-ranked-identity-readers
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/reverse-sync.env
 LoadCredential=pgpass:/etc/m-ranked/credentials/migration-bridge-pgpass

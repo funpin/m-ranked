@@ -3,6 +3,7 @@ package org.mranked.emoji.application;
 import java.util.Objects;
 
 public record CustomEmojiAsset(byte[] content, String mediaType) {
+    public int sizeBytes() { return content.length; }
     public CustomEmojiAsset {
         Objects.requireNonNull(content, "content");
         Objects.requireNonNull(mediaType, "mediaType");

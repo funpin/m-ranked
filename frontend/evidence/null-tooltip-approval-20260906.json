@@ -1,0 +1,21 @@
+{
+  "recordedDate": "2026-09-06",
+  "decision": "APPROVED_PRESENTATION_EXCEPTION",
+  "authority": "Explicit user response in this task, relayed by parent /root",
+  "userResponse": "Оставить „—“ для отсутствующего значения",
+  "scope": "A tooltip displays — when the underlying metric is NULL, even where the legacy Chart.js tooltip formats that NULL as 0. This approval changes only the visible tooltip contract.",
+  "legacy": "Прирост лайков: 0",
+  "target": "Прирост лайков: —",
+  "underlyingData": "NULL remains NULL in API, table and chart gaps; no fabricated zero",
+  "evidence": "evidence/chart-null-tooltip-v29-r2/report.json",
+  "historicalEvidenceUnmodified": true,
+  "runtimeChangeRequired": false,
+  "buildId": "S1bNtv272Sw_pPvSFsZqO",
+  "doesNotWaive": [
+    "Pixel difference threshold",
+    "Axe accessibility",
+    "Observer initialization and frozen clock",
+    "LCP/INP/CLS and JavaScript budgets",
+    "Any other data or behavior discrepancy"
+  ]
+}

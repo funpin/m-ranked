@@ -3,6 +3,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 import re
+import os
+from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Sequence
 from uuid import UUID
 
@@ -23,7 +25,8 @@ from .model import (
     raw_payload_uuid,
     utc,
 )
-from .normalize import canonical_json, sanitize_evidence
+from .normalize import canonical_json, sanitize_evidence, source_fingerprint
+from .evidence import ImmutableEvidenceStore
 
 
 _SHARD = re.compile(r"^(\d+)/(\d+)$")
@@ -62,6 +65,7 @@ class PostgresCollectorRepository:
         connection_factory: Callable[[], Any] | None = None,
         raw_retention_days: int = 7,
         statement_timeout_seconds: int = 60,
+        evidence_store: ImmutableEvidenceStore | None = None,
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
@@ -72,6 +76,9 @@ class PostgresCollectorRepository:
         self._factory = connection_factory or self._psycopg_factory(str(dsn))
         self.raw_retention = timedelta(days=raw_retention_days)
         self.statement_timeout_seconds = statement_timeout_seconds
+        self.evidence_store = evidence_store or ImmutableEvidenceStore(
+            Path(os.environ.get("COLLECTOR_RAW_EVIDENCE_DIR", "data/target-raw-evidence"))
+        )
 
     @staticmethod
     def _psycopg_factory(dsn: str) -> Callable[[], Any]:
@@ -310,7 +317,7 @@ class PostgresCollectorRepository:
                           max(snapshot.comments_count) AS comments,
                           max(snapshot.shares_count) AS shares
                      FROM ingest.publication_identity AS identity
-                     JOIN ingest.publication_metric_snapshot AS snapshot
+                     JOIN ingest.publication_metric_snapshot_active AS snapshot
                        ON snapshot.publication_id=identity.publication_id
                     WHERE identity.platform_account_id=%s
                       AND identity.external_id=ANY(%s)
@@ -393,7 +400,7 @@ class PostgresCollectorRepository:
                      ) AS primary_identity ON true
                      LEFT JOIN LATERAL (
                          SELECT snapshot.observed_at, snapshot.sampling_bucket
-                           FROM ingest.publication_metric_snapshot AS snapshot
+                           FROM ingest.publication_metric_snapshot_active AS snapshot
                           WHERE snapshot.publication_id=publication.id
                           ORDER BY snapshot.observed_at DESC, snapshot.id DESC
                           LIMIT 1
@@ -455,6 +462,7 @@ class PostgresCollectorRepository:
         snapshot_count = 0
         deletion_probe_count = 0
         changed = False
+        identity_receipt = None
         with self._connection() as connection, connection.transaction():
             for published_month in sorted({
                 publication.snapshot.published_month
@@ -472,6 +480,21 @@ class PostgresCollectorRepository:
                     connection, batch, batch.account_observation,
                 )
                 changed = changed or identity_changed or account_changed
+                if batch.account_observation is not None:
+                    from .identity_evidence import IdentityEvidenceStore, configured_root
+                    # Source fields come from the already sanitized original
+                    # observation, before any database state is read as output.
+                    original = batch.account_observation.sanitized_source
+                    receipt = {
+                        "version": 1, "kind": "collector-account-identity",
+                        "accountId": str(batch.account.id), "platform": batch.context.platform.value,
+                        "sourceRunId": str(batch.context.run_id),
+                        "sourceFingerprint": batch.account_observation.source_fingerprint,
+                        "observedAt": original["observed_at"],
+                        "username": original.get("username"), "title": original.get("title"),
+                        "url": original.get("url"), "nativeId": original.get("native_external_id"),
+                    }
+                    identity_receipt = IdentityEvidenceStore(configured_root()/"collector"/batch.context.platform.value).put(receipt)
 
             for publication in batch.publications:
                 discovered, snapshot, publication_changed = self._persist_publication(
@@ -539,6 +562,7 @@ class PostgresCollectorRepository:
                     snapshot_count,
                     deletion_probe_count,
                     completed_at,
+                    identity_receipt,
                 )
                 if changed else None
             )
@@ -585,6 +609,7 @@ class PostgresCollectorRepository:
             batch.account.id,
             observation.collected_at,
             observation.source_fingerprint,
+            observation.sanitized_source,
         )
         return True
 
@@ -613,9 +638,9 @@ class PostgresCollectorRepository:
                     FOR UPDATE""",
                 (account.id,),
             ).fetchone()
-            username = observation.username or account.current_username
-            title = observation.title or account.current_title
-            url = observation.url or account.current_url
+            username = observation.username or (_row_value(current,"username",1) if current is not None else account.current_username)
+            title = observation.title or (_row_value(current,"title",2) if current is not None else account.current_title)
+            url = observation.url or (_row_value(current,"url",3) if current is not None else account.current_url)
             differs = current is None or (
                 _row_value(current, "username", 1),
                 _row_value(current, "title", 2),
@@ -693,6 +718,15 @@ class PostgresCollectorRepository:
                 or str(_row_value(current_native, "external_id", 1))
                     != observation.native_external_id
             ):
+                if current_native is None:
+                    boundary = connection.execute(
+                        """SELECT max(valid_to) AS last_closed FROM catalog.account_external_identity
+                            WHERE platform_account_id=%s AND identity_namespace=%s""",
+                        (account.id, namespace),
+                    ).fetchone()
+                    last_closed = _row_value(boundary, "last_closed", 0) if boundary is not None else None
+                    if last_closed is not None and observation.observed_at <= utc(last_closed, "external_identity.last_closed"):
+                        raise RuntimeError("account native identity time collision")
                 if current_native is not None:
                     valid_from = utc(
                         _row_value(current_native, "valid_from", 2),
@@ -922,10 +956,9 @@ class PostgresCollectorRepository:
                    collected_at, age_seconds, sampling_bucket, views_count, reactions_count,
                    comments_count, shares_count, quality, interval_uncertain,
                    synthetic, metric_semantics_version, capability_version,
-                   source_fingerprint
-               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,1,%s)
-               ON CONFLICT (published_month, publication_id, sampling_bucket)
-               DO NOTHING
+                   source_fingerprint, views_quality, reactions_quality, comments_quality, shares_quality, metric_evidence
+               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,1,%s,%s,%s,%s,%s,%s::jsonb)
+
                RETURNING id""",
             (
                 snapshot.published_month,
@@ -943,6 +976,19 @@ class PostgresCollectorRepository:
                 snapshot.interval_uncertain,
                 snapshot.synthetic,
                 snapshot.source_fingerprint,
+                *(snapshot.metric_quality[metric].value for metric in ("views", "reactions", "comments", "shares")),
+                _json({
+                    metric: {
+                        "source_field": metric,
+                        "quality": quality.value,
+                        "flags": {
+                            "unsupported_or_missing": getattr(snapshot, metric + "_count") is None,
+                            "suspected_reset": quality.value == "suspected_reset",
+                            "invalid": quality.value == "invalid",
+                        },
+                    }
+                    for metric, quality in snapshot.metric_quality.items()
+                }),
             ),
         ).fetchone()
         snapshot_inserted = snapshot_row is not None
@@ -970,7 +1016,11 @@ class PostgresCollectorRepository:
                 publication_id,
                 snapshot.collected_at,
                 snapshot.source_fingerprint,
+                snapshot.sanitized_source,
             )
+        if snapshot_inserted:
+            from .legacy_csv import persist_native_csv
+            persist_native_csv(connection,publication_id,snapshot.published_month,snapshot_id,snapshot.sanitized_source)
         return (
             not known,
             snapshot_inserted,
@@ -1068,8 +1118,16 @@ class PostgresCollectorRepository:
         owner_id: UUID,
         collected_at: datetime,
         fingerprint: str,
+        evidence: Mapping[str, Any],
     ) -> None:
         collected = utc(collected_at, "lineage.collected_at")
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            ("raw-evidence:" + fingerprint,),
+        )
+        object_uri, object_hash = self.evidence_store.put(evidence)
+        if object_hash != fingerprint:
+            raise ValueError("canonical evidence fingerprint mismatch")
         payload_id = raw_payload_uuid(run_id, owner_type, owner_id, fingerprint)
         connection.execute(
             """INSERT INTO ingest.raw_payload(
@@ -1085,10 +1143,25 @@ class PostgresCollectorRepository:
                 owner_id,
                 collected,
                 fingerprint,
-                f"sha256:{fingerprint}",
+                object_uri,
                 collected + self.raw_retention,
             ),
         )
+
+    def quarantine_rejected_batch(self, raw: Any, context: CollectionContext, error_code: str) -> None:
+        """Commit retrievable sanitized rejection evidence without canonical facts."""
+        evidence = sanitize_evidence(raw)
+        fingerprint = source_fingerprint(evidence)
+        collected = utc(context.started_at, "quarantine.collected_at")
+        with self._connection() as connection, connection.transaction():
+            self._persist_lineage(connection, context.run_id, "account", raw.account.id,
+                                  collected, fingerprint, evidence)
+            payload_id = raw_payload_uuid(context.run_id, "account", raw.account.id, fingerprint)
+            connection.execute(
+                """INSERT INTO ingest.evidence_quarantine(raw_payload_id,reason_code)
+                   VALUES(%s,%s) ON CONFLICT DO NOTHING""",
+                (payload_id, _error_code(error_code)),
+            )
 
     def _persist_cursor(self, connection: Any, batch: CanonicalAccountBatch) -> None:
         key = "collector.cursor"
@@ -1172,6 +1245,7 @@ class PostgresCollectorRepository:
         snapshot_count: int,
         deletion_probe_count: int,
         completed_at: datetime,
+        identity_receipt: str | None = None,
     ) -> int:
         metadata = sanitize_evidence({
             "platform": batch.context.platform,
@@ -1185,6 +1259,9 @@ class PostgresCollectorRepository:
             "snapshot_count": snapshot_count,
             "deletion_probe_count": deletion_probe_count,
         })
+        if identity_receipt is not None:
+            metadata["identity_source_receipt"] = identity_receipt
+        metadata["identity_observation"] = batch.account_observation is not None
         row = connection.execute(
             """INSERT INTO analytics.dataset_revision(
                    cause, correlation_id, source_run_id, metadata

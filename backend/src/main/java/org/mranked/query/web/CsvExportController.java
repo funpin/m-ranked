@@ -28,10 +28,11 @@ public class CsvExportController {
     public ResponseEntity<StreamingResponseBody> publications(
             @RequestParam(defaultValue = "all")
             @Pattern(regexp = "all|telegram|vk|max|rutube") String platform
-    ) {
+    ) throws java.io.IOException {
         Platform parsedPlatform = Platform.fromApiValue(platform);
-        var revision = exportService.currentRevision();
-        StreamingResponseBody body = output -> exportService.write(parsedPlatform, revision, output);
+        var prepared = exportService.prepare(parsedPlatform);
+        var revision = prepared.revision();
+        StreamingResponseBody body = prepared::transferTo;
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))

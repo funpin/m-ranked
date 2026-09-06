@@ -171,7 +171,7 @@ class AdminPostgresIntegrationTest {
                     """)
                     .param("revision", updated.datasetRevision())
                     .query(Integer.class)
-                    .single()).isEqualTo(6);
+                    .single()).isEqualTo(9);
             assertThat(admin.sql("""
                     SELECT count(*)
                       FROM ops_and_admin.outbox_event
@@ -333,12 +333,8 @@ class AdminPostgresIntegrationTest {
                     .query(Boolean.class)
                     .single();
 
-            owner.sql("""
-                    DELETE FROM ops_and_admin.audit_log
-                     WHERE correlation_id IN (:correlationIds)
-                    """)
-                    .param("correlationIds", ownedCorrelations)
-                    .update();
+            // Audit rows are immutable even to the owner; disposable integration databases
+            // retain their unique correlation IDs until the database itself is discarded.
             owner.sql("""
                     DELETE FROM ops_and_admin.outbox_event
                      WHERE dataset_revision_id IN (

@@ -1,0 +1,29 @@
+...F                                                                     [100%]
+=================================== FAILURES ===================================
+_____ test_cleared_native_identity_closes_history_and_reenrollment_appends _____
+
+tmp_path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-526/test_cleared_native_identity_c0')
+
+    @pytest.mark.skipif(not ADMIN_DSN, reason="requires disposable PostgreSQL admin DSN")
+    def test_cleared_native_identity_closes_history_and_reenrollment_appends(tmp_path: Path):
+        import json
+        from app.database import Database
+        initial = tmp_path / "native-initial.sqlite"
+        build_golden_fixture(initial, revision=2)
+        def bridge(path, target):
+            return BridgeService(BridgeOptions(source=path,source_namespace="pytest-golden-integration",batch_size=2),
+                                 LegacySource(path),target,snapshot_kind="catch_up")
+        with PostgresTarget(str(ADMIN_DSN)) as target:
+            _, baseline = bridge(initial,target).run()
+>           assert baseline["gate"]["status"] == "pass", baseline["mismatches"]
+E           AssertionError: [{'actual': {'distinctKeys': 8, 'duplicateKeys': 0, 'rows': 8, 'sha256': '64edfa779e0a2def8e9e938e5bc9f4a8b77d2c03a3d6...', 1, 'posts', 1, 'views']], 'serialization': 'canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct'}, ...}]
+E           assert 'fail' == 'pass'
+E             
+E             - pass
+E             + fail
+
+tests/test_bridge_actual_target_postgres.py:119: AssertionError
+- generated xml file: /Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260905-r9/bridge.xml -
+=========================== short test summary info ============================
+FAILED tests/test_bridge_actual_target_postgres.py::test_cleared_native_identity_closes_history_and_reenrollment_appends
+1 failed, 3 passed, 1 deselected in 13.25s

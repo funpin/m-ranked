@@ -82,4 +82,56 @@ class CsvExportServiceTest {
                         + "\"'=HYPERLINK(\"\"https://example.invalid\"\",\"\"open\"\")\",ordinary,\r\n"
         );
     }
+
+    @Test void neutralizesFormulaPrefixesAfterSpreadsheetIgnoredWhitespace() throws Exception {
+        var output=new ByteArrayOutputStream();
+        var writer=new BufferedWriter(new OutputStreamWriter(output,StandardCharsets.UTF_8));
+        CsvExportService.writeRecord(writer,List.of("\t=1+1","  +1","\r@SUM(A1:A2)"," ordinary"));writer.flush();
+        assertThat(output.toString(StandardCharsets.UTF_8)).isEqualTo("'\t=1+1,'  +1,\"'\r@SUM(A1:A2)\", ordinary\r\n");
+    }
+    @Test
+    void maxRowsAreEnforcedWithoutMaterializingTheExportAndSlotsRecover() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger count = new java.util.concurrent.atomic.AtomicInteger();
+        PublicationCsvRow row = new PublicationCsvRow("vk", "large", UUID.randomUUID(), Instant.EPOCH,
+                Instant.EPOCH, 0L, null, null, null, "exact");
+        CsvExportService service = new CsvExportService((platform,revision,consumer)-> {
+            for (int index=0; index<=CsvExportService.MAX_ROWS; index++) {
+                count.incrementAndGet();consumer.accept(row);
+            }
+        }, ()->new DatasetRevision(5,Instant.EPOCH));
+        for (int attempt=0;attempt<3;attempt++) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(()->service.prepare(Platform.VK))
+                    .isInstanceOf(CsvExportLimitException.class).hasMessageContaining("maxRows");
+        }
+        assertThat(count.get()).isEqualTo(3*(CsvExportService.MAX_ROWS+1));
+        service.shutdown();
+    }
+
+    @Test
+    void disconnectDeletesTheSpoolAndReleasesDownloadCapacity() throws Exception {
+        CsvExportService service = new CsvExportService((platform,revision,consumer)-> {},
+                ()->new DatasetRevision(7,Instant.EPOCH));
+        var artifact = service.prepare(Platform.ALL);
+        assertThat(java.nio.file.Files.exists(artifact.path())).isTrue();
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->artifact.transferTo(new java.io.OutputStream() {
+            @Override public void write(int value) throws java.io.IOException { throw new java.io.IOException("client disconnected"); }
+        })).isInstanceOf(java.io.IOException.class).hasMessageContaining("disconnected");
+        assertThat(java.nio.file.Files.exists(artifact.path())).isFalse();
+        assertThat(artifact.slots().availablePermits()).isEqualTo(4);
+        artifact.close();
+        assertThat(artifact.slots().availablePermits()).isEqualTo(4);
+        service.shutdown();
+    }
+
+    @Test
+    void rateLimitStopsAnonymousRepeatedWorkBeforeOpeningDatabaseCursor() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger opened = new java.util.concurrent.atomic.AtomicInteger();
+        CsvExportService service = new CsvExportService((platform,revision,consumer)->opened.incrementAndGet(),
+                ()->new DatasetRevision(7,Instant.EPOCH));
+        for(int index=0;index<10;index++) try(var artifact=service.prepare(Platform.ALL)) { }
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->service.prepare(Platform.ALL))
+                .isInstanceOf(CsvExportLimitException.class).hasMessageContaining("rate limit");
+        assertThat(opened).hasValue(10);
+        service.shutdown();
+    }
 }

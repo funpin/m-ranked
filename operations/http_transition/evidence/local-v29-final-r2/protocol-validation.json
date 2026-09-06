@@ -1,0 +1,12 @@
+{
+  "status": "pass",
+  "scope": "actual-rehearsal-protocol",
+  "productionAcceptance": false,
+  "externalReleaseAndOperatorApprovalVerified": false,
+  "inputUnchanged": true,
+  "inputSha256": "dac7d001ec9054ec79928d1b3e01d0bc68ea0f5ecaea0444fde648fd7d2704b4",
+  "predicateSha256": "fb7a35553c819be28b4a3c50cb29da7bd9b7ed3b57d46e98e127a199c5e1eb0b",
+  "preflightScriptSha256": "051ca5b7eb3bd4d93ed4a83543b5f49269bd498b2b855adbb111f5c42ba718dc",
+  "validatorExitCode": 0,
+  "validationError": null
+}

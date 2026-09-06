@@ -30,11 +30,12 @@ public class JdbcPublicationCsvRowSource implements PublicationCsvRowSource {
                    latest.shares_count,
                    latest.quality::text AS quality
             FROM analytics.publication_latest latest
-            JOIN ingest.publication publication ON publication.id = latest.publication_id
-            JOIN catalog.institution institution ON institution.id = latest.institution_id
+            JOIN ingest.visible_publication publication ON publication.id = latest.publication_id
+            JOIN catalog.visible_institution institution ON institution.id = latest.institution_id
             WHERE latest.dataset_revision_id = ?
               AND (? = 'all' OR latest.platform::text = ?)
             ORDER BY publication.published_at, publication.id
+            LIMIT ?
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -44,12 +45,22 @@ public class JdbcPublicationCsvRowSource implements PublicationCsvRowSource {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ, timeout = 30)
     public void stream(
             Platform platform,
             long datasetRevision,
             CsvRowConsumer consumer
     ) throws IOException {
+        streamBounded(platform, datasetRevision, 100_000, 30, consumer);
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ, timeout = 300)
+    public void streamBounded(Platform platform, long datasetRevision, long maxRows,
+                              int timeoutSeconds, CsvRowConsumer consumer) throws IOException {
+        if (maxRows < 1 || maxRows > 2_000_000 || timeoutSeconds < 1 || timeoutSeconds > 300) {
+            throw new IllegalArgumentException("Invalid bounded export policy");
+        }
         try {
             jdbcTemplate.query(connection -> {
                 var statement = connection.prepareStatement(
@@ -57,11 +68,13 @@ public class JdbcPublicationCsvRowSource implements PublicationCsvRowSource {
                         ResultSet.TYPE_FORWARD_ONLY,
                         ResultSet.CONCUR_READ_ONLY
                 );
-                        statement.setFetchDirection(ResultSet.FETCH_FORWARD);
+                statement.setFetchDirection(ResultSet.FETCH_FORWARD);
                 statement.setFetchSize(FETCH_SIZE);
+                statement.setQueryTimeout(timeoutSeconds);
                 statement.setLong(1, datasetRevision);
                 statement.setString(2, platform.databaseValue());
                 statement.setString(3, platform.databaseValue());
+                statement.setLong(4, maxRows + 1);
                 return statement;
             }, resultSet -> {
                 try {

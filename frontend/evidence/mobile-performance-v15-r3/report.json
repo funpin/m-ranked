@@ -1,0 +1,1041 @@
+{
+  "generatedAt": "2026-09-05T06:24:11.712Z",
+  "origin": "http://127.0.0.1:18093",
+  "apiOrigin": "http://127.0.0.1:57565",
+  "release": "a7a2f09ff156eb72445f04f40dbe0e93d3378911",
+  "workingTreeDiff": ".gitignore                                         |    1 +\n backend/pom.xml                                    |   37 +\n .../infrastructure/AdminDatabaseConfiguration.java |   36 +\n .../infrastructure/ApiSecurityConfiguration.java   |   10 +\n .../infrastructure/JdbcAdminCommandRepository.java |    2 +-\n .../infrastructure/JdbcAdminQueryRepository.java   |    2 +-\n .../admin/web/AdminRfc9457ExceptionHandler.java    |   17 +-\n .../org/mranked/analytics/domain/MetricSet.java    |   10 +-\n .../mranked/cache/application/PublicCacheKey.java  |    5 +\n .../cache/application/PublicCacheKeyFactory.java   |   20 +-\n .../mranked/cache/application/PublicDtoCache.java  |   39 +-\n .../JdbcDatasetRevisionProvider.java               |    7 +-\n .../infrastructure/RedisPublicCacheStore.java      |   18 +-\n .../emoji/application/CustomEmojiAsset.java        |    1 +\n .../emoji/application/CustomEmojiService.java      |   36 +-\n .../infrastructure/TelegramEmojiHttpGateway.java   |   60 +-\n .../infrastructure/JdbcReadinessProbe.java         |    7 +-\n .../query/application/CsvExportService.java        |   84 +-\n .../org/mranked/query/application/CursorCodec.java |   24 +\n .../query/application/PublicQueryRepository.java   |   22 +\n .../query/application/PublicQueryService.java      |  125 +-\n .../query/application/PublicationCsvRowSource.java |    5 +\n .../java/org/mranked/query/domain/AccountView.java |   16 +-\n .../mranked/query/domain/ActivityRatingResult.java |    5 +-\n .../mranked/query/domain/ComparisonSelection.java  |    2 +-\n .../org/mranked/query/domain/ComparisonView.java   |    9 +-\n .../org/mranked/query/domain/InstitutionView.java  |   11 +-\n .../org/mranked/query/domain/OverviewMetric.java   |    9 +-\n .../org/mranked/query/domain/PublicationView.java  |   12 +-\n .../java/org/mranked/query/domain/RatingPage.java  |   13 +-\n .../query/infrastructure/ActivityRatingSql.java    |   87 +-\n .../query/infrastructure/ComparisonSql.java        |   30 +-\n .../JdbcProjectionQueryRepository.java             |  197 +-\n .../JdbcPublicationCsvRowSource.java               |   21 +-\n .../org/mranked/query/web/CsvExportController.java |    7 +-\n .../org/mranked/query/web/PublicApiModels.java     |   58 +-\n .../mranked/query/web/PublicQueryController.java   |   97 +-\n .../mranked/query/web/Rfc9457ExceptionHandler.java |    8 +\n .../AdminPostgresIntegrationTest.java              |   10 +-\n .../application/PublicCacheKeyFactoryTest.java     |    8 +\n .../cache/application/PublicDtoCacheTest.java      |   14 +\n .../JdbcDatasetRevisionProviderTest.java           |    4 +-\n .../org/mranked/contract/OpenApiContractTest.java  |   42 +-\n .../emoji/application/CustomEmojiServiceTest.java  |   15 +\n .../TelegramEmojiHttpGatewayTest.java              |    5 +\n .../infrastructure/JdbcReadinessProbeTest.java     |    5 +-\n .../query/application/CsvExportServiceTest.java    |   52 +\n .../mranked/query/application/CursorCodecTest.java |   11 +\n .../query/domain/ComparisonSelectionTest.java      |    4 +-\n .../ActivityRatingPostgresIntegrationTest.java     |   11 +\n .../query/infrastructure/ComparisonSqlTest.java    |    4 +-\n .../query/web/PublicQueryControllerTest.java       |   12 +-\n collector_target/README.md                         |   55 +-\n collector_target/coordinator.py                    |   43 +-\n collector_target/normalize.py                      |    1 +\n collector_target/ports.py                          |    3 +\n collector_target/repository.py                     |   63 +-\n contracts/openapi/m-ranked-v1-client.ts            | 3692 +++++++++++++++---\n contracts/openapi/m-ranked-v1.yaml                 | 2760 ++++++++++++--\n frontend/.gitignore                                |   16 +-\n frontend/README.md                                 |  108 +-\n frontend/app/(overview)/page.tsx                   |   83 +-\n frontend/app/channels/[id]/page.tsx                |   13 +-\n frontend/app/compare/page.tsx                      |  303 +-\n frontend/app/globals.css                           |  456 +--\n frontend/app/institutions/[id]/page.tsx            |   37 +-\n frontend/app/layout.tsx                            |   23 +-\n frontend/app/manage/page.tsx                       |   80 +-\n frontend/app/platform-accounts/[id]/page.tsx       |    9 +-\n frontend/app/platform-posts/[id]/page.tsx          |    8 +-\n frontend/app/posts/[id]/page.tsx                   |   10 +-\n frontend/app/rating/page.tsx                       |  227 +-\n frontend/components/account-detail.tsx             |   94 +-\n frontend/components/comparison-chart.tsx           |  208 +-\n frontend/components/institution-detail.tsx         |   71 +-\n frontend/components/overview-card.tsx              |  112 +-\n frontend/components/publication-detail.tsx         |   67 +-\n frontend/components/site-header.tsx                |   70 +-\n frontend/components/theme-toggle.tsx               |   22 +-\n frontend/components/ui.tsx                         |   14 +-\n frontend/lib/admin-api.ts                          |   51 +-\n frontend/lib/api.ts                                |  274 +-\n frontend/lib/format.ts                             |   29 +-\n frontend/lib/params.ts                             |   14 +-\n frontend/lib/types.ts                              |  266 +-\n frontend/next-env.d.ts                             |    4 +-\n frontend/next.config.ts                            |    2 +\n frontend/package.json                              |   22 +-\n frontend/pnpm-lock.yaml                            | 3978 ++++++++++++++++++--\n frontend/pnpm-workspace.yaml                       |    3 +\n frontend/tests/api.test.ts                         |    8 +-\n frontend/tests/params.test.ts                      |    6 +-\n frontend/tsconfig.json                             |   15 +-\n migration/bridge/cli.py                            |   44 +\n migration/bridge/model.py                          |    2 +-\n migration/bridge/service.py                        |  246 +-\n migration/bridge/target.py                         |   15 +-\n migration/reverse_sync_format.py                   |   29 +-\n migration/traceability-matrix.md                   |   62 +-\n operations/cold_archive/README.md                  |   43 +\n operations/cold_archive/model.py                   |    2 +\n operations/cold_archive/parquet.py                 |   68 +-\n operations/cold_archive/service.py                 |   32 +-\n operations/collector_parity_evidence.py            |   97 +-\n operations/requirements.txt                        |    1 +\n operations/reverse_sync/cli.py                     |    4 +\n operations/reverse_sync/journal.py                 |   32 +\n operations/reverse_sync/postgres.py                |   41 +-\n operations/reverse_sync/service.py                 |   38 +-\n operations/reverse_sync/sqlite_target.py           |   72 +-\n operations/scripts/cutover-preflight.sh            |   81 +-\n operations/scripts/deploy-shadow.sh                |  129 +-\n operations/scripts/restore-verify.sh               |   23 +-\n tests/test_cold_archive.py                         |   44 +\n tests/test_collector_parity_evidence.py            |   10 +-\n tests/test_operational_flyway_gates.py             |   31 +-\n tests/test_reverse_sync_postgres.py                |  105 +-\n tests/test_target_collectors.py                    |   18 +-\n tests/test_target_collectors_postgres.py           |    9 +-\n 119 files changed, 12506 insertions(+), 3439 deletions(-)",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "sourceSha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+  "databaseBytes": 3154409151,
+  "runtimeEvidence": {
+    "path": "../operations/performance/evidence/public-read-review-r1/report.json",
+    "jarSha256": "bd9216aed69f46a24ce7b719f2f6109503a2c53af0005d25ca3bf39c149806b0",
+    "database": {
+      "name": "visual_review_v2_it",
+      "bytes": 3154409151,
+      "institutions": 207,
+      "accounts": 824,
+      "publications": 824,
+      "snapshots": 9026,
+      "comparisonPoints": 8534560,
+      "datasetRevision": 29,
+      "flyway": [
+        {
+          "version": "1",
+          "script": "V1__target_baseline.sql",
+          "checksum": -1636077697,
+          "success": true
+        },
+        {
+          "version": "2",
+          "script": "V2__rebuild_core_projections.sql",
+          "checksum": 839607018,
+          "success": true
+        },
+        {
+          "version": "3",
+          "script": "V3__collector_observation_times_and_identity_grants.sql",
+          "checksum": -1456658399,
+          "success": true
+        },
+        {
+          "version": "4",
+          "script": "V4__admin_collection_run_status_grants.sql",
+          "checksum": 1318350062,
+          "success": true
+        },
+        {
+          "version": "5",
+          "script": "V5__legacy_activity_period_projection.sql",
+          "checksum": -1313754193,
+          "success": true
+        },
+        {
+          "version": "6",
+          "script": "V6__comparison_valid_observation_hourly_projection.sql",
+          "checksum": -290358219,
+          "success": true
+        },
+        {
+          "version": "7",
+          "script": "V7__activity_rating_read_grants.sql",
+          "checksum": -1228913579,
+          "success": true
+        },
+        {
+          "version": "8",
+          "script": "V8__legacy_overview_projection.sql",
+          "checksum": -574188650,
+          "success": true
+        },
+        {
+          "version": "9",
+          "script": "V9__immutable_observations_quality_archive_fence.sql",
+          "checksum": 1058556652,
+          "success": true
+        },
+        {
+          "version": "10",
+          "script": "V10__consistent_public_queries_and_formula_guards.sql",
+          "checksum": -1148603410,
+          "success": true
+        },
+        {
+          "version": "11",
+          "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+          "checksum": 1679789143,
+          "success": true
+        },
+        {
+          "version": "12",
+          "script": "V12__detail_history_projection.sql",
+          "checksum": 1453326243,
+          "success": true
+        },
+        {
+          "version": "13",
+          "script": "V13__immutable_account_identity_history.sql",
+          "checksum": -185639607,
+          "success": true
+        },
+        {
+          "version": "14",
+          "script": "V14__public_archived_publication_text.sql",
+          "checksum": -956321170,
+          "success": true
+        },
+        {
+          "version": "15",
+          "script": "V15__verified_source_preservation.sql",
+          "checksum": -1953543117,
+          "success": true
+        }
+      ]
+    }
+  },
+  "revisionBefore": {
+    "datasetRevision": 29,
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "86f186dcdd8c1d3670378a441e07d68f3c0371424f99e4e7eec672ac5f1b3ee4"
+  },
+  "revisionAfter": {
+    "datasetRevision": 29,
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "86f186dcdd8c1d3670378a441e07d68f3c0371424f99e4e7eec672ac5f1b3ee4"
+  },
+  "coherent": true,
+  "buildId": "R9wTOxFOJujHe45CL1vOl",
+  "buildMode": "production",
+  "scope": "Interim V15 actual API. Synthetic 207-entity representative corpus; database size includes indexes and comparison projections. Mobile lab measurements, not production field Core Web Vitals. Each route has an independent cold browser cache; API cache remains under its runtime policy.",
+  "methodology": {
+    "cls": "Maximum 5s session window with <1s gaps; excludes hadRecentInput",
+    "inp": "Event Timing of exercised theme/menu/search/chart/legend/scale interactions; durations <16ms are below observer threshold",
+    "initialJs": "Every script fetched through initial network idle/chart readiness, individually gzip level 9; includes dynamically loaded initial charts. Only requests explicitly marked by Purpose/Sec-Purpose prefetch or Next-Router-Prefetch headers are classified separately; unclassified requests remain included. Next firstLoad diagnostics are reported separately.",
+    "sources": [
+      "https://web.dev/articles/cls",
+      "https://web.dev/articles/inp"
+    ]
+  },
+  "browser": "151.0.7922.34",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "throttling": {
+    "cpu": 4,
+    "latencyMs": 150,
+    "downloadBitsPerSecond": 1600000,
+    "uploadBitsPerSecond": 750000
+  },
+  "sampleCount": 5,
+  "gate": "NO-GO",
+  "summaries": [
+    {
+      "path": "/compare?platform=vk",
+      "samples": 5,
+      "lcpP75Ms": 2428,
+      "inpP75Ms": 840,
+      "clsP75": 0,
+      "initialJsGzipBytes": 148966,
+      "nextFirstLoadGzipBytes": 143959,
+      "speculativeJsGzipBytes": 0,
+      "initialJsBudgetBytes": 174080,
+      "passed": false
+    },
+    {
+      "path": "/posts/1",
+      "samples": 5,
+      "lcpP75Ms": 660,
+      "inpP75Ms": 64,
+      "clsP75": 0,
+      "initialJsGzipBytes": 150918,
+      "nextFirstLoadGzipBytes": 145911,
+      "speculativeJsGzipBytes": 0,
+      "initialJsBudgetBytes": 174080,
+      "passed": true
+    }
+  ],
+  "rows": [
+    {
+      "path": "/compare?platform=vk",
+      "sample": 0,
+      "status": 200,
+      "lcp": 2756,
+      "inp": 840,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "7615": 80,
+        "7622": 32,
+        "7636": 24,
+        "7657": 16,
+        "7664": 840,
+        "7671": 832,
+        "7678": 24,
+        "7685": 16
+      },
+      "initialScriptBytes": 153132,
+      "initialScriptGzipBytes": 148966,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 148966,
+      "nextFirstLoadGzipBytes": 143959,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3r7zuem6q3479.js",
+          "gzipBytes": 4637,
+          "sha256": "da6c56de5240f1c20514d5e099fa6e4e06cef54e09f76ab4d881b5c5ff0f5c40",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3cd-dnvappu23.js",
+          "gzipBytes": 5007,
+          "sha256": "cc6b0f78ce9d3b7a4b4fbdf99690c71b0717047773a653e865142a50126ff6d5",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 1,
+      "status": 200,
+      "lcp": 2412,
+      "inp": 840,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "1541": 96,
+        "1548": 32,
+        "1562": 24,
+        "1583": 16,
+        "1590": 840,
+        "1597": 816,
+        "1604": 24,
+        "1611": 16
+      },
+      "initialScriptBytes": 153132,
+      "initialScriptGzipBytes": 148966,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 148966,
+      "nextFirstLoadGzipBytes": 143959,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3r7zuem6q3479.js",
+          "gzipBytes": 4637,
+          "sha256": "da6c56de5240f1c20514d5e099fa6e4e06cef54e09f76ab4d881b5c5ff0f5c40",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3cd-dnvappu23.js",
+          "gzipBytes": 5007,
+          "sha256": "cc6b0f78ce9d3b7a4b4fbdf99690c71b0717047773a653e865142a50126ff6d5",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 2,
+      "status": 200,
+      "lcp": 2412,
+      "inp": 832,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "580": 88,
+        "587": 32,
+        "601": 24,
+        "622": 16,
+        "629": 832,
+        "636": 832,
+        "643": 24,
+        "650": 16
+      },
+      "initialScriptBytes": 153132,
+      "initialScriptGzipBytes": 148966,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 148966,
+      "nextFirstLoadGzipBytes": 143959,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3r7zuem6q3479.js",
+          "gzipBytes": 4637,
+          "sha256": "da6c56de5240f1c20514d5e099fa6e4e06cef54e09f76ab4d881b5c5ff0f5c40",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3cd-dnvappu23.js",
+          "gzipBytes": 5007,
+          "sha256": "cc6b0f78ce9d3b7a4b4fbdf99690c71b0717047773a653e865142a50126ff6d5",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 3,
+      "status": 200,
+      "lcp": 2428,
+      "inp": 840,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "3367": 88,
+        "3374": 32,
+        "3388": 24,
+        "3409": 16,
+        "3416": 840,
+        "3423": 816,
+        "3430": 24,
+        "3437": 16
+      },
+      "initialScriptBytes": 153132,
+      "initialScriptGzipBytes": 148966,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 148966,
+      "nextFirstLoadGzipBytes": 143959,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3r7zuem6q3479.js",
+          "gzipBytes": 4637,
+          "sha256": "da6c56de5240f1c20514d5e099fa6e4e06cef54e09f76ab4d881b5c5ff0f5c40",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3cd-dnvappu23.js",
+          "gzipBytes": 5007,
+          "sha256": "cc6b0f78ce9d3b7a4b4fbdf99690c71b0717047773a653e865142a50126ff6d5",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 4,
+      "status": 200,
+      "lcp": 2404,
+      "inp": 832,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "7643": 80,
+        "7650": 32,
+        "7664": 24,
+        "7685": 16,
+        "7692": 832,
+        "7699": 824,
+        "7706": 24,
+        "7713": 16
+      },
+      "initialScriptBytes": 153132,
+      "initialScriptGzipBytes": 148966,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 148966,
+      "nextFirstLoadGzipBytes": 143959,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3r7zuem6q3479.js",
+          "gzipBytes": 4637,
+          "sha256": "da6c56de5240f1c20514d5e099fa6e4e06cef54e09f76ab4d881b5c5ff0f5c40",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/3cd-dnvappu23.js",
+          "gzipBytes": 5007,
+          "sha256": "cc6b0f78ce9d3b7a4b4fbdf99690c71b0717047773a653e865142a50126ff6d5",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 0,
+      "status": 200,
+      "lcp": 660,
+      "inp": 56,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "3031": 56,
+        "3038": 16,
+        "3045": 16,
+        "3052": 16,
+        "3059": 16,
+        "3066": 16,
+        "3073": 16,
+        "3080": 16,
+        "3087": 16,
+        "3094": 16,
+        "3101": 16
+      },
+      "initialScriptBytes": 155088,
+      "initialScriptGzipBytes": 150918,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 150918,
+      "nextFirstLoadGzipBytes": 145911,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0l23b4s0l63ap.js",
+          "gzipBytes": 6589,
+          "sha256": "30093928c5a5be43b457548e2c443f054273bd6c5c91bcd432ee1afb1ac87a25",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2h6867h00yfki.js",
+          "gzipBytes": 5007,
+          "sha256": "fee9385b69b0becca2034d3a6c1e1fe68bf3471f2ffd8f2cc7411069261b6c87",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 1,
+      "status": 200,
+      "lcp": 652,
+      "inp": 64,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "7578": 64,
+        "7585": 16,
+        "7592": 16,
+        "7599": 16,
+        "7613": 24,
+        "7620": 16,
+        "7627": 16,
+        "7634": 16,
+        "7641": 16,
+        "7648": 16
+      },
+      "initialScriptBytes": 155088,
+      "initialScriptGzipBytes": 150918,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 150918,
+      "nextFirstLoadGzipBytes": 145911,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0l23b4s0l63ap.js",
+          "gzipBytes": 6589,
+          "sha256": "30093928c5a5be43b457548e2c443f054273bd6c5c91bcd432ee1afb1ac87a25",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2h6867h00yfki.js",
+          "gzipBytes": 5007,
+          "sha256": "fee9385b69b0becca2034d3a6c1e1fe68bf3471f2ffd8f2cc7411069261b6c87",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 2,
+      "status": 200,
+      "lcp": 652,
+      "inp": 72,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "3066": 72,
+        "3073": 16,
+        "3080": 16,
+        "3087": 16,
+        "3094": 16,
+        "3101": 24,
+        "3108": 16,
+        "3115": 16,
+        "3122": 16,
+        "3129": 16,
+        "3136": 16
+      },
+      "initialScriptBytes": 155088,
+      "initialScriptGzipBytes": 150918,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 150918,
+      "nextFirstLoadGzipBytes": 145911,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0l23b4s0l63ap.js",
+          "gzipBytes": 6589,
+          "sha256": "30093928c5a5be43b457548e2c443f054273bd6c5c91bcd432ee1afb1ac87a25",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2h6867h00yfki.js",
+          "gzipBytes": 5007,
+          "sha256": "fee9385b69b0becca2034d3a6c1e1fe68bf3471f2ffd8f2cc7411069261b6c87",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 3,
+      "status": 200,
+      "lcp": 676,
+      "inp": 64,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "9095": 64,
+        "9102": 16,
+        "9109": 16,
+        "9116": 16,
+        "9123": 16,
+        "9130": 24,
+        "9137": 16,
+        "9144": 16,
+        "9151": 16,
+        "9158": 16,
+        "9165": 16
+      },
+      "initialScriptBytes": 155088,
+      "initialScriptGzipBytes": 150918,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 150918,
+      "nextFirstLoadGzipBytes": 145911,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0l23b4s0l63ap.js",
+          "gzipBytes": 6589,
+          "sha256": "30093928c5a5be43b457548e2c443f054273bd6c5c91bcd432ee1afb1ac87a25",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2h6867h00yfki.js",
+          "gzipBytes": 5007,
+          "sha256": "fee9385b69b0becca2034d3a6c1e1fe68bf3471f2ffd8f2cc7411069261b6c87",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 4,
+      "status": 200,
+      "lcp": 656,
+      "inp": 64,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "3106": 64,
+        "3113": 16,
+        "3120": 16,
+        "3127": 16,
+        "3134": 16,
+        "3141": 16,
+        "3148": 16,
+        "3155": 16,
+        "3162": 16,
+        "3169": 16,
+        "3176": 16
+      },
+      "initialScriptBytes": 155088,
+      "initialScriptGzipBytes": 150918,
+      "speculativeScriptGzipBytes": 0,
+      "allInitialScriptGzipBytes": 150918,
+      "nextFirstLoadGzipBytes": 145911,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0zhiqq2bo1_ye.js",
+          "gzipBytes": 1968,
+          "sha256": "40442cb6fa79017ac46fbcf365984254c74ae9cd4f3d32266d60d52bf634ad55",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/turbopack-06wsik_1pg-0o.js",
+          "gzipBytes": 3849,
+          "sha256": "1176fd18e401c276833b86c4aa408ff53f2a9e7e0c19d8d9bd6d7d75850ef0c1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0qsk5v_db-mof.js",
+          "gzipBytes": 8843,
+          "sha256": "28131e333b9a799a9008f1eaf99fdd02eb3f57b7ddbfa54adb706bf41c32030c",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/0l23b4s0l63ap.js",
+          "gzipBytes": 6589,
+          "sha256": "30093928c5a5be43b457548e2c443f054273bd6c5c91bcd432ee1afb1ac87a25",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2m0-hhvd_oflt.js",
+          "gzipBytes": 71463,
+          "sha256": "83f781b881487eb7e6c98e34b8d0cd93a90038da0d7bb4b6cf694cda03a435c9",
+          "speculativePrefetch": false
+        },
+        {
+          "url": "http://127.0.0.1:18093/_next/static/chunks/2h6867h00yfki.js",
+          "gzipBytes": 5007,
+          "sha256": "fee9385b69b0becca2034d3a6c1e1fe68bf3471f2ffd8f2cc7411069261b6c87",
+          "speculativePrefetch": false
+        }
+      ],
+      "development": false
+    }
+  ]
+}

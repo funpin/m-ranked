@@ -54,7 +54,7 @@ For Telegram MTProto/public (as deployed), VK, MAX, and RUTUBE:
    and a later actual rediscovery records `present` and clears `deleted_at`.
 7. Replay a committed run/account batch and prove no duplicate snapshots,
    deletion observations, revisions, or outbox events.
-8. Keep `m-ranked-target-projection-publisher.service` active, wait for all six
+8. Keep `m-ranked-target-projection-publisher.service` active, wait for all nine
    named projection states to equal the newest collector revision, and record
    that exact revision in the evidence. An older ready revision is a failure.
 
@@ -93,11 +93,11 @@ The source document is an exact versioned object. Its top-level fields are
 provider mode and authoritative-missing reason, cursor-wrap/off-page exact
 refresh counts, the first/second/confirmed/rediscovered run sequence, transient
 failure counters, replay zeros, latest revision and its raw file. Projection
-state must put all six named projections at the newest collector revision;
+state must put all nine named projections at the newest collector revision;
 duplicate counts must all be integer zero. The sealer rejects extra keys,
 floats masquerading as integers, local/test namespaces or databases,
 placeholder approvals, stale/future timestamps and any Flyway history other
-than the frozen successful V1-V8 set.
+than the frozen successful V1-V29 set.
 
 After an independent reviewer has checked that the raw captures really came
 from the controlled live-provider shadow run and recorded approval in the

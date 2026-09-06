@@ -1,68 +1,32 @@
 import Link from "next/link";
-import { InfoNotice, Metric, PageHeader, StatusPill } from "./ui";
-import { formatDate, PLATFORM_LONG_LABELS } from "@/lib/format";
-import type { AccountView } from "@/lib/types";
+import { duration, legacyDate, legacyNumber, PLATFORM_LABELS, PLATFORM_LONG_LABELS, postTypeLabel, publicationLabel } from "@/lib/format";
+import { metricEvidence } from "@/lib/metric-evidence";
+import type { AccountView, PublicationListItem } from "@/lib/types";
 
-function safeExternalUrl(value: string | null): string | null {
-  return value?.startsWith("https://") ? value : null;
-}
-
-export function AccountDetail({
-  account,
-  channelCompatibility = false,
-}: {
-  account: AccountView;
-  channelCompatibility?: boolean;
-}) {
-  const institutionName = account.institutionShortName || account.institutionName;
-  const accountName = account.title
-    || (account.username ? `@${account.username}` : null)
-    || institutionName;
-  const externalUrl = safeExternalUrl(account.url);
-  return (
-    <>
-      <nav className="breadcrumbs" aria-label="Хлебные крошки">
-        <Link href="/">Обзор</Link>
-        <span aria-hidden="true">/</span>
-        <Link href={`/institutions/${account.institutionLegacyId}?platform=${account.platform}`}>
-          {institutionName}
-        </Link>
-        <span aria-hidden="true">/</span>
-        <span>{accountName}</span>
-      </nav>
-      <PageHeader
-        eyebrow={`${PLATFORM_LONG_LABELS[account.platform]} · ${channelCompatibility ? "канал" : "аккаунт"}`}
-        title={accountName}
-        description={account.username ? `${account.institutionName} · @${account.username}` : account.institutionName}
-        meta={<StatusPill tone={account.enabled ? "green" : "neutral"}>{account.enabled ? "активен" : "отключён"}</StatusPill>}
-      />
-      <section className="panel detail-panel">
-        <div className="section-head">
-          <div><p className="eyebrow">Сводка</p><h2>Состояние аккаунта</h2></div>
-          <StatusPill tone="blue">ID {account.legacyId}</StatusPill>
-        </div>
-        <div className="metrics-grid">
-          <Metric label="публикаций в проекции" value={account.publicationCount} />
-        </div>
-        <dl className="provenance account-provenance">
-          <div><dt>Площадка</dt><dd>{PLATFORM_LONG_LABELS[account.platform]}</dd></div>
-          <div><dt>Режим доступа</dt><dd>{account.accessMode}</dd></div>
-          <div><dt>Внешний ID</dt><dd>{account.canonicalExternalId}</dd></div>
-          <div><dt>Последний замер</dt><dd>{formatDate(account.latestObservedAt)}</dd></div>
-          <div><dt>Ревизия</dt><dd>#{account.datasetRevision}</dd></div>
-          <div><dt>Актуальность</dt><dd>{formatDate(account.asOf)}</dd></div>
-        </dl>
-      </section>
-      <InfoNotice>
-        Карточка использует account-level проекцию. Список публикаций не подменяется
-        агрегатами: он появится после отдельного bounded endpoint.
-      </InfoNotice>
-      <div className="page-actions">
-        {externalUrl ? <a className="button-link" href={externalUrl} target="_blank" rel="noopener noreferrer">Открыть на площадке</a> : null}
-        <Link className="button-link secondary-button" href={`/institutions/${account.institutionLegacyId}?platform=${account.platform}`}>
-          Карточка вуза
-        </Link>
-      </div>
-    </>
-  );
+export function AccountDetail({ account, posts }: { account: AccountView; posts: PublicationListItem[] }) {
+  const name = account.title || account.institutionShortName || account.institutionName;
+  const stats = account.stats;
+  const telegram = account.platform === "telegram";
+  const primary = account.platform === "vk" || account.platform === "rutube" ? "лайков" : "реакций";
+  return <><span data-active-platform={account.platform} hidden />
+    <h1>{name}{account.username ? <> <span className="muted">@{account.username}</span></> : null}</h1>
+    <div className="panel">
+      {stats ? <><p className="panel-note">{telegram ? `Данные ниже — по всем публикациям, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Метки скачков временно отключены; реакции и просмотры продолжают накапливаться для настройки алгоритма.` : `Данные ниже — по всем публикациям ${PLATFORM_LONG_LABELS[account.platform]}, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Недоступные площадке метрики показываются прочерком.`}</p>
+      <div className="metrics channel-metrics">
+        <span><b className="metric">{stats.postCount}</b><small>публикаций в базе</small></span>
+        <span><b className="metric">{stats.monitored}</b><small>с полной историей{telegram ? "" : " ⓘ"}</small></span>
+        {([{ metric:stats.medianReactions, label:`медиана ${primary}` },{ metric:stats.medianViews,label:"медиана просмотров" },{ metric:stats.medianComments,label:"медиана комментариев" }]).map(({metric,label}) => <span key={label} className="has-tooltip" tabIndex={0} data-tooltip={metricEvidence(metric)}><b className="metric">{metric.value === null ? "—" : Math.trunc(metric.value)}</b><small>{label} ⓘ</small><span className="sr-only">{metricEvidence(metric)}</span></span>)}
+        <span className="has-tooltip" tabIndex={0} data-tooltip={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[account.platform]}.`}><b className="metric">{stats.ratingRank ? `№${stats.ratingRank}` : "—"}</b><small>М‑Рейтинг {PLATFORM_LABELS[account.platform]} ⓘ{stats.ratingPeriod ? ` · ${stats.ratingPeriod}` : ""}</small></span>
+      </div></> : <p className="panel-note">Сводка публикаций ещё не рассчитана.</p>}
+    </div>
+    <div className="panel mt table-wrap"><table><thead><tr><th>Публикация</th><th>Опубликовано, МСК</th><th>Возраст</th><th>История</th><th>{telegram ? "Реакции" : primary}</th><th>Просмотры</th><th>Комментарии</th><th>Тип</th></tr></thead><tbody>
+      {posts.map((post) => {
+        const observedAt = post.reactions.observedAt ?? post.views.observedAt;
+        const complete = post.historyCompleteness === "complete";
+        const externalUrl = telegram && post.deletedAt && account.username ? `https://tgstat.ru/channel/@${account.username}/${post.displayExternalId ?? post.externalId}` : post.publicUrl;
+        return <tr key={post.publicationId}><td>{post.legacyRoute ? <Link href={post.legacyRoute}>{publicationLabel(post.displayExternalId ?? post.externalId,account.platform)}</Link> : publicationLabel(post.displayExternalId ?? post.externalId,account.platform)}{externalUrl?.startsWith("https://") ? <> · <a className="muted external" href={externalUrl} target="_blank" rel="noopener noreferrer">{telegram && post.deletedAt ? "TGStat" : PLATFORM_LONG_LABELS[account.platform]}</a></> : null}{post.deletedAt ? <> <span className="pill deleted">удалена</span></> : null}{post.repost ? <> · <span className="pill repost">репост</span></> : null}{post.joint ? <> · <span className="pill coauthor">+{post.additionalAuthorCount} авт.</span></> : null}</td><td>{legacyDate(post.publishedAt)}</td><td>{duration(observedAt ? (Date.parse(observedAt)-Date.parse(post.publishedAt))/1000 : null)}</td><td>{observedAt || telegram ? <span className={`pill ${complete ? "ok" : "warn"}`}>{complete ? "полная" : "неполная"}</span> : <span className="muted">нет замеров</span>}</td><td title={post.reactions.quality ?? undefined}>{legacyNumber(post.reactions.value)}</td><td title={post.views.quality ?? undefined}>{legacyNumber(post.views.value)}</td><td title={post.comments.quality ?? undefined}>{legacyNumber(post.comments.value)}</td><td>{postTypeLabel(post.publicationType)}</td></tr>;
+      })}
+      {!posts.length ? <tr><td colSpan={8} className="empty-state">Публикации ещё не собраны.</td></tr> : null}
+    </tbody></table></div>
+  </>;
 }

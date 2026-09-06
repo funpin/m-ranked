@@ -1,0 +1,27 @@
+{
+  "status": "pass",
+  "migration": "V26",
+  "migrationSha256": "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8",
+  "verifierSha256": "ec11334fe934690cb15334a767bacb731a24e2eaaa4bdb52c61b10119d28dab8",
+  "flyway": "actual fresh V1–V26",
+  "tests": {
+    "postgresJUnit": {
+      "passed": 1,
+      "skipped": 0,
+      "seconds": 8.126
+    },
+    "pythonUnit": {
+      "passed": 3,
+      "seconds": 0.39
+    }
+  },
+  "sourceOracle": "unchanged original overview/compare endpoints with injected published anchor",
+  "sqlMutations": "fixture tamper only, rollback without rebuild",
+  "runtimeRole": "migration_bridge",
+  "remainingGates": [
+    "Integrate helper or separate mandatory CLI in release pipeline",
+    "Run against representative accepted source artifacts and record exact SHA/revision",
+    "Preserved missing source history requires separately verified reconstructable artifact; fail-closed",
+    "Closed identity intervals and projection families outside stated oracle remain separate gates"
+  ]
+}

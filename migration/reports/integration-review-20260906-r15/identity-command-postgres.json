@@ -1,0 +1,158 @@
+{
+  "status": "pass",
+  "secondSFinal": {
+    "status": "pass",
+    "critical_mismatches": 0
+  },
+  "repeat": {
+    "status": "pass",
+    "critical_mismatches": 0
+  },
+  "history": {
+    "status": "pass",
+    "sourceSha256": "71bc276d7407d2146f15effec8b90247762615a4dacf9f49e813924a2bef1ad4",
+    "sourceUnchanged": true,
+    "sourceArtifacts": [
+      "71bc276d7407d2146f15effec8b90247762615a4dacf9f49e813924a2bef1ad4",
+      "9b588451eaa9ed46b5af7f571bdcae4100f88f8b65576118a7f330538b2a4f47"
+    ],
+    "datasetRevision": 16,
+    "asOf": "2026-09-06T13:25:32.568419+00:00",
+    "identitySourceReceipts": [
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "0e455767a289b8da2cac720e4915ecc515c31205852d7884ea57f22f9e4b4ddb"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "21a8ce52f8aaabf0cf69f50113159eb025b50567ee10ce496a00413d66ebb5ee"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "88b798f7919f2a848e43bd67ad4ea829d0e79f6d5307207a6a64773bd8f7cbc5"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "b990bf291afccc14fdd17ef0642b6bf99b2203150ebc6eff77100f84d48dc1b3"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "c8dbd5be562b8c470f69cda220e8a6ad1ae5aa17631f7c8cb2bc2bede7e1aa5f"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "ecf8b071ad4cf103b1403b07c5def7b7e62cc906cc321355a3a0367f871044aa"
+      },
+      {
+        "kind": "collector",
+        "platform": "max",
+        "sha256": "8e2ab6be4351db00af067cb7fdf664a7ba2a47b80434b62da89422d7b55a8b01"
+      },
+      {
+        "kind": "collector",
+        "platform": "max",
+        "sha256": "a4e83665b1378344607db77da374f771120cc7ac7a40cebf5530fdae6f66bdda"
+      }
+    ],
+    "checks": [
+      {
+        "name": "presentation",
+        "status": "pass",
+        "expected": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "0fdf1b8c6768b2cdd6ed26b2c1169de5bb1936026d77f4e5a082e5407c18684f"
+        },
+        "actual": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "0fdf1b8c6768b2cdd6ed26b2c1169de5bb1936026d77f4e5a082e5407c18684f"
+        },
+        "changedKeysSample": []
+      },
+      {
+        "name": "native",
+        "status": "pass",
+        "expected": {
+          "rows": 5,
+          "distinctKeys": 5,
+          "duplicateKeys": 0,
+          "sha256": "dc57a80bf907adfe29592b93060a333aea45bb7d5342e5463540c9a3b86b4de2"
+        },
+        "actual": {
+          "rows": 5,
+          "distinctKeys": 5,
+          "duplicateKeys": 0,
+          "sha256": "dc57a80bf907adfe29592b93060a333aea45bb7d5342e5463540c9a3b86b4de2"
+        },
+        "changedKeysSample": []
+      }
+    ]
+  },
+  "receiptRestore": {
+    "status": "pass",
+    "originalRootUnavailable": true,
+    "inventory": [
+      {
+        "relativePath": "admin/0e455767a289b8da2cac720e4915ecc515c31205852d7884ea57f22f9e4b4ddb.json",
+        "sha256": "0e455767a289b8da2cac720e4915ecc515c31205852d7884ea57f22f9e4b4ddb",
+        "bytes": 128
+      },
+      {
+        "relativePath": "admin/21a8ce52f8aaabf0cf69f50113159eb025b50567ee10ce496a00413d66ebb5ee.json",
+        "sha256": "21a8ce52f8aaabf0cf69f50113159eb025b50567ee10ce496a00413d66ebb5ee",
+        "bytes": 128
+      },
+      {
+        "relativePath": "admin/88b798f7919f2a848e43bd67ad4ea829d0e79f6d5307207a6a64773bd8f7cbc5.json",
+        "sha256": "88b798f7919f2a848e43bd67ad4ea829d0e79f6d5307207a6a64773bd8f7cbc5",
+        "bytes": 309
+      },
+      {
+        "relativePath": "admin/b990bf291afccc14fdd17ef0642b6bf99b2203150ebc6eff77100f84d48dc1b3.json",
+        "sha256": "b990bf291afccc14fdd17ef0642b6bf99b2203150ebc6eff77100f84d48dc1b3",
+        "bytes": 122
+      },
+      {
+        "relativePath": "admin/c8dbd5be562b8c470f69cda220e8a6ad1ae5aa17631f7c8cb2bc2bede7e1aa5f.json",
+        "sha256": "c8dbd5be562b8c470f69cda220e8a6ad1ae5aa17631f7c8cb2bc2bede7e1aa5f",
+        "bytes": 122
+      },
+      {
+        "relativePath": "admin/ecf8b071ad4cf103b1403b07c5def7b7e62cc906cc321355a3a0367f871044aa.json",
+        "sha256": "ecf8b071ad4cf103b1403b07c5def7b7e62cc906cc321355a3a0367f871044aa",
+        "bytes": 128
+      },
+      {
+        "relativePath": "collector/max/8e2ab6be4351db00af067cb7fdf664a7ba2a47b80434b62da89422d7b55a8b01.json",
+        "sha256": "8e2ab6be4351db00af067cb7fdf664a7ba2a47b80434b62da89422d7b55a8b01",
+        "bytes": 365
+      },
+      {
+        "relativePath": "collector/max/a4e83665b1378344607db77da374f771120cc7ac7a40cebf5530fdae6f66bdda.json",
+        "sha256": "a4e83665b1378344607db77da374f771120cc7ac7a40cebf5530fdae6f66bdda",
+        "bytes": 418
+      }
+    ]
+  },
+  "futureObservationClearReenroll": "pass",
+  "collectorGap": {
+    "status": "pass",
+    "olderAndEqualRejected": true,
+    "canonicalValuesUnchangedAfterReject": true,
+    "failureRecorded": true,
+    "retryAcceptedOriginalObservedAt": "2026-09-06T14:25:27.722454+00:00",
+    "closedBoundary": "2026-09-06T14:25:27.722453+00:00",
+    "acceptedRevision": 12
+  },
+  "missingReceipt": "fail-closed",
+  "forgedReceipt": "fail-closed"
+}

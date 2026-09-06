@@ -1,5 +1,9 @@
 # Full V8 clean-room local verification
 
+> Historical evidence, superseded for the current implementation by the
+> [V29 review](review-v29-20260906.md) and [current traceability matrix](../traceability-matrix.md).
+> The original V8 results below remain unchanged and are not acceptance for V9+.
+
 This report records engineering evidence from disposable local databases. It
 does not approve a production route switch, writer cutover, data deletion, or a
 new Flyway migration. It covers the checked-out, uncommitted migration worktree

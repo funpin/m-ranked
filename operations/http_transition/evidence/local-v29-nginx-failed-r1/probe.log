@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/workspace/operations/http_transition/nginx_probe.py", line 151, in <module>
+    print(json.dumps(run(), indent=2))
+                     ~~~^^
+  File "/workspace/operations/http_transition/nginx_probe.py", line 122, in run
+    assert result["status"] == 403 and before == after, result
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'path': '/manage/accounts', 'method': 'POST', 'status': 200, 'phase': 'legacy-before', 'milliseconds': 0.5}

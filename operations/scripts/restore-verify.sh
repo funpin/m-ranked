@@ -180,6 +180,7 @@ database_assertion="$(
   "$PG_BIN/psql" --host="$socket_dir" --port="$RESTORE_PORT" \
     --username="$RESTORE_DATABASE_USER" --dbname="$RESTORE_DATABASE" \
     --no-psqlrc --set ON_ERROR_STOP=1 --quiet --tuples-only --no-align <<'SQL'
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
 DO $assertions$
 DECLARE
     latest_revision bigint;
@@ -200,15 +201,17 @@ BEGIN
       FROM flyway.flyway_schema_history
      WHERE version IS NOT NULL
        AND success;
-    IF migration_count <> 8 OR latest_migration <> 8
+    IF migration_count <> 29 OR latest_migration <> 29
        OR migration_versions IS DISTINCT FROM
-          ARRAY['1', '2', '3', '4', '5', '6', '7', '8']::text[]
+          ARRAY['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29']::text[]
        OR EXISTS (
            SELECT 1 FROM flyway.flyway_schema_history
             WHERE version IS NOT NULL AND NOT success
        ) OR EXISTS (
            SELECT 1 FROM flyway.flyway_schema_history
             WHERE version IS NULL
+              AND ROW(installed_rank,description,type,script,checksum,success)
+                  IS DISTINCT FROM ROW(0,'<< Flyway Schema Creation >>','SCHEMA','"flyway"',NULL::integer,true)
        ) OR EXISTS (
            SELECT 1
              FROM (VALUES
@@ -219,7 +222,28 @@ BEGIN
                  ('5', 'V5__legacy_activity_period_projection.sql', -1313754193),
                  ('6', 'V6__comparison_valid_observation_hourly_projection.sql', -290358219),
                  ('7', 'V7__activity_rating_read_grants.sql', -1228913579),
-                 ('8', 'V8__legacy_overview_projection.sql', -574188650)
+                 ('8', 'V8__legacy_overview_projection.sql', -574188650),
+                 ('9', 'V9__immutable_observations_quality_archive_fence.sql', 1058556652),
+                 ('10', 'V10__consistent_public_queries_and_formula_guards.sql', -1148603410),
+                 ('11', 'V11__bridge_identity_lineage_and_reconciliation.sql', 1679789143),
+                 ('12', 'V12__detail_history_projection.sql', 1453326243),
+                 ('13', 'V13__immutable_account_identity_history.sql', -185639607),
+                 ('14', 'V14__public_archived_publication_text.sql', -956321170),
+                 ('15', 'V15__verified_source_preservation.sql', -1953543117),
+                 ('16', 'V16__audited_catalog_commands.sql', -888916335),
+                 ('17', 'V17__legacy_csv_compatibility_projection.sql', 2060863494),
+                 ('18', 'V18__official_rating_commands.sql', 875583974),
+                 ('19', 'V19__safe_health_operational_snapshot.sql', -1653532549),
+                 ('20', 'V20__catalog_url_and_version_compatibility.sql', 925593865),
+                 ('21', 'V21__legacy_period_first_observation_policy.sql', -900669350),
+                 ('22', 'V22__durable_legacy_csv_archive_facts.sql', 2064364640),
+                 ('23', 'V23__official_rating_entity_context.sql', 890722389),
+                 ('24', 'V24__ordered_history_reaction_details.sql', 1889276383),
+                 ('25', 'V25__safe_legacy_account_presentation.sql', 381330844),
+                 ('26', 'V26__independent_projection_verifier_reads.sql', -1482835665),
+                 ('27', 'V27__retained_disabled_platform_period_metrics.sql', -1466195806),
+                 ('28', 'V28__identity_command_receipt_verifier_acl.sql', 1374125493),
+                 ('29', 'V29__monotonic_native_identity_transitions.sql', -1547328464)
              ) AS expected(version, script, checksum)
              FULL JOIN (
                  SELECT version, script, checksum
@@ -232,7 +256,7 @@ BEGIN
                OR actual.script IS DISTINCT FROM expected.script
                OR actual.checksum IS DISTINCT FROM expected.checksum
        ) THEN
-        RAISE EXCEPTION 'restored Flyway history does not match frozen V1-V8';
+        RAISE EXCEPTION 'restored Flyway history does not match frozen V1-V29';
     END IF;
     SELECT max(id) INTO latest_revision FROM analytics.dataset_revision;
     IF latest_revision IS NULL THEN
@@ -245,10 +269,11 @@ BEGIN
        AND projection_name IN (
            'publication_latest', 'publication_hourly',
            'institution_daily_metrics', 'institution_monthly_metrics',
-           'institution_period_metrics', 'comparison'
+           'institution_period_metrics', 'comparison',
+           'publication_history', 'publication_content', 'legacy_exports'
        );
-    IF ready_count <> 6 THEN
-        RAISE EXCEPTION 'restored latest revision % has % ready core projections',
+    IF ready_count <> 9 OR (SELECT count(*) FROM analytics.projection_state) <> 9 THEN
+        RAISE EXCEPTION 'restored latest revision % does not have the exact nine ready projections (% ready)',
             latest_revision, ready_count;
     END IF;
 END
@@ -282,12 +307,20 @@ SELECT jsonb_build_object(
     'lastXactReplayAt', pg_last_xact_replay_timestamp(),
     'datasetRevision', (SELECT max(id) FROM analytics.dataset_revision),
     'datasetCommittedAt', (SELECT max(committed_at) FROM analytics.dataset_revision),
+    'projectionStates', (
+        SELECT jsonb_agg(jsonb_build_object(
+            'name', projection_name, 'status', status,
+            'datasetRevision', dataset_revision_id
+        ) ORDER BY projection_name)
+        FROM analytics.projection_state
+    ),
     'coreReadyProjections', (
         SELECT count(*) FROM analytics.projection_state
          WHERE dataset_revision_id = (SELECT max(id) FROM analytics.dataset_revision)
            AND status = 'ready'
     )
 );
+COMMIT;
 SQL
 )"
 

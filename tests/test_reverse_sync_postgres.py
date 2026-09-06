@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 import hashlib
 import importlib
 import json
@@ -41,7 +42,7 @@ POSTGRES_DSN = os.environ.get("MRANKED_TEST_REVERSE_SYNC_POSTGRES_DSN")
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_DIR = ROOT / "backend/src/main/resources/db/migration"
 LOCAL_REHEARSAL_ENVIRONMENT = "disposable-postgresql-integration"
-EXPECTED_FLYWAY_MIGRATIONS = (
+FROZEN_V8_MIGRATIONS = (
     (
         "1",
         "V1__target_baseline.sql",
@@ -90,6 +91,14 @@ EXPECTED_FLYWAY_MIGRATIONS = (
         "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c",
         -574188650,
     ),
+)
+# Published V1-V8 hashes stay pinned. New migrations are bound to the exact
+# current release files; both their SHA-256 and Flyway CRC are verified below.
+from migration.release_manifest import flyway_manifest
+_RELEASE_SCHEMA = flyway_manifest(MIGRATION_DIR)
+assert [tuple((m["version"], m["script"], m["sha256"], m["checksum"])) for m in _RELEASE_SCHEMA[:8]] == list(FROZEN_V8_MIGRATIONS)
+EXPECTED_FLYWAY_MIGRATIONS = FROZEN_V8_MIGRATIONS + tuple(
+    (m["version"], m["script"], m["sha256"], m["checksum"]) for m in _RELEASE_SCHEMA[8:]
 )
 LOCAL_RELEASE_MANIFEST_SHA256 = hashlib.sha256(
     b"disposable-postgresql-integration:unbound-release"
@@ -370,7 +379,7 @@ def _require_password_free_production_dsns(
 def _validated_flyway_manifest(
     rows: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    if len(rows) == 9:
+    if len(rows) == len(EXPECTED_FLYWAY_MIGRATIONS) + 1:
         marker = rows[0]
         assert {
             "installed_rank": marker["installed_rank"],
@@ -391,8 +400,8 @@ def _validated_flyway_manifest(
         }, "Flyway history contains an unexpected schema/baseline marker"
         versioned_rows = rows[1:]
     else:
-        assert len(rows) == 8, (
-            "Flyway history must contain exactly V1-V8, optionally preceded "
+        assert len(rows) == len(EXPECTED_FLYWAY_MIGRATIONS), (
+            "Flyway history must contain exactly the release manifest, optionally preceded "
             "by the one allowed schema marker"
         )
         versioned_rows = rows
@@ -678,7 +687,7 @@ def test_flyway_history_allows_exact_v1_v8_with_optional_schema_marker() -> None
     with pytest.raises(AssertionError, match="unexpected schema/baseline"):
         _validated_flyway_manifest(unexpected)
 
-    with pytest.raises(AssertionError, match="exactly V1-V8"):
+    with pytest.raises(AssertionError, match="exactly the release manifest"):
         _validated_flyway_manifest([*rows, dict(rows[-1])])
 
 
@@ -859,6 +868,7 @@ def _bridge_import(
     namespace: str,
     snapshot_kind: str,
     report_dir: Path,
+    historical_source_paths: tuple[Path, ...] = (),
 ) -> tuple[Any, Mapping[str, Any]]:
     source = LegacySource(source_path)
     options = BridgeOptions(
@@ -866,6 +876,7 @@ def _bridge_import(
         source_namespace=namespace,
         batch_size=2,
         report_dir=report_dir,
+        historical_source_paths=historical_source_paths,
     )
     with PostgresTarget(dsn) as target:
         return BridgeService(
@@ -1045,6 +1056,46 @@ def _persist_batch(
     return batch.publications[0].id
 
 
+def _persist_account_identity(
+    repository: PostgresCollectorRepository,
+    account: AccountRef,
+    *,
+    observed_at: datetime,
+    partition: str,
+    ordinal: int,
+) -> None:
+    """Persist an actual normalized collector input, including its durable receipt."""
+    context = CollectionContext.create(account.platform, partition,
+        "reverse-sync-identity-input-v1", observed_at, observed_at)
+    raw = replace(_raw_batch(account, observed_at=observed_at, ordinal=ordinal), publications=())
+    batch = CanonicalNormalizer().normalize(raw, context)
+    repository.start_run(context)
+    assert repository.begin_account(context, account, context.started_at)
+    result = repository.persist_account_batch(batch)
+    assert result.revision_id is not None
+    assert result.discovered_count == result.snapshot_count == 0
+    assert repository.finish_run(context, observed_at).status.value == "succeeded"
+
+
+def _account_identity_state(connection: Any, account_id: UUID) -> dict[str, Any]:
+    current = connection.execute("""SELECT id::text,canonical_external_id,
+        current_username,current_title,current_url FROM catalog.platform_account WHERE id=%s""",
+        (account_id,)).fetchone()
+    presentation = connection.execute("""SELECT id,username,title,url,valid_from,valid_to,source_run_id
+        FROM catalog.account_identity_history WHERE platform_account_id=%s ORDER BY valid_from,id""",
+        (account_id,)).fetchall()
+    native = connection.execute("""SELECT id,identity_namespace,external_id,valid_from,valid_to,verified_at,source_run_id
+        FROM catalog.account_external_identity WHERE platform_account_id=%s ORDER BY valid_from,id""",
+        (account_id,)).fetchall()
+    return {"current": dict(current), "presentation": [dict(row) for row in presentation],
+            "native": [dict(row) for row in native]}
+
+
+def _legacy_max_identity(database: Path) -> tuple[str | None, str | None, str | None]:
+    with sqlite3.connect(database) as connection:
+        return tuple(connection.execute("SELECT native_id,username,title FROM platform_accounts WHERE platform='max'").fetchone())
+
+
 def _target_identity_state(
     connection: Any,
     publication_ids: tuple[UUID, ...],
@@ -1178,16 +1229,18 @@ def _legacy_counts(path: Path) -> tuple[int, int, int, int]:
     not POSTGRES_DSN,
     reason=(
         "set MRANKED_TEST_REVERSE_SYNC_POSTGRES_DSN to an empty disposable "
-        "Flyway-V8 PostgreSQL database"
+        "Flyway-latest PostgreSQL database"
     ),
 )
 def test_postgres_reverse_sync_round_trip_preserves_target_identity(
     tmp_path: Path,
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Exercise Writer Gate W against a caller-provisioned disposable database.
 
     The test deliberately neither creates nor drops the database. The dedicated
-    database must contain only a successful Flyway V1-V8 migration before this
+    database must contain only a successful exact release Flyway migration before this
     test starts, because reverse sync fixes a database-wide revision set.
     """
 
@@ -1241,7 +1294,7 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
         ]
         assert flyway_manifest == expected_database_manifest, (
             "reverse-sync PostgreSQL integration requires exactly successful "
-            "Flyway V1-V8 version/script/checksum history"
+            "Flyway release version/script/checksum history"
         )
         database_row = admin.execute(
             "SELECT current_database() AS database_name"
@@ -1263,8 +1316,51 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
         }, "MRANKED_TEST_REVERSE_SYNC_POSTGRES_DSN must point to an empty database"
 
     source_fixture = tmp_path / "s-final-source.sqlite"
+    live_source = tmp_path / "legacy-live.sqlite"
+    s0_source = tmp_path / "s0-source.sqlite"
+    catch_up_source = tmp_path / "catch-up-source.sqlite"
     legacy_target = tmp_path / "legacy-reverse-target.sqlite"
-    build_golden_fixture(source_fixture, revision=1)
+    receipt_root = tmp_path / "identity-receipts"
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(receipt_root))
+    build_golden_fixture(live_source, revision=1)
+    # The original source explicitly has no MAX native identity. Both later
+    # identities must be proven by original target inputs, not inferred from the
+    # final reverse-synchronized account row.
+    with sqlite3.connect(live_source) as initial:
+        assert initial.execute("UPDATE platform_accounts SET native_id=NULL WHERE platform='max'").rowcount == 1
+    http_transition = None
+    if os.environ.get("MRANKED_HTTP_REHEARSAL_JAR"):
+        from operations.http_transition.verifier import TransitionVerifier
+        http_transition = TransitionVerifier(tmp_path / "http", live_source, admin_dsn, collector_dsn)
+        request.addfinalizer(http_transition.close)
+    s0_backup = create_online_backup(live_source,s0_source)
+    class InterruptedBridge(BridgeService):
+        def _import_stream(self, stream, handler):
+            super()._import_stream(stream,handler)
+            if stream == "platform_accounts":
+                raise RuntimeError("injected process interruption after committed account checkpoint")
+    with PostgresTarget(bridge_dsn) as interrupted_target:
+        interrupted = InterruptedBridge(BridgeOptions(s0_source,namespace,batch_size=2),LegacySource(s0_source),interrupted_target,snapshot_kind="s0")
+        with pytest.raises(RuntimeError,match="injected process interruption"):
+            interrupted.run()
+    s0_stats,s0_report = _bridge_import(s0_source,dsn=bridge_dsn,namespace=namespace,
+        snapshot_kind="s0",report_dir=tmp_path/"s0-report")
+    assert s0_report["gate"]["status"] == "pass",s0_report["mismatches"]
+    with sqlite3.connect(live_source) as live:
+        assert live.execute("UPDATE institutions SET name=name||' — live' WHERE id=1").rowcount == 1
+        assert live.execute("UPDATE reaction_snapshots SET views_count=views_count+7 WHERE views_count>0").rowcount > 0
+        assert live.execute("UPDATE platform_snapshots SET views_count=views_count+7 WHERE views_count>0").rowcount > 0
+    create_online_backup(live_source,catch_up_source)
+    catch_up_stats,catch_up_report = _bridge_import(catch_up_source,dsn=bridge_dsn,namespace=namespace,
+        snapshot_kind="catch_up",report_dir=tmp_path/"catch-up-report")
+    assert catch_up_report["gate"]["status"] == "pass",catch_up_report["mismatches"]
+    assert catch_up_stats.rows_written > 0
+    with sqlite3.connect(live_source) as frozen_writer:
+        frozen_writer.execute("BEGIN IMMEDIATE")
+        with sqlite3.connect(live_source,timeout=.05) as refused_writer:
+            with pytest.raises(sqlite3.OperationalError,match="locked"):
+                refused_writer.execute("UPDATE institutions SET name='forbidden writer' WHERE id=1")
+        create_online_backup(live_source,source_fixture)
     create_online_backup(source_fixture, legacy_target)
     with sqlite3.connect(legacy_target) as legacy:
         assert legacy.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
@@ -1275,12 +1371,14 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
         namespace=namespace,
         snapshot_kind="s_final",
         report_dir=tmp_path / "s-final-report",
+        historical_source_paths=(s0_source,catch_up_source),
     )
     assert s_final_report["gate"] == {
         "status": "pass",
         "critical_mismatches": 0,
     }, s_final_report["mismatches"]
     assert s_final_stats.rows_written > 0
+    assert s_final_report["identity_history_verification"]["status"] == "pass"
 
     from operations.reverse_sync.journal import ReverseSyncJournal
     from operations.reverse_sync.postgres import PostgresReverseSource
@@ -1303,12 +1401,20 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
     assert started["status"] == "active"
     assert started["baselineRevisionCount"] > 0
 
+    if http_transition:
+        http_transition.verify_legacy_health_contract()
+        http_transition.to_target(s_final_report["gate"])
+
     repository = PostgresCollectorRepository(collector_dsn)
     accounts: dict[Platform, AccountRef] = {}
     for platform in Platform:
         loaded = tuple(repository.enabled_accounts(platform, "all"))
         assert len(loaded) == 1
         accounts[platform] = loaded[0]
+    assert accounts[Platform.MAX].native_external_id is None
+    with connect(admin_dsn) as admin:
+        original_account_state = _account_identity_state(admin, accounts[Platform.MAX].id)
+    assert original_account_state["native"] == []
 
     partition = f"reverse-sync-{uuid4()}"
     observed_base = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
@@ -1324,10 +1430,21 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
             ordinal=ordinal,
         )
 
+    account_n = replace(accounts[Platform.MAX], native_external_id="-20001",
+        current_username="beta_max_target_n", current_title="Бета MAX — target N",
+        current_url="https://max.ru/beta_max_target_n")
+    _persist_account_identity(repository, account_n,
+        observed_at=observed_base+timedelta(minutes=2, seconds=10), partition=partition, ordinal=5)
+    accounts[Platform.MAX] = account_n
+
     first_apply = service.once()
     assert first_apply["status"] == "active"
-    assert first_apply["revisionCount"] == 2
+    assert first_apply["revisionCount"] == 3
     assert first_apply["caughtUp"] is True
+    assert _legacy_max_identity(legacy_target) == ("-20001", "beta_max_target_n", "Бета MAX — target N")
+    with connect(admin_dsn) as admin:
+        account_state_n = _account_identity_state(admin, account_n.id)
+    assert len(account_state_n["presentation"]) == 2 and len(account_state_n["native"]) == 1
     first_legacy_counts = _legacy_counts(legacy_target)
 
     replay = service.once()
@@ -1345,12 +1462,35 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
             ordinal=ordinal,
         )
 
+    account_n1 = replace(account_n, native_external_id="-20002",
+        current_username="beta_max_target_n1", current_title="Бета MAX — target N+1",
+        current_url="https://max.ru/beta_max_target_n1")
+    _persist_account_identity(repository, account_n1,
+        observed_at=observed_base+timedelta(minutes=4, seconds=10), partition=partition, ordinal=6)
+
+    admin_results = []
+    if http_transition:
+        admin_results.append(http_transition.admin_identity_command(account_n1.id, presentation=True))
+        for native_id in ("-20003", None, "-20004"):
+            admin_results.append(http_transition.admin_identity_command(account_n1.id, native_id=native_id))
+            applied_admin = service.once()
+            assert applied_admin["caughtUp"] is True
+            assert _legacy_max_identity(legacy_target) == (native_id, "beta_max", "Бета MAX — Java admin")
+
     drained = service.drain(
         operator=rehearsal_context["operator"],
         ticket=rehearsal_context["changeTicket"],
     )
     assert drained["status"] == "drained"
-    assert drained["fixedRevisionCount"] == 4
+    assert drained["fixedRevisionCount"] == 6 + len(admin_results)
+    assert _legacy_max_identity(legacy_target) == (("-20004", "beta_max", "Бета MAX — Java admin") if http_transition
+                                                   else ("-20002", "beta_max_target_n1", "Бета MAX — target N+1"))
+    with connect(admin_dsn) as admin:
+        account_state_n1 = _account_identity_state(admin, account_n1.id)
+    assert len(account_state_n1["presentation"]) == (4 if http_transition else 3)
+    assert len(account_state_n1["native"]) == (4 if http_transition else 2)
+    assert all(row["valid_to"] is not None for row in account_state_n1["native"][:-1])
+    assert account_state_n1["native"][-1]["valid_to"] is None
     drained_counts = _legacy_counts(legacy_target)
     assert tuple(after - before for before, after in zip(
         first_legacy_counts, drained_counts, strict=True
@@ -1373,6 +1513,11 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
     assert stopped["status"] == "stopped"
     assert service.stop()["idempotent"] is True
 
+    if http_transition:
+        # Only a drained, independently verified and stopped reverse sync admits rollback.
+        assert verified["status"] == "verified" and stopped["status"] == "stopped"
+        http_transition.to_legacy({"status": "pass", "critical_mismatches": 0}, legacy_target)
+
     ordered_publication_ids = tuple(
         publication_ids[platform] for platform in Platform
     )
@@ -1394,23 +1539,42 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
 
     reverse_export = tmp_path / "legacy-reverse-export.sqlite"
     create_online_backup(legacy_target, reverse_export)
+    # Restart the actual legacy application against the synchronized database.
+    from fastapi.testclient import TestClient
+    from app.config import Settings
+    from app.database import Database
+    from app.web.app import create_app
+    settings = Settings(None,None,tmp_path/"telegram.session",legacy_target,(),60,336,90,15,2.0,
+                        "127.0.0.1",8080,"Europe/Moscow",tmp_path/"legacy.log",200,20)
+    restarted_routes = []
+    with TestClient(create_app(settings,Database(legacy_target))) as restarted:
+        for platform in Platform:
+            response = restarted.get("/",params={"platform":platform.value})
+            assert response.status_code == 200
+            restarted_routes.append({"path":"/?platform="+platform.value,"status":response.status_code})
+        assert restarted.get("/health").status_code == 200
     forward_stats, forward_report = _bridge_import(
         reverse_export,
         dsn=bridge_dsn,
         namespace=namespace,
-        snapshot_kind="catch_up",
+        snapshot_kind="s_final",
         report_dir=tmp_path / "forward-report",
+        historical_source_paths=(s0_source, catch_up_source, source_fixture),
     )
     assert forward_report["gate"] == {
         "status": "pass",
         "critical_mismatches": 0,
     }, forward_report["mismatches"]
     assert forward_stats.rows_written > 0
+    assert forward_report["identity_history_verification"]["status"] == "pass"
+    assert forward_report["projection_verification"]["status"] == "pass"
+    assert forward_stats.batch_id != s_final_stats.batch_id
 
     with connect(admin_dsn) as admin:
         after_round_trip = _target_identity_state(admin, ordered_publication_ids)
         duplicate_counts = _duplicate_counts(admin, ordered_publication_ids)
         assert duplicate_counts == (0, 0, 0, 0)
+        assert _account_identity_state(admin, account_n1.id) == account_state_n1
     preservation_mismatches = {
         "publicationMismatches": int(
             after_round_trip["publications"] != before_round_trip["publications"]
@@ -1427,18 +1591,61 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
     }
     assert set(preservation_mismatches.values()) == {0}
 
+    # Removing or corrupting an original receipt must block a new writer
+    # admission even when current account fields still happen to match.
+    max_receipts = sorted((receipt_root / "collector" / "max").glob("*.json"))
+    assert len(max_receipts) >= 2
+    receipt_inputs = [("collector", max_receipts[0])]
+    if http_transition:
+        admin_receipts = sorted((receipt_root/"admin").glob("*.json"))
+        assert len(admin_receipts) == 4
+        receipt_inputs.append(("admin", admin_receipts[0]))
+    receipt_hashes = {str(path.relative_to(receipt_root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                      for path in sorted(receipt_root.rglob("*.json"))}
+    receipt_failures = []
+    for kind, receipt in receipt_inputs:
+        for fault in ("missing", "corrupt"):
+            held = receipt.with_suffix(".held")
+            receipt.rename(held)
+            try:
+                if fault == "corrupt":
+                    receipt.write_bytes(b"{}\n")
+                    receipt.chmod(0o400)
+                failed_stats, failed_report = _bridge_import(reverse_export, dsn=bridge_dsn,
+                    namespace=namespace, snapshot_kind="s_final", report_dir=tmp_path/(kind+"-receipt-"+fault),
+                    historical_source_paths=(s0_source, catch_up_source, source_fixture))
+                assert failed_stats.rows_written == 0
+                assert failed_report["gate"]["status"] == "fail"
+                assert failed_report["identity_history_verification"]["status"] == "fail"
+                receipt_failures.append({"kind": kind, "fault": fault, "status": "blocked",
+                                         "identityProof": failed_report["identity_history_verification"]})
+                if http_transition:
+                    http_transition.reject_bad_gate("target", failed_report["gate"],
+                        reason="actual " + fault + " original " + kind + " identity receipt")
+            finally:
+                if receipt.exists(): receipt.unlink()
+                held.rename(receipt)
+    with connect(admin_dsn) as admin:
+        revision_before_repeat = admin.execute("SELECT max(id) AS revision FROM analytics.dataset_revision").fetchone()["revision"]
+        assert _account_identity_state(admin, account_n1.id) == account_state_n1
+
     repeat_stats, repeat_report = _bridge_import(
         reverse_export,
         dsn=bridge_dsn,
         namespace=namespace,
-        snapshot_kind="catch_up",
+        snapshot_kind="s_final",
         report_dir=tmp_path / "forward-repeat-report",
+        historical_source_paths=(s0_source, catch_up_source, source_fixture),
     )
     assert repeat_report["gate"]["status"] == "pass"
     assert repeat_stats.batch_id == forward_stats.batch_id
     assert repeat_stats.rows_written == 0
+    assert repeat_report["identity_history_verification"]["status"] == "pass"
+    assert repeat_report["projection_verification"]["status"] == "pass"
+    assert repeat_report["dataset_revision"] == revision_before_repeat
     with connect(admin_dsn) as admin:
         assert _target_identity_state(admin, ordered_publication_ids) == before_round_trip
+        assert _account_identity_state(admin, account_n1.id) == account_state_n1
 
     journal_integrity = journal.integrity()
     assert journal_integrity["schemaVersion"] == 3
@@ -1451,10 +1658,15 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
     assert stopped["ticket"] == rehearsal_context["changeTicket"]
     assert stopped["planSha256"] == drained["planSha256"]
 
+    http_evidence = "requires separate isolated HTTP deployment rehearsal"
+    if http_transition:
+        http_transition.to_target(repeat_report["gate"])
+        http_evidence = http_transition.finish()
+
     _write_rehearsal_evidence(
         {
             "reportType": "reverse-sync-rehearsal",
-            "reportVersion": 3,
+            "reportVersion": 4,
             "status": "pass",
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "environment": rehearsal_context["environment"],
@@ -1469,14 +1681,14 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
             "sourceNamespace": namespace,
             "database": database_name,
             "flyway": {
-                "schemaVersion": 8,
+                "schemaVersion": int(flyway_manifest[-1]["version"]),
                 "migrationCount": len(flyway_manifest),
                 "fileSha256": file_sha256_manifest,
                 "databaseMigrations": flyway_manifest,
             },
             "platforms": sorted(platform.value for platform in Platform),
             "replay": {
-                "runCount": 4,
+                "runCount": 6,
                 "idempotent": True,
             },
             "duplicates": {
@@ -1509,6 +1721,43 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
                 "batchId": str(s_final_stats.batch_id),
                 "sourceSha256": s_final_source_sha256,
                 "gate": s_final_report["gate"]["status"],
+                "identityHistoryVerification":s_final_report["identity_history_verification"],
+                "projectionVerification":s_final_report["projection_verification"],
+            },
+            "secondSFinal": {
+                "batchId": str(forward_stats.batch_id),
+                "sourceSha256": forward_report["source"]["source_sha256"],
+                "gate": forward_report["gate"]["status"],
+                "identityHistoryVerification": forward_report["identity_history_verification"],
+                "projectionVerification": forward_report["projection_verification"],
+                "repeat": {"batchId": str(repeat_stats.batch_id), "rowsWritten": repeat_stats.rows_written,
+                           "datasetRevisionBefore": revision_before_repeat,
+                           "datasetRevisionAfter": repeat_report["dataset_revision"],
+                           "gate": repeat_report["gate"]["status"]},
+            },
+            "accountIdentityTransitions": {
+                "accountId": str(account_n1.id),
+                "canonicalExternalId": account_n1.canonical_external_id,
+                "nativeSequence": [None, "-20001", "-20002"] + (["-20003", None, "-20004"] if http_transition else []),
+                "javaAdminCommands": admin_results,
+                "presentationRows": len(account_state_n1["presentation"]),
+                "nativeRows": len(account_state_n1["native"]),
+                "originalReceiptsSha256": receipt_hashes,
+                "receiptFaults": receipt_failures,
+                "fullHistorySha256BeforeSecondSFinal": hashlib.sha256(json.dumps(account_state_n1,sort_keys=True,default=str).encode()).hexdigest(),
+                "fullHistoryUnchangedAfterSecondSFinalAndRepeat": True,
+            },
+            "cutoverPhases": {
+                "s0OnlineBackup":s0_backup,
+                "s0Import":{"status":s0_report["gate"]["status"],"batchId":str(s0_stats.batch_id)},
+                "interruptionResume":"pass: committed checkpoint followed by new bridge instance",
+                "liveMutationCatchUp":{"status":catch_up_report["gate"]["status"],"rowsWritten":catch_up_stats.rows_written},
+                "writerFreeze":"pass: SQLite BEGIN IMMEDIATE rejects second writer during S-final Backup API",
+                "controlledTargetCollectors":sorted(platform.value for platform in Platform),
+                "legacyRestart":restarted_routes,
+                "repeatedForwardCutover":repeat_report["gate"]["status"],
+                "productionRouteSwitch":False,
+                "httpUpstreamTransition":http_evidence,
             },
         }
     )

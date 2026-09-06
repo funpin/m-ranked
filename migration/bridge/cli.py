@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Sequence
@@ -60,6 +61,7 @@ def parser() -> argparse.ArgumentParser:
     )
     import_data.add_argument(
         "--postgres-dsn",
+        default=os.getenv("BRIDGE_DATABASE_URL"),
         help="PostgreSQL DSN. Required unless --dry-run is used; never written to reports",
     )
     import_data.add_argument("--batch-size", type=int, default=1_000)
@@ -67,6 +69,38 @@ def parser() -> argparse.ArgumentParser:
     import_data.add_argument("--dry-run", action="store_true")
     import_data.add_argument("--report-dir", type=Path, default=Path("migration/reports"))
     import_data.add_argument("--stem", default=None)
+
+    verify = subcommands.add_parser("reconcile", help="Independently verify actual target without repairing or importing")
+    verify.add_argument("source", type=Path)
+    verify.add_argument("--source-namespace", required=True)
+    verify.add_argument("--snapshot-kind", choices=("s0", "catch_up", "s_final", "fixture"), required=True)
+    verify.add_argument("--postgres-dsn", default=os.getenv("BRIDGE_DATABASE_URL"))
+    verify.add_argument("--batch-size", type=int, default=1000)
+    verify.add_argument("--report-dir", type=Path, default=Path("migration/reports"))
+    verify.add_argument("--stem", default=None)
+
+    preserve = subcommands.add_parser("preserve-disappeared", help="Verify missing rows against prior source and preserve their canonical history")
+    preserve.add_argument("source", type=Path)
+    preserve.add_argument("--prior-source", type=Path, required=True)
+    preserve.add_argument("--source-namespace", required=True)
+    preserve.add_argument("--snapshot-kind", choices=("s0", "catch_up", "s_final", "fixture"), required=True)
+    preserve.add_argument("--postgres-dsn", default=os.getenv("BRIDGE_DATABASE_URL"), help="Migration owner credential; bridge role cannot approve")
+    preserve.add_argument("--operator", required=True)
+    preserve.add_argument("--ticket", required=True)
+    preserve.add_argument("--reason", required=True)
+    preserve.add_argument("--report-dir", type=Path, default=Path("migration/reports"))
+    preserve.add_argument("--stem", default=None)
+
+    for verification in (import_data,verify,preserve):
+        verification.add_argument("--verify-projections",action="store_true",
+            help="Require original-formula derived parity (always required for s_final)")
+        verification.add_argument("--projection-first-age-limit-seconds",type=int,default=360)
+        verification.add_argument("--preserved-source",type=Path,action="append",default=[],
+            help="Verified prior SQLite artifact needed to reconstruct preserved disappeared rows")
+        verification.add_argument("--verify-identity-history",action="store_true",
+            help="Require complete account timeline parity (always required for s_final)")
+        verification.add_argument("--historical-source",type=Path,action="append",default=[],
+            help="Frozen imported SQLite artifact proving earlier account identity transitions")
 
     return command
 
@@ -114,6 +148,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         json_path, markdown_path = write_reports(args.report_dir, stem, payload)
         print(json.dumps({"json": str(json_path), "markdown": str(markdown_path), **payload["gate"]}))
         return 0 if payload["gate"]["status"] == "pass" else 2
+    if args.command == "preserve-disappeared":
+        from .preservation import preserve_disappeared
+        if not args.postgres_dsn:
+            parser().error("preserve-disappeared requires a migration owner PostgreSQL DSN")
+        with PostgresTarget(args.postgres_dsn) as target:
+            service = BridgeService(BridgeOptions(args.source,args.source_namespace,
+                verify_projections=args.verify_projections,projection_first_age_limit_seconds=args.projection_first_age_limit_seconds,
+                preserved_source_paths=tuple(args.preserved_source),verify_identity_history=args.verify_identity_history,
+                historical_source_paths=tuple(args.historical_source)),LegacySource(args.source),target,snapshot_kind=args.snapshot_kind)
+            payload = preserve_disappeared(service,args.prior_source,operator=args.operator,ticket=args.ticket,reason=args.reason)
+        paths = write_reports(args.report_dir,args.stem or f"preservation-{service.batch_id}",payload)
+        print(json.dumps({"json":str(paths[0]),"markdown":str(paths[1]),**payload["gate"]}))
+        return 0
+    if args.command == "reconcile":
+        if not args.postgres_dsn:
+            parser().error("reconcile requires BRIDGE_DATABASE_URL or --postgres-dsn")
+        options = BridgeOptions(args.source, args.source_namespace, batch_size=args.batch_size,
+            verify_projections=args.verify_projections,projection_first_age_limit_seconds=args.projection_first_age_limit_seconds,
+            preserved_source_paths=tuple(args.preserved_source),verify_identity_history=args.verify_identity_history,
+            historical_source_paths=tuple(args.historical_source))
+        with PostgresTarget(args.postgres_dsn) as target:
+            service = BridgeService(options, LegacySource(args.source), target, snapshot_kind=args.snapshot_kind)
+            payload = service.reconcile()
+        stem = args.stem or f"verify-{service.batch_id}"
+        json_path, markdown_path = write_reports(args.report_dir, stem, payload)
+        print(json.dumps({"json": str(json_path), "markdown": str(markdown_path), **payload["gate"]}))
+        return 0 if payload["gate"]["status"] == "pass" else 2
     if args.command == "import":
         if not args.dry_run and not args.postgres_dsn:
             parser().error("import requires --postgres-dsn unless --dry-run is used")
@@ -125,6 +186,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             dry_run=args.dry_run,
             resume=not args.no_resume,
             report_dir=args.report_dir,
+            verify_projections=args.verify_projections,
+            projection_first_age_limit_seconds=args.projection_first_age_limit_seconds,
+            preserved_source_paths=tuple(args.preserved_source),
+            verify_identity_history=args.verify_identity_history,
+            historical_source_paths=tuple(args.historical_source),
         )
         target = PostgresTarget(args.postgres_dsn or "")
         if args.dry_run:

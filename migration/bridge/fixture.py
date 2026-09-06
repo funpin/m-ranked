@@ -281,6 +281,14 @@ def build_golden_fixture(destination: Path, *, revision: int = 1) -> dict[str, o
             (fixed, fixed),
         )
 
+    # This producer returns a standalone migration artifact, not a live polling
+    # database. Publish its final header before recording the source SHA: a WAL
+    # header can otherwise create empty WAL/SHM files when a later catch-up uses
+    # this accepted artifact as the source of the read-only SQLite Backup API.
+    with database.connect() as connection:
+        mode = connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+        if str(mode).lower() != "delete":
+            raise RuntimeError("golden fixture could not become a standalone SQLite artifact")
     inventory = LegacySource(destination).inventory()
     return {
         "path": str(destination),

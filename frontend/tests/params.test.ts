@@ -51,12 +51,12 @@ test("comparison selection preserves order and reports invalid bounded input", (
   assert.equal(parseComparisonSelection(["0"]).issue, "invalid");
   assert.equal(parseComparisonSelection(["not-a-number"]).issue, "invalid");
   assert.deepEqual(
-    parseComparisonSelection(Array.from({ length: 51 }, (_, index) => String(index + 1))).issue,
+    parseComparisonSelection(Array.from({ length: 2001 }, (_, index) => String(index + 1))).issue,
     "too_many",
   );
   assert.deepEqual(
     defaultComparisonSelection(Array.from({ length: 75 }, (_, index) => index + 1)),
-    Array.from({ length: 50 }, (_, index) => index + 1),
+    Array.from({ length: 75 }, (_, index) => index + 1),
   );
 });
 
@@ -125,7 +125,7 @@ test("legacy detail IDs and Telegram history limits are bounded", () => {
   assert.equal(normalizeHistoryLimit(undefined), 100);
   assert.equal(normalizeHistoryLimit("50"), 50);
   assert.equal(normalizeHistoryLimit("1000"), 1000);
-  assert.equal(normalizeHistoryLimit("49"), 100);
+  assert.throws(() => normalizeHistoryLimit("49"), /history_limit/);
 });
 
 test("legacy platform query either redirects canonically or rejects mismatches", () => {

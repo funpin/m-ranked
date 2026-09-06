@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="2.751" timestamp="2026-09-05T09:50:09.672529+03:00" hostname="MacBook-funpin.local"><testcase classname="tests.test_bridge_actual_target_postgres" name="test_cleared_native_identity_closes_history_and_reenrollment_appends" time="2.628"><failure message="psycopg.errors.UniqueViolation: duplicate key value violates unique constraint &quot;account_external_identity_platform_account_id_identity_name_key&quot;&#10;DETAIL:  Key (platform_account_id, identity_namespace, external_id, valid_from)=(be87c596-edbf-53ff-b93d-61ca24f8c73d, telegram:native_id, -1001234567890, 2026-08-01 12:00:00+00) already exists.">tmp_path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-513/test_cleared_native_identity_c0')
+
+    @pytest.mark.skipif(not ADMIN_DSN, reason="requires disposable PostgreSQL admin DSN")
+    def test_cleared_native_identity_closes_history_and_reenrollment_appends(tmp_path: Path):
+        import json
+        from app.database import Database
+        initial = tmp_path / "native-initial.sqlite"
+        build_golden_fixture(initial, revision=2)
+        def bridge(path, target):
+            return BridgeService(BridgeOptions(source=path,source_namespace="pytest-golden-integration",batch_size=2),
+                                 LegacySource(path),target,snapshot_kind="catch_up")
+        with PostgresTarget(str(ADMIN_DSN)) as target:
+            _, baseline = bridge(initial,target).run()
+            assert baseline["gate"]["status"] == "pass", baseline["mismatches"]
+            for platform in ("telegram","vk","max","rutube"):
+                cleared = tmp_path / f"{platform}-cleared.sqlite"
+                create_online_backup(initial,cleared)
+                with Database(cleared).connect() as connection:
+                    connection.execute("UPDATE platform_accounts SET native_id=NULL WHERE platform=?",(platform,))
+                    if platform == "telegram":
+                        connection.execute("UPDATE channels SET telegram_id=NULL")
+                frozen = tmp_path / f"{platform}-frozen.sqlite"
+                create_online_backup(cleared,frozen)
+                cleared = frozen
+                prior = target.fetchone("""SELECT identity.id,to_jsonb(identity)::text,account.canonical_external_id
+                    FROM catalog.account_external_identity identity JOIN catalog.platform_account account
+                        ON account.id=identity.platform_account_id
+                    WHERE account.platform=%s AND identity.identity_namespace=%s AND identity.valid_to IS NULL""",
+                    (platform,platform+":native_id"))
+                assert prior is not None
+                try:
+                    _, report = bridge(cleared,target).run()
+                    assert report["gate"]["status"] == "pass", report["mismatches"]
+                    history = target.fetchone("SELECT to_jsonb(identity)::text FROM catalog.account_external_identity identity WHERE id=%s",(prior[0],))
+                    before,after = json.loads(prior[1]),json.loads(history[0])
+                    assert before["valid_to"] is None and after["valid_to"] is not None
+                    assert {k:v for k,v in before.items() if k!="valid_to"} == {k:v for k,v in after.items() if k!="valid_to"}
+                    assert target.fetchone("SELECT count(*) FROM catalog.account_external_identity WHERE platform_account_id=%s AND identity_namespace=%s AND valid_to IS NULL",
+                        (before["platform_account_id"],platform+":native_id"))[0] == 0
+                    repeated, report = bridge(cleared,target).run()
+                    assert repeated.rows_written == 0 and report["gate"]["status"] == "pass"
+                finally:
+&gt;                   _, restored = bridge(initial,target).run()
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_bridge_actual_target_postgres.py:148: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+migration/bridge/service.py:245: in run
+    self._import_stream(stream, handlers[stream])
+migration/bridge/service.py:308: in _import_stream
+    writes += handler(row)
+              ^^^^^^^^^^^^
+migration/bridge/service.py:953: in _import_platform_account
+    writes = self._upsert_account(
+migration/bridge/service.py:813: in _upsert_account
+    self.target.execute(
+migration/bridge/target.py:49: in execute
+    return self.connection.execute(sql, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;psycopg.Connection [BAD] at 0x1055f0ec0&gt;
+query = 'INSERT INTO catalog.account_external_identity(\n                       platform_account_id,identity_namespace,external_id,valid_from,verified_at,source_run_id)\n                       VALUES(%s,%s,%s,%s,%s,%s)'
+params = (UUID('be87c596-edbf-53ff-b93d-61ca24f8c73d'), 'telegram:native_id', '-1001234567890', datetime.datetime(2026, 8, 1, 1...ime.datetime(2026, 9, 5, 6, 50, 9, 830433, tzinfo=datetime.timezone.utc), UUID('08746265-9773-5d0b-aaf3-70645ce8c003'))
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool = False,
+    ) -&gt; Cursor[Row]:
+        """Execute a query and return a cursor to read its results."""
+        try:
+            cur = self.cursor()
+            if binary:
+                cur.format = BINARY
+    
+            if isinstance(query, Template):
+                if params is not None:
+                    raise TypeError(
+                        "'execute()' with string template query doesn't support parameters"
+                    )
+                return cur.execute(query, prepare=prepare)
+            else:
+                return cur.execute(query, params, prepare=prepare)
+        except e._NO_TRACEBACK as ex:
+&gt;           raise ex.with_traceback(None)
+E           psycopg.errors.UniqueViolation: duplicate key value violates unique constraint "account_external_identity_platform_account_id_identity_name_key"
+E           DETAIL:  Key (platform_account_id, identity_namespace, external_id, valid_from)=(be87c596-edbf-53ff-b93d-61ca24f8c73d, telegram:native_id, -1001234567890, 2026-08-01 12:00:00+00) already exists.
+
+.venv/lib/python3.13/site-packages/psycopg/connection.py:300: UniqueViolation</failure></testcase></testsuite></testsuites>

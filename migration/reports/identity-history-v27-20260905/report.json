@@ -1,0 +1,33 @@
+{
+  "status": "pass",
+  "generatedAt": "2026-09-05T07:36:07.849590+00:00",
+  "schemaVersion": 27,
+  "productionAcceptance": false,
+  "tests": {
+    "identityHistoryPostgres": {
+      "passed": 1,
+      "skipped": 0,
+      "seconds": 8.53,
+      "individualTamperCases": 14,
+      "compoundTamperCases": 1
+    },
+    "reverseSyncPostgres": {
+      "passed": 10,
+      "skipped": 0,
+      "seconds": 6.97
+    },
+    "requiredHistoryPredicateCliAndWriter": {
+      "passed": 11,
+      "skipped": 0
+    }
+  },
+  "requiredGate": "S_final and explicit verify-identity-history, cutover preflight and fresh writer report",
+  "sourceAuthority": "Every distinct committed account-stream SHA requires its immutable original SQLite; target absence never substitutes for a source.",
+  "boundary": "Non-migration admin/collector identity history needs an accepted independent external receipt protocol; unknown authority is NO-GO. No arbitrary owner JSON or target audit as external source.",
+  "evidence": [
+    "oracle-proof.json",
+    "reverse-sfinal-proof.json",
+    "postgres-test.log",
+    "reverse-test.log"
+  ]
+}

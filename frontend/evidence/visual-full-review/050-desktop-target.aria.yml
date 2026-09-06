@@ -1,0 +1,103 @@
+- link "Перейти к содержимому":
+  - /url: "#main-content"
+- navigation "Основная навигация":
+  - link "m-ranked — обзор":
+    - /url: /?platform=rutube
+    - strong: m-ranked
+  - link "Обзор":
+    - /url: /?platform=rutube
+  - link "Рейтинг":
+    - /url: /rating?platform=rutube
+  - link "Сравнение":
+    - /url: /compare?platform=rutube
+  - link "Экспорт CSV":
+    - /url: /export/snapshots.csv?platform=rutube
+  - link "Управление":
+    - /url: /manage?platform=rutube
+  - button "Включить светлую тему": Тёмная
+- main:
+  - heading "Рейтинг · Rutube" [level=1]
+  - paragraph: Только публикации и замеры Rutube. Данные других площадок в расчёт не входят.
+  - form "Настройка рейтинга":
+    - text: Период ⓘ
+    - combobox "Период ⓘ":
+      - option "3 часа"
+      - option "Сутки"
+      - option "Неделя" [selected]
+      - option "Последний месяц"
+    - button "Применить"
+  - region "Рейтинг активности ВК":
+    - heading "Вузы" [level=2]
+    - paragraph: Если у вуза несколько аккаунтов Rutube, их публикации объединяются.
+    - text: "Период: 7 дней Вовлечённость: (лайки + комментарии) / просмотры. Это отношение событий, а не уникальных пользователей."
+    - table "Вузы по активности ВКонтакте":
+      - caption: Вузы по активности ВКонтакте
+      - rowgroup:
+        - row "# Вуз Среднее лайков Лайков всего Просмотры Вовлечённость ↓ Подписчики":
+          - columnheader "#"
+          - columnheader "Вуз"
+          - columnheader "Среднее лайков":
+            - link "Среднее лайков":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=average&channel_direction=desc&post_sort=view_share&post_direction=desc
+          - columnheader "Лайков всего":
+            - link "Лайков всего":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=total&channel_direction=desc&post_sort=view_share&post_direction=desc
+          - columnheader "Просмотры":
+            - link "Просмотры":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=views&channel_direction=desc&post_sort=view_share&post_direction=desc
+          - columnheader "Вовлечённость ↓":
+            - link "Вовлечённость ↓":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=engagement&channel_direction=asc&post_sort=view_share&post_direction=desc
+          - columnheader "Подписчики":
+            - link "Подписчики":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=subscribers&channel_direction=desc&post_sort=view_share&post_direction=desc
+      - rowgroup:
+        - row "1 Бета 1 публикаций · 0 комментариев · 0 репостов 0.0 0 250 0.00% —":
+          - cell "1"
+          - cell "Бета 1 публикаций · 0 комментариев · 0 репостов":
+            - link "Бета":
+              - /url: /institutions/2?platform=rutube
+            - text: 1 публикаций · 0 комментариев · 0 репостов
+          - cell "0.0":
+            - strong: "0.0"
+          - cell "0"
+          - cell "250"
+          - cell "0.00%":
+            - strong: 0.00%
+          - cell "—"
+  - region "Публикации ВК":
+    - heading "Публикации Rutube" [level=2]
+    - paragraph: Последний известный замер каждой публикации, вышедшей за период.
+    - text: "Период: 7 дней"
+    - table "Публикации ВКонтакте по активности":
+      - caption: Публикации ВКонтакте по активности
+      - rowgroup:
+        - row "# Публикация Лайки Просмотры Комментарии Вовлечённость ↓":
+          - columnheader "#"
+          - columnheader "Публикация"
+          - columnheader "Лайки":
+            - link "Лайки":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=reactions&post_direction=desc
+          - columnheader "Просмотры":
+            - link "Просмотры":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=views&post_direction=desc
+          - columnheader "Комментарии":
+            - link "Комментарии":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=comments&post_direction=desc
+          - columnheader "Вовлечённость ↓":
+            - link "Вовлечённость ↓":
+              - /url: /rating?platform=rutube&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=view_share&post_direction=asc
+      - rowgroup:
+        - row "1 Бета · video-1 Открыть публикацию ↗ 0 250 — 0.00%":
+          - cell "1"
+          - cell "Бета · video-1 Открыть публикацию ↗":
+            - link "Бета · video-1":
+              - /url: /platform-posts/3
+            - link "Открыть публикацию ↗":
+              - /url: https://rutube.ru/video/video-1/
+          - cell "0":
+            - strong: "0"
+          - cell "250"
+          - cell "—"
+          - cell "0.00%"
+- alert

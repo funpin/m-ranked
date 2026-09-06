@@ -1,0 +1,2244 @@
+{
+  "worker": 0,
+  "scope": "worker",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "results": [
+    {
+      "worker": 0,
+      "path": "/?platform=telegram&period=3h",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "39daec0615325881c04c8694e73db927a2a2856d5a0161fc98b7f50fa7be0425",
+      "targetSha256": "847bbf0c05beaf27738dc0c1f1dd8cc20cb036e9ed8d5d9f033e47e4f0f9318e",
+      "changedPixels": 220,
+      "pixelDiffRatio": 0.00016975308641975308,
+      "rawPixelDiffRatio": 0.00016975308641975308,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=telegram&period=7d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "a86c814be75ef2ae6accdd677b3e98f96ace42aadcb29922c048b46f2eee689b",
+      "targetSha256": "c1159e894441736af0a3de43193e751ba2db70579a879af03d7f2ed3cd94ea6f",
+      "changedPixels": 220,
+      "pixelDiffRatio": 0.00016975308641975308,
+      "rawPixelDiffRatio": 0.00016975308641975308,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=telegram&period=24",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "36b02bfc15aec9a356fb9a5c282a3b1f9f714087bdf6d35244d0704b489eed96",
+      "targetSha256": "28d57b9743b2b760dfe07c98f9a63499b716b4f2c6a552a9cb474e010e816e6a",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.0000046296296296296296,
+      "rawPixelDiffRatio": 0.0000046296296296296296,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=telegram&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "06750f2583e3b104d850d7d93e9082408de0516c5993704a0077272f37923b4c",
+      "targetSha256": "581c7fc12465875bcc2d59a4bcf35af62e275c6aaa72c075a7ca221784f09919",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.0000046296296296296296,
+      "rawPixelDiffRatio": 0.0000046296296296296296,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0.00023301504629629627,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.00023301504629629627,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/rating?platform=vk&period=3h",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "1c82263992f19d6bbe4bcf99a2443e00dc5e77f76207f2de8a4393018e496f67",
+      "targetSha256": "ca0fe9ce78e2de758df75726f9fede6292ccf998b3a6d3db0278efa9bc2af10d",
+      "changedPixels": 82,
+      "pixelDiffRatio": 0.0000632716049382716,
+      "rawPixelDiffRatio": 0.0000632716049382716,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/rating?platform=vk&period=7d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "28bb729c403c0577ff45c92d70da9630e22d6c4244804d87f1f6e401effdd338",
+      "targetSha256": "63bfc71f5d38bf767fdaace40204fb2311f6101d218d08ac1d6894bc762a40ea",
+      "changedPixels": 386,
+      "pixelDiffRatio": 0.00029783950617283953,
+      "rawPixelDiffRatio": 0.00029783950617283953,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=vk&period=48",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "83a8aff3a46783ea4d87a0f414bc530f885d5f8d12d9b73f2fd7fe7cd709aeed",
+      "targetSha256": "54538456acee07295d665d4045056b722a14dae783eabe0b3fa760b9859d1c5e",
+      "changedPixels": 36,
+      "pixelDiffRatio": 0.00002777777777777778,
+      "rawPixelDiffRatio": 0.00002777777777777778,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=vk&submitted=true",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "c830bfc9fe22b3364c139eeef38cd05d976f48dbd338c013264ccff6e47e89c5",
+      "targetSha256": "033ade262e271db176349d08afedd30425bbbac73d368e673a8ccd77a29c63b7",
+      "changedPixels": 30,
+      "pixelDiffRatio": 0.000023148148148148147,
+      "rawPixelDiffRatio": 0.000023148148148148147,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=max&period=1d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "dd63144c865e02bd86d0e437caa997c8d85c8d317290093db1fdad067c86b27c",
+      "targetSha256": "181d305d6efcd31ed7f462f944c131571673ce788ce433feff0b0a455cacccae",
+      "changedPixels": 242,
+      "pixelDiffRatio": 0.00018672839506172839,
+      "rawPixelDiffRatio": 0.00018672839506172839,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=max&period=30d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "95fde399fd9b31a08cf330924e6c74a96c1faef8cc1475a0c2893d4bacb70b9d",
+      "targetSha256": "7d178360d9e5c331a0ee5d6c760a3ddacef3715bf6340982815185af3df2ccc7",
+      "changedPixels": 379,
+      "pixelDiffRatio": 0.00029243827160493825,
+      "rawPixelDiffRatio": 0.00029243827160493825,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=max&period=72",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "08efbcc2d3f6ac92e8505fe2ff0d394302616a9a3d74fa2412f40e166cc39433",
+      "targetSha256": "b4d2c31c3bb14ee49d9cc93920733d35f915fae14308a153696301c481b6c28e",
+      "changedPixels": 70,
+      "pixelDiffRatio": 0.00005401234567901235,
+      "rawPixelDiffRatio": 0.00005401234567901235,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=max&q=НетТакогоВуза",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "daa75b4d4a642ea1e2a22e517cc4430ea34d78604ccdd2345a30731370b1748e",
+      "targetSha256": "1d96a8dda468b584817e478b462c2201a19fc113254d932dbfb9ad6676f32fe8",
+      "changedPixels": 52,
+      "pixelDiffRatio": 0.000040123456790123456,
+      "rawPixelDiffRatio": 0.000040123456790123456,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/rating?platform=rutube&period=1d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "92d117455b2b3739b31a7b6e884e1e198e5e226645bbdb5116faec003d348f22",
+      "targetSha256": "9020907fa5893ccb92f1f1b6d7e9e53d0d8055bc4a77076cddfe52189dd1a6fb",
+      "changedPixels": 393,
+      "pixelDiffRatio": 0.00030324074074074075,
+      "rawPixelDiffRatio": 0.00030324074074074075,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/rating?platform=rutube&period=30d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "1343044b7bd08ba5a120b802ec7307135c2e240c3f353cf7c85cc8b434d94ba3",
+      "targetSha256": "5e2e9e2f4d96ffba92ebd897199e3e4d9ff74603622adaf28f2beb391c93204d",
+      "changedPixels": 426,
+      "pixelDiffRatio": 0.0003287037037037037,
+      "rawPixelDiffRatio": 0.0003287037037037037,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=rutube&period=168",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "c4b45daf38b73c1e3214d9f74bc8c9f8326ad5e0db4e016c80464e087e737178",
+      "targetSha256": "8efd472b2aad9441ce3695223a6dce2a1b44618c8bf617375d7cd2f2bb60ca11",
+      "changedPixels": 42,
+      "pixelDiffRatio": 0.00003240740740740741,
+      "rawPixelDiffRatio": 0.00003240740740740741,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0.00023070726433899177,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.00023070726433899177,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=all&period=3h",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "4e5edd1fcbf8c9bddc95ee9ba521ca0e0da6c7fb5cfcc3a895281dbd395cf250",
+      "targetSha256": "4e5edd1fcbf8c9bddc95ee9ba521ca0e0da6c7fb5cfcc3a895281dbd395cf250",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=all&period=7d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "c63b170b58a116e5b2bfa2b4ebd1d78e004d843bd84a9257ba8e5ab051eb9858",
+      "targetSha256": "c63b170b58a116e5b2bfa2b4ebd1d78e004d843bd84a9257ba8e5ab051eb9858",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=all&period=24",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "3f424973617b729f3dad2827106a66463430d1634fd23e2a0e317b8943769b19",
+      "targetSha256": "e50ab613afdb91bd5f8d2087e3982dd919fa2a391452e7cfb424a8b39c693cac",
+      "changedPixels": 46,
+      "pixelDiffRatio": 0.00003549382716049383,
+      "rawPixelDiffRatio": 0.00003549382716049383,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=all&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "3f424973617b729f3dad2827106a66463430d1634fd23e2a0e317b8943769b19",
+      "targetSha256": "e50ab613afdb91bd5f8d2087e3982dd919fa2a391452e7cfb424a8b39c693cac",
+      "changedPixels": 46,
+      "pixelDiffRatio": 0.00003549382716049383,
+      "rawPixelDiffRatio": 0.00003549382716049383,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/posts/1",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "3887ee4007eaab8edb60302fe434dc175e666c101c074f1206194447c3788242",
+      "targetSha256": "828c28211dc76bdface00f585e96e7fcf8233c12abdf74d2ea76441722d825b0",
+      "changedPixels": 138,
+      "pixelDiffRatio": 0.00010648148148148149,
+      "rawPixelDiffRatio": 0.00010648148148148149,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/institutions/1?platform=all",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "4f32bc900d441de32bf9f2a397c338187be68ec25e241033a310161df734ef6c",
+      "targetSha256": "4e6363a695489cc25bad57e78a81cc866b0f933cc5406a7bd968f1bead465d31",
+      "changedPixels": 216,
+      "pixelDiffRatio": 0.00016666666666666666,
+      "rawPixelDiffRatio": 0.00016666666666666666,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/manage",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 401,
+      "targetStatus": 401,
+      "legacySha256": "b05656aa9fee83eaf5079bb3a051714b1de363ea0aee77cfd729438a13c097e6",
+      "targetSha256": "b05656aa9fee83eaf5079bb3a051714b1de363ea0aee77cfd729438a13c097e6",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 2,
+      "applicableAxeViolations": 0,
+      "a11yScope": "JSON protocol response: browser-generated viewer is outside HTML author control; exact response bytes are checked",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=telegram&period=3h",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "5e2fbf792dc97696013409b24f4e87a9d31f253d4293dba76b761f52a7028007",
+      "targetSha256": "5e2fbf792dc97696013409b24f4e87a9d31f253d4293dba76b761f52a7028007",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=telegram&period=7d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "d66ff3d8347396838e4ae3bacd7cbc6814de6af93e55d89c96ccfdf9ea981b39",
+      "targetSha256": "d66ff3d8347396838e4ae3bacd7cbc6814de6af93e55d89c96ccfdf9ea981b39",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=telegram&period=24",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "5aae084c775b4836bf157a4cc4293de63dd9c90711800c05c3a1cae37f4f69ea",
+      "targetSha256": "4ad0c9733ae5f581175823be588140c1a45db27175345f26bf0df9abd92a2a34",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.00001822821728034998,
+      "rawPixelDiffRatio": 0.00001822821728034998,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=telegram&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "ed7e2c0e9560fc86ccd5876c94dddc76a6a81e9ca9ccbc5a5b68d2223d525e1c",
+      "targetSha256": "4ad0c9733ae5f581175823be588140c1a45db27175345f26bf0df9abd92a2a34",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.00001822821728034998,
+      "rawPixelDiffRatio": 0.00001822821728034998,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0.07358433451744754,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.07358433451744754,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/rating?platform=vk&period=3h",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "efb292c2d1226aa523043ad61396a14340b0c2e3a21d1afd683f81007d988ec3",
+      "targetSha256": "c32401f736c64581c62a065d9f17e2225fe80a42bc2b91e3732f2b6662a36bb4",
+      "changedPixels": 39,
+      "pixelDiffRatio": 0.00011848341232227489,
+      "rawPixelDiffRatio": 0.00011848341232227489,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/rating?platform=vk&period=7d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "03c922a1bd790c6b66c7bce3dab9dd2e349d423e1f62a77159e4e9a61772037f",
+      "targetSha256": "c0b904b1a8da4518f15c0819a1340dd85f2e8d3c5a5ba860d4161999e283fab4",
+      "changedPixels": 86,
+      "pixelDiffRatio": 0.00026127111435168306,
+      "rawPixelDiffRatio": 0.00026127111435168306,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=vk&period=48",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "751326b89ddb7ffd922d8cf7999cae2baf871f4920de7f92a9ddf194428377a6",
+      "targetSha256": "f2cc4a038e46edd247686b0f499a8988d7ab2734d0e30cd0fd1b2cd77efce32a",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.00001822821728034998,
+      "rawPixelDiffRatio": 0.00001822821728034998,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=vk&submitted=true",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "c9ec4538ce576292e300effba9b462f07b4ec49aeab3f3c4dd19dc334fc822bb",
+      "targetSha256": "c9ec4538ce576292e300effba9b462f07b4ec49aeab3f3c4dd19dc334fc822bb",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=max&period=1d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "d2715bd90de3c0d637e7f0ba5ea66c91abcd7930a096d438d56496687e50c1bc",
+      "targetSha256": "d2715bd90de3c0d637e7f0ba5ea66c91abcd7930a096d438d56496687e50c1bc",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=max&period=30d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "dc312fc917f5a4ad1824c57eeb1ad0dbafdfcf78f1be382e16f7ab4b118e774b",
+      "targetSha256": "afa47161e481aac01e04a4db0193e521510e592e20fd85502f456a1a70340740",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=max&period=72",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "c2211851f1da451a1deae45e256117c597b107736e43211a5d9c5c70b2366051",
+      "targetSha256": "c2211851f1da451a1deae45e256117c597b107736e43211a5d9c5c70b2366051",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=max&q=НетТакогоВуза",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "3e7c61ad90a7a9c01a15b243d946c249c9376eb0798e7d43ba0982926caa80bc",
+      "targetSha256": "3e7c61ad90a7a9c01a15b243d946c249c9376eb0798e7d43ba0982926caa80bc",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/rating?platform=rutube&period=1d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "63522c3c9281789aff9a39cf33b1ac46fd9599dd3dabb28ed4db5bb0357189e4",
+      "targetSha256": "e275d0d9b1192986110738fbc44a9a30beb56d155e81dd2b18adb1a2e783b26b",
+      "changedPixels": 47,
+      "pixelDiffRatio": 0.0001427877020294082,
+      "rawPixelDiffRatio": 0.0001427877020294082,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/rating?platform=rutube&period=30d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "693499a8012862bfb4173bc10a63e04ded5de71347128cddaf56f2db7f4061b6",
+      "targetSha256": "023263146d4522c96c99c9b36022d33c5247eec0735feb2a2c407dc6b5c31d06",
+      "changedPixels": 128,
+      "pixelDiffRatio": 0.00038886863531413296,
+      "rawPixelDiffRatio": 0.00038886863531413296,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=rutube&period=168",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "adeeb575c92de45a8b26781cbd0f81a852a41eeaa8d2c814753e6793f187e20b",
+      "targetSha256": "9ad28faefca889f63bccfcad92ccbed635543bc906e81847cfa99fbd70adfb08",
+      "changedPixels": 12,
+      "pixelDiffRatio": 0.00003645643456069996,
+      "rawPixelDiffRatio": 0.00003645643456069996,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=all&period=3h",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "4c948089d292672ab2985ab78b9b9e81ddc6682f82623147f4504fe37da216ad",
+      "targetSha256": "4c948089d292672ab2985ab78b9b9e81ddc6682f82623147f4504fe37da216ad",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=all&period=7d",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "ce34ce00c769edcdc7736db5a82bab7b4a9ae3bf401adffd39e02edb07f1a0ca",
+      "targetSha256": "ce34ce00c769edcdc7736db5a82bab7b4a9ae3bf401adffd39e02edb07f1a0ca",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=all&period=24",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "8df22b3c5c524d41f2a8fba05cb96c4028c4505ad05ff2d4106bebefd9b17b2a",
+      "targetSha256": "8df22b3c5c524d41f2a8fba05cb96c4028c4505ad05ff2d4106bebefd9b17b2a",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=all&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "8df22b3c5c524d41f2a8fba05cb96c4028c4505ad05ff2d4106bebefd9b17b2a",
+      "targetSha256": "8df22b3c5c524d41f2a8fba05cb96c4028c4505ad05ff2d4106bebefd9b17b2a",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/posts/1",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "bb96cb0f3c717724aabd80750efb80c69a806e12d882df805b797feda3ede7c0",
+      "targetSha256": "2a44c1b637738a849a32f5c7e792e1079c214a6a2d1512d6b99eb421a4543079",
+      "changedPixels": 36,
+      "pixelDiffRatio": 0.0001093693036820999,
+      "rawPixelDiffRatio": 0.0001093693036820999,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/institutions/1?platform=all",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "dbd46c6ea82ed34afdc16f15f42898566d071fe155beb6407ebcb6513179e1da",
+      "targetSha256": "dbd46c6ea82ed34afdc16f15f42898566d071fe155beb6407ebcb6513179e1da",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/manage",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 401,
+      "targetStatus": 401,
+      "legacySha256": "be28c2cb4b68fdcfa0a07d6cc1781487bee1d82481eff89e92dd605ad278e782",
+      "targetSha256": "be28c2cb4b68fdcfa0a07d6cc1781487bee1d82481eff89e92dd605ad278e782",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 2,
+      "applicableAxeViolations": 0,
+      "a11yScope": "JSON protocol response: browser-generated viewer is outside HTML author control; exact response bytes are checked",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    }
+  ]
+}

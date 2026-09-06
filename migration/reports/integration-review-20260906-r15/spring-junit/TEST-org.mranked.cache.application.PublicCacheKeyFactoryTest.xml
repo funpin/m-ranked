@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.cache.application.PublicCacheKeyFactoryTest" time="0.026" tests="3" errors="0" skipped="0" failures="0" flakes="0">
+  <testcase name="normalizesParameterOrderAndIsolatesNamespaces" classname="org.mranked.cache.application.PublicCacheKeyFactoryTest" time="0.006" />
+  <testcase name="isolatesRevisionsAndHashesRawQueryValues" classname="org.mranked.cache.application.PublicCacheKeyFactoryTest" time="0.002" />
+  <testcase name="schemaOnlyDeployChangesBothStorageKeysAndHttpValidatorsAtTheSameRevision" classname="org.mranked.cache.application.PublicCacheKeyFactoryTest" time="0.003" />
+</testsuite>

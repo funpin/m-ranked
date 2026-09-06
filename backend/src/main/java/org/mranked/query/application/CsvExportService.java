@@ -14,7 +14,59 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class CsvExportService {
-    static final List<String> HEADERS = List.of(
+    public static final long MAX_ROWS = 100_000;
+    public static final long MAX_BYTES = 32L * 1024 * 1024;
+    public static final java.time.Duration MAX_DURATION = java.time.Duration.ofSeconds(30);
+    private final java.util.concurrent.Semaphore generationSlots = new java.util.concurrent.Semaphore(2);
+    private final java.util.concurrent.Semaphore downloadSlots = new java.util.concurrent.Semaphore(4);
+    private final java.util.concurrent.ScheduledExecutorService expiry = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+            task -> { Thread thread = new Thread(task, "public-export-expiry"); thread.setDaemon(true); return thread; });
+    @jakarta.annotation.PreDestroy void shutdown() { expiry.shutdownNow(); }
+    private final java.util.ArrayDeque<Long> recentExports = new java.util.ArrayDeque<>();
+
+    public record PreparedExport(DatasetRevision revision, java.nio.file.Path path,
+                                 java.util.concurrent.Semaphore slots) implements AutoCloseable {
+        public void transferTo(OutputStream output) throws IOException {
+            try (this; var input = java.nio.file.Files.newInputStream(path)) { input.transferTo(output); }
+        }
+        @Override public void close() throws IOException {
+            if (java.nio.file.Files.deleteIfExists(path)) slots.release();
+        }
+    }
+
+    private synchronized boolean permitRequest() {
+        long now = System.nanoTime();
+        while (!recentExports.isEmpty() && now - recentExports.peekFirst() > 60_000_000_000L) recentExports.removeFirst();
+        if (recentExports.size() >= 10) return false;
+        recentExports.addLast(now);
+        return true;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true,
+            isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ, timeout = 30)
+    public PreparedExport prepare(Platform platform) throws IOException {
+        if (!permitRequest()) throw new CsvExportLimitException("Export rate limit reached; retry later");
+        if (!generationSlots.tryAcquire()) throw new CsvExportLimitException("Export capacity reached; retry later");
+        boolean artifactSlot = false;
+        java.nio.file.Path path = null;
+        try {
+            if (!downloadSlots.tryAcquire()) throw new CsvExportLimitException("Export download capacity reached; retry later");
+            artifactSlot = true;
+            DatasetRevision revision = revisionProvider.current();
+            path = java.nio.file.Files.createTempFile("mranked-public-export-", ".csv");
+            try (var output = java.nio.file.Files.newOutputStream(path)) { write(platform, revision, output); }
+            var artifact = new PreparedExport(revision, path, downloadSlots);
+            expiry.schedule(() -> { try { artifact.close(); } catch (IOException ignored) { } },
+                    5, java.util.concurrent.TimeUnit.MINUTES);
+            return artifact;
+        } catch (IOException | RuntimeException exception) {
+            if (path != null) java.nio.file.Files.deleteIfExists(path);
+            if (artifactSlot) downloadSlots.release();
+            throw exception;
+        } finally { generationSlots.release(); }
+    }
+
+    public static final List<String> HEADERS = List.of(
             "platform", "institution", "publication_id", "published_at", "observed_at",
             "views", "reactions", "comments", "shares", "quality", "dataset_revision"
     );
@@ -35,13 +87,30 @@ public class CsvExportService {
     }
 
     public void write(Platform platform, DatasetRevision revision, OutputStream output) throws IOException {
-        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8), 16_384);
+        long started = System.nanoTime();
+        long[] rows = {0};
+        OutputStream bounded = new java.io.FilterOutputStream(output) {
+            private long bytes;
+            @Override public void write(int value) throws IOException {
+                if (++bytes > MAX_BYTES) throw new CsvExportLimitException("Export exceeds maxBytes");
+                out.write(value);
+            }
+            @Override public void write(byte[] bytes, int offset, int length) throws IOException {
+                if ((this.bytes += length) > MAX_BYTES) throw new CsvExportLimitException("Export exceeds maxBytes");
+                out.write(bytes, offset, length);
+            }
+        };
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(bounded, StandardCharsets.UTF_8), 16_384);
         writeRecord(writer, HEADERS);
-        rowSource.stream(platform, revision.id(), row -> writeRecord(writer, values(row, revision.id())));
+        rowSource.stream(platform, revision.id(), row -> {
+            if (++rows[0] > MAX_ROWS) throw new CsvExportLimitException("Export exceeds maxRows; narrow the requested dataset");
+            if (System.nanoTime() - started > MAX_DURATION.toNanos()) throw new CsvExportLimitException("Export exceeds maxDuration");
+            writeRecord(writer, values(row, revision.id()));
+        });
         writer.flush();
     }
 
-    private static List<String> values(PublicationCsvRow row, long revision) {
+    public static List<String> values(PublicationCsvRow row, long revision) {
         return List.of(
                 text(row.platform()),
                 text(row.institution()),
@@ -61,7 +130,7 @@ public class CsvExportService {
         return value == null ? "" : value.toString();
     }
 
-    static void writeRecord(BufferedWriter writer, List<String> values) throws IOException {
+    public static void writeRecord(BufferedWriter writer, List<String> values) throws IOException {
         for (int index = 0; index < values.size(); index++) {
             if (index > 0) {
                 writer.write(',');
@@ -91,7 +160,10 @@ public class CsvExportService {
         if (value.isEmpty()) {
             return value;
         }
-        return switch (value.charAt(0)) {
+        int start=0;
+        while(start<value.length()&&(Character.isWhitespace(value.charAt(start))||Character.isISOControl(value.charAt(start))))start++;
+        if(start==value.length())return value;
+        return switch (value.charAt(start)) {
             case '=', '+', '-', '@' -> "'" + value;
             default -> value;
         };

@@ -30,8 +30,8 @@ class ProjectionSqlTest {
                 .contains("LEFT JOIN metrics ON metrics.institution_id = i.id");
         assertThat(JdbcProjectionQueryRepository.PUBLICATION_SQL)
                 .contains("catalog.legacy_entity_alias")
-                .contains("JOIN ingest.publication p ON p.id = alias.target_uuid")
-                .contains("JOIN catalog.platform_account account ON account.id = p.primary_account_id")
+                .contains("JOIN ingest.visible_publication p ON p.id = alias.target_uuid")
+                .contains("JOIN catalog.visible_platform_account account ON account.id = p.primary_account_id")
                 .contains("LEFT JOIN analytics.publication_latest latest")
                 .contains("latest.dataset_revision_id = :revision")
                 .contains("account.institution_id")
@@ -132,7 +132,7 @@ class ProjectionSqlTest {
                 .doesNotContain("metric_snapshot");
 
         assertThat(JdbcProjectionQueryRepository.ACCOUNT_SQL)
-                .contains("catalog.platform_account")
+                .contains("catalog.visible_platform_account")
                 .contains("catalog.legacy_entity_alias")
                 .contains("WHERE alias.entity_type = 'channels'")
                 .contains("WHERE alias.entity_type = 'platform_accounts'")

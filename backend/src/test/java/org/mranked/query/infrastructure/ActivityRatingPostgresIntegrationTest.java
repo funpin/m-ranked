@@ -91,6 +91,17 @@ class ActivityRatingPostgresIntegrationTest {
                         Platform.RUTUBE, seed + 301, "platform_posts", "video-301", false,
                         400L, null, null, null, 301, null, "{}");
 
+                // This repository fixture seeds projections directly (publication_latest below);
+                // subscribers now follow the same projection-only contract as publication facts.
+                fixture.sql("""
+                        INSERT INTO analytics.account_latest(platform_account_id,metric_key,value,observed_at,
+                            quality,source_snapshot_id,dataset_revision_id)
+                        SELECT platform_account_id,'subscribers',subscriber_count,observed_at,subscriber_quality,id,:revision
+                          FROM ingest.account_metric_snapshot_active
+                         WHERE collection_run_id IN (:runs)
+                        ON CONFLICT (platform_account_id,metric_key) DO UPDATE
+                           SET value=excluded.value,dataset_revision_id=excluded.dataset_revision_id
+                        """).param("revision",revision).param("runs", java.util.List.of(tgRun,vkRun)).update();
                 JdbcProjectionQueryRepository repository = new JdbcProjectionQueryRepository(fixture);
                 var telegram = repository.findActivityRating(query(
                         Platform.TELEGRAM, "engagement", "desc", "reactions", "desc"

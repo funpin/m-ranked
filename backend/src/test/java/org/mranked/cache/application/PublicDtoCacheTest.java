@@ -128,6 +128,20 @@ class PublicDtoCacheTest {
         assertThat(body).isEqualTo(new TestDto("database", 31, 1));
     }
 
+    @Test
+    void missCachesUnderTheRevisionReadByTheTransactionalLoader() {
+        MemoryStore store = new MemoryStore();
+        AtomicReference<DatasetRevision> current = new AtomicReference<>(revision(41));
+        PublicDtoCache cache = cache(current::get, store);
+        var request = cache.prepare("publication", Map.of("legacyId", 4L));
+        current.set(revision(42));
+        var loaded = cache.getOrLoadSnapshot(request, TestDto.class,
+                () -> new RevisionedValue<>(current.get(), new TestDto("new-publication", 42, 1)));
+        assertThat(loaded.revision().id()).isEqualTo(loaded.value().revision()).isEqualTo(42);
+        assertThat(store.values.keySet()).singleElement().asString().contains(":r42:").doesNotContain(":r41:");
+        assertThat(new ETagFactory().create(request.key().atRevision(loaded.revision()))).startsWith("\"mr-42-");
+    }
+
     private static PublicDtoCache cache(
             DatasetRevisionProvider revisions,
             PublicCacheStore l2

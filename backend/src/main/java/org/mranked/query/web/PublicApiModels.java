@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.mranked.analytics.domain.AggregateMetric;
 import org.mranked.query.domain.InstitutionView;
 import org.mranked.query.domain.AccountView;
 import org.mranked.query.domain.ComparisonView;
@@ -16,6 +17,19 @@ public final class PublicApiModels {
     private PublicApiModels() {
     }
 
+    public record InstitutionAccounts(List<Account> items,String nextCursor,long legacyTotalAccountCount,
+                                      long datasetRevision,Instant asOf) {}
+    public record PublicationHistory(Publication publication,List<org.mranked.query.domain.HistorySnapshot> items,
+            String nextCursor,Long previousLegacyId,Long nextLegacyId,String archivedText,long datasetRevision,Instant asOf) {}
+    public static InstitutionAccounts institutionAccounts(org.mranked.query.domain.InstitutionAccountPage page) {
+        return new InstitutionAccounts(page.items().stream().map(PublicApiModels::account).toList(),page.nextCursor(),
+                page.legacyTotalAccountCount(),page.datasetRevision(),page.asOf());
+    }
+    public static PublicationHistory history(org.mranked.query.domain.PublicationHistoryView page) {
+        return new PublicationHistory(publication(page.publication()),page.items(),page.nextCursor(),page.previousLegacyId(),
+                page.nextLegacyId(),page.archivedText(),page.datasetRevision(),page.asOf());
+    }
+
     public record Metrics(
             BigDecimal totalReactions,
             BigDecimal totalViews,
@@ -23,7 +37,8 @@ public final class PublicApiModels {
             BigDecimal medianViews,
             int sampleSize,
             BigDecimal coverage,
-            String quality
+            String quality,
+            java.util.Map<String, AggregateMetric> aggregates
     ) {
     }
 
@@ -33,7 +48,9 @@ public final class PublicApiModels {
             BigDecimal previousTotal,
             BigDecimal previousMedian,
             BigDecimal totalTrend,
-            BigDecimal medianTrend
+            BigDecimal medianTrend,
+            AggregateMetric totalMetadata, AggregateMetric medianMetadata,
+            AggregateMetric previousTotalMetadata, AggregateMetric previousMedianMetadata
     ) {
     }
 
@@ -96,7 +113,7 @@ public final class PublicApiModels {
             List<OverviewRow> items,
             String nextCursor,
             long datasetRevision,
-            Instant asOf
+            Instant asOf,String integrationStatus,String integrationWarning
     ) {
     }
 
@@ -131,7 +148,10 @@ public final class PublicApiModels {
             boolean synthetic,
             String historyCompleteness,
             long datasetRevision,
-            Instant asOf
+            Instant asOf,
+            Long accountLegacyId,String accountLegacyType,String accountName,String accountUsername,
+            String externalId,String publicUrl,String displayExternalId,boolean repost,boolean joint,
+            int additionalAuthorCount,boolean ambiguousAlbumReactions
     ) {
     }
 
@@ -206,7 +226,9 @@ public final class PublicApiModels {
             int entityLimit,
             boolean entitiesTruncated,
             long datasetRevision,
-            Instant asOf
+            Instant asOf,
+            String nextEntityCursor,
+            int entityOffset
     ) {
     }
 
@@ -246,7 +268,8 @@ public final class PublicApiModels {
             int cohortSampleSize,
             List<ComparisonSeries> series,
             long datasetRevision,
-            Instant asOf
+            Instant asOf,
+            String nextSelectionCursor
     ) {
     }
 
@@ -270,14 +293,19 @@ public final class PublicApiModels {
             long publicationCount,
             Instant latestObservedAt,
             long datasetRevision,
-            Instant asOf
+            Instant asOf,
+            org.mranked.query.domain.AccountStats stats
     ) {
     }
 
-    public static OverviewPage overview(PageResult<OverviewCard> page) {
+    public static OverviewPage overview(PageResult<OverviewCard> page) {return overview(page,"unknown");}
+    public static OverviewPage overview(PageResult<OverviewCard> page,String integrationStatus) {
+        return overview(page,integrationStatus,null);
+    }
+    public static OverviewPage overview(PageResult<OverviewCard> page,String integrationStatus,String integrationWarning) {
         return new OverviewPage(
                 page.items().stream().map(PublicApiModels::overviewRow).toList(),
-                page.nextCursor(), page.datasetRevision(), page.asOf()
+                page.nextCursor(), page.datasetRevision(), page.asOf(),integrationStatus,integrationWarning
         );
     }
 
@@ -299,7 +327,9 @@ public final class PublicApiModels {
                 identity.publicationType(), identity.deletedAt(), counter(view.views()),
                 counter(view.reactions()), counter(view.comments()), counter(view.shares()), view.quality(),
                 view.intervalUncertain(), view.synthetic(), view.historyCompleteness(),
-                view.datasetRevision(), view.observedAt()
+                view.datasetRevision(), view.observedAt(), view.accountLegacyId(),view.accountLegacyType(),view.accountName(),
+                view.accountUsername(),view.externalId(),view.publicUrl(),view.presentation().displayExternalId(),
+                view.presentation().repost(),view.presentation().joint(),view.presentation().additionalAuthorCount(),view.presentation().ambiguousAlbumReactions()
         );
     }
 
@@ -328,7 +358,7 @@ public final class PublicApiModels {
                         item.interactions(), item.subscriberShare(), item.viewShare()
                 )).toList(),
                 page.entityLimit(), page.entitiesTruncated(),
-                page.datasetRevision(), page.asOf()
+                page.datasetRevision(), page.asOf(), page.nextEntityCursor(), page.entityOffset()
         );
     }
 
@@ -357,7 +387,7 @@ public final class PublicApiModels {
                             ).toList()
                     );
                 }).toList(),
-                view.datasetRevision(), view.asOf()
+                view.datasetRevision(), view.asOf(), view.nextSelectionCursor()
         );
     }
 
@@ -370,7 +400,7 @@ public final class PublicApiModels {
                 institution.shortName(), view.platform().databaseValue(),
                 view.canonicalExternalId(), view.username(), view.title(), view.url(),
                 view.accessMode(), view.enabled(), view.publicationCount(), view.latestObservedAt(),
-                view.datasetRevision(), view.asOf()
+                view.datasetRevision(), view.asOf(),view.stats()
         );
     }
 
@@ -409,14 +439,15 @@ public final class PublicApiModels {
     ) {
         return new OverviewMetric(
                 metric.total(), metric.median(), metric.previousTotal(),
-                metric.previousMedian(), metric.totalTrend(), metric.medianTrend()
+                metric.previousMedian(), metric.totalTrend(), metric.medianTrend(), metric.totalMetadata(), metric.medianMetadata(),
+                metric.previousTotalMetadata(), metric.previousMedianMetadata()
         );
     }
 
     private static Metrics metrics(org.mranked.analytics.domain.MetricSet metrics) {
         return new Metrics(
                 metrics.totalReactions(), metrics.totalViews(), metrics.medianReactions(),
-                metrics.medianViews(), metrics.sampleSize(), metrics.coverage(), metrics.quality()
+                metrics.medianViews(), metrics.sampleSize(), metrics.coverage(), metrics.quality(), metrics.aggregates()
         );
     }
 }

@@ -71,7 +71,7 @@ public class JdbcAdminQueryRepository implements AdminQueryRepository {
                    account.row_version,
                    account.updated_at
               FROM catalog.platform_account AS account
-             WHERE account.id = :accountId
+             WHERE account.id = :accountId AND account.deleted_at IS NULL
             """;
 
     private final JdbcClient jdbcClient;

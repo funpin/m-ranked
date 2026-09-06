@@ -1,0 +1,38 @@
+{
+  "generatedAt": "2026-09-05T07:21:58.207Z",
+  "runId": "8130e892-6397-4800-a548-487edbeb43ec",
+  "origin": "http://127.0.0.1:18104",
+  "runtime": {
+    "path": "/private/tmp/mranked-admin-forms-v8-runtime.json",
+    "database": "admin_review_forms_v8_it",
+    "apiBaseUrl": "http://127.0.0.1:57685",
+    "pid": 25262
+  },
+  "scope": "Actual browser forms against a dedicated disposable database; each successful mutation is verified through the real generated catalog API. Frozen visual/performance database is not used.",
+  "checks": [
+    {
+      "name": "anonymous challenge and no-store",
+      "passed": true
+    },
+    {
+      "name": "viewer/editor/admin server capabilities",
+      "passed": true
+    },
+    {
+      "name": "editor creates institution through HTML form",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n403 !== 303\n"
+    }
+  ],
+  "submissions": [
+    {
+      "action": "/manage/institutions",
+      "status": 403,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    }
+  ],
+  "gate": "NO-GO",
+  "failure": "Expected values to be strictly equal:\n\n403 !== 303\n"
+}

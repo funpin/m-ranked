@@ -1,0 +1,1568 @@
+{
+  "reportVersion": 1,
+  "status": "pass",
+  "retainedAt": "2026-09-06T13:31:41.060338+00:00",
+  "sourceIntegrationGeneratedAt": "2026-09-06T13:31:29.339264+00:00",
+  "environment": "disposable-local-compose",
+  "productionAcceptance": false,
+  "timingDefinition": "Sum of recorded command durations, including service startup and cleanup; not an invented run start or wall-clock measurement.",
+  "commands": [
+    {
+      "name": "services",
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "mranked-ci-b2ab5320d78a",
+        "--env-file",
+        "/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/mranked-integration-n7hk6l12/services.env",
+        "-f",
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/infra/compose.yaml",
+        "up",
+        "-d",
+        "--wait",
+        "postgres",
+        "redis"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 6.289
+    },
+    {
+      "name": "create-clean_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE clean_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.244
+    },
+    {
+      "name": "create-upgrade_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE upgrade_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.242
+    },
+    {
+      "name": "create-bridge_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE bridge_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.179
+    },
+    {
+      "name": "create-collector_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE collector_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.186
+    },
+    {
+      "name": "create-reverse_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE reverse_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.246
+    },
+    {
+      "name": "create-ledger_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE ledger_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.239
+    },
+    {
+      "name": "create-catalog_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE catalog_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.19
+    },
+    {
+      "name": "create-native_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE native_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.188
+    },
+    {
+      "name": "create-history_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE history_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.246
+    },
+    {
+      "name": "create-golden_it",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE golden_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.181
+    },
+    {
+      "name": "flyway-clean-upgrade",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#cleanInstallationAndFrozenV8UpgradeHaveTheSameManifest",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 18.892
+    },
+    {
+      "name": "flyway-bridge_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 8.405
+    },
+    {
+      "name": "flyway-collector_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 7.808
+    },
+    {
+      "name": "flyway-reverse_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 6.377
+    },
+    {
+      "name": "flyway-ledger_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 5.497
+    },
+    {
+      "name": "flyway-catalog_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 5.276
+    },
+    {
+      "name": "flyway-native_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 5.609
+    },
+    {
+      "name": "flyway-history_it",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 4.95
+    },
+    {
+      "name": "redis-ping",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-ci-b2ab5320d78a-redis-1",
+        "sh",
+        "-c",
+        "REDISCLI_AUTH=\"$REDIS_PASSWORD\" redis-cli --no-auth-warning ping"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.175
+    },
+    {
+      "name": "bridge",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_migration_bridge_postgres.py",
+        "tests/test_bridge_actual_target_postgres.py",
+        "-k",
+        "not missing_source_row and not cleared_native_identity",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/bridge.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 16.59
+    },
+    {
+      "name": "native-identity",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_bridge_actual_target_postgres.py::test_cleared_native_identity_closes_history_and_reenrollment_appends",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/native-identity.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 16.86
+    },
+    {
+      "name": "identity-history",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_identity_history_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/identity-history.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 13.983
+    },
+    {
+      "name": "preserved-source",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_bridge_actual_target_postgres.py::test_missing_source_row_requires_verified_owner_ledger_and_remains_checked",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/preserved-source.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 9.648
+    },
+    {
+      "name": "archive",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cold_archive_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/archive.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.768
+    },
+    {
+      "name": "collectors",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_target_collectors_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/collectors.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.601
+    },
+    {
+      "name": "observation-integrity",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_observation_integrity_postgres.py",
+        "tests/test_operational_projection_guards.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/observations.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 33.939
+    },
+    {
+      "name": "operations-metrics",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_operations_metrics_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/metrics.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.61
+    },
+    {
+      "name": "spring",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Dtest=!QueryPlanEvidenceTest",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 326.804
+    },
+    {
+      "name": "query-plans",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Dtest=QueryPlanEvidenceTest",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 4.287
+    },
+    {
+      "name": "python",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 42.15
+    },
+    {
+      "name": "reverse-rehearsal",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_reverse_sync_postgres.py",
+        "--junitxml=/Users/funpin/Documents/ChatGPT/TG-monitoring/migration/reports/integration-review-20260906-r15/reverse.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 13.694
+    },
+    {
+      "name": "cleanup",
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "mranked-ci-b2ab5320d78a",
+        "--env-file",
+        "/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/mranked-integration-n7hk6l12/services.env",
+        "-f",
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/infra/compose.yaml",
+        "down",
+        "--volumes",
+        "--remove-orphans"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.705
+    }
+  ],
+  "commandCount": 33,
+  "failedCommands": 0,
+  "commandDurationSumSeconds": 554.058,
+  "realServiceSuites": [
+    {
+      "suite": "bridge",
+      "junit": "bridge.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 16.59,
+      "modules": {
+        "tests.test_migration_bridge_postgres": 1,
+        "tests.test_bridge_actual_target_postgres": 2
+      }
+    },
+    {
+      "suite": "native-identity",
+      "junit": "native-identity.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 16.86,
+      "modules": {
+        "tests.test_bridge_actual_target_postgres": 1
+      }
+    },
+    {
+      "suite": "identity-history",
+      "junit": "identity-history.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 13.983,
+      "modules": {
+        "tests.test_identity_history_postgres": 1
+      }
+    },
+    {
+      "suite": "preserved-source",
+      "junit": "preserved-source.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 9.648,
+      "modules": {
+        "tests.test_bridge_actual_target_postgres": 1
+      }
+    },
+    {
+      "suite": "archive",
+      "junit": "archive.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.768,
+      "modules": {
+        "tests.test_cold_archive_postgres": 1
+      }
+    },
+    {
+      "suite": "collectors",
+      "junit": "collectors.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.601,
+      "modules": {
+        "tests.test_target_collectors_postgres": 2
+      }
+    },
+    {
+      "suite": "observation-integrity",
+      "junit": "observations.xml",
+      "tests": 111,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 33.939,
+      "modules": {
+        "tests.test_observation_integrity_postgres": 20,
+        "tests.test_operational_projection_guards": 91
+      }
+    },
+    {
+      "suite": "operations-metrics",
+      "junit": "metrics.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.61,
+      "modules": {
+        "tests.test_operations_metrics_postgres": 1
+      }
+    },
+    {
+      "suite": "reverse-rehearsal",
+      "junit": "reverse.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 13.694,
+      "modules": {
+        "tests.test_reverse_sync_postgres": 10
+      }
+    }
+  ],
+  "realServiceCases": 131,
+  "realServiceSkipped": 0,
+  "spring": {
+    "general": {
+      "tests": 216,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "passed": 212,
+    "classes": [
+      {
+        "class": "org.mranked.ArchitectureTest",
+        "junit": "spring-junit/TEST-org.mranked.ArchitectureTest.xml",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.application.AccountReferenceTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.application.AccountReferenceTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.application.AdminServiceTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.application.AdminServiceTest.xml",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.application.LegacyCatalogServiceTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.application.LegacyCatalogServiceTest.xml",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.AdminConfigurationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.AdminConfigurationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.AdminPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.AdminPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.ApiSecurityConfigurationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.ApiSecurityConfigurationTest.xml",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.CatalogHttpPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.CatalogHttpPostgresIntegrationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest.xml",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.HttpOfficialRatingSourceTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.HttpOfficialRatingSourceTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.IdentityCommandEvidenceTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.IdentityCommandEvidenceTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.IdentityCommandPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.IdentityCommandPostgresIntegrationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.JdbcAdminSqlTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.JdbcAdminSqlTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.LegacyAccountPresentationPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.LegacyAccountPresentationPostgresIntegrationTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.LegacyFormPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.LegacyFormPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.OfficialRatingContextPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.OfficialRatingContextPostgresIntegrationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.infrastructure.OfficialRatingParserTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.infrastructure.OfficialRatingParserTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.web.AdminControllerTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.web.AdminControllerTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.admin.web.LegacyFormExceptionHandlerTest",
+        "junit": "spring-junit/TEST-org.mranked.admin.web.LegacyFormExceptionHandlerTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.cache.application.ETagFactoryTest",
+        "junit": "spring-junit/TEST-org.mranked.cache.application.ETagFactoryTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.cache.application.PublicCacheKeyFactoryTest",
+        "junit": "spring-junit/TEST-org.mranked.cache.application.PublicCacheKeyFactoryTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.cache.application.PublicDtoCacheTest",
+        "junit": "spring-junit/TEST-org.mranked.cache.application.PublicDtoCacheTest.xml",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.cache.infrastructure.JdbcDatasetRevisionProviderTest",
+        "junit": "spring-junit/TEST-org.mranked.cache.infrastructure.JdbcDatasetRevisionProviderTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.cache.infrastructure.RedisPublicCacheIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.cache.infrastructure.RedisPublicCacheIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.cache.infrastructure.RedisRevisionInvalidationSubscriberTest",
+        "junit": "spring-junit/TEST-org.mranked.cache.infrastructure.RedisRevisionInvalidationSubscriberTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.contract.OpenApiContractTest",
+        "junit": "spring-junit/TEST-org.mranked.contract.OpenApiContractTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.emoji.application.CustomEmojiServiceTest",
+        "junit": "spring-junit/TEST-org.mranked.emoji.application.CustomEmojiServiceTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.emoji.application.CustomEmojiWiringTest",
+        "junit": "spring-junit/TEST-org.mranked.emoji.application.CustomEmojiWiringTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.emoji.infrastructure.TelegramEmojiHttpGatewayTest",
+        "junit": "spring-junit/TEST-org.mranked.emoji.infrastructure.TelegramEmojiHttpGatewayTest.xml",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.emoji.web.CustomEmojiControllerTest",
+        "junit": "spring-junit/TEST-org.mranked.emoji.web.CustomEmojiControllerTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.exportjob.application.ExportJobPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.exportjob.application.ExportJobPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.exportjob.application.ExportJobServiceTest",
+        "junit": "spring-junit/TEST-org.mranked.exportjob.application.ExportJobServiceTest.xml",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.exportjob.web.ExportJobSecurityTest",
+        "junit": "spring-junit/TEST-org.mranked.exportjob.web.ExportJobSecurityTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.legacyexport.application.LegacyCsvServiceTest",
+        "junit": "spring-junit/TEST-org.mranked.legacyexport.application.LegacyCsvServiceTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.legacyexport.infrastructure.LegacyCsvArchivePostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.legacyexport.infrastructure.LegacyCsvArchivePostgresIntegrationTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.legacyexport.infrastructure.LegacyCsvPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.legacyexport.infrastructure.LegacyCsvPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.operations.application.ReadinessServiceTest",
+        "junit": "spring-junit/TEST-org.mranked.operations.application.ReadinessServiceTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.operations.infrastructure.JdbcQueryMetricsConfigurationTest",
+        "junit": "spring-junit/TEST-org.mranked.operations.infrastructure.JdbcQueryMetricsConfigurationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.operations.infrastructure.JdbcReadinessProbeTest",
+        "junit": "spring-junit/TEST-org.mranked.operations.infrastructure.JdbcReadinessProbeTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.operations.infrastructure.LegacyHealthPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.operations.infrastructure.LegacyHealthPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.operations.infrastructure.ManagementSecurityConfigurationTest",
+        "junit": "spring-junit/TEST-org.mranked.operations.infrastructure.ManagementSecurityConfigurationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.operations.infrastructure.PinnedHttpsClientNetworkTest",
+        "junit": "spring-junit/TEST-org.mranked.operations.infrastructure.PinnedHttpsClientNetworkTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.operations.web.HealthControllerTest",
+        "junit": "spring-junit/TEST-org.mranked.operations.web.HealthControllerTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.application.CsvExportServiceTest",
+        "junit": "spring-junit/TEST-org.mranked.query.application.CsvExportServiceTest.xml",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.application.CursorCodecTest",
+        "junit": "spring-junit/TEST-org.mranked.query.application.CursorCodecTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.application.ProviderConfigurationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.application.ProviderConfigurationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.application.PublicQueryServiceTest",
+        "junit": "spring-junit/TEST-org.mranked.query.application.PublicQueryServiceTest.xml",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.domain.ActivityRatingQueryTest",
+        "junit": "spring-junit/TEST-org.mranked.query.domain.ActivityRatingQueryTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.domain.ComparisonSelectionTest",
+        "junit": "spring-junit/TEST-org.mranked.query.domain.ComparisonSelectionTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.domain.ComparisonSeriesTest",
+        "junit": "spring-junit/TEST-org.mranked.query.domain.ComparisonSeriesTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.domain.OverviewQueryTest",
+        "junit": "spring-junit/TEST-org.mranked.query.domain.OverviewQueryTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.ActivityRatingGrantMigrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.ActivityRatingGrantMigrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.ActivityRatingPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.ActivityRatingPostgresIntegrationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest.xml",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.ComparisonPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.ComparisonPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.ComparisonProjectionMigrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.ComparisonProjectionMigrationTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.ComparisonSqlTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.ComparisonSqlTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.DetailFallbackPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.DetailFallbackPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.DetailPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.DetailPostgresIntegrationTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.DisabledPeriodPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.DisabledPeriodPostgresIntegrationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.HistoryReactionDetailsPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.HistoryReactionDetailsPostgresIntegrationTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.LegacyGoldenProjectionIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.LegacyGoldenProjectionIntegrationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.LegacyOverviewProjectionMigrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.LegacyOverviewProjectionMigrationTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.LegacyPeriodOraclePostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.LegacyPeriodOraclePostgresIntegrationTest.xml",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.MigrationInstallationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.MigrationInstallationTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 4
+      },
+      {
+        "class": "org.mranked.query.infrastructure.OverviewPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.OverviewPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest.xml",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.ProjectionSchemaContractTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.ProjectionSchemaContractTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.infrastructure.ProjectionSqlTest",
+        "junit": "spring-junit/TEST-org.mranked.query.infrastructure.ProjectionSqlTest.xml",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.web.CsvExportControllerTest",
+        "junit": "spring-junit/TEST-org.mranked.query.web.CsvExportControllerTest.xml",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "class": "org.mranked.query.web.PublicQueryControllerTest",
+        "junit": "spring-junit/TEST-org.mranked.query.web.PublicQueryControllerTest.xml",
+        "tests": 18,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "conditionalMigrationInstallation": {
+      "class": "org.mranked.query.infrastructure.MigrationInstallationTest",
+      "junit": "spring-junit/TEST-org.mranked.query.infrastructure.MigrationInstallationTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "conditionalExplanation": "These four CLI entry points are disabled in the generic Spring invocation. Required clean and frozen V8 upgrade plus seven disposable installations ran in separate successful Flyway commands. This does not claim every optional helper method was separately invoked.",
+    "separateQueryPlans": {
+      "class": "org.mranked.query.infrastructure.QueryPlanEvidenceTest",
+      "junit": "spring-junit/TEST-org.mranked.query.infrastructure.QueryPlanEvidenceTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "retainedXmlTotals": {
+      "tests": 217,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "retentionManifest": "spring-junit/manifest.json"
+  },
+  "python": {
+    "passed": 531,
+    "skipped": 108,
+    "secondsReportedByPytest": 41.31,
+    "conditionalCoverage": "conditional-service-coverage.json",
+    "allConditionalNodeidsExecutedInMandatorySuites": true
+  },
+  "schemaObservedAtReverseRehearsal": {
+    "databaseMigrations": [
+      {
+        "checksum": -1636077697,
+        "script": "V1__target_baseline.sql",
+        "success": true,
+        "version": "1"
+      },
+      {
+        "checksum": 839607018,
+        "script": "V2__rebuild_core_projections.sql",
+        "success": true,
+        "version": "2"
+      },
+      {
+        "checksum": -1456658399,
+        "script": "V3__collector_observation_times_and_identity_grants.sql",
+        "success": true,
+        "version": "3"
+      },
+      {
+        "checksum": 1318350062,
+        "script": "V4__admin_collection_run_status_grants.sql",
+        "success": true,
+        "version": "4"
+      },
+      {
+        "checksum": -1313754193,
+        "script": "V5__legacy_activity_period_projection.sql",
+        "success": true,
+        "version": "5"
+      },
+      {
+        "checksum": -290358219,
+        "script": "V6__comparison_valid_observation_hourly_projection.sql",
+        "success": true,
+        "version": "6"
+      },
+      {
+        "checksum": -1228913579,
+        "script": "V7__activity_rating_read_grants.sql",
+        "success": true,
+        "version": "7"
+      },
+      {
+        "checksum": -574188650,
+        "script": "V8__legacy_overview_projection.sql",
+        "success": true,
+        "version": "8"
+      },
+      {
+        "checksum": 1058556652,
+        "script": "V9__immutable_observations_quality_archive_fence.sql",
+        "success": true,
+        "version": "9"
+      },
+      {
+        "checksum": -1148603410,
+        "script": "V10__consistent_public_queries_and_formula_guards.sql",
+        "success": true,
+        "version": "10"
+      },
+      {
+        "checksum": 1679789143,
+        "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+        "success": true,
+        "version": "11"
+      },
+      {
+        "checksum": 1453326243,
+        "script": "V12__detail_history_projection.sql",
+        "success": true,
+        "version": "12"
+      },
+      {
+        "checksum": -185639607,
+        "script": "V13__immutable_account_identity_history.sql",
+        "success": true,
+        "version": "13"
+      },
+      {
+        "checksum": -956321170,
+        "script": "V14__public_archived_publication_text.sql",
+        "success": true,
+        "version": "14"
+      },
+      {
+        "checksum": -1953543117,
+        "script": "V15__verified_source_preservation.sql",
+        "success": true,
+        "version": "15"
+      },
+      {
+        "checksum": -888916335,
+        "script": "V16__audited_catalog_commands.sql",
+        "success": true,
+        "version": "16"
+      },
+      {
+        "checksum": 2060863494,
+        "script": "V17__legacy_csv_compatibility_projection.sql",
+        "success": true,
+        "version": "17"
+      },
+      {
+        "checksum": 875583974,
+        "script": "V18__official_rating_commands.sql",
+        "success": true,
+        "version": "18"
+      },
+      {
+        "checksum": -1653532549,
+        "script": "V19__safe_health_operational_snapshot.sql",
+        "success": true,
+        "version": "19"
+      },
+      {
+        "checksum": 925593865,
+        "script": "V20__catalog_url_and_version_compatibility.sql",
+        "success": true,
+        "version": "20"
+      },
+      {
+        "checksum": -900669350,
+        "script": "V21__legacy_period_first_observation_policy.sql",
+        "success": true,
+        "version": "21"
+      },
+      {
+        "checksum": 2064364640,
+        "script": "V22__durable_legacy_csv_archive_facts.sql",
+        "success": true,
+        "version": "22"
+      },
+      {
+        "checksum": 890722389,
+        "script": "V23__official_rating_entity_context.sql",
+        "success": true,
+        "version": "23"
+      },
+      {
+        "checksum": 1889276383,
+        "script": "V24__ordered_history_reaction_details.sql",
+        "success": true,
+        "version": "24"
+      },
+      {
+        "checksum": 381330844,
+        "script": "V25__safe_legacy_account_presentation.sql",
+        "success": true,
+        "version": "25"
+      },
+      {
+        "checksum": -1482835665,
+        "script": "V26__independent_projection_verifier_reads.sql",
+        "success": true,
+        "version": "26"
+      },
+      {
+        "checksum": -1466195806,
+        "script": "V27__retained_disabled_platform_period_metrics.sql",
+        "success": true,
+        "version": "27"
+      },
+      {
+        "checksum": 1374125493,
+        "script": "V28__identity_command_receipt_verifier_acl.sql",
+        "success": true,
+        "version": "28"
+      },
+      {
+        "checksum": -1547328464,
+        "script": "V29__monotonic_native_identity_transitions.sql",
+        "success": true,
+        "version": "29"
+      }
+    ],
+    "fileSha256": {
+      "V10__consistent_public_queries_and_formula_guards.sql": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b",
+      "V11__bridge_identity_lineage_and_reconciliation.sql": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff",
+      "V12__detail_history_projection.sql": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100",
+      "V13__immutable_account_identity_history.sql": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0",
+      "V14__public_archived_publication_text.sql": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6",
+      "V15__verified_source_preservation.sql": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941",
+      "V16__audited_catalog_commands.sql": "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad",
+      "V17__legacy_csv_compatibility_projection.sql": "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83",
+      "V18__official_rating_commands.sql": "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9",
+      "V19__safe_health_operational_snapshot.sql": "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503",
+      "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1",
+      "V20__catalog_url_and_version_compatibility.sql": "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2",
+      "V21__legacy_period_first_observation_policy.sql": "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8",
+      "V22__durable_legacy_csv_archive_facts.sql": "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f",
+      "V23__official_rating_entity_context.sql": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c",
+      "V24__ordered_history_reaction_details.sql": "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db",
+      "V25__safe_legacy_account_presentation.sql": "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1",
+      "V26__independent_projection_verifier_reads.sql": "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8",
+      "V27__retained_disabled_platform_period_metrics.sql": "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97",
+      "V28__identity_command_receipt_verifier_acl.sql": "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020",
+      "V29__monotonic_native_identity_transitions.sql": "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de",
+      "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd",
+      "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1",
+      "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82",
+      "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41",
+      "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64",
+      "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb",
+      "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c",
+      "V9__immutable_observations_quality_archive_fence.sql": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"
+    },
+    "migrationCount": 29,
+    "schemaVersion": 29
+  },
+  "schemaEvidenceBoundary": "Actual database migration rows from reverse.json after the run reached reverse rehearsal. No schema snapshot is attributed to run start.",
+  "retainedStructuredProofs": [
+    {
+      "path": "disabled-period-clean.json",
+      "sha256": "cdb019cdf01a5aa436cca4967974703a2df6048ce7dfca96325ea84681417329",
+      "status": "pass"
+    },
+    {
+      "path": "disabled-period-upgrade.json",
+      "sha256": "21a09488a88cdd8d04087e43ddad0a6dd4f0fe693a534070b9cc5994301e4348",
+      "status": "pass"
+    },
+    {
+      "path": "export-heap.json",
+      "sha256": "36b30571ce0b887b98430bd5490e6b4a35acc5eb618fc820b70c16c86ffa8f00",
+      "status": "pass"
+    },
+    {
+      "path": "export-postgres.json",
+      "sha256": "588a80eda20b20063c1150d0fed1c46c0f561bb1d81827e862f7983163c1f4d7",
+      "status": "pass"
+    },
+    {
+      "path": "health-postgres.json",
+      "sha256": "0f5caba0be3c8663c63e3678f4e39837c5dc012bf22d927472fbf6b00342f278",
+      "status": "pass"
+    },
+    {
+      "path": "identity-command-postgres-upgrade-v28.json",
+      "sha256": "66b9379fcd16ae8726b0852eb1be16b8bc8d970bccc34631da910cff71e6adae",
+      "status": "pass"
+    },
+    {
+      "path": "identity-command-postgres.json",
+      "sha256": "51548efe0d1ffebeaf5612761258afe84e1ca4cf8061c7b995e4310112e92fca",
+      "status": "pass"
+    },
+    {
+      "path": "legacy-csv-archive-native.json",
+      "sha256": "e81c526c1f43271946c25a7c21bd0910ce218241894fcbda15729cafcb314d28",
+      "status": "pass"
+    },
+    {
+      "path": "legacy-csv-archive-old_cold.json",
+      "sha256": "4f6b9e27456eaf1edcca864a01609fdeddf7b899635c9c41b00de72d3407588c",
+      "status": "pass"
+    },
+    {
+      "path": "legacy-csv-archive-source.json",
+      "sha256": "e58291455d1a09a7799d612e352c1190892f7df1a787aec84d71daf529d1e2ef",
+      "status": "pass"
+    },
+    {
+      "path": "legacy-csv-golden.json",
+      "sha256": "f385481213db75ad3bd8fba95a04b7e183dc4ef11361ec852299baa894ea3dba",
+      "status": "pass"
+    },
+    {
+      "path": "legacy-csv-heap.json",
+      "sha256": "9ea4bcb29c25c645a80cf804625b06e6460a7ba3b5816f817b133ae9b0cdfd78",
+      "status": "pass"
+    },
+    {
+      "path": "period-oracle-upgrade.json",
+      "sha256": "92906e5e86ab44c35ab65ebd358b11583f3735c5dec352b74103b3305426ea1b",
+      "status": "pass"
+    },
+    {
+      "path": "period-oracle.json",
+      "sha256": "92906e5e86ab44c35ab65ebd358b11583f3735c5dec352b74103b3305426ea1b",
+      "status": "pass"
+    },
+    {
+      "path": "projection-oracle.json",
+      "sha256": "11a8b29d66a56991daf012ce7cea65451d7d314f95575cfc8c7d975edbd0006f",
+      "status": "pass"
+    },
+    {
+      "path": "query-plans/comparison-vk.json",
+      "sha256": "7c025c033724a5a27449de11e444bc2c2866d417535b6e2be0419cd96a70ec92",
+      "status": null
+    },
+    {
+      "path": "query-plans/overview-200.json",
+      "sha256": "72eca0d4c6944aef22aa041fdb447b8a991e5c732e68dbf6d01922ee81d8fc87",
+      "status": null
+    },
+    {
+      "path": "query-plans/overview-50.json",
+      "sha256": "af92462a5c3b15d502d8a46ddc87dda51a9f7b3fb2a0f13006dafd4bd0e18d57",
+      "status": null
+    },
+    {
+      "path": "query-plans/rating-rutube.json",
+      "sha256": "643710257ecacd4985e09f450bada38cef6871f7934fa65dc562efc47618d404",
+      "status": null
+    },
+    {
+      "path": "query-plans/rating-telegram.json",
+      "sha256": "3332ccafaaa96ff16e003debb21cf6db5e90207459e545dbe1c3a42b2a06acf7",
+      "status": null
+    },
+    {
+      "path": "query-plans/rating-vk.json",
+      "sha256": "3d715ca5b0a4c7a5d0547730d234c2a539036e9418ba499a6aefc289a1dd245e",
+      "status": null
+    },
+    {
+      "path": "query-plans/report.json",
+      "sha256": "4d016433dd08d7241c5b98a3bc43afde1c8627d091c64c873affc6cc3edb2a8d",
+      "status": null
+    },
+    {
+      "path": "reverse.json",
+      "sha256": "f850b82fbcb49813ca1f447743105a3b70af50b4f5c79576d2ad24b089289923",
+      "status": "pass"
+    }
+  ]
+}

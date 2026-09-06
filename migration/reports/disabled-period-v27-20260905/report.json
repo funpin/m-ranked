@@ -1,0 +1,42 @@
+{
+  "status": "pass",
+  "generatedAt": "2026-09-05T07:36:07.849590+00:00",
+  "productionAcceptance": false,
+  "migration": "V27__retained_disabled_platform_period_metrics.sql",
+  "migrationSha256": "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97",
+  "tests": {
+    "passed": 2,
+    "skipped": 0,
+    "seconds": 14.56,
+    "installations": [
+      "clean V1-V27",
+      "populated V26 to V27"
+    ],
+    "originalMetricCellsPerInstallation": 288,
+    "actualInstitutionHttpFieldsPerInstallation": 144
+  },
+  "representativeReadOnlyFinding": {
+    "institutionLegacyId": 207,
+    "platform": "rutube",
+    "accountEnabled": false,
+    "original7d": {
+      "totalViews": 240,
+      "totalReactions": 48,
+      "totalComments": 0,
+      "totalShares": null
+    },
+    "v26MaterializedPeriodRows": 0,
+    "v26PublicInstitutionViews": null
+  },
+  "oracleExtractionChanged": false,
+  "priorMigrationsEdited": false,
+  "telegramEnabledPolicyChanged": false,
+  "visibilityPreserved": true,
+  "missingPopulatedProjectionRowsFail": true,
+  "fullRepresentativeV27Acceptance": "pending parent read-only complete oracle rerun",
+  "evidence": [
+    "clean-oracle.json",
+    "upgrade-oracle.json",
+    "junit.txt"
+  ]
+}

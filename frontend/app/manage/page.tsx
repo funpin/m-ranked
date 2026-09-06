@@ -1,20 +1,70 @@
 import type { Metadata } from "next";
-import { AdminConsole } from "./admin-console";
+import Link from "next/link";
+import { headers } from "next/headers";
+import { randomUUID } from "node:crypto";
+import { AccountMatrix, DeleteCatalogForm } from "@/components/catalog-forms";
+import { CatalogApiError, catalogReader, type CatalogStatus, type ManagedAccount, type ManagedInstitution, type OfficialRating } from "@/lib/catalog-api";
+import { first, type SearchParams } from "@/lib/params";
+import { legacyDate, PLATFORM_LONG_LABELS } from "@/lib/format";
 
-// Administrative routes must never inherit Next's public static-page cache.
-// The shell contains no credentials, but making the response dynamic also
-// gives the future same-origin Nginx route an explicit fail-safe no-store
-// policy before any browser session is established.
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const dynamic="force-dynamic";
+export const revalidate=0;
+export const metadata:Metadata={title:"Управление",description:"Закрытое управление вузами, официальными аккаунтами и сбором данных.",referrer:"same-origin",robots:{index:false,follow:false,nocache:true}};
+const statuses:Record<string,string>={"institution-added":"Вуз добавлен.","institution-updated":"Названия вуза обновлены.","account-added":"Аккаунты сохранены.","accounts-updated":"Аккаунты сохранены.","account-disabled":"Сбор для аккаунта остановлен. История сохранена.","account-enabled":"Сбор для аккаунта включён.","native-id-updated":"Идентификатор площадки сохранён.","account-deleted":"Аккаунт и собранные по нему данные удалены."};
+function plural(value:number,one:string,few:string,many:string){const n=Math.abs(value)%100;return n>10&&n<20?many:n%10===1?one:n%10>=2&&n%10<=4?few:many;}
+function fields(csrf:string,version=0){return <><input type="hidden" name="csrf_token" value={csrf}/><input type="hidden" name="expected_row_version" value={version}/><input type="hidden" name="correlation_id" value={randomUUID()}/></>;}
+function bytes(value:number|null|undefined){if(value==null)return "—";let unit=0,n=value;while(n>=1024&&unit<4){n/=1024;unit++;}return `${unit?n.toFixed(1):Math.trunc(n)} ${["Б","КБ","МБ","ГБ","ТБ"][unit]}`;}
+function percentage(part:number|null,total:number|null,digits=2){return part!==null&&total!==null&&total>0?Number((part*100/total).toFixed(digits)):null;}
+function ratingScore(value:number|null){if(value===null)return "—";const rounded=Math.round(value*100)/100;return Number.isInteger(rounded)?rounded.toFixed(1):String(rounded);}
 
-export const metadata: Metadata = {
-  title: "Управление сбором",
-  description: "Закрытая консоль просмотра запусков сбора и управления состоянием аккаунтов.",
-  referrer: "no-referrer",
-  robots: { index: false, follow: false, nocache: true },
-};
+function Storage({status}:{status:CatalogStatus|null}) {
+  const storage=status?.storage,total=storage?.diskTotalBytes??null,free=storage?.diskFreeBytes??null,project=storage?.projectBytes??null,database=storage?.databaseBytes??null;
+  const used=total!==null&&free!==null?Math.max(0,total-free):null;
+  const rows=[{name:"Диск сервера",value:`${bytes(used)} из ${bytes(total)}`,percent:percentage(used,total,1),label:"Занято на диске сервера",note:"раздела занято",kind:""},{name:"Весь проект m-ranked",value:bytes(project),percent:percentage(project,used),label:"Доля проекта в занятом месте",note:"от занятого места на диске",kind:"project"},{name:"База результатов парсинга",value:bytes(database),percent:percentage(database,project),label:"Доля базы в размере проекта",note:"от размера проекта",kind:"database"}];
+  return <section className="panel storage-panel"><div className="storage-heading"><div><h2>Использование хранилища</h2><p className="panel-note">Размеры вычислены для раздела диска и текущего каталога m-ranked.</p></div><span className="period-badge">Свободно {bytes(free)}</span></div><div className="storage-grid">{rows.map((row)=><article key={row.kind}><div className="storage-label"><span>{row.name}</span><b>{row.value}</b></div><div className={`storage-track ${row.kind}`} role="progressbar" aria-label={row.label} aria-valuenow={row.percent??undefined} aria-valuemin={0} aria-valuemax={100}>{row.percent===null?null:<span style={{width:`${Math.min(100,row.percent)}%`}}/>}</div><small>{row.percent===null?"Размер не предоставлен сервером":`${row.percent}% ${row.note}`}</small></article>)}</div></section>;
+}
+function Rating({rating,label}:{rating:OfficialRating|undefined;label:string}) {return <>{rating===undefined?`${label}: статус не получен`:rating.rank?<><b>{label} №{rating.rank}</b> · {ratingScore(rating.score)}</>:`${label} —`}</>;}
+function InstitutionCell({institution,csrf,canEdit,withRating=true}:{institution:ManagedInstitution;csrf:string;canEdit:boolean;withRating?:boolean}) {
+  return <td rowSpan={Math.max(1,institution.accounts.length)} className="institution-cell"><b title={institution.name}>{institution.shortName||institution.name}</b><small>{institution.name}</small>{withRating?<small><Rating rating={institution.officialRatings?.all} label="Общий М‑Рейтинг"/></small>:null}<details><summary>Редактировать название</summary><form method="post" action={`/manage/institutions/${institution.legacyId}`}><label>Полное название<input name="name" defaultValue={institution.name} required disabled={!canEdit}/></label><label>Сокращение<input name="short_name" defaultValue={institution.shortName||institution.name} required disabled={!canEdit}/></label>{fields(csrf,institution.rowVersion)}<button type="submit" disabled={!canEdit}>Сохранить</button></form></details></td>;
+}
+function AccountStatus({account,status}:{account:ManagedAccount;status:CatalogStatus|null}) {
+  const integration=status?.integrations.find((row)=>row.platform===account.platform)?.status;
+  const text=!account.enabled?"отключён":integration==="unknown"||integration===undefined?"статус не получен":account.platform==="telegram"?"работает":account.platform==="vk"?integration==="configured"?"работает":"нужен токен":account.platform==="max"?integration!=="configured"?"нужна сессия":!account.nativeId?"ожидает подписки":"работает":integration==="configured"?"работает":"сбор выключен";
+  return <span className={`pill ${text==="работает"?"ok":"warn"}`}>{text}</span>;
+}
+function PlatformLabel({account,csrf,canEdit}:{account:ManagedAccount;csrf:string;canEdit:boolean}) {
+  const label=<span className={`platform-chip platform-${account.platform}`}>{account.platform.toUpperCase()}</span>;
+  if(account.platform!=="max")return label;
+  return <details className="native-id-editor"><summary aria-label="Изменить chat_id MAX">{label}</summary><form method="post" action={`/manage/platform-accounts/${account.legacyId}/native-id`}><label>chat_id<input name="native_id" defaultValue={account.nativeId??""} required disabled={!canEdit}/></label>{fields(csrf,account.rowVersion)}<button type="submit" disabled={!canEdit}>Сохранить</button></form></details>;
+}
 
-export default function ManagePage() {
-  return <AdminConsole />;
+export default async function ManagePage({searchParams}:{searchParams:Promise<SearchParams>}) {
+  const incoming=new Headers(await headers()),query=await searchParams;
+  const csrf=incoming.get("x-mranked-csrf")??"",canEdit=["1","true"].includes(incoming.get("x-mranked-can-edit")??"")&&!!csrf,canDelete=["1","true"].includes(incoming.get("x-mranked-can-delete")??"")&&!!csrf;
+  const reader=catalogReader(incoming);
+  const [catalogResult,statusResult]=await Promise.allSettled([reader.institutions(),reader.status()]);
+  if(catalogResult.status==="rejected") return <><h1>Управление каналами</h1><section className="panel" role="alert"><p>{catalogResult.reason instanceof CatalogApiError?catalogResult.reason.message:"Не удалось загрузить каталог."}</p><Link href="/manage">Повторить загрузку</Link></section></>;
+  // SQLite NOCASE folds ASCII only; preserve the legacy catalog ordering.
+  const fold=(name:string)=>name.replace(/[A-Z]/g,(letter)=>letter.toLowerCase());
+  const institutions=catalogResult.value.sort((a,b)=>fold(a.name)<fold(b.name)?-1:fold(a.name)>fold(b.name)?1:a.legacyId-b.legacyId);
+  // Bounded API pages use IDs; presentation follows SQLite's platform/title/username order.
+  const textOrder=(a:string|null,b:string|null)=>a===b?0:a===null?-1:b===null?1:a<b?-1:1;
+  for(const institution of institutions)institution.accounts.sort((a,b)=>textOrder(a.platform,b.platform)||textOrder(a.title,b.title)||textOrder(a.username,b.username)||a.legacyId-b.legacyId);
+  const status=statusResult.status==="fulfilled"?statusResult.value:null;
+  const channelCount=status?.channelCount??institutions.flatMap((row)=>row.accounts).filter((row)=>row.channelId!==null).length,platformCount=status?.platformCount??institutions.reduce((sum,row)=>sum+row.accounts.length,0);
+  const selected=Number(first(query.institution_id));
+  const selectedId=institutions.some((row)=>row.legacyId===selected)?selected:institutions[0]?.legacyId??null;
+  const message=statuses[first(query.platform_status)??""];
+  return <>
+    <div className="manage-heading"><div><h1>Управление каналами</h1><p className="lead">Добавляйте, временно отключайте или полностью удаляйте мониторинг каналов.</p></div><div className="channel-count-badge"><b>{channelCount}</b><span>{plural(channelCount,"канал добавлен","канала добавлено","каналов добавлено")}</span></div></div>
+    <div className="panel m-rating-admin"><div><h2>Официальный М‑Рейтинг · соцсети</h2><p className="panel-note">Для каждого вуза загружаются общий рейтинг соцсетей и отдельные места в Telegram, VK, MAX и Rutube. Последний период: <b>{status?status.mRating.period||"ещё не загружен":"статус не получен"}</b>{status?.mRating.updatedAt?` · обновлено ${legacyDate(status.mRating.updatedAt,true)}`:""}.</p>{first(query.m_rating_status)==="updated"?<p className="ok">Пять срезов М‑Рейтинга обновлены.</p>:first(query.m_rating_status)==="error"?<p className="bad">Не удалось обновить М‑Рейтинг: {status?.mRating.error||"неизвестная ошибка"}</p>:status?.mRating.error?<p className="bad">Последняя попытка: {status.mRating.error}</p>:null}</div><form method="post" action="/manage/m-rating/update">{fields(csrf)}<button type="submit" disabled={!canEdit}>Загрузить свежий М‑Рейтинг</button></form></div>
+    <section className="panel storage-panel"><div className="storage-heading"><div><h2>Подключения API</h2><p className="panel-note">Значения секретов хранятся только в окружении сервера и никогда не выводятся в браузер.</p></div></div>{status?<div className="storage-grid">{status.integrations.map((integration)=><article key={integration.platform}><div className="storage-label"><b>{PLATFORM_LONG_LABELS[integration.platform]}</b><span className={`pill ${integration.status==="configured"?"ok":"warn"}`}>{integration.status==="configured"?"подключено":integration.status==="missing"?"нужна настройка":"статус не получен"}</span></div><small>{integration.detail}</small></article>)}</div>:<p className="bad" role="status">Не удалось получить состояние подключений и хранилища.</p>}</section>
+    <Storage status={status}/>
+    <section className="panel platform-admin"><div className="storage-heading"><div><h2>Вузы и аккаунты в соцсетях</h2><p className="panel-note">VK сохраняет просмотры, лайки, комментарии и репосты. MAX читает публичные каналы через отдельную пользовательскую сессию и сохраняет просмотры и реакции. Rutube получает просмотры, лайки и комментарии из официальных публичных API без токена.</p></div><span className="period-badge">{platformCount} {plural(platformCount,"аккаунт","аккаунта","аккаунтов")} · {institutions.length} {plural(institutions.length,"вуз","вуза","вузов")}</span></div>
+      {message?<p className="notice success-notice" role="status">{message}</p>:null}
+      {!canEdit?<p className="notice">Доступен просмотр. Изменения выполняют редакторы и администраторы.</p>:null}
+      <div className="platform-forms"><AccountMatrix institutions={institutions} selectedId={selectedId} csrfToken={csrf} correlationId={randomUUID()} canEdit={canEdit}/><form className="platform-form institution-create" method="post" action="/manage/institutions"><h3>Новый вуз</h3><p className="form-note">Полное название показывается в подсказках, сокращение — в компактных карточках.</p><label>Полное название<input name="name" required placeholder="Полное официальное название" disabled={!canEdit}/></label><label>Сокращение<input name="short_name" placeholder="Например, ВВГУ" disabled={!canEdit}/></label>{fields(csrf)}<button type="submit" disabled={!canEdit}>Добавить вуз</button></form></div>
+      <div className="table-wrap platform-table"><table><thead><tr><th>Вуз</th><th>Платформа</th><th>Аккаунт</th><th>Данные</th><th>Статус</th><th>Действия</th></tr></thead><tbody>{institutions.flatMap((institution)=>institution.accounts.length?institution.accounts.map((account,index)=><tr key={account.id}>{index===0?<InstitutionCell institution={institution} csrf={csrf} canEdit={canEdit}/>:null}<td><PlatformLabel account={account} csrf={csrf} canEdit={canEdit}/></td><td>{account.url&&/^https?:\/\//.test(account.url)?<a href={account.url} target="_blank" rel="noopener noreferrer">{account.title||(account.username?`@${account.username}`:account.externalKey)} ↗</a>:account.title||(account.username?`@${account.username}`:account.externalKey)}{account.platform==="max"&&account.nativeId?<small>chat_id {account.nativeId}</small>:null}</td><td><small>{account.channelId!==null?<>{account.subscribers||"—"} подписчиков<br/></>:<>{({public:"публичный доступ",user_session:"пользовательская сессия",owner:"нужен доступ владельца"} as Record<string,string>)[account.legacyAccessMode??account.accessMode]||account.legacyAccessMode||account.accessMode}<br/></>}<Rating rating={institution.officialRatings?.[account.platform]} label={`М‑Рейтинг ${account.platform.toUpperCase()}`}/></small></td><td><AccountStatus account={account} status={status}/>{account.lastErrorCode?<small className="bad account-error">{account.lastErrorCode==="legacy_collection_error"?"Ошибка предыдущего сбора":"Ошибка сбора данных"}</small>:null}</td><td><div className="manage-actions"><form method="post" action={`/manage/platform-accounts/${account.legacyId}/${account.enabled?"disable":"enable"}`}>{fields(csrf,account.rowVersion)}<button type="submit" disabled={!canEdit}>{account.enabled?"Отключить":"Включить"}</button></form><DeleteCatalogForm method="post" action={`/manage/platform-accounts/${account.legacyId}/delete`}>{fields(csrf,account.rowVersion)}<button className="danger" type="submit" disabled={!canDelete}>Удалить</button></DeleteCatalogForm></div></td></tr>):[<tr key={institution.id}><InstitutionCell institution={institution} csrf={csrf} canEdit={canEdit} withRating={false}/><td colSpan={5} className="muted">Аккаунты ещё не привязаны</td></tr>])}</tbody></table></div>
+    </section>
+  </>;
 }

@@ -1,0 +1,103 @@
+{
+  "reportVersion": 1,
+  "environment": "disposable-local-compose",
+  "generatedAt": "2026-09-05T06:44:29.155063+00:00",
+  "productionAcceptance": false,
+  "checks": [
+    {
+      "name": "services",
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "mranked-http-it-bb44daedd643",
+        "--env-file",
+        "/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/mranked-http-rehearsal-v66ygone/services.env",
+        "-f",
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/infra/compose.yaml",
+        "up",
+        "-d",
+        "--wait",
+        "postgres"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 5.871
+    },
+    {
+      "name": "create-database",
+      "command": [
+        "docker",
+        "exec",
+        "mranked-http-it-bb44daedd643-postgres-1",
+        "psql",
+        "-U",
+        "mranked_bootstrap",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        "CREATE DATABASE http_reverse_it OWNER migration_owner"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.249
+    },
+    {
+      "name": "flyway",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/private/tmp/mranked-http-transition-final-v26-r1/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Pmigration-integration",
+        "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 8.853
+    },
+    {
+      "name": "spring-package",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/private/tmp/mranked-http-transition-final-v26-r1/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-DskipTests",
+        "package"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 2.679
+    },
+    {
+      "name": "reverse-http",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_reverse_sync_postgres.py::test_postgres_reverse_sync_round_trip_preserves_target_identity",
+        "--basetemp=/private/tmp/mranked-http-transition-final-v26-r1/test-runtime",
+        "--junitxml=/private/tmp/mranked-http-transition-final-v26-r1/reverse-http.xml"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 13.916
+    },
+    {
+      "name": "cleanup",
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "mranked-http-it-bb44daedd643",
+        "--env-file",
+        "/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/mranked-http-rehearsal-v66ygone/services.env",
+        "-f",
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/infra/compose.yaml",
+        "down",
+        "--volumes",
+        "--remove-orphans"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.044
+    }
+  ]
+}

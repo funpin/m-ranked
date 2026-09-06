@@ -1,0 +1,69 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.0.8)
+
+2026-09-05T10:40:36.471+03:00  INFO 66472 --- [           main] org.mranked.MRankedApplication           : Starting MRankedApplication v0.1.0-SNAPSHOT using Java 21 with PID 66472 (/private/tmp/mranked-review-v27-build/m-ranked-backend-0.1.0-SNAPSHOT.jar started by funpin in /Users/funpin/Documents/ChatGPT/TG-monitoring)
+2026-09-05T10:40:36.474+03:00  INFO 66472 --- [           main] org.mranked.MRankedApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-09-05T10:40:37.204+03:00  INFO 66472 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-05T10:40:37.206+03:00  INFO 66472 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-09-05T10:40:37.229+03:00  INFO 66472 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 12 ms. Found 0 Redis repository interfaces.
+2026-09-05T10:40:37.478+03:00  WARN 66472 --- [           main] trationDelegate$BeanPostProcessorChecker : Bean 'jdbcQueryCounters' of type [org.mranked.operations.infrastructure.JdbcQueryMetricsConfiguration$QueryCounters] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [meterJdbcDataSources]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-09-05T10:40:37.815+03:00  INFO 66472 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 57685 (http)
+2026-09-05T10:40:37.827+03:00  INFO 66472 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-05T10:40:37.827+03:00  INFO 66472 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-09-05T10:40:37.845+03:00  INFO 66472 --- [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 1330 ms
+2026-09-05T10:40:38.283+03:00  WARN 66472 --- [           main] i.n.r.d.DnsServerAddressStreamProviders  : Can not find io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider in the classpath, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'
+2026-09-05T10:40:38.648+03:00  INFO 66472 --- [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+2026-09-05T10:40:39.314+03:00  INFO 66472 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 57685 (http) with context path '/'
+2026-09-05T10:40:39.369+03:00  INFO 66472 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 57686 (http)
+2026-09-05T10:40:39.369+03:00  INFO 66472 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-05T10:40:39.369+03:00  INFO 66472 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-09-05T10:40:39.371+03:00  INFO 66472 --- [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 48 ms
+2026-09-05T10:40:39.382+03:00  INFO 66472 --- [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-09-05T10:40:39.409+03:00  INFO 66472 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 57686 (http) with context path '/'
+2026-09-05T10:40:39.417+03:00  INFO 66472 --- [           main] org.mranked.MRankedApplication           : Started MRankedApplication in 3.636 seconds (process running for 3.967)
+2026-09-05T10:40:39.526+03:00  INFO 66472 --- [.1-57685-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-05T10:40:39.526+03:00  INFO 66472 --- [.1-57685-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-09-05T10:40:39.527+03:00  INFO 66472 --- [.1-57685-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-09-05T10:40:39.562+03:00  INFO 66472 --- [.1-57685-exec-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-09-05T10:40:39.695+03:00  INFO 66472 --- [.1-57685-exec-1] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@549f6150
+2026-09-05T10:40:39.697+03:00  INFO 66472 --- [.1-57685-exec-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-09-05T19:46:46.302+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=5m28s298ms).
+2026-09-05T19:52:39.883+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=5m23s574ms).
+2026-09-05T19:58:38.374+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=5m28s478ms).
+2026-09-05T21:18:33.729+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=16m54s374ms).
+2026-09-05T22:38:37.687+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=17m33s).
+2026-09-05T23:42:41.661+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=3m33s125ms).
+2026-09-06T00:00:43.249+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=17m31s600ms).
+2026-09-06T02:30:12.335+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=15m57s107ms).
+2026-09-06T03:53:03.535+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=42m8s567ms).
+2026-09-06T04:25:35.222+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=32m31s689ms).
+2026-09-06T04:43:00.975+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=17m25s752ms).
+2026-09-06T05:12:10.179+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=29m9s199ms).
+2026-09-06T05:59:19.606+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=47m9s433ms).
+2026-09-06T06:43:31.244+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=44m11s638ms).
+2026-09-06T07:01:00.806+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=17m29s561ms).
+2026-09-06T08:02:22.851+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h1m22s45ms).
+2026-09-06T08:47:45.234+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=45m22s384ms).
+2026-09-06T09:32:55.122+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=45m9s887ms).
+2026-09-06T09:50:34.876+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=17m39s755ms).
+2026-09-06T10:17:03.467+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=26m28s591ms).
+2026-09-06T11:17:57.198+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h53s731ms).
+2026-09-06T11:51:35.347+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=33m38s149ms).
+2026-09-06T12:19:01.738+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=27m26s391ms).
+2026-09-06T12:52:37.050+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=33m35s312ms).
+2026-09-06T13:19:57.895+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=27m20s844ms).
+2026-09-06T14:20:53.100+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h55s206ms).
+2026-09-06T14:51:56.142+03:00  WARN 66472 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=31m3s40ms).
+2026-09-06T15:45:24.014+03:00  INFO 66472 --- [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-09-06T15:45:24.032+03:00  INFO 66472 --- [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-09-06T15:45:24.037+03:00  INFO 66472 --- [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-09-06T15:45:24.038+03:00  INFO 66472 --- [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-09-06T15:45:24.195+03:00  INFO 66472 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-09-06T15:45:24.219+03:00  INFO 66472 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.

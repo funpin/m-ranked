@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import date, datetime, timezone
 import hashlib
 import json
@@ -14,7 +14,7 @@ from .model import ArchiveVerification
 
 
 DATASET_TYPE = "publication_metric_snapshot"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 COMPRESSION = "zstd"
 
 # This whitelist is deliberately independent of cursor metadata. Raw payloads,
@@ -44,6 +44,15 @@ ARCHIVE_SCHEMA = pa.schema(
         pa.field("source_fingerprint", pa.string(), nullable=False),
         pa.field("created_at", pa.timestamp("us", tz="UTC"), nullable=False),
         pa.field("reaction_breakdown_json", pa.string(), nullable=False),
+        pa.field("correction_sequence", pa.int64(), nullable=False),
+        pa.field("supersedes_snapshot_id", pa.int64()),
+        pa.field("correction_reason", pa.string()),
+        pa.field("views_quality", pa.string(), nullable=False),
+        pa.field("reactions_quality", pa.string(), nullable=False),
+        pa.field("comments_quality", pa.string(), nullable=False),
+        pa.field("shares_quality", pa.string(), nullable=False),
+        pa.field("metric_evidence_json", pa.string(), nullable=False),
+        pa.field("canonical_record", pa.string(), nullable=False),
     ],
     metadata={
         b"mranked.dataset_type": DATASET_TYPE.encode(),
@@ -54,10 +63,13 @@ ARCHIVE_SCHEMA = pa.schema(
 )
 
 
-def sha256_file(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
+def sha256_file(path: Path, *, chunk_size: int = 1024 * 1024,
+        on_chunk: Callable[[], None] | None = None) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
         for chunk in iter(lambda: source.read(chunk_size), b""):
+            if on_chunk is not None:
+                on_chunk()
             digest.update(chunk)
     return digest.hexdigest()
 
@@ -88,7 +100,36 @@ def normalize_row(row: Mapping[str, Any]) -> dict[str, Any]:
     result["reaction_breakdown_json"] = json.dumps(
         decoded, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
+    metric_evidence = result["metric_evidence_json"]
+    if not isinstance(metric_evidence, str):
+        result["metric_evidence_json"] = json.dumps(metric_evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    if not isinstance(json.loads(result["canonical_record"]), dict):
+        raise ValueError("canonical record must be an object")
     return result
+
+
+def _verify_canonical_fields(row: Mapping[str, Any]) -> None:
+    canonical = json.loads(row["canonical_record"])
+    if not isinstance(canonical, dict):
+        raise ValueError("invalid archive canonical record")
+    for name, value in row.items():
+        if name == "canonical_record":
+            continue
+        target = {"snapshot_id": "id", "reaction_breakdown_json": "reaction_breakdown", "metric_evidence_json": "metric_evidence"}.get(name, name)
+        actual = canonical.get(target)
+        if isinstance(value, datetime):
+            try:
+                actual = datetime.fromisoformat(actual)
+            except (TypeError, ValueError):
+                raise ValueError("archive canonical timestamp mismatch") from None
+        elif isinstance(value, date):
+            value = value.isoformat()
+        elif name.endswith("_json"):
+            value = json.loads(value) if isinstance(value, str) else value
+        elif name in ("publication_id", "collection_run_id", "primary_account_id"):
+            value = str(value)
+        if actual != value:
+            raise ValueError(f"archive canonical field mismatch: {name}")
 
 
 def _as_utc(value: Any, field: str) -> datetime:
@@ -160,10 +201,11 @@ def verify_archive(
     expected_row_count: int | None = None,
     expected_sha256: str | None = None,
     sample_size: int = 16,
+    on_batch: Callable[[], None] | None = None,
 ) -> ArchiveVerification:
     if sample_size < 1 or sample_size > 10_000:
         raise ValueError("sample_size must be between 1 and 10000")
-    digest = sha256_file(path)
+    digest = sha256_file(path,on_chunk=on_batch)
     if expected_sha256 is not None and digest != expected_sha256:
         raise ValueError("archive SHA-256 mismatch")
 
@@ -191,11 +233,24 @@ def verify_archive(
     max_observed_at: datetime | None = None
     sample_rows_read = 0
     sample_validated = False
+    chain = hashlib.sha256(b"").digest()
+    previous_id: int | None = None
     for batch in parquet.iter_batches(
         batch_size=max(1, sample_size),
-        columns=["observed_at", "reaction_breakdown_json"],
+
     ):
-        observed_column = batch.column(0)
+        if on_batch is not None:
+            on_batch()
+        for record in batch.to_pylist():
+            _verify_canonical_fields(record)
+            if previous_id is not None and record["snapshot_id"] <= previous_id:
+                raise ValueError("archive snapshot ordering or uniqueness mismatch")
+            previous_id = record["snapshot_id"]
+            canonical = record["canonical_record"]
+            if not isinstance(json.loads(canonical), dict):
+                raise ValueError("invalid archive canonical record")
+            chain = hashlib.sha256(chain + hashlib.sha256(canonical.encode("utf-8")).digest()).digest()
+        observed_column = batch.column(batch.schema.get_field_index("observed_at"))
         for value in observed_column.to_pylist():
             value = _as_utc(value, "observed_at")
             min_observed_at = value if min_observed_at is None else min(min_observed_at, value)
@@ -217,4 +272,5 @@ def verify_archive(
         sample_rows_read=sample_rows_read,
         row_groups=parquet.metadata.num_row_groups,
         compression=COMPRESSION,
+        canonical_sha256=chain.hex(),
     )

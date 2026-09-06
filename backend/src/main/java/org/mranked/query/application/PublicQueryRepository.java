@@ -43,6 +43,18 @@ public interface PublicQueryRepository {
             long datasetRevision
     );
 
+    default ActivityRatingResult findActivityRatingPage(
+            ActivityRatingQuery query, int entityLimit, long datasetRevision, UUID afterEntityId
+    ) {
+        if (afterEntityId != null) throw new UnsupportedOperationException("rating pagination unavailable");
+        return findActivityRating(query, entityLimit, datasetRevision);
+    }
+
+    default List<org.mranked.query.domain.ComparisonCandidate> findComparisonCandidates(
+            Platform platform, int limit, UUID afterId, long revision) {
+        return List.of();
+    }
+
     Optional<ComparisonView> findComparison(
             Platform platform,
             int horizonHours,
@@ -53,6 +65,16 @@ public interface PublicQueryRepository {
             ComparisonSelection selection,
             long datasetRevision
     );
+
+    default List<org.mranked.query.domain.PublicationListItem> findAccountPublications(
+            UUID accountId,LegacyEntityType accountType,int limit,UUID afterId,long revision) {return List.of();}
+    default List<AccountView> findInstitutionAccounts(long legacyId,Platform platform,int limit,UUID afterId,
+            long revision) {return List.of();}
+    default long countInstitutionAccounts(long legacyId,Platform platform) {return 0;}
+    default List<org.mranked.query.domain.HistorySnapshot> findPublicationHistory(
+            UUID publicationId,int limit,Long afterSnapshotId,long revision) {return List.of();}
+    default String findPublicationArchivedText(UUID publicationId,long revision) {return null;}
+    default List<Long> findPublicationNeighbours(UUID publicationId,LegacyEntityType type) {return java.util.Arrays.asList(null,null);}
 
     Optional<AccountView> findAccount(
             long legacyId,

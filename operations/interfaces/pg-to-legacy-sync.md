@@ -126,9 +126,34 @@ versions, non-Telegram synthetic/uncertain samples, Telegram shares, a missing
 Telegram reaction total, invalid identity roles, conflicting sampling buckets,
 and administrative account changes that cannot be safely projected.
 
+## Original identity inputs during rollback
+
+The supported configuration delta is limited to accepted `account.upsert` and
+`account.native_id` commands for an account already bound to the S-final
+namespace and immutable legacy alias. Canonical account key, platform,
+institution, enabled state and access mode must remain unchanged. Catalog
+creation, moves, deletion, enable/disable, policy changes and every other
+configuration action remain blocked. Presentation or native-ID changes never
+replace the canonical key or its alias.
+
+The adapter reads the immutable `catalog_command_receipt` acceptance record and
+verifies the separately retained original `{action,target,expected,body}` file
+against `request_digest`. Expected identity values come from that file, never
+from the receipt response state. Collector changes use their original input
+receipt bound to the ingestion revision. A missing, unsafe or corrupt receipt
+fails closed even if the current account fields happen to match.
+
+Collector, Java admin and bridge/reverse processes must share
+`MRANKED_IDENTITY_RECEIPT_DIR`; retain `admin/<sha256>.json` and
+`collector/<platform>/<sha256>.json` with their original private permissions.
+See [IDENTITY_RECEIPTS.md](../runbooks/IDENTITY_RECEIPTS.md) for backup and
+restore verification. A confirmed admin native-ID clear is authoritative and
+writes SQLite NULL. An absent collector observation remains unknown and does
+not erase the previous value.
+
 ## Fail-closed behavior
 
-Any binding mismatch, missing baseline revision, non-ingestion delta revision,
+Any binding mismatch, missing baseline revision, unsupported delta revision,
 missing source-run/account metadata, collector-lock conflict, alias collision,
 duplicate key, malformed envelope, unsupported value, SQLite integrity error,
 insufficient disk space, expired window or durability failure returns non-zero.
@@ -143,11 +168,14 @@ drain or verification cannot finish, both writer sets remain stopped.
 ## Disposable integration proof and production-like Gate W evidence
 
 Run the integration rehearsal against an otherwise empty disposable database
-with exactly successful Flyway V1-V8, a schema-v15 SQLite S-final, separate
+with exactly successful Flyway V1-V29, a schema-v15 SQLite S-final, separate
 collector/migration credentials and all four platforms. It covers repeated
 application of the same plan, fixed drain, verify, stop, a SQLite Backup API
-export, and a forward bridge catch-up/replay proving stable publication,
-identity, snapshot and alias state.
+export, restarted legacy HTTP reads, and a new `s_final` import followed by
+its exact zero-write repeat. The fixture proves stable publication, account
+presentation/native histories, snapshots and aliases. With the packaged HTTP
+verifier it also runs authenticated Java admin commands, preserves one active
+writer owner, and rejects missing/corrupt collector and admin receipts.
 
 The reporter deliberately defaults to
 `environment=disposable-postgresql-integration`. Host names and DSNs never
@@ -163,6 +191,18 @@ rtk env \
   MRANKED_TEST_REVERSE_SYNC_REPORT_PATH="/NEW/IMMUTABLE/PATH/reverse-sync.json" \
   .venv/bin/python -m pytest -q tests/test_reverse_sync_postgres.py
 ```
+
+The collector-only PostgreSQL test is useful regression evidence but cannot
+satisfy v4 Gate W by itself. Its HTTP variant additionally requires
+`MRANKED_HTTP_REHEARSAL_JAR`, `MRANKED_HTTP_REHEARSAL_JAVA`,
+`MRANKED_HTTP_REHEARSAL_API_READ_DSN` and
+`MRANKED_HTTP_REHEARSAL_API_WRITE_ADMIN_DSN`, with all roles targeting the same
+explicit loopback `*_it` database. The disposable bootstrap principal must be
+able to create and remove the invocation's unique read login. That login
+inherits `api_read` table/function rights and receives database CONNECT;
+`api_write_admin` cannot inherit CONNECT through `api_read` while writers are
+fenced. Existing cluster roles are not altered. The harness restores its
+own database ACL and removes the temporary role on exit.
 
 A production-like run is possible only from the installed immutable release
 itself. Run its own `.venv/bin/python` with bytecode writes disabled and set
@@ -225,11 +265,11 @@ use pgpass. The namespace and operator/ticket are passed into the actual bridge
 and reverse-sync start/drain operations; they are not report-only labels.
 
 All DSNs are password-free and use pgpass. The test refuses a database that is
-not otherwise empty or whose complete Flyway history is not the ordered V1-V8
+not otherwise empty or whose complete Flyway history is not the ordered V1-V29
 version/script/Flyway-checksum manifest, optionally preceded by the one exact
 Flyway 12 rank-0 schema-creation marker. This covers both a pre-created Flyway
 schema (no marker) and Flyway-created schema (marker); every other baseline,
-repeatable or non-versioned row is rejected. The eight migration file bytes are
+repeatable or non-versioned row is rejected. All 27 migration file bytes are
 verified separately. The caller-provisioned database is single-use; the test
 does not create, clean or drop it.
 
@@ -239,83 +279,47 @@ Use a new approval-scoped path for every run so a failed attempt cannot make an
 older pass artifact look current. Consumer preflight also rejects either file
 when it is group/world writable.
 
-`cutover-preflight.sh --mode writer-cutover` accepts only report contract v3.
+`cutover-preflight.sh --mode writer-cutover` accepts only report contract v4 (the durable journal remains state v3).
 Every enforced object has an exact key set; missing or additional keys, wrong
 JSON types, and unknown manifest entries fail closed. The complete shape is:
 
-```json
-{
-  "reportType": "reverse-sync-rehearsal",
-  "reportVersion": 3,
-  "status": "pass",
-  "environment": "production-like",
-  "generatedAt": "2026-09-05T12:00:00+00:00",
-  "release": {
-    "id": "release-2026-09-05",
-    "sha256SumsSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  },
-  "operator": "named-operator",
-  "changeTicket": "GATE-W-APPROVAL",
-  "sourceNamespace": "m-ranked-production",
-  "database": "mranked_rehearsal_20260905",
-  "flyway": {
-    "schemaVersion": 8,
-    "migrationCount": 8,
-    "fileSha256": {
-      "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1",
-      "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd",
-      "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1",
-      "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82",
-      "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41",
-      "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64",
-      "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb",
-      "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c"
-    },
-    "databaseMigrations": [
-      {"version": "1", "script": "V1__target_baseline.sql", "checksum": -1636077697, "success": true},
-      {"version": "2", "script": "V2__rebuild_core_projections.sql", "checksum": 839607018, "success": true},
-      {"version": "3", "script": "V3__collector_observation_times_and_identity_grants.sql", "checksum": -1456658399, "success": true},
-      {"version": "4", "script": "V4__admin_collection_run_status_grants.sql", "checksum": 1318350062, "success": true},
-      {"version": "5", "script": "V5__legacy_activity_period_projection.sql", "checksum": -1313754193, "success": true},
-      {"version": "6", "script": "V6__comparison_valid_observation_hourly_projection.sql", "checksum": -290358219, "success": true},
-      {"version": "7", "script": "V7__activity_rating_read_grants.sql", "checksum": -1228913579, "success": true},
-      {"version": "8", "script": "V8__legacy_overview_projection.sql", "checksum": -574188650, "success": true}
-    ]
-  },
-  "platforms": ["max", "rutube", "telegram", "vk"],
-  "replay": {"runCount": 4, "idempotent": true},
-  "duplicates": {
-    "observationCount": 0,
-    "identityCount": 0,
-    "primaryIdentityCount": 0,
-    "snapshotCount": 0
-  },
-  "preservation": {
-    "publicationMismatches": 0,
-    "identityMismatches": 0,
-    "snapshotMismatches": 0,
-    "aliasMismatches": 0
-  },
-  "forwardReconciliation": {
-    "status": "pass",
-    "criticalMismatches": 0
-  },
-  "reverseSync": {
-    "status": "stopped",
-    "journalStateVersion": 3,
-    "baselineRevisionCount": 1,
-    "baselineRevisionSetSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "fixedRevisionCount": 4,
-    "fixedRevisionSetSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-    "planSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-  },
-  "sFinal": {
-    "batchId": "11111111-1111-4111-8111-111111111111",
-    "sourceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-    "gate": "pass"
-  }
-}
+The report has the strict top-level sections `release`, `flyway`, `platforms`,
+`replay`, `duplicates`, `preservation`, `forwardReconciliation`, `reverseSync`,
+`sFinal`, `secondSFinal`, `accountIdentityTransitions`, and `cutoverPhases`, plus
+its report/provenance fields. The executable schema is the
+`check_reverse_sync_rehearsal_gate` predicate in `cutover-preflight.sh`; its
+positive fixture and mutation tests are in `test_operational_flyway_gates.py`.
+A `{status:"pass"}` document or an old v3 report cannot pass.
+
+Both S-final sections must contain independent complete identity-history and
+original-formula projection proofs bound to their source SHA and one dataset
+revision. The second must have a different source and batch; its repeat must
+have the same batch, zero writes and unchanged revision. Identity evidence
+must include original receipt hashes, collector and Java admin changes,
+authoritative native NULL transitions, unchanged complete history, and four
+actual missing/corrupt receipt failures. The HTTP section must prove all four
+phases and all platform reads, zero failed samples, seven rejected gates,
+legacy/collector/admin writer ownership, and repeated real Java commands.
+
+Validate the actual saved artifact without changing or filling any fields:
+
+```bash
+rtk proxy .venv/bin/python -m operations.reverse_sync.rehearsal_contract \
+  /NEW/IMMUTABLE/PATH/reverse-http.json \
+  --output /NEW/IMMUTABLE/PATH/reverse-protocol-validation.json
 ```
+
+This runs the same JQ predicate with only external release/operator approval
+comparisons excluded. Its report binds the untouched input and predicate
+SHA-256 and always records `productionAcceptance=false`. Production preflight
+passes `protocolOnly=false` explicitly and still requires the real active
+release, namespace, named operator, approval, file ownership and freshness.
+A protocol PASS therefore cannot reopen production writers by itself.
+
+These checks supplement the separate four-provider collector parity gate;
+they do not establish live-provider completeness or production routing
+acceptance. A local report remains explicitly local and cannot be promoted by
+renaming or copying it.
 
 Before applying the machine predicate, preflight resolves the configured
 `MRANKED_CURRENT_LINK`, requires its absolute target to be one direct child of
@@ -340,7 +344,7 @@ sidecar mtime and `generatedAt` age must each be in
 
 The checked-in
 `migration/reports/reverse-sync-rehearsal-v8-local-v3.json` is disposable
-regression evidence. Newly generated local reports use the v3 layout but retain
+regression evidence. Newly generated local reports use the v4 layout but retain
 explicit non-production placeholders such as `release.id=local-unbound`; most
 importantly, their environment is hardcoded by default to
 `disposable-postgresql-integration`. Neither the local report nor its sidecar
@@ -360,7 +364,7 @@ Use `REVERSE_SYNC_DATABASE_URL` without a password and `MIGRATION_PGPASSFILE`;
 the CLI rejects password-bearing DSNs in argv. The systemd unit loads the pgpass
 file as a credential and runs as `telegram-monitor` with a narrow writable path.
 
-The frozen V1-V8 release has no dedicated `reverse_sync` database role. The
+The frozen V1-V29 release has no dedicated `reverse_sync` database role. The
 deployed adapter therefore uses `migration_bridge`, which has broader catalog,
 migration and ingest privileges than the adapter needs. Preflight proves the
 required reads and alias insert ability but cannot prove absence of excess
@@ -368,5 +372,5 @@ grants. This is a recorded residual least-privilege risk, not a claim that the
 role is minimal. Mitigate it with a host-local DSN, private pgpass permissions,
 the hardened systemd unit, named operator/ticket evidence and a credential
 limited to the rollback window. Creating a narrower role requires a separately
-reviewed future migration; do not alter the frozen V1-V8 manifest during this
+reviewed future migration; do not alter the frozen V1-V29 manifest during this
 cutover.

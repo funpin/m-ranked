@@ -72,7 +72,7 @@ the target runtime does not perform an interactive login.
   running/partial/failed run for its platform, partition, and collector version;
   otherwise it uses a deterministic wall-clock schedule slot.
 - Each account commits its account/publication observations, reaction rows,
-  sanitized digest lineage, account cursor, dataset revision, and outbox event
+  retrievable sanitized evidence, account cursor, dataset revision, and outbox event
   in one PostgreSQL transaction.
 - That collector outbox event is `projection.rebuild.requested`; a raw ingestion
   commit is never advertised as `dataset.revision.changed`. The separate
@@ -116,9 +116,45 @@ V3 stores scheduler, observation, and collection instants separately in
 and per-account cursor. Observed presentation and native identifiers are
 versioned in the two catalog history tables and their denormalized current
 values are updated with the V3 column-level grants. Native identities keep the
-bridge-compatible `<platform>:native_id` namespace. No raw body is placed in
-PostgreSQL: `external_ref=sha256:<digest>` is used until an encrypted
-object-store writer and key reference are available.
+bridge-compatible `<platform>:native_id` namespace. V9 writes sanitized evidence to `COLLECTOR_RAW_EVIDENCE_DIR` (default
+`data/target-raw-evidence`), which must be durable service-owned storage. The
+content-addressed JSON is published atomically with mode `0400` inside a `0700`
+directory before the canonical transaction commits. `ingest.raw_payload` stores
+the immutable `file://` reference, verified SHA-256 and seven-day `purge_after`.
+`ImmutableEvidenceStore.read()` enforces expiry, root confinement, no symlinks,
+permissions, canonical serialization, redaction and content hash. A crash before
+PG commit may leave an unreferenced object; exact retry reuses it. Missing or
+corrupt evidence fails closed. This raw-evidence directory is not a cold archive.
+Normalization rejection records sanitized retrievable evidence in
+`ingest.evidence_quarantine` without publishing canonical facts.
+
+## Collector metrics
+
+Set `COLLECTOR_METRICS_FILE` to an absolute, service-writable Prometheus textfile
+path, for example `/var/lib/node_exporter/textfile_collector/telegram.prom`.
+Provision its directory first and use a distinct file for each platform process
+and shard. A node exporter textfile collector can serve these files on the
+private monitoring network. Each update is atomically replaced with mode `0640`.
+
+The runtime records account latency histograms (success/failure), run outcomes,
+inserted snapshot counters and the last successful collection timestamp. Labels
+are bounded by the four platform enum values and fixed status/outcome enums;
+they never contain account IDs, URLs, credentials or exception messages. Counter
+resets on process restart have normal Prometheus counter semantics. A failed
+metrics write logs only a sanitized exception class and cannot undo a committed
+collection. Alert expressions are in
+`operations/observability/collector-alerts.yml`; this textfile producer does not
+claim that a production scrape endpoint has already been deployed.
+
+V9 stores each metric's quality and source/semantic evidence independently.
+Row-level quality is operational only: one invalid shares value cannot hide
+valid views, reactions or comments. Publication and account insert triggers
+serialize corrections by logical slot, no-op exact fingerprints, reject reused
+fingerprints with different values, and assign immutable predecessor, sequence
+and reason. Both active-tip views select the largest correction sequence.
+Published V1–V8 rows are backfilled once without changing their original values.
+Older hash-only raw references are marked `legacy_evidence_unavailable`; their
+missing payload is an explicit acceptance gap, never evidence of retrieval.
 
 ## Explicit remaining validation gaps
 
@@ -127,16 +163,34 @@ object-store writer and key reference are available.
   production-like shadow run must still prove discovery + historical refresh +
   two-check deletion/recovery for every enabled platform before legacy
   collection can be retired.
-- Per-metric quality is retained by normalization and covered by the source
-  fingerprint, while V1 stores only one aggregate snapshot quality value.
-- Digest lineage is atomic, but representative encrypted raw payload archival is
-  not implemented.
+- Remote encrypted evidence storage/key management and production storage
+  acceptance remain external work. `ImmutableEvidenceStore.purge_expired()`
+  removes expired/unreferenced blobs in bounded batches using the collector's
+  per-hash database lock. All PG references are checked before unlink; orphan
+  files receive at least seven days of grace. Use the maintenance role and the
+  same durable directory; the generic PG metadata purge alone does not remove
+  the files.
 
-Unit tests live in `tests/test_target_collectors.py`. The optional real-schema
-test in `tests/test_target_collectors_postgres.py` runs only when
-`MRANKED_TEST_POSTGRES_DSN` is set to a collector-role DSN for a database with
+Unit tests live in `tests/test_target_collectors.py`. The real-schema suite
+in `tests/test_target_collectors_postgres.py` is mandatory in
+`python -m migration.integration.run`: that producer provisions its own services
+and rejects skipped integration cases. A standalone invocation requires
+`MRANKED_TEST_POSTGRES_DSN` set to a collector-role DSN for a database with
 the target Flyway schema. Fixture creation/cleanup uses
 `MRANKED_TEST_POSTGRES_ADMIN_DSN`; it falls back to the first DSN only for a
-privileged disposable test database. Against V5 it also verifies public
+privileged disposable test database. Against the exact current schema it verifies public
 baseline/actual persistence, retry idempotency, monotonic forced-incomplete
 merge, and the rollback-only `1d` activity projection from publication zero.
+
+Account observations also publish a minimal original identity receipt before
+their PostgreSQL transaction commits. Set `MRANKED_IDENTITY_RECEIPT_DIR` to the
+same protected root used by the API, migration verifier and reverse sync; each
+collector writes only its own `collector/<platform>/` subtree. The deployed
+shared-reader layout uses writer-owned `2750` directories and immutable `0440`
+files with group `m-ranked-identity-readers`. Collectors are not members of that
+group; reverse/backup readers receive supplementary membership. Private
+single-user fixtures still use exact `0700`/`0400`. These inputs retain username,
+title, safe URL, native ID, observation time and committed event bindings. They
+are retained independently of expiring provider raw payloads so that later
+S_final verification can reconstruct the identity timeline from original
+inputs. See [ownership and recovery requirements](../operations/runbooks/IDENTITY_RECEIPTS.md).

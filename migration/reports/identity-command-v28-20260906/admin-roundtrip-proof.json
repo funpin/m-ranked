@@ -1,0 +1,118 @@
+{
+  "status": "pass",
+  "secondSFinal": {
+    "status": "pass",
+    "critical_mismatches": 0
+  },
+  "repeat": {
+    "status": "pass",
+    "critical_mismatches": 0
+  },
+  "history": {
+    "status": "pass",
+    "sourceSha256": "8567bc07f0a504fc439bb2024da9e10b043b2e2ae982eed73ab801daf63e9839",
+    "sourceUnchanged": true,
+    "sourceArtifacts": [
+      "648697f03fb96d1b78c341ccfe15ffea679c7631904ebf6a452823bbeff87466",
+      "8567bc07f0a504fc439bb2024da9e10b043b2e2ae982eed73ab801daf63e9839"
+    ],
+    "datasetRevision": 12,
+    "asOf": "2026-09-06T12:54:24.555754+00:00",
+    "identitySourceReceipts": [
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "1ba3550e81afaeee0190a8dfb299e9dc95b37e420a8dd5f191f3afc0e6854b9b"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "37f0976e098a6a56005859d304de5b5c328885fa3b63db08316a90968419b206"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "71e6411eaa6cb63becd896af2f073c70521df63bb7c7da8ea59ddb723a5769b2"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "7b8ec7a7464f078873eb56c4618f732d5c794a9f2e3cb39a9ee7cb1aeb294cb3"
+      },
+      {
+        "kind": "admin",
+        "platform": null,
+        "sha256": "9184921a27f224d5c284a84053ef340d0b577c127199ada134d0e9ab8e001756"
+      }
+    ],
+    "checks": [
+      {
+        "name": "presentation",
+        "status": "pass",
+        "expected": {
+          "rows": 2,
+          "distinctKeys": 2,
+          "duplicateKeys": 0,
+          "sha256": "386f103b0702b46532cbc702b2d0f5537e58638ba5be037c5b14d83854f0c514"
+        },
+        "actual": {
+          "rows": 2,
+          "distinctKeys": 2,
+          "duplicateKeys": 0,
+          "sha256": "386f103b0702b46532cbc702b2d0f5537e58638ba5be037c5b14d83854f0c514"
+        },
+        "changedKeysSample": []
+      },
+      {
+        "name": "native",
+        "status": "pass",
+        "expected": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "7acb2a4ef10c6054edb9e7dad6390b88055c989c4445afb052b8e57645b54552"
+        },
+        "actual": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "7acb2a4ef10c6054edb9e7dad6390b88055c989c4445afb052b8e57645b54552"
+        },
+        "changedKeysSample": []
+      }
+    ]
+  },
+  "receiptRestore": {
+    "status": "pass",
+    "originalRootUnavailable": true,
+    "inventory": [
+      {
+        "relativePath": "admin/1ba3550e81afaeee0190a8dfb299e9dc95b37e420a8dd5f191f3afc0e6854b9b.json",
+        "sha256": "1ba3550e81afaeee0190a8dfb299e9dc95b37e420a8dd5f191f3afc0e6854b9b",
+        "bytes": 128
+      },
+      {
+        "relativePath": "admin/37f0976e098a6a56005859d304de5b5c328885fa3b63db08316a90968419b206.json",
+        "sha256": "37f0976e098a6a56005859d304de5b5c328885fa3b63db08316a90968419b206",
+        "bytes": 128
+      },
+      {
+        "relativePath": "admin/71e6411eaa6cb63becd896af2f073c70521df63bb7c7da8ea59ddb723a5769b2.json",
+        "sha256": "71e6411eaa6cb63becd896af2f073c70521df63bb7c7da8ea59ddb723a5769b2",
+        "bytes": 128
+      },
+      {
+        "relativePath": "admin/7b8ec7a7464f078873eb56c4618f732d5c794a9f2e3cb39a9ee7cb1aeb294cb3.json",
+        "sha256": "7b8ec7a7464f078873eb56c4618f732d5c794a9f2e3cb39a9ee7cb1aeb294cb3",
+        "bytes": 122
+      },
+      {
+        "relativePath": "admin/9184921a27f224d5c284a84053ef340d0b577c127199ada134d0e9ab8e001756.json",
+        "sha256": "9184921a27f224d5c284a84053ef340d0b577c127199ada134d0e9ab8e001756",
+        "bytes": 309
+      }
+    ]
+  },
+  "missingReceipt": "fail-closed",
+  "forgedReceipt": "fail-closed"
+}

@@ -326,6 +326,7 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible() 
     finally:
         run_ids = [item.run_id for item in contexts]
         try:
+            admin.execute("SET session_replication_role='replica'")
             admin.execute(
                 """DELETE FROM ops_and_admin.outbox_event
                     WHERE dataset_revision_id IN (
@@ -404,6 +405,7 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible() 
                 "DELETE FROM catalog.institution WHERE id=%s", (institution_id,),
             )
         finally:
+            admin.execute("SET session_replication_role=origin")
             admin.close()
 
 
@@ -566,7 +568,10 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic() -> None:
         ).fetchall()
         assert len(lineage) == 2
         assert all(row["payload"] is None for row in lineage)
-        assert all(row["external_ref"].startswith("sha256:") for row in lineage)
+        assert all(row["external_ref"].startswith("file://") for row in lineage)
+        from pathlib import Path
+        from urllib.parse import unquote, urlsplit
+        assert all(Path(unquote(urlsplit(row["external_ref"]).path)).is_file() for row in lineage)
         assert admin.execute(
             """SELECT count(*) AS count
                  FROM catalog.account_identity_history
@@ -880,6 +885,7 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic() -> None:
             recovery_context.run_id,
         )
         try:
+            admin.execute("SET session_replication_role='replica'")
             admin.execute(
                 """DELETE FROM ops_and_admin.outbox_event
                     WHERE dataset_revision_id IN (
@@ -949,4 +955,5 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic() -> None:
             admin.execute("DELETE FROM catalog.platform_account WHERE id=%s", (account_id,))
             admin.execute("DELETE FROM catalog.institution WHERE id=%s", (institution_id,))
         finally:
+            admin.execute("SET session_replication_role=origin")
             admin.close()

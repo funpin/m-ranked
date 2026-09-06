@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 import json
 from typing import Any, Mapping
@@ -8,7 +8,7 @@ from uuid import UUID
 
 
 ENVELOPE_KEY = "_mranked_reverse_sync"
-ENVELOPE_VERSION = 1
+ENVELOPE_VERSION = 2
 PUBLICATION_ENVELOPE_KEY = "_mranked_reverse_publication"
 PUBLICATION_ENVELOPE_VERSION = 1
 SNAPSHOT_TABLES = frozenset({"reaction_snapshots", "platform_snapshots"})
@@ -45,6 +45,9 @@ class ReverseSnapshotEnvelope:
     capability_version: int
     source_fingerprint: str
     created_at: datetime
+    metric_quality: Mapping[str, str] | None = None
+    metric_evidence: Mapping[str, Any] = field(default_factory=dict)
+    reaction_breakdown: Mapping[str, int] = field(default_factory=dict)
 
     def as_payload(self) -> dict[str, Any]:
         return {
@@ -62,7 +65,10 @@ class ReverseSnapshotEnvelope:
                 "capability_version": self.capability_version,
                 "source_fingerprint": self.source_fingerprint,
                 "created_at": self.created_at.isoformat(),
-            }
+                "metric_quality": dict(self.metric_quality) if self.metric_quality is not None else None,
+                "metric_evidence": dict(self.metric_evidence),
+            },
+            "reaction_breakdown": dict(self.reaction_breakdown),
         }
 
     def as_json(self) -> str:
@@ -185,7 +191,7 @@ def parse_reverse_snapshot_envelope(value: Any) -> ReverseSnapshotEnvelope | Non
     raw = payload[ENVELOPE_KEY]
     if not isinstance(raw, Mapping):
         raise ValueError("reverse-sync snapshot envelope must be an object")
-    if raw.get("version") != ENVELOPE_VERSION:
+    if raw.get("version") not in (1, ENVELOPE_VERSION):
         raise ValueError("unsupported reverse-sync snapshot envelope version")
     legacy_table = str(raw.get("legacy_table") or "")
     if legacy_table not in SNAPSHOT_TABLES:
@@ -200,6 +206,18 @@ def parse_reverse_snapshot_envelope(value: Any) -> ReverseSnapshotEnvelope | Non
     source_fingerprint = str(raw.get("source_fingerprint") or "").strip()
     if not source_fingerprint:
         raise ValueError("reverse-sync source_fingerprint must not be blank")
+    metric_quality = raw.get("metric_quality")
+    if metric_quality is not None and (not isinstance(metric_quality, Mapping)
+            or set(metric_quality) != {"views","reactions","comments","shares"}
+            or any(value not in OBSERVATION_QUALITIES for value in metric_quality.values())):
+        raise ValueError("invalid reverse-sync per-metric quality")
+    metric_evidence = raw.get("metric_evidence", {})
+    breakdown = payload.get("reaction_breakdown", {})
+    if not isinstance(metric_evidence, Mapping) or not isinstance(breakdown, Mapping):
+        raise ValueError("reverse-sync metric evidence and reactions must be objects")
+    if any(not isinstance(key,str) or not key or isinstance(count,bool) or not isinstance(count,int) or count<0
+           for key,count in breakdown.items()):
+        raise ValueError("invalid reverse-sync reaction breakdown")
     return ReverseSnapshotEnvelope(
         legacy_table=legacy_table,
         publication_id=UUID(str(raw["publication_id"])),
@@ -217,6 +235,9 @@ def parse_reverse_snapshot_envelope(value: Any) -> ReverseSnapshotEnvelope | Non
         ),
         source_fingerprint=source_fingerprint,
         created_at=_aware_datetime(raw.get("created_at"), "created_at"),
+        metric_quality=dict(metric_quality) if metric_quality is not None else None,
+        metric_evidence=dict(metric_evidence),
+        reaction_breakdown=dict(breakdown),
     )
 
 

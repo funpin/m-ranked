@@ -12,7 +12,24 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class PublicCacheKeyFactory {
-    private static final String PREFIX = "mranked:public:v1:dto1";
+    private static final String PREFIX = "mranked:public:v1:dto2";
+    private final String representationVersion;
+
+    public PublicCacheKeyFactory() {this(contractVersion());}
+    PublicCacheKeyFactory(String representationVersion) {this.representationVersion=representationVersion;}
+    public String representationVersion() {return representationVersion;}
+    private static String contractVersion() {
+        try(var input=PublicCacheKeyFactory.class.getResourceAsStream("/contract/m-ranked-v1.yaml");
+            var build=PublicCacheKeyFactory.class.getResourceAsStream("/META-INF/build-info.properties")) {
+            if(input==null)throw new IllegalStateException("packaged public API contract is missing");
+            if(build==null)throw new IllegalStateException("packaged public API build identity is missing");
+            // Code-only fixes also change public representations at the same PG
+            // revision. Build identity is packaged once and shared by replicas.
+            MessageDigest digest=sha256();
+            digest.update(input.readAllBytes());digest.update((byte)0);digest.update(build.readAllBytes());
+            return HexFormat.of().formatHex(digest.digest());
+        } catch(java.io.IOException error) {throw new IllegalStateException("cannot read packaged public API contract",error);}
+    }
 
     public PublicCacheKey create(
             String namespace,
@@ -30,6 +47,7 @@ public class PublicCacheKeyFactory {
         }
 
         MessageDigest digest = sha256();
+        updateLengthPrefixed(digest, representationVersion);
         updateLengthPrefixed(digest, namespace);
         new TreeMap<>(normalizedQuery).forEach((name, value) -> {
             if (name == null || name.isBlank()) {

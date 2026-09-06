@@ -1,0 +1,642 @@
+{
+  "accountIdentityTransitions": {
+    "accountId": "8458e610-50fc-5a8f-a307-0aa6e5d0a7a9",
+    "canonicalExternalId": "beta_max",
+    "fullHistorySha256BeforeSecondSFinal": "ceb652c25ec83b58c1fdcb7a036a28ef37e6906edd92639a348fb8b624b87f39",
+    "fullHistoryUnchangedAfterSecondSFinalAndRepeat": true,
+    "javaAdminCommands": [],
+    "nativeRows": 2,
+    "nativeSequence": [
+      null,
+      "-20001",
+      "-20002"
+    ],
+    "originalReceiptsSha256": {
+      "collector/max/1f8d493d7c55245408e71eceb037885663a151d47f6f0bb3f968b6f4a9ade150.json": "1f8d493d7c55245408e71eceb037885663a151d47f6f0bb3f968b6f4a9ade150",
+      "collector/max/3e6dfadc0f93ec10eaa4a0b3c25c7183f137d4a0dfdba2e735c1b0f048442091.json": "3e6dfadc0f93ec10eaa4a0b3c25c7183f137d4a0dfdba2e735c1b0f048442091",
+      "collector/max/a45de6636b5f9ec6c61fda3bc497636bfea5b57a23cfa531fcd89cadcf24bdba.json": "a45de6636b5f9ec6c61fda3bc497636bfea5b57a23cfa531fcd89cadcf24bdba",
+      "collector/rutube/8dcaa2e5a596839ab54620fc3af211d33bda76e08e69434c4eafc8131b4bd277.json": "8dcaa2e5a596839ab54620fc3af211d33bda76e08e69434c4eafc8131b4bd277",
+      "collector/telegram/f52cb477b25c1273fbe31c012e1a15fa7023b768ba8d5e051bab2e228bd10263.json": "f52cb477b25c1273fbe31c012e1a15fa7023b768ba8d5e051bab2e228bd10263",
+      "collector/vk/48df83521695e08a958c6e9ebc12a47793f5afa283b2796073ae9d2cd2efa4d5.json": "48df83521695e08a958c6e9ebc12a47793f5afa283b2796073ae9d2cd2efa4d5"
+    },
+    "presentationRows": 3,
+    "receiptFaults": [
+      {
+        "fault": "missing",
+        "identityProof": {
+          "errorCode": "HISTORY_IDENTITY_RECEIPT_MISSING",
+          "status": "fail"
+        },
+        "kind": "collector",
+        "status": "blocked"
+      },
+      {
+        "fault": "corrupt",
+        "identityProof": {
+          "errorCode": "HISTORY_IDENTITY_RECEIPT_HASH_MISMATCH",
+          "status": "fail"
+        },
+        "kind": "collector",
+        "status": "blocked"
+      }
+    ]
+  },
+  "changeTicket": "TEST-WRITER-GATE-W",
+  "cutoverPhases": {
+    "controlledTargetCollectors": [
+      "max",
+      "rutube",
+      "telegram",
+      "vk"
+    ],
+    "httpUpstreamTransition": "requires separate isolated HTTP deployment rehearsal",
+    "interruptionResume": "pass: committed checkpoint followed by new bridge instance",
+    "legacyRestart": [
+      {
+        "path": "/?platform=telegram",
+        "status": 200
+      },
+      {
+        "path": "/?platform=vk",
+        "status": 200
+      },
+      {
+        "path": "/?platform=max",
+        "status": 200
+      },
+      {
+        "path": "/?platform=rutube",
+        "status": 200
+      }
+    ],
+    "liveMutationCatchUp": {
+      "rowsWritten": 161,
+      "status": "pass"
+    },
+    "productionRouteSwitch": false,
+    "repeatedForwardCutover": "pass",
+    "s0Import": {
+      "batchId": "a4e54630-5225-5bde-b664-c806199a9a88",
+      "status": "pass"
+    },
+    "s0OnlineBackup": {
+      "created_at": "2026-09-06T14:14:10.123534+00:00",
+      "destination": "/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-647/test_postgres_reverse_sync_rou0/s0-source.sqlite",
+      "foreign_key_violations": 0,
+      "quick_check": "ok",
+      "sha256": "99563f526b5ceb8d6bb90f3943f3abdeb43066e5ab579a0975a48dd184fbc1b2",
+      "size_bytes": 135168,
+      "source": "/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-647/test_postgres_reverse_sync_rou0/legacy-live.sqlite"
+    },
+    "writerFreeze": "pass: SQLite BEGIN IMMEDIATE rejects second writer during S-final Backup API"
+  },
+  "database": "reverse_it",
+  "duplicates": {
+    "identityCount": 0,
+    "observationCount": 0,
+    "primaryIdentityCount": 0,
+    "snapshotCount": 0
+  },
+  "environment": "disposable-postgresql-integration",
+  "flyway": {
+    "databaseMigrations": [
+      {
+        "checksum": -1636077697,
+        "script": "V1__target_baseline.sql",
+        "success": true,
+        "version": "1"
+      },
+      {
+        "checksum": 839607018,
+        "script": "V2__rebuild_core_projections.sql",
+        "success": true,
+        "version": "2"
+      },
+      {
+        "checksum": -1456658399,
+        "script": "V3__collector_observation_times_and_identity_grants.sql",
+        "success": true,
+        "version": "3"
+      },
+      {
+        "checksum": 1318350062,
+        "script": "V4__admin_collection_run_status_grants.sql",
+        "success": true,
+        "version": "4"
+      },
+      {
+        "checksum": -1313754193,
+        "script": "V5__legacy_activity_period_projection.sql",
+        "success": true,
+        "version": "5"
+      },
+      {
+        "checksum": -290358219,
+        "script": "V6__comparison_valid_observation_hourly_projection.sql",
+        "success": true,
+        "version": "6"
+      },
+      {
+        "checksum": -1228913579,
+        "script": "V7__activity_rating_read_grants.sql",
+        "success": true,
+        "version": "7"
+      },
+      {
+        "checksum": -574188650,
+        "script": "V8__legacy_overview_projection.sql",
+        "success": true,
+        "version": "8"
+      },
+      {
+        "checksum": 1058556652,
+        "script": "V9__immutable_observations_quality_archive_fence.sql",
+        "success": true,
+        "version": "9"
+      },
+      {
+        "checksum": -1148603410,
+        "script": "V10__consistent_public_queries_and_formula_guards.sql",
+        "success": true,
+        "version": "10"
+      },
+      {
+        "checksum": 1679789143,
+        "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+        "success": true,
+        "version": "11"
+      },
+      {
+        "checksum": 1453326243,
+        "script": "V12__detail_history_projection.sql",
+        "success": true,
+        "version": "12"
+      },
+      {
+        "checksum": -185639607,
+        "script": "V13__immutable_account_identity_history.sql",
+        "success": true,
+        "version": "13"
+      },
+      {
+        "checksum": -956321170,
+        "script": "V14__public_archived_publication_text.sql",
+        "success": true,
+        "version": "14"
+      },
+      {
+        "checksum": -1953543117,
+        "script": "V15__verified_source_preservation.sql",
+        "success": true,
+        "version": "15"
+      },
+      {
+        "checksum": -888916335,
+        "script": "V16__audited_catalog_commands.sql",
+        "success": true,
+        "version": "16"
+      },
+      {
+        "checksum": 2060863494,
+        "script": "V17__legacy_csv_compatibility_projection.sql",
+        "success": true,
+        "version": "17"
+      },
+      {
+        "checksum": 875583974,
+        "script": "V18__official_rating_commands.sql",
+        "success": true,
+        "version": "18"
+      },
+      {
+        "checksum": -1653532549,
+        "script": "V19__safe_health_operational_snapshot.sql",
+        "success": true,
+        "version": "19"
+      },
+      {
+        "checksum": 925593865,
+        "script": "V20__catalog_url_and_version_compatibility.sql",
+        "success": true,
+        "version": "20"
+      },
+      {
+        "checksum": -900669350,
+        "script": "V21__legacy_period_first_observation_policy.sql",
+        "success": true,
+        "version": "21"
+      },
+      {
+        "checksum": 2064364640,
+        "script": "V22__durable_legacy_csv_archive_facts.sql",
+        "success": true,
+        "version": "22"
+      },
+      {
+        "checksum": 890722389,
+        "script": "V23__official_rating_entity_context.sql",
+        "success": true,
+        "version": "23"
+      },
+      {
+        "checksum": 1889276383,
+        "script": "V24__ordered_history_reaction_details.sql",
+        "success": true,
+        "version": "24"
+      },
+      {
+        "checksum": 381330844,
+        "script": "V25__safe_legacy_account_presentation.sql",
+        "success": true,
+        "version": "25"
+      },
+      {
+        "checksum": -1482835665,
+        "script": "V26__independent_projection_verifier_reads.sql",
+        "success": true,
+        "version": "26"
+      },
+      {
+        "checksum": -1466195806,
+        "script": "V27__retained_disabled_platform_period_metrics.sql",
+        "success": true,
+        "version": "27"
+      },
+      {
+        "checksum": 1374125493,
+        "script": "V28__identity_command_receipt_verifier_acl.sql",
+        "success": true,
+        "version": "28"
+      },
+      {
+        "checksum": -1547328464,
+        "script": "V29__monotonic_native_identity_transitions.sql",
+        "success": true,
+        "version": "29"
+      }
+    ],
+    "fileSha256": {
+      "V10__consistent_public_queries_and_formula_guards.sql": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b",
+      "V11__bridge_identity_lineage_and_reconciliation.sql": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff",
+      "V12__detail_history_projection.sql": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100",
+      "V13__immutable_account_identity_history.sql": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0",
+      "V14__public_archived_publication_text.sql": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6",
+      "V15__verified_source_preservation.sql": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941",
+      "V16__audited_catalog_commands.sql": "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad",
+      "V17__legacy_csv_compatibility_projection.sql": "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83",
+      "V18__official_rating_commands.sql": "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9",
+      "V19__safe_health_operational_snapshot.sql": "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503",
+      "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1",
+      "V20__catalog_url_and_version_compatibility.sql": "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2",
+      "V21__legacy_period_first_observation_policy.sql": "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8",
+      "V22__durable_legacy_csv_archive_facts.sql": "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f",
+      "V23__official_rating_entity_context.sql": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c",
+      "V24__ordered_history_reaction_details.sql": "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db",
+      "V25__safe_legacy_account_presentation.sql": "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1",
+      "V26__independent_projection_verifier_reads.sql": "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8",
+      "V27__retained_disabled_platform_period_metrics.sql": "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97",
+      "V28__identity_command_receipt_verifier_acl.sql": "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020",
+      "V29__monotonic_native_identity_transitions.sql": "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de",
+      "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd",
+      "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1",
+      "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82",
+      "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41",
+      "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64",
+      "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb",
+      "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c",
+      "V9__immutable_observations_quality_archive_fence.sql": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"
+    },
+    "migrationCount": 29,
+    "schemaVersion": 29
+  },
+  "forwardReconciliation": {
+    "criticalMismatches": 0,
+    "status": "pass"
+  },
+  "generatedAt": "2026-09-06T14:14:21.270514+00:00",
+  "operator": "pytest-reverse-sync",
+  "platforms": [
+    "max",
+    "rutube",
+    "telegram",
+    "vk"
+  ],
+  "preservation": {
+    "aliasMismatches": 0,
+    "identityMismatches": 0,
+    "publicationMismatches": 0,
+    "snapshotMismatches": 0
+  },
+  "release": {
+    "id": "local-unbound",
+    "sha256SumsSha256": "b681882b99e9f2e2d31ec9360b3e5ce9be483cbc184bb984a7c85bf2c31017d9"
+  },
+  "replay": {
+    "idempotent": true,
+    "runCount": 6
+  },
+  "reportType": "reverse-sync-rehearsal",
+  "reportVersion": 4,
+  "reverseSync": {
+    "baselineRevisionCount": 66,
+    "baselineRevisionSetSha256": "5717bdef4d885ce120a8d3cc41811e206d8aedb0883110fb7368d2f36ca87524",
+    "fixedRevisionCount": 6,
+    "fixedRevisionSetSha256": "38af508cbfa82479cd947a5fda3cd8afd6943c8391a2aaf8c6e90dff2c310fb1",
+    "journalStateVersion": 3,
+    "planSha256": "c74a9f5b84dfc13fcdbd94dd493989cc1434ec8ffba72694b66d05544d1a105f",
+    "status": "stopped"
+  },
+  "sFinal": {
+    "batchId": "40d76cee-8eba-5153-8b20-3a83d501f6e2",
+    "gate": "pass",
+    "identityHistoryVerification": {
+      "asOf": "2026-09-06T14:14:13.197456+00:00",
+      "checks": [
+        {
+          "actual": {
+            "distinctKeys": 4,
+            "duplicateKeys": 0,
+            "rows": 4,
+            "sha256": "1ce32828575f0607993aa499c70b05aceb421f6a09f6b9e9b7874ff0b196971f"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 4,
+            "duplicateKeys": 0,
+            "rows": 4,
+            "sha256": "1ce32828575f0607993aa499c70b05aceb421f6a09f6b9e9b7874ff0b196971f"
+          },
+          "name": "presentation",
+          "status": "pass"
+        },
+        {
+          "actual": {
+            "distinctKeys": 3,
+            "duplicateKeys": 0,
+            "rows": 3,
+            "sha256": "ee2203490a13d96cc7e8bb84122d5551514db8001cedae876c637fe3b26c4a47"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 3,
+            "duplicateKeys": 0,
+            "rows": 3,
+            "sha256": "ee2203490a13d96cc7e8bb84122d5551514db8001cedae876c637fe3b26c4a47"
+          },
+          "name": "native",
+          "status": "pass"
+        }
+      ],
+      "datasetRevision": 66,
+      "identitySourceReceipts": [],
+      "sourceArtifacts": [
+        "64bc084374660ed44754ca8d1a9e90c9866e18edfd7884a84c787cd7400c0770",
+        "99563f526b5ceb8d6bb90f3943f3abdeb43066e5ab579a0975a48dd184fbc1b2"
+      ],
+      "sourceSha256": "64bc084374660ed44754ca8d1a9e90c9866e18edfd7884a84c787cd7400c0770",
+      "sourceUnchanged": true,
+      "status": "pass"
+    },
+    "projectionVerification": {
+      "asOf": "2026-09-06T14:14:14.057901+00:00",
+      "checks": {
+        "fixedCohort": {
+          "actual": {
+            "distinctKeys": 7836,
+            "duplicateKeys": 0,
+            "rows": 7836,
+            "sha256": "20f7e0ceb26aef12cafde6c65b4ee08a40377a67c2516294d75f3e8344f3feca"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 7836,
+            "duplicateKeys": 0,
+            "rows": 7836,
+            "sha256": "20f7e0ceb26aef12cafde6c65b4ee08a40377a67c2516294d75f3e8344f3feca"
+          },
+          "status": "pass"
+        },
+        "overview": {
+          "actual": {
+            "distinctKeys": 28,
+            "duplicateKeys": 0,
+            "rows": 28,
+            "sha256": "f713fafe9202880e43d5eb62169c669501ae415e486cc7c071ea9cb47e467fd9"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 28,
+            "duplicateKeys": 0,
+            "rows": 28,
+            "sha256": "f713fafe9202880e43d5eb62169c669501ae415e486cc7c071ea9cb47e467fd9"
+          },
+          "status": "pass"
+        },
+        "periodMetrics": {
+          "actual": {
+            "distinctKeys": 96,
+            "duplicateKeys": 0,
+            "rows": 96,
+            "sha256": "313622115d1eb403e1deab73f51b1ce07c7876312e08b10bdc14bddc26e48c4e"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 96,
+            "duplicateKeys": 0,
+            "rows": 96,
+            "sha256": "313622115d1eb403e1deab73f51b1ce07c7876312e08b10bdc14bddc26e48c4e"
+          },
+          "status": "pass"
+        }
+      },
+      "datasetRevision": 66,
+      "firstAgeLimitSeconds": 360,
+      "horizons": [
+        24,
+        48,
+        72,
+        168,
+        336
+      ],
+      "oracle": "unchanged app.web.app.create_app endpoints with injected clock",
+      "oracleSource": {
+        "mode": "original",
+        "priorSourceSha256": [],
+        "restoredRows": 0
+      },
+      "serialization": "NULL-distinct; exact decimal counters; engagement rounded to 8 decimal places",
+      "sourceRows": 17,
+      "sourceSha256": "64bc084374660ed44754ca8d1a9e90c9866e18edfd7884a84c787cd7400c0770",
+      "sourceUnchanged": true,
+      "status": "pass"
+    },
+    "sourceSha256": "64bc084374660ed44754ca8d1a9e90c9866e18edfd7884a84c787cd7400c0770"
+  },
+  "secondSFinal": {
+    "batchId": "e1915692-0d92-5aba-90f6-a7f2499f6e32",
+    "gate": "pass",
+    "identityHistoryVerification": {
+      "asOf": "2026-09-06T14:14:16.136273+00:00",
+      "checks": [
+        {
+          "actual": {
+            "distinctKeys": 6,
+            "duplicateKeys": 0,
+            "rows": 6,
+            "sha256": "c046d5597cb78fd52fe866d3b9f132a4a67a880cd1f56fce62a9c6ec70e5ea34"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 6,
+            "duplicateKeys": 0,
+            "rows": 6,
+            "sha256": "c046d5597cb78fd52fe866d3b9f132a4a67a880cd1f56fce62a9c6ec70e5ea34"
+          },
+          "name": "presentation",
+          "status": "pass"
+        },
+        {
+          "actual": {
+            "distinctKeys": 5,
+            "duplicateKeys": 0,
+            "rows": 5,
+            "sha256": "7cbf45482a14358b53aa569d6eee22369e1640d2df7a8e69581d8b3aa8294181"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 5,
+            "duplicateKeys": 0,
+            "rows": 5,
+            "sha256": "7cbf45482a14358b53aa569d6eee22369e1640d2df7a8e69581d8b3aa8294181"
+          },
+          "name": "native",
+          "status": "pass"
+        }
+      ],
+      "datasetRevision": 107,
+      "identitySourceReceipts": [
+        {
+          "kind": "collector",
+          "platform": "max",
+          "sha256": "1f8d493d7c55245408e71eceb037885663a151d47f6f0bb3f968b6f4a9ade150"
+        },
+        {
+          "kind": "collector",
+          "platform": "max",
+          "sha256": "3e6dfadc0f93ec10eaa4a0b3c25c7183f137d4a0dfdba2e735c1b0f048442091"
+        },
+        {
+          "kind": "collector",
+          "platform": "max",
+          "sha256": "a45de6636b5f9ec6c61fda3bc497636bfea5b57a23cfa531fcd89cadcf24bdba"
+        },
+        {
+          "kind": "collector",
+          "platform": "rutube",
+          "sha256": "8dcaa2e5a596839ab54620fc3af211d33bda76e08e69434c4eafc8131b4bd277"
+        },
+        {
+          "kind": "collector",
+          "platform": "telegram",
+          "sha256": "f52cb477b25c1273fbe31c012e1a15fa7023b768ba8d5e051bab2e228bd10263"
+        },
+        {
+          "kind": "collector",
+          "platform": "vk",
+          "sha256": "48df83521695e08a958c6e9ebc12a47793f5afa283b2796073ae9d2cd2efa4d5"
+        }
+      ],
+      "sourceArtifacts": [
+        "64bc084374660ed44754ca8d1a9e90c9866e18edfd7884a84c787cd7400c0770",
+        "99563f526b5ceb8d6bb90f3943f3abdeb43066e5ab579a0975a48dd184fbc1b2",
+        "af2ba1e1f7b55789406bffb6f7d16d9f0b3dc0d7cc863f8531a086a421eb7bb0"
+      ],
+      "sourceSha256": "af2ba1e1f7b55789406bffb6f7d16d9f0b3dc0d7cc863f8531a086a421eb7bb0",
+      "sourceUnchanged": true,
+      "status": "pass"
+    },
+    "projectionVerification": {
+      "asOf": "2026-09-06T14:14:17.217918+00:00",
+      "checks": {
+        "fixedCohort": {
+          "actual": {
+            "distinctKeys": 7836,
+            "duplicateKeys": 0,
+            "rows": 7836,
+            "sha256": "20f7e0ceb26aef12cafde6c65b4ee08a40377a67c2516294d75f3e8344f3feca"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 7836,
+            "duplicateKeys": 0,
+            "rows": 7836,
+            "sha256": "20f7e0ceb26aef12cafde6c65b4ee08a40377a67c2516294d75f3e8344f3feca"
+          },
+          "status": "pass"
+        },
+        "overview": {
+          "actual": {
+            "distinctKeys": 28,
+            "duplicateKeys": 0,
+            "rows": 28,
+            "sha256": "c0e999a749d86238b8779fe357c235e64e6be8b14490015db64adfab58cf98fa"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 28,
+            "duplicateKeys": 0,
+            "rows": 28,
+            "sha256": "c0e999a749d86238b8779fe357c235e64e6be8b14490015db64adfab58cf98fa"
+          },
+          "status": "pass"
+        },
+        "periodMetrics": {
+          "actual": {
+            "distinctKeys": 96,
+            "duplicateKeys": 0,
+            "rows": 96,
+            "sha256": "313622115d1eb403e1deab73f51b1ce07c7876312e08b10bdc14bddc26e48c4e"
+          },
+          "changedKeysSample": [],
+          "expected": {
+            "distinctKeys": 96,
+            "duplicateKeys": 0,
+            "rows": 96,
+            "sha256": "313622115d1eb403e1deab73f51b1ce07c7876312e08b10bdc14bddc26e48c4e"
+          },
+          "status": "pass"
+        }
+      },
+      "datasetRevision": 107,
+      "firstAgeLimitSeconds": 360,
+      "horizons": [
+        24,
+        48,
+        72,
+        168,
+        336
+      ],
+      "oracle": "unchanged app.web.app.create_app endpoints with injected clock",
+      "oracleSource": {
+        "mode": "original",
+        "priorSourceSha256": [],
+        "restoredRows": 0
+      },
+      "serialization": "NULL-distinct; exact decimal counters; engagement rounded to 8 decimal places",
+      "sourceRows": 25,
+      "sourceSha256": "af2ba1e1f7b55789406bffb6f7d16d9f0b3dc0d7cc863f8531a086a421eb7bb0",
+      "sourceUnchanged": true,
+      "status": "pass"
+    },
+    "repeat": {
+      "batchId": "e1915692-0d92-5aba-90f6-a7f2499f6e32",
+      "datasetRevisionAfter": 107,
+      "datasetRevisionBefore": 107,
+      "gate": "pass",
+      "rowsWritten": 0
+    },
+    "sourceSha256": "af2ba1e1f7b55789406bffb6f7d16d9f0b3dc0d7cc863f8531a086a421eb7bb0"
+  },
+  "sourceNamespace": "pytest-reverse-sync-eec9668e-33d8-4bc0-9cb6-7837dd17991d",
+  "status": "pass"
+}

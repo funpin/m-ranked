@@ -65,6 +65,7 @@ class ArchiveVerification:
     sample_rows_read: int
     row_groups: int
     compression: str
+    canonical_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +87,7 @@ class ArchiveResult:
             "objectPath": str(self.object_path),
             "manifestPath": str(self.manifest_path),
             "sha256": self.verification.sha256,
+            "canonicalSha256": self.verification.canonical_sha256,
             "rowCount": self.verification.row_count,
             "minObservedAt": _iso(self.verification.min_observed_at),
             "maxObservedAt": _iso(self.verification.max_observed_at),

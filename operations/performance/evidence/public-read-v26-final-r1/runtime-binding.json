@@ -1,0 +1,25 @@
+{
+  "runtimeEvidence": "migration/reports/visual-admin-import-v25-20260905/runtime-v26.json",
+  "runtimeEvidenceSha256": "668aab45b5ad29a02e87c40f3743eab40fd6843e171773de4004207de1ee373c",
+  "sourceSha256Before": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+  "sourceSha256After": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+  "reportSha256": "98eecde0c517d037bac80585922d6f08fc6fb05b7b34820b39dadcf506cf2580",
+  "command": [
+    "/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python",
+    "-m",
+    "operations.performance.rehearse",
+    "--jar",
+    "/private/tmp/mranked-admin-visual-v26-build/m-ranked-backend-0.1.0-SNAPSHOT.jar",
+    "--java",
+    "/Users/funpin/Library/Java/JavaVirtualMachines/openjdk-21/Contents/Home/bin/java",
+    "--samples",
+    "50",
+    "--legacy-url",
+    "http://127.0.0.1:18080",
+    "--output",
+    "/Users/funpin/Documents/ChatGPT/TG-monitoring/operations/performance/evidence/public-read-v26-final-r1"
+  ],
+  "jarSha256": "12005a0b37d7cf482cf3dde54b6d6174193d688472f884b1ce7bc21bd78fd3d5",
+  "datasetRevision": 29,
+  "productionAcceptance": false
+}

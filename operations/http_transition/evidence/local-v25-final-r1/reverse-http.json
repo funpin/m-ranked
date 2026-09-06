@@ -1,0 +1,3258 @@
+{
+  "changeTicket": "TEST-WRITER-GATE-W",
+  "cutoverPhases": {
+    "controlledTargetCollectors": [
+      "max",
+      "rutube",
+      "telegram",
+      "vk"
+    ],
+    "httpUpstreamTransition": {
+      "database": "http_reverse_it",
+      "durationSeconds": 11.291314,
+      "environment": "disposable-local",
+      "failures": 0,
+      "generatedAt": "2026-09-05T06:33:48.306711+00:00",
+      "healthCompatibility": {
+        "canonicalJsonSha256": "82626c76f70f4919b593c0a73e173b50866ab27c8b61c84b55c345bc4872372a",
+        "fieldsEqual": true,
+        "status": "pass"
+      },
+      "healthSemantics": "continuous legacy-compatible health; collector freshness is explicit, target readiness additionally gates admission; reads retain last published revision during collector lag",
+      "limitations": [
+        "loopback transport and local database locks; no production load balancer, TLS or cross-host network exercised",
+        "authoritative collectors fenced; reverse sync writes its separate shadow SQLite as part of rollback protocol"
+      ],
+      "maxResponseMs": 134.405,
+      "observations": [
+        {
+          "atSeconds": 4.440901,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 10.341,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.45125,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 39.025,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.490283,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 11.893,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.502182,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 10.654,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.512845,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 9.244,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.626136,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 19.432,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.645574,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 6.739,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.652318,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 8.082,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.660407,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 9.149,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.669563,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 8.429,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.778315,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 14.18,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.792502,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 5.134,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.797641,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 5.4,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.803046,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 5.26,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.80831,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 5.274,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.914373,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 8.153,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.922534,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 9.058,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.931599,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 6.243,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.937847,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 7.969,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 4.945821,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 5.102,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.052823,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 8.527,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.061356,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 4.276,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.065637,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 4.674,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.070317,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 4.87,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.075191,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 4.736,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.186418,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 13.243,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.199667,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 8.336,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.208009,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 10.636,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.21865,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 11.654,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.23031,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 13.103,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.344151,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 21.562,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.365719,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 7.946,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.37367,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 8.619,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.382295,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 8.797,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.391096,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 8.598,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.503863,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 21.858,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.525728,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 7.584,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.533318,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 8.724,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.542047,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 8.431,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.550485,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 7.929,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.660846,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 21.616,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.682468,
+          "bodySha256": "3d022efcf5f16062794d73560b2242426ba832e609c0d6c7274f5971b2006b24",
+          "bytes": 54002,
+          "durationMs": 8.371,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.690845,
+          "bodySha256": "9307b6c84f5f2ef1f39d8d718ab944a730cfb7087cca5d323ae800fc6b61c235",
+          "bytes": 56038,
+          "durationMs": 9.103,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.699952,
+          "bodySha256": "0f291838a53997ac5f17e580a8d357165346ef3fd4d295abe85d9745628c13b3",
+          "bytes": 55993,
+          "durationMs": 9.563,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.70952,
+          "bodySha256": "b4eb21790fa56609de298df592d28f58a1f54d6ccd80365990786c3209704051",
+          "bytes": 56010,
+          "durationMs": 8.639,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.822321,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 12.405,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.834731,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 5.341,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.840077,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 5.346,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.845427,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 5.125,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.850557,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 5.58,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.956553,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 9.955,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.966513,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 4.828,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.971345,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.709,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.97606,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 5.024,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 5.981091,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.381,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.08594,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 9.429,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.095373,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 4.154,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.099532,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.385,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.103922,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 5.286,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.109212,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.92,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.214271,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 8.731,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.223007,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 4.471,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.227483,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.999,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.232487,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 5.114,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.237606,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 5.537,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.344317,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 7.434,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.351756,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 4.473,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.356234,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 5.737,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.361976,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 4.905,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.36689,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.811,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.478875,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 9.869,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.488747,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 3.732,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.492484,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.879,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.497368,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 5.35,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.502724,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.839,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.607988,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 13.679,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.621673,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 4.543,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.626224,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.183,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.630412,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 3.86,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.634276,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.504,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.744566,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 10.601,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.755173,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 4.703,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.759882,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.299,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.764185,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 4.098,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.768289,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.873,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.873488,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 9.004,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.882497,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 3.968,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.88647,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 5.015,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.89149,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 5.013,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 6.896507,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.343,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.009068,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 9.653,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.018726,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 4.042,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.022772,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.177,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.026954,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 4.877,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.031835,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.664,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.137813,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 6.801,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.144619,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 3.982,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.148607,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.637,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.15325,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 4.52,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.157776,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.529,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.262443,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 11.739,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.274186,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 4.093,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.278286,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 5.71,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.284001,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 5.763,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.289769,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 4.86,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.394787,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 10.56,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.405351,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 3.836,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.409192,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 4.885,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.414082,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 6.451,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.42054,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 5.761,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.532836,
+          "bodySha256": "5608189f78ed9cbc8f17ddb8e032c079802603b46510cf13158ef5a6b08b87cb",
+          "bytes": 905,
+          "durationMs": 7.06,
+          "path": "/health",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.539901,
+          "bodySha256": "94d909ac0dac89b9fe682adb21fe18cf6d54bc1491cefbae4d3eea7a77b91ce8",
+          "bytes": 54011,
+          "durationMs": 3.82,
+          "path": "/read?platform=telegram",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.543726,
+          "bodySha256": "dfbcdb6bdecdd36b70a97356a3dcb91edbc9474912bb3297fb5e1da3dd64e455",
+          "bytes": 56047,
+          "durationMs": 3.98,
+          "path": "/read?platform=vk",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.547711,
+          "bodySha256": "6402597e29e777e1788c0a4a1b766e197366b14b44397aa015a6ad05c0280dff",
+          "bytes": 56002,
+          "durationMs": 4.092,
+          "path": "/read?platform=max",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.551807,
+          "bodySha256": "fac834345d237f5110203890fed1928c5a3b6b889c5c5d66a7526b307c0baf69",
+          "bytes": 56019,
+          "durationMs": 3.983,
+          "path": "/read?platform=rutube",
+          "phase": 0,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.656869,
+          "bodySha256": "fbfaaa414884af1d9ff6b24f9c50ca33b60971671501014a1921f6a5269cfe9e",
+          "bytes": 905,
+          "durationMs": 5.562,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.662435,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 134.405,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.796844,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 14.402,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.811251,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 14.922,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.826178,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 13.063,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.939948,
+          "bodySha256": "fbfaaa414884af1d9ff6b24f9c50ca33b60971671501014a1921f6a5269cfe9e",
+          "bytes": 905,
+          "durationMs": 5.758,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.945712,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 34.881,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.980597,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 8.323,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.988927,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 6.794,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 7.995726,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 7.832,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.105041,
+          "bodySha256": "1edc1d9d2c42874f751ebdb0e769a7323717b185722d70d3fe25711097061be4",
+          "bytes": 928,
+          "durationMs": 5.589,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.110635,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 7.342,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.117982,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 6.839,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.124826,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 6.707,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.131537,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 6.73,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.239028,
+          "bodySha256": "3e6074e8b587cb0cdfc6feb5009aba6c1f59ceedad63d02f3f0af7357f99071d",
+          "bytes": 944,
+          "durationMs": 7.98,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.247014,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 5.564,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.252583,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 6.67,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.259258,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 7.056,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.266318,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 6.489,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.373701,
+          "bodySha256": "85bb3f995647e22c4e3f76d43bc0c5b297f41d0362da2a45aec150601afa9eb9",
+          "bytes": 960,
+          "durationMs": 5.67,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.379375,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 5.297,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.384677,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 6.197,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.390879,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 6.126,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.397009,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 6.146,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.503344,
+          "bodySha256": "d335dc2aa10b0f7475e5e3fb189e54e12a70e6d2387e2c0ee88857a95e4bd977",
+          "bytes": 976,
+          "durationMs": 4.466,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.507815,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 5.491,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.51331,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 5.322,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.518638,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 5.846,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.524489,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 5.828,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.630595,
+          "bodySha256": "a8c170bc0001e9e913813cb1820a007edbf55f3a17f953f3f2fe2827feb68fcb",
+          "bytes": 992,
+          "durationMs": 4.711,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.635312,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 6.742,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.642058,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 5.74,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.647804,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 5.436,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.653245,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 5.978,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.761119,
+          "bodySha256": "a8c170bc0001e9e913813cb1820a007edbf55f3a17f953f3f2fe2827feb68fcb",
+          "bytes": 992,
+          "durationMs": 4.59,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.765714,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 4.686,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.770406,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 5.492,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.775903,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 5.355,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.781262,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 5.2,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.886668,
+          "bodySha256": "a8c170bc0001e9e913813cb1820a007edbf55f3a17f953f3f2fe2827feb68fcb",
+          "bytes": 992,
+          "durationMs": 4.798,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.891471,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 5.184,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.896658,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 4.339,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.901003,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 5.1,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 8.906108,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 4.617,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.010829,
+          "bodySha256": "a8c170bc0001e9e913813cb1820a007edbf55f3a17f953f3f2fe2827feb68fcb",
+          "bytes": 992,
+          "durationMs": 4.271,
+          "path": "/health",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.015104,
+          "bodySha256": "a6dd8dc3097dad7139a3007b13b12d05fba51fb21c5b0fd15b22c34ba2c18724",
+          "bytes": 4149,
+          "datasetRevision": 66,
+          "durationMs": 4.925,
+          "path": "/read?platform=telegram",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.020034,
+          "bodySha256": "7867aaad47e7fb5c4b9876ec97616ac9dd718b5384560f360db0357e6ad1dcfd",
+          "bytes": 7555,
+          "datasetRevision": 66,
+          "durationMs": 5.294,
+          "path": "/read?platform=vk",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.025332,
+          "bodySha256": "24bc8d440c583fd5288e5ea851f139f9cac66be03e2ac6ab0181a9133247442e",
+          "bytes": 7546,
+          "datasetRevision": 66,
+          "durationMs": 5.311,
+          "path": "/read?platform=max",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.030648,
+          "bodySha256": "2aad568036eb952d84a5149f16a092f795344111afdead54ab19d8a181229722",
+          "bytes": 7571,
+          "datasetRevision": 66,
+          "durationMs": 4.978,
+          "path": "/read?platform=rutube",
+          "phase": 1,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.136334,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 7.472,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.143812,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 28.152,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.17197,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 4.293,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.176267,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 4.363,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.180636,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 4.191,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.286692,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 6.614,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.29331,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 2.368,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.295684,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.357,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.298045,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.214,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.300263,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.258,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.404956,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 6.844,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.411806,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 2.697,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.414508,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.177,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.41669,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.348,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.419044,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.544,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.527859,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 9.293,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.537157,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 3.137,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.540299,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 6.419,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.546725,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 3.058,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.549787,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.706,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.652972,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 9.442,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.66242,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 2.859,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.665283,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.266,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.667553,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.765,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.670324,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.948,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.773664,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 8.574,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.782242,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 2.561,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.784807,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.355,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.787166,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.844,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.790016,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.865,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.894844,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 8.803,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.903652,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 2.573,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.90623,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.409,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.908643,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.38,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 9.911027,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.659,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.018343,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 10.501,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.02885,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 2.972,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.031826,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.76,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.034589,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.706,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.0373,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.503,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.145148,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 8.529,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.153682,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 3.024,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.15671,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.379,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.159094,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.637,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.161737,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 3.325,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.266022,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 9.077,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.275105,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 3.198,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.278308,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.49,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.280803,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 3.013,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.283819,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.817,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.387215,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 9.889,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.397109,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 2.784,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.399897,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.295,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.402196,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.775,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.404976,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.992,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.508429,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 11.008,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.519444,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 3.514,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.522963,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.613,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.52558,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 3.327,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.528913,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.968,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.636149,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 8.589,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.644746,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 3.654,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.648405,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.523,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.650932,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.565,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.653502,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.844,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.763089,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 9.904,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.772998,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 3.329,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.776331,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 3.035,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.779372,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.694,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.782069,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.522,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.885816,
+          "bodySha256": "174781291fbe93fa3e355c1fc4a21ebda6e934e5e34cf41bd49bc20db0426394",
+          "bytes": 1022,
+          "durationMs": 6.785,
+          "path": "/health",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.892605,
+          "bodySha256": "e751d4ab6c2b0b02fa3eb712330f1541a7e734fb63ab196a088f614ad2e62635",
+          "bytes": 54011,
+          "durationMs": 2.516,
+          "path": "/read?platform=telegram",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.895126,
+          "bodySha256": "1bd8f6ef924820167c96708057fcf524b82214e30171a5d3258185bfe027fce5",
+          "bytes": 56047,
+          "durationMs": 2.481,
+          "path": "/read?platform=vk",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.897613,
+          "bodySha256": "2def04ce5aed90fb566937f48ecdb8c234efcf7f2af4f1223fdf8898beb93915",
+          "bytes": 56006,
+          "durationMs": 2.303,
+          "path": "/read?platform=max",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 10.899921,
+          "bodySha256": "11f2fa174f437eaac271f09a0537961d44232b9a9fbf8ae8e513a502bd8ceebd",
+          "bytes": 56021,
+          "durationMs": 2.396,
+          "path": "/read?platform=rutube",
+          "phase": 2,
+          "status": 200,
+          "upstream": "legacy",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.004148,
+          "bodySha256": "a2debf14dabf90d908197e0d5dd37d3d115ed004f55fcab068729df9c7a79bcc",
+          "bytes": 992,
+          "durationMs": 8.104,
+          "path": "/health",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.012258,
+          "bodySha256": "05f39a02ed1e3bdda2929512f70b3045b1db14d776e6bd3e36e24372943ce627",
+          "bytes": 4166,
+          "datasetRevision": 105,
+          "durationMs": 27.033,
+          "path": "/read?platform=telegram",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.039297,
+          "bodySha256": "8d8b75be7449d9bc473c35999f19731d88da5b828c743f8b16a725ca06c9ae8d",
+          "bytes": 7588,
+          "datasetRevision": 105,
+          "durationMs": 17.191,
+          "path": "/read?platform=vk",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.056494,
+          "bodySha256": "01f6b32590bf813e5ddf3fde0863419923ba64a6bfdd3e5b0f9ca3ec58cd2964",
+          "bytes": 7579,
+          "datasetRevision": 105,
+          "durationMs": 14.043,
+          "path": "/read?platform=max",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.070542,
+          "bodySha256": "7b449be577b233be7cad2e6d78be1b03e7168e9fe27ee681d1fb4a457b005b81",
+          "bytes": 7598,
+          "datasetRevision": 105,
+          "durationMs": 12.706,
+          "path": "/read?platform=rutube",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.186128,
+          "bodySha256": "a2debf14dabf90d908197e0d5dd37d3d115ed004f55fcab068729df9c7a79bcc",
+          "bytes": 992,
+          "durationMs": 4.94,
+          "path": "/health",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.191072,
+          "bodySha256": "05f39a02ed1e3bdda2929512f70b3045b1db14d776e6bd3e36e24372943ce627",
+          "bytes": 4166,
+          "datasetRevision": 105,
+          "durationMs": 5.373,
+          "path": "/read?platform=telegram",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.196451,
+          "bodySha256": "8d8b75be7449d9bc473c35999f19731d88da5b828c743f8b16a725ca06c9ae8d",
+          "bytes": 7588,
+          "datasetRevision": 105,
+          "durationMs": 5.994,
+          "path": "/read?platform=vk",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.202452,
+          "bodySha256": "01f6b32590bf813e5ddf3fde0863419923ba64a6bfdd3e5b0f9ca3ec58cd2964",
+          "bytes": 7579,
+          "datasetRevision": 105,
+          "durationMs": 6.849,
+          "path": "/read?platform=max",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        },
+        {
+          "atSeconds": 11.209306,
+          "bodySha256": "7b449be577b233be7cad2e6d78be1b03e7168e9fe27ee681d1fb4a457b005b81",
+          "bytes": 7598,
+          "datasetRevision": 105,
+          "durationMs": 6.479,
+          "path": "/read?platform=rutube",
+          "phase": 3,
+          "status": 200,
+          "upstream": "target",
+          "valid": true
+        }
+      ],
+      "p95ResponseMs": 14.043,
+      "productionAcceptance": false,
+      "productionRouteSwitch": false,
+      "rejectedGates": [
+        {
+          "phase": 0,
+          "reason": "unready actual Spring API on empty database",
+          "routingUnchanged": true,
+          "writersUnchanged": true
+        },
+        {
+          "phase": 0,
+          "reason": "injected critical reconciliation mismatch",
+          "routingUnchanged": true,
+          "writersUnchanged": true
+        },
+        {
+          "phase": 2,
+          "reason": "injected critical reconciliation mismatch",
+          "routingUnchanged": true,
+          "writersUnchanged": true
+        }
+      ],
+      "reportVersion": 1,
+      "requests": 250,
+      "routeSequence": [
+        "initial-legacy",
+        "target",
+        "legacy",
+        "target"
+      ],
+      "samplesPerPhase": {
+        "0": 115,
+        "1": 50,
+        "2": 75,
+        "3": 10
+      },
+      "springJarSha256": "b0b7cda5e17b573bea37e090e7887aa9f579abd5d168d7a18d24b0dee7370375",
+      "status": "pass",
+      "transitions": [
+        {
+          "from": "legacy",
+          "phase": 1,
+          "routeSwitchSeconds": 0.15774,
+          "to": "target",
+          "verifiedSeconds": 0.543778,
+          "writers": {
+            "legacySqliteWriteAllowed": false,
+            "owner": "target",
+            "postgresCollectorWriteAllowed": true,
+            "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+            "stage": "target-authoritative"
+          }
+        },
+        {
+          "from": "target",
+          "phase": 2,
+          "routeSwitchSeconds": 0.152213,
+          "to": "legacy",
+          "verifiedSeconds": 0.418602,
+          "writers": {
+            "legacySqliteWriteAllowed": true,
+            "owner": "legacy",
+            "postgresCollectorWriteAllowed": false,
+            "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+            "stage": "legacy-authoritative-after-reverse-sync"
+          }
+        },
+        {
+          "from": "legacy",
+          "phase": 3,
+          "routeSwitchSeconds": 0.159418,
+          "to": "target",
+          "verifiedSeconds": 0.422435,
+          "writers": {
+            "legacySqliteWriteAllowed": false,
+            "owner": "target",
+            "postgresCollectorWriteAllowed": true,
+            "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+            "stage": "target-authoritative"
+          }
+        }
+      ],
+      "writerChecks": [
+        {
+          "legacySqliteWriteAllowed": true,
+          "owner": "legacy",
+          "postgresCollectorWriteAllowed": false,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "initial-legacy"
+        },
+        {
+          "legacySqliteWriteAllowed": true,
+          "owner": "legacy",
+          "postgresCollectorWriteAllowed": false,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "rejected-gate"
+        },
+        {
+          "legacySqliteWriteAllowed": true,
+          "owner": "legacy",
+          "postgresCollectorWriteAllowed": false,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "rejected-gate"
+        },
+        {
+          "legacySqliteWriteAllowed": false,
+          "owner": "none",
+          "postgresCollectorWriteAllowed": false,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "all-writers-frozen"
+        },
+        {
+          "legacySqliteWriteAllowed": false,
+          "owner": "target",
+          "postgresCollectorWriteAllowed": true,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "target-authoritative"
+        },
+        {
+          "legacySqliteWriteAllowed": false,
+          "owner": "none",
+          "postgresCollectorWriteAllowed": false,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "all-writers-frozen-before-rollback"
+        },
+        {
+          "legacySqliteWriteAllowed": true,
+          "owner": "legacy",
+          "postgresCollectorWriteAllowed": false,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "legacy-authoritative-after-reverse-sync"
+        },
+        {
+          "legacySqliteWriteAllowed": true,
+          "owner": "legacy",
+          "postgresCollectorWriteAllowed": false,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "rejected-gate"
+        },
+        {
+          "legacySqliteWriteAllowed": false,
+          "owner": "none",
+          "postgresCollectorWriteAllowed": false,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "all-writers-frozen"
+        },
+        {
+          "legacySqliteWriteAllowed": false,
+          "owner": "target",
+          "postgresCollectorWriteAllowed": true,
+          "probe": "actual UPDATE / INSERT followed by ROLLBACK; closed writer rejected by database",
+          "stage": "target-authoritative"
+        }
+      ]
+    },
+    "interruptionResume": "pass: committed checkpoint followed by new bridge instance",
+    "legacyRestart": [
+      {
+        "path": "/?platform=telegram",
+        "status": 200
+      },
+      {
+        "path": "/?platform=vk",
+        "status": 200
+      },
+      {
+        "path": "/?platform=max",
+        "status": 200
+      },
+      {
+        "path": "/?platform=rutube",
+        "status": 200
+      }
+    ],
+    "liveMutationCatchUp": {
+      "rowsWritten": 162,
+      "status": "pass"
+    },
+    "productionRouteSwitch": false,
+    "repeatedForwardCutover": "pass",
+    "s0Import": {
+      "batchId": "cb3e2986-109a-50e3-9997-95c1368efa4a",
+      "status": "pass"
+    },
+    "s0OnlineBackup": {
+      "created_at": "2026-09-05T06:33:41.801690+00:00",
+      "destination": "/private/tmp/mranked-http-transition-final-v25-r1/test-runtime/test_postgres_reverse_sync_rou0/s0-source.sqlite",
+      "foreign_key_violations": 0,
+      "quick_check": "ok",
+      "sha256": "c034fad56586813e12c1cad8d2ebd49587b02b52d7f7e3d976e1cf29d2bf42e7",
+      "size_bytes": 135168,
+      "source": "/private/tmp/mranked-http-transition-final-v25-r1/test-runtime/test_postgres_reverse_sync_rou0/legacy-live.sqlite"
+    },
+    "writerFreeze": "pass: SQLite BEGIN IMMEDIATE rejects second writer during S-final Backup API"
+  },
+  "database": "http_reverse_it",
+  "duplicates": {
+    "identityCount": 0,
+    "observationCount": 0,
+    "primaryIdentityCount": 0,
+    "snapshotCount": 0
+  },
+  "environment": "disposable-postgresql-integration",
+  "flyway": {
+    "databaseMigrations": [
+      {
+        "checksum": -1636077697,
+        "script": "V1__target_baseline.sql",
+        "success": true,
+        "version": "1"
+      },
+      {
+        "checksum": 839607018,
+        "script": "V2__rebuild_core_projections.sql",
+        "success": true,
+        "version": "2"
+      },
+      {
+        "checksum": -1456658399,
+        "script": "V3__collector_observation_times_and_identity_grants.sql",
+        "success": true,
+        "version": "3"
+      },
+      {
+        "checksum": 1318350062,
+        "script": "V4__admin_collection_run_status_grants.sql",
+        "success": true,
+        "version": "4"
+      },
+      {
+        "checksum": -1313754193,
+        "script": "V5__legacy_activity_period_projection.sql",
+        "success": true,
+        "version": "5"
+      },
+      {
+        "checksum": -290358219,
+        "script": "V6__comparison_valid_observation_hourly_projection.sql",
+        "success": true,
+        "version": "6"
+      },
+      {
+        "checksum": -1228913579,
+        "script": "V7__activity_rating_read_grants.sql",
+        "success": true,
+        "version": "7"
+      },
+      {
+        "checksum": -574188650,
+        "script": "V8__legacy_overview_projection.sql",
+        "success": true,
+        "version": "8"
+      },
+      {
+        "checksum": 1058556652,
+        "script": "V9__immutable_observations_quality_archive_fence.sql",
+        "success": true,
+        "version": "9"
+      },
+      {
+        "checksum": -1148603410,
+        "script": "V10__consistent_public_queries_and_formula_guards.sql",
+        "success": true,
+        "version": "10"
+      },
+      {
+        "checksum": 1679789143,
+        "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+        "success": true,
+        "version": "11"
+      },
+      {
+        "checksum": 1453326243,
+        "script": "V12__detail_history_projection.sql",
+        "success": true,
+        "version": "12"
+      },
+      {
+        "checksum": -185639607,
+        "script": "V13__immutable_account_identity_history.sql",
+        "success": true,
+        "version": "13"
+      },
+      {
+        "checksum": -956321170,
+        "script": "V14__public_archived_publication_text.sql",
+        "success": true,
+        "version": "14"
+      },
+      {
+        "checksum": -1953543117,
+        "script": "V15__verified_source_preservation.sql",
+        "success": true,
+        "version": "15"
+      },
+      {
+        "checksum": -888916335,
+        "script": "V16__audited_catalog_commands.sql",
+        "success": true,
+        "version": "16"
+      },
+      {
+        "checksum": 2060863494,
+        "script": "V17__legacy_csv_compatibility_projection.sql",
+        "success": true,
+        "version": "17"
+      },
+      {
+        "checksum": 875583974,
+        "script": "V18__official_rating_commands.sql",
+        "success": true,
+        "version": "18"
+      },
+      {
+        "checksum": -1653532549,
+        "script": "V19__safe_health_operational_snapshot.sql",
+        "success": true,
+        "version": "19"
+      },
+      {
+        "checksum": 925593865,
+        "script": "V20__catalog_url_and_version_compatibility.sql",
+        "success": true,
+        "version": "20"
+      },
+      {
+        "checksum": -900669350,
+        "script": "V21__legacy_period_first_observation_policy.sql",
+        "success": true,
+        "version": "21"
+      },
+      {
+        "checksum": 2064364640,
+        "script": "V22__durable_legacy_csv_archive_facts.sql",
+        "success": true,
+        "version": "22"
+      },
+      {
+        "checksum": 890722389,
+        "script": "V23__official_rating_entity_context.sql",
+        "success": true,
+        "version": "23"
+      },
+      {
+        "checksum": 1889276383,
+        "script": "V24__ordered_history_reaction_details.sql",
+        "success": true,
+        "version": "24"
+      },
+      {
+        "checksum": 381330844,
+        "script": "V25__safe_legacy_account_presentation.sql",
+        "success": true,
+        "version": "25"
+      }
+    ],
+    "fileSha256": {
+      "V10__consistent_public_queries_and_formula_guards.sql": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b",
+      "V11__bridge_identity_lineage_and_reconciliation.sql": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff",
+      "V12__detail_history_projection.sql": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100",
+      "V13__immutable_account_identity_history.sql": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0",
+      "V14__public_archived_publication_text.sql": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6",
+      "V15__verified_source_preservation.sql": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941",
+      "V16__audited_catalog_commands.sql": "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad",
+      "V17__legacy_csv_compatibility_projection.sql": "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83",
+      "V18__official_rating_commands.sql": "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9",
+      "V19__safe_health_operational_snapshot.sql": "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503",
+      "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1",
+      "V20__catalog_url_and_version_compatibility.sql": "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2",
+      "V21__legacy_period_first_observation_policy.sql": "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8",
+      "V22__durable_legacy_csv_archive_facts.sql": "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f",
+      "V23__official_rating_entity_context.sql": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c",
+      "V24__ordered_history_reaction_details.sql": "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db",
+      "V25__safe_legacy_account_presentation.sql": "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1",
+      "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd",
+      "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1",
+      "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82",
+      "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41",
+      "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64",
+      "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb",
+      "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c",
+      "V9__immutable_observations_quality_archive_fence.sql": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"
+    },
+    "migrationCount": 25,
+    "schemaVersion": 25
+  },
+  "forwardReconciliation": {
+    "criticalMismatches": 0,
+    "status": "pass"
+  },
+  "generatedAt": "2026-09-05T06:33:48.347382+00:00",
+  "operator": "pytest-reverse-sync",
+  "platforms": [
+    "max",
+    "rutube",
+    "telegram",
+    "vk"
+  ],
+  "preservation": {
+    "aliasMismatches": 0,
+    "identityMismatches": 0,
+    "publicationMismatches": 0,
+    "snapshotMismatches": 0
+  },
+  "release": {
+    "id": "local-unbound",
+    "sha256SumsSha256": "b681882b99e9f2e2d31ec9360b3e5ce9be483cbc184bb984a7c85bf2c31017d9"
+  },
+  "replay": {
+    "idempotent": true,
+    "runCount": 4
+  },
+  "reportType": "reverse-sync-rehearsal",
+  "reportVersion": 3,
+  "reverseSync": {
+    "baselineRevisionCount": 66,
+    "baselineRevisionSetSha256": "5717bdef4d885ce120a8d3cc41811e206d8aedb0883110fb7368d2f36ca87524",
+    "fixedRevisionCount": 4,
+    "fixedRevisionSetSha256": "3545d192eb1a830f584366e5612778871f0df16fe7ead6459ae5412e4c508afd",
+    "journalStateVersion": 3,
+    "planSha256": "31f551371394b7f73d5a5f137a3364e6a2cec51f8828a32faf071c879a029a81",
+    "status": "stopped"
+  },
+  "sFinal": {
+    "batchId": "38061e0f-460a-5dbd-92ee-7619c7b223ac",
+    "gate": "pass",
+    "sourceSha256": "826f230af9ced3f5df3e3eba64d34ff0fec2d4beacf6afb0e4fa2feb09aa8a9b"
+  },
+  "sourceNamespace": "pytest-reverse-sync-105ac138-2e0d-4d50-a686-471bdccdb647",
+  "status": "pass"
+}

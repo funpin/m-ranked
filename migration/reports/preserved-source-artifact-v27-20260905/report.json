@@ -1,0 +1,46 @@
+{
+  "status": "pass",
+  "generatedAt": "2026-09-05T07:50:30.868373+00:00",
+  "schemaVersion": 27,
+  "productionAcceptance": false,
+  "problem": "A fixture output kept a WAL header, so a later read-only Backup API created empty WAL/SHM next to the accepted prior artifact; strict history verification correctly rejected it.",
+  "changes": [
+    "Finish the golden fixture in journal_mode=DELETE before inventory/SHA. Never rewrite an accepted source artifact.",
+    "Make only the distinct mutable native reverse-sync clone WAL; freeze its export with the standard Backup API.",
+    "Include safe identity/projection verifier codes and digests in preservation errors.",
+    "Assert accepted history equality, unchanged source and membership of the verified prior SHA explicitly."
+  ],
+  "schemaOrOraclePolicyChanged": false,
+  "strictSidecarGatePreserved": true,
+  "tests": {
+    "freshV27PreservedSource": {
+      "passed": 1,
+      "skipped": 0,
+      "seconds": 7.14
+    },
+    "archiveSFinal": {
+      "passed": 3,
+      "skipped": 0,
+      "seconds": 22.08,
+      "byteCases": 38,
+      "actualDropAndPreV22ColdRestore": true
+    },
+    "pythonRegression": {
+      "passed": 34,
+      "skipped": 0,
+      "seconds": 1.94
+    }
+  },
+  "independentRepresentative": {
+    "report": "migration/reports/representative-frozen-v27-r1/verification.json",
+    "sha256": "62bc554860ba4e5dc25b44fb2e5720f0640a2bde594ae3742a671a5240dbb74b",
+    "gate": {
+      "critical_mismatches": 0,
+      "status": "pass"
+    },
+    "datasetRevision": 30,
+    "projectionStatus": "pass",
+    "identityHistoryStatus": "pass"
+  },
+  "remainingGate": "Parent aggregate r12 and final operational/HTTP/DR evidence; no production operation performed."
+}

@@ -1,0 +1,141 @@
+{
+  "status": "pass",
+  "proof": {
+    "status": "pass",
+    "sourceSha256": "4866bc304a1c2c7991ce496573bea806b237471c8f8e5486c12acf67b626bb45",
+    "sourceUnchanged": true,
+    "sourceArtifacts": [
+      "1fd2175c7ae37cc055e214b4ab43d6ae7c7d666ad9767c3ac9650ac6950c4c11",
+      "2db18deaf36a1ce8d0f9a59dd94524f0b79b7d8c9f959cd5d24e0e1268739193",
+      "303141dcaae7e4929101636231f32ffa7b3a67436507171cd9bee4e0a5ac2bce",
+      "4866bc304a1c2c7991ce496573bea806b237471c8f8e5486c12acf67b626bb45"
+    ],
+    "datasetRevision": 102,
+    "asOf": "2026-08-01T12:00:00+00:00",
+    "identitySourceReceipts": [],
+    "checks": [
+      {
+        "name": "presentation",
+        "status": "pass",
+        "expected": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "bc058a050333fa370fad9510cda3f6525e673b1ef03584aeddcc9a98c1d6b2a8"
+        },
+        "actual": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "bc058a050333fa370fad9510cda3f6525e673b1ef03584aeddcc9a98c1d6b2a8"
+        },
+        "changedKeysSample": []
+      },
+      {
+        "name": "native",
+        "status": "pass",
+        "expected": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "9e7cb0eaad02025883cc3a930649186e81c9645b731677dc0566354711842c59"
+        },
+        "actual": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "9e7cb0eaad02025883cc3a930649186e81c9645b731677dc0566354711842c59"
+        },
+        "changedKeysSample": []
+      }
+    ]
+  },
+  "tamperCases": [
+    "closed_username",
+    "closed_title",
+    "closed_url",
+    "closed_from",
+    "closed_to",
+    "closed_native",
+    "closed_namespace",
+    "closed_native_from",
+    "closed_native_to",
+    "closed_verified",
+    "closed_provenance",
+    "missing_presentation",
+    "missing_native",
+    "extra_closed"
+  ],
+  "eachTamperOverallNoGo": true,
+  "migrationBridgeRole": "pass",
+  "clearReenrollOldBatchReplay": "pass",
+  "missingPrior": "fail-closed",
+  "compoundDeletedClosedAndBackdatedCurrent": "fail-closed with and without prior artifacts",
+  "nonMigrationAuthority": "fail-closed",
+  "requiredSFinal": "pass",
+  "boundedLimits": "pass",
+  "collectorOriginalReceipt": {
+    "status": "pass",
+    "sourceSha256": "4866bc304a1c2c7991ce496573bea806b237471c8f8e5486c12acf67b626bb45",
+    "sourceUnchanged": true,
+    "sourceArtifacts": [
+      "1fd2175c7ae37cc055e214b4ab43d6ae7c7d666ad9767c3ac9650ac6950c4c11",
+      "2db18deaf36a1ce8d0f9a59dd94524f0b79b7d8c9f959cd5d24e0e1268739193",
+      "303141dcaae7e4929101636231f32ffa7b3a67436507171cd9bee4e0a5ac2bce",
+      "4866bc304a1c2c7991ce496573bea806b237471c8f8e5486c12acf67b626bb45"
+    ],
+    "datasetRevision": 104,
+    "asOf": "2026-08-01T12:00:00+00:00",
+    "identitySourceReceipts": [
+      {
+        "kind": "collector",
+        "platform": "vk",
+        "sha256": "b25172ef979150827524976391aedf81be5b0807dcb33d094c951e7229154ffd"
+      },
+      {
+        "kind": "collector",
+        "platform": "vk",
+        "sha256": "eaee17937f99ba5f925bac128695f61d3698fa8ec85fb7ce793ad80abd3b1755"
+      }
+    ],
+    "checks": [
+      {
+        "name": "presentation",
+        "status": "pass",
+        "expected": {
+          "rows": 5,
+          "distinctKeys": 5,
+          "duplicateKeys": 0,
+          "sha256": "c49bcf0529d2c58cadd2df5df5f4365fdc6daa39478a07addcd770d0d9cffee9"
+        },
+        "actual": {
+          "rows": 5,
+          "distinctKeys": 5,
+          "duplicateKeys": 0,
+          "sha256": "c49bcf0529d2c58cadd2df5df5f4365fdc6daa39478a07addcd770d0d9cffee9"
+        },
+        "changedKeysSample": []
+      },
+      {
+        "name": "native",
+        "status": "pass",
+        "expected": {
+          "rows": 4,
+          "distinctKeys": 4,
+          "duplicateKeys": 0,
+          "sha256": "adfe5ed63f645888db859f2094bd8bfbd08a42905f7fc0fc884c369e9e94f7d7"
+        },
+        "actual": {
+          "rows": 4,
+          "distinctKeys": 4,
+          "duplicateKeys": 0,
+          "sha256": "adfe5ed63f645888db859f2094bd8bfbd08a42905f7fc0fc884c369e9e94f7d7"
+        },
+        "changedKeysSample": []
+      }
+    ]
+  },
+  "collectorRawRetentionExpired": "pass",
+  "collectorMissingForgedReceipt": "fail-closed",
+  "collectorStaleReferenceFallback": "pass"
+}

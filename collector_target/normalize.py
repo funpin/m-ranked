@@ -336,6 +336,7 @@ class CanonicalNormalizer:
         if observed < published:
             flags["observed_before_publication"] = True
             quality = ObservationQuality.INVALID
+            metric_quality = {metric: ObservationQuality.INVALID for metric in METRIC_NAMES}
         if invalid_fields:
             flags["invalid_fields"] = sorted(set(invalid_fields))
         interval = int(raw.sampling_interval_seconds)

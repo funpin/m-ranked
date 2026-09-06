@@ -1,0 +1,65 @@
+- navigation "Основная навигация":
+  - link "Логотип m-ranked":
+    - /url: /?platform=rutube
+    - img "Логотип m-ranked"
+  - button "Включить светлую тему"
+  - button "Открыть меню"
+- main:
+  - heading "Рейтинг · Rutube" [level=1]
+  - paragraph: Только публикации и замеры Rutube. Данные других площадок в расчёт не входят.
+  - text: Период ⓘ
+  - combobox "Период ⓘ":
+    - option "3 часа" [selected]
+    - option "Сутки"
+    - option "Неделя"
+    - option "Последний месяц"
+  - button "Применить"
+  - heading "Вузы" [level=2]
+  - paragraph: Если у вуза несколько аккаунтов Rutube, их публикации объединяются.
+  - text: "Период: 3 часа Вовлечённость: (лайки + комментарии) / просмотры. Это отношение событий, а не уникальных пользователей."
+  - table:
+    - rowgroup:
+      - row "# Вуз Среднее лайков ⓘ Лайков всего ⓘ Просмотры ⓘ Вовлечённость ⓘ ↓ Подписчики ⓘ":
+        - columnheader "#"
+        - columnheader "Вуз"
+        - columnheader "Среднее лайков ⓘ":
+          - link "Среднее лайков ⓘ":
+            - /url: "?platform=rutube&period=3h&channel_sort=average&channel_direction=desc&post_sort=view_share&post_direction=desc"
+        - columnheader "Лайков всего ⓘ":
+          - link "Лайков всего ⓘ":
+            - /url: "?platform=rutube&period=3h&channel_sort=total&channel_direction=desc&post_sort=view_share&post_direction=desc"
+        - columnheader "Просмотры ⓘ":
+          - link "Просмотры ⓘ":
+            - /url: "?platform=rutube&period=3h&channel_sort=views&channel_direction=desc&post_sort=view_share&post_direction=desc"
+        - columnheader "Вовлечённость ⓘ ↓":
+          - link "Вовлечённость ⓘ ↓":
+            - /url: "?platform=rutube&period=3h&channel_sort=engagement&channel_direction=asc&post_sort=view_share&post_direction=desc"
+        - columnheader "Подписчики ⓘ":
+          - link "Подписчики ⓘ":
+            - /url: "?platform=rutube&period=3h&channel_sort=subscribers&channel_direction=desc&post_sort=view_share&post_direction=desc"
+    - rowgroup:
+      - row "Данные появятся после первого замера Rutube.":
+        - cell "Данные появятся после первого замера Rutube."
+  - heading "Публикации Rutube" [level=2]
+  - paragraph: Последний известный замер каждой публикации, вышедшей за период.
+  - text: "Период: 3 часа"
+  - table:
+    - rowgroup:
+      - row "# Публикация Лайки ⓘ Просмотры ⓘ Комментарии ⓘ Вовлечённость ⓘ ↓":
+        - columnheader "#"
+        - columnheader "Публикация"
+        - columnheader "Лайки ⓘ":
+          - link "Лайки ⓘ":
+            - /url: "?platform=rutube&period=3h&channel_sort=engagement&channel_direction=desc&post_sort=reactions&post_direction=desc"
+        - columnheader "Просмотры ⓘ":
+          - link "Просмотры ⓘ":
+            - /url: "?platform=rutube&period=3h&channel_sort=engagement&channel_direction=desc&post_sort=views&post_direction=desc"
+        - columnheader "Комментарии ⓘ":
+          - link "Комментарии ⓘ":
+            - /url: "?platform=rutube&period=3h&channel_sort=engagement&channel_direction=desc&post_sort=comments&post_direction=desc"
+        - columnheader "Вовлечённость ⓘ ↓":
+          - link "Вовлечённость ⓘ ↓":
+            - /url: "?platform=rutube&period=3h&channel_sort=engagement&channel_direction=desc&post_sort=view_share&post_direction=asc"
+    - rowgroup:
+      - row "Пока нет публикаций Rutube за выбранный период.":
+        - cell "Пока нет публикаций Rutube за выбранный период."

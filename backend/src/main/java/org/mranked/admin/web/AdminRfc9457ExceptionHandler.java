@@ -22,9 +22,22 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = AdminController.class)
+@RestControllerAdvice(assignableTypes = {AdminController.class,CatalogController.class})
 public class AdminRfc9457ExceptionHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(AdminRfc9457ExceptionHandler.class);
+
+    @ExceptionHandler(org.mranked.admin.application.LegacyFormException.class)
+    ResponseEntity<ProblemDetail> legacyForm(org.mranked.admin.application.LegacyFormException exception,
+            HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST,"Invalid legacy form",exception.getMessage(),
+            "urn:m-ranked:problem:legacy-form",request);
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    ResponseEntity<ProblemDetail> forbidden(Exception exception,HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN,"Access denied","Access to this resource is denied",
+            "urn:m-ranked:problem:forbidden",request);
+    }
 
     @ExceptionHandler(AdminResourceNotFoundException.class)
     ResponseEntity<ProblemDetail> notFound(
@@ -60,6 +73,8 @@ public class AdminRfc9457ExceptionHandler {
             HandlerMethodValidationException.class,
             MethodArgumentNotValidException.class,
             MethodArgumentTypeMismatchException.class
+            , org.springframework.web.bind.MissingRequestHeaderException.class
+            , org.springframework.http.converter.HttpMessageNotReadableException.class
     })
     ResponseEntity<ProblemDetail> invalidRequest(Exception exception, HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid request",

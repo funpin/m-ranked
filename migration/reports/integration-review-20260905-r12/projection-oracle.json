@@ -1,0 +1,259 @@
+{
+  "status": "pass",
+  "sourceSha256": "9bc73c9f1f273cf95175ba93fbce7ea60b6c56f84b991fa58c932221cbc16919",
+  "sourceUnchanged": true,
+  "sourceRows": 67,
+  "oracleSource": {
+    "mode": "original",
+    "restoredRows": 0,
+    "priorSourceSha256": []
+  },
+  "datasetRevision": 10,
+  "asOf": "2026-08-01T12:00:00+00:00",
+  "firstAgeLimitSeconds": 360,
+  "horizons": [
+    24,
+    48,
+    72,
+    168,
+    336
+  ],
+  "oracle": "unchanged app.web.app.create_app endpoints with injected clock",
+  "serialization": "NULL-distinct; exact decimal counters; engagement rounded to 8 decimal places",
+  "checks": {
+    "overview": {
+      "expected": {
+        "rows": 28,
+        "distinctKeys": 28,
+        "duplicateKeys": 0,
+        "sha256": "9306218ebb3bb9bc90ff3739044d39ad4fae1eb0595cb37cbc580a2b163729bd"
+      },
+      "actual": {
+        "rows": 28,
+        "distinctKeys": 28,
+        "duplicateKeys": 0,
+        "sha256": "9306218ebb3bb9bc90ff3739044d39ad4fae1eb0595cb37cbc580a2b163729bd"
+      },
+      "changedKeysSample": [],
+      "status": "pass"
+    },
+    "periodMetrics": {
+      "expected": {
+        "rows": 96,
+        "distinctKeys": 96,
+        "duplicateKeys": 0,
+        "sha256": "66449e86021d048b9aa9f2c908fceb8a096847e29e050a320ef5ccdaab1f7438"
+      },
+      "actual": {
+        "rows": 96,
+        "distinctKeys": 96,
+        "duplicateKeys": 0,
+        "sha256": "66449e86021d048b9aa9f2c908fceb8a096847e29e050a320ef5ccdaab1f7438"
+      },
+      "changedKeysSample": [],
+      "status": "pass"
+    },
+    "fixedCohort": {
+      "expected": {
+        "rows": 7836,
+        "distinctKeys": 7836,
+        "duplicateKeys": 0,
+        "sha256": "800394feeb0c0eb9b11c2e71197485dcfea626ba0a12f8a1acda51b81f65f006"
+      },
+      "actual": {
+        "rows": 7836,
+        "distinctKeys": 7836,
+        "duplicateKeys": 0,
+        "sha256": "800394feeb0c0eb9b11c2e71197485dcfea626ba0a12f8a1acda51b81f65f006"
+      },
+      "changedKeysSample": [],
+      "status": "pass"
+    }
+  },
+  "tamperDetectedWithoutRebuild": {
+    "overview": [
+      [
+        "vk",
+        "7d",
+        1
+      ]
+    ],
+    "periodMetrics": [
+      [
+        "vk",
+        "7d",
+        1,
+        "views",
+        "sum"
+      ]
+    ],
+    "hourly": [
+      [
+        "vk",
+        168,
+        false,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        168,
+        true,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        24,
+        true,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        336,
+        false,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        336,
+        true,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        48,
+        false,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        48,
+        true,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        72,
+        false,
+        1,
+        "reactions",
+        24
+      ],
+      [
+        "vk",
+        72,
+        true,
+        1,
+        "reactions",
+        24
+      ]
+    ],
+    "membership": [
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        0
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        10
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        11
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        12
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        13
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        14
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        15
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        16
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        17
+      ],
+      [
+        "vk",
+        24,
+        false,
+        1,
+        "engagement",
+        18
+      ]
+    ]
+  },
+  "sourceSqliteWriteDenied": true,
+  "preservedSourceFailsClosed": true,
+  "migrationBridgeRole": "pass",
+  "overallNoGoOnEachTamper": true
+}

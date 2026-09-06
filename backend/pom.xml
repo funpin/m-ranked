@@ -21,9 +21,14 @@
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
         <archunit.version>1.4.1</archunit.version>
+        <mranked.build.directory>${project.basedir}/target</mranked.build.directory>
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
@@ -39,6 +44,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -88,11 +97,39 @@
         </dependency>
     </dependencies>
 
+    <profiles>
+        <profile>
+            <id>migration-integration</id>
+            <build><plugins><plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration><systemPropertyVariables>
+                    <mranked.integration.required>true</mranked.integration.required>
+                </systemPropertyVariables></configuration>
+            </plugin></plugins></build>
+        </profile>
+    </profiles>
+
     <build>
+        <directory>${mranked.build.directory}</directory>
+        <resources>
+            <resource><directory>src/main/resources</directory></resource>
+            <resource>
+                <directory>../contracts/openapi</directory>
+                <includes><include>m-ranked-v1.yaml</include></includes>
+                <targetPath>contract</targetPath>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>public-representation-build-identity</id>
+                        <goals><goal>build-info</goal></goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

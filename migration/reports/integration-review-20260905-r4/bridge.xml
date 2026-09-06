@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="9.141" timestamp="2026-09-05T07:15:19.722252+03:00" hostname="MacBook-funpin.local"><testcase classname="tests.test_migration_bridge_postgres" name="test_postgres_bridge_repeat_catch_up_delete_gate_and_rollback" time="3.208" /><testcase classname="tests.test_bridge_actual_target_postgres" name="test_reconciliation_detects_actual_canonical_corruption" time="3.953" /><testcase classname="tests.test_bridge_actual_target_postgres" name="test_changed_legacy_fact_appends_correction_and_preserves_original_bytes" time="1.193" /><testcase classname="tests.test_bridge_actual_target_postgres" name="test_missing_source_row_requires_verified_owner_ledger_and_remains_checked" time="0.728"><failure message="AssertionError: [{'actual': {'distinctKeys': 8, 'duplicateKeys': 0, 'rows': 8, 'sha256': '64edfa779e0a2def8e9e938e5bc9f4a8b77d2c03a3d6...', 1, 'posts', 1, 'views']], 'serialization': 'canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct'}, ...}]&#10;assert 'fail' == 'pass'&#10;  &#10;  - pass&#10;  + fail">tmp_path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-465/test_missing_source_row_requir0')
+
+    @pytest.mark.skipif(not ADMIN_DSN, reason="requires disposable PostgreSQL admin DSN")
+    def test_missing_source_row_requires_verified_owner_ledger_and_remains_checked(tmp_path: Path):
+        from migration.bridge.preservation import preserve_disappeared
+        import psycopg
+        from uuid import uuid4
+        prior, live, final = (tmp_path/name for name in ("prior.sqlite","live.sqlite","s-final.sqlite"))
+        build_golden_fixture(prior, revision=2)
+        namespace = "preservation-test-"+str(uuid4())
+        def bridge(path, target, kind):
+            return BridgeService(BridgeOptions(source=path,source_namespace=namespace,batch_size=2),
+                                 LegacySource(path),target,snapshot_kind=kind)
+        with PostgresTarget(str(ADMIN_DSN)) as target:
+            _, initial = bridge(prior,target,"s0").run()
+&gt;           assert initial["gate"]["status"] == "pass", initial["mismatches"]
+E           AssertionError: [{'actual': {'distinctKeys': 8, 'duplicateKeys': 0, 'rows': 8, 'sha256': '64edfa779e0a2def8e9e938e5bc9f4a8b77d2c03a3d6...', 1, 'posts', 1, 'views']], 'serialization': 'canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct'}, ...}]
+E           assert 'fail' == 'pass'
+E             
+E             - pass
+E             + fail
+
+tests/test_bridge_actual_target_postgres.py:117: AssertionError</failure></testcase></testsuite></testsuites>

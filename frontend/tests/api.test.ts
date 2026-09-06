@@ -28,7 +28,7 @@ test("API client revalidates a cached response with If-None-Match", async () => 
   const second = await client.overview({ platform: "telegram", period: "1d" });
 
   assert.deepEqual(first, overviewPayload);
-  assert.strictEqual(second, first);
+  assert.deepEqual(second, first);
   const headers = new Headers(requests[1]?.headers);
   assert.equal(headers.get("If-None-Match"), '"revision-17"');
   assert.equal(requests[1]?.cache, "no-store");
@@ -235,9 +235,9 @@ test("comparison client rejects invalid or excess relevant IDs without substitut
       includePartial: false,
       metric: "reactions",
       aggregation: "median",
-      channels: Array.from({ length: 51 }, (_, index) => index + 1),
+      channels: Array.from({ length: 2001 }, (_, index) => index + 1),
     }),
-    /between 1 and 50/,
+    /between 1 and 2000/,
   );
   assert.throws(
     () => client.comparison({
@@ -248,7 +248,7 @@ test("comparison client rejects invalid or excess relevant IDs without substitut
       aggregation: "median",
       channels: [],
     }),
-    /between 1 and 50/,
+    /between 1 and 2000/,
   );
   assert.equal(calls, 0);
 });

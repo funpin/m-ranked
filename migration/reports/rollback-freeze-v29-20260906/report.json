@@ -1,0 +1,30 @@
+{
+  "status": "pass",
+  "scope": "Executable rollback ordering, old-worker generation barrier, failure recovery, transition security and CSV guards; actual Nginx separately verifies the same helper.",
+  "tests": {
+    "combined": {
+      "passed": 87,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 27.28,
+      "junit": "final-guards.xml"
+    },
+    "orderingCases": 11,
+    "generationBarrierCases": 15
+  },
+  "sourceSha256": {
+    "operations/scripts/rollback.sh": "0909d811860a9b4ffc0fd3ea8b1980c2062e4c2880602f48a54deaf1f23dbe75",
+    "operations/scripts/switch-routing.sh": "8763ed6d537e43fee3c6588ed877f1b5ca841cf4438674610fa22b16763a4ff8",
+    "operations/scripts/writer-cutover.sh": "5cec1183e3c84f1e685641c2bff3216c6d940b31b4378b9e92d77e14f38ba21b",
+    "operations/nginx/routes/phase-4-rollback-freeze.conf": "7e08e9378afbf251a54453bbe7cc60e4d190abff28489d90dfd74a11154672c8",
+    "tests/test_rollback_ordering.py": "3c4b68fa77fab1703705d2baccb3c0e570509fbe7aa415f2a084d54a0372f2e9",
+    "operations/scripts/nginx-freeze-barrier.sh": "5186dfa5e70e32f8ee3094042f0003ef4d62a0912d1fd08d14cd647e6585bebf",
+    "tests/test_nginx_freeze_barrier.py": "c203a5d6538822637f35a284f38169abad24ebfa83db92c3c72f70ea32a123e1"
+  },
+  "boundaries": [
+    "Control body executed unchanged against fake services; privileged preamble covered by existing transition guard tests.",
+    "No live services or production routing were modified.",
+    "Final Nginx and full integration evidence are separate."
+  ],
+  "actualNginxEvidence": "operations/http_transition/evidence/local-v29-nginx-r1/report.json"
+}

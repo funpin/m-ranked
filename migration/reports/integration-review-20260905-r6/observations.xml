@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="20" time="4.055" timestamp="2026-09-05T08:57:37.415785+03:00" hostname="MacBook-funpin.local"><testcase classname="tests.test_observation_integrity_postgres" name="test_exact_replay_corrections_immutable_and_independent_metric_projection[clean]" time="0.364" /><testcase classname="tests.test_observation_integrity_postgres" name="test_account_corrections_preserve_lineage_and_active_tip[clean]" time="0.026" /><testcase classname="tests.test_observation_integrity_postgres" name="test_archive_fences_concurrent_correction_and_revalidates_digest[clean]" time="0.223" /><testcase classname="tests.test_observation_integrity_postgres" name="test_empty_partition_canonical_archive[clean]" time="0.052" /><testcase classname="tests.test_observation_integrity_postgres" name="test_collector_role_commits_retrievable_evidence_quality_and_corrections[clean]" time="0.085"><failure message="ValueError: native Telegram publication has no message identity">database = 'user=mranked_bootstrap password=d2cda254ba56d354bb5df608fd10d585db940d97208f3b6a dbname=mranked_observations_it_5ff66420800f host=127.0.0.1 port=58609'
+tmp_path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-486/test_collector_role_commits_re0')
+
+    def test_collector_role_commits_retrievable_evidence_quality_and_corrections(database,tmp_path):
+        from dataclasses import replace
+        from collector_target.evidence import ImmutableEvidenceStore
+        from collector_target.model import AccountRef,CollectionContext,Platform,RawCollectionBatch,RawPublication
+        from collector_target.normalize import CanonicalNormalizer
+        from collector_target.repository import PostgresCollectorRepository
+        with psycopg.connect(database,row_factory=dict_row) as admin:
+            f=seed(admin,'2025-05-01')
+        def connect():
+            c=psycopg.connect(database,autocommit=True,row_factory=dict_row)
+            c.execute('SET ROLE collector_ingest')
+            return c
+        store=ImmutableEvidenceStore(tmp_path/'raw')
+        repository=PostgresCollectorRepository(connection_factory=connect,evidence_store=store)
+        account=AccountRef(f['account'],f['institution'],Platform.TELEGRAM,str(f['account']),'public_web')
+        context=CollectionContext.create(Platform.TELEGRAM,'all','integrity',f['observed'],f['observed'])
+        repository.start_run(context)
+        assert repository.begin_account(context,account,f['observed'])
+        raw=RawCollectionBatch(account,None,(RawPublication(
+            external_id='fixture',published_at=f['observed']-timedelta(hours=2),discovered_at=f['observed'],
+            observed_at=f['observed'],collected_at=f['observed'],publication_type='post',
+            metrics={'views':10,'reactions':2,'comments':3,'shares':-1},
+            source={'access_token':'must-disappear','metrics':{'views':10,'shares':-1}},
+        ),),'fixture','1')
+        batch=CanonicalNormalizer().normalize(raw,context)
+&gt;       first=repository.persist_account_batch(batch)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_observation_integrity_postgres.py:199: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+collector_target/repository.py:484: in persist_account_batch
+    discovered, snapshot, publication_changed = self._persist_publication(
+collector_target/repository.py:997: in _persist_publication
+    persist_native_csv(connection,publication_id,snapshot.published_month,snapshot_id,snapshot.sanitized_source)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+connection = &lt;psycopg.Connection [BAD] at 0x1072c3d40&gt;
+publication_id = UUID('ade51a9f-2fda-5a7c-a7c7-61f2fb0b67b0')
+month = datetime.date(2025, 5, 1), snapshot_id = 9
+evidence = {'account': 'd7237754-9601-4375-977d-b2768208dcc1', 'collected_at': '2025-05-02T02:00:00+00:00', 'discovered_at': '2025-05-02T02:00:00+00:00', 'external_id': 'fixture', ...}
+
+    def persist_native_csv(connection, publication_id, month, snapshot_id, evidence):
+        if sanitize_evidence(evidence) != evidence:
+            raise ValueError("native export evidence must already be sanitized")
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("""SELECT snapshot.*,account.platform::text AS platform,publication.published_at,
+                publication.publication_type FROM ingest.publication_metric_snapshot snapshot
+                JOIN ingest.publication publication ON publication.id=snapshot.publication_id
+                JOIN catalog.platform_account account ON account.id=publication.primary_account_id
+                WHERE snapshot.published_month=%s AND snapshot.id=%s AND snapshot.publication_id=%s""",
+                (month,snapshot_id,publication_id))
+            row=cursor.fetchone()
+            if row is None:
+                raise ValueError("native export observation is missing")
+            cursor.execute("SELECT external_id,role,public_url FROM ingest.publication_identity WHERE publication_id=%s ORDER BY id",(publication_id,))
+            identities=cursor.fetchall()
+            cursor.execute("SELECT reaction_key,reaction_count FROM ingest.reaction_breakdown WHERE snapshot_published_month=%s AND snapshot_id=%s",(month,snapshot_id))
+            breakdown={item['reaction_key']:item['reaction_count'] for item in cursor.fetchall()}
+        telegram=row['platform']=='telegram'
+        primary=next(item for item in identities if item['role']=='primary')
+        public={'published_at':row['published_at'].isoformat(),'post_type':row['publication_type'],
+                'url':primary['public_url'],'external_id':primary['external_id']}
+        if telegram:
+            members=[parse_telegram_external_id(item['external_id'])[1] for item in identities
+                     if item['role'] in ('primary','album_member') and item['external_id'].startswith('m:')]
+            if not members:
+&gt;               raise ValueError("native Telegram publication has no message identity")
+E               ValueError: native Telegram publication has no message identity
+
+collector_target/legacy_csv.py:41: ValueError</failure></testcase><testcase classname="tests.test_observation_integrity_postgres" name="test_drop_recomputes_digest_after_independent_attestation[clean]" time="0.136" /><testcase classname="tests.test_observation_integrity_postgres" name="test_v8_backfill_is_explicit_and_constraints_are_validated[clean]" time="0.013" /><testcase classname="tests.test_observation_integrity_postgres" name="test_quality_belongs_to_each_metric_in_latest_hourly_period_and_comparison[clean]" time="0.092" /><testcase classname="tests.test_observation_integrity_postgres" name="test_raw_expiry_gc_keeps_active_reference_then_removes_file_and_metadata[clean]" time="0.048" /><testcase classname="tests.test_observation_integrity_postgres" name="test_v10_overview_metadata_uses_independent_candidate_sets[clean]" time="0.157" /><testcase classname="tests.test_observation_integrity_postgres" name="test_exact_replay_corrections_immutable_and_independent_metric_projection[v8-upgrade]" time="1.957" /><testcase classname="tests.test_observation_integrity_postgres" name="test_account_corrections_preserve_lineage_and_active_tip[v8-upgrade]" time="0.025" /><testcase classname="tests.test_observation_integrity_postgres" name="test_archive_fences_concurrent_correction_and_revalidates_digest[v8-upgrade]" time="0.141" /><testcase classname="tests.test_observation_integrity_postgres" name="test_empty_partition_canonical_archive[v8-upgrade]" time="0.051" /><testcase classname="tests.test_observation_integrity_postgres" name="test_collector_role_commits_retrievable_evidence_quality_and_corrections[v8-upgrade]" time="0.068"><failure message="ValueError: native Telegram publication has no message identity">database = 'user=mranked_bootstrap password=d2cda254ba56d354bb5df608fd10d585db940d97208f3b6a dbname=mranked_observations_it_18e6ec029b07 host=127.0.0.1 port=58609'
+tmp_path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-486/test_collector_role_commits_re1')
+
+    def test_collector_role_commits_retrievable_evidence_quality_and_corrections(database,tmp_path):
+        from dataclasses import replace
+        from collector_target.evidence import ImmutableEvidenceStore
+        from collector_target.model import AccountRef,CollectionContext,Platform,RawCollectionBatch,RawPublication
+        from collector_target.normalize import CanonicalNormalizer
+        from collector_target.repository import PostgresCollectorRepository
+        with psycopg.connect(database,row_factory=dict_row) as admin:
+            f=seed(admin,'2025-05-01')
+        def connect():
+            c=psycopg.connect(database,autocommit=True,row_factory=dict_row)
+            c.execute('SET ROLE collector_ingest')
+            return c
+        store=ImmutableEvidenceStore(tmp_path/'raw')
+        repository=PostgresCollectorRepository(connection_factory=connect,evidence_store=store)
+        account=AccountRef(f['account'],f['institution'],Platform.TELEGRAM,str(f['account']),'public_web')
+        context=CollectionContext.create(Platform.TELEGRAM,'all','integrity',f['observed'],f['observed'])
+        repository.start_run(context)
+        assert repository.begin_account(context,account,f['observed'])
+        raw=RawCollectionBatch(account,None,(RawPublication(
+            external_id='fixture',published_at=f['observed']-timedelta(hours=2),discovered_at=f['observed'],
+            observed_at=f['observed'],collected_at=f['observed'],publication_type='post',
+            metrics={'views':10,'reactions':2,'comments':3,'shares':-1},
+            source={'access_token':'must-disappear','metrics':{'views':10,'shares':-1}},
+        ),),'fixture','1')
+        batch=CanonicalNormalizer().normalize(raw,context)
+&gt;       first=repository.persist_account_batch(batch)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_observation_integrity_postgres.py:199: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+collector_target/repository.py:484: in persist_account_batch
+    discovered, snapshot, publication_changed = self._persist_publication(
+collector_target/repository.py:997: in _persist_publication
+    persist_native_csv(connection,publication_id,snapshot.published_month,snapshot_id,snapshot.sanitized_source)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+connection = &lt;psycopg.Connection [BAD] at 0x111835e50&gt;
+publication_id = UUID('edadf6f8-d5dd-5608-92e4-716e9408961a')
+month = datetime.date(2025, 5, 1), snapshot_id = 10
+evidence = {'account': '1c51d9e3-489b-458a-b09f-df249cbe4415', 'collected_at': '2025-05-02T02:00:00+00:00', 'discovered_at': '2025-05-02T02:00:00+00:00', 'external_id': 'fixture', ...}
+
+    def persist_native_csv(connection, publication_id, month, snapshot_id, evidence):
+        if sanitize_evidence(evidence) != evidence:
+            raise ValueError("native export evidence must already be sanitized")
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("""SELECT snapshot.*,account.platform::text AS platform,publication.published_at,
+                publication.publication_type FROM ingest.publication_metric_snapshot snapshot
+                JOIN ingest.publication publication ON publication.id=snapshot.publication_id
+                JOIN catalog.platform_account account ON account.id=publication.primary_account_id
+                WHERE snapshot.published_month=%s AND snapshot.id=%s AND snapshot.publication_id=%s""",
+                (month,snapshot_id,publication_id))
+            row=cursor.fetchone()
+            if row is None:
+                raise ValueError("native export observation is missing")
+            cursor.execute("SELECT external_id,role,public_url FROM ingest.publication_identity WHERE publication_id=%s ORDER BY id",(publication_id,))
+            identities=cursor.fetchall()
+            cursor.execute("SELECT reaction_key,reaction_count FROM ingest.reaction_breakdown WHERE snapshot_published_month=%s AND snapshot_id=%s",(month,snapshot_id))
+            breakdown={item['reaction_key']:item['reaction_count'] for item in cursor.fetchall()}
+        telegram=row['platform']=='telegram'
+        primary=next(item for item in identities if item['role']=='primary')
+        public={'published_at':row['published_at'].isoformat(),'post_type':row['publication_type'],
+                'url':primary['public_url'],'external_id':primary['external_id']}
+        if telegram:
+            members=[parse_telegram_external_id(item['external_id'])[1] for item in identities
+                     if item['role'] in ('primary','album_member') and item['external_id'].startswith('m:')]
+            if not members:
+&gt;               raise ValueError("native Telegram publication has no message identity")
+E               ValueError: native Telegram publication has no message identity
+
+collector_target/legacy_csv.py:41: ValueError</failure></testcase><testcase classname="tests.test_observation_integrity_postgres" name="test_drop_recomputes_digest_after_independent_attestation[v8-upgrade]" time="0.139" /><testcase classname="tests.test_observation_integrity_postgres" name="test_v8_backfill_is_explicit_and_constraints_are_validated[v8-upgrade]" time="0.014" /><testcase classname="tests.test_observation_integrity_postgres" name="test_quality_belongs_to_each_metric_in_latest_hourly_period_and_comparison[v8-upgrade]" time="0.101" /><testcase classname="tests.test_observation_integrity_postgres" name="test_raw_expiry_gc_keeps_active_reference_then_removes_file_and_metadata[v8-upgrade]" time="0.052" /><testcase classname="tests.test_observation_integrity_postgres" name="test_v10_overview_metadata_uses_independent_candidate_sets[v8-upgrade]" time="0.136" /></testsuite></testsuites>

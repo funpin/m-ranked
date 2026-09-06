@@ -1,0 +1,12 @@
+import {spawn,spawnSync} from "node:child_process";
+import {cpSync,existsSync,mkdirSync} from "node:fs";
+const env={...process.env,NEXT_DIST_DIR:".next-browser-tests"};
+const build=spawnSync(process.execPath,["node_modules/next/dist/bin/next","build"],{env,stdio:"inherit"});
+if(build.status!==0) process.exit(build.status??1);
+const directory=".next-browser-tests/standalone/frontend";
+mkdirSync(`${directory}/.next-browser-tests`,{recursive:true});
+cpSync(".next-browser-tests/static",`${directory}/.next-browser-tests/static`,{recursive:true});
+if(existsSync("public")) cpSync("public",`${directory}/public`,{recursive:true});
+const child=spawn(process.execPath,[`${directory}/server.js`],{env:{...env,HOSTNAME:"127.0.0.1",PORT:"18092"},stdio:"inherit"});
+for(const signal of ["SIGINT","SIGTERM"]) process.on(signal,()=>{child.kill(signal);});
+child.on("exit",(code)=>process.exit(code??0));

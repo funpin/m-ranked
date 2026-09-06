@@ -283,6 +283,38 @@ class ReverseSyncJournal:
             ).fetchone()
         return None if row is None else _sha256(str(row[0]), "legacy target identity")
 
+    def bind_account_baseline(self, accounts: dict[str, str]) -> None:
+        """Persist S-final identities before the first compatibility write."""
+        payload = canonical_json(accounts)
+        with self.connect(write=True) as connection:
+            connection.execute(
+                "INSERT INTO journal_meta(key,value) VALUES('account_identity_baseline',?) "
+                "ON CONFLICT(key) DO NOTHING", (payload,),
+            )
+            actual = connection.execute(
+                "SELECT value FROM journal_meta WHERE key='account_identity_baseline'"
+            ).fetchone()
+            if actual is None or actual[0] != payload:
+                raise RuntimeError("immutable account baseline changed")
+
+    def account_baseline(self) -> dict[str, str] | None:
+        if not self.exists:
+            return None
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT value FROM journal_meta WHERE key='account_identity_baseline'"
+            ).fetchone()
+        if row is None:
+            return None
+        value = json.loads(row[0])
+        if not isinstance(value, dict) or any(
+            not isinstance(key, str) or not key.isdecimal() or int(key) <= 0
+            or not isinstance(identity, str) or not identity.strip()
+            for key, identity in value.items()
+        ):
+            raise RuntimeError("invalid account identity baseline")
+        return value
+
     def replace_revisions(self, table: str, revision_ids: Sequence[int]) -> None:
         if table not in {
             "baseline_revision", "drain_revision", "applied_revision",

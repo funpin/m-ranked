@@ -4,8 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -18,6 +16,7 @@ import java.util.concurrent.Flow;
 import org.mranked.emoji.application.CustomEmojiAsset;
 import org.mranked.emoji.application.CustomEmojiNotFoundException;
 import org.mranked.emoji.application.TelegramEmojiGateway;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -38,11 +37,9 @@ public final class TelegramEmojiHttpGateway implements TelegramEmojiGateway {
     private final ObjectMapper objectMapper;
     private final Transport transport;
 
+    @Autowired
     public TelegramEmojiHttpGateway(ObjectMapper objectMapper) {
-        this(objectMapper, new JdkTransport(HttpClient.newBuilder()
-                .connectTimeout(REQUEST_TIMEOUT)
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build()));
+        this(objectMapper, new PinnedEmojiTransport());
     }
 
     TelegramEmojiHttpGateway(ObjectMapper objectMapper, Transport transport) {
@@ -52,9 +49,10 @@ public final class TelegramEmojiHttpGateway implements TelegramEmojiGateway {
 
     @Override
     public CustomEmojiAsset fetch(String emojiId) {
+        long deadline = System.nanoTime() + REQUEST_TIMEOUT.toNanos();
         URI metadataUri = URI.create("https://t.me/i/emoji/" + emojiId + ".json");
         UpstreamResponse metadata = getFollowingAllowedRedirects(
-                metadataUri, MAX_METADATA_BYTES
+                metadataUri, MAX_METADATA_BYTES, deadline
         );
         if (metadata.statusCode() != 200 || metadata.body().length > MAX_METADATA_BYTES) {
             throw new CustomEmojiNotFoundException();
@@ -75,7 +73,7 @@ public final class TelegramEmojiHttpGateway implements TelegramEmojiGateway {
             throw new CustomEmojiNotFoundException();
         }
 
-        UpstreamResponse image = getFollowingAllowedRedirects(assetUri, MAX_ASSET_BYTES);
+        UpstreamResponse image = getFollowingAllowedRedirects(assetUri, MAX_ASSET_BYTES, deadline);
         if (image.statusCode() != 200 || image.body().length > MAX_ASSET_BYTES) {
             throw new CustomEmojiNotFoundException();
         }
@@ -83,7 +81,7 @@ public final class TelegramEmojiHttpGateway implements TelegramEmojiGateway {
         return new CustomEmojiAsset(image.body(), mediaType);
     }
 
-    private UpstreamResponse getFollowingAllowedRedirects(URI initialUri, int maximumBytes) {
+    private UpstreamResponse getFollowingAllowedRedirects(URI initialUri, int maximumBytes, long deadline) {
         URI current = initialUri;
         for (int redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
             if (!isAllowedUri(current)) {
@@ -91,7 +89,9 @@ public final class TelegramEmojiHttpGateway implements TelegramEmojiGateway {
             }
             UpstreamResponse response;
             try {
-                response = transport.get(current, maximumBytes);
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) throw new IOException("emoji total deadline expired");
+                response = transport.get(current, maximumBytes, remaining);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new CustomEmojiUpstreamException("Telegram emoji request was interrupted", exception);
@@ -127,7 +127,9 @@ public final class TelegramEmojiHttpGateway implements TelegramEmojiGateway {
     }
 
     static boolean isAllowedUri(URI uri) {
-        if (uri == null || !"https".equals(uri.getScheme()) || uri.getHost() == null) {
+        if (uri == null || !"https".equals(uri.getScheme()) || uri.getHost() == null
+                || uri.getRawUserInfo() != null || uri.getPort() != -1 && uri.getPort() != 443
+                || uri.getRawFragment() != null) {
             return false;
         }
         String host = uri.getHost().toLowerCase(Locale.ROOT);
@@ -176,6 +178,14 @@ public final class TelegramEmojiHttpGateway implements TelegramEmojiGateway {
     @FunctionalInterface
     interface Transport {
         UpstreamResponse get(URI uri, int maximumBytes) throws IOException, InterruptedException;
+        default UpstreamResponse get(URI uri, int maximumBytes, long remainingNanos) throws IOException, InterruptedException {
+            return get(uri, maximumBytes);
+        }
+    }
+
+    @jakarta.annotation.PreDestroy
+    public void close() throws Exception {
+        if (transport instanceof AutoCloseable closeable) closeable.close();
     }
 
     record UpstreamResponse(
@@ -184,34 +194,6 @@ public final class TelegramEmojiHttpGateway implements TelegramEmojiGateway {
             String contentType,
             byte[] body
     ) {
-    }
-
-    private static final class JdkTransport implements Transport {
-        private final HttpClient client;
-
-        private JdkTransport(HttpClient client) {
-            this.client = client;
-        }
-
-        @Override
-        public UpstreamResponse get(URI uri, int maximumBytes)
-                throws IOException, InterruptedException {
-            HttpRequest request = HttpRequest.newBuilder(uri)
-                    .timeout(REQUEST_TIMEOUT)
-                    .header("Accept", "application/json,image/webp,image/png,image/gif,image/jpeg,*/*")
-                    .GET()
-                    .build();
-            HttpResponse<byte[]> response = client.send(
-                    request,
-                    ignored -> new BoundedBodySubscriber(maximumBytes)
-            );
-            return new UpstreamResponse(
-                    response.statusCode(),
-                    response.headers().firstValue("location").orElse(null),
-                    response.headers().firstValue("content-type").orElse(""),
-                    response.body()
-            );
-        }
     }
 
     static final class BoundedBodySubscriber implements HttpResponse.BodySubscriber<byte[]> {

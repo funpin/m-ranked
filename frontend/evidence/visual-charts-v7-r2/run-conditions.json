@@ -1,0 +1,5 @@
+{
+  "gate": "NO-GO",
+  "acceptanceEligible": false,
+  "reason": "Capture interrupted after target standalone initial JS assets returned 404. Assets were copied after startup; restarting after asset copy verified HTTP 200. No passing result is inferred from this partial run."
+}

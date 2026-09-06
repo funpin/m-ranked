@@ -42,7 +42,12 @@ SELECT
     snapshot.capability_version,
     snapshot.source_fingerprint,
     snapshot.created_at,
-    COALESCE(reactions.breakdown, '{}'::jsonb) AS reaction_breakdown_json
+    COALESCE(reactions.breakdown, '{}'::jsonb) AS reaction_breakdown_json,
+    snapshot.correction_sequence, snapshot.supersedes_snapshot_id, snapshot.correction_reason,
+    snapshot.views_quality::text, snapshot.reactions_quality::text,
+    snapshot.comments_quality::text, snapshot.shares_quality::text,
+    snapshot.metric_evidence AS metric_evidence_json,
+    ops_and_admin.publication_archive_record(snapshot.published_month,snapshot.id) AS canonical_record
 FROM ingest.publication_metric_snapshot AS snapshot
 JOIN ingest.publication AS publication ON publication.id = snapshot.publication_id
 JOIN catalog.platform_account AS account ON account.id = publication.primary_account_id
@@ -98,11 +103,13 @@ class ColdArchiveService:
             self._dsn, row_factory=dict_row, autocommit=True
         ) as connection:
             with self._advisory_lock(connection, lock_key):
+                connection.execute("SELECT ops_and_admin.begin_publication_archive(%s)", (month.start,))
                 reused = self._reuse_verified(connection, month)
                 if reused is not None:
                     if drop_hot_partition:
                         self._drop(connection, month, reused.manifest_id)
                         return replace(reused, hot_partition_dropped=True)
+                    connection.execute("SELECT ops_and_admin.abort_publication_archive(%s)", (month.start,))
                     return reused
 
                 self._assert_partition_and_capacity(connection, month)
@@ -135,6 +142,8 @@ class ColdArchiveService:
                 if drop_hot_partition:
                     self._drop(connection, month, str(manifest_id))
                     result = replace(result, hot_partition_dropped=True)
+                if not drop_hot_partition:
+                    connection.execute("SELECT ops_and_admin.abort_publication_archive(%s)", (month.start,))
                 return result
 
     def _prepare_output_directory(self) -> None:
@@ -164,7 +173,7 @@ class ColdArchiveService:
             cursor.execute(
                 """
                 SELECT id, object_uri, sha256, row_count, min_observed_at,
-                       max_observed_at, verification_details
+                       max_observed_at, canonical_sha256, verification_details
                 FROM ops_and_admin.archive_manifest
                 WHERE dataset_type = %s
                   AND schema_version = %s
@@ -179,6 +188,9 @@ class ColdArchiveService:
             )
             row = cursor.fetchone()
         if row is None:
+            return None
+        actual = connection.execute("SELECT * FROM ops_and_admin.publication_partition_digest(%s)", (month.start,)).fetchone()
+        if any(actual[key] != row[key] for key in ("row_count", "min_observed_at", "max_observed_at", "canonical_sha256")):
             return None
         object_path = _file_uri_to_path(row["object_uri"])
         if object_path is None or not object_path.is_file():
@@ -298,6 +310,7 @@ class ColdArchiveService:
             "format": "parquet",
             "compression": verification.compression,
             "sha256": verification.sha256,
+            "canonicalSha256": verification.canonical_sha256,
             "rowCount": verification.row_count,
             "minObservedAt": _iso(verification.min_observed_at),
             "maxObservedAt": _iso(verification.max_observed_at),
@@ -334,9 +347,14 @@ class ColdArchiveService:
             "sampleRowsRead": verification.sample_rows_read,
             "rowGroups": verification.row_groups,
             "schemaFingerprint": f"mranked-publication-metric-snapshot-v{SCHEMA_VERSION}",
-            "verifiedChecks": ["sha256", "rowCount", "schema", "compression", "sampleRead"],
+            "verifiedChecks": ["sha256", "canonicalSha256", "rowCount", "schema", "compression", "sampleRead"],
+            "storageClass": "local-spool-not-product-archive",
         }
         with connection.transaction():
+            actual = connection.execute("SELECT * FROM ops_and_admin.publication_partition_digest(%s)", (month.start,)).fetchone()
+            expected = (verification.row_count, verification.min_observed_at, verification.max_observed_at, verification.canonical_sha256)
+            if tuple(actual[key] for key in ("row_count", "min_observed_at", "max_observed_at", "canonical_sha256")) != expected:
+                raise RuntimeError("partition digest differs from verified Parquet")
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
@@ -344,10 +362,10 @@ class ColdArchiveService:
                         dataset_type, schema_version, partition_start, partition_end,
                         object_uri, archive_format, compression, sha256, row_count,
                         min_observed_at, max_observed_at, status, verified_at,
-                        verification_details
+                        verification_details, canonical_sha256
                     ) VALUES (
                         %s, %s, %s, %s, %s, 'parquet', 'zstandard', %s, %s,
-                        %s, %s, 'verified', transaction_timestamp(), %s::jsonb
+                        %s, %s, 'verified', transaction_timestamp(), %s::jsonb, %s
                     )
                     ON CONFLICT (dataset_type, partition_start, partition_end, sha256)
                     DO UPDATE SET
@@ -357,7 +375,8 @@ class ColdArchiveService:
                         max_observed_at = EXCLUDED.max_observed_at,
                         status = 'verified',
                         verified_at = transaction_timestamp(),
-                        verification_details = EXCLUDED.verification_details
+                        verification_details = EXCLUDED.verification_details,
+                        canonical_sha256 = EXCLUDED.canonical_sha256
                     RETURNING id
                     """,
                     (
@@ -371,6 +390,7 @@ class ColdArchiveService:
                         verification.min_observed_at,
                         verification.max_observed_at,
                         json.dumps(details, sort_keys=True),
+                        verification.canonical_sha256,
                     ),
                 )
                 return cursor.fetchone()["id"]

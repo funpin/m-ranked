@@ -21,7 +21,10 @@ public class JdbcReadinessProbe implements ReadinessProbe {
                 ('institution_daily_metrics'),
                 ('institution_monthly_metrics'),
                 ('institution_period_metrics'),
-                ('comparison')
+                ('comparison'),
+                ('publication_history'),
+                ('publication_content'),
+                ('legacy_exports')
             )
             SELECT revision.id AS revision_id,
                    count(state.projection_name) AS ready_count
@@ -55,7 +58,7 @@ public class JdbcReadinessProbe implements ReadinessProbe {
                 ))
                 .optional()
                 .orElse(null);
-        if (core == null || core.readyCount() != 6) {
+        if (core == null || core.readyCount() != 9) {
             return ReadinessResult.down();
         }
         DatasetRevision revision = revisionProvider.current();

@@ -1,0 +1,3312 @@
+{
+  "batch_id": "302bed97-bf78-551b-b043-9bfd704e92e2",
+  "bridge": {
+    "batch_id": "302bed97-bf78-551b-b043-9bfd704e92e2",
+    "dry_run": false,
+    "finished_at": "2026-09-05T06:38:23.353739+00:00",
+    "projection_rebuild": {
+      "account_latest": 823,
+      "comparison": 8534560,
+      "comparison_publication_hourly": 276340,
+      "comparison_semantics_version": 2,
+      "dataset_revision_id": 29,
+      "institution_daily_metrics": 8264,
+      "institution_monthly_metrics": 8256,
+      "institution_period_metrics": 32960,
+      "institution_period_semantics_version": 2,
+      "legacy_exports": 9850,
+      "legacy_overview_accounts": 1648,
+      "legacy_overview_cards": 4136,
+      "legacy_overview_semantics_version": 1,
+      "official_account_ratings": 4,
+      "publication_content": 824,
+      "publication_history": 9026,
+      "publication_history_reactions": 9026,
+      "publication_hourly": 315706,
+      "publication_latest": 824
+    },
+    "rows_by_stream": {
+      "app_state": 2,
+      "channels": 206,
+      "institutions": 207,
+      "platform_accounts": 824,
+      "platform_posts": 618,
+      "platform_snapshots": 6768,
+      "post_messages": 208,
+      "posts": 206,
+      "reaction_snapshots": 2258,
+      "schema_migrations": 15
+    },
+    "rows_read": 11312,
+    "rows_written": 54692,
+    "schema_version": 15,
+    "source_sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "started_at": "2026-09-05T06:33:21.904644+00:00",
+    "warnings": []
+  },
+  "canonical_protocol": "v1",
+  "checks": [
+    {
+      "actual": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+      "check": "source_artifact_unchanged",
+      "critical": true,
+      "expected": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+      "scope": "sqlite_sha256",
+      "status": "pass"
+    },
+    {
+      "actual": 15,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "eeb15b6da62a2c2ab43078d7a69df0abc8e1e6587fec24f45a39a19d9e2a5d2a"
+      },
+      "expected": 15,
+      "scope": "schema_migrations",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 15,
+        "sha256": "8912601c382fcda221b9c2813c46737406fe8e2f56b2acfad5c822b77875ed5f"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 15,
+        "sha256": "8912601c382fcda221b9c2813c46737406fe8e2f56b2acfad5c822b77875ed5f"
+      },
+      "scope": "schema_migrations",
+      "status": "pass"
+    },
+    {
+      "actual": 2,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "07c2ad57ad7f2fb499d39a0f4a808052230d5e9e8db02926e5412c0f7662c057"
+      },
+      "expected": 2,
+      "scope": "app_state",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 2,
+        "sha256": "a523f9c3427cfdcbd41f099b5a8c9570db0a6de192284024b1a60cc3db404346"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 2,
+        "sha256": "a523f9c3427cfdcbd41f099b5a8c9570db0a6de192284024b1a60cc3db404346"
+      },
+      "scope": "app_state",
+      "status": "pass"
+    },
+    {
+      "actual": 207,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "a1a9a8e0639a8f45e20e40f784357212388b9a9a0b11be30c67fb0a5a04a5c55"
+      },
+      "expected": 207,
+      "scope": "institutions",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 207,
+        "sha256": "f64a7d5cd23ce9621a5d1c0554e94e4e06218ab84c97796805683de5d3b0aebc"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 207,
+        "sha256": "f64a7d5cd23ce9621a5d1c0554e94e4e06218ab84c97796805683de5d3b0aebc"
+      },
+      "scope": "institutions",
+      "status": "pass"
+    },
+    {
+      "actual": 824,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "7407467ebb7084c8839f5a52ff6008275088169d6ca664da7964435d81e8cb81"
+      },
+      "expected": 824,
+      "scope": "platform_accounts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 824,
+        "sha256": "056eba3450615ad4330fdbe4149575d122505618e9adef6cea49fd4aefe4ea2d"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 824,
+        "sha256": "056eba3450615ad4330fdbe4149575d122505618e9adef6cea49fd4aefe4ea2d"
+      },
+      "scope": "platform_accounts",
+      "status": "pass"
+    },
+    {
+      "actual": 206,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "7f488b025c0d626d0825bb4d4f21d08b87fff7d4b60ee267c7e40ff8b5db0832"
+      },
+      "expected": 206,
+      "scope": "channels",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 206,
+        "sha256": "f6151f619ef79dd7d817913a3e848c23fb674377ed3e350522ac0c76765bee0a"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 206,
+        "sha256": "f6151f619ef79dd7d817913a3e848c23fb674377ed3e350522ac0c76765bee0a"
+      },
+      "scope": "channels",
+      "status": "pass"
+    },
+    {
+      "actual": 618,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "8fe92e1d7b6aab924a26da15dbeacfdabad782f748a1a928409620a60bcbe5e7"
+      },
+      "expected": 618,
+      "scope": "platform_posts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 618,
+        "sha256": "67be341fd04ace8bf7c54af7af379aae5995a09af6b4221b53304d21ae8cc2de"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 618,
+        "sha256": "67be341fd04ace8bf7c54af7af379aae5995a09af6b4221b53304d21ae8cc2de"
+      },
+      "scope": "platform_posts",
+      "status": "pass"
+    },
+    {
+      "actual": 206,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "4a943c65abacd8fde8feeb99b9581e0641b6371c55b348a9bd2ac3df06557005"
+      },
+      "expected": 206,
+      "scope": "posts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 206,
+        "sha256": "cc0d3b7e38938a6e24fc4dccdf8abdf28f5009c6ab7568de09af32fa15fa8212"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 206,
+        "sha256": "cc0d3b7e38938a6e24fc4dccdf8abdf28f5009c6ab7568de09af32fa15fa8212"
+      },
+      "scope": "posts",
+      "status": "pass"
+    },
+    {
+      "actual": 208,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "a3f1289d17743a851284c8ee1157b54a66134cf9d9c7e5f4b192869aff87292c"
+      },
+      "expected": 208,
+      "scope": "post_messages",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 208,
+        "sha256": "558d538f0f84707955c769b3d79d1f5ef10a950704afad11431cbad25350b23b"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 208,
+        "sha256": "558d538f0f84707955c769b3d79d1f5ef10a950704afad11431cbad25350b23b"
+      },
+      "scope": "post_messages",
+      "status": "pass"
+    },
+    {
+      "actual": 6768,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "6c12cf731961da348d36591014bc36e33b0e958a8ad9d2c5d7bb6595ce68c879"
+      },
+      "expected": 6768,
+      "scope": "platform_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 6768,
+        "sha256": "91663493b777f3994c5d7e46452b328fc2c32e49f97f70d5835d3c1826b00aaa"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 6768,
+        "sha256": "91663493b777f3994c5d7e46452b328fc2c32e49f97f70d5835d3c1826b00aaa"
+      },
+      "scope": "platform_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 2258,
+      "check": "mapped_row_count",
+      "critical": true,
+      "details": {
+        "source_canonical_hash": "eb8e6237fcebf969f475dd05788710d8db84bf11b946ed88a94efb4d6732c9b8"
+      },
+      "expected": 2258,
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 2258,
+        "sha256": "b27418eef305164d98d7fbcf77b50e0d4022b04213fa5b2f80f4054c69e011e1"
+      },
+      "check": "source_row_hashes",
+      "critical": true,
+      "details": {
+        "changed_sample": [],
+        "extra_sample": [],
+        "missing_sample": []
+      },
+      "expected": {
+        "rows": 2258,
+        "sha256": "b27418eef305164d98d7fbcf77b50e0d4022b04213fa5b2f80f4054c69e011e1"
+      },
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "source_rows_missing_since_prior_batch",
+      "critical": true,
+      "details": {
+        "policy": "never delete automatically; preserved history requires verified prior source facts and owner decision"
+      },
+      "expected": 0,
+      "scope": "all",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_institutions",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_accounts",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_account_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_publications",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_publication_identities",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "missing_official_ratings",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "default_snapshot_partition_rows",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "default_reaction_partition_rows",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "target_integrity",
+      "critical": true,
+      "expected": 0,
+      "scope": "unvalidated_constraints",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "comments": 0,
+        "comments_null": 2246,
+        "comments_zero": 4522,
+        "max_observed_at": "2026-08-01T12:00:00+00:00",
+        "min_observed_at": "2026-07-16T12:00:00+00:00",
+        "reactions": 2023400,
+        "reactions_null": 1,
+        "reactions_zero": 1,
+        "rows": 6768,
+        "shares": 0,
+        "shares_null": 2256,
+        "shares_zero": 4512,
+        "synthetic": 0,
+        "uncertain": 0,
+        "views": 13601975,
+        "views_null": 0,
+        "views_zero": 1
+      },
+      "check": "snapshot_metrics",
+      "critical": true,
+      "details": {
+        "null_and_zero_are_compared_separately": true
+      },
+      "expected": {
+        "comments": 0,
+        "comments_null": 2246,
+        "comments_zero": 4522,
+        "max_observed_at": "2026-08-01T12:00:00+00:00",
+        "min_observed_at": "2026-07-16T12:00:00+00:00",
+        "reactions": 2023400,
+        "reactions_null": 1,
+        "reactions_zero": 1,
+        "rows": 6768,
+        "shares": 0,
+        "shares_null": 2256,
+        "shares_zero": 4512,
+        "synthetic": 0,
+        "uncertain": 0,
+        "views": 13601975,
+        "views_null": 0,
+        "views_zero": 1
+      },
+      "scope": "platform_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "comments": 3,
+        "comments_null": 748,
+        "comments_zero": 1508,
+        "max_observed_at": "2026-08-01T12:00:00+00:00",
+        "min_observed_at": "2026-07-16T12:00:00+00:00",
+        "reactions": 674472,
+        "reactions_null": 0,
+        "reactions_zero": 1,
+        "rows": 2258,
+        "shares": null,
+        "shares_null": 2258,
+        "shares_zero": 0,
+        "synthetic": 1,
+        "uncertain": 1641,
+        "views": 4533765,
+        "views_null": 0,
+        "views_zero": 1
+      },
+      "check": "snapshot_metrics",
+      "critical": true,
+      "details": {
+        "null_and_zero_are_compared_separately": true
+      },
+      "expected": {
+        "comments": 3,
+        "comments_null": 748,
+        "comments_zero": 1508,
+        "max_observed_at": "2026-08-01T12:00:00+00:00",
+        "min_observed_at": "2026-07-16T12:00:00+00:00",
+        "reactions": 674472,
+        "reactions_null": 0,
+        "reactions_zero": 1,
+        "rows": 2258,
+        "shares": null,
+        "shares_null": 2258,
+        "shares_zero": 0,
+        "synthetic": 1,
+        "uncertain": 1641,
+        "views": 4533765,
+        "views_null": 0,
+        "views_zero": 1
+      },
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "breakdown_rows": 2259,
+        "breakdown_sum": 674472,
+        "breakdown_total_mismatch": 0
+      },
+      "check": "reaction_breakdown",
+      "critical": true,
+      "expected": {
+        "breakdown_rows": 2259,
+        "breakdown_sum": 674472,
+        "breakdown_total_mismatch": 0
+      },
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": 0,
+      "check": "reaction_breakdown_parse",
+      "critical": true,
+      "expected": 0,
+      "scope": "reaction_snapshots",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "album_posts": 1,
+        "albums": 1,
+        "ambiguous_albums": 1,
+        "deleted": 1,
+        "forced_incomplete": 0,
+        "incomplete": 0,
+        "reposts": 1,
+        "rows": 206
+      },
+      "check": "publication_semantics",
+      "critical": true,
+      "expected": {
+        "album_posts": 1,
+        "albums": 1,
+        "ambiguous_albums": 1,
+        "deleted": 1,
+        "forced_incomplete": 0,
+        "incomplete": 0,
+        "reposts": 1,
+        "rows": 206
+      },
+      "scope": "posts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "deleted": 0,
+        "forced_incomplete": 0,
+        "incomplete": 1,
+        "reposts": 1,
+        "rows": 618
+      },
+      "check": "publication_semantics",
+      "critical": true,
+      "expected": {
+        "deleted": 0,
+        "forced_incomplete": 0,
+        "incomplete": 1,
+        "reposts": 1,
+        "rows": 618
+      },
+      "scope": "platform_posts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "rows": 823,
+        "subscribers": 8478045,
+        "subscribers_null": 0,
+        "subscribers_zero": 4
+      },
+      "check": "account_snapshot_metrics",
+      "critical": true,
+      "expected": {
+        "rows": 823,
+        "subscribers": 8478045,
+        "subscribers_null": 0,
+        "subscribers_zero": 4
+      },
+      "scope": "accounts",
+      "status": "pass"
+    },
+    {
+      "actual": 6,
+      "check": "official_rating_count",
+      "critical": true,
+      "expected": 6,
+      "scope": "all",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 207,
+        "duplicateKeys": 0,
+        "rows": 207,
+        "sha256": "e4eea2e2059c2d05161add8d51785bcb1bc1324d0b9dfcb1944396a79331d101"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 207,
+        "duplicateKeys": 0,
+        "rows": 207,
+        "sha256": "e4eea2e2059c2d05161add8d51785bcb1bc1324d0b9dfcb1944396a79331d101"
+      },
+      "scope": "institutions",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 824,
+        "duplicateKeys": 0,
+        "rows": 824,
+        "sha256": "f90fa98ab14f1e1b766416c579befcd1e4f811491a445ff5f9dbad5b53e89121"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 824,
+        "duplicateKeys": 0,
+        "rows": 824,
+        "sha256": "f90fa98ab14f1e1b766416c579befcd1e4f811491a445ff5f9dbad5b53e89121"
+      },
+      "scope": "accounts",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 823,
+        "duplicateKeys": 0,
+        "rows": 823,
+        "sha256": "5b3593fbea25792614d3a6ae98c977ed99623a312a26a1c5311a76c917010b18"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 823,
+        "duplicateKeys": 0,
+        "rows": 823,
+        "sha256": "5b3593fbea25792614d3a6ae98c977ed99623a312a26a1c5311a76c917010b18"
+      },
+      "scope": "subscribers",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 824,
+        "duplicateKeys": 0,
+        "rows": 824,
+        "sha256": "45652af02885059738ab8bd06e6af60607c8de27e617328cd818910823fd923d"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 824,
+        "duplicateKeys": 0,
+        "rows": 824,
+        "sha256": "45652af02885059738ab8bd06e6af60607c8de27e617328cd818910823fd923d"
+      },
+      "scope": "publications",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 827,
+        "duplicateKeys": 0,
+        "rows": 827,
+        "sha256": "933c5c796b814beeea563c29d4f3c0112820f4438b965ee1a228efb7b66d54b2"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 827,
+        "duplicateKeys": 0,
+        "rows": 827,
+        "sha256": "933c5c796b814beeea563c29d4f3c0112820f4438b965ee1a228efb7b66d54b2"
+      },
+      "scope": "publication_identities",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 9026,
+        "duplicateKeys": 0,
+        "rows": 9026,
+        "sha256": "45bda43fd9e6c3a3199235544c150fffea5523487a880d49819707b5a87a49b9"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 9026,
+        "duplicateKeys": 0,
+        "rows": 9026,
+        "sha256": "45bda43fd9e6c3a3199235544c150fffea5523487a880d49819707b5a87a49b9"
+      },
+      "scope": "observations",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 2259,
+        "duplicateKeys": 0,
+        "rows": 2259,
+        "sha256": "d742b3feaeae6bbc6a990168fb8145cb27df88b07d0bc1131eb660e8e1150361"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 2259,
+        "duplicateKeys": 0,
+        "rows": 2259,
+        "sha256": "d742b3feaeae6bbc6a990168fb8145cb27df88b07d0bc1131eb660e8e1150361"
+      },
+      "scope": "reaction_keys",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 6,
+        "duplicateKeys": 0,
+        "rows": 6,
+        "sha256": "0fe3f993e2efafcf98e8c5e055bf9b48bb4640f1a008433e8212988fdd1e95dc"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 6,
+        "duplicateKeys": 0,
+        "rows": 6,
+        "sha256": "0fe3f993e2efafcf98e8c5e055bf9b48bb4640f1a008433e8212988fdd1e95dc"
+      },
+      "scope": "official_rating_values",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 3296,
+        "duplicateKeys": 0,
+        "rows": 3296,
+        "sha256": "c61e68f89c733dda3b5b771c32e11c0837935fa12807933ed59922761ce5bd53"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 3296,
+        "duplicateKeys": 0,
+        "rows": 3296,
+        "sha256": "c61e68f89c733dda3b5b771c32e11c0837935fa12807933ed59922761ce5bd53"
+      },
+      "scope": "ordered_metric_series",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 1,
+        "duplicateKeys": 0,
+        "rows": 1,
+        "sha256": "a7b106b9d35621b83c75303766ef136ee59ce81a3998150ec011a4831b470113"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 1,
+        "duplicateKeys": 0,
+        "rows": 1,
+        "sha256": "a7b106b9d35621b83c75303766ef136ee59ce81a3998150ec011a4831b470113"
+      },
+      "scope": "operational_checkpoint_text",
+      "status": "pass"
+    },
+    {
+      "actual": {
+        "distinctKeys": 824,
+        "duplicateKeys": 0,
+        "rows": 824,
+        "sha256": "02decb56e97e5833bb683e8377d44eca9abdefa49cfd5aecfc667b1d9d92cbc6"
+      },
+      "check": "canonical_target_digest",
+      "critical": true,
+      "details": {
+        "changed_keys_sample": [],
+        "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"
+      },
+      "expected": {
+        "distinctKeys": 824,
+        "duplicateKeys": 0,
+        "rows": 824,
+        "sha256": "02decb56e97e5833bb683e8377d44eca9abdefa49cfd5aecfc667b1d9d92cbc6"
+      },
+      "scope": "current_account_presentation",
+      "status": "pass"
+    },
+    {
+      "actual": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+      "check": "source_artifact_unchanged_after_scan",
+      "critical": true,
+      "expected": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+      "scope": "sqlite_sha256",
+      "status": "pass"
+    }
+  ],
+  "dataset_revision": 29,
+  "flyway_manifest": [
+    {
+      "checksum": -1636077697,
+      "script": "V1__target_baseline.sql",
+      "success": true,
+      "version": "1"
+    },
+    {
+      "checksum": 839607018,
+      "script": "V2__rebuild_core_projections.sql",
+      "success": true,
+      "version": "2"
+    },
+    {
+      "checksum": -1456658399,
+      "script": "V3__collector_observation_times_and_identity_grants.sql",
+      "success": true,
+      "version": "3"
+    },
+    {
+      "checksum": 1318350062,
+      "script": "V4__admin_collection_run_status_grants.sql",
+      "success": true,
+      "version": "4"
+    },
+    {
+      "checksum": -1313754193,
+      "script": "V5__legacy_activity_period_projection.sql",
+      "success": true,
+      "version": "5"
+    },
+    {
+      "checksum": -290358219,
+      "script": "V6__comparison_valid_observation_hourly_projection.sql",
+      "success": true,
+      "version": "6"
+    },
+    {
+      "checksum": -1228913579,
+      "script": "V7__activity_rating_read_grants.sql",
+      "success": true,
+      "version": "7"
+    },
+    {
+      "checksum": -574188650,
+      "script": "V8__legacy_overview_projection.sql",
+      "success": true,
+      "version": "8"
+    },
+    {
+      "checksum": 1058556652,
+      "script": "V9__immutable_observations_quality_archive_fence.sql",
+      "success": true,
+      "version": "9"
+    },
+    {
+      "checksum": -1148603410,
+      "script": "V10__consistent_public_queries_and_formula_guards.sql",
+      "success": true,
+      "version": "10"
+    },
+    {
+      "checksum": 1679789143,
+      "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+      "success": true,
+      "version": "11"
+    },
+    {
+      "checksum": 1453326243,
+      "script": "V12__detail_history_projection.sql",
+      "success": true,
+      "version": "12"
+    },
+    {
+      "checksum": -185639607,
+      "script": "V13__immutable_account_identity_history.sql",
+      "success": true,
+      "version": "13"
+    },
+    {
+      "checksum": -956321170,
+      "script": "V14__public_archived_publication_text.sql",
+      "success": true,
+      "version": "14"
+    },
+    {
+      "checksum": -1953543117,
+      "script": "V15__verified_source_preservation.sql",
+      "success": true,
+      "version": "15"
+    },
+    {
+      "checksum": -888916335,
+      "script": "V16__audited_catalog_commands.sql",
+      "success": true,
+      "version": "16"
+    },
+    {
+      "checksum": 2060863494,
+      "script": "V17__legacy_csv_compatibility_projection.sql",
+      "success": true,
+      "version": "17"
+    },
+    {
+      "checksum": 875583974,
+      "script": "V18__official_rating_commands.sql",
+      "success": true,
+      "version": "18"
+    },
+    {
+      "checksum": -1653532549,
+      "script": "V19__safe_health_operational_snapshot.sql",
+      "success": true,
+      "version": "19"
+    },
+    {
+      "checksum": 925593865,
+      "script": "V20__catalog_url_and_version_compatibility.sql",
+      "success": true,
+      "version": "20"
+    },
+    {
+      "checksum": -900669350,
+      "script": "V21__legacy_period_first_observation_policy.sql",
+      "success": true,
+      "version": "21"
+    },
+    {
+      "checksum": 2064364640,
+      "script": "V22__durable_legacy_csv_archive_facts.sql",
+      "success": true,
+      "version": "22"
+    },
+    {
+      "checksum": 890722389,
+      "script": "V23__official_rating_entity_context.sql",
+      "success": true,
+      "version": "23"
+    },
+    {
+      "checksum": 1889276383,
+      "script": "V24__ordered_history_reaction_details.sql",
+      "success": true,
+      "version": "24"
+    },
+    {
+      "checksum": 381330844,
+      "script": "V25__safe_legacy_account_presentation.sql",
+      "success": true,
+      "version": "25"
+    }
+  ],
+  "gate": {
+    "critical_mismatches": 0,
+    "status": "pass"
+  },
+  "generated_at": "2026-09-05T06:38:23.351327+00:00",
+  "mismatches": [],
+  "release_identity": {
+    "files": [
+      {
+        "path": "app/__init__.py",
+        "sha256": "a4b9d78c56738f348a38d7c0d7256ac097d017111fa8e6297c6486cf9a00c65d"
+      },
+      {
+        "path": "app/__main__.py",
+        "sha256": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d"
+      },
+      {
+        "path": "app/analytics.py",
+        "sha256": "6d7813d6e2bb786bc6e2e0dda2db0c9a351da2d1953b278ea3469de740600d35"
+      },
+      {
+        "path": "app/backup.py",
+        "sha256": "8d66cd9c5c5002c1cde06e836ad82fecf63b77ddedbdc4fde62f401a09ec6eb4"
+      },
+      {
+        "path": "app/cli.py",
+        "sha256": "d998e9c1517b64ac0b0f37083a01d93faccde93df9f3a1d51ac53d4dbebe4a88"
+      },
+      {
+        "path": "app/clock.py",
+        "sha256": "a136c4ef3482f613c43429352e7036e310a9d0989d624b8f143d469b85c9dfa1"
+      },
+      {
+        "path": "app/collector.py",
+        "sha256": "b53ed63ba48e3ab93dc321ece9d610d35ca75f7de74a4c93f2e7948eed5e6850"
+      },
+      {
+        "path": "app/config.py",
+        "sha256": "d70442a32c37207a31b767a8597b3348a2b2cb86218b08e1e8a78287aa8c1d84"
+      },
+      {
+        "path": "app/database.py",
+        "sha256": "8ddf7a403e65e43f8bce1daec54912c25092a0c6829d20c281f638852d6df90d"
+      },
+      {
+        "path": "app/institution_names.py",
+        "sha256": "56752ab2c980e165943256709923bbf9c43296838e55d39e64168d79a395d2d5"
+      },
+      {
+        "path": "app/m_rating.py",
+        "sha256": "063b5056b3f601a819b660d96c6e5c54e861a7bed0c5d898d496b33aa5fe66a9"
+      },
+      {
+        "path": "app/maintenance.py",
+        "sha256": "74d9695c948d4fe64cd89d84c607f03dac6b81d58add8ce30487666ffce1d753"
+      },
+      {
+        "path": "app/max_api.py",
+        "sha256": "c379a447450d437120608e4ad9f921248dc3655aa8b605a3d1015b4475820889"
+      },
+      {
+        "path": "app/max_collector.py",
+        "sha256": "3a409d5672f466045355ef73a102b43c725b41545ff064239d2b0c751ec04ed3"
+      },
+      {
+        "path": "app/max_user_api.py",
+        "sha256": "ee67e35c2ca21e09d60b05dee657ea631ae16ddfa4ea24d39c098508030105bd"
+      },
+      {
+        "path": "app/models.py",
+        "sha256": "24a050f45495dc2faae17264daea16578bc39c5e5f8d7bf305ad6947b3ff4101"
+      },
+      {
+        "path": "app/official_accounts.py",
+        "sha256": "5bb04165caaffc824b1242dbcb7d34ebc3fe2c73b9e238b7391056a69d5bdace"
+      },
+      {
+        "path": "app/platform_analytics.py",
+        "sha256": "91551e670d352589aef7ecfe5cd29c1ab1cece16624213ea26b2e73606d273b3"
+      },
+      {
+        "path": "app/ports.py",
+        "sha256": "6fe97bf0ab3063929dd7dfe87e9d04dc019c6d87ea1e671b9eb80c608621af0a"
+      },
+      {
+        "path": "app/public_web.py",
+        "sha256": "d4e5303c235134f845249b4af51914fc5680d9446b6bcd552258360bc17706fd"
+      },
+      {
+        "path": "app/reactions.py",
+        "sha256": "bb0178058826b7e0266a951d4bcc4fd73feffa62006ae464fc99683a8b3cdc06"
+      },
+      {
+        "path": "app/rutube.py",
+        "sha256": "d1061cd87c59e55ad70a09ff0cf2e18e6296cbdef94035e9f8499983725412dc"
+      },
+      {
+        "path": "app/rutube_collector.py",
+        "sha256": "b0bdc73c77634efae635996b4b8a81423a660623928733f35826dd7dfc35eb89"
+      },
+      {
+        "path": "app/scheduler.py",
+        "sha256": "09cdc58a59f0f4f97091129c1c5af44cca095a9eb5e6448093df9ba5a28c5502"
+      },
+      {
+        "path": "app/telegram_client.py",
+        "sha256": "fddb16e3622820a29815ea398095f6238c4129121836ada7736800f731d1e93f"
+      },
+      {
+        "path": "app/telegram_identity.py",
+        "sha256": "8104e08140fd6e08d4a516cf6eac5edbbe21666a6bb723afa1bd58eb00b0fa09"
+      },
+      {
+        "path": "app/telegram_web.py",
+        "sha256": "8fc9f8e4c499c794be1190e178f96fd8f5d8d9ef17f0b06633130ee48d21afec"
+      },
+      {
+        "path": "app/top10_universities.py",
+        "sha256": "7e487fc52fa82f6c33583a8751bc388634f4858aabcb9d3ea9e9ccfe27c94b11"
+      },
+      {
+        "path": "app/vk.py",
+        "sha256": "d990ae3a2cbe890581a09940e21ed7187a1833e26b4bd7ead97a52fc2f1862a5"
+      },
+      {
+        "path": "app/vk_collector.py",
+        "sha256": "2639228481924395188c5df7acd9be5984adc34522f5374eedc920847688ca89"
+      },
+      {
+        "path": "app/web/__init__.py",
+        "sha256": "60e4f0d2f051003ed21fadaf1f741b3feb9dd24343fd54384476d43d3d03a704"
+      },
+      {
+        "path": "app/web/app.py",
+        "sha256": "0a4bd53c639635c240e14e23f84adecfe5e9a749262a118a799ccb7498148fd7"
+      },
+      {
+        "path": "app/web/templates/base.html",
+        "sha256": "938e99692c76edc6f2dd75a2e306222e1e853ac722cd2f9a0ba50b134858535c"
+      },
+      {
+        "path": "app/web/templates/channel.html",
+        "sha256": "c4f4e8df70c38980dc87702c4e59ac7e2a9af58e574829bd0d39b1d761cd320d"
+      },
+      {
+        "path": "app/web/templates/compare.html",
+        "sha256": "24ebae734543976569d3d56c9dfa543b1c125d42496c18faa249f41a31dbabed"
+      },
+      {
+        "path": "app/web/templates/index.html",
+        "sha256": "2aff593d40a379b8c29fd7432b95b92e2106850a9f2bbeef3d93dae085df23b3"
+      },
+      {
+        "path": "app/web/templates/institution.html",
+        "sha256": "6ca2375fcd8a17bf6d4f6859e0015986c8b68b6bfe788763a1aeb65ddbcb7b57"
+      },
+      {
+        "path": "app/web/templates/manage.html",
+        "sha256": "7da0ddfd5e1903efc29780c28925387e805d42f8993158b6b1a584fafc32eb82"
+      },
+      {
+        "path": "app/web/templates/overview.html",
+        "sha256": "a194fe7bda66c9ca1dff9e201dc59febf5aef39f26c5d8778ae598b39ddb1385"
+      },
+      {
+        "path": "app/web/templates/platform_channel.html",
+        "sha256": "aece916ba1d0ed4477bdf2a8ba3e0106c7c386b746f66f4dccc87525921a13d3"
+      },
+      {
+        "path": "app/web/templates/platform_compare.html",
+        "sha256": "03c4f25eceefa34ad87c12500fa87e2b00332b98ca68d0c4a6e4181fe97c234e"
+      },
+      {
+        "path": "app/web/templates/platform_pending.html",
+        "sha256": "1d2fe64b81b5baf1f74b2ddeba7c8c91b7af3c4ca9e44033b4c882f4ede9a34a"
+      },
+      {
+        "path": "app/web/templates/platform_publication.html",
+        "sha256": "5485bd879a3c923fe74a6e92f81eaf4b92ebbb5b117c75bd92eb03fd5fe6e078"
+      },
+      {
+        "path": "app/web/templates/platform_rating.html",
+        "sha256": "86d58566058b09350ec21d2fba8f85e4d4bfd89189462ac6a0e8d45b5232bfe1"
+      },
+      {
+        "path": "app/web/templates/post.html",
+        "sha256": "3dae206d4c9dde7fc56d125d2dd2ab6b296451494d01be3326ec12268308d286"
+      },
+      {
+        "path": "app/web/templates/telegram_institution.html",
+        "sha256": "b7a9c50dcae73c8a005b8587a7cebbc7f4ccb3a5b86148b1dd573ec21f59e242"
+      },
+      {
+        "path": "backend/admin-evidence/legacy-account-presentation-v25.json",
+        "sha256": "7106d2400a2782386c3c49881af490d2c323f61d4cf368aa4d54b0145ad77df2"
+      },
+      {
+        "path": "backend/export-evidence/export-heap.json",
+        "sha256": "52a8a81698b2a307e4b6b161a9a31a67865ddc632f9b1ff19992f90bb8e26bd5"
+      },
+      {
+        "path": "backend/export-evidence/export-postgres.json",
+        "sha256": "3ee250a39443f82d3b2c1f7a342597918361ad092f3cc7f20638130c1bfaf6fb"
+      },
+      {
+        "path": "backend/history-evidence/ordered-reactions-postgres-v24.json",
+        "sha256": "6a05625a6ab2380a2ef235baef7257312fd2a29b236dd96d93dec9972838992b"
+      },
+      {
+        "path": "backend/pom.xml",
+        "sha256": "76f11b2b64a5b486d6b5cf962903c3e28df82f9969c6ffed2a3dc464f7a9519a"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/MRankedApplication.java",
+        "sha256": "202d4aed9f071f9b2b2900d6fdddb7934169f2a1f87a42385819e0a3b6499678"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/AccountReference.java",
+        "sha256": "1bc9605a7116dfb0d4764df807f2767ce50d0460a25a62a942026341bdff48e7"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/AdminCommandRepository.java",
+        "sha256": "e9574acf4158fa19881364a7379dcab8200ef18ce16cf24998872745192087be"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/AdminDatabaseUnavailableException.java",
+        "sha256": "5ad1be188c6f989364fe2f658c4295dbc0a047af03323dc355338a6710a93007"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/AdminOptimisticLockException.java",
+        "sha256": "214d1a457d51d1967def22c45330547f3ed6e43eaf09a00e4717489b9a15f964"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/AdminQueryRepository.java",
+        "sha256": "6ae003a76e8639f9f9263ce9ebcead97275f0e55ac4067d882ec6091eb18b020"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/AdminResourceNotFoundException.java",
+        "sha256": "5f4523643aa059d762c64629f6a5ed0565d5cc9e7760809c1808cc42261223cf"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/AdminService.java",
+        "sha256": "240fa186d07e53c995f415d4163495fe8e20a7bb1e492cb609d689d520a1da82"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/CatalogRepository.java",
+        "sha256": "1899bf7e81f86c29e5c2cc27250e502c67869f1893ab9bd5ca1dbc55b6be03ef"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/CatalogService.java",
+        "sha256": "bdfcc8d820f69614670eb9d8689fe940f01cd049297260ff1b591aec6d315d21"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/CatalogStatusPort.java",
+        "sha256": "4606565ba2153b8278608ec0795c3f514664a4fad4013e3d88d7f922279feee8"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/LegacyCatalogService.java",
+        "sha256": "07dcbcb59eca9aac7957301bd769e801082ed811a3578a1ed22c671124b6def0"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/LegacyFormException.java",
+        "sha256": "75cc4d663650ae680ce406a6f053e5e0e692309a85eda6d7014b4464884162aa"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/OfficialRatingRepository.java",
+        "sha256": "0cddc29901b8df43f60fad641a37ca30b97108d9e5af5b90527d9d883835a4a4"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/OfficialRatingService.java",
+        "sha256": "0c603a9f0bf0d82fe031e3677ee1b32672bca6cd9d257530cf63b5b7be6ab606"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/OfficialRatingSource.java",
+        "sha256": "98b95cec0549e76a5540d52ab65779436be7aca63b06a93468290d7645c0036d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/SetPlatformAccountEnabledCommand.java",
+        "sha256": "51163a1b972c7a588af6d54f0027bbe252df05de040fa8c8174a1ca7d674b57a"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/SetPlatformAccountEnabledOutcome.java",
+        "sha256": "492208261940ffbcf0556896545c0609a1745136a0726c345550d2529ea4fab9"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/application/SetPlatformAccountEnabledResult.java",
+        "sha256": "5c335c6a52b0dc9799629f223515fce8b5a10231731b6eac37a2eb09d25a09de"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/AdminAccountResult.java",
+        "sha256": "728d2eab67d97d8465e6c2be464a6f404c5e05215e2145c93129ca732399cb9e"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/AdminJobDetail.java",
+        "sha256": "0ba0d1382970796c3bac832bbf361caa6cb33c2b2c5a1109c88e3682f143a765"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/AdminJobSummary.java",
+        "sha256": "c75a0813142a6ef504e3d02855e088276bb1c764cf8e4dcdf424e2666f4f5e1c"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/AdminRole.java",
+        "sha256": "475bb6b9c37d02348a886b0747b620396f99add2f29428be8be0322975446a48"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/CatalogCommandResult.java",
+        "sha256": "016da6676aa938503a4b153e00cfb7d495a521e53e4d4cfb08192dc663c8ff7a"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/CatalogStatus.java",
+        "sha256": "ade22fe5e52f5cdfe51f37097a5cf00fb86dc0c5804e05d7055458a78f5e63c2"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/ManagedAccount.java",
+        "sha256": "3ad0193e5eba332466cf28e3a31ce62d8037ff3c068058cfdaa96dcc0d6684d1"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/ManagedInstitution.java",
+        "sha256": "925a83b69f890924a45ba95086109a7d66629290a77ab09cc0240f1eaa2cb64c"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/OfficialRating.java",
+        "sha256": "4f71bbc601ab0faece0cb20c2f8480fa8113f9473fcbdf27b1a4eea3eba236be"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/OfficialRatingDataset.java",
+        "sha256": "26e714876ab8554fa39c69e11c45045a86f0e5bd09ad13c8457b8219d06a6420"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/domain/PlatformAccountAdminState.java",
+        "sha256": "8b53d73f397fe50366cea4dbec5b41d12d75ad4eef4ee12b5bc4de2fa1a7ce83"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/AdminAuthenticationProperties.java",
+        "sha256": "4ac180bc90b1ed3e71e7a79366b31ed130bf4326f87bb4f01dfbe59ffadf9274"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/AdminDatabaseConfiguration.java",
+        "sha256": "2d8f2b58d8445c8b235427e632b0717b1a4705f825a027c5b816f0c2de782c3f"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/AdminDatabaseProperties.java",
+        "sha256": "37e20bbcaf39a8bd67a00f2f8cb4d326e2719aad26593b2ed405f093bf7ef728"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/ApiSecurityConfiguration.java",
+        "sha256": "2652affc28843da65faef1c084acc2aed858408dc253f24073f1ded6022be02b"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/HttpOfficialRatingSource.java",
+        "sha256": "f06935da09fedf90c0f5511b4eb6c5d3791392e61a7983508655132e83970a46"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/JdbcAdminCommandRepository.java",
+        "sha256": "34e1e12643fae58b79a6693810af22b262cad31f2a3c5e4311f243b8c2194e68"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/JdbcAdminQueryRepository.java",
+        "sha256": "5b1765f961d23898e889a4bc821590346fe2e934459eb0b9a765628dcc04b7ca"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/JdbcCatalogRepository.java",
+        "sha256": "260ca2022a57f990f0ef8ba05ea592dd68fb84675d7e712e2447f31d7e0f15f6"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/JdbcCatalogStatus.java",
+        "sha256": "8ec530289e3b7e651e7e4e3ac6bea7b04a4f9b0cef4cf3f7e5148abee19a1314"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/JdbcOfficialRatingRepository.java",
+        "sha256": "f81a64dc60ba177d1855b3eb1e7c35833511fe4985f9f43be250ca54453057c0"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/OfficialRatingParser.java",
+        "sha256": "826d319af4bd5bbd586ddf55ad3ee80326a720b945df7ffe2f4fc910403215c3"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/ProblemSecurityHandler.java",
+        "sha256": "beff7e619162bbd67472ebd43313fcdea903cb8dc242f76cc3978cb9c0f5c8dd"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/UnavailableAdminCommandRepository.java",
+        "sha256": "bf901265ab0c046fef1a0774aec546784bd0e164da901833e5d05ebce3229904"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/infrastructure/UnavailableAdminQueryRepository.java",
+        "sha256": "92a5d67cc66eece50ea7aa4517de5de02627d017e2ad2a9c98fb330ce360ea6d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/web/AdminApiModels.java",
+        "sha256": "0023424aab76b6f67ab25c51dcbcbfc5b06a9c86788bc5c06de5264511700565"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/web/AdminController.java",
+        "sha256": "404fcfb80c5d6cd73a3dbb59fa4a718f122bba135ec0c0484a1fe8a7b35925a5"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/web/AdminRfc9457ExceptionHandler.java",
+        "sha256": "6d244f3ccd2a28fd93938ad1ffc91444a67ff7c09899eed4f3dd75448dcacc4e"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/admin/web/CatalogController.java",
+        "sha256": "560a4ced1aaa97b74f4411126001f4ad1bad463c07534a389a6ddadb5992ec6f"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/analytics/domain/AggregateMetric.java",
+        "sha256": "d971379d5343cd710cc72fba218978103e79601347dd2c37baf8a2af90523c19"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/analytics/domain/CounterMetric.java",
+        "sha256": "3da12104bbbcc668803be55d12858b58aefa8a4fee291d924ac5c1eebabd38e1"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/analytics/domain/MetricSet.java",
+        "sha256": "e66c3f8ea1f0dfd37fd8276120ce8632aa8a7cfd5530cb92b76ede9df33f812c"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/analytics/domain/PeriodKey.java",
+        "sha256": "cf2996165fb73416b1a8ccee2099324326efe2e501fa97086f1de7adcc2780ce"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/analytics/domain/Platform.java",
+        "sha256": "74f59791b9863f541b67ff5f0d0602095e1ee5a777a8edd9900cb2a2d25e9215"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/application/DatasetRevisionProvider.java",
+        "sha256": "d1b10f95705172fb1816c469a3731406b17c1d79c1adb982b00eec8900d00405"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/application/ETagFactory.java",
+        "sha256": "70438c90ca44bc0142af49c50d0f369dbbdc81254d3268825c36b349de0a9f69"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/application/PublicCacheKey.java",
+        "sha256": "10d0c7772aca3c3c5c52a39dfa7a3d264866693db290663c30e681ff5b6be843"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/application/PublicCacheKeyFactory.java",
+        "sha256": "2d9dd609ad4c45c683d823db8fe1f3db5d522ab35e2f50097e1b812ff361622d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/application/PublicCacheRequest.java",
+        "sha256": "49672647f279dcc0a6b606292e19266145e39c7721d730ca64d94cc4a6115eeb"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/application/PublicCacheStore.java",
+        "sha256": "fa5b38b1e3f851e48ce2827c1f1c3f04d5e8b76027d273be1269a004927e8f53"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/application/PublicDtoCache.java",
+        "sha256": "4d13de8a340fe477bf4719ecfab6e92b558fb1e8982169550b99d4a4a526b4af"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/application/RevisionedValue.java",
+        "sha256": "fc2a4378727665c9e280848840f5b336bbabda9a1d535882d28c5c3b02d5fff5"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/domain/DatasetRevision.java",
+        "sha256": "52bd64298f4bb569d85a80b01e248a2a5716d3be3078d76a3be244c72c97425b"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/infrastructure/CacheMetricsConfiguration.java",
+        "sha256": "d906245b92e85df9a8a039e463e272ab085a704deee0ca9d53fca8aebaf72fad"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/infrastructure/DisabledPublicCacheStore.java",
+        "sha256": "dad5a3bee4266ac9e09e00746eead42de1a1bdaa608f482db104556d16eecf72"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/infrastructure/JdbcDatasetRevisionProvider.java",
+        "sha256": "88beeedee8876685c89a7d7cf7908fd63ac9aa7c82b7719527578e60beec699d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/infrastructure/PublicCacheConfiguration.java",
+        "sha256": "dd61bf1696e0267a0158b9d22973e5f49b514bf5a024ec263eaff438e6ff2e8e"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/infrastructure/RedisPublicCacheStore.java",
+        "sha256": "c86166eca43ad7bcd06be4969ddbc555f57dea25e7103255fcd6a5d6cfbf8e3f"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/cache/infrastructure/RedisRevisionInvalidationSubscriber.java",
+        "sha256": "dbab1c337f45af2c0fd06b8ef3778da85576f240c76a27943bf4cf8d92d1bea6"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/catalog/domain/InstitutionIdentity.java",
+        "sha256": "fb0bc405008dccff80794c54dfa092877302d83e3171228607bd870ddce5475b"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/catalog/domain/LegacyEntityType.java",
+        "sha256": "383c1169cee9e6d2fccdd81be77b9c549f60a91c46468bc39e81d498c16c8606"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/application/CustomEmojiAsset.java",
+        "sha256": "fa0465702b7ee320720f9dd2857de9d4fb6006b649d5efb58296934c295dfb7d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/application/CustomEmojiNotFoundException.java",
+        "sha256": "36abda2ffe7bf3ce9d1e4ab1d4b2ce7302039f35d2937b06126354da76203e13"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/application/CustomEmojiService.java",
+        "sha256": "b1ed126db7f656ff697a35fd928a72465f3b76723a0acde1f291ff612b2c7628"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/application/TelegramEmojiGateway.java",
+        "sha256": "2571c37a25b17f8111410f754c5ad6ea4903876f93de4a01e2e02e4c7a3bf414"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/infrastructure/CustomEmojiUpstreamException.java",
+        "sha256": "c4bf3a7e1e954643de4be13356857c6a9210f1e5e88f92bfc5ec6f10382847fa"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/infrastructure/PinnedEmojiTransport.java",
+        "sha256": "b153d50983303172d62c36cd2c1bda25189da8b993ac6ab706f1968a68739e68"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/infrastructure/TelegramEmojiHttpGateway.java",
+        "sha256": "c21fcce33108e7a9d5ff15d6294a8d41590a1474dfdb1f6699009d3aaf9c545f"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/web/CustomEmojiController.java",
+        "sha256": "498e8ff5eb68433fdc69f05168ed1e8a919ac14cb47c0af29083a0b7f8b11cc3"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/emoji/web/CustomEmojiExceptionHandler.java",
+        "sha256": "96e0c7a4ee3a86f151d492d75054e84b36946a419062b9f97f7c6b20b439eaea"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/exportjob/application/ExportJobFailure.java",
+        "sha256": "c3c55adfaa674c3fc06f4e9c902d235e6932f0bb025192e4d7da99597e51c4bc"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/exportjob/application/ExportJobGenerator.java",
+        "sha256": "536cfaefa4cd99092b67280cd719cc4d503aa46b6da69eaef8673eddc6743d7d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/exportjob/application/ExportJobPolicy.java",
+        "sha256": "ff6540f9a7a7bc6ed7baf42979a077b7f59c9b33df9616ddf9d1994acfab6645"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/exportjob/application/ExportJobService.java",
+        "sha256": "84192a3f01bf6a912965294e5d682c97964b379727b8ce3456e2c9dea3c1fb54"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/exportjob/web/ExportJobController.java",
+        "sha256": "7a32a61357084889c3087b039822d14de600f70c9baf42929261a1f5be93c229"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/ingestion/domain/PublicationIdentity.java",
+        "sha256": "efbc2e2ef1c2861187039ea7a9afadddfd0acfc04cd1bcc0e3167c4656e3002d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/legacyexport/application/LegacyCsvFormat.java",
+        "sha256": "c6eb090592c10bbf17b958b684bfa0cf86de822b0cf4416a623b462755f27869"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/legacyexport/application/LegacyCsvRows.java",
+        "sha256": "7547483a255b46549825ee11ce6712ca98e0d242bbc5f4f1efaf95f9b90d0ca9"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/legacyexport/application/LegacyCsvService.java",
+        "sha256": "396e0b842ffe8e0938863c265099942e447728f34367ba2b47f04157dd5c0a61"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/legacyexport/application/LegacyCsvUnavailable.java",
+        "sha256": "a7874b64bb7cae74e13acd83a0adf1c97bce0601b533ad4e3e3b7026e337de5e"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/legacyexport/infrastructure/JdbcLegacyCsvRows.java",
+        "sha256": "b474bc1ff89c6f418b5f65e7ef120fe9e858d15dc240a5c403c56278d0310159"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/legacyexport/web/LegacyCsvController.java",
+        "sha256": "d62ff1ecfd7ff99b40472a66634900dfb470dc269a1d8050b3366c38e28c0d79"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/application/HealthSnapshotSource.java",
+        "sha256": "ee24bf92b1700e084688a9ff6f4038c6ba4f498b85ad4d0ba78a4e625fc891cb"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/application/LegacyHealthService.java",
+        "sha256": "76fe52ee90c641e509ddc5ed12ce71f5e6bc57a1719ed1209e8a7f20b46599c4"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/application/ReadinessProbe.java",
+        "sha256": "1614d7ed4f746abb4e0dee5cdc1a1b35b4bed4fda2c3a70a1edd6ffc6e351a90"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/application/ReadinessService.java",
+        "sha256": "fd8c1573086430c1644e67597208ea7264be33785f0878e33e00bbb422e353e0"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/domain/ProbeStatus.java",
+        "sha256": "aa4187db1434e078a207ff2ee56d37ffa157a1608ff1e80a0cca4ecd4f97ab46"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/domain/ReadinessResult.java",
+        "sha256": "660dcc7c72d310592801a63f4195073f212c45da328ab5612cabf8838e7b0876"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/infrastructure/JdbcHealthSnapshotSource.java",
+        "sha256": "962f3bd440b92ddbc5e0d7f77db5e342a5de26c0077acc90ace03a64e50cdc71"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/infrastructure/JdbcQueryMetricsConfiguration.java",
+        "sha256": "f61f9df295865daefced7e1d3be4026c250e0a1f4761830a679958aed368ef98"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/infrastructure/JdbcReadinessProbe.java",
+        "sha256": "0f04ccf293aea806f84995b22b6d99ad83038101912c39d8f1daf51b31ecba72"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/infrastructure/ManagementSecurityConfiguration.java",
+        "sha256": "064f39c532cdb23b9939864d4d87f48431b53e3bc12b2203699e71312a8e0bfe"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/infrastructure/PinnedHttpsClient.java",
+        "sha256": "5f5330162daf446018173fda74bb8b294a83e06ffa0cc43bf34f24c6fdd545a1"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/infrastructure/PublicAddressPolicy.java",
+        "sha256": "b5a5e2245bddbee72a72ea7118da7e4572cabe3959e13fceefec072e7b191d93"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/web/HealthController.java",
+        "sha256": "d4dd7138a4337b77ccdd6b83df5031abe49782526bbac684441c875da0998506"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/operations/web/LegacyHealthController.java",
+        "sha256": "368845e563229294c04d4fb4237a21cfc892a209dd48e039b327b8ad799b45ce"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/CsvExportLimitException.java",
+        "sha256": "857483be9bd60264f8b8eba7db210c102f0fe2d6eea1939ecfce5ab600fed631"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/CsvExportService.java",
+        "sha256": "296e3ca455a3702eda2e27ed99d8c01cea0855ab32beb23dfbbac70d96a55dec"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/CursorCodec.java",
+        "sha256": "5c47a71270786d31865bc94c840652f4929e0d975fbf1b080291cd513f2982a6"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/InvalidCursorException.java",
+        "sha256": "3af6148b739ceb7e3a26cae718c899c76143a08b7945a3e6d5efb4e9135b3b74"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/ProviderConfiguration.java",
+        "sha256": "a685907213ec4db4555b6baf5e91e2705ad3801d343658e965cb740566267fe5"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/PublicQueryRepository.java",
+        "sha256": "a2a802c7132fbf109070dc63bb72e874e3c12d489d1cd97c6ce52895e9e78981"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/PublicQueryService.java",
+        "sha256": "6736817ff8beb1842825463767b1078bb213af44041b4e6e9081597b2a21c950"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/PublicationCsvRowSource.java",
+        "sha256": "6f2dd9c6950a6c46847905e1ccd2bcd00cce8fb3efd16a012674fba368690c04"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/application/ResourceNotFoundException.java",
+        "sha256": "f22c1d0276e574433bef814273f63edaada883df1e0f49d5fff89e2c185f7f43"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/AccountStats.java",
+        "sha256": "5f3b0594ea0a29e4c5cc4c558ba427fd61932b73f9e52c6731d30061f8136dcf"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/AccountView.java",
+        "sha256": "0f0d73fd50eedfb746106bc4bc8546328e32327f2d16c19c7741ac60aac068ea"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ActivityRatingEntity.java",
+        "sha256": "1b82cecf32d56080d25d54afba9113ca2435a7f18e24cc6ee5e684a08069d381"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ActivityRatingPublication.java",
+        "sha256": "946ff0862c2ad035d7056b2a05efb486c1271c9a084b0b57d3c478cd88ffb92d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ActivityRatingQuery.java",
+        "sha256": "bb52b17f816aaf5c3c58301868e004b4a765261fa157a759cd1e3d1839b84a4f"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ActivityRatingResult.java",
+        "sha256": "5e16f68d1ce0ba9a00598cea4a0305ec33256822736198bea48e0f61673ba9db"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ComparisonCandidate.java",
+        "sha256": "9d1de51a2889c5a7c80c6358d26b8350abe6893e3434f258d8ef5da822023acd"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ComparisonPoint.java",
+        "sha256": "8f41d0658d1a6aeacedeaaa1fdff417827b925199a5f4dfc3213c53c75317b05"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ComparisonSelection.java",
+        "sha256": "b5d8ece373f4a341368e7839aa4ddab389538fc2e61282f069d60b3812a5de33"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ComparisonSelectionType.java",
+        "sha256": "3428772e60b44dc75fbea06b3e70d1d2992347a019324cda14665112eae7cf53"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ComparisonSeries.java",
+        "sha256": "2c0194bf3ce4f57a6b4e26e7e6a3873d6c0f02a75c1b33c24349a2981945cf8f"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ComparisonView.java",
+        "sha256": "822934c9a85060b8514b8ccf84bc0c83476dd1d7aea488f0050e15048e3d0a8d"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/HistorySnapshot.java",
+        "sha256": "e3c2e9ffca03858c1b314b69d4ae712de382d27cfa881b8f3ab4cedd3088904f"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/InstitutionAccountPage.java",
+        "sha256": "fc0ebf34ffb0e0797b602b8ecb31c7cc86584660c3637146a1d1cfa6384b1cd3"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/InstitutionView.java",
+        "sha256": "bdcd2a92a47a83b130aa963c6cf4db8fea19a8056380a9fd73e826fa2204d4b7"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/InvalidComparisonSelectionException.java",
+        "sha256": "b51db440bce8ed4eaad5edd626f002cae7406487589f8f8c9d43775b5fb83cdd"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/OverviewAccount.java",
+        "sha256": "7c4e5a188f0d55de7de71f98231795730f3c7a408b44d5ddbb3ec9680fff9fe3"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/OverviewCard.java",
+        "sha256": "e5c7020c32854a9e8d51b544538b444e03383a43672b03293f3ebf90f40cc2ab"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/OverviewItem.java",
+        "sha256": "ae7171a267d9dc5fba961ea5d232127b404b95844a431571a6564d824b425213"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/OverviewMetric.java",
+        "sha256": "3514e16f654bb4ee599e80fdec5d3e12185639aaf8b949a89751eed42dcff730"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/OverviewQuery.java",
+        "sha256": "86148d92e24c690c329b06bbf409034add0892a47dd942c79f948cc167ccd8e3"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/PageResult.java",
+        "sha256": "5bff0f48a7c33a3f9e1634a2eac9d3dc271413b3cdddd7acc88ab2f9f01cba21"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/PublicationCsvRow.java",
+        "sha256": "f96e6bb6459d42e25ee9804a5b71f5c5006321df51040e0c6efc53bd7370d353"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/PublicationHistoryView.java",
+        "sha256": "7c290264a81773ce800195569d34dcf1287e52a6063d9e1c8f3432191b3d969f"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/PublicationListItem.java",
+        "sha256": "1f058120a712d0ddb3ca92eb8cba663c5b4d81fb2c375c32cccc8b721c9a6a32"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/PublicationPresentation.java",
+        "sha256": "3adbff385aedfd71d81bf212272c55a8cbcb9545484bc8bddfc662c66dfdb5ee"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/PublicationView.java",
+        "sha256": "c8846dd0002b174143493bb6e858c64e3e2c2296cf7527932e99ece1f4390104"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/RatingPage.java",
+        "sha256": "35d5f7835d849bada0f6f360462f6276d1a423c65572176cff0ec9af67c8883b"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/domain/ReactionBreakdownEntry.java",
+        "sha256": "e9a4e270fb0564effc52bea1116bf8e6745416b112197b9992bedc53a816b439"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/infrastructure/ActivityRatingSql.java",
+        "sha256": "ff5d22f6d44db643d319365b0d1513dff8e5ab4042b2e834f866ed117629dd91"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/infrastructure/ComparisonSql.java",
+        "sha256": "6987405a02c3b7fa77f893065e6ccbc3055f1fce7c28dba9c785053a501004c7"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/infrastructure/JdbcDetailQueries.java",
+        "sha256": "a05314f6f6ecc88942dd5eed75dfca36226aae1df361d585482055067b62f866"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/infrastructure/JdbcProjectionQueryRepository.java",
+        "sha256": "a192b18a85ffb64ac45bc55ef434ab75a13e68061ea4b15b0a4afff9ae3783ec"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/infrastructure/JdbcPublicationCsvRowSource.java",
+        "sha256": "2a8d0534212d10761abad01783036384b0fabdc0a566a85400fd0875cb93e8a9"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/infrastructure/PublicationPresentationMapper.java",
+        "sha256": "68c9521444b0779d5f24c49421bc6ca8b94f451548156156ffa41a003d5ff7a8"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/web/CsvExportController.java",
+        "sha256": "714381e6fb078ac8ebf0df228c6a88f42f9052bc5fa6e69c06d931576ccd47b6"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/web/PublicApiModels.java",
+        "sha256": "e58ff0eb124aff8f2a77d46f2a79cb7f1c5eaedbf3a82fd8b4a6b88be44b49f5"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/web/PublicQueryController.java",
+        "sha256": "360cfd3567acded9ca39ce250b1cc01da5b2a1b751e2af2a3452e3416c7a91f0"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/query/web/Rfc9457ExceptionHandler.java",
+        "sha256": "a6bd71d5625be3d28344746b275ac32bbafd73168c0a2f676b6b3fa9db40c6c4"
+      },
+      {
+        "path": "backend/src/main/java/org/mranked/rating/domain/RatingValue.java",
+        "sha256": "7a111809a74864b5230c3a4b17167717d5889bbc6eff9d3023b7a34603d76833"
+      },
+      {
+        "path": "backend/src/main/resources/admin/legacy-unicode-casefold.json",
+        "sha256": "9a43982791bbf78aee2b688d470d8bb5f40a235a1768aaee44d1e58b01128c32"
+      },
+      {
+        "path": "backend/src/main/resources/admin/official-m-rating-channel-codes.json",
+        "sha256": "d36a2d08b508b1aba536cffa89a59e25ea107f3e77393ba5f6e9fa756121c97c"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V10__consistent_public_queries_and_formula_guards.sql",
+        "sha256": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V11__bridge_identity_lineage_and_reconciliation.sql",
+        "sha256": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V12__detail_history_projection.sql",
+        "sha256": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V13__immutable_account_identity_history.sql",
+        "sha256": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V14__public_archived_publication_text.sql",
+        "sha256": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V15__verified_source_preservation.sql",
+        "sha256": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V16__audited_catalog_commands.sql",
+        "sha256": "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V17__legacy_csv_compatibility_projection.sql",
+        "sha256": "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V18__official_rating_commands.sql",
+        "sha256": "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V19__safe_health_operational_snapshot.sql",
+        "sha256": "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V1__target_baseline.sql",
+        "sha256": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V20__catalog_url_and_version_compatibility.sql",
+        "sha256": "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V21__legacy_period_first_observation_policy.sql",
+        "sha256": "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V22__durable_legacy_csv_archive_facts.sql",
+        "sha256": "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V23__official_rating_entity_context.sql",
+        "sha256": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V24__ordered_history_reaction_details.sql",
+        "sha256": "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V25__safe_legacy_account_presentation.sql",
+        "sha256": "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V2__rebuild_core_projections.sql",
+        "sha256": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V3__collector_observation_times_and_identity_grants.sql",
+        "sha256": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V4__admin_collection_run_status_grants.sql",
+        "sha256": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V5__legacy_activity_period_projection.sql",
+        "sha256": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V6__comparison_valid_observation_hourly_projection.sql",
+        "sha256": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V7__activity_rating_read_grants.sql",
+        "sha256": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V8__legacy_overview_projection.sql",
+        "sha256": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c"
+      },
+      {
+        "path": "backend/src/main/resources/db/migration/V9__immutable_observations_quality_archive_fence.sql",
+        "sha256": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/ArchitectureTest.java",
+        "sha256": "1abad15e3ce04d02bfb7dadc62d644faa2d8d24c2e0e62161e7f0fdc5100d057"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/application/AccountReferenceTest.java",
+        "sha256": "9d2a4bd395aa273963c155ac44bf031b4ce1319e470da4236d3dc8ac2eada2d4"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/application/AdminServiceTest.java",
+        "sha256": "b187938feea10dc4851e42d3709160eab4ae089e9137003b384f2a7318e9d184"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/application/LegacyCatalogServiceTest.java",
+        "sha256": "a63550a3056e42815a6af370455159fa515971178d32f918420ffbfd2d8d0b48"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/AdminConfigurationTest.java",
+        "sha256": "02eacecbf34fbd60c49a2083ce9fe4a8fd7d863c580f9cd41a8827fbc50bfa34"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/AdminPostgresIntegrationTest.java",
+        "sha256": "231e991b61e1455c87b78739cdb2a5ac0f428629dae66c9aa022b7fe385c283a"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/ApiSecurityConfigurationTest.java",
+        "sha256": "a872b6bb7d6d8a4867cf1a34e04705565ed650c437aff63570c96119f8e1671b"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/CatalogHttpPostgresIntegrationTest.java",
+        "sha256": "923f021f2cdecbb3df73075766078e868ae2195b1f13a5ef96ff3d71b49dd27e"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/CatalogPostgresIntegrationTest.java",
+        "sha256": "52fd22c782c708dc448e6c0a34b79df789421b34d20a4741d7b6d13ba40a1303"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/HttpOfficialRatingSourceTest.java",
+        "sha256": "a6ebed5846c59362a235612b1296e84b37cace5cf56f831b53f43447e187dc54"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/JdbcAdminSqlTest.java",
+        "sha256": "b88b5855b3186b6db7ebe2c9c5a7aa1958474579107e82a9ace136ea78698b63"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/LegacyAccountPresentationPostgresIntegrationTest.java",
+        "sha256": "318ca8e4165d838490eaf55e9ad74e78aa5864bb11b86e73bff9d2e9146bf9c3"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/LegacyFormPostgresIntegrationTest.java",
+        "sha256": "d3c569d0d706fff4207c95c7b804b6ea55579fdbc3670c4bd616dfcdc0358084"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/OfficialRatingContextPostgresIntegrationTest.java",
+        "sha256": "8efe0493c5628493ae30e815a301dadc987e21585f3f6fd803808eafac5b47e4"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/infrastructure/OfficialRatingParserTest.java",
+        "sha256": "678d728357e91e781508f72a9c38d439a25a850abd92228ef2340ecbd0aab30c"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/web/AdminControllerTest.java",
+        "sha256": "97bd50519bd6d9c6039c8cbdbe26d3d4149eaebfc3670c7b475cb3dc27aa0bdf"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/admin/web/LegacyFormExceptionHandlerTest.java",
+        "sha256": "9b5933b998ae226166e5e2ecc95999319840c5b3740c59c41a1b0d61248639e0"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/cache/application/ETagFactoryTest.java",
+        "sha256": "a02265b3b5fe038d7cacd96a80fb0a2d57d1349f36f17490a2c9d031ebd2d85d"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/cache/application/PublicCacheKeyFactoryTest.java",
+        "sha256": "1f12f362aa714fc254c47c43b550ddfa61a7b33d6e9209b2b33703226bff1107"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/cache/application/PublicDtoCacheTest.java",
+        "sha256": "b2ee2b86126c6b8d87fe82dd71f2bd3e53f48979d584f55965247b5d06a4c863"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/cache/infrastructure/JdbcDatasetRevisionProviderTest.java",
+        "sha256": "21675990d52f327c8d05dcee507b13c52e56806f3c634de47d645853bab7e4c8"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/cache/infrastructure/RedisPublicCacheIntegrationTest.java",
+        "sha256": "d7e278f0dd1c330a6bacc3beeef71da4d68ea73e3b3c479d3e05fef165eb91e8"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/cache/infrastructure/RedisRevisionInvalidationSubscriberTest.java",
+        "sha256": "9a61b987ec20ceebe7f9c52347f953f042871aaf5edce18815536d611156c934"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/contract/OpenApiContractTest.java",
+        "sha256": "f105b83f40ca1fe1a8cf0439bfb56f035b87b19de4a1bcdbf40ed9cd540bbe6b"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/emoji/application/CustomEmojiServiceTest.java",
+        "sha256": "e2f41182ef4b8fb01b050593e7aee609e8d37b9f784bc2f88d023aa3ff3bb8fe"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/emoji/application/CustomEmojiWiringTest.java",
+        "sha256": "773610cc42824bf3a3a7acfe798f612e837d4655d04d80b8e4bc0d690b313653"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/emoji/infrastructure/TelegramEmojiHttpGatewayTest.java",
+        "sha256": "f6b82413152b8c8b8d2d30ba9521cfab235c50795f16e7bfa2e117b72c57e529"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/emoji/web/CustomEmojiControllerTest.java",
+        "sha256": "c3bc8c7f77dee7685f5dbf34abdd93980554c52bf12baf3d5d1d7cbb1ef7fccb"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/exportjob/application/ExportHeapProbe.java",
+        "sha256": "f79e56a91c8e936fa92b6f567094a68382df887b3fd3e7ee7c94a98b66b9ecbf"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/exportjob/application/ExportJobPostgresIntegrationTest.java",
+        "sha256": "c955926e8f2042d1fa7c8ab9078f8ff8237e9f902612103222a8e4ff42cde36c"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/exportjob/application/ExportJobServiceTest.java",
+        "sha256": "25fe529bc29039ec84a5915beca4bd0fb96eb8fe3c7fdb4bd9250a1372086499"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/exportjob/web/ExportJobSecurityTest.java",
+        "sha256": "42e90a4f9d90ec966ccc3a5fd283341611e55e097280752146fc8f99cefac422"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/legacyexport/application/LegacyCsvHeapProbe.java",
+        "sha256": "d0f10fc5abf7072a06bfcbf3e0b1f04d4410c82f0d8776effb4d2560b743e06d"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/legacyexport/application/LegacyCsvServiceTest.java",
+        "sha256": "6d3cbf737f0d319b6b4f9a48de5d25d8014b3430c757464defc77e4eb16a73f3"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/legacyexport/infrastructure/LegacyCsvArchivePostgresIntegrationTest.java",
+        "sha256": "5b565394ea1d28996256ce75e9b60e57ff56e3530bf5b6122016dcd740106e10"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/legacyexport/infrastructure/LegacyCsvPostgresIntegrationTest.java",
+        "sha256": "a3cd2514bfb39dd5420d5c2cb22b7ba3e313b96c7a2279397ad1f96dc64be98d"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/operations/application/ReadinessServiceTest.java",
+        "sha256": "2cbc9284a50349aeffbe827fc94314d2a58761245838235dfa2361bd46fbf254"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/operations/infrastructure/HttpsNetworkRehearsal.java",
+        "sha256": "b13ae3d9ddc5ba6fee6cca32177f72c487a2cbc53f3698943d3178430fa88ae0"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/operations/infrastructure/JdbcQueryMetricsConfigurationTest.java",
+        "sha256": "2556bd109298b074f97a8a412663d8a4719546a32a58c97f6d9e6bc2bce84e0e"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/operations/infrastructure/JdbcReadinessProbeTest.java",
+        "sha256": "c890277a728823b5d1f1fb42eee263f1c90cfe5b90ffd0cd38e61b2c7df36d3f"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/operations/infrastructure/LegacyHealthPostgresIntegrationTest.java",
+        "sha256": "d8193f121a79940656c44e7d9e27f800aedcede6d9e18b1c276a8be2518aa511"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/operations/infrastructure/ManagementSecurityConfigurationTest.java",
+        "sha256": "f1a1df47c147a5db04cdeb9fb8130986e7007a5298962f1d924b82367b819454"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/operations/infrastructure/PinnedHttpsClientNetworkTest.java",
+        "sha256": "d4f7f1d24c2b9e2a3d8e718a5b9d725c2f1a300c018d0bdd2807779cdac4e03c"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/operations/web/HealthControllerTest.java",
+        "sha256": "92118916f036bc50e29e8eb822f1b1f6d716bd289dadffd4f6b3f673a5000e05"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/application/CsvExportServiceTest.java",
+        "sha256": "5354d5d6b507456df2dc112eee80a803013a703a1dd43f24ca7f4dc9410f20e5"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/application/CursorCodecTest.java",
+        "sha256": "96076223d6801d666028c7acc923e474a36f30a190232489d3c0ca3923df8e30"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/application/ProviderConfigurationTest.java",
+        "sha256": "fb02b8db2c96c789658891ba2dd3b3ecf99597b22840a8884990b5e3c4f80555"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/application/PublicQueryServiceTest.java",
+        "sha256": "087880a81f13db92a539821ea12c25afc8a71037f12d136ad688a0a4981ddb2b"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/domain/ActivityRatingQueryTest.java",
+        "sha256": "2bd41c685621451ae9e55bd88d3f8995255ae6799b153766a3fd55c17e2c4e26"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/domain/ComparisonSelectionTest.java",
+        "sha256": "ff7d62c6b7c9e1256ca1e866dc35df5be5199748b036bcf6c7f3380aefe120ab"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/domain/ComparisonSeriesTest.java",
+        "sha256": "1ba01d15d8c63fb085c91455cf435ce73a1cfebc291e9952e70267fdc6234f6a"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/domain/OverviewQueryTest.java",
+        "sha256": "66c5d616dbd08ca720d228e28868ba92c3a8e70de1edceba511175aaefbea84e"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/ActivityRatingGrantMigrationTest.java",
+        "sha256": "a5321b79cf20df7320c59e92166df13ac4e17c806988518346f4f911bf8fa42f"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/ActivityRatingPostgresIntegrationTest.java",
+        "sha256": "e3a2737775af7665e9440ec2b09d80b341848444829c94f07a7dcafffd7db713"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/BackendConsistencyPostgresIntegrationTest.java",
+        "sha256": "a54962d3b28889f352120317def8d6f081d491b2dd983e7cf8ba52fa194e033b"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/ComparisonPostgresIntegrationTest.java",
+        "sha256": "fe96672f0615b9b720d596f9e788160d76c0c1626b71acbec33932c873c0c708"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/ComparisonProjectionMigrationTest.java",
+        "sha256": "ea66943ad23f0cfe7b4ed43c5da3d38e10828b2820dd2ff8a98ae16344483159"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/ComparisonSqlTest.java",
+        "sha256": "434694d1dc71a1d66ea6288530a8d3118244f32d8bd31a572bd1c5f64a2f6ead"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/DetailFallbackPostgresIntegrationTest.java",
+        "sha256": "4e433e9fdf131793af9c790f8e16ae2d4592bc797324ff5b73d6be61fcb071c4"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/DetailPostgresIntegrationTest.java",
+        "sha256": "c2c7e9264348702b844ab7ba4ded71f9166ac9f3429c268215f54a4703ca7cb1"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/HistoryReactionDetailsPostgresIntegrationTest.java",
+        "sha256": "b31efafba473b9ee3966778d6dc27bf2aaac291c0f4d34437e26856b3268dc3a"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/LegacyGoldenProjectionIntegrationTest.java",
+        "sha256": "5ea1c7269db8896bd69200ee1e2afd6d71de30d07216e9edd79f07f1ffaf1dfa"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/LegacyOverviewProjectionMigrationTest.java",
+        "sha256": "0b25b55c04c683adc6ca65e1a4d9009707afc73dd890c394c934c9fd3a10ffdc"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/LegacyPeriodOraclePostgresIntegrationTest.java",
+        "sha256": "42b4c1080250ddff98d72847f6bcc2c78bcdc980a8b9fd081e140002dad44c0b"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/MigrationInstallationTest.java",
+        "sha256": "d04b74a5d972651e4dd67e4ab6309345007cf401caa5f210a3790b73a9ef0607"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/OverviewPostgresIntegrationTest.java",
+        "sha256": "a67e22ee68d4dd828d8d5a20b641cd8ddf92d45f0144353f60c28d44e2b2f12b"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/ProjectionReconciliationPostgresIntegrationTest.java",
+        "sha256": "0bd1d0101b97a0cfbe117ec48827cee06edbf0e5ed91d446b689d4f2fd987b57"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/ProjectionSchemaContractTest.java",
+        "sha256": "e7295322dc26ac2dc0dec6285f405976fd9600f62fbe0b9749f09f3dddef1fdf"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/ProjectionSqlTest.java",
+        "sha256": "51f8c29e8b42c55b75d16f18e0019e5779dcaaba214b42903de6d7e2a44ba0db"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/infrastructure/QueryPlanEvidenceTest.java",
+        "sha256": "20db73aa1d90eabadc20e77be68cff71dedc3e5dd238b294270ff150e7769e97"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/web/CsvExportControllerTest.java",
+        "sha256": "4bbafe2c9b721a16c8a92156f2c9cfa1b9fa8980efe163737a7a93eb255bc3a6"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/query/web/PublicQueryControllerTest.java",
+        "sha256": "bce145733d211edb80a55dbfe95c45b8dab5d16bfb00e4ba49d317bf0f639d01"
+      },
+      {
+        "path": "backend/src/test/java/org/mranked/testing/IntegrationRuntime.java",
+        "sha256": "b226fe7bffcdb2f5c5d323a736e8aaad1dfb1809161954246df3e0d8bae9f0cc"
+      },
+      {
+        "path": "backend/src/test/resources/admin/official-rating-legacy-golden.json",
+        "sha256": "a14ef39777543c9ab186bb2e3ac1a9f82b7da9acd236a544b6ca5e083672e888"
+      },
+      {
+        "path": "collector_target/__init__.py",
+        "sha256": "ced3741c04b803df4750f667bf4d579554bd7fc6ab9bdc4f4a5d07e208aedcc1"
+      },
+      {
+        "path": "collector_target/__main__.py",
+        "sha256": "5b618dd6c5a821e48456e2599b2f29f371a72715b014cb1adb656ede3f9d0ebc"
+      },
+      {
+        "path": "collector_target/adapters.py",
+        "sha256": "6887fff1deabd75b4e9220b20a8fd5b8633576856b8999debfdc2572017acb00"
+      },
+      {
+        "path": "collector_target/auth.py",
+        "sha256": "470b3b045c998e750b2c46f1e6156b5a78bedfd95a5d013dd6c2fb01a03e1dcd"
+      },
+      {
+        "path": "collector_target/coordinator.py",
+        "sha256": "e3eeb495c96c36660290ef966fb3ee1a04c7c2a1fd23c29dbbe98878646bb92a"
+      },
+      {
+        "path": "collector_target/evidence.py",
+        "sha256": "fddae04858f33a20a47c4ea98de799e226950fb8039c00d8b4b2225ba4d40b3d"
+      },
+      {
+        "path": "collector_target/lease.py",
+        "sha256": "643bf4e1ec84eaf1adbf8a1592335eca80359656be916023c648706bae97ac4c"
+      },
+      {
+        "path": "collector_target/legacy_csv.py",
+        "sha256": "c3b8cfcf1a121909d8a8620d2764a2b32252b3a76cba32bd125ebd2331e96f4f"
+      },
+      {
+        "path": "collector_target/metrics.py",
+        "sha256": "908c30b97f78bc244742b4df1338886be4ba6b5eff85dc3f301ea5d7cd04fe49"
+      },
+      {
+        "path": "collector_target/model.py",
+        "sha256": "7cb68fc0e81032dab544acccb2e8f07bfba9d120ba397392c4d148c98a513ade"
+      },
+      {
+        "path": "collector_target/normalize.py",
+        "sha256": "c0417927f73bc556634bb56c16b18cf6b2521a95df530cf72fdba5a278ee247d"
+      },
+      {
+        "path": "collector_target/ports.py",
+        "sha256": "2b0dfd63ebd239ca86ce22d08b6c88fcb8531dc2fb90bc50718a2b65545c88b3"
+      },
+      {
+        "path": "collector_target/repository.py",
+        "sha256": "34dfaf3f4d4cb322d55eb63adde9747ad454177783abb52111d45d4d2bb973b9"
+      },
+      {
+        "path": "collector_target/runtime_adapters.py",
+        "sha256": "0f5c0bf86dfe7b5360da1558a850b9fc40f46ca4930a1ca12256ada921e58e34"
+      },
+      {
+        "path": "collector_target/tracking.py",
+        "sha256": "91ff4eece3f2d30e433dfdbbc6fb98e011754186941579076389cd63c1db1fe8"
+      },
+      {
+        "path": "contracts/openapi/m-ranked-v1-client.ts",
+        "sha256": "e5660613e954e0e8b5dff8afc8c1a42e41d5727951dd8787eeed5d5775c80962"
+      },
+      {
+        "path": "contracts/openapi/m-ranked-v1.yaml",
+        "sha256": "6b70888e54e7f51c3f9f403b209d72bbc6087ca8a85ffd0ab30f6c0e99f285cd"
+      },
+      {
+        "path": "frontend/app/(overview)/loading.tsx",
+        "sha256": "f48067c8daf30156431cb43b2318d2cf30ff3098b0adbe476b6f8f57af76b463"
+      },
+      {
+        "path": "frontend/app/(overview)/page.tsx",
+        "sha256": "44e6b453234708e661ae0786f3cb69bd81dfa21564a7f32735e3a22b3d3d23bd"
+      },
+      {
+        "path": "frontend/app/channels/[id]/page.tsx",
+        "sha256": "080eeaa8c361d95d24b0c36a451f755814367768907c688043557ae7db3d0457"
+      },
+      {
+        "path": "frontend/app/compare/loading.tsx",
+        "sha256": "a56f903a268ec80104d320c3e17ec01cfd458de0a9b56bd255b0733b5dccb489"
+      },
+      {
+        "path": "frontend/app/compare/page.tsx",
+        "sha256": "1c5052413269bcf683b619b60652b94dbb4e4a13df017c85bca93ff6d9bd3d21"
+      },
+      {
+        "path": "frontend/app/emoji/[[...emojiPath]]/route.ts",
+        "sha256": "d445fec0b380d7c6161b3fbe1470993e06291c139af2aa97366da383180aeebb"
+      },
+      {
+        "path": "frontend/app/error.tsx",
+        "sha256": "cf90e0f1b6bfb86470fa0ee81a536501194dc2da6baba3bb62938a6bb8ec66bd"
+      },
+      {
+        "path": "frontend/app/export/posts.csv/route.ts",
+        "sha256": "82c6414ffed22d43c18714ed060b7306d39e4bf8aafa672949c6e98eac57c20f"
+      },
+      {
+        "path": "frontend/app/export/snapshots.csv/route.ts",
+        "sha256": "e65966c05496c0cfc765426bdfb42bbc16697b38b819a4ba046ec93ce7555cb9"
+      },
+      {
+        "path": "frontend/app/globals.css",
+        "sha256": "36e4691ac5f77afac5ec93899409f9b7429add3c4f587d18d1b57304f1bb567a"
+      },
+      {
+        "path": "frontend/app/institutions/[id]/page.tsx",
+        "sha256": "b9890e9f7a2873b158c905f8f0bb799504727624ce207a5618c2ae4d121cd735"
+      },
+      {
+        "path": "frontend/app/layout.tsx",
+        "sha256": "7b3ca9855ac3f813be1815e1671e5ca37bc089d8f767e1222fdf30cb0a0cf724"
+      },
+      {
+        "path": "frontend/app/legacy.css",
+        "sha256": "882ecc3fabe5e1dc11d104753c06162ec9956137c6d91c133beb977912ec86a8"
+      },
+      {
+        "path": "frontend/app/manage/[...path]/route.ts",
+        "sha256": "b3b50ee97050bc351ea8f61aeead316008e60a5cc0e15b32368c92bd009f8143"
+      },
+      {
+        "path": "frontend/app/manage/admin-console.tsx",
+        "sha256": "026ba29e550fa06b86abffe17f86b6fd3d05dad8db8f053dcbb5806085516235"
+      },
+      {
+        "path": "frontend/app/manage/manage.module.css",
+        "sha256": "482711f5bfd43d54d7ba11f89194ad4b806e775ae1b066a08c8817a64a3aecd3"
+      },
+      {
+        "path": "frontend/app/manage/page.tsx",
+        "sha256": "e8c37244531c1ac068be76169a5940309b9417cb9c74108ba06a51f08bca7e4e"
+      },
+      {
+        "path": "frontend/app/not-found.tsx",
+        "sha256": "37d5b4790fb669176871573ef736a5d6ff99868cfcde374845bdddda653ed85b"
+      },
+      {
+        "path": "frontend/app/platform-accounts/[id]/page.tsx",
+        "sha256": "393a2270bccf9f6116d122f33c212524b488a31d886f5b87a749219eb34f8788"
+      },
+      {
+        "path": "frontend/app/platform-posts/[id]/page.tsx",
+        "sha256": "d828ab7366990f6ad69b798b8aa700686269d0eff9ea854cf9bff0a39d365c25"
+      },
+      {
+        "path": "frontend/app/posts/[id]/page.tsx",
+        "sha256": "83599b899fa02ee3964488d188d9b859a17d18d4c391b15a4091edaefa6546bb"
+      },
+      {
+        "path": "frontend/app/rating/loading.tsx",
+        "sha256": "78ecb39ea8fd00e41b3ffe49404e89185499001f4effbe485a41f2a5830ef909"
+      },
+      {
+        "path": "frontend/app/rating/page.tsx",
+        "sha256": "433f4273d8a1133e0626a13f8b7005665e6513245bdea08386abf1c5c05dd4a2"
+      },
+      {
+        "path": "frontend/components/account-detail.tsx",
+        "sha256": "438d4e4576669bd9475f01903afa34d8220f4830dc007ccf8df6fc19d8e60156"
+      },
+      {
+        "path": "frontend/components/catalog-forms.tsx",
+        "sha256": "957cbd538859e4306bf6d5e79be7a852c50e731af923dedee491d938cd30ace5"
+      },
+      {
+        "path": "frontend/components/compare-bars.tsx",
+        "sha256": "af4968f1dabc54d6ce649c1f5d20e1833e16a179a6d8a165884d3c8bb76e475f"
+      },
+      {
+        "path": "frontend/components/comparison-chart.tsx",
+        "sha256": "8f314a8562af5230e632edcf0960dd3b42fe176161d2fe8c5d5ac56abc195937"
+      },
+      {
+        "path": "frontend/components/comparison-selector.tsx",
+        "sha256": "9d833011c990e2e4000abfecbc1f5cba7d37f5d06d5e0fad1176281a521760e0"
+      },
+      {
+        "path": "frontend/components/comparison-visibility.tsx",
+        "sha256": "a919cab0e8c3064a5ddda27fb8543ea87c850a4c72fdd3dc1bc2d57b85c648cb"
+      },
+      {
+        "path": "frontend/components/institution-detail.tsx",
+        "sha256": "fb8d6fd0af788fcb8e3e086f4e4ed756ee529a235bc7cae00c9078d89c4746c7"
+      },
+      {
+        "path": "frontend/components/legacy-filter-form.tsx",
+        "sha256": "a91e04d0cdd04d41fa6923d5767457540923b0653ccf72dbf95640b172f8e592"
+      },
+      {
+        "path": "frontend/components/loading-state.tsx",
+        "sha256": "07c30b233cc8287eb6a413afef287a41c798ddaa84637873ff496d706d30ba92"
+      },
+      {
+        "path": "frontend/components/overview-card.tsx",
+        "sha256": "6df5f3d45df68ac1a166aed8ac7d1e44de270fb54feff8df36b08867a8ae79f9"
+      },
+      {
+        "path": "frontend/components/platform-pending.tsx",
+        "sha256": "4d0f36c7e9c6be3bba224a67471036fb0460328c5cddb00e1ed4c594a9dd9c46"
+      },
+      {
+        "path": "frontend/components/publication-detail.tsx",
+        "sha256": "0ddc64487cd51ced8f75e95e65e4a6bea76a0033b9005dfb258e4af558232744"
+      },
+      {
+        "path": "frontend/components/publication-measurements.tsx",
+        "sha256": "e5021d1661ef3a2a9d58d6f60a6224bbd9dbd301b76174c579c695ef5024011a"
+      },
+      {
+        "path": "frontend/components/rating-filter-form.tsx",
+        "sha256": "c536d142a3e21ca73ed09bef1102170501938b813f1a7fc9129575d4903b26bb"
+      },
+      {
+        "path": "frontend/components/site-header.tsx",
+        "sha256": "8dc0d89d0aa0fd735a29263151f60700786edcef88096b97f31bc7739f20cfa5"
+      },
+      {
+        "path": "frontend/components/theme-toggle.tsx",
+        "sha256": "44f4599796da27b46ece095effdcd1a91ae26698bf233bd79098b6fcaeed5ba2"
+      },
+      {
+        "path": "frontend/components/ui.tsx",
+        "sha256": "6b8043e22b9532e06eebbc909503814aa0ae392003238c53380ebed24cadbd57"
+      },
+      {
+        "path": "frontend/lib/admin-api.ts",
+        "sha256": "c45f5c67436b806758c227d42cb8409dbd7226df06c1b6d4ad164840309391f9"
+      },
+      {
+        "path": "frontend/lib/api.ts",
+        "sha256": "509c56fb3293c61016fb1a5aaa1b8158b7f215fd9e4e2fe8609fb05db2fd3acd"
+      },
+      {
+        "path": "frontend/lib/catalog-api.ts",
+        "sha256": "1df35f16b1180576eb495230a5161f56d29a9801190e537dab15948c4838a0fb"
+      },
+      {
+        "path": "frontend/lib/chart-history.ts",
+        "sha256": "1086d3615e2f522f726d0b972292b93e520597f75a0216705b983ea2902f8142"
+      },
+      {
+        "path": "frontend/lib/chart-line.ts",
+        "sha256": "1086d3615e2f522f726d0b972292b93e520597f75a0216705b983ea2902f8142"
+      },
+      {
+        "path": "frontend/lib/comparison-chart-data.ts",
+        "sha256": "2d24e0a51ad82c41e7a7e625c96b893589cf2f0f72a4f504d6a65c462e0bca60"
+      },
+      {
+        "path": "frontend/lib/continuation.ts",
+        "sha256": "c413ac131240962dfbdbb16453b99ce69d71db3ab3b6699bda24433d601df4ac"
+      },
+      {
+        "path": "frontend/lib/deployment.ts",
+        "sha256": "e11b925b9a0421b1532cee48e882c065259a6253eca452377da93f080c3eb81b"
+      },
+      {
+        "path": "frontend/lib/detail-data.ts",
+        "sha256": "4dbae1a5b1651e337067206bfd16c765225bdae39c812ed7f2edd9ffbec16b16"
+      },
+      {
+        "path": "frontend/lib/emoji-route.ts",
+        "sha256": "cb4c3952f95ef20b8259ea8426c2d8ec808be3f7acccb9db2487e179eac20688"
+      },
+      {
+        "path": "frontend/lib/format.ts",
+        "sha256": "0bdf4ec5bab191703e34ca0b5caeaf654e5387f1e4774d485d6882e8dcee1d93"
+      },
+      {
+        "path": "frontend/lib/history-data.ts",
+        "sha256": "7951ae582f6346481d47703e943203d5e54bffbb1126a67d58471cbc4d460fb8"
+      },
+      {
+        "path": "frontend/lib/history-preferences.ts",
+        "sha256": "3bda6694cffdf669b83eb94e8475fd8ccff66a130ec3e3ec792b37e1b72c15fe"
+      },
+      {
+        "path": "frontend/lib/legacy-csv.ts",
+        "sha256": "fb58647cfcaaf0d122d90e66ebbef7f93904471706314e823ad7d2cbf4bf2911"
+      },
+      {
+        "path": "frontend/lib/legacy-detail-error.ts",
+        "sha256": "cfe2a1a13a75d1b3e66e7f1e720268a29aaa63f77ce70d116f4dd318fcc487a4"
+      },
+      {
+        "path": "frontend/lib/legacy-validation.ts",
+        "sha256": "7d09fc209c9a8d686718a767a0dd2e4af8e3f9381b47e4be65b2740dd84ba292"
+      },
+      {
+        "path": "frontend/lib/manage-facade.ts",
+        "sha256": "d014dc8c94df9c79a83521f8aaa0273db97f286a8bd1523a33ff8b55a9333b9a"
+      },
+      {
+        "path": "frontend/lib/metric-evidence.ts",
+        "sha256": "bef2b43e3744a5c43cb2041f98d6e9618a6b62fc01c25e5489e2d39410fb4be4"
+      },
+      {
+        "path": "frontend/lib/params.ts",
+        "sha256": "e8d56b3e639503ec2e260c5b6a9793127d6f515232201b78807513a2720850b2"
+      },
+      {
+        "path": "frontend/lib/rating.ts",
+        "sha256": "0e59f067bae2806e812e35b9831578c46d472342399e3ed8299b691bea927be1"
+      },
+      {
+        "path": "frontend/lib/revision-cache.ts",
+        "sha256": "4f3060be6f35d30bae2d14b6ef4e0a23a28434b9d04132a6e2f9ad2399bffeb4"
+      },
+      {
+        "path": "frontend/lib/types.ts",
+        "sha256": "76a8da3c392e7248a248f56800ca7a006e67bc619078b1fb1bc4f5c64f1237dc"
+      },
+      {
+        "path": "frontend/next-env.d.ts",
+        "sha256": "fcc113cc576b7870c47c6dce55e7d966018488f2373fb0decb9bb8b81c22ae5a"
+      },
+      {
+        "path": "frontend/next.config.ts",
+        "sha256": "abc46936cfdcde7dc2531fd8ac1708d945e75312408f8c24a2c77a2e4c7d5c92"
+      },
+      {
+        "path": "frontend/package.json",
+        "sha256": "8c54090da19db981fddad08c4ff4c4bc5bd95864423e11b964d7bd52bf00b818"
+      },
+      {
+        "path": "frontend/packages/legacy-chart/index.ts",
+        "sha256": "baa348c325225d5e33d916e59e101e566c55db527f7cc035512f693a698ba33f"
+      },
+      {
+        "path": "frontend/packages/legacy-chart/package.json",
+        "sha256": "0c9a82d0c76be72e1a1034885bc8291fb171ab6e38d5c20e38e2dec1d607e535"
+      },
+      {
+        "path": "frontend/playwright.config.ts",
+        "sha256": "88079c1da7885e7c2f3e4a0fd6f07c0efa048ba463e307501b446f045c77e926"
+      },
+      {
+        "path": "frontend/pnpm-lock.yaml",
+        "sha256": "17fc51ff86458f933f2257ae84eb07f5d86f2b9f5bb98860cbfc056e0ee43091"
+      },
+      {
+        "path": "frontend/pnpm-workspace.yaml",
+        "sha256": "dc71c99695151a8c43e556807ea9307118589aaa049d32f1ee31fd33aa0c048a"
+      },
+      {
+        "path": "frontend/proxy.ts",
+        "sha256": "50a7b557574a45d94ff826e2f5c149e37500f8d7957e803b2223ae36a36323b4"
+      },
+      {
+        "path": "frontend/scripts/legacy-fixture.py",
+        "sha256": "91950862b89a51e289d2c2eea2374835b1ebf50d4161bfee2ae1b64694f06dc4"
+      },
+      {
+        "path": "frontend/tests/admin-api.test.ts",
+        "sha256": "950f10ddad9f5a75bf40e6ec0e26948b9b5834e5241a8ccda8c35d66deb7dd44"
+      },
+      {
+        "path": "frontend/tests/api.test.ts",
+        "sha256": "e4a62df4050c5bf8c818afad6f34eb70ba2ef4ae5366198a5603e67f9cd40cf6"
+      },
+      {
+        "path": "frontend/tests/browser/manage.spec.ts",
+        "sha256": "2dbd5d85eab44b21695d03c8f292daf2c709da2d41957c7811e25fa3d861abb8"
+      },
+      {
+        "path": "frontend/tests/browser/parity.spec.ts",
+        "sha256": "b3d628f3197861801572d71816009d8c4a429fbe1df90a7c78ebc808ee851a75"
+      },
+      {
+        "path": "frontend/tests/catalog-api.test.ts",
+        "sha256": "2dea9c6bf11de73c24903e07ae1d4b4701e00e9c8f87842a1369fb05ee07a7e9"
+      },
+      {
+        "path": "frontend/tests/chart-scales.test.ts",
+        "sha256": "8cf09191f7760d49c7c1ee7e82b856288822d738a4e7be19eb652806fb0c5eef"
+      },
+      {
+        "path": "frontend/tests/comparison-chart-data.test.ts",
+        "sha256": "487598cdb8f984999360b9bb68c046e9e2a3427c726cd50ff1829b542be3b717"
+      },
+      {
+        "path": "frontend/tests/continuation.test.ts",
+        "sha256": "62589fc731b5e3dfbeec19b687b4afef2b057b638042e6621f43065df295dc72"
+      },
+      {
+        "path": "frontend/tests/emoji-route.test.ts",
+        "sha256": "14912c1ad086aa7e6c74dc255b76f6c61d5ab99655bf29a59c1dc76e144cedc0"
+      },
+      {
+        "path": "frontend/tests/history-data.test.ts",
+        "sha256": "2ebb996b613661cc02e047bb5ff6b91c7791c205ffee00c14369f83fb275a96e"
+      },
+      {
+        "path": "frontend/tests/legacy-csv.test.ts",
+        "sha256": "651311a85507b22f5d91211186065f8370fdca7b4d9ce566f0c6c77d321349f6"
+      },
+      {
+        "path": "frontend/tests/legacy-detail-error.test.ts",
+        "sha256": "4d3590ebb381120a698638db33f3088126df3a3e152f32ddf61fee5752536d52"
+      },
+      {
+        "path": "frontend/tests/legacy-validation.test.ts",
+        "sha256": "f74cb40925451cdd01a1bd5cddd1421f02e8ea19955753d099dc5016cf21ce0a"
+      },
+      {
+        "path": "frontend/tests/manage-facade.test.ts",
+        "sha256": "dd5b376d37b04c19135909c5826c28e89f389b4e9bc6cb302261347f099b0f7f"
+      },
+      {
+        "path": "frontend/tests/metric-evidence.test.ts",
+        "sha256": "813643a4aabd0664c9e965a54689618bf5942537e0f23a38b71868a2bbb99a23"
+      },
+      {
+        "path": "frontend/tests/params.test.ts",
+        "sha256": "fec0dec6bd00941d72d13d09026ea7b2deba5ce8d413d9d887843fe5b60774a2"
+      },
+      {
+        "path": "frontend/tests/rating.test.ts",
+        "sha256": "e19e3540795e9e954de0f4adfe04ef454fbb77ab91ec1e37836a7b616c218007"
+      },
+      {
+        "path": "frontend/tests/revision-cache.test.ts",
+        "sha256": "0342d2757577175e7d1a57d7b559e5c5e51b3cffa1f6acc913bbee86f70d4bb7"
+      },
+      {
+        "path": "frontend/tests/visual-privacy.test.ts",
+        "sha256": "c9027948218f856b4eb9bbde61469d43ebf22cbcbaa307484fc09ae59ce082e0"
+      },
+      {
+        "path": "frontend/tsconfig.json",
+        "sha256": "f71c9ba0675df3f1c9dfb63451a5c99de0b2d53ad8108cbc0470bc317cb210a8"
+      },
+      {
+        "path": "infra/compose.yaml",
+        "sha256": "3986ad04f5e9ac68d9611e6a9e063fe4ae22b98c5c3bd6cf786082e439422777"
+      },
+      {
+        "path": "infra/postgres/init/001-create-roles.sh",
+        "sha256": "464d71aeee6669be0edb254c3a4af69e5bcd37b08ee535d277500f5f8d457f42"
+      },
+      {
+        "path": "migration/bridge/__init__.py",
+        "sha256": "70264cca05d958ea29d675d784380e6c6af3eddb8e7d5e251c2b8cc056a45877"
+      },
+      {
+        "path": "migration/bridge/__main__.py",
+        "sha256": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d"
+      },
+      {
+        "path": "migration/bridge/admin_presentation.py",
+        "sha256": "2b389ec55a974d12e9dbda08754bf3757efd3eb60ec25fd0c524c9ae5384714d"
+      },
+      {
+        "path": "migration/bridge/cli.py",
+        "sha256": "cce107ffc741fe76b6bcad6d4fd879e3fb57d375f9bee984c8ed84033d969cf3"
+      },
+      {
+        "path": "migration/bridge/export_lexemes.py",
+        "sha256": "4500285bbc0801fb6f6831fb6ecd12c3d5232e43ae63e30e566fcee34910c0f9"
+      },
+      {
+        "path": "migration/bridge/fixture.py",
+        "sha256": "3e55e56b76ffe84fb68c38a7546736096b981ad7d4c09febafa92a27eafbabb2"
+      },
+      {
+        "path": "migration/bridge/mapping.py",
+        "sha256": "df3a0b46f131a4115bcbb86045d155077aab8ff7300b1563bfa721b215d69e88"
+      },
+      {
+        "path": "migration/bridge/model.py",
+        "sha256": "e475eeb35b46f1d309b60cfea7ee32394a1371db3d62b6732de953b5c5155586"
+      },
+      {
+        "path": "migration/bridge/normalize.py",
+        "sha256": "68d0fa2cee7bc32fca34ffc3f7dac711b572d99dafbefdf2496e84171117bbe5"
+      },
+      {
+        "path": "migration/bridge/preservation.py",
+        "sha256": "99eca3c4eb18a67bb44f1c987efcb8117e049ae1ee3dca788d7363d938ed524b"
+      },
+      {
+        "path": "migration/bridge/projection_reconciliation.py",
+        "sha256": "38398bdf8d2a911390c32e296f1d9b3a40236cfd0bac29b9c06727d70d9a4208"
+      },
+      {
+        "path": "migration/bridge/reconciliation.py",
+        "sha256": "9cc9444dea6b37256cdffa7ddce9d3230b9f2b0aeaf8b8796616f955af3f7b7e"
+      },
+      {
+        "path": "migration/bridge/report.py",
+        "sha256": "3870e7b2fa8b635db652629aa356bab563524057adf176c3343d98661ea4748a"
+      },
+      {
+        "path": "migration/bridge/service.py",
+        "sha256": "803473a4f5d10a34e9fd36296de687dd1211ca959b98e1e73b8424e97e9db032"
+      },
+      {
+        "path": "migration/bridge/source.py",
+        "sha256": "938a635c564a495b34e542f10b3b31d75a9aa6eebd69c09c1788c8df876788db"
+      },
+      {
+        "path": "migration/bridge/target.py",
+        "sha256": "29e365601c7a8443533de2f781490ed948816d336f098bbdff3e381750f7faf0"
+      },
+      {
+        "path": "migration/integration/AdminFixturePassword.java",
+        "sha256": "5a3240ef7a47058b1a76e33f9b316b661e863aa644c3331dbd883ff134d9ce72"
+      },
+      {
+        "path": "migration/integration/fixture_auth.py",
+        "sha256": "44f2d401856114db17164a70305ceb994ac77aed0e03dc193d301e3ead407227"
+      },
+      {
+        "path": "migration/integration/freeze_schema.py",
+        "sha256": "19f10e1b9bbcc017e9b722ee176c0990cf98a0b7bd98d4a15577e34cd9cde9d1"
+      },
+      {
+        "path": "migration/integration/legacy_csv_archive_fixture.py",
+        "sha256": "d237629347c97e9301b02394db14189bc323eb6224a4bb368710ecb7311912c0"
+      },
+      {
+        "path": "migration/integration/legacy_csv_fixture.py",
+        "sha256": "ff62470cb8ebafbcb2ba8467d59aaf0105f665c5ded62f19d5775915035743b3"
+      },
+      {
+        "path": "migration/integration/legacy_native_csv_fixture.py",
+        "sha256": "e4c973cd3407e812183d4943274015a84aa94177d917a66ba51e38755ac4a545"
+      },
+      {
+        "path": "migration/integration/legacy_period_oracle.py",
+        "sha256": "17a2a84bf4f9ead0b24133550192c87649ab5c47cd29e426e4557dae6113a9f3"
+      },
+      {
+        "path": "migration/integration/official_context_fixture.py",
+        "sha256": "093e0b7f04a2653e04e3576409d07af2b06545b9ac1cff04400cadd14f9a4346"
+      },
+      {
+        "path": "migration/integration/official_rating_golden.py",
+        "sha256": "c9700d5773f76d9462a789d166c55047cd0bb3a5f2a247567a9e5e5001bd513c"
+      },
+      {
+        "path": "migration/integration/projection_oracle_fixture.py",
+        "sha256": "9d86696bfcc9a31a1a30afff5647be20324ca1fe39275a9c6f935035bda177ac"
+      },
+      {
+        "path": "migration/integration/run.py",
+        "sha256": "b388c6a42319cfa4a8cafa21f38acb7c7be585ebc72c56ceb22dc22266b1996a"
+      },
+      {
+        "path": "migration/release_manifest.py",
+        "sha256": "2ea7232814d54b45f46dea4d3d974a86234e026e536d114397a210ccc30dcc9f"
+      },
+      {
+        "path": "migration/reverse_sync_format.py",
+        "sha256": "81d776029cd2e14558b72ee10ede7aab1f2024c26df37cbaf3d9dce84bd83782"
+      },
+      {
+        "path": "operations/__init__.py",
+        "sha256": "2ed4680c9eefd58ebf8030926e097659a44e38bdb4f62fe841230c14c9be2aad"
+      },
+      {
+        "path": "operations/cold_archive/__init__.py",
+        "sha256": "37cad1d5e3fe4cc0584c94e776fbb28550e91587bced9200a0511ef5439fb64a"
+      },
+      {
+        "path": "operations/cold_archive/__main__.py",
+        "sha256": "0f7d54f3fbb1f79a85eb8110f11793db99da6f3c61ee979de5abe9a1b5f3fdb3"
+      },
+      {
+        "path": "operations/cold_archive/cli.py",
+        "sha256": "d8627b38fea793b0043260d723147bc8e3335978b5908e17d933f4ddb3cbcfee"
+      },
+      {
+        "path": "operations/cold_archive/legacy_csv_restore.py",
+        "sha256": "04bbad27c98dd15c16ee1d5dd5e2b0c52f828b5f8735464907d746b5a6044e21"
+      },
+      {
+        "path": "operations/cold_archive/model.py",
+        "sha256": "e163f1b0f874eb967309339b7f1f85d75f667c0f1be3e4963d37ce9893c0fded"
+      },
+      {
+        "path": "operations/cold_archive/parquet.py",
+        "sha256": "e0c54937268b0098c5df57291fdec3b2caa42f0e1e61768482a370f3f8bb95bc"
+      },
+      {
+        "path": "operations/cold_archive/service.py",
+        "sha256": "536a7d827f3c45d26afa66afa3366cd80f3ec02487aab19420e6e247db5a518e"
+      },
+      {
+        "path": "operations/collector_parity_evidence.py",
+        "sha256": "9998d0aeee89e8d4fe478c04ad028e3b77190d413f6654b3d58b0eac51198b6c"
+      },
+      {
+        "path": "operations/disaster_recovery/__init__.py",
+        "sha256": "090af2ef45de2ac5808aeb9a93566ef5e38d4245a3ca0dded5f4dc7935aadd29"
+      },
+      {
+        "path": "operations/disaster_recovery/rehearse.py",
+        "sha256": "8aa8cfa99d81aed68b0ff5c4357d04d19251496e2ef31bb51990b6d4085e0939"
+      },
+      {
+        "path": "operations/http_transition/__init__.py",
+        "sha256": "7cc30c5e69e2fb56d6dbaac6a837a3899d98afd08a8ec81079e90e9d223f59ff"
+      },
+      {
+        "path": "operations/http_transition/rehearse.py",
+        "sha256": "25f62720ee35cdee6800ee37d7e9bb7c337a70104728d895844966dd64b61c75"
+      },
+      {
+        "path": "operations/http_transition/verifier.py",
+        "sha256": "653260364ed0bbc11ad8f0f718f06214a78f3e722aaae2bd5b2efe9a26a6444b"
+      },
+      {
+        "path": "operations/https_egress/__init__.py",
+        "sha256": "7f5aa629fbad236809243bd185c91a69d6bdc43839e9b56c9d4acf22ad05024a"
+      },
+      {
+        "path": "operations/https_egress/rehearse.py",
+        "sha256": "8f1be44f9cdba89afb81805950ef90ca17ef191903c96737f74490e4cca735e8"
+      },
+      {
+        "path": "operations/observability/__init__.py",
+        "sha256": "d454ec1ba295b97efc69e3c955ebc698e9735510a9d5521d1a75c98830afc772"
+      },
+      {
+        "path": "operations/observability/collector-alerts.yml",
+        "sha256": "bb3c256d7c925f69238b43c994bae9eab83bdfe1f4a84676c680b53e2d2f8bde"
+      },
+      {
+        "path": "operations/observability/exporter.py",
+        "sha256": "b9d07991cdb0ec477a42825a3cb87795e7dcd6f1feb9a3c47c6d2482759c7226"
+      },
+      {
+        "path": "operations/observability/operations-alerts.yml",
+        "sha256": "ee75d7049290b5aaf3afd499764f31623dc6f5f876923ad8a9b766d4b73fd6b8"
+      },
+      {
+        "path": "operations/performance/__init__.py",
+        "sha256": "eba28d6037cef237fdd460111456d1d9ae494c9e0cab34c33138c7bb3e7ca971"
+      },
+      {
+        "path": "operations/performance/rehearse.py",
+        "sha256": "f65254b4c2b8fd16b939fe7922ecb287fa9ffadd1aef8f62c4c8138c62263bee"
+      },
+      {
+        "path": "operations/reverse_sync/__init__.py",
+        "sha256": "0201f51611a2979aa17903c6e746b12953a3da9cbb83f63da68ff44e5bd46c20"
+      },
+      {
+        "path": "operations/reverse_sync/__main__.py",
+        "sha256": "0f7d54f3fbb1f79a85eb8110f11793db99da6f3c61ee979de5abe9a1b5f3fdb3"
+      },
+      {
+        "path": "operations/reverse_sync/cli.py",
+        "sha256": "93cd74b8b9bca88b66f0c8343ed0153ee6af64d22d53185e5a8436d0accf0cde"
+      },
+      {
+        "path": "operations/reverse_sync/journal.py",
+        "sha256": "48d530a964b23255b32916afc89eef8c900c49197b1051bc560ca8741322a806"
+      },
+      {
+        "path": "operations/reverse_sync/model.py",
+        "sha256": "a705931073ed850bb980cb15314a6bc7eb9bdf5bc4d43802c52e960104e419ce"
+      },
+      {
+        "path": "operations/reverse_sync/postgres.py",
+        "sha256": "a763c51949cc7ce3664351d63ae75f9cab66f3e2dea5c7d63cf71009a76f6580"
+      },
+      {
+        "path": "operations/reverse_sync/service.py",
+        "sha256": "b2fe34e18b8cc96b5cb9d4839f5b2a410b48f19292ea39393618427d0f1f2d4b"
+      },
+      {
+        "path": "operations/reverse_sync/sqlite_target.py",
+        "sha256": "cccdd263f6a07ddd82b4e9c2ad6b56fde835b3e683e5fb0ee575323b2ba839ac"
+      },
+      {
+        "path": "operations/scripts/backup.sh",
+        "sha256": "f1727cbfa8cbef2ec1664213ab8d725dde0052e33794508d63eefcd43d39a766"
+      },
+      {
+        "path": "operations/scripts/cache-outbox-worker.sh",
+        "sha256": "c586d840cef63441d77c61fef8223b47be1d4e4ecf8d464bb9b29c43f7a6d7e7"
+      },
+      {
+        "path": "operations/scripts/collector-preflight.sh",
+        "sha256": "2289e24f9312242595d646b47aae63425fb831a4f20d1e160b0c981bb6b24cd9"
+      },
+      {
+        "path": "operations/scripts/cutover-preflight.sh",
+        "sha256": "947b4afd9c8d2060b5bb7e8ae4f047b5d769b135062c68f1ee6078db383aacac"
+      },
+      {
+        "path": "operations/scripts/deploy-shadow.sh",
+        "sha256": "69fef248eb9614daa92aa0871130164f0d7456c6101277a419860784f184b7d7"
+      },
+      {
+        "path": "operations/scripts/projection-publisher.sh",
+        "sha256": "d9a608c9b02d0027907f85661c0bfe9edccb2305a368579ee08b8f09ac4fdc5e"
+      },
+      {
+        "path": "operations/scripts/restore-verify.sh",
+        "sha256": "666a40429a44a21a1903f23b494272efcd24f90f827fbfce70c8f5e72654fe9d"
+      },
+      {
+        "path": "operations/scripts/rollback.sh",
+        "sha256": "082b460bbe19d14d86cd0d9b14dd15911821c4ab3dfe4b286f9601d5c2dfed4d"
+      },
+      {
+        "path": "operations/scripts/run-maintenance.sh",
+        "sha256": "963cb7c7fb533c57d15c60b5a4cc63e8fe2fa2d337612c10a7c01643756273cf"
+      },
+      {
+        "path": "operations/scripts/switch-routing.sh",
+        "sha256": "9c6d9a2ee537c9ba8edcb93011c111d575116dda26ad9b2e7d9ff8102585d36f"
+      },
+      {
+        "path": "operations/scripts/transition-lock.sh",
+        "sha256": "2d83879f17c96aa7326fe87965438d2569e23569516bc31bbb4464460076b477"
+      },
+      {
+        "path": "operations/scripts/wal-archive.sh",
+        "sha256": "077b13f2d149b9208b45456c7f4bd7b144f5dae0c765b5e27e832393362c24aa"
+      },
+      {
+        "path": "operations/scripts/writer-cutover.sh",
+        "sha256": "cbccd43602606ccb3e2bc9fa3e52a1e0219271699b31ad208aab6a4ea6acd768"
+      }
+    ],
+    "gitHead": "a7a2f09ff156eb72445f04f40dbe0e93d3378911",
+    "kind": "local-working-tree",
+    "productionApproved": false,
+    "sourceManifestSha256": "606cda08ccccaa2ee4e7d2d2c826b5f60c75d900147e82d8c06a202f0946c186"
+  },
+  "report_type": "post-import-reconciliation",
+  "report_version": 1,
+  "source": {
+    "captured_at": "2026-09-05T06:33:21.784084+00:00",
+    "foreign_key_violations": 0,
+    "quick_check": "ok",
+    "schema_version": 15,
+    "source_path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "source_sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "source_size_bytes": 2895872,
+    "tables": [
+      {
+        "canonical_hash": "eeb15b6da62a2c2ab43078d7a69df0abc8e1e6587fec24f45a39a19d9e2a5d2a",
+        "columns": [
+          "version",
+          "applied_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-08-01T12:00:00+00:00",
+        "name": "schema_migrations",
+        "row_count": 15
+      },
+      {
+        "canonical_hash": "07c2ad57ad7f2fb499d39a0f4a808052230d5e9e8db02926e5412c0f7662c057",
+        "columns": [
+          "key",
+          "value"
+        ],
+        "max_timestamp": null,
+        "min_timestamp": null,
+        "name": "app_state",
+        "row_count": 2
+      },
+      {
+        "canonical_hash": "a1a9a8e0639a8f45e20e40f784357212388b9a9a0b11be30c67fb0a5a04a5c55",
+        "columns": [
+          "id",
+          "name",
+          "short_name",
+          "created_at",
+          "m_rating_social_rank",
+          "m_rating_social_score",
+          "m_rating_tg_rank",
+          "m_rating_tg_score",
+          "m_rating_vk_rank",
+          "m_rating_vk_score",
+          "m_rating_max_rank",
+          "m_rating_max_score",
+          "m_rating_rutube_rank",
+          "m_rating_rutube_score",
+          "m_rating_period",
+          "m_rating_measured_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-08-01T12:00:00+00:00",
+        "name": "institutions",
+        "row_count": 207
+      },
+      {
+        "canonical_hash": "7407467ebb7084c8839f5a52ff6008275088169d6ca664da7964435d81e8cb81",
+        "columns": [
+          "id",
+          "institution_id",
+          "platform",
+          "external_key",
+          "native_id",
+          "username",
+          "title",
+          "url",
+          "enabled",
+          "access_mode",
+          "data_quality",
+          "subscriber_count",
+          "subscriber_count_display",
+          "subscriber_measured_at",
+          "last_checked_at",
+          "last_error",
+          "added_at"
+        ],
+        "max_timestamp": "2026-09-05T02:29:13.106098+00:00",
+        "min_timestamp": "2026-08-01T12:00:00+00:00",
+        "name": "platform_accounts",
+        "row_count": 824
+      },
+      {
+        "canonical_hash": "7f488b025c0d626d0825bb4d4f21d08b87fff7d4b60ee267c7e40ff8b5db0832",
+        "columns": [
+          "id",
+          "telegram_id",
+          "username",
+          "title",
+          "enabled",
+          "added_at",
+          "last_seen_message_id",
+          "last_checked_at",
+          "last_error",
+          "subscriber_count",
+          "subscriber_count_display",
+          "subscriber_measured_at",
+          "m_rating_tg_rank",
+          "m_rating_tg_score",
+          "m_rating_period",
+          "m_rating_measured_at",
+          "institution_id",
+          "platform_account_id"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-08-01T12:00:00+00:00",
+        "name": "channels",
+        "row_count": 206
+      },
+      {
+        "canonical_hash": "8fe92e1d7b6aab924a26da15dbeacfdabad782f748a1a928409620a60bcbe5e7",
+        "columns": [
+          "id",
+          "platform_account_id",
+          "external_id",
+          "published_at",
+          "discovered_at",
+          "post_type",
+          "url",
+          "deleted_at",
+          "missing_check_count",
+          "missing_last_checked_at",
+          "missing_reason",
+          "raw_json",
+          "history_complete",
+          "history_forced_incomplete",
+          "source_external_id",
+          "is_joint",
+          "additional_author_count",
+          "is_repost",
+          "created_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-07-16T12:00:00+00:00",
+        "name": "platform_posts",
+        "row_count": 618
+      },
+      {
+        "canonical_hash": "4a943c65abacd8fde8feeb99b9581e0641b6371c55b348a9bd2ac3df06557005",
+        "columns": [
+          "id",
+          "channel_id",
+          "logical_key",
+          "telegram_message_id",
+          "telegram_grouped_id",
+          "published_at",
+          "discovered_at",
+          "first_observation_age_seconds",
+          "history_complete",
+          "history_forced_incomplete",
+          "baseline_from_publication",
+          "post_type",
+          "ambiguous_album_reactions",
+          "is_repost",
+          "created_at",
+          "deleted_at",
+          "missing_check_count",
+          "missing_last_checked_at",
+          "missing_reason"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-07-16T12:00:00+00:00",
+        "name": "posts",
+        "row_count": 206
+      },
+      {
+        "canonical_hash": "a3f1289d17743a851284c8ee1157b54a66134cf9d9c7e5f4b192869aff87292c",
+        "columns": [
+          "post_id",
+          "telegram_message_id"
+        ],
+        "max_timestamp": null,
+        "min_timestamp": null,
+        "name": "post_messages",
+        "row_count": 208
+      },
+      {
+        "canonical_hash": "6c12cf731961da348d36591014bc36e33b0e958a8ad9d2c5d7bb6595ce68c879",
+        "columns": [
+          "id",
+          "platform_post_id",
+          "measured_at",
+          "measurement_bucket",
+          "age_seconds",
+          "views_count",
+          "reactions_count",
+          "comments_count",
+          "shares_count",
+          "raw_json",
+          "created_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-07-16T12:00:00+00:00",
+        "name": "platform_snapshots",
+        "row_count": 6768
+      },
+      {
+        "canonical_hash": "eb8e6237fcebf969f475dd05788710d8db84bf11b946ed88a94efb4d6732c9b8",
+        "columns": [
+          "id",
+          "post_id",
+          "measured_at",
+          "measurement_bucket",
+          "age_seconds",
+          "total_reactions",
+          "reactions_json",
+          "raw_state_json",
+          "delta_total",
+          "delta_by_reaction_json",
+          "delta_seconds",
+          "rate_per_hour",
+          "interval_uncertain",
+          "spike",
+          "comments_count",
+          "delta_comments",
+          "views_count",
+          "delta_views",
+          "synthetic",
+          "created_at"
+        ],
+        "max_timestamp": "2026-08-01T12:00:00+00:00",
+        "min_timestamp": "2026-07-16T12:00:00+00:00",
+        "name": "reaction_snapshots",
+        "row_count": 2258
+      }
+    ],
+    "totals": {
+      "account_metric_snapshot.rows": 823,
+      "account_metric_snapshot.subscribers": 8478045,
+      "account_metric_snapshot.subscribers_null": 0,
+      "account_metric_snapshot.subscribers_zero": 4,
+      "app_state.rows": 2,
+      "channels.rows": 206,
+      "institutions.rows": 207,
+      "official_rating_observation.rows": 6,
+      "platform_accounts.rows": 824,
+      "platform_posts.additional_authors": 2,
+      "platform_posts.deleted": 0,
+      "platform_posts.distinct_natural_keys": 618,
+      "platform_posts.forced_incomplete": 0,
+      "platform_posts.incomplete": 1,
+      "platform_posts.joint_posts": 1,
+      "platform_posts.reposts": 1,
+      "platform_posts.rows": 618,
+      "platform_snapshots.comments": 0,
+      "platform_snapshots.comments_null": 2246,
+      "platform_snapshots.comments_zero": 4522,
+      "platform_snapshots.max_observed_at": "2026-08-01T12:00:00+00:00",
+      "platform_snapshots.min_observed_at": "2026-07-16T12:00:00+00:00",
+      "platform_snapshots.reactions": 2023400,
+      "platform_snapshots.reactions_null": 1,
+      "platform_snapshots.reactions_zero": 1,
+      "platform_snapshots.rows": 6768,
+      "platform_snapshots.shares": 0,
+      "platform_snapshots.shares_null": 2256,
+      "platform_snapshots.shares_zero": 4512,
+      "platform_snapshots.synthetic": 0,
+      "platform_snapshots.uncertain": 0,
+      "platform_snapshots.views": 13601975,
+      "platform_snapshots.views_null": 0,
+      "platform_snapshots.views_zero": 1,
+      "post_messages.distinct_natural_keys": 208,
+      "post_messages.rows": 208,
+      "posts.album_posts": 1,
+      "posts.albums": 1,
+      "posts.ambiguous_albums": 1,
+      "posts.deleted": 1,
+      "posts.distinct_natural_keys": 206,
+      "posts.forced_incomplete": 0,
+      "posts.incomplete": 0,
+      "posts.reposts": 1,
+      "posts.rows": 206,
+      "reaction_snapshots.breakdown_invalid": 0,
+      "reaction_snapshots.breakdown_rows": 2259,
+      "reaction_snapshots.breakdown_sum": 674472,
+      "reaction_snapshots.breakdown_total_mismatch": 0,
+      "reaction_snapshots.comments": 3,
+      "reaction_snapshots.comments_null": 748,
+      "reaction_snapshots.comments_zero": 1508,
+      "reaction_snapshots.max_observed_at": "2026-08-01T12:00:00+00:00",
+      "reaction_snapshots.min_observed_at": "2026-07-16T12:00:00+00:00",
+      "reaction_snapshots.negative_comment_transitions": 1,
+      "reaction_snapshots.negative_reaction_transitions": 1,
+      "reaction_snapshots.negative_view_transitions": 1,
+      "reaction_snapshots.reactions": 674472,
+      "reaction_snapshots.reactions_null": 0,
+      "reaction_snapshots.reactions_zero": 1,
+      "reaction_snapshots.rows": 2258,
+      "reaction_snapshots.shares_null": 2258,
+      "reaction_snapshots.shares_zero": 0,
+      "reaction_snapshots.synthetic": 1,
+      "reaction_snapshots.uncertain": 1641,
+      "reaction_snapshots.views": 4533765,
+      "reaction_snapshots.views_null": 0,
+      "reaction_snapshots.views_zero": 1,
+      "schema_migrations.rows": 15
+    }
+  }
+}

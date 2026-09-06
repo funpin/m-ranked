@@ -26,7 +26,9 @@ class ComparisonSqlTest {
     @Test
     void repositoryConsumesTheRevisionPinnedPrecomputedSameSnapshotRatio() {
         assertThat(ComparisonSql.INSTITUTIONS)
-                .contains("prepared.dataset_revision_id = cohort.dataset_revision_id")
+                .contains("cohort.dataset_revision_id = :revision")
+                .contains("hourly.dataset_revision_id = cohort.dataset_revision_id")
+                .contains("state.status = 'ready'")
                 .contains("hourly.engagement_percent")
                 .contains("hourly.engagement_quality::text")
                 .doesNotContain("supported_interactions")

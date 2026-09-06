@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=oneshot
 User=m-ranked-restore
 Group=m-ranked-restore
+SupplementaryGroups=m-ranked-identity-readers
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/restore-verify.env
 LoadCredential=pgbackrest.conf:/etc/m-ranked/credentials/pgbackrest-restore.conf

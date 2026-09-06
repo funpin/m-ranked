@@ -61,7 +61,10 @@ WITH latest_revision AS (
     ('institution_daily_metrics'),
     ('institution_monthly_metrics'),
     ('institution_period_metrics'),
-    ('comparison')
+    ('comparison'),
+    ('publication_history'),
+    ('publication_content'),
+    ('legacy_exports')
 ), readiness AS (
     SELECT revision.id,
            count(state.projection_name) AS ready_count
@@ -75,6 +78,7 @@ WITH latest_revision AS (
 ), publisher_state AS (
     SELECT readiness.id,
            readiness.ready_count,
+           (SELECT count(*) FROM analytics.projection_state) AS state_count,
            (
                SELECT count(*)
                  FROM ops_and_admin.outbox_event AS event
@@ -86,8 +90,8 @@ WITH latest_revision AS (
 )
 SELECT CASE
            WHEN id IS NULL THEN 'idle'
-           WHEN ready_count = 6 AND request_count = 0 THEN 'ready'
-           WHEN ready_count = 6 THEN 'finalize'
+           WHEN ready_count = 9 AND state_count = 9 AND request_count = 0 THEN 'ready'
+           WHEN ready_count = 9 AND state_count = 9 THEN 'finalize'
            ELSE 'publish'
        END,
        coalesce(id, 0),
@@ -120,11 +124,15 @@ WITH latest_revision AS (
     ('institution_daily_metrics'),
     ('institution_monthly_metrics'),
     ('institution_period_metrics'),
-    ('comparison')
+    ('comparison'),
+    ('publication_history'),
+    ('publication_content'),
+    ('legacy_exports')
 )
 SELECT (
            revision.id = CAST(:'revision' AS bigint)
-           AND count(state.projection_name) = 6
+           AND count(state.projection_name) = 9
+           AND (SELECT count(*) FROM analytics.projection_state) = 9
        ) AS core_ready
   FROM latest_revision AS revision
  CROSS JOIN core_projection AS core
@@ -148,7 +156,7 @@ VALUES (
     ARRAY['publications', 'overview', 'comparison'],
     jsonb_build_object(
         'revision', CAST(:'revision' AS bigint),
-        'projectionCount', 6
+        'projectionCount', 9
     )
 )
 ON CONFLICT (dataset_revision_id, event_type, aggregate_type, aggregate_id)
@@ -166,7 +174,7 @@ VALUES (
     ARRAY['publications', 'overview', 'comparison'],
     jsonb_build_object(
         'revision', CAST(:'revision' AS bigint),
-        'projectionCount', 6
+        'projectionCount', 9
     )
 )
 ON CONFLICT (dataset_revision_id, event_type, aggregate_type, aggregate_id)
@@ -226,8 +234,9 @@ while [[ "$stopping" == false ]]; do
         || ( "$action" != idle && "$action" != ready \
              && "$action" != finalize && "$action" != publish ) \
         || ! "$revision" =~ ^[0-9]+$ \
-        || ! "$ready_count" =~ ^[0-6]$ \
-        || ! "$request_count" =~ ^[0-9]+$ ]]; then
+        || ! "$ready_count" =~ ^[0-9]$ \
+        || ! "$request_count" =~ ^[0-9]+$ \
+        || ( ( "$action" == ready || "$action" == finalize ) && "$ready_count" != 9 ) ]]; then
     echo "projection readiness query returned an invalid envelope" >&2
     exit 70
   fi

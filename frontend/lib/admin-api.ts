@@ -1,3 +1,4 @@
+import type { components } from "../../contracts/openapi/m-ranked-v1-client";
 import type { ApiProblem } from "./types";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -17,55 +18,17 @@ export const ADMIN_JOB_STATUSES = [
 export type AdminPlatform = (typeof ADMIN_PLATFORMS)[number];
 export type AdminJobStatus = (typeof ADMIN_JOB_STATUSES)[number];
 
-export interface AdminJob {
-  jobId: string;
-  kind: "collection";
-  platform: Exclude<AdminPlatform, "">;
-  scheduledAt: string;
-  startedAt: string;
-  completedAt: string | null;
-  status: Exclude<AdminJobStatus, "">;
-  accountCount: number;
-  errorCount: number;
-  correlationId: string;
-}
+export type AdminJob = components["schemas"]["AdminJob"];
 
-export interface AdminJobPage {
-  items: AdminJob[];
-}
+export type AdminJobPage = components["schemas"]["AdminJobPage"];
 
-export interface AdminAccountResult {
-  resultId: number;
-  platformAccountId: string;
-  startedAt: string;
-  completedAt: string | null;
-  status: string;
-  discoveredCount: number;
-  snapshotCount: number;
-  sanitizedErrorCode: string | null;
-}
+export type AdminAccountResult = components["schemas"]["AdminAccountResult"];
 
-export interface AdminJobDetail {
-  job: AdminJob;
-  accountResults: AdminAccountResult[];
-  accountResultsTruncated: boolean;
-}
+export type AdminJobDetail = components["schemas"]["AdminJobDetail"];
 
-export interface PlatformAccountAdminState {
-  accountId: string;
-  platform: Exclude<AdminPlatform, "">;
-  enabled: boolean;
-  rowVersion: number;
-  updatedAt: string;
-}
+export type PlatformAccountAdminState = components["schemas"]["AdminPlatformAccountState"];
 
-export interface SetEnabledResponse {
-  account: PlatformAccountAdminState;
-  changed: boolean;
-  datasetRevision: number | null;
-  correlationId: string;
-  outcome: "updated" | "idempotent";
-}
+export type SetEnabledResponse = components["schemas"]["AdminSetEnabledResponse"];
 
 export interface AdminCredentials {
   username: string;

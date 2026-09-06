@@ -1,0 +1,848 @@
+{
+  "backupManifestSha256": "8bb08f609a90c3a532f01f47b29d401c4dee33a66acafc85b27d510438fda0a1",
+  "checks": {
+    "coldArchiveFallbackWithPrimaryStopped": true,
+    "fullRestorePageChecksumsAndAmcheck": true,
+    "independentSourceClone": true,
+    "localRpoBudget": true,
+    "localRtoBudget": true,
+    "ownedResourcesCleaned": true,
+    "physicalBackupVerified": true,
+    "pitrBoundaryPageChecksumsAndAmcheck": true,
+    "promotedStandbyPageChecksums": true,
+    "sameExactFlywayManifest": true,
+    "standbyPromotion": true,
+    "streamingStandbyCaughtUp": true
+  },
+  "coldArchive": {
+    "canonicalSha256": "7be1c532c0e2517aa627c29947bb53e64d715025b9689785a407b93151477da5",
+    "exportSeconds": 3.6612,
+    "path": "cold-3d3d49235fbc.parquet",
+    "providerAttestation": false,
+    "rowCount": 9025,
+    "schemaVersion": 3,
+    "sha256": "9fa04959820bc7f175522238095bac38196ddc9680f2f1200cacd435ca556818"
+  },
+  "commands": [
+    {
+      "action": "SQL verification in mranked-review-it-postgres-1",
+      "durationSeconds": 2.9631,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:20.023242+00:00"
+    },
+    {
+      "action": "network create --internal --label org.mranked.disposable-dr=3d3d49235fbc mranked-dr-3d3d49235fbc-net",
+      "durationSeconds": 0.0399,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:22.986698+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=3d3d49235fbc mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0251,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:23.026627+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=3d3d49235fbc mranked-dr-3d3d49235fbc-wal",
+      "durationSeconds": 0.0216,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:23.051750+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=3d3d49235fbc mranked-dr-3d3d49235fbc-backup",
+      "durationSeconds": 0.0217,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:23.073372+00:00"
+    },
+    {
+      "action": "run --rm -v mranked-dr-3d3d49235fbc-wal:/archive -v mranked-dr-3d3d49235fbc-backup:/backup postgres:18.6 sh -ec chown postgres:postgres /archive /backup; chmod 0700 /archive /backup",
+      "durationSeconds": 0.4489,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:23.095090+00:00"
+    },
+    {
+      "action": "Start own checksum-enabled primary with independent WAL/basebackup volumes",
+      "durationSeconds": 0.1739,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:23.544278+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.1089,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:16:23.718266+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0963,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:16:24.087360+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.1046,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:16:24.435989+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0954,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:24.795330+00:00"
+    },
+    {
+      "action": "Allow password-authenticated replication only inside the isolated Docker network",
+      "durationSeconds": 0.0552,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:24.890754+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0796,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:16:24.946021+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-review-it-postgres-1",
+      "durationSeconds": 2.9718,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:08.646022+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 2.5126,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:11.618204+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0939,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:14.130993+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0883,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:14.224927+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 2.4783,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:14.313266+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.1028,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:20.350067+00:00"
+    },
+    {
+      "action": "Bounded maintenance-role Parquet export and full canonical verification",
+      "durationSeconds": 3.6612,
+      "exitCode": 0
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0769,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:20.453333+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0881,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:20.530297+00:00"
+    },
+    {
+      "action": "pg_basebackup using restricted replication role",
+      "durationSeconds": 4.841,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:20.618454+00:00"
+    },
+    {
+      "action": "pg_verifybackup validates manifest and WAL",
+      "durationSeconds": 0.7555,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:25.459562+00:00"
+    },
+    {
+      "action": "exec mranked-dr-3d3d49235fbc-primary sha256sum /backup/base/backup_manifest",
+      "durationSeconds": 0.0689,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:26.215144+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=3d3d49235fbc mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 0.0235,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:26.284153+00:00"
+    },
+    {
+      "action": "Restore physical base backup into own empty volume",
+      "durationSeconds": 3.2227,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:26.307719+00:00"
+    },
+    {
+      "action": "Write isolated recovery configuration (credentials omitted)",
+      "durationSeconds": 0.3031,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:29.530603+00:00"
+    },
+    {
+      "action": "run -d --name mranked-dr-3d3d49235fbc-standby --label org.mranked.disposable-dr=3d3d49235fbc --network mranked-dr-3d3d49235fbc-net -e PGDATA=/data -v mranked-dr-3d3d49235fbc-standby:/data -v mranked-dr-3d3d49235fbc-wal:/archive:ro postgres:18.6 postgres -c listen_addresses=* -c archive_mode=off -c max_wal_senders=12",
+      "durationSeconds": 0.1727,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:29.833742+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 0.088,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:17:30.006494+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 0.0929,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:30.354739+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 0.0817,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:30.447650+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0838,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:30.529389+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0847,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:30.613234+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.083,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:30.697964+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0767,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:30.781005+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.1231,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:30.857741+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-primary",
+      "durationSeconds": 0.0892,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:30.980953+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 0.0823,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:31.070208+00:00"
+    },
+    {
+      "action": "exec mranked-dr-3d3d49235fbc-primary sh -ec cd /archive; sha256sum *",
+      "durationSeconds": 3.4889,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:31.152511+00:00"
+    },
+    {
+      "action": "Simulate loss of only the UUID-owned primary",
+      "durationSeconds": 0.2642,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:34.641702+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 0.2385,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:35.413842+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 0.0916,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:35.652430+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 2.6773,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:35.744064+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=3d3d49235fbc mranked-dr-3d3d49235fbc-full-restore",
+      "durationSeconds": 0.0246,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:38.421605+00:00"
+    },
+    {
+      "action": "Restore physical base backup into own empty volume",
+      "durationSeconds": 3.7283,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:38.446286+00:00"
+    },
+    {
+      "action": "run -d --name mranked-dr-3d3d49235fbc-full-restore --label org.mranked.disposable-dr=3d3d49235fbc --network mranked-dr-3d3d49235fbc-net -e PGDATA=/data -v mranked-dr-3d3d49235fbc-full-restore:/data -v mranked-dr-3d3d49235fbc-wal:/archive:ro postgres:18.6 postgres -c listen_addresses=* -c archive_mode=off -c max_wal_senders=12",
+      "durationSeconds": 0.1912,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:42.174788+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-full-restore",
+      "durationSeconds": 0.1028,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:17:42.366026+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-full-restore",
+      "durationSeconds": 0.1121,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:42.729032+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-full-restore",
+      "durationSeconds": 0.0959,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:42.841231+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-full-restore",
+      "durationSeconds": 2.6012,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:42.937196+00:00"
+    },
+    {
+      "action": "pg_amcheck full restored cluster (diagnostic extension installed only in disposable restore)",
+      "durationSeconds": 3.8848,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:45.538714+00:00"
+    },
+    {
+      "action": "stop --time 30 mranked-dr-3d3d49235fbc-full-restore",
+      "durationSeconds": 0.208,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:49.423631+00:00"
+    },
+    {
+      "action": "Offline PostgreSQL page-checksum verification",
+      "durationSeconds": 1.607,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:49.631674+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=3d3d49235fbc mranked-dr-3d3d49235fbc-pitr",
+      "durationSeconds": 0.0275,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:51.238950+00:00"
+    },
+    {
+      "action": "Restore physical base backup into own empty volume",
+      "durationSeconds": 3.9006,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:51.266473+00:00"
+    },
+    {
+      "action": "Write isolated recovery configuration (credentials omitted)",
+      "durationSeconds": 0.2786,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:55.167194+00:00"
+    },
+    {
+      "action": "run -d --name mranked-dr-3d3d49235fbc-pitr --label org.mranked.disposable-dr=3d3d49235fbc --network mranked-dr-3d3d49235fbc-net -e PGDATA=/data -v mranked-dr-3d3d49235fbc-pitr:/data -v mranked-dr-3d3d49235fbc-wal:/archive:ro postgres:18.6 postgres -c listen_addresses=* -c archive_mode=off -c max_wal_senders=12",
+      "durationSeconds": 0.1727,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:55.445837+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-pitr",
+      "durationSeconds": 0.0808,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:17:55.618596+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-pitr",
+      "durationSeconds": 0.0948,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:55.955298+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-pitr",
+      "durationSeconds": 0.0942,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:56.050214+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-pitr",
+      "durationSeconds": 0.0932,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:56.144516+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-3d3d49235fbc-pitr",
+      "durationSeconds": 2.5263,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:56.237786+00:00"
+    },
+    {
+      "action": "pg_amcheck PITR restored cluster (diagnostic extension installed only in disposable restore)",
+      "durationSeconds": 4.1013,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:17:58.764382+00:00"
+    },
+    {
+      "action": "stop --time 30 mranked-dr-3d3d49235fbc-pitr",
+      "durationSeconds": 0.1605,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:02.865752+00:00"
+    },
+    {
+      "action": "Offline PostgreSQL page-checksum verification",
+      "durationSeconds": 0.9615,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:03.026267+00:00"
+    },
+    {
+      "action": "stop --time 30 mranked-dr-3d3d49235fbc-standby",
+      "durationSeconds": 0.1213,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:03.987864+00:00"
+    },
+    {
+      "action": "Offline PostgreSQL page-checksum verification",
+      "durationSeconds": 2.7767,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:04.109237+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.0486,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:06.886678+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.0362,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:06.935403+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.034,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:06.971635+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.0341,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:07.005638+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.1259,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:07.039779+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.1699,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:07.165750+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.1113,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:07.335710+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.0913,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:07.447038+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.0492,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:07.538416+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.0698,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:07.587621+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture network",
+      "durationSeconds": 0.1702,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:18:07.657517+00:00"
+    }
+  ],
+  "durationSeconds": 107.805,
+  "externalGates": [
+    "Separate physical DR host and encrypted channel",
+    "Production-like capacity and concurrent workload",
+    "pgBackRest encrypted multi-repository retention acceptance",
+    "Provider immutable cold archive attestation",
+    "Production RPO/RTO acceptance and named operator approval"
+  ],
+  "finishedAt": "2026-09-05T03:18:07.827794+00:00",
+  "fixtureDumpSha256": "8ab672698e9d48ef42474650f0a714cb90252846bbc4d3fd08930207ec2ea3c9",
+  "formatVersion": 1,
+  "image": "postgres:18.6",
+  "measurements": {
+    "baseBackupSeconds": 5.5967,
+    "coldArchiveFallbackSeconds": 0.5079,
+    "fullRestoreRtoSeconds": 10.9773,
+    "pitrControlledRpoSeconds": 0.168062,
+    "pitrRestoreRtoSeconds": 11.5992,
+    "standbyControlledRpoSeconds": 0,
+    "standbyPromotionRtoSeconds": 3.7799
+  },
+  "pitr": {
+    "excludedCommittedAt": "2026-09-05 03:17:30.755044+00",
+    "includedCommittedAt": "2026-09-05 03:17:30.586982+00",
+    "method": "named WAL restore point",
+    "restorePoint": "dr_target_3d3d49235fbc",
+    "restoredMarkers": [
+      "baseline",
+      "pitr-included"
+    ]
+  },
+  "productionAcceptance": false,
+  "roles": {
+    "backupCreateDb": false,
+    "backupCreateRole": false,
+    "backupReplication": true,
+    "backupSuperuser": false
+  },
+  "runId": "3d3d49235fbc",
+  "scope": "disposable-local-physical-rehearsal",
+  "sourceContainer": "mranked-review-it-postgres-1",
+  "sourceDatabase": "visual_review_v2_it",
+  "sourceState": {
+    "accounts": 824,
+    "canonicalSha256": "2fbe65c3ec8d46768f3bb9adb2cbfb3086b8321299636b184ef475575c3af8b1",
+    "flyway": [
+      {
+        "checksum": null,
+        "script": "\"flyway\"",
+        "success": true,
+        "version": null
+      },
+      {
+        "checksum": -1636077697,
+        "script": "V1__target_baseline.sql",
+        "success": true,
+        "version": "1"
+      },
+      {
+        "checksum": 839607018,
+        "script": "V2__rebuild_core_projections.sql",
+        "success": true,
+        "version": "2"
+      },
+      {
+        "checksum": -1456658399,
+        "script": "V3__collector_observation_times_and_identity_grants.sql",
+        "success": true,
+        "version": "3"
+      },
+      {
+        "checksum": 1318350062,
+        "script": "V4__admin_collection_run_status_grants.sql",
+        "success": true,
+        "version": "4"
+      },
+      {
+        "checksum": -1313754193,
+        "script": "V5__legacy_activity_period_projection.sql",
+        "success": true,
+        "version": "5"
+      },
+      {
+        "checksum": -290358219,
+        "script": "V6__comparison_valid_observation_hourly_projection.sql",
+        "success": true,
+        "version": "6"
+      },
+      {
+        "checksum": -1228913579,
+        "script": "V7__activity_rating_read_grants.sql",
+        "success": true,
+        "version": "7"
+      },
+      {
+        "checksum": -574188650,
+        "script": "V8__legacy_overview_projection.sql",
+        "success": true,
+        "version": "8"
+      },
+      {
+        "checksum": 1058556652,
+        "script": "V9__immutable_observations_quality_archive_fence.sql",
+        "success": true,
+        "version": "9"
+      },
+      {
+        "checksum": -1148603410,
+        "script": "V10__consistent_public_queries_and_formula_guards.sql",
+        "success": true,
+        "version": "10"
+      },
+      {
+        "checksum": 1679789143,
+        "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+        "success": true,
+        "version": "11"
+      },
+      {
+        "checksum": 1453326243,
+        "script": "V12__detail_history_projection.sql",
+        "success": true,
+        "version": "12"
+      },
+      {
+        "checksum": -185639607,
+        "script": "V13__immutable_account_identity_history.sql",
+        "success": true,
+        "version": "13"
+      }
+    ],
+    "institutions": 207,
+    "partitions": [
+      {
+        "canonical_sha256": "7be1c532c0e2517aa627c29947bb53e64d715025b9689785a407b93151477da5",
+        "max_observed_at": "2026-08-01T12:00:00+00:00",
+        "min_observed_at": "2026-07-16T12:00:00+00:00",
+        "month": "2026-07-01",
+        "row_count": 9025
+      },
+      {
+        "canonical_sha256": "b313141455ede8b6959c2a1c096c0c07757ae651781dc28ea5fd642b75f6f118",
+        "max_observed_at": "2026-08-01T07:00:00+00:00",
+        "min_observed_at": "2026-08-01T07:00:00+00:00",
+        "month": "2026-08-01",
+        "row_count": 1
+      }
+    ],
+    "projections": [
+      {
+        "name": "comparison",
+        "revision": 29,
+        "rowCount": 8534560,
+        "status": "ready"
+      },
+      {
+        "name": "institution_daily_metrics",
+        "revision": 29,
+        "rowCount": 8264,
+        "status": "ready"
+      },
+      {
+        "name": "institution_monthly_metrics",
+        "revision": 29,
+        "rowCount": 8256,
+        "status": "ready"
+      },
+      {
+        "name": "institution_period_metrics",
+        "revision": 29,
+        "rowCount": 32960,
+        "status": "ready"
+      },
+      {
+        "name": "publication_history",
+        "revision": 29,
+        "rowCount": 9026,
+        "status": "ready"
+      },
+      {
+        "name": "publication_hourly",
+        "revision": 29,
+        "rowCount": 315706,
+        "status": "ready"
+      },
+      {
+        "name": "publication_latest",
+        "revision": 29,
+        "rowCount": 824,
+        "status": "ready"
+      }
+    ],
+    "publications": 824,
+    "revision": 29,
+    "sizeBytes": 3154081471,
+    "snapshots": 9026,
+    "unvalidatedConstraints": 0
+  },
+  "startedAt": "2026-09-05T03:16:20.022546+00:00",
+  "status": "pass",
+  "walFiles": [
+    "0999bc0c252907c0ec85203b1c668478d49a1d9a164d680a5244b63a4a2a1124  000000010000000000000001",
+    "d4cad0471c618748b8da02239e94ae15037b59488a55a24a3d7b9bca8283fb44  000000010000000000000002",
+    "a5fe6ff24974b51a022a4c4a5642198b02499a322b84533ed4af845f63a18f48  000000010000000000000003",
+    "046cd59d04b0bd3a4963fff5740d3063f6288bc7918bc956ffa518ccf34be0e5  000000010000000000000004",
+    "2354918f88db031c2a0565faa61cd69c4166377ed36bdee9ece98d1109c9fb62  000000010000000000000005",
+    "20b1381c04b29841e12f9dd3e9df821e903f01e920c4eaacdda0cc0328fad800  000000010000000000000006",
+    "85fc71acb3aaa820232f82317d03a723a7173ab2e88583afa4e48c6ea532ad0f  000000010000000000000007",
+    "35fc0f4e72821b7529f953a13fc3705f0149e18df297bc8f69c4f164f9453a1f  000000010000000000000008",
+    "40889e69e0aca836a76a1b030989d3af6e24f5571cd848bf1cfaf5581c776059  000000010000000000000009",
+    "c5687197efb05a3c5984e0ba8b6bc78abbddccabd60fe6efa979df616f205d62  00000001000000000000000A",
+    "317a297db164b42c04468b2d152a0b7ff79d535b62b646353f6a15329eb66705  00000001000000000000000B",
+    "cba921672b1dd2e4f511d096b9648ec45b565c44c78283f28c84d8169e0916c2  00000001000000000000000C",
+    "c0e860eb7bb23430bf9aa6711e6a4f6c7028e6ed493aee7ccd50ce32f76a6e92  00000001000000000000000D",
+    "19a49ededd506041b3d8c6a5ddb4672c1b3c03e2c195483268bf7e806024cd29  00000001000000000000000E",
+    "a778f771bd1158121934f2524e1700597cd607f6ed78b3b52eee6567fd75b646  00000001000000000000000F",
+    "5b4a09d1f67be680efa2d827168689dd5f469c14630bb798f27c216464eddfad  000000010000000000000010",
+    "dc6247cb1d2537543d784dec6c1e6f1265f7255249ea7b8bdfb63f9137d0c766  000000010000000000000011",
+    "1fe32e7f9cdcdf16363f7681b6723afda1506e6aae652d7576a69088724ab312  000000010000000000000012",
+    "eeda936409c783cb10e79b05c65225efde9c8f1483177b1267a090bc27177f9c  000000010000000000000013",
+    "ac41b3ee58cf5ce7c0600215a4cbc6f9764491f2073d837f905c2437c542d021  000000010000000000000014",
+    "db7d3590526bc6ed4cb98bb0546abc9ed43a3e4a3037f661f6356f9362ae6957  000000010000000000000015",
+    "0dedcafcd4be6cf0ef651230761392bc239a7ab4a1f39bb4b8f85d7353d9b3f0  000000010000000000000016",
+    "298d34feaac2560d60ae44efd9ea58efc29767c741cb43d5815e2eaaa7be5d3a  000000010000000000000017",
+    "4b4855e60fd60c8d4d2863de63f3814f4a5e517b6e44aa3e8ece71c2cefa4ccc  000000010000000000000018",
+    "107bbfeb9e2d869d86982d9e2e9bbf197b9cf8dd12f88518fc9acbac411da69e  000000010000000000000019",
+    "16413abbb32cf73072169e5045b8a16acf2052b86cac8f0a4441a37b29e534de  00000001000000000000001A",
+    "e3c4b94a4543cf8f4993f2842ca6087eb9e77a94a1c5243a6c29f573f2376399  00000001000000000000001B",
+    "3ada5b3f6556f4617806fccf0a58ecb2b4effa82e19885f4e6ff114e114f4d10  00000001000000000000001C",
+    "01e38b88caea736577b23738fd2c30361b442734fa53cebabf9ee7000a3124c8  00000001000000000000001D",
+    "38d9815a061bbd86a3e4678cef906623473f1a775e97d7d31a98fb50073772f0  00000001000000000000001E",
+    "e0ad9c719e415b026041a33a9a1a7ab6fc52a3cf8872b73cf8a13631a95ce442  00000001000000000000001F",
+    "caadbc66784246c3cf12cc1629b4914aa3cecfb5dc5ba827767e755a4f10aebc  000000010000000000000020",
+    "0aca71234f4ac6e83679d44aee83667c09efda90dfb6f9d1b3d1af6b97d511b3  000000010000000000000021",
+    "e2c70d497ba575bcd65ed62710c48c76918f34d6cfc6db94d3934c2215148c66  000000010000000000000022",
+    "b345b893d0b1a1e3563f22e94367a676f5dee8bfef7cee3cef885a8166560323  000000010000000000000023",
+    "fd73fa8466ae032f4a058e7bbfa7736d0f7fb0a291a0c41358d6bf5d12631f78  000000010000000000000024",
+    "bdfb805dbd52cfa770d6bb78636056a7bd8e8c236c761a24d2bce5f32daa79bf  000000010000000000000025",
+    "c8858fa6f62b17d4a28da58ed902b9803479ad6b4232fb3a5aa7bac74d31aed4  000000010000000000000026",
+    "d7b107dd828df329aa5a4a11aac62ffd49be2518f38c63dc212241110b270c84  000000010000000000000027",
+    "56d4a8793f061026969bd3212186fe9cf9f25d00fd360dbd09bb8a40b475c94b  000000010000000000000028",
+    "196c8627bf1494b94944d7c864753e7b196c198553135d0775caa8682a4cab67  000000010000000000000029",
+    "b1c65519a918d69560232cbc09137330a52f819a63f380f41dd7968b2a03ed8b  00000001000000000000002A",
+    "c931137a5520c70bf681406d8c7f54b2ea36873549714a61a254b9a50c99d62a  00000001000000000000002B",
+    "fb5d40ff37798da29609e73a467609f05238d891256fdda2d32ef3871f7072da  00000001000000000000002C",
+    "cca213242a5af4b3558b4769d31f1e598f87a9b4aa3eb63afcbf630748985e5c  00000001000000000000002D",
+    "c3f3a6d282bd4bcce72671c08ea904438c404175fd44002a1158abbd17a400d1  00000001000000000000002E",
+    "0aa8cc56e90cd1001b1173cf5127cede3e3ec362bb48e4800081ea1376607327  00000001000000000000002F",
+    "1059fbb8fb135bff05b114d2af3126c3c7766b8fe67221ecdb3a2065a19a961d  000000010000000000000030",
+    "28cae8e152c78c452bd12a6e4f17210510d4fee30ba644b7b7d333597869d98b  000000010000000000000031",
+    "02cd8d21a07af902fb53748ba5b353b447eb0325e9e9ba7d53911a5b74d0528c  000000010000000000000032",
+    "193251da1bd75e0ff814c0639ac7351a1fb50313000c10ee091f9b469fc2cd0a  000000010000000000000033",
+    "662d79a5ce68c27bf9dbf110c3e559a264b3cdd784fbff5fd494f844f16b8fd5  000000010000000000000034",
+    "7f441afd95513219edcd17b41500015b81125cc401589c8b35c52e92a24c749f  000000010000000000000035",
+    "6e2ada2308ba5eed1725c212e95149f8a10bdea7015658c3560a4f32e76c3505  000000010000000000000036",
+    "e7635f69f7aa15cd0b179322c81b1f25dcd67483e93731f726ee269058defaac  000000010000000000000037",
+    "dc1149bd4c9b0f1fd470a337e475c4ac0d8a0d67d1dc3b418dc45db2a436003c  000000010000000000000038",
+    "0b81ce56e29e13412801186092739fdb64e6f836e6069d1a1168537b1c0e7a2b  000000010000000000000039",
+    "8044954f73eb76a106d8e84c68a50af99e4a9cb34b6cc6f483afc2019f69d8fa  00000001000000000000003A",
+    "ccf956b306d8507160b292ad3ba2060bbcb09ec24b4d22204bbc53ac0746ee58  00000001000000000000003B",
+    "e75c9001e3542629c1434007982aa76bd699fff1905e54f4d62eca01f8f9f9d1  00000001000000000000003C",
+    "b76695e72ed528acac5c475996dab4d7c557d734fd9f442423ccd3723cd622c9  00000001000000000000003D",
+    "701559f56a8d5160609ad539c4f985a5e35f71392c34247e44e8c3c5f2955224  00000001000000000000003E",
+    "6beab34ee441618cce7fad0cc94fd6fd0d85342052ab4b4872f4c725b6504e1e  00000001000000000000003F",
+    "4185f40880b61aaa3d09aed6e38c9a4aa331d85a3aac2885ab5870a525a1d570  000000010000000000000040",
+    "0096eb2a7bbebea3656642ce1ff1ac9d1be2950bb4dfbea0005bb0d2fd638a1f  000000010000000000000041",
+    "dac4a6c31aac2dd47c9a36fe38f287c7ce989704c62ed6620a1baf39addded12  000000010000000000000042",
+    "3fea5ca09e782aefcea7831c9642d561bb7ab9aa4d6ba978ce4671cfcf907423  000000010000000000000043",
+    "9f81193d249607cf458c6c3325f1c01e82aa897fd40b60b1b72282deb5d6415d  000000010000000000000044",
+    "5993bd35a53e5ad568335937f98b0e0683ba506c0a2711a760aae5b3e6b3798e  000000010000000000000045",
+    "6741ae7c67c9221a5b84fc8d46e961b5253533f4e7248086ea103f0000c34abd  000000010000000000000046",
+    "2795d6bafbf9c3ee66e3da5a9a8c32a5765c2d4c69ffb2af528d606e00889ae5  000000010000000000000047",
+    "f08d9c095ae468e118e0acd4db2dbb6513fa321e80b064e7398052b2a614ea42  000000010000000000000048",
+    "28856bee4bda06f878c9aabf13b244d6db25a6c6cf6e83f7ea1d6f86f9a7466f  000000010000000000000049",
+    "08696e998f98308a1194a0ead894174364ce36232c22ea564bb3ea4b3efb3208  00000001000000000000004A",
+    "55bf24bd00c9bef713d26518289289d07cfd5af852cff40bb05808b975275f64  00000001000000000000004B",
+    "e0f771e59bee5e29632f21cd4cf07a85ded87a43b86ff6287cf07ba0a94a05c3  00000001000000000000004C",
+    "7c9400cfecd2d2ced60cd977fafba5b874a90f03cac87ae1f654456c84f67f77  00000001000000000000004D",
+    "e604d77e0b2ecc9c97db2a921036a5b06abf5f7d21e510d9ed4b7ac59b386159  00000001000000000000004E",
+    "a26ca1d9ad6234a659faf0d10ff18dd60748ba1f84bb3efe0269c6cf67ef3a1b  00000001000000000000004F",
+    "fc80c54a1927cc7b494dec863345c13d90b63ca5134bc681e9ad205df4080864  000000010000000000000050",
+    "953b82a932bb520ee8f5e074853848c7737663097ef814c478184afd7a521474  000000010000000000000051",
+    "179dedb70aea155f5ae74a0265871245bfa47710bd4fac1eaa90a08d8a414ab5  000000010000000000000052",
+    "4f4c82a1ecf35a51e1b390853b6cbe5b2ed5e2a712838cac00fffe2c0baaf24d  000000010000000000000053",
+    "580c7b182a658c686851b7eb903270281908910356a84ec8644b1b973cf141c3  000000010000000000000054",
+    "25ddf59b8ac0684881df4190a22760c3f70b237bb7509cef800a1c7073e4d01a  000000010000000000000055",
+    "01198b44301e109bd2f4f52faf5f6e6e4e877c52b11ac9a975e73ec657d437c4  000000010000000000000056",
+    "9c7a66b883e665e16de2a54157f1402f29d873e69809189603ff69efb37af554  000000010000000000000057",
+    "ad2dfa5399c7f659bb39521df9143d6ef5b975ba7953b7e0a9b9f1e6f09a90ea  000000010000000000000058",
+    "42deb58f81799f330e359b021f2eaad12096aece48037ad91dd24acf9ea9646e  000000010000000000000059",
+    "3d375fee8dab8868c500bd15bd28fc223956c924ebfc21659d0ea34a413edc9b  00000001000000000000005A",
+    "d8e68d03dec55709db28747b1ddaafac237b015f79afbf7632c5cf8fb096f82b  00000001000000000000005B",
+    "6c747ea4d0156d5456fc5ce216946d22096e413a13cab98481013b4333489ca3  00000001000000000000005C",
+    "29f884e3a666a84b0257f2cd4ab4495eec8ef591d7d9b5a266bb77b77671c557  00000001000000000000005D",
+    "f4b8e76d429aad3c1a0a71091c6eef5345d104275ca83cb67351764d2fde2bf9  00000001000000000000005E",
+    "a894e9d68972ef56f8f7c1f213252212efd019d7fd5daf251e8196969d8b528b  00000001000000000000005F",
+    "94b1dfecf8325fa48f8b8099a6b3a927b93ae86ff259fdd03e31d128111db4c7  000000010000000000000060",
+    "7930573947b856964527b087efbd7128b3cc8f968d4b77b5ae6b7f64d10be180  000000010000000000000061",
+    "5815df6263af8a26a73a8142d019dbc79c92fd4177705dd287dc6e1abeec9323  000000010000000000000062",
+    "4ddfe9234188f8eaebb0f4babcbcbd267c4d55ae38b5f36586488b85bc3c558c  000000010000000000000063",
+    "840eae3605ef420944e622974484b0d9ccb3dc634784bb9d5ff7fb0030cfbbb3  000000010000000000000064",
+    "a1574685a0de13009835a33ce2fd2b7922a1f8e336364bef7c0c838ca9dd15a3  000000010000000000000065",
+    "af58e4577df341860cdbbb5142f12cc605fbcc92169834b1f62cceb11a742525  000000010000000000000066",
+    "a0278fb3f1a87dd4644612f99b9fe38c245fb21ce4b07b1504983cfb81537f08  000000010000000000000067",
+    "c185b836489dc91005b223ae776f160760b8e1f66baa5b4bbbcf10edabe563a9  000000010000000000000068",
+    "c8b683a69e5dbdb097b5000eb35593845fcf94402c055747f377e76b0627abf6  000000010000000000000069",
+    "d71419e7ff18c6f9dbd06ea19b6c2fb2801b79d721cf19f6c362d705e611513f  00000001000000000000006A",
+    "c08cbd1a7c7cf7681439605e38317a22d9f70f000423dbca0cbe88c6fc5be2e6  00000001000000000000006B",
+    "4f9fdcc8b227bd64bfd3dd8b5265e8795d52eca2240c180e87c267bd1b7c085f  00000001000000000000006C",
+    "ae513df887df46ae2d3ba18022a321e2c001aa720562deab87604a19217e093b  00000001000000000000006D",
+    "acf35a1c253be51c995015b3bb86350186c8b070836cfff91c3648c6a91cff17  00000001000000000000006E",
+    "b8413893ae80d20ec7888f8f4dcf49529af79eab6cbb465ba317f86c42094e9c  00000001000000000000006F",
+    "a86a09d6064605b6c677797630ca8db4a4f5bd2fb7a71178dfdc456b99b62e0e  000000010000000000000070",
+    "e4f499f31aa4e297dd8a14a680565518ddd118a171960d6cbc3efe9345322fe6  000000010000000000000071",
+    "22e4c171c87b66a4cd807d0e01effcce425d215cc156068252645c4c41c9e407  000000010000000000000072",
+    "829120df838fceb7960fb4d41cd8ca4d3c5e47a8d41d336007b67f65402863ba  000000010000000000000073",
+    "ff29f51287eda9adbf7a91ff9a3fb3e1e26ea4d1ccd8f01919bc35f6a308e1ec  000000010000000000000074",
+    "52cd8e19e37804db016ae5a80037ab3214e5ee2fb436f624e779b880cca33e8a  000000010000000000000075",
+    "39954189ee7cd9e220ecb8183b83fdd05b18792b33ef4ceaa11015581181e350  000000010000000000000076",
+    "040776c40db85cc71fcf151b565074c6c9f1170866376cabd34596ff854254a3  000000010000000000000077",
+    "a893fd8c5dd06bf5135eabc546f1244cc9cc08720022c797a4a8aae2359b13c9  000000010000000000000078",
+    "d4c4cf5d1088f50af86b3b6918b812dc0ed5a98ff83fe93f0230afb220c4bab1  000000010000000000000079",
+    "f139979379c6a9a91abd6cf2a5493892d74de0a5cff38419d5afd8bb644023cd  00000001000000000000007A",
+    "24ac15b04b35bd4378963e0031d743e9dbdf24b3b01521c6a915e5d3781822bc  00000001000000000000007B",
+    "e79f326a0abe008b9194e197791b64a99706654d510a59cd40a34608dfe587b7  00000001000000000000007C",
+    "59a0c3d074af145ee36ffcb9121aafd2c249cacb721e8f85b8326208fc350534  00000001000000000000007D",
+    "e2a28052106217147b87694278cc2c8ea1f84f433901e0ce7312ea5b4d5602bf  00000001000000000000007E",
+    "f3204462bef540f29e46efd7d8f1be590ae9974d5fe10572ef8ecd47ac124bbb  00000001000000000000007F",
+    "89893d77cea8d61ff21975d0c074b79c7af36435b3a939c11106ed5a4b308111  000000010000000000000080",
+    "42385326ae7ee6b6e90451c1cdb4311eb8f985d5e72e71bacf94cd675266c17a  000000010000000000000081",
+    "4202a38c9c3fc3ee3d8e9a2d3b650a14f1e93901276224a92679a3ddc55a1557  000000010000000000000082",
+    "402064dc8b6f5f6e03a1f745db4cee2c1f7c4cf2a6dfb514da9d837b6a05c175  000000010000000000000083",
+    "ba7d29132267f3e13b1ee35d833fdced4a588e0449432c5a45593707805fce40  000000010000000000000084",
+    "c45b2361d5fc6552071720530f101d839befc4ef498cc2b593a5d702d0321547  000000010000000000000085",
+    "01c822dbd813bb7a8dfff830a09351a88e92d2e60ea87040dda04c5d6a1fa791  000000010000000000000086",
+    "94a358ad9bfe85d184c70800c7154bab1c69f57993194e6bcb64c3e5ae4725cc  000000010000000000000087",
+    "004d1c097a3ab5a1c2df504298a7c248153c5df68bb3533c6de1c9507389188a  000000010000000000000088",
+    "410e9697de9a7d2e06f5fa2736a533f4913831e1abb082dff2f8ee28a65b8a2e  000000010000000000000089",
+    "004faf816e8611a3cef3bf6b38dee9c2b049593f58e665db74000901c8a0cc8c  00000001000000000000008A",
+    "7075b84a0d5e311086b61412a965b7340841ef9450fc793e7c9886b7fb23bf98  00000001000000000000008B",
+    "b0513fe23a9cfbfa89b7ab2018e3c5b850eb2a2e423517ca66487ba0140c1837  00000001000000000000008C",
+    "e2dfba9106bd0f0fd4b567142f41d7af5d9c2afba494ec5e9a36e5cc71a8d8a4  00000001000000000000008D",
+    "3eedf1b87ac3a2694d55cc29c3e0303f13734330b0536838ebd478bf6bdeb8dc  00000001000000000000008E",
+    "88e495e46caeb00558d7d0efbb5a2b1e7ed6ea5e770c1a2aafeb3f18c9966ed2  00000001000000000000008F",
+    "c577ed6ad3682c91efeb4cc73acfabd327b2841680c614b761cf1d8dd002685e  00000001000000000000008F.000000D8.backup",
+    "f859797a63f0a047499741a1ca88389c33bcf9542de4821ab7e3d0c449354105  000000010000000000000090"
+  ]
+}

@@ -64,6 +64,8 @@ class ReverseSyncService:
             s_final = self.source.s_final(connection)
         state = self.journal.load_state()
         if state is not None:
+            if utc_now() > state.rollback_deadline:
+                raise RuntimeError("rollback compatibility window has expired")
             self._assert_binding(state, s_final)
         elif self.journal.legacy_target_identity() is not None:
             self._assert_target_binding()
@@ -107,6 +109,8 @@ class ReverseSyncService:
                 self._assert_target_binding()
                 return self._state_result(existing, idempotent=True)
             self.journal.bind_legacy_target(self.target.identity())
+            if isinstance(self.target, LegacySqliteTarget):
+                self.journal.bind_account_baseline(self.target.capture_account_baseline())
             with self.source.drain_lock() as connection:
                 s_final = self.source.s_final(connection)
                 baseline = tuple(item.id for item in self.source.revisions(connection))
@@ -137,12 +141,21 @@ class ReverseSyncService:
             if utc_now() > state.rollback_deadline:
                 raise RuntimeError("rollback compatibility window has expired")
             plan, aliases = self._build_and_reserve(state)
-            counts = self.target.apply(plan, aliases)
-            self.journal.record_applied(plan.revision_ids, plan.digest)
+            applied = self.journal.applied_checkpoint()
+            idempotent = (tuple(applied["revisionIds"]) == plan.revision_ids
+                          and applied["planDigest"] == plan.digest)
+            if idempotent:
+                self.target.verify(plan, aliases)
+                counts = plan.counts()
+            else:
+                counts = self.target.apply(plan, aliases)
+                self.target.durability_barrier()
+                self.journal.record_applied(plan.revision_ids, plan.digest)
             current_ids = self._current_revision_ids(state)
             expected_ids = tuple(sorted((*plan.baseline_revision_ids, *plan.revision_ids)))
             return {
                 "status": "active",
+                "idempotent": idempotent,
                 "planSha256": plan.digest,
                 "revisionCount": len(plan.revision_ids),
                 "revisionSetSha256": payload_sha256(plan.revision_ids),
@@ -294,6 +307,8 @@ class ReverseSyncService:
             state = self.journal.load_state()
             if state is None:
                 raise RuntimeError("reverse-sync has not been started")
+            if utc_now() > state.rollback_deadline:
+                raise RuntimeError("rollback compatibility window has expired")
             if state.status != "active":
                 return {"status": state.status, "cycles": cycles}
             self.once()
@@ -359,8 +374,12 @@ class ReverseSyncService:
                 target_key = self._snapshot_alias_key(snapshot, entity_type)
                 legacy_id = self.journal.resolve_alias(entity_type, target_key)
                 if legacy_id is None:
-                    next_id += 1
-                    legacy_id = next_id
+                    source_id = snapshot.get("legacy_source_snapshot_id")
+                    if source_id is not None:
+                        legacy_id = int(source_id)
+                    else:
+                        next_id += 1
+                        legacy_id = next_id
                     self.journal.record_alias(entity_type, target_key, legacy_id)
                 else:
                     next_id = max(next_id, legacy_id)
@@ -417,7 +436,9 @@ class ReverseSyncService:
             {
                 "legacy_table": entity_type,
                 "published_month": snapshot["published_month"],
-                "target_id": int(snapshot["id"]),
+                **({"publication_id": str(snapshot["publication_id"]),
+                    "sampling_bucket": int(snapshot["sampling_bucket"])}
+                   if "correction_sequence" in snapshot else {"target_id": int(snapshot["id"])}),
             },
         )
 
@@ -493,6 +514,13 @@ class ReverseSyncService:
         state = self.journal.load_state()
         if state is None or state.status not in set(allowed):
             raise RuntimeError("reverse-sync state transition is not allowed")
+        if utc_now() > state.rollback_deadline:
+            raise RuntimeError("rollback compatibility window has expired")
+        if isinstance(self.target, LegacySqliteTarget):
+            baseline = self.journal.account_baseline()
+            if baseline is None:
+                raise RuntimeError("immutable S-final account baseline is missing")
+            self.target.account_identity_baseline = baseline
         return state
 
     def _assert_binding(

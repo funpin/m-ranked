@@ -1,0 +1,142 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Solving dependencies...
+The following additional packages will be installed:
+  libpython3-stdlib libpython3.14-minimal libpython3.14-stdlib media-types
+  netbase nginx-common python3-minimal python3.14 python3.14-minimal
+Suggested packages:
+  fcgiwrap nginx-doc ssl-cert python3-doc python3-tk python3-venv
+  python3.14-venv python3.14-doc binutils binfmt-support
+The following NEW packages will be installed:
+  libpython3-stdlib libpython3.14-minimal libpython3.14-stdlib media-types
+  netbase nginx nginx-common python3 python3-minimal python3.14
+  python3.14-minimal
+0 upgraded, 11 newly installed, 0 to remove and 32 not upgraded.
+Need to get 7,427 kB of archives.
+After this operation, 28.5 MB of additional disk space will be used.
+Get:1 http://ports.ubuntu.com/ubuntu-ports resolute-updates/main arm64 libpython3.14-minimal arm64 3.14.4-1ubuntu0.1 [913 kB]
+Get:2 http://ports.ubuntu.com/ubuntu-ports resolute-updates/main arm64 python3.14-minimal arm64 3.14.4-1ubuntu0.1 [2,568 kB]
+Get:3 http://ports.ubuntu.com/ubuntu-ports resolute/main arm64 python3-minimal arm64 3.14.3-0ubuntu2 [25.8 kB]
+Get:4 http://ports.ubuntu.com/ubuntu-ports resolute/main arm64 media-types all 14.0.0build1 [31.4 kB]
+Get:5 http://ports.ubuntu.com/ubuntu-ports resolute/main arm64 netbase all 6.5build1 [13.0 kB]
+Get:6 http://ports.ubuntu.com/ubuntu-ports resolute-updates/main arm64 libpython3.14-stdlib arm64 3.14.4-1ubuntu0.1 [2,367 kB]
+Get:7 http://ports.ubuntu.com/ubuntu-ports resolute-updates/main arm64 python3.14 arm64 3.14.4-1ubuntu0.1 [830 kB]
+Get:8 http://ports.ubuntu.com/ubuntu-ports resolute/main arm64 libpython3-stdlib arm64 3.14.3-0ubuntu2 [8,480 B]
+Get:9 http://ports.ubuntu.com/ubuntu-ports resolute/main arm64 python3 arm64 3.14.3-0ubuntu2 [22.9 kB]
+Get:10 http://ports.ubuntu.com/ubuntu-ports resolute-updates/main arm64 nginx-common all 1.28.3-2ubuntu1.10 [37.8 kB]
+Get:11 http://ports.ubuntu.com/ubuntu-ports resolute-updates/main arm64 nginx arm64 1.28.3-2ubuntu1.10 [609 kB]
+Preconfiguring packages ...
+Fetched 7,427 kB in 2s (3,450 kB/s)
+Selecting previously unselected package libpython3.14-minimal:arm64.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 10079 files and directories currently installed.)
+Preparing to unpack .../libpython3.14-minimal_3.14.4-1ubuntu0.1_arm64.deb ...
+Unpacking libpython3.14-minimal:arm64 (3.14.4-1ubuntu0.1) ...
+Selecting previously unselected package python3.14-minimal.
+Preparing to unpack .../python3.14-minimal_3.14.4-1ubuntu0.1_arm64.deb ...
+Unpacking python3.14-minimal (3.14.4-1ubuntu0.1) ...
+Setting up libpython3.14-minimal:arm64 (3.14.4-1ubuntu0.1) ...
+Setting up python3.14-minimal (3.14.4-1ubuntu0.1) ...
+Selecting previously unselected package python3-minimal.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 10425 files and directories currently installed.)
+Preparing to unpack .../0-python3-minimal_3.14.3-0ubuntu2_arm64.deb ...
+Unpacking python3-minimal (3.14.3-0ubuntu2) ...
+Selecting previously unselected package media-types.
+Preparing to unpack .../1-media-types_14.0.0build1_all.deb ...
+Unpacking media-types (14.0.0build1) ...
+Selecting previously unselected package netbase.
+Preparing to unpack .../2-netbase_6.5build1_all.deb ...
+Unpacking netbase (6.5build1) ...
+Selecting previously unselected package libpython3.14-stdlib:arm64.
+Preparing to unpack .../3-libpython3.14-stdlib_3.14.4-1ubuntu0.1_arm64.deb ...
+Unpacking libpython3.14-stdlib:arm64 (3.14.4-1ubuntu0.1) ...
+Selecting previously unselected package python3.14.
+Preparing to unpack .../4-python3.14_3.14.4-1ubuntu0.1_arm64.deb ...
+Unpacking python3.14 (3.14.4-1ubuntu0.1) ...
+Selecting previously unselected package libpython3-stdlib:arm64.
+Preparing to unpack .../5-libpython3-stdlib_3.14.3-0ubuntu2_arm64.deb ...
+Unpacking libpython3-stdlib:arm64 (3.14.3-0ubuntu2) ...
+Setting up python3-minimal (3.14.3-0ubuntu2) ...
+Selecting previously unselected package python3.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 10899 files and directories currently installed.)
+Preparing to unpack .../python3_3.14.3-0ubuntu2_arm64.deb ...
+Unpacking python3 (3.14.3-0ubuntu2) ...
+Selecting previously unselected package nginx-common.
+Preparing to unpack .../nginx-common_1.28.3-2ubuntu1.10_all.deb ...
+Unpacking nginx-common (1.28.3-2ubuntu1.10) ...
+Selecting previously unselected package nginx.
+Preparing to unpack .../nginx_1.28.3-2ubuntu1.10_arm64.deb ...
+Unpacking nginx (1.28.3-2ubuntu1.10) ...
+Setting up media-types (14.0.0build1) ...
+Setting up nginx-common (1.28.3-2ubuntu1.10) ...
+Setting up netbase (6.5build1) ...
+Setting up nginx (1.28.3-2ubuntu1.10) ...
+invoke-rc.d: could not determine current runlevel
+invoke-rc.d: policy-rc.d denied execution of start.
+Setting up libpython3.14-stdlib:arm64 (3.14.4-1ubuntu0.1) ...
+Setting up python3.14 (3.14.4-1ubuntu0.1) ...
+Setting up libpython3-stdlib:arm64 (3.14.3-0ubuntu2) ...
+Setting up python3 (3.14.3-0ubuntu2) ...

@@ -31,15 +31,37 @@ class OpenApiContractTest {
         assertThat(paths.keySet()).containsExactlyInAnyOrder(
                 "/api/v1/health/live",
                 "/api/v1/health/ready",
+                "/api/v1/health/legacy",
+                "/api/v1/health/freshness",
                 "/api/v1/emoji/{emojiId}",
                 "/api/v1/overview",
+                "/api/v1/revision",
                 "/api/v1/institutions/{legacyId}",
                 "/api/v1/publications/{legacyId}",
                 "/api/v1/rating",
                 "/api/v1/compare",
+                "/api/v1/compare/candidates",
                 "/api/v1/accounts/{legacyId}",
+                "/api/v1/accounts/{legacyId}/publications",
+                "/api/v1/institutions/{legacyId}/accounts",
+                "/api/v1/publications/{legacyId}/history",
                 "/api/v1/exports/publications.csv",
+                "/api/v1/legacy-exports/{kind}.csv",
+                "/api/v1/admin/catalog/session",
+                "/api/v1/admin/catalog/status",
+                "/api/v1/admin/catalog/institutions",
+                "/api/v1/admin/catalog/institutions/{id}/accounts",
+                "/api/v1/admin/catalog/institutions/{id}",
+                "/api/v1/admin/catalog/accounts",
+                "/api/v1/admin/catalog/accounts/{id}",
+                "/api/v1/admin/catalog/accounts/{id}/enable",
+                "/api/v1/admin/catalog/accounts/{id}/disable",
+                "/api/v1/admin/catalog/accounts/{id}/native-id",
+                "/api/v1/admin/catalog/legacy-command",
                 "/api/v1/admin/csrf",
+                "/api/v1/admin/exports",
+                "/api/v1/admin/exports/{id}",
+                "/api/v1/admin/exports/{id}/download",
                 "/api/v1/admin/jobs",
                 "/api/v1/admin/jobs/{jobId}",
                 "/api/v1/admin/platform-accounts/{accountId}",
@@ -147,7 +169,7 @@ class OpenApiContractTest {
         assertThat(compareGet.toString())
                 .contains("name=channels")
                 .contains("name=institutions")
-                .contains("maxItems=50")
+                .contains("maxItems=2000")
                 .contains("de-duplicated")
                 .contains("ignored")
                 .contains("explode=true");
@@ -155,7 +177,7 @@ class OpenApiContractTest {
         Map<String, Object> comparison = (Map<String, Object>) schemas.get("Comparison");
         @SuppressWarnings("unchecked")
         List<String> comparisonRequired = (List<String>) comparison.get("required");
-        assertThat(comparisonRequired).contains("selectionType");
+        assertThat(comparisonRequired).contains("selectionType", "nextSelectionCursor");
         @SuppressWarnings("unchecked")
         Map<String, Object> comparisonSeries = (Map<String, Object>) schemas.get(
                 "ComparisonSeries"
@@ -185,16 +207,14 @@ class OpenApiContractTest {
         String generatedClient = Files.readString(client);
         assertThat(generatedClient).contains("Source-SHA256: " + sourceHash);
         assertThat(generatedClient)
-                .contains("getAdminJobs(")
-                .contains("getAdminPlatformAccount(")
-                .contains("setAdminPlatformAccountEnabled(")
-                .contains("getCustomEmoji(")
-                .contains("channels?: readonly number[];")
-                .contains("institutions?: readonly number[];")
-                .contains("parameters.append(key, String(entry))")
-                .contains("cache: \"no-store\"")
-                .contains("credentials: \"include\"")
+                .contains("export interface paths")
+                .contains("export interface operations")
+                .contains("entityCursor?: string")
+                .contains("nextEntityCursor: string | null")
+                .contains("AggregateMetric")
                 .doesNotContain("password:");
+        String actualTransport = Files.readString(backend.resolve("../frontend/lib/api.ts"));
+        assertThat(actualTransport).contains("openapi-fetch", "createClient<paths>", "m-ranked-v1-client");
 
         Map<String, Object> document;
         try (Reader reader = Files.newBufferedReader(contract)) {
@@ -210,7 +230,7 @@ class OpenApiContractTest {
                 Map<String, Object> operation = (Map<String, Object>) operationValue;
                 Object operationId = operation.get("operationId");
                 if (operationId != null) {
-                    assertThat(generatedClient).contains(operationId + "(");
+                    assertThat(generatedClient).contains(operationId + ":");
                 }
             }
         }

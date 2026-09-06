@@ -1,0 +1,25 @@
+{
+  "database": "operational_guards_4c1bb9ffbe56_it",
+  "durationSeconds": 12.8613,
+  "errors": 0,
+  "exitCode": 0,
+  "failures": 0,
+  "fileSha256": {
+    "operations/scripts/cutover-preflight.sh": "53838b29fef6dba4b705c6e10cd0ef976e99bc7446f7fc1ab6e7f43f96ea25e6",
+    "operations/scripts/projection-publisher.sh": "a6ab60f09768caa20a2c759b6d9f2d2a7030f26d558f6efb3cfe1ffbbb125042",
+    "operations/scripts/restore-verify.sh": "f7a3ce891c5e769dc8e9231b4682b7563e7ccbdcb21efaa75aeb0f0ace6cf191",
+    "operations/scripts/writer-cutover.sh": "386c327716bde4956e4b013c51fe4c647f75144d7207b3d741291529e6f4cb50",
+    "tests/test_operational_flyway_gates.py": "5f43e858679110bb32f1e2b6950881a51a41235fdc4b184395ff657c7607c985",
+    "tests/test_operational_projection_guards.py": "d7e40ff6d725aa192be344f6a13a423cfe46a1436d4d634a019eac2c9e2b8ccb",
+    "tests/test_projection_release_gate.py": "d11f8e45d2c770feb58ae8b77a764e2ab152da577812e041f25df04bcc851d11"
+  },
+  "ownedDatabaseRemoved": true,
+  "productionAcceptance": false,
+  "schemaChanges": false,
+  "scope": "disposable-local-operational-projection-guards",
+  "serverVersionNum": "180006",
+  "skipped": 0,
+  "sourceDatabaseAccess": false,
+  "status": "pass",
+  "tests": 131
+}

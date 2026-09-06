@@ -92,6 +92,11 @@ class TelegramEmojiHttpGatewayTest {
     void rejectsNonAllowlistedAssetsNonSuccessesAndBodiesOverTwoMegabytes() {
         for (String target : List.of(
                 "http://t.me/a.webp",
+                "https://t.me:444/a.webp",
+                "https://secret@t.me/a.webp",
+                "https://t.me/a.webp#fragment",
+                "https://t.me./a.webp",
+                "https://127.0.0.1/a.webp",
                 "https://telegram.org/a.webp",
                 "https://telesco.pe/a.webp",
                 "https://nottelegram.org/a.webp",

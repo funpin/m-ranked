@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { loadAccountPublications } from "@/lib/detail-data";
 import { AccountDetail } from "@/components/account-detail";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -20,7 +21,7 @@ export async function generateMetadata({ params }: PlatformAccountPageProps): Pr
     const account = await api.account(legacyId, "platform_accounts");
     const name = account.title || account.username || account.institutionShortName || account.institutionName;
     const title = `${name}: ${account.platform.toUpperCase()}`;
-    const description = `Аккаунт ${account.institutionName} из согласованной проекции Spring API.`;
+    const description = `Публикации и статистика аккаунта ${name}.`;
     return {
       title,
       description,
@@ -46,7 +47,7 @@ export default async function PlatformAccountPage({ params, searchParams }: Plat
     if (error instanceof ApiError && error.status === 404) notFound();
     return (
       <>
-        <PageHeader title={`Аккаунт №${legacyId}`} description="Не удалось получить карточку аккаунта из Spring API." />
+        <PageHeader title={`Аккаунт №${legacyId}`} description="Не удалось загрузить карточку аккаунта." />
         <ApiFailureState retryHref={`/platform-accounts/${legacyId}`} />
       </>
     );
@@ -58,5 +59,11 @@ export default async function PlatformAccountPage({ params, searchParams }: Plat
   const platformDecision = legacyPlatformDecision(query.platform, account.platform, true);
   if (platformDecision === "not_found") notFound();
   if (platformDecision === "redirect") redirect(`/platform-accounts/${legacyId}`);
-  return <AccountDetail account={account} />;
+  let posts;
+  try {
+    posts = await loadAccountPublications(legacyId, "platform_accounts");
+    if (posts.datasetRevision !== account.datasetRevision) throw new Error("Revision changed");
+
+  } catch { return <ApiFailureState retryHref={`/platform-accounts/${legacyId}`} />; }
+  return <AccountDetail account={account} posts={posts.items} />;
 }

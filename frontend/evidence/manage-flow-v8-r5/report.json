@@ -1,0 +1,151 @@
+{
+  "generatedAt": "2026-09-05T07:42:06.360Z",
+  "runId": "32f8b9e8-4e01-40a6-ad44-7db1e1f2bdc5",
+  "origin": "http://127.0.0.1:18104",
+  "runtime": {
+    "path": "/private/tmp/mranked-admin-forms-v8-runtime.json",
+    "database": "admin_review_forms_v8_it",
+    "apiBaseUrl": "http://127.0.0.1:57685",
+    "pid": 66472
+  },
+  "scope": "Actual browser forms against a dedicated disposable database; each successful mutation is verified through the real generated catalog API. Frozen visual/performance database is not used.",
+  "institutionId": 3,
+  "checks": [
+    {
+      "name": "anonymous challenge and no-store",
+      "passed": true
+    },
+    {
+      "name": "viewer/editor/admin server capabilities",
+      "passed": true
+    },
+    {
+      "name": "CSRF cookie and HTML tokens remain stable across authenticated reloads",
+      "passed": true
+    },
+    {
+      "name": "editor creates institution through HTML form",
+      "passed": true
+    },
+    {
+      "name": "editor renames institution with optimistic version",
+      "passed": true
+    },
+    {
+      "name": "matrix creates all four platforms without dropping selections",
+      "passed": true
+    },
+    {
+      "name": "existing matrix updates retain account identities",
+      "passed": true
+    },
+    {
+      "name": "MAX native ID disclosure submits and persists",
+      "passed": true
+    },
+    {
+      "name": "disable preserves account and stale browser receives 409",
+      "passed": true
+    },
+    {
+      "name": "enable restores collection through browser form",
+      "passed": true
+    },
+    {
+      "name": "invalid CSRF is rejected before mutation",
+      "passed": true
+    },
+    {
+      "name": "delete cancellation sends no mutation",
+      "passed": true
+    },
+    {
+      "name": "administrator confirms deletion and API removes account",
+      "passed": true
+    },
+    {
+      "name": "offline MRating failure remains explicit in UI",
+      "passed": true
+    }
+  ],
+  "submissions": [
+    {
+      "action": "/manage/institutions",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/institutions/3",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/institutions/3/accounts",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/institutions/3/accounts",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/platform-accounts/7/native-id",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/platform-accounts/6/disable",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/platform-accounts/6/disable",
+      "status": 409,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/platform-accounts/6/enable",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/platform-accounts/6/disable",
+      "status": 403,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/platform-accounts/6/delete",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    },
+    {
+      "action": "/manage/m-rating/update",
+      "status": 303,
+      "origin": "http://127.0.0.1:18104",
+      "host": "127.0.0.1:18104",
+      "fetchSite": "same-origin"
+    }
+  ],
+  "gate": "PASS"
+}

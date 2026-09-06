@@ -1,66 +1,9 @@
 import Link from "next/link";
-import { AggregateMetrics, DataProvenance, InfoNotice, PageHeader, StatusPill } from "./ui";
-import { PERIOD_LABELS, PLATFORM_LONG_LABELS } from "@/lib/format";
-import { queryHref } from "@/lib/params";
-import type { InstitutionView } from "@/lib/types";
-
-export function InstitutionDetail({
-  institution,
-  channelCompatibility = false,
-}: {
-  institution: InstitutionView;
-  channelCompatibility?: boolean;
-}) {
-  const name = institution.shortName || institution.canonicalName;
-  return (
-    <>
-      <nav className="breadcrumbs" aria-label="Хлебные крошки">
-        <Link href="/">Обзор</Link><span aria-hidden="true">/</span><span>{name}</span>
-      </nav>
-      <PageHeader
-        eyebrow={channelCompatibility ? "Совместимый маршрут Telegram" : "Карточка вуза"}
-        title={name}
-        description={`${institution.canonicalName} · ${PLATFORM_LONG_LABELS[institution.platform]} · ${PERIOD_LABELS[institution.period]}`}
-        meta={<StatusPill tone="blue">ID {institution.legacyId}</StatusPill>}
-      />
-      {channelCompatibility ? (
-        <InfoNotice>
-          Маршрут `/channels/{institution.legacyId}` сохранён. Текущий API публикует агрегат по вузу,
-          поэтому здесь показана Telegram-проекция без выдуманного списка аккаунтов или публикаций.
-        </InfoNotice>
-      ) : null}
-      <section className="panel detail-panel">
-        <div className="section-head">
-          <div><p className="eyebrow">Активность</p><h2>Показатели за период</h2></div>
-          <StatusPill tone="green">данные API</StatusPill>
-        </div>
-        <AggregateMetrics metrics={institution.metrics} />
-        <DataProvenance
-          quality={institution.metrics.quality}
-          sampleSize={institution.metrics.sampleSize}
-          coverage={institution.metrics.coverage}
-          asOf={institution.asOf}
-          revision={institution.datasetRevision}
-        />
-      </section>
-      <section className="panel section">
-        <div className="section-head"><div><p className="eyebrow">Детализация</p><h2>Аккаунты и публикации</h2></div></div>
-        <div className="embedded-empty">
-          <p>Spring API пока не отдаёт account/publication list для этой карточки.</p>
-          <p className="muted">Раздел появится после отдельного bounded endpoint; прямого чтения БД во frontend нет.</p>
-        </div>
-      </section>
-      <div className="page-actions">
-        <Link className="button-link" href={queryHref("/compare", {
-          submitted: "true",
-          institutions: institution.legacyId,
-          platform: institution.platform,
-        })}>Добавить к сравнению</Link>
-        <Link className="button-link secondary-button" href={queryHref("/", {
-          platform: institution.platform,
-          period: institution.period,
-        })}>Вернуться к обзору</Link>
-      </div>
-    </>
-  );
+import { legacyDate, legacyNumber, PLATFORM_LABELS, PLATFORM_LONG_LABELS, publicationLabel } from "@/lib/format";
+import type { AccountView, InstitutionView, PublicationListItem } from "@/lib/types";
+export function InstitutionDetail({institution,accounts,posts}:{institution:InstitutionView;accounts:AccountView[];posts:(PublicationListItem & {account:AccountView})[]}) {
+  const telegram=institution.platform === "telegram";
+  return <><span data-active-platform={institution.platform} hidden /><p><Link href={`/?platform=${institution.platform}`}>← К обзору</Link></p><h1>{institution.shortName || institution.canonicalName}</h1><p className="lead">{institution.canonicalName}{institution.platform !== "all" ? ` · ${PLATFORM_LONG_LABELS[institution.platform]}` : ""}</p>
+  <section className="grid institution-accounts">{accounts.map((account) => <article className="card platform-overview-card" key={account.accountId}><span className={`platform-chip platform-${account.platform}`}>{PLATFORM_LABELS[account.platform]}</span><h2 className="mt">{account.title || account.username || account.canonicalExternalId}</h2><div className="muted">{telegram && account.username ? `@${account.username} · ` : ""}{legacyNumber(account.stats?.subscriberCount ?? null)} подписчиков</div><div className="overview-footer"><div className={account.stats?.lastError ? "bad" : account.stats?.lastCheckedAt ? "ok" : "muted"}>{account.stats?.lastError || (account.stats?.lastCheckedAt ? "Источник опрашивается" : "Ожидает первого опроса")}</div><p><Link href={telegram && account.channelLegacyId ? `/channels/${account.channelLegacyId}` : `/platform-accounts/${account.platformAccountLegacyId ?? account.legacyId}`}>Открыть публикации</Link>{account.url?.startsWith("https://") ? <> · <a className="external" href={account.url} target="_blank" rel="noopener noreferrer">Официальный аккаунт</a></> : null}</p></div></article>)}{!accounts.length ? <div className="panel">{telegram ? "Telegram-каналы вуза не добавлены." : "Для выбранной площадки официальный аккаунт не добавлен."}</div> : null}</section>
+  <section className="panel section institution-publications"><div className="section-head"><h2>Последние публикации</h2><span className="period-badge">{posts.length}</span></div>{posts.length ? <div className="table-wrap"><table><thead><tr><th>{telegram ? "Канал" : "Площадка"}</th><th>Опубликовано</th><th>Публикация</th><th>{telegram ? "Реакции" : "Просмотры"}</th><th>{telegram ? "Просмотры" : "Реакции"}</th><th>Комментарии</th>{!telegram ? <th>Репосты</th> : null}</tr></thead><tbody>{posts.map((post) => <tr key={post.publicationId}><td>{telegram ? <Link href={`/channels/${post.account.channelLegacyId}`}>{post.account.title || `@${post.account.username}`}</Link> : <span className={`platform-chip platform-${post.account.platform}`}>{post.account.platform.toUpperCase()}</span>}</td><td>{legacyDate(post.publishedAt,true)}</td><td>{post.legacyRoute ? <Link href={post.legacyRoute}>{publicationLabel(post.displayExternalId ?? post.externalId,post.account.platform)}</Link> : publicationLabel(post.displayExternalId ?? post.externalId,post.account.platform)}{!telegram && post.publicUrl?.startsWith("https://") ? <> · <a className="external" href={post.publicUrl} target="_blank" rel="noopener noreferrer">оригинал</a></> : null}{post.deletedAt ? <> · <span className="pill deleted">удалена</span></> : null}{post.repost ? <> · <span className="pill repost">репост</span></> : null}{post.joint ? <> · <span className="pill coauthor">+{post.additionalAuthorCount} авт.</span></> : null}</td><td>{legacyNumber(telegram ? post.reactions.value : post.views.value)}</td><td>{legacyNumber(telegram ? post.views.value : post.reactions.value)}</td><td>{legacyNumber(post.comments.value)}</td>{!telegram ? <td>{legacyNumber(post.shares.value)}</td> : null}</tr>)}</tbody></table></div> : <div className="empty-state">Публикации ещё не собраны.</div>}</section></>;
 }

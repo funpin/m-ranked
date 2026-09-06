@@ -32,8 +32,11 @@ from .normalize import (
     parse_json,
     sanitize_evidence,
 )
-from .source import LEGACY_TABLES, LegacySource
+from .source import LEGACY_TABLES, LegacySource, sha256_file
 from .target import PostgresTarget
+from .reconciliation import independent_checks
+from .export_lexemes import ensure_export_lexemes, preserve_export_lexemes
+from .admin_presentation import ensure_admin_presentation
 from migration.reverse_sync_format import (
     parse_reverse_publication_envelope,
     parse_reverse_snapshot_envelope,
@@ -62,6 +65,16 @@ def _source_pk(table: str, row: Mapping[str, Any]) -> str:
 def _https_or_none(value: Any) -> str | None:
     text = str(value or "").strip()
     return text if text.startswith("https://") else None
+
+
+def _catalog_url_or_none(value: Any) -> str | None:
+    from urllib.parse import urlsplit
+    text = str(value or "").strip()
+    try:
+        parsed = urlsplit(text)
+        return text if parsed.scheme in {"http", "https"} and parsed.hostname and parsed.username is None and parsed.password is None else None
+    except ValueError:
+        return None
 
 
 def _safe_error(value: Any) -> dict[str, Any]:
@@ -117,6 +130,8 @@ class BridgeService:
         self.target = target
         self.snapshot_kind = snapshot_kind
         self.inventory = source.inventory()
+        from migration.release_manifest import release_identity
+        self.release_identity = release_identity()
         self.source_namespace_uuid = stable_uuid(
             "m-ranked-bridge",
             "source_namespace",
@@ -194,6 +209,10 @@ class BridgeService:
         if previous_status == "succeeded" and self.target.namespace_is_current(
             self.source_namespace_uuid, self.batch_id
         ):
+            ensure_admin_presentation(self)
+            if ensure_export_lexemes(self):
+                with self.target.transaction():
+                    self.target.rebuild_core_projections(self.target.latest_batch_revision(self.batch_id))
             reconciliation = self.reconcile()
             self.stats.rows_read = sum(table.row_count for table in self.inventory.tables)
             self.stats.rows_by_stream = {
@@ -224,11 +243,13 @@ class BridgeService:
                     self._import_snapshot_stream(stream)
                 else:
                     self._import_stream(stream, handlers[stream])
+            ensure_export_lexemes(self)
+            ensure_admin_presentation(self)
             with self.target.transaction():
                 self._finish_collection_runs("succeeded")
                 revision = self.target.latest_batch_revision(self.batch_id)
                 if revision is None:
-                    revision = self.target.record_revision(
+                    revision = self._record_revision(
                         self.batch_id,
                         None,
                         "import_completion",
@@ -285,9 +306,10 @@ class BridgeService:
             with self.target.transaction():
                 for row in rows:
                     writes += handler(row)
+                    writes += preserve_export_lexemes(self.target, self.source_namespace_uuid, stream, row)
                     last_rowid = int(row["__source_rowid"])
                 processed += len(rows)
-                self.target.record_revision(
+                self._record_revision(
                     self.batch_id,
                     None,
                     stream,
@@ -355,10 +377,11 @@ class BridgeService:
                         published_at,
                         run_id,
                     )
+                    writes += preserve_export_lexemes(self.target, self.source_namespace_uuid, stream, row)
                     last_rowid = int(row["__source_rowid"])
                 processed += len(rows)
                 source_run = next(iter(used_runs)) if len(used_runs) == 1 else None
-                self.target.record_revision(
+                self._record_revision(
                     self.batch_id,
                     source_run,
                     stream,
@@ -384,6 +407,11 @@ class BridgeService:
                 completed=True,
             )
         self.stats.rows_by_stream[stream] = processed
+
+    def _record_revision(self, *args):
+        if self.snapshot_kind == "fixture":
+            return self.target.record_revision(*args, committed_at=self.source_snapshot_at)
+        return self.target.record_revision(*args)
 
     @staticmethod
     def _affected_tags(stream: str) -> list[str]:
@@ -432,9 +460,9 @@ class BridgeService:
             self.target.execute(
                 """UPDATE ingest.collection_run
                       SET status=%s::ingest.run_status,
-                          completed_at=GREATEST(started_at, transaction_timestamp())
+                          completed_at=GREATEST(started_at, COALESCE(%s,transaction_timestamp()))
                     WHERE id=%s AND status<>'succeeded'""",
-                (status, run_id),
+                (status, self.source_snapshot_at if self.snapshot_kind == "fixture" else None, run_id),
             )
 
     def _institution_uuid(self, legacy_id: int) -> UUID:
@@ -534,7 +562,7 @@ class BridgeService:
         ) or evidence_id
         writes = 1
         known = (
-            key in {"last_poll", "next_poll"}
+            key in {"last_poll", "next_poll", "m_rating_last_period", "m_rating_last_updated", "m_rating_last_error"}
             or key.startswith("poll_last_")
             or any(key.startswith(f"{platform}_poll_last_") for platform in self.runs)
             or key.startswith("telegram_web_last_")
@@ -574,7 +602,10 @@ class BridgeService:
                     scope_type,
                     scope_id,
                     platform,
-                    json.dumps(parse_json(row["value"], fallback=None), default=str),
+                    json.dumps(
+                        _safe_error(row["value"]) if key.endswith("_error") else
+                        row["value"] if key in {"last_poll", "next_poll", "m_rating_last_period", "m_rating_last_updated"} or key.endswith(("_at", "_seconds", "_count")) else
+                        sanitize_evidence(parse_json(row["value"], fallback=None)), default=str),
                     self.source_snapshot_at,
                     self.batch_id,
                 ),
@@ -680,6 +711,13 @@ class BridgeService:
                     fetched_at,
                 ),
             )
+            persisted_rating = self.target.fetchone(
+                "SELECT id FROM rating.official_rating_observation WHERE institution_id=%s AND category=%s AND period=%s AND source_hash=%s",
+                (target_id, category, period, rating_digest),
+            )
+            if persisted_rating is None:
+                raise RuntimeError("official rating observation was not persisted")
+            rating_id = persisted_rating[0]
             self.target.record_mapping(
                 source_namespace=self.source_namespace_uuid,
                 source_table="institutions",
@@ -715,7 +753,7 @@ class BridgeService:
         run_id: UUID,
         native_id: Any,
     ) -> int:
-        safe_url = _https_or_none(url)
+        safe_url = _catalog_url_or_none(url)
         self.target.execute(
             """INSERT INTO catalog.platform_account(
                    id, institution_id, platform, canonical_external_id,
@@ -725,7 +763,6 @@ class BridgeService:
                          %s::catalog.access_mode,%s,%s,%s)
                ON CONFLICT (id) DO UPDATE SET
                    institution_id=excluded.institution_id,
-                   canonical_external_id=excluded.canonical_external_id,
                    current_username=excluded.current_username,
                    current_title=excluded.current_title,
                    current_url=excluded.current_url,
@@ -747,37 +784,58 @@ class BridgeService:
                 self.source_snapshot_at,
             ),
         )
-        self.target.execute(
-            """INSERT INTO catalog.account_identity_history(
-                   platform_account_id, username, title, url, valid_from, source_run_id
-               ) VALUES (%s,%s,%s,%s,%s,%s)
-               ON CONFLICT (platform_account_id) WHERE valid_to IS NULL
-               DO UPDATE SET username=excluded.username, title=excluded.title,
-                   url=excluded.url, source_run_id=excluded.source_run_id""",
-            (target_id, username, title, safe_url, created_at, run_id),
-        )
+        previous = self.target.fetchone(
+            """SELECT username,title,url,valid_from FROM catalog.account_identity_history
+               WHERE platform_account_id=%s AND valid_to IS NULL FOR UPDATE""", (target_id,))
+        if previous is None or tuple(previous[:3]) != (username, title, safe_url):
+            from datetime import timedelta
+            transition = max(self.source_snapshot_at, previous[3] + timedelta(microseconds=1)) if previous else created_at
+            self.target.execute(
+                """UPDATE catalog.account_identity_history SET valid_to=%s
+                   WHERE platform_account_id=%s AND valid_to IS NULL""", (transition, target_id))
+            self.target.execute(
+                """INSERT INTO catalog.account_identity_history(
+                   platform_account_id,username,title,url,valid_from,source_run_id)
+                   VALUES(%s,%s,%s,%s,%s,%s)""", (target_id,username,title,safe_url,transition,run_id))
         writes = 2
         if native_id is not None and str(native_id).strip():
-            self.target.execute(
-                """INSERT INTO catalog.account_external_identity(
-                       platform_account_id, identity_namespace, external_id,
-                       valid_from, verified_at, source_run_id
-                   ) VALUES (%s,%s,%s,%s,%s,%s)
-                   ON CONFLICT (platform_account_id, identity_namespace)
-                       WHERE valid_to IS NULL
-                   DO UPDATE SET external_id=excluded.external_id,
-                       verified_at=excluded.verified_at,
-                       source_run_id=excluded.source_run_id""",
-                (
-                    target_id,
-                    f"{platform}:native_id",
-                    str(native_id),
-                    created_at,
-                    self.source_snapshot_at,
-                    run_id,
-                ),
-            )
+            previous_native = self.target.fetchone(
+                """SELECT external_id,valid_from FROM catalog.account_external_identity
+                   WHERE platform_account_id=%s AND identity_namespace=%s AND valid_to IS NULL FOR UPDATE""",
+                (target_id,f"{platform}:native_id"))
+            if previous_native is None or previous_native[0] != str(native_id):
+                from datetime import timedelta
+                if previous_native:
+                    transition = max(self.source_snapshot_at, previous_native[1] + timedelta(microseconds=1))
+                else:
+                    closed = self.target.fetchone(
+                        """SELECT max(valid_to) FROM catalog.account_external_identity
+                           WHERE platform_account_id=%s AND identity_namespace=%s""",
+                        (target_id, f"{platform}:native_id"))
+                    transition = max(self.source_snapshot_at, closed[0] + timedelta(microseconds=1)) if closed and closed[0] else created_at
+                self.target.execute(
+                    """UPDATE catalog.account_external_identity SET valid_to=%s
+                       WHERE platform_account_id=%s AND identity_namespace=%s AND valid_to IS NULL""",
+                    (transition,target_id,f"{platform}:native_id"))
+                self.target.execute(
+                    """INSERT INTO catalog.account_external_identity(
+                       platform_account_id,identity_namespace,external_id,valid_from,verified_at,source_run_id)
+                       VALUES(%s,%s,%s,%s,%s,%s)""",
+                    (target_id,f"{platform}:native_id",str(native_id),transition,max(transition,self.source_snapshot_at),run_id))
             writes += 1
+        else:
+            previous_native = self.target.fetchone(
+                """SELECT valid_from FROM catalog.account_external_identity
+                   WHERE platform_account_id=%s AND identity_namespace=%s AND valid_to IS NULL FOR UPDATE""",
+                (target_id, f"{platform}:native_id"))
+            if previous_native is not None:
+                from datetime import timedelta
+                transition = max(self.source_snapshot_at, previous_native[0] + timedelta(microseconds=1))
+                self.target.execute(
+                    """UPDATE catalog.account_external_identity SET valid_to=%s
+                       WHERE platform_account_id=%s AND identity_namespace=%s AND valid_to IS NULL""",
+                    (transition, target_id, f"{platform}:native_id"))
+                writes += 1
         return writes
 
     def _insert_account_snapshot(
@@ -800,18 +858,20 @@ class BridgeService:
             f"{source_table}:{digest}:subscriber".encode("utf-8")
         ).hexdigest()
         existing = self.target.fetchone(
-            """SELECT id FROM ingest.account_metric_snapshot
+            """SELECT id,collected_at FROM ingest.account_metric_snapshot
                 WHERE platform_account_id=%s AND observed_at=%s
                   AND source_fingerprint=%s""",
             (account_id, observed_at, fingerprint),
         )
+        if existing:
+            collected_at = existing[1]
         snapshot_id = (
             int(existing[0])
             if existing
             else stable_bigint(
                 self.options.source_namespace,
                 "account_metric_snapshot",
-                {"source_table": source_table, "source_pk": _source_pk(source_table, row)},
+                {"source_table": source_table, "source_pk": _source_pk(source_table, row), "fingerprint": fingerprint},
             )
         )
         self.target.execute(
@@ -820,17 +880,7 @@ class BridgeService:
                    subscriber_count, subscriber_display, quality, source_fingerprint,
                    created_at
                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s::ingest.observation_quality,%s,%s)
-               ON CONFLICT (id) DO UPDATE SET
-                   collection_run_id=excluded.collection_run_id,
-                   observed_at=excluded.observed_at,
-                   collected_at=excluded.collected_at,
-                   subscriber_count=excluded.subscriber_count,
-                   subscriber_display=excluded.subscriber_display,
-                   quality=excluded.quality,
-                   source_fingerprint=excluded.source_fingerprint,
-                   created_at=excluded.created_at
-               WHERE ingest.account_metric_snapshot.platform_account_id=
-                     excluded.platform_account_id""",
+               ON CONFLICT (id) DO NOTHING""",
             (
                 snapshot_id,
                 account_id,
@@ -906,6 +956,7 @@ class BridgeService:
         institution_id = self._institution_uuid(int(row["institution_id"]))
         created_at = as_utc(row.get("added_at"), fallback=self.source_snapshot_at)
         canonical = str(row.get("native_id") or row.get("external_key") or f"legacy:{legacy_id}")
+        channel = self.channels_by_account.get(legacy_id) if platform == "telegram" else None
         writes = self._upsert_account(
             target_id=target_id,
             institution_id=institution_id,
@@ -914,11 +965,14 @@ class BridgeService:
             username=row.get("username"),
             title=row.get("title"),
             url=row.get("url"),
-            raw_access_mode=row.get("access_mode"),
+            raw_access_mode=("mtproto" if channel.get("telegram_id") else "public_web") if channel is not None else row.get("access_mode"),
             enabled=row.get("enabled"),
             created_at=created_at,
             run_id=self.runs[platform],
-            native_id=row.get("native_id"),
+            # The dedicated Telegram channel is authoritative when the generic
+            # platform row is only its mirror; do not close/reopen its native
+            # identity merely because that mirror has no native_id value.
+            native_id=channel.get("telegram_id") if channel is not None else row.get("native_id"),
         )
         self.target.record_alias(
             "platform_accounts",
@@ -1056,7 +1110,7 @@ class BridgeService:
             rating_id = stable_uuid(
                 self.options.source_namespace,
                 "official_rating_observation",
-                {"source_table": "channels", "legacy_id": legacy_id},
+                {"source_table": "channels", "legacy_id": legacy_id, "hash": rating_digest},
             )
             self.target.execute(
                 """INSERT INTO rating.official_rating_observation(
@@ -1078,6 +1132,13 @@ class BridgeService:
                     ),
                 ),
             )
+            persisted_rating = self.target.fetchone(
+                "SELECT id FROM rating.official_rating_observation WHERE institution_id=%s AND category='telegram' AND period=%s AND source_hash=%s",
+                (institution_id, period, rating_digest),
+            )
+            if persisted_rating is None:
+                raise RuntimeError("official rating observation was not persisted")
+            rating_id = persisted_rating[0]
             self.target.record_mapping(
                 source_namespace=self.source_namespace_uuid,
                 source_table="channels",
@@ -1625,7 +1686,7 @@ class BridgeService:
             snapshot_id = stable_bigint(
                 self.options.source_namespace,
                 "publication_metric_snapshot",
-                {"source_table": stream, "source_pk": source_pk},
+                {"source_table": stream, "source_pk": source_pk, "fingerprint": digest},
             )
             fingerprint = hashlib.sha256(
                 f"{stream}:{source_pk}:{digest}".encode("utf-8")
@@ -1637,31 +1698,29 @@ class BridgeService:
         if reverse_envelope is None:
             created_at = as_utc(row.get("created_at"), fallback=self.source_snapshot_at)
             collected_at = max(observed_at, created_at)
+        existing = self.target.fetchone(
+            """SELECT id,collected_at FROM ingest.publication_metric_snapshot
+               WHERE published_month=%s AND publication_id=%s AND sampling_bucket=%s AND source_fingerprint=%s""",
+            (month, publication_id, int(row["measurement_bucket"]), fingerprint),
+        )
+        if existing is not None:
+            collected_at = existing[1]
+        metric_quality = (reverse_envelope.metric_quality if reverse_envelope else None) or {
+            metric:quality for metric in ("views","reactions","comments","shares")}
+        metric_evidence = reverse_envelope.metric_evidence if reverse_envelope else {}
         self.target.execute(
             """INSERT INTO ingest.publication_metric_snapshot(
                    published_month, id, publication_id, collection_run_id,
                    observed_at, collected_at, age_seconds, sampling_bucket, views_count,
                    reactions_count, comments_count, shares_count, quality,
                    interval_uncertain, synthetic, metric_semantics_version,
-                   capability_version, source_fingerprint, created_at
+                   capability_version, source_fingerprint, created_at,
+                   views_quality,reactions_quality,comments_quality,shares_quality,metric_evidence
                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                         %s::ingest.observation_quality,%s,%s,%s,%s,%s,%s)
-               ON CONFLICT (published_month, publication_id, sampling_bucket)
-               DO UPDATE SET
-                   observed_at=excluded.observed_at,
-                   collected_at=excluded.collected_at,
-                   age_seconds=excluded.age_seconds,
-                   views_count=excluded.views_count,
-                   reactions_count=excluded.reactions_count,
-                   comments_count=excluded.comments_count,
-                   shares_count=excluded.shares_count,
-                   interval_uncertain=excluded.interval_uncertain,
-                   synthetic=excluded.synthetic,
-                   quality=excluded.quality,
-                   metric_semantics_version=excluded.metric_semantics_version,
-                   capability_version=excluded.capability_version,
-                   source_fingerprint=excluded.source_fingerprint
-               WHERE ingest.publication_metric_snapshot.id=excluded.id""",
+                         %s::ingest.observation_quality,%s,%s,%s,%s,%s,%s,
+                         %s::ingest.observation_quality,%s::ingest.observation_quality,
+                         %s::ingest.observation_quality,%s::ingest.observation_quality,%s::jsonb)
+               ON CONFLICT (published_month, id) DO NOTHING""",
             (
                 month,
                 snapshot_id,
@@ -1682,20 +1741,31 @@ class BridgeService:
                 capability_version,
                 fingerprint,
                 created_at,
+                *(metric_quality[metric] for metric in ("views","reactions","comments","shares")),
+                canonical_json(metric_evidence),
             ),
         )
+        persisted = self.target.fetchone(
+            """SELECT id FROM ingest.publication_metric_snapshot
+               WHERE published_month=%s AND publication_id=%s
+                 AND sampling_bucket=%s AND source_fingerprint=%s""",
+            (month, publication_id, int(row["measurement_bucket"]), fingerprint),
+        )
+        if persisted is None:
+            raise RuntimeError("immutable snapshot was not persisted")
+        snapshot_id = int(persisted[0])
         writes = 1
         if stream == "reaction_snapshots":
             breakdown = parse_json(row.get("reactions_json"), fallback={})
             if not isinstance(breakdown, Mapping):
                 raise RuntimeError(f"reaction breakdown is not an object for snapshot {source_pk}")
-            for reaction_key, count in breakdown.items():
+            for reaction_key, count in breakdown.items() if existing is None else ():
                 self.target.execute(
                     """INSERT INTO ingest.reaction_breakdown(
                            snapshot_published_month, snapshot_id, reaction_key, reaction_count
                        ) VALUES (%s,%s,%s,%s)
                        ON CONFLICT (snapshot_published_month, snapshot_id, reaction_key)
-                       DO UPDATE SET reaction_count=excluded.reaction_count""",
+                       DO NOTHING""",
                     (month, snapshot_id, str(reaction_key), int(count)),
                 )
                 writes += 1
@@ -1740,6 +1810,19 @@ class BridgeService:
                 evidence=_safe_raw(row.get("raw_json")),
             )
             writes += 1
+        if stream == "platform_snapshots":
+            raw = parse_json(row.get("raw_json"), fallback={})
+            breakdown = raw.get("reaction_breakdown", {}) if isinstance(raw, Mapping) else {}
+            if breakdown is not None and not isinstance(breakdown, Mapping):
+                raise RuntimeError("generic reaction breakdown is not an object")
+            for reaction_key, count in (breakdown or {}).items() if existing is None else ():
+                self.target.execute(
+                    """INSERT INTO ingest.reaction_breakdown(
+                       snapshot_published_month,snapshot_id,reaction_key,reaction_count)
+                       VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                    (month, snapshot_id, str(reaction_key), int(count)),
+                )
+                writes += 1
         self.target.record_mapping(
             source_namespace=self.source_namespace_uuid,
             source_table=stream,
@@ -1758,6 +1841,13 @@ class BridgeService:
         return writes + 1
 
     def reconcile(self) -> dict[str, Any]:
+        idle = self.target.connection.info.transaction_status.name == "IDLE"
+        with self.target.transaction():
+            if idle:
+                self.target.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            return self._reconcile_snapshot()
+
+    def _reconcile_snapshot(self) -> dict[str, Any]:
         mismatches: list[dict[str, Any]] = []
         checks: list[dict[str, Any]] = []
 
@@ -1798,6 +1888,9 @@ class BridgeService:
                 actual=actual,
                 details=details,
             )
+
+        add_check("source_artifact_unchanged", "sqlite_sha256", self.inventory.source_sha256,
+                  sha256_file(self.source.path), source_table=None, target_table=None)
 
         for table in self.inventory.tables:
             actual = self.target.mapped_count(
@@ -1849,9 +1942,19 @@ class BridgeService:
                 },
             )
 
+        self.target.execute(
+            """INSERT INTO migration.source_disappearance(
+                 source_namespace,source_table,source_pk,target_type,source_row_hash,first_missing_batch_id)
+               SELECT source_namespace,source_table,source_pk,target_type,source_row_hash,%s
+               FROM migration.legacy_identity_map
+               WHERE source_namespace=%s AND last_seen_batch_id<>%s
+               ON CONFLICT DO NOTHING""",
+            (self.batch_id, self.source_namespace_uuid, self.batch_id),
+        )
+        from .reconciliation import PRESERVED_MAPPING
         stale = self.target.fetchone(
-            """SELECT COUNT(*) FROM migration.legacy_identity_map
-                WHERE source_namespace=%s AND last_seen_batch_id<>%s""",
+            """SELECT COUNT(*) FROM migration.legacy_identity_map m
+                WHERE source_namespace=%s AND last_seen_batch_id<>%s AND NOT ("""+PRESERVED_MAPPING+")",
             (self.source_namespace_uuid, self.batch_id),
         )
         stale_count = int(stale[0]) if stale else 0
@@ -1862,7 +1965,7 @@ class BridgeService:
             stale_count,
             source_table=None,
             target_table="migration.legacy_identity_map",
-            details={"policy": "never delete automatically; operator must explain hard delete"},
+            details={"policy": "never delete automatically; preserved history requires verified prior source facts and owner decision"},
         )
 
         integrity = self.target.integrity_summary(
@@ -2023,10 +2126,62 @@ class BridgeService:
             target_table="rating.official_rating_observation",
         )
 
+        for name, result in independent_checks(self):
+            add_check(
+                "canonical_target_digest", name, result["expected"], result["actual"],
+                source_table=name, target_table="canonical PostgreSQL tables",
+                details={"changed_keys_sample": result["changedKeysSample"],
+                         "serialization": "canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct"},
+            )
+        identity_history_verification = None
+        if self.snapshot_kind == "s_final" or self.options.verify_identity_history:
+            from .identity_history_reconciliation import verify_identity_history, IdentityHistorySourceError
+            try:
+                identity_history_verification = verify_identity_history(self,
+                    historical_source_paths=self.options.historical_source_paths)
+            except IdentityHistorySourceError as error:
+                identity_history_verification = {"status":"fail","errorCode":str(error)}
+            except Exception as error:
+                identity_history_verification = {"status":"fail","errorCode":type(error).__name__}
+            add_check("canonical_identity_history", "complete_account_timelines", "pass",
+                identity_history_verification["status"],source_table="verified SQLite and original identity-input artifacts",
+                target_table="catalog.account_identity_history/account_external_identity",
+                details=identity_history_verification)
+        projection_verification = None
+        if self.snapshot_kind == "s_final" or self.options.verify_projections:
+            from .projection_reconciliation import verify_projections
+            from .projection_source import ProjectionSourceError
+            try:
+                projection_verification = verify_projections(self.source.path,self.target.connection,
+                    source_name=self.options.source_namespace,expected_sha256=self.inventory.source_sha256,
+                    first_age_limit_seconds=self.options.projection_first_age_limit_seconds,
+                    preserved_source_paths=self.options.preserved_source_paths)
+            except ProjectionSourceError as error:
+                projection_verification = {"status":"fail","errorCode":str(error)}
+            except Exception as error:
+                # A verifier failure cannot turn S_final into a partial pass.
+                # Exception types are safe report metadata; DSNs/source raw JSON are not.
+                projection_verification = {"status":"fail","errorCode":type(error).__name__}
+            add_check("derived_projection_parity", "original_legacy_endpoints", "pass",
+                projection_verification["status"],source_table="verified SQLite source artifacts",
+                target_table="published PostgreSQL projections",details=projection_verification)
+        manifest = self.target.fetchall(
+            """SELECT version,script,checksum,success FROM flyway.flyway_schema_history
+               WHERE version IS NOT NULL ORDER BY installed_rank"""
+        )
+        add_check("source_artifact_unchanged_after_scan", "sqlite_sha256", self.inventory.source_sha256,
+                  sha256_file(self.source.path), source_table=None, target_table=None)
+        revision = self.target.fetchone("SELECT max(id) FROM analytics.dataset_revision")
         critical_mismatches = len(mismatches)
         return {
             "report_version": 1,
             "report_type": "post-import-reconciliation",
+            "canonical_protocol": "v1",
+            "projection_verification": projection_verification,
+            "identity_history_verification": identity_history_verification,
+            "release_identity": self.release_identity,
+            "flyway_manifest": [dict(zip(("version", "script", "checksum", "success"), row)) for row in manifest],
+            "dataset_revision": revision[0] if revision else None,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "batch_id": str(self.batch_id),
             "source": self.inventory.as_dict(),

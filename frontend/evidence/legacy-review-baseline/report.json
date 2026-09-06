@@ -1,0 +1,146 @@
+{
+  "generatedAt": "2026-09-05T02:39:55.058Z",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "browser": "Playwright pinned Chromium",
+  "captureOnly": true,
+  "gate": "BASELINE_ONLY",
+  "results": [
+    {
+      "path": "/?platform=vk&period=1d",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "legacySha256": "18a09f6f79d86ccf3356b9692f18a64e20e14b5b858b436eb2ef24460c2ef9b9"
+    },
+    {
+      "path": "/compare?platform=vk&period=24",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "legacySha256": "d2a156bd5f6220a7f746ace5e554b332e9cf1ebc7e1ad9fd92d159a1b20afb7d"
+    },
+    {
+      "path": "/rating?platform=telegram&period=30d",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "legacySha256": "c1a6ffbb17223b5d6eb49419fa98dc7f4d7b3febf8279e04efe7ce169bb567fc"
+    },
+    {
+      "path": "/channels/1",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "legacySha256": "c0e538ed1eb009ea281033d6631b2d386951372290f457a43004ab8498633ec4"
+    },
+    {
+      "path": "/posts/1",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "legacySha256": "3887ee4007eaab8edb60302fe434dc175e666c101c074f1206194447c3788242"
+    },
+    {
+      "path": "/?platform=vk&period=1d",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "legacySha256": "a7a36815f038e6796d80f3510f5a1bc40c53ef59b0d3924b5460b73338a410d4"
+    },
+    {
+      "path": "/compare?platform=vk&period=24",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "legacySha256": "751326b89ddb7ffd922d8cf7999cae2baf871f4920de7f92a9ddf194428377a6"
+    },
+    {
+      "path": "/rating?platform=telegram&period=30d",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "legacySha256": "6f48a830972e3db175ab5ac66035bc4dae0d44033b88c4e1745642423d63fc65"
+    },
+    {
+      "path": "/channels/1",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "legacySha256": "a826ff89d4d6c8b6d58209ce48c0419f3e2d381cba7a13d4b7ec22a483981414"
+    },
+    {
+      "path": "/posts/1",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "legacySha256": "bb96cb0f3c717724aabd80750efb80c69a806e12d882df805b797feda3ede7c0"
+    }
+  ]
+}

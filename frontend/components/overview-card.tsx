@@ -1,8 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { formatDate, formatMetric, PLATFORM_LABELS } from "@/lib/format";
+import { legacyDate, legacyNumber, PERIOD_SHORT, PLATFORM_LABELS } from "@/lib/format";
 import { metricNumber, queryHref } from "@/lib/params";
-import type { OverviewItem, OverviewMetric } from "@/lib/types";
+import type { OverviewItem, OverviewMetric, OverviewPage } from "@/lib/types";
+import { overviewStatus } from "@/lib/overview-status";
+import { metricEvidence, type AggregateMetric } from "@/lib/metric-evidence";
 
 function accountName(item: OverviewItem): string {
   const account = item.accounts[0];
@@ -11,107 +13,95 @@ function accountName(item: OverviewItem): string {
   return account.title || account.canonicalExternalId;
 }
 
-function statusText(item: OverviewItem): string {
-  if (item.lastErrorCode) return item.lastErrorCode;
-  switch (item.statusCode) {
-    case "no_account":
-      return item.platform === "all"
-        ? "Официальные аккаунты пока не подтверждены"
-        : "Официальный аккаунт не добавлен";
-    case "all_accounts_disabled":
-      return "Сбор отключён";
-    case "last_poll_failed":
-      return "Последний опрос завершился с ошибкой";
-    case "awaiting_first_poll":
-      return "Опрос ещё не выполнялся";
-    case "connected":
-      return `Подключено ${item.connectedPlatformCount}/4 площадок`;
-    default:
-      return "активен";
-  }
-}
-
-function Trend({ value }: { value: OverviewMetric["totalTrend"] }) {
+function Trend({ value, suffix }: { value: OverviewMetric["totalTrend"]; suffix:string }) {
   const numeric = metricNumber(value);
   if (numeric === null || numeric === 0) return <span className="trend-slot" />;
   return (
     <span className="trend-slot">
       <em className={`trend ${numeric > 0 ? "up" : "down"}`}>
-        {numeric > 0 ? "+" : ""}{formatMetric(numeric)} к прошлому периоду
+        {numeric > 0 ? "+" : ""}{legacyNumber(numeric)} {suffix}
       </em>
     </span>
   );
 }
 
-function MetricCell({ value, label, trend }: {
+function MetricCell({ value, label, trend, evidence, suffix }: {
   value: OverviewMetric["total"];
   label: string;
   trend: OverviewMetric["totalTrend"];
+  evidence: AggregateMetric;
+  suffix:string;
 }) {
   return (
-    <span className="legacy-metric-cell">
-      <b className="metric-value">{formatMetric(value)}</b>
-      <small>{label}</small>
-      <Trend value={trend} />
+    <span className="has-tooltip" tabIndex={0} data-tooltip={metricEvidence(evidence)} title={metricEvidence(evidence)}>
+      <b className="metric">{legacyNumber(value)}</b>
+      <small>{label} ⓘ</small>
+      <Trend value={trend} suffix={suffix} />
+      <span className="sr-only">{metricEvidence(evidence)}</span>
     </span>
   );
 }
 
-function ActivityBody({ item }: { item: OverviewItem }) {
-  return (
-    <>
-      <div className="card-head legacy-card-head">
-        <div>
-          <h2>{item.shortName || item.canonicalName}</h2>
-          <p className="card-subtitle">{accountName(item)} · {formatMetric(item.subscriberCount)} подписчиков</p>
-        </div>
-        {item.ratingRank ? <span className="pill pill-blue">М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</span> : null}
-      </div>
-      <div className="publication-badges" aria-label="Публикации за период">
-        <span title="Всего публикаций в базе"><b>{formatMetric(item.totalPublicationCount)}</b><small>всего</small></span>
-        <span className="activity" title="Публикации с измеримой активностью"><b>{formatMetric(item.activityPublicationCount)}</b><small>активных</small></span>
-        <span className="new" title="Новые публикации"><b>{formatMetric(item.newPublicationCount)}</b><small>новых</small></span>
-      </div>
-      <div className="legacy-metrics-grid">
-        <MetricCell value={item.reactions.total} label="реакций за период" trend={item.reactions.totalTrend} />
-        <MetricCell value={item.views.total} label="просмотров за период" trend={item.views.totalTrend} />
-        <MetricCell value={item.reactions.median} label="медиана прироста реакций" trend={item.reactions.medianTrend} />
-        <MetricCell value={item.views.median} label="медиана прироста просмотров" trend={item.views.medianTrend} />
-      </div>
-      <div className="legacy-overview-footer">
-        <div className={item.lastErrorCode ? "status-bad" : "status-ok"}>{statusText(item)}</div>
-        <div className="muted">Последний опрос: {item.lastCheckedAt ? formatDate(item.lastCheckedAt) : "ещё не выполнялся"}</div>
-      </div>
-    </>
-  );
+function ActivityBody({ item, integrationWarning }: { item: OverviewItem; integrationWarning: OverviewPage["integrationWarning"] }) {
+  const short = PERIOD_SHORT[item.period];
+  const primary = item.platform === "vk" || item.platform === "rutube" ? "лайков" : "реакций";
+  const suffix=short;
+  const status=overviewStatus(item,integrationWarning);
+  const badges = <div className="post-stat-badges" aria-label={`Публикации ${short}`}>
+    {[
+      { label: "Всего публикаций в базе.", value: item.totalPublicationCount, path: "M6 4h12v16H6zM9 8h6M9 12h6M9 16h4", kind: "" },
+      { label: `Публикации из БД с активностью ${short}.`, value: item.activityPublicationCount, path: "M4 17l5-5 4 3 7-8M16 7h4v4", kind: "activity" },
+      { label: `Публикации, вышедшие ${short}.`, value: item.newPublicationCount, path: "M12 3v18M3 12h18", kind: "new" },
+    ].map((badge) => <span key={badge.kind} className={`post-stat-badge has-tooltip ${badge.kind}`} tabIndex={0} data-tooltip={badge.label} aria-label={`${badge.label} ${badge.value}`}>
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d={badge.path} /></svg><b>{badge.value}</b>
+    </span>)}
+  </div>;
+  return <>
+    {item.ratingRank ? <span className="m-rating-badge has-tooltip" tabIndex={0} data-tooltip={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[item.platform]}.`}>М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</span> : null}
+    <div className="overview-header">
+      <div className="card-title-row"><h3 className="institution-title has-tooltip" tabIndex={0} data-tooltip={item.canonicalName}><span className="title-text">{item.shortName || item.canonicalName}</span><span className="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div>
+      <div className="muted channel-meta">{accountName(item)}{item.accounts.length ? <> · {legacyNumber(item.subscriberCount)} подписчиков{item.accountCount > 1 ? ` · ещё ${item.accountCount - 1}` : ""}</> : null}</div>
+      {item.platform === "telegram" ? badges : null}
+    </div>
+    {item.platform !== "telegram" ? badges : null}
+    <div className="metrics overview-metrics">
+      <MetricCell suffix={suffix} value={item.reactions.total} label={`${primary} ${short}`} trend={item.reactions.totalTrend} evidence={item.reactions.totalMetadata} />
+      <MetricCell suffix={suffix} value={item.views.total} label={`просмотров ${short}`} trend={item.views.totalTrend} evidence={item.views.totalMetadata} />
+      <MetricCell suffix={suffix} value={item.reactions.median} label={`медиана прироста ${primary}`} trend={item.reactions.medianTrend} evidence={item.reactions.medianMetadata} />
+      <MetricCell suffix={suffix} value={item.views.median} label="медиана прироста просмотров" trend={item.views.medianTrend} evidence={item.views.medianMetadata} />
+    </div>
+    <div className="overview-footer">
+      <div className={status.kind}>{status.text}</div>
+      <div className="muted">Последний опрос: {item.lastCheckedAt ? legacyDate(item.lastCheckedAt, true) : "ещё не выполнялся"}</div>
+    </div>
+  </>;
 }
 
 function AllPlatformsBody({ item }: { item: OverviewItem }) {
+  const status=overviewStatus(item);
   return (
     <>
-      <div className="card-head legacy-card-head">
-        <h2>{item.shortName || item.canonicalName}</h2>
-        {item.ratingRank ? <span className="pill pill-blue">М‑Рейтинг · №{item.ratingRank}</span> : null}
-      </div>
+      {item.ratingRank ? <span className="m-rating-badge has-tooltip" tabIndex={0} data-tooltip={`Официальное место в М‑Рейтинге: Общий.`}>М‑Рейтинг Общий · №{item.ratingRank}</span> : null}
+      <div className="overview-header"><div className="card-title-row"><h3 className="institution-title has-tooltip" tabIndex={0} data-tooltip={item.canonicalName}><span className="title-text">{item.shortName || item.canonicalName}</span><span className="title-info info-mark" aria-hidden="true">ⓘ</span></h3></div></div>
       {item.accounts.length ? (
-        <div className="platform-account-list">
-          {item.accounts.map((account) => {
+        <div className="platform-card-accounts">
+          {[...item.accounts].sort((a,b)=>a.platform.localeCompare(b.platform)).map((account) => {
             const name = account.title || account.username || account.canonicalExternalId;
             return (
               <div className="platform-account-line" key={account.accountId}>
                 <span className={`platform-chip platform-${account.platform}`}>{PLATFORM_LABELS[account.platform]}</span>
-                {account.url ? <a href={account.url} target="_blank" rel="noopener noreferrer">{name}</a> : <span>{name}</span>}
+                {account.url ? <a className="external" href={account.url} target="_blank" rel="noopener noreferrer">{name}</a> : <span>{name}</span>}
               </div>
             );
           })}
         </div>
-      ) : <div className="platform-empty">Официальные аккаунты пока не подтверждены.</div>}
+      ) : <div className="platform-empty">Официальный аккаунт этой площадки пока не подтверждён.</div>}
       <div className="platform-card-summary">
-        <span><b className="metric-value">{item.connectedPlatformCount}/4</b><small>площадок подключено</small></span>
-        <span><b className="metric-value">{item.accountCount}</b><small>аккаунтов добавлено</small></span>
+        <span><b className="metric">{item.connectedPlatformCount}/4</b><small>площадок подключено</small></span>
+        <span><b className="metric">{item.accountCount}</b><small>аккаунтов добавлено</small></span>
       </div>
-      <div className="legacy-overview-footer">
-        <div className={item.lastErrorCode ? "status-bad" : "status-ok"}>{statusText(item)}</div>
+      <div className="overview-footer">
+        <div className={status.kind}>{status.text}</div>
       </div>
     </>
   );
@@ -129,12 +119,12 @@ function activityHref(item: OverviewItem): string {
   });
 }
 
-export function OverviewCard({ item }: { item: OverviewItem }) {
+export function OverviewCard({ item, integrationWarning }: { item: OverviewItem; integrationWarning: OverviewPage["integrationWarning"] }) {
   const body: ReactNode = item.platform === "all"
     ? <AllPlatformsBody item={item} />
-    : <ActivityBody item={item} />;
+    : <ActivityBody item={item} integrationWarning={integrationWarning} />;
   if (item.platform === "all") {
-    return <article className="panel overview-card legacy-overview-card">{body}</article>;
+    return <article className="card overview-card platform-overview-card">{body}</article>;
   }
-  return <Link className="panel overview-card legacy-overview-card overview-card-link" href={activityHref(item)}>{body}</Link>;
+  return <Link className="card overview-card" href={activityHref(item)}>{body}</Link>;
 }

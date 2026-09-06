@@ -5,7 +5,7 @@ export default function NotFound() {
     <section className="panel error-state">
       <span className="pill pill-amber">404</span>
       <h1>Данные не найдены</h1>
-      <p>Объект отсутствует в текущей ревизии данных или его legacy-ID больше не сопоставлен.</p>
+      <p>По этому адресу нет доступной страницы.</p>
       <Link className="button-link" href="/">Вернуться к обзору</Link>
     </section>
   );

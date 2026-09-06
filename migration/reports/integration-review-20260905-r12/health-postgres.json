@@ -1,0 +1,8 @@
+{
+  "ownedDatabaseRemoved" : true,
+  "database" : "mranked_health_eb41e66cc98c43118ed042f5f2cdffbc_it",
+  "status" : "pass",
+  "productionAcceptance" : false,
+  "checks" : [ "restricted-api-role", "sanitized-allowlist", "migration-runs-not-freshness", "legacy-null-zero-types", "all-nine-projection-states", "revision-lag", "failed-collector", "future-clock", "stale-collector", "secret-free-503", "real-lock-jdbc-timeout" ],
+  "durationSeconds" : 4.373391833
+}

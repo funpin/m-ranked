@@ -12,7 +12,7 @@ from uuid import UUID, uuid5
 # This namespace is immutable migration protocol state. Changing it would change every
 # imported business identity and is therefore a breaking migration format change.
 BRIDGE_NAMESPACE = UUID("45f74b35-89b2-5f43-82f2-f7c5d9db6d34")
-BRIDGE_VERSION = "1.2.0"
+BRIDGE_VERSION = "1.3.0"
 
 
 def utc_now() -> datetime:
@@ -68,12 +68,19 @@ class BridgeOptions:
     dry_run: bool = False
     resume: bool = True
     report_dir: Path = Path("migration/reports")
+    verify_projections: bool = False
+    projection_first_age_limit_seconds: int = 360
+    preserved_source_paths: tuple[Path, ...] = ()
+    verify_identity_history: bool = False
+    historical_source_paths: tuple[Path, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.source_namespace.strip():
             raise ValueError("source_namespace must be a stable, non-empty identifier")
         if not 1 <= self.batch_size <= 50_000:
             raise ValueError("batch_size must be between 1 and 50000")
+        if not 0 <= self.projection_first_age_limit_seconds <= 86400:
+            raise ValueError("projection_first_age_limit_seconds must be between 0 and 86400")
 
 
 @dataclass(frozen=True)

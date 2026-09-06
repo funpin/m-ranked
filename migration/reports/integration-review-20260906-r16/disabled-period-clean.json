@@ -1,0 +1,2907 @@
+{
+  "status": "pass",
+  "sourceSha256": "c26512214c41941ebac1c8463363182d57ecec42df1298cb7739983903f07c69",
+  "anchor": "2026-08-01T12:00:00+00:00",
+  "cases": [
+    {
+      "key": [
+        "vk",
+        "3h",
+        1,
+        "views",
+        "sum"
+      ],
+      "value": "20"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        1,
+        "views",
+        "median"
+      ],
+      "value": "20"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        1,
+        "reactions",
+        "sum"
+      ],
+      "value": "2"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        1,
+        "reactions",
+        "median"
+      ],
+      "value": "2"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        1,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        1,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        1,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        1,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        3,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        3,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        3,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        3,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        3,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        3,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        3,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        3,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        2,
+        "views",
+        "sum"
+      ],
+      "value": "60"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        2,
+        "views",
+        "median"
+      ],
+      "value": "30"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        2,
+        "reactions",
+        "sum"
+      ],
+      "value": "6"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        2,
+        "reactions",
+        "median"
+      ],
+      "value": "3"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        2,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        2,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        2,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "3h",
+        2,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        1,
+        "views",
+        "sum"
+      ],
+      "value": "50"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        1,
+        "views",
+        "median"
+      ],
+      "value": "50"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        1,
+        "reactions",
+        "sum"
+      ],
+      "value": "5"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        1,
+        "reactions",
+        "median"
+      ],
+      "value": "5"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        1,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        1,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        1,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        1,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        3,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        3,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        3,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        3,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        3,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        3,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        3,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        3,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        2,
+        "views",
+        "sum"
+      ],
+      "value": "150"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        2,
+        "views",
+        "median"
+      ],
+      "value": "75"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        2,
+        "reactions",
+        "sum"
+      ],
+      "value": "15"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        2,
+        "reactions",
+        "median"
+      ],
+      "value": "8"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        2,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        2,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        2,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "1d",
+        2,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        1,
+        "views",
+        "sum"
+      ],
+      "value": "100"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        1,
+        "views",
+        "median"
+      ],
+      "value": "100"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        1,
+        "reactions",
+        "sum"
+      ],
+      "value": "10"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        1,
+        "reactions",
+        "median"
+      ],
+      "value": "10"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        1,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        1,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        1,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        1,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        3,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        3,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        3,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        3,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        3,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        3,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        3,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        3,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        2,
+        "views",
+        "sum"
+      ],
+      "value": "300"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        2,
+        "views",
+        "median"
+      ],
+      "value": "150"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        2,
+        "reactions",
+        "sum"
+      ],
+      "value": "30"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        2,
+        "reactions",
+        "median"
+      ],
+      "value": "15"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        2,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        2,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        2,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "7d",
+        2,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        1,
+        "views",
+        "sum"
+      ],
+      "value": "160"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        1,
+        "views",
+        "median"
+      ],
+      "value": "160"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        1,
+        "reactions",
+        "sum"
+      ],
+      "value": "16"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        1,
+        "reactions",
+        "median"
+      ],
+      "value": "16"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        1,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        1,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        1,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        1,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        3,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        3,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        3,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        3,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        3,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        3,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        3,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        3,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        2,
+        "views",
+        "sum"
+      ],
+      "value": "480"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        2,
+        "views",
+        "median"
+      ],
+      "value": "240"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        2,
+        "reactions",
+        "sum"
+      ],
+      "value": "48"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        2,
+        "reactions",
+        "median"
+      ],
+      "value": "24"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        2,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        2,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        2,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "vk",
+        "30d",
+        2,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        4,
+        "views",
+        "sum"
+      ],
+      "value": "20"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        4,
+        "views",
+        "median"
+      ],
+      "value": "20"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        4,
+        "reactions",
+        "sum"
+      ],
+      "value": "2"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        4,
+        "reactions",
+        "median"
+      ],
+      "value": "2"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        4,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        4,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        4,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        4,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        6,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        6,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        6,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        6,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        6,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        6,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        6,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        6,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        5,
+        "views",
+        "sum"
+      ],
+      "value": "60"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        5,
+        "views",
+        "median"
+      ],
+      "value": "30"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        5,
+        "reactions",
+        "sum"
+      ],
+      "value": "6"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        5,
+        "reactions",
+        "median"
+      ],
+      "value": "3"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        5,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        5,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        5,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "3h",
+        5,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        4,
+        "views",
+        "sum"
+      ],
+      "value": "50"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        4,
+        "views",
+        "median"
+      ],
+      "value": "50"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        4,
+        "reactions",
+        "sum"
+      ],
+      "value": "5"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        4,
+        "reactions",
+        "median"
+      ],
+      "value": "5"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        4,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        4,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        4,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        4,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        6,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        6,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        6,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        6,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        6,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        6,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        6,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        6,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        5,
+        "views",
+        "sum"
+      ],
+      "value": "150"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        5,
+        "views",
+        "median"
+      ],
+      "value": "75"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        5,
+        "reactions",
+        "sum"
+      ],
+      "value": "15"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        5,
+        "reactions",
+        "median"
+      ],
+      "value": "8"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        5,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        5,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        5,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "1d",
+        5,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        4,
+        "views",
+        "sum"
+      ],
+      "value": "100"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        4,
+        "views",
+        "median"
+      ],
+      "value": "100"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        4,
+        "reactions",
+        "sum"
+      ],
+      "value": "10"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        4,
+        "reactions",
+        "median"
+      ],
+      "value": "10"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        4,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        4,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        4,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        4,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        6,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        6,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        6,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        6,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        6,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        6,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        6,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        6,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        5,
+        "views",
+        "sum"
+      ],
+      "value": "300"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        5,
+        "views",
+        "median"
+      ],
+      "value": "150"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        5,
+        "reactions",
+        "sum"
+      ],
+      "value": "30"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        5,
+        "reactions",
+        "median"
+      ],
+      "value": "15"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        5,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        5,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        5,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "7d",
+        5,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        4,
+        "views",
+        "sum"
+      ],
+      "value": "160"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        4,
+        "views",
+        "median"
+      ],
+      "value": "160"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        4,
+        "reactions",
+        "sum"
+      ],
+      "value": "16"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        4,
+        "reactions",
+        "median"
+      ],
+      "value": "16"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        4,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        4,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        4,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        4,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        6,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        6,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        6,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        6,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        6,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        6,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        6,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        6,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        5,
+        "views",
+        "sum"
+      ],
+      "value": "480"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        5,
+        "views",
+        "median"
+      ],
+      "value": "240"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        5,
+        "reactions",
+        "sum"
+      ],
+      "value": "48"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        5,
+        "reactions",
+        "median"
+      ],
+      "value": "24"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        5,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        5,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        5,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "max",
+        "30d",
+        5,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        7,
+        "views",
+        "sum"
+      ],
+      "value": "20"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        7,
+        "views",
+        "median"
+      ],
+      "value": "20"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        7,
+        "reactions",
+        "sum"
+      ],
+      "value": "2"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        7,
+        "reactions",
+        "median"
+      ],
+      "value": "2"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        7,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        7,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        7,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        7,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        9,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        9,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        9,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        9,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        9,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        9,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        9,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        9,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        8,
+        "views",
+        "sum"
+      ],
+      "value": "60"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        8,
+        "views",
+        "median"
+      ],
+      "value": "30"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        8,
+        "reactions",
+        "sum"
+      ],
+      "value": "6"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        8,
+        "reactions",
+        "median"
+      ],
+      "value": "3"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        8,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        8,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        8,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "3h",
+        8,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        7,
+        "views",
+        "sum"
+      ],
+      "value": "50"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        7,
+        "views",
+        "median"
+      ],
+      "value": "50"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        7,
+        "reactions",
+        "sum"
+      ],
+      "value": "5"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        7,
+        "reactions",
+        "median"
+      ],
+      "value": "5"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        7,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        7,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        7,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        7,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        9,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        9,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        9,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        9,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        9,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        9,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        9,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        9,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        8,
+        "views",
+        "sum"
+      ],
+      "value": "150"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        8,
+        "views",
+        "median"
+      ],
+      "value": "75"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        8,
+        "reactions",
+        "sum"
+      ],
+      "value": "15"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        8,
+        "reactions",
+        "median"
+      ],
+      "value": "8"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        8,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        8,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        8,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "1d",
+        8,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        7,
+        "views",
+        "sum"
+      ],
+      "value": "100"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        7,
+        "views",
+        "median"
+      ],
+      "value": "100"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        7,
+        "reactions",
+        "sum"
+      ],
+      "value": "10"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        7,
+        "reactions",
+        "median"
+      ],
+      "value": "10"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        7,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        7,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        7,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        7,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        9,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        9,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        9,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        9,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        9,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        9,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        9,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        9,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        8,
+        "views",
+        "sum"
+      ],
+      "value": "300"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        8,
+        "views",
+        "median"
+      ],
+      "value": "150"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        8,
+        "reactions",
+        "sum"
+      ],
+      "value": "30"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        8,
+        "reactions",
+        "median"
+      ],
+      "value": "15"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        8,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        8,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        8,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "7d",
+        8,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        7,
+        "views",
+        "sum"
+      ],
+      "value": "160"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        7,
+        "views",
+        "median"
+      ],
+      "value": "160"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        7,
+        "reactions",
+        "sum"
+      ],
+      "value": "16"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        7,
+        "reactions",
+        "median"
+      ],
+      "value": "16"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        7,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        7,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        7,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        7,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        9,
+        "views",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        9,
+        "views",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        9,
+        "reactions",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        9,
+        "reactions",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        9,
+        "comments",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        9,
+        "comments",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        9,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        9,
+        "shares",
+        "median"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        8,
+        "views",
+        "sum"
+      ],
+      "value": "480"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        8,
+        "views",
+        "median"
+      ],
+      "value": "240"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        8,
+        "reactions",
+        "sum"
+      ],
+      "value": "48"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        8,
+        "reactions",
+        "median"
+      ],
+      "value": "24"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        8,
+        "comments",
+        "sum"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        8,
+        "comments",
+        "median"
+      ],
+      "value": "0"
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        8,
+        "shares",
+        "sum"
+      ],
+      "value": null
+    },
+    {
+      "key": [
+        "rutube",
+        "30d",
+        8,
+        "shares",
+        "median"
+      ],
+      "value": null
+    }
+  ],
+  "comparison": {
+    "expected": {
+      "rows": 288,
+      "distinctKeys": 288,
+      "duplicateKeys": 0,
+      "sha256": "ab53790f05267a0fb1736160acd33df49bb6f262037b7176630b6109872e621d"
+    },
+    "actual": {
+      "rows": 288,
+      "distinctKeys": 288,
+      "duplicateKeys": 0,
+      "sha256": "ab53790f05267a0fb1736160acd33df49bb6f262037b7176630b6109872e621d"
+    },
+    "changedKeysSample": []
+  },
+  "revision": 6,
+  "missingPopulatedRowsDetected": true,
+  "telegramEnabledPolicyUnchanged": true,
+  "visibilityPreserved": true,
+  "sourceUnchanged": true
+}

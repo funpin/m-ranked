@@ -1,0 +1,940 @@
+{
+  "backupManifestSha256": "8642f5738d07dad02df521b52fbdb7a6c0812e60f16c5019a53258fcc087cba4",
+  "checks": {
+    "coldArchiveFallbackWithPrimaryStopped": true,
+    "fullRestorePageChecksumsAndAmcheck": true,
+    "independentSourceClone": true,
+    "localRpoBudget": true,
+    "localRtoBudget": true,
+    "ownedResourcesCleaned": true,
+    "physicalBackupVerified": true,
+    "pitrBoundaryPageChecksumsAndAmcheck": true,
+    "promotedStandbyPageChecksums": true,
+    "sameExactFlywayManifest": true,
+    "standbyPromotion": true,
+    "streamingStandbyCaughtUp": true
+  },
+  "coldArchive": {
+    "canonicalSha256": "38f19c0962c1b5859504015eb0ffd57b256745fa70f89e8f899bc3f79a7137e9",
+    "exportSeconds": 3.4979,
+    "path": "cold-789ced5873f1.parquet",
+    "providerAttestation": false,
+    "rowCount": 9025,
+    "schemaVersion": 3,
+    "sha256": "6dbfeb1f49eb6fc5abc5ce902fa4d0c3ebd676735fe7bd245ca490ece00018d5"
+  },
+  "commands": [
+    {
+      "action": "SQL verification in mranked-review-it-postgres-1",
+      "durationSeconds": 2.9598,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:33.385805+00:00"
+    },
+    {
+      "action": "network create --internal --label org.mranked.disposable-dr=789ced5873f1 mranked-dr-789ced5873f1-net",
+      "durationSeconds": 0.0435,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:36.345892+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=789ced5873f1 mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0269,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:36.389426+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=789ced5873f1 mranked-dr-789ced5873f1-wal",
+      "durationSeconds": 0.0229,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:36.416359+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=789ced5873f1 mranked-dr-789ced5873f1-backup",
+      "durationSeconds": 0.0226,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:36.439333+00:00"
+    },
+    {
+      "action": "run --rm -v mranked-dr-789ced5873f1-wal:/archive -v mranked-dr-789ced5873f1-backup:/backup postgres:18.6 sh -ec chown postgres:postgres /archive /backup; chmod 0700 /archive /backup",
+      "durationSeconds": 0.3188,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:36.461992+00:00"
+    },
+    {
+      "action": "Start own checksum-enabled primary with independent WAL/basebackup volumes",
+      "durationSeconds": 0.1971,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:36.781021+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0928,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T06:54:36.978195+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0795,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T06:54:37.331107+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0837,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T06:54:37.670449+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0959,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:38.006736+00:00"
+    },
+    {
+      "action": "Allow password-authenticated replication only inside the isolated Docker network",
+      "durationSeconds": 0.0702,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:38.102687+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0904,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:54:38.172894+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-review-it-postgres-1",
+      "durationSeconds": 2.8578,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:30.459308+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 2.4997,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:33.317441+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0847,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:35.817431+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0868,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:35.902201+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 2.4615,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:35.989046+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0789,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:41.869666+00:00"
+    },
+    {
+      "action": "Bounded maintenance-role Parquet export and full canonical verification",
+      "durationSeconds": 3.4979,
+      "exitCode": 0
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0816,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:41.949061+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0842,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:42.030709+00:00"
+    },
+    {
+      "action": "pg_basebackup using restricted replication role",
+      "durationSeconds": 3.6284,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:42.114947+00:00"
+    },
+    {
+      "action": "pg_verifybackup validates manifest and WAL",
+      "durationSeconds": 0.4458,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:45.743419+00:00"
+    },
+    {
+      "action": "exec mranked-dr-789ced5873f1-primary sha256sum /backup/base/backup_manifest",
+      "durationSeconds": 0.0713,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:46.189323+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=789ced5873f1 mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 0.0228,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:46.260631+00:00"
+    },
+    {
+      "action": "Restore physical base backup into own empty volume",
+      "durationSeconds": 2.0719,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:46.283463+00:00"
+    },
+    {
+      "action": "Write isolated recovery configuration (credentials omitted)",
+      "durationSeconds": 0.2502,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:48.355460+00:00"
+    },
+    {
+      "action": "run -d --name mranked-dr-789ced5873f1-standby --label org.mranked.disposable-dr=789ced5873f1 --network mranked-dr-789ced5873f1-net -e PGDATA=/data -v mranked-dr-789ced5873f1-standby:/data -v mranked-dr-789ced5873f1-wal:/archive:ro postgres:18.6 postgres -c listen_addresses=* -c archive_mode=off -c max_wal_senders=12",
+      "durationSeconds": 0.1647,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:48.605878+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 0.0845,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T06:55:48.770624+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 0.0909,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.113114+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 0.0799,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.204063+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.089,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.284052+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0866,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.373089+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0789,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.459693+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0807,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.538615+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0844,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.619324+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-primary",
+      "durationSeconds": 0.0842,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.703814+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 0.0857,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.788119+00:00"
+    },
+    {
+      "action": "exec mranked-dr-789ced5873f1-primary sh -ec cd /archive; sha256sum *",
+      "durationSeconds": 2.1997,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:49.873825+00:00"
+    },
+    {
+      "action": "Simulate loss of only the UUID-owned primary",
+      "durationSeconds": 0.1924,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:52.073807+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 0.2072,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:52.827402+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 0.0817,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:53.034651+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 2.5831,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:53.116380+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=789ced5873f1 mranked-dr-789ced5873f1-full-restore",
+      "durationSeconds": 0.0278,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:55.699805+00:00"
+    },
+    {
+      "action": "Restore physical base backup into own empty volume",
+      "durationSeconds": 3.3294,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:55.727595+00:00"
+    },
+    {
+      "action": "run -d --name mranked-dr-789ced5873f1-full-restore --label org.mranked.disposable-dr=789ced5873f1 --network mranked-dr-789ced5873f1-net -e PGDATA=/data -v mranked-dr-789ced5873f1-full-restore:/data -v mranked-dr-789ced5873f1-wal:/archive:ro postgres:18.6 postgres -c listen_addresses=* -c archive_mode=off -c max_wal_senders=12",
+      "durationSeconds": 0.1959,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:59.057195+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-full-restore",
+      "durationSeconds": 0.0797,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T06:55:59.253172+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-full-restore",
+      "durationSeconds": 0.0979,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:59.592961+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-full-restore",
+      "durationSeconds": 0.0955,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:59.690902+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-full-restore",
+      "durationSeconds": 2.5088,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:55:59.786496+00:00"
+    },
+    {
+      "action": "pg_amcheck full restored cluster (diagnostic extension installed only in disposable restore)",
+      "durationSeconds": 3.7312,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:02.295690+00:00"
+    },
+    {
+      "action": "stop --time 30 mranked-dr-789ced5873f1-full-restore",
+      "durationSeconds": 0.1524,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:06.026959+00:00"
+    },
+    {
+      "action": "Offline PostgreSQL page-checksum verification",
+      "durationSeconds": 1.031,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:06.179383+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=789ced5873f1 mranked-dr-789ced5873f1-pitr",
+      "durationSeconds": 0.0265,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:07.210559+00:00"
+    },
+    {
+      "action": "Restore physical base backup into own empty volume",
+      "durationSeconds": 3.5936,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:07.237129+00:00"
+    },
+    {
+      "action": "Write isolated recovery configuration (credentials omitted)",
+      "durationSeconds": 0.4152,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:10.830842+00:00"
+    },
+    {
+      "action": "run -d --name mranked-dr-789ced5873f1-pitr --label org.mranked.disposable-dr=789ced5873f1 --network mranked-dr-789ced5873f1-net -e PGDATA=/data -v mranked-dr-789ced5873f1-pitr:/data -v mranked-dr-789ced5873f1-wal:/archive:ro postgres:18.6 postgres -c listen_addresses=* -c archive_mode=off -c max_wal_senders=12",
+      "durationSeconds": 0.187,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:11.246141+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-pitr",
+      "durationSeconds": 0.0962,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T06:56:11.433197+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-pitr",
+      "durationSeconds": 0.099,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:11.779985+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-pitr",
+      "durationSeconds": 0.0832,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:11.878998+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-pitr",
+      "durationSeconds": 0.0896,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:11.962366+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-789ced5873f1-pitr",
+      "durationSeconds": 2.6869,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:12.051992+00:00"
+    },
+    {
+      "action": "pg_amcheck PITR restored cluster (diagnostic extension installed only in disposable restore)",
+      "durationSeconds": 3.5506,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:14.739298+00:00"
+    },
+    {
+      "action": "stop --time 30 mranked-dr-789ced5873f1-pitr",
+      "durationSeconds": 0.1471,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:18.290028+00:00"
+    },
+    {
+      "action": "Offline PostgreSQL page-checksum verification",
+      "durationSeconds": 0.838,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:18.437214+00:00"
+    },
+    {
+      "action": "stop --time 30 mranked-dr-789ced5873f1-standby",
+      "durationSeconds": 0.1471,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:19.275217+00:00"
+    },
+    {
+      "action": "Offline PostgreSQL page-checksum verification",
+      "durationSeconds": 1.919,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:19.422328+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.0353,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.341536+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.0325,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.376896+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.035,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.409439+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.0361,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.444484+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.1243,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.480601+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.0545,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.604990+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.0941,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.659564+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.0897,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.753720+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.094,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.843472+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.1079,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:21.937525+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture network",
+      "durationSeconds": 0.1451,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T06:56:22.045463+00:00"
+    }
+  ],
+  "durationSeconds": 108.8043,
+  "externalGates": [
+    "Separate physical DR host and encrypted channel",
+    "Production-like capacity and concurrent workload",
+    "pgBackRest encrypted multi-repository retention acceptance",
+    "Provider immutable cold archive attestation",
+    "Production RPO/RTO acceptance and named operator approval"
+  ],
+  "finishedAt": "2026-09-05T06:56:22.190606+00:00",
+  "fixtureDumpSha256": "5404143b027449b11028976e0ff334edf558e6a52cbb104f27ca6d7ed5252bfe",
+  "formatVersion": 1,
+  "image": "postgres:18.6",
+  "measurements": {
+    "baseBackupSeconds": 4.0743,
+    "coldArchiveFallbackSeconds": 0.5611,
+    "fullRestoreRtoSeconds": 10.2992,
+    "pitrControlledRpoSeconds": 0.167824,
+    "pitrRestoreRtoSeconds": 11.0528,
+    "standbyControlledRpoSeconds": 0,
+    "standbyPromotionRtoSeconds": 3.6259
+  },
+  "pitr": {
+    "excludedCommittedAt": "2026-09-05 06:55:49.529959+00",
+    "inRecovery": false,
+    "includedCommittedAt": "2026-09-05 06:55:49.362135+00",
+    "method": "named WAL restore point",
+    "restorePoint": "dr_target_789ced5873f1",
+    "restoredMarkers": [
+      "baseline",
+      "pitr-included"
+    ]
+  },
+  "productionAcceptance": false,
+  "roles": {
+    "backupCreateDb": false,
+    "backupCreateRole": false,
+    "backupReplication": true,
+    "backupSuperuser": false
+  },
+  "runId": "789ced5873f1",
+  "scope": "disposable-local-physical-rehearsal",
+  "sourceContainer": "mranked-review-it-postgres-1",
+  "sourceDatabase": "admin_review_visual_v7_it",
+  "sourceState": {
+    "accounts": 824,
+    "canonicalSha256": "fcbaf5bca3e8b416c28308b43c291cd6c4f729d5124b6865bb3759bd2ce97053",
+    "flyway": [
+      {
+        "checksum": null,
+        "script": "\"flyway\"",
+        "success": true,
+        "version": null
+      },
+      {
+        "checksum": -1636077697,
+        "script": "V1__target_baseline.sql",
+        "success": true,
+        "version": "1"
+      },
+      {
+        "checksum": 839607018,
+        "script": "V2__rebuild_core_projections.sql",
+        "success": true,
+        "version": "2"
+      },
+      {
+        "checksum": -1456658399,
+        "script": "V3__collector_observation_times_and_identity_grants.sql",
+        "success": true,
+        "version": "3"
+      },
+      {
+        "checksum": 1318350062,
+        "script": "V4__admin_collection_run_status_grants.sql",
+        "success": true,
+        "version": "4"
+      },
+      {
+        "checksum": -1313754193,
+        "script": "V5__legacy_activity_period_projection.sql",
+        "success": true,
+        "version": "5"
+      },
+      {
+        "checksum": -290358219,
+        "script": "V6__comparison_valid_observation_hourly_projection.sql",
+        "success": true,
+        "version": "6"
+      },
+      {
+        "checksum": -1228913579,
+        "script": "V7__activity_rating_read_grants.sql",
+        "success": true,
+        "version": "7"
+      },
+      {
+        "checksum": -574188650,
+        "script": "V8__legacy_overview_projection.sql",
+        "success": true,
+        "version": "8"
+      },
+      {
+        "checksum": 1058556652,
+        "script": "V9__immutable_observations_quality_archive_fence.sql",
+        "success": true,
+        "version": "9"
+      },
+      {
+        "checksum": -1148603410,
+        "script": "V10__consistent_public_queries_and_formula_guards.sql",
+        "success": true,
+        "version": "10"
+      },
+      {
+        "checksum": 1679789143,
+        "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+        "success": true,
+        "version": "11"
+      },
+      {
+        "checksum": 1453326243,
+        "script": "V12__detail_history_projection.sql",
+        "success": true,
+        "version": "12"
+      },
+      {
+        "checksum": -185639607,
+        "script": "V13__immutable_account_identity_history.sql",
+        "success": true,
+        "version": "13"
+      },
+      {
+        "checksum": -956321170,
+        "script": "V14__public_archived_publication_text.sql",
+        "success": true,
+        "version": "14"
+      },
+      {
+        "checksum": -1953543117,
+        "script": "V15__verified_source_preservation.sql",
+        "success": true,
+        "version": "15"
+      },
+      {
+        "checksum": -888916335,
+        "script": "V16__audited_catalog_commands.sql",
+        "success": true,
+        "version": "16"
+      },
+      {
+        "checksum": 2060863494,
+        "script": "V17__legacy_csv_compatibility_projection.sql",
+        "success": true,
+        "version": "17"
+      },
+      {
+        "checksum": 875583974,
+        "script": "V18__official_rating_commands.sql",
+        "success": true,
+        "version": "18"
+      },
+      {
+        "checksum": -1653532549,
+        "script": "V19__safe_health_operational_snapshot.sql",
+        "success": true,
+        "version": "19"
+      },
+      {
+        "checksum": 925593865,
+        "script": "V20__catalog_url_and_version_compatibility.sql",
+        "success": true,
+        "version": "20"
+      },
+      {
+        "checksum": -900669350,
+        "script": "V21__legacy_period_first_observation_policy.sql",
+        "success": true,
+        "version": "21"
+      },
+      {
+        "checksum": 2064364640,
+        "script": "V22__durable_legacy_csv_archive_facts.sql",
+        "success": true,
+        "version": "22"
+      },
+      {
+        "checksum": 890722389,
+        "script": "V23__official_rating_entity_context.sql",
+        "success": true,
+        "version": "23"
+      },
+      {
+        "checksum": 1889276383,
+        "script": "V24__ordered_history_reaction_details.sql",
+        "success": true,
+        "version": "24"
+      },
+      {
+        "checksum": 381330844,
+        "script": "V25__safe_legacy_account_presentation.sql",
+        "success": true,
+        "version": "25"
+      },
+      {
+        "checksum": -1482835665,
+        "script": "V26__independent_projection_verifier_reads.sql",
+        "success": true,
+        "version": "26"
+      }
+    ],
+    "institutions": 207,
+    "partitions": [
+      {
+        "canonical_sha256": "38f19c0962c1b5859504015eb0ffd57b256745fa70f89e8f899bc3f79a7137e9",
+        "max_observed_at": "2026-08-01T12:00:00+00:00",
+        "min_observed_at": "2026-07-16T12:00:00+00:00",
+        "month": "2026-07-01",
+        "row_count": 9025
+      },
+      {
+        "canonical_sha256": "30cdbf447fca029c948425b4470c68f1891c0cb0dd4d7a00266ca392700cef51",
+        "max_observed_at": "2026-08-01T07:00:00+00:00",
+        "min_observed_at": "2026-08-01T07:00:00+00:00",
+        "month": "2026-08-01",
+        "row_count": 1
+      }
+    ],
+    "projections": [
+      {
+        "name": "comparison",
+        "revision": 29,
+        "rowCount": 8534560,
+        "status": "ready"
+      },
+      {
+        "name": "institution_daily_metrics",
+        "revision": 29,
+        "rowCount": 8264,
+        "status": "ready"
+      },
+      {
+        "name": "institution_monthly_metrics",
+        "revision": 29,
+        "rowCount": 8256,
+        "status": "ready"
+      },
+      {
+        "name": "institution_period_metrics",
+        "revision": 29,
+        "rowCount": 32960,
+        "status": "ready"
+      },
+      {
+        "name": "legacy_exports",
+        "revision": 29,
+        "rowCount": 9850,
+        "status": "ready"
+      },
+      {
+        "name": "publication_content",
+        "revision": 29,
+        "rowCount": 824,
+        "status": "ready"
+      },
+      {
+        "name": "publication_history",
+        "revision": 29,
+        "rowCount": 9026,
+        "status": "ready"
+      },
+      {
+        "name": "publication_hourly",
+        "revision": 29,
+        "rowCount": 315706,
+        "status": "ready"
+      },
+      {
+        "name": "publication_latest",
+        "revision": 29,
+        "rowCount": 824,
+        "status": "ready"
+      }
+    ],
+    "publications": 824,
+    "revision": 29,
+    "sizeBytes": 2011543231,
+    "snapshots": 9026,
+    "unvalidatedConstraints": 0
+  },
+  "startedAt": "2026-09-05T06:54:33.385009+00:00",
+  "status": "pass",
+  "walFiles": [
+    "415efba7f75f16cee9c3741b4f71e1213abf5e166c5f1c53074d37f37010cb1f  000000010000000000000001",
+    "7cfad15b8cde11c14ce1260debd235e4653fb9b0d1db2181408358d20e38fc45  000000010000000000000002",
+    "c20e5a05ce150553363a287820290d6cd1522333f2a7256a217c2750424475ed  000000010000000000000003",
+    "9071b2a510cfd85f522fb48ff6e4a83210df1c12c173485fc947ac1d2f0e40fd  000000010000000000000004",
+    "8241b3d5fa4fe63f1375a09b4c3aab881d8ecd0deb104d976add02bf9424f1a3  000000010000000000000005",
+    "a6a54702408ee47d00ab10719595a415f67ed6960a4bb816e0d3dd48d9f99690  000000010000000000000006",
+    "b524b8c4fb6ce8792c7b38b6f86e57010b058b8ceb31e59fe98522b0b592939b  000000010000000000000007",
+    "4c996fe15bcfd519b2a6627153da9e2d5fbd1e3612d8d121e14f369b54e36e43  000000010000000000000008",
+    "bd2640a2f946c712b227c188bc9792e5c2d15a66dc4495ba5ce81280f3d02192  000000010000000000000009",
+    "02b91f979f713a80a64ca9275ef1fc764c3cb04fcf106342d136ab3aa493005d  00000001000000000000000A",
+    "b3b1389cc26b9b5d2b3d0274550480eaf69adc1a510b8c552fd061c123b4b02b  00000001000000000000000B",
+    "9e11b73fe118304f24c68a82523d69e5118847e7b93eec25ee342fb0b0037521  00000001000000000000000C",
+    "29d6de9f98b152c950aef43c9fb1fbdef5a3d72febb257cdd2ef555fd564c6b5  00000001000000000000000D",
+    "efecf062c5df12b8a28593e8ea41e0c101c69d818e1df8be06c43c65cd3d7182  00000001000000000000000E",
+    "cad88432e8134e8939ca6341f2fcf7c442d65e1a5a6d84e4999db539269f188a  00000001000000000000000F",
+    "8c3e3f782e3b19f55e1746d8e9cfbcc3450dcc9ea5c3eda0f00af8c89f4ca145  000000010000000000000010",
+    "c601ee84db324fb7eb5c1cff34ba27ee05884c38cfc2b5ec5221c63a4798ac8c  000000010000000000000011",
+    "06f5162c76601dff57b373b5be21fee7aef59637d89b66049bce6c89c43015a0  000000010000000000000012",
+    "5f38b3ff2e3e7a6c562ded6ae16e34d6061dbadf39c7614cdfd6c94b1ad82f76  000000010000000000000013",
+    "bd57ea5ad204ca95bf804c4b3e29b7c3cf795db99551c6597e21ee50bcbe2198  000000010000000000000014",
+    "62eadd0ec184e48cd159e11bf1ae2160d3eac89634a70e96d7bab2e292a442c9  000000010000000000000015",
+    "1a78b82c7855e5c6f4de89a29bc2f004177ac854371f5d994e4bb7265197a596  000000010000000000000016",
+    "794c4e637769f4dbc39fa148e49d1b7cc033c591c7d9c0e2930fdd747cbbbdfe  000000010000000000000017",
+    "4a104b84827a4473e6e375fe46441c2a3d6b4cb3d866d97e22b1ea6cb0189571  000000010000000000000018",
+    "a10c6d42ffabc0f6a44e79344ea5ca1f6ff594d6917634752b6ab6cbf5bf16f0  000000010000000000000019",
+    "4006312fdd0170b64e5a9c967349bb4ca08dfa032b879fc0acc6d415fe06a240  00000001000000000000001A",
+    "fb30f74245dcc696a55d8093152e318e2f4cf8e36b20d26512ee63cd86071bb8  00000001000000000000001B",
+    "243190e4bcc71d4ab68fa8bddf4f523cca80255f9e4356e49a3533e68c273f05  00000001000000000000001C",
+    "a0dd5fea214b037383d5c4d7942725f71317b579dc8208e053c519fcd38ca49c  00000001000000000000001D",
+    "9442ecf581cba13f7863a297c7f3d6236b7e182dc358a415e51c29e29fdd0b53  00000001000000000000001E",
+    "fe7a1618f47ae3c3634815b6d49b1407758ed7d75880b051e3e0e01d3a2bb9f9  00000001000000000000001F",
+    "c391d26b181a652e414b71c9247e880f0d38c09170f4e72a77b05e063eb98e6e  000000010000000000000020",
+    "2c90d3a64218ac5b9fd488efa79b51c4d270e4c16c1b453f3e3f09e27e5619b6  000000010000000000000021",
+    "cb96697026ce3fade6efab6ce836c7f45f8d79ea63c6be406bf360f28f42884f  000000010000000000000022",
+    "0385c36d894274bccc33aba1492e06098505dedfc9635b6b8635e64ca8e4cf24  000000010000000000000023",
+    "9b1023eed429b095cdfbbb7a050e66023ef0b1f9a09517bc7b4a28771d84c17b  000000010000000000000024",
+    "8a59ac63604749da46f6ea230494ff01843b0e7b656cc1194b4cdd2bc175f7b4  000000010000000000000025",
+    "b2432a00b9288042a0df9686dfba302fac5d70483ae9096381f1c65eacc31c37  000000010000000000000026",
+    "22ce964544175a01511cedae5b45d0522f7ac0a767d6d5ea71b48112d5332593  000000010000000000000027",
+    "4e9fbc0c60d01247a232a14ccd2ccc6181a4b195ddc9b6dcdfc9b3d66780d207  000000010000000000000028",
+    "a1b886b15fe7e4a52dab6f82a9e9cc8923b7bf9c63253dcfd8d791249096290a  000000010000000000000029",
+    "956b65e6acde203fb4a0c2ad8629f554d1c60b04c2668c610fe90e72b31ddd36  00000001000000000000002A",
+    "fc40098bf918d5388cbf442a7342a327dbb5acf462ede37f820ea1e30375a50a  00000001000000000000002B",
+    "68c08b0762f039073d2393c1e0be73d2f51af67c2925b9b1d2df47253e9bf126  00000001000000000000002C",
+    "5029f4d4f9051ced4ea41ecc78dccd743acebfa9261fc21480b84394a8811c02  00000001000000000000002D",
+    "fc33e477430f67339a2e843282283de6c1d7695f2f14036954abcb30be3fc821  00000001000000000000002E",
+    "c9d3ee476570b8e3bbed0f5c3471890d1472b6eb71046eecf90a98f085934c97  00000001000000000000002F",
+    "373bfd3e667575dcfb5950a9e9d523a75086f0a394f73a41be1f63db74f8f405  000000010000000000000030",
+    "4078c672ca0b850b76a19bdc56b682c82d6dbcc10ca656b24fdd17aeb4924f00  000000010000000000000031",
+    "04fcefaace7738518fcef626af3bd8e40e470c98a1cc3d7cc93ed7372de03a05  000000010000000000000032",
+    "d80ac7b654d2850e5d1603e0da1dff9cebbd96ef1e32a41f18fecd24e1963bf9  000000010000000000000033",
+    "2fc2fa8147a5362ae168e54346138dd42fe9b677e4704217926ffa710b08e2b9  000000010000000000000034",
+    "a396b214dcbdd5c827e2412566ea14aed342e3d34f8a67979635fe08c9414e45  000000010000000000000035",
+    "43a82c980b4f4305a4e3ab8662e5ab017d5624e08fe8bebd7c5bbd0e752a3a0d  000000010000000000000036",
+    "227fc7e92964377be1a854fb11ba882dd20fd2c3d9d8a6d51a82d459c63d0635  000000010000000000000037",
+    "657257d60bf6a4945ad72c7451e090560629e4634a6f6420c4c4d699266f0f2c  000000010000000000000038",
+    "eb40a2a389dedd165e0042a497422e98cac6e68c910fb1c94e052f4dd09bb4c3  000000010000000000000039",
+    "77b93806fbafa13eecce89a272354c9051c0c181da284cd8faf9dadac49f0ffb  00000001000000000000003A",
+    "f040b4623b358228d227e7c401700a18e2c071ca7a2bdac24a0d7a62079c13be  00000001000000000000003B",
+    "48708e3618b0cfe88eb2c6b67f9f38532de355a1ffd00ebc9cba840c0d46f80b  00000001000000000000003C",
+    "43625804d48edf2ebd69f44e9a979499a680dce75ac9f8839a86e9275523f233  00000001000000000000003D",
+    "a5b29792b0512f1549446f3fce83613295c218c174de61dd5eb3c9da75bf5094  00000001000000000000003E",
+    "3f78396302b4a9d06594bbc1cc960b8a6c36d06ff4e3dc0c22f5005f2b47dcc0  00000001000000000000003F",
+    "efaf87fc9bf8708f3f5ec043d11e46bd70b618ccc88ebfbb8fd46304da960e0a  000000010000000000000040",
+    "1ae90ed3ea4eb9a9723cdf6be39ebca19ea49e11973a3fffd784f010bf51ebf5  000000010000000000000041",
+    "e8db5ca6bfb8b587169aa2d01d4e5e381464e0a4646d4c197afe4559113f06ec  000000010000000000000042",
+    "7d0b845cb1528ad74d70781a4a399209f28ab9e494e26cc583d6b0990db6bda4  000000010000000000000043",
+    "d58a318c41160e2d15d8f32e2960abc31119c543e1b9143a9a72dda7269779b6  000000010000000000000044",
+    "b9d197c9333a8cb405051d6477c185cd876b5d8a42d7fe4d07bc6fd67f971f54  000000010000000000000045",
+    "238b9d6bb190005ce9f37fc3021986123c86a207fca402f307b64377301150ed  000000010000000000000046",
+    "f5b2576e2faed665a5e99b2a17a1da6bef80377330decc6fd62f045e3c6a29d2  000000010000000000000047",
+    "ea6bc4e43e8a741ed260d73c33e7d125e194818c10e8046723e325854f4f5f83  000000010000000000000048",
+    "09143543e9a51854b1127ec385aacf4ada381fd71af3791c14f60f69abb1bb7a  000000010000000000000049",
+    "b059f3476387fb078b13489fff2b9ae34ee8775015f19b847eba3570ff9674fa  00000001000000000000004A",
+    "30bc7ece70794df4876aae8545206626903c9ae956332618168852d2402f4a01  00000001000000000000004B",
+    "95ada91b8ec731b61bf636247257625f7472ff79dbaceaf38da06bd1570293be  00000001000000000000004C",
+    "7d5cb637887107eb287265c0d1484a8c182972ee1a48d750e5ec611c10819a45  00000001000000000000004D",
+    "2b1a1087cb268ef5261b773c230cfc6eaaf66d21d8e95bbfbad7574665a2e905  00000001000000000000004E",
+    "0285d930c695131a1ffcbd4765951ed1e61bb69c2647ccefed8ca7209de07708  00000001000000000000004F",
+    "e1705973f8ccd750756d1ba90772589845ad123d35e2d8535709af620dd0c02b  000000010000000000000050",
+    "26a717daa2cc9fa88bb1c7df681824567079dcc9c45be610f1301c67e0bff32c  000000010000000000000051",
+    "2d115f00f5ea17a7cec74e1d49bcfa8761c6f780ad3379257ae057df6803aeeb  000000010000000000000052",
+    "05aa2e7a9c1fe7792fe22290540f3d7ef186e0bdb6c95124bf5472f29cc35f1a  000000010000000000000053",
+    "dee4ac29538597bb366579cf06c629f252b0755a8d3d98b242add41944fc9424  000000010000000000000054",
+    "ba7d1a7a494661c7b1254b2decdb2ccf5652f09017b2dd88811fa9d9eb3471a4  000000010000000000000055",
+    "c7586cd2d5458b6be6ad558da2ce306fd3ed92aafe155e3385393c094dbb307d  000000010000000000000056",
+    "90b99ebb75ede4786715b9bd91ccf35efbdcb7ae48025ef703a00ed58dd7a25c  000000010000000000000057",
+    "bec119174e0a80650cd9b45c2ca2d287de3cdfdc5c054e5c901915edb585c21d  000000010000000000000058",
+    "cd9910b1d4e75f6ede337d6e9d8c9e5ead3c506e015856de525bb817bad69b83  000000010000000000000059",
+    "a4654f81b5b0942cf37328c5e50558e76e10edb49ac40a43dd2f73d706ad7ec8  00000001000000000000005A",
+    "86476ed45906b173001f500e34ea3b67815d4541c4d1246b369b578372618859  00000001000000000000005B",
+    "39b0dbd831c197cb08f634ca4e106532a38c13037f73ce2f480298618236fc65  00000001000000000000005C",
+    "bc679d8b230bf393cb77fb9ca2084678185ccbb1c7e0cc1c0d8e105aefb22da0  00000001000000000000005D",
+    "4bcca3bcdb8eb6137dc4033ef4e68011f7708d397ae18f1c3ee1814cc3839694  00000001000000000000005E",
+    "7e76ded29a32a25ec80d4305e7f0f1619a9c2b3a6f7e3e338c4b96952a3525d3  00000001000000000000005F",
+    "9fe1b67dd2a5c7c39a310cbbd4d0568e0420b46c313df05ac9cd8d5d85c950b7  000000010000000000000060",
+    "726b052a0afb7173be2912b41bc74b1e2d5f0065d1ddebc09ee93bc9492d60d2  000000010000000000000061",
+    "75d6f2b0cc89b34dc4cebfdbc99656989e7260094f4b81ace03b6843b84160e1  000000010000000000000062",
+    "84cbd4f806cf12a45cb54fa120240d073a28c3ff4d4f11d86d0c54921ef82f3e  000000010000000000000063",
+    "3f8f63c28e99045f0a80af43ded12ea2edef4c48a44d3abd93cc62dbef43ff3e  000000010000000000000064",
+    "ae6904c55e398f37c00e781c847ce423e6cc355700ab59976bae5c8dc60f3c7f  000000010000000000000065",
+    "dd6938c6764e4ef9b06d2c3e1cef6426fab43923d62b75f96df37ebcca347107  000000010000000000000066",
+    "ea9c95b2a5ed38dc33818635e5cd046b73ccd4242b4d0b0a7af863d777b6f0ae  000000010000000000000067",
+    "4a78e94b3ea9fca4ea77e5ebd0e6b2b940e78dd37d46a1834aa3c48c8d962c4a  000000010000000000000068",
+    "45a6054b31cdf4f51869c4ffeaa003a87e8011c7ee9000401c78ffb33ad446c9  000000010000000000000069",
+    "1c4c4833317e1e24b1a3d223ec97c7aaaabba9c2dcc2b21c2d48e80e99f810e2  00000001000000000000006A",
+    "721d0fe7615895d8902cdd39e528af2ac703f911e0bac9d050c02e040ed0c161  00000001000000000000006B",
+    "cc2f9d9ba387470e947b2c686dcf30e899611057454cd241780081dc35603d62  00000001000000000000006C",
+    "35f8244b0a251f61a2e2fe3e34fa26e35fda12f101145644a771b61e7845b648  00000001000000000000006D",
+    "5ba4160ba5997a588690a2912b9a3db911823355ced757883ecc31bfe06cb25c  00000001000000000000006E",
+    "aee1a8109338ee75e1c1c8b82e4a44dd65ce7c05f39cf2d52c1a828b496fe653  00000001000000000000006F",
+    "fb9ee76f7142b44e0612ee0006932c34da82a34b90127db557c2fc9bae1571f9  000000010000000000000070",
+    "a926fa0b0740e0adfdbc22b27dcc7386768b1c5751661f7e78c41153c635129d  000000010000000000000071",
+    "318434c8a22711e31da670468b28bec750a601578ba22ed664f79041f111f686  000000010000000000000072",
+    "508593297647e16fc545bad2ec6067fee7291729412c36e47d46797cfa2486b8  000000010000000000000073",
+    "47afaa7a90dba166f7b67268dad157fc43818e56e569a6ba15947e1b63b025c3  000000010000000000000074",
+    "3b4dc76e2e5dfa754e355b2bb0cba6cb49c2fd259e9b811f1747adacc08af476  000000010000000000000075",
+    "451cf327f953402728cf5c4457114a739a7a3a8df2fe0551288a693275ef36ae  000000010000000000000076",
+    "ab2b52b7da67047c513cf28fcaec23352f46ad502bfe589b32b315c58c214419  000000010000000000000077",
+    "3266f3411cb05438fd53aaf1b82c7a0bdf966b8766fc678e41c80bdb6e36e94f  000000010000000000000078",
+    "a20e0dd869b004ceaa99afb65b8264ce8dcd22525b9ded22b29c510d35b9ea16  000000010000000000000079",
+    "3ad21e68d176386a61c1f624dcf365bbd4c50633c2b5781dbeda698842d1a591  00000001000000000000007A",
+    "7d147b62a140ffe57b3158fdbff8d10a503bce773ee88a1c29361268c0b1d6e1  00000001000000000000007B",
+    "a8efbd9c6a9995d3af5e28051e0e5b214704eb97d4c45cc34745c518662d6e1e  00000001000000000000007C",
+    "d48a0ebe8a421d9f221d6d9015feb3e540d5ca5d2ec4f162c91d4876f855ac52  00000001000000000000007D",
+    "6026062a6bd8faf67700829a540bfc863ddb225474316e9815086935c78dd44a  00000001000000000000007E",
+    "06bf1773793743c25e46396f55142de5807b8cd93670297193f0ef7a1e305eda  00000001000000000000007F",
+    "66c3f1f75f2b125f39e04e5781ff101ea26eeb11d7717e6d38eb03da5ddaf476  000000010000000000000080",
+    "296a3edc21720921b3409c397523ea4609daac8940f1fef1a2706223b4afb020  000000010000000000000081",
+    "0b89da3ece8fcc1311061acdacc636ccb37a0fcf82dabd7f1aaf5f72c00c20a2  000000010000000000000082",
+    "c1d0c8b4246bae769ae240172cb792913c2daae29ec9e0a25a5037965e384a70  000000010000000000000083",
+    "85b75609dc4d3be55fb2146e640c7f0f3860fd1831ff65523fbf7184c1a82f11  000000010000000000000084",
+    "051a0689ea2acdd074fb60004dfef3e4742e869324b06a1f425009c44ede509a  000000010000000000000085",
+    "5bb6e781df60ae54c7f90e30eca722d8f2a52ab34465f496e2d8ca7bfe692a0e  000000010000000000000086",
+    "7ca392ddaac65bf35497b389722bfa3f08bbe357da8a546fc4fd934caccc5b08  000000010000000000000087",
+    "12d7a4e75ff64e4e2a3bbf268e9da6836002be72efab557e7ea0a0f91907a898  000000010000000000000088",
+    "fd1a9ef322703d9fbfffde57de7dc45fef3e4ec1158d803ae332f7b93d861999  000000010000000000000089",
+    "28eb103fad2cf56bae14413dea0ca01f5769ccb7702a243e197d2012083226c4  00000001000000000000008A",
+    "6261c7675110d12a9df532405c815064c846a8d9ad5deb287ddcf965701aafae  00000001000000000000008B",
+    "3d14df0ff6c2a0288c1629a7fd5e0cca3498c40ba9f08d1b97345595afc046b8  00000001000000000000008C",
+    "738b0e39877a7588010b6a78c95a60b772c12277fbbdf5dcb127c539901b2a87  00000001000000000000008D",
+    "e953c05226152c848896ae8e22989c437509f06e650713ff474bf49ea5b5c80d  00000001000000000000008E",
+    "88a87c0630779854d7fe713b9bf258b806babf50ec10b3d00cc5f63e850ddaa8  00000001000000000000008F",
+    "e7ca0294547ecdf85d7761acdb266824638dd54371414b2dd03a7724ea529b16  000000010000000000000090",
+    "8b0df28d322727bf6555c2014e96a86d99d16291d44e74eb0e45d6a554c5cb21  000000010000000000000090.000000D8.backup",
+    "6d46c578c5fd9b97ba8dc7513998875f26367fcff892a15eecbdd53dbf75f703  000000010000000000000091"
+  ]
+}

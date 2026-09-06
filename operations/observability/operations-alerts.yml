@@ -1,0 +1,61 @@
+groups:
+  - name: mranked-operations
+    rules:
+      - alert: MRankedMonitoringProducerStale
+        expr: time() - mranked_ops_sample_unixtime > 300
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Operational metric production has stopped.
+      - alert: MRankedMonitoringSourceUnavailable
+        expr: mranked_ops_source_up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: An operational monitoring dependency is unavailable.
+      - alert: MRankedProjectionLag
+        expr: mranked_ops_dataset_revision_lag > 0 or mranked_ops_projection_not_ready > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: Public projections have not caught up with the canonical revision.
+      - alert: MRankedReplicationMissingOrLate
+        expr: mranked_ops_replication_connected < 1 or mranked_ops_replication_replay_lag_seconds > 900
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Standby replication is missing or exceeds the recovery objective.
+      - alert: MRankedWalArchiveLate
+        expr: time() - mranked_ops_wal_last_archived_unixtime > 900 or increase(mranked_ops_wal_archive_failures_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: WAL archival has failed or is late.
+      - alert: MRankedSpoolBacklog
+        expr: mranked_ops_spool_oldest_age_seconds{kind="wal"} > 900
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: WAL spool backlog exceeds fifteen minutes.
+      - alert: MRankedArchiveFenceStuck
+        expr: mranked_ops_archive_fenced > 0
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: A cold archive partition fence needs operator investigation.
+      - alert: MRankedDiskForecast
+        expr: predict_linear(mranked_ops_free_bytes[6h], 86400) < 0 or mranked_ops_free_bytes < mranked_ops_required_5x_bytes
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Measured disk growth or the 5x capacity scenario exceeds available storage.
+      - record: mranked_ops_inserted_rows_per_day
+        expr: sum(rate(mranked_ops_inserted_rows_total[1h])) * 86400

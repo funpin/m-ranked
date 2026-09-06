@@ -1,0 +1,1073 @@
+{
+  "generatedAt": "2026-09-06T13:59:52.774Z",
+  "legacyOrigin": "http://127.0.0.1:18088",
+  "targetOrigin": "http://127.0.0.1:18107",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "sourceSha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+  "buildId": "S1bNtv272Sw_pPvSFsZqO",
+  "runtimeEvidencePath": "../migration/reports/runtime-final-v29-20260906-r2/runtime-visual.json",
+  "runtimeEvidence": {
+    "environment": "local synthetic representative fixture",
+    "productionAcceptance": false,
+    "apiBaseUrl": "http://127.0.0.1:57675",
+    "pid": 34582,
+    "jarPath": "/private/tmp/mranked-review-v29-final-r2-build/m-ranked-backend-0.1.0-SNAPSHOT.jar",
+    "jarSha256": "db588efb5e8c33d8300a44d32b3e64725ece1b6dcb61a036544b466ab29f69aa",
+    "database": {
+      "name": "admin_review_visual_v7_it",
+      "bytes": 3952768703,
+      "institutions": 207,
+      "accounts": 824,
+      "publications": 824,
+      "snapshots": 9026,
+      "comparisonPoints": 8534560,
+      "datasetRevision": 30,
+      "flyway": [
+        {
+          "version": "1",
+          "script": "V1__target_baseline.sql",
+          "checksum": -1636077697,
+          "success": true
+        },
+        {
+          "version": "2",
+          "script": "V2__rebuild_core_projections.sql",
+          "checksum": 839607018,
+          "success": true
+        },
+        {
+          "version": "3",
+          "script": "V3__collector_observation_times_and_identity_grants.sql",
+          "checksum": -1456658399,
+          "success": true
+        },
+        {
+          "version": "4",
+          "script": "V4__admin_collection_run_status_grants.sql",
+          "checksum": 1318350062,
+          "success": true
+        },
+        {
+          "version": "5",
+          "script": "V5__legacy_activity_period_projection.sql",
+          "checksum": -1313754193,
+          "success": true
+        },
+        {
+          "version": "6",
+          "script": "V6__comparison_valid_observation_hourly_projection.sql",
+          "checksum": -290358219,
+          "success": true
+        },
+        {
+          "version": "7",
+          "script": "V7__activity_rating_read_grants.sql",
+          "checksum": -1228913579,
+          "success": true
+        },
+        {
+          "version": "8",
+          "script": "V8__legacy_overview_projection.sql",
+          "checksum": -574188650,
+          "success": true
+        },
+        {
+          "version": "9",
+          "script": "V9__immutable_observations_quality_archive_fence.sql",
+          "checksum": 1058556652,
+          "success": true
+        },
+        {
+          "version": "10",
+          "script": "V10__consistent_public_queries_and_formula_guards.sql",
+          "checksum": -1148603410,
+          "success": true
+        },
+        {
+          "version": "11",
+          "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+          "checksum": 1679789143,
+          "success": true
+        },
+        {
+          "version": "12",
+          "script": "V12__detail_history_projection.sql",
+          "checksum": 1453326243,
+          "success": true
+        },
+        {
+          "version": "13",
+          "script": "V13__immutable_account_identity_history.sql",
+          "checksum": -185639607,
+          "success": true
+        },
+        {
+          "version": "14",
+          "script": "V14__public_archived_publication_text.sql",
+          "checksum": -956321170,
+          "success": true
+        },
+        {
+          "version": "15",
+          "script": "V15__verified_source_preservation.sql",
+          "checksum": -1953543117,
+          "success": true
+        },
+        {
+          "version": "16",
+          "script": "V16__audited_catalog_commands.sql",
+          "checksum": -888916335,
+          "success": true
+        },
+        {
+          "version": "17",
+          "script": "V17__legacy_csv_compatibility_projection.sql",
+          "checksum": 2060863494,
+          "success": true
+        },
+        {
+          "version": "18",
+          "script": "V18__official_rating_commands.sql",
+          "checksum": 875583974,
+          "success": true
+        },
+        {
+          "version": "19",
+          "script": "V19__safe_health_operational_snapshot.sql",
+          "checksum": -1653532549,
+          "success": true
+        },
+        {
+          "version": "20",
+          "script": "V20__catalog_url_and_version_compatibility.sql",
+          "checksum": 925593865,
+          "success": true
+        },
+        {
+          "version": "21",
+          "script": "V21__legacy_period_first_observation_policy.sql",
+          "checksum": -900669350,
+          "success": true
+        },
+        {
+          "version": "22",
+          "script": "V22__durable_legacy_csv_archive_facts.sql",
+          "checksum": 2064364640,
+          "success": true
+        },
+        {
+          "version": "23",
+          "script": "V23__official_rating_entity_context.sql",
+          "checksum": 890722389,
+          "success": true
+        },
+        {
+          "version": "24",
+          "script": "V24__ordered_history_reaction_details.sql",
+          "checksum": 1889276383,
+          "success": true
+        },
+        {
+          "version": "25",
+          "script": "V25__safe_legacy_account_presentation.sql",
+          "checksum": 381330844,
+          "success": true
+        },
+        {
+          "version": "26",
+          "script": "V26__independent_projection_verifier_reads.sql",
+          "checksum": -1482835665,
+          "success": true
+        },
+        {
+          "version": "27",
+          "script": "V27__retained_disabled_platform_period_metrics.sql",
+          "checksum": -1466195806,
+          "success": true
+        },
+        {
+          "version": "28",
+          "script": "V28__identity_command_receipt_verifier_acl.sql",
+          "checksum": 1374125493,
+          "success": true
+        },
+        {
+          "version": "29",
+          "script": "V29__monotonic_native_identity_transitions.sql",
+          "checksum": -1547328464,
+          "success": true
+        }
+      ]
+    },
+    "revision": {
+      "asOf": "2026-08-01T12:00:00Z",
+      "representationVersion": "d7ce38b53353c9118c61ad20713989e06325e931af77bc013950610c821a315b",
+      "datasetRevision": 30
+    },
+    "sourceSha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "sourceClock": "2026-08-01T12:00:00Z",
+    "writerGate": "CLOSED"
+  },
+  "revisionBefore": {
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "d7ce38b53353c9118c61ad20713989e06325e931af77bc013950610c821a315b",
+    "datasetRevision": 30
+  },
+  "revisionAfter": {
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "d7ce38b53353c9118c61ad20713989e06325e931af77bc013950610c821a315b",
+    "datasetRevision": 30
+  },
+  "coherent": true,
+  "browser": "Playwright pinned Chromium",
+  "instrumentation": {
+    "version": 2,
+    "frozenClockRequired": true,
+    "cls": "Maximum 5s session with gaps below 1s; registered observer required, no missing-value fallback",
+    "chartStills": "Legacy Chart.js animation disabled for final endpoint state only; values, scales and tooltip formatting unchanged. Performance runs do not disable animations."
+  },
+  "captureOnly": false,
+  "fullScope": false,
+  "authenticatedManageCoverage": "INCLUDED",
+  "secretHandling": "Administrator credentials stay in per-origin browser authentication contexts. CSRF/password values are redacted from text artifacts; raw screenshots have no masks. Explicit VISUAL_STORAGE_MASKS may create separate comparison screenshots for only paired live storage values; every rectangle is reported.",
+  "gate": "PASS",
+  "results": [
+    {
+      "worker": 1,
+      "path": "/platform-posts/1",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "df9b77333247b5a45d639b308a88f8f720cfbf815cba296332c8466b2297b9c8",
+      "targetSha256": "1d8c34c8e937e95ddfefdf0340f161ce0079bf7ee67706859c287d7a60c3c5e1",
+      "changedPixels": 117,
+      "pixelDiffRatio": 0.00009027777777777777,
+      "rawPixelDiffRatio": 0.00009027777777777777,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/channels/99999999",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 404,
+      "targetStatus": 404,
+      "legacySha256": "5c587d85a38a8f27c7e692a7735809d9f72799c59b32322f027a1462dbfdd0cc",
+      "targetSha256": "5c587d85a38a8f27c7e692a7735809d9f72799c59b32322f027a1462dbfdd0cc",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=max",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "dd63144c865e02bd86d0e437caa997c8d85c8d317290093db1fdad067c86b27c",
+      "targetSha256": "181d305d6efcd31ed7f462f944c131571673ce788ce433feff0b0a455cacccae",
+      "changedPixels": 242,
+      "pixelDiffRatio": 0.00018672839506172839,
+      "rawPixelDiffRatio": 0.00018672839506172839,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/posts/1?history_limit=bad",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 422,
+      "targetStatus": 422,
+      "legacySha256": "8933091e0596a65c76175a0b9818df0fa29ab953ba6f7533463ffc2624fa981a",
+      "targetSha256": "8933091e0596a65c76175a0b9818df0fa29ab953ba6f7533463ffc2624fa981a",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 2,
+      "applicableAxeViolations": 0,
+      "a11yScope": "JSON protocol response: browser-generated viewer is outside HTML author control; exact response bytes are checked",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/manage",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 401,
+      "targetStatus": 401,
+      "legacySha256": "b05656aa9fee83eaf5079bb3a051714b1de363ea0aee77cfd729438a13c097e6",
+      "targetSha256": "b05656aa9fee83eaf5079bb3a051714b1de363ea0aee77cfd729438a13c097e6",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 2,
+      "applicableAxeViolations": 0,
+      "a11yScope": "JSON protocol response: browser-generated viewer is outside HTML author control; exact response bytes are checked",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/manage?institution_id=1",
+      "state": "manage-overview",
+      "authenticated": true,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "4b4e11ab331f6470f30213e5426817b6d02bb8feaa7549b7cb1e20d2d79ec296",
+      "targetSha256": "023ee28a9d68cb908ef06c974a544719cfadddde82f44eea7162fdb95be9e628",
+      "changedPixels": 3356,
+      "pixelDiffRatio": 0.0025895061728395063,
+      "rawPixelDiffRatio": 0.0025895061728395063,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.042717013888888884,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.042717013888888884,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/manage?institution_id=1",
+      "state": "manage-matrix",
+      "authenticated": true,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "2b9e1ec92e5450b3479ca3f573c179d22567f373dd41e2280eb0cd08e98fddfe",
+      "targetSha256": "f260ab3b50437ba30ccedb8e63573e6a48190e8c28667cae946008f0c529f338",
+      "changedPixels": 2336,
+      "pixelDiffRatio": 0.0018024691358024692,
+      "rawPixelDiffRatio": 0.0018024691358024692,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.042717013888888884,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.042717013888888884,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/?platform=max",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "d2715bd90de3c0d637e7f0ba5ea66c91abcd7930a096d438d56496687e50c1bc",
+      "targetSha256": "d2715bd90de3c0d637e7f0ba5ea66c91abcd7930a096d438d56496687e50c1bc",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 50,
+        "actualCount": 50,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/posts/1?history_limit=bad",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 422,
+      "targetStatus": 422,
+      "legacySha256": "052dd8dfac58c0e225278b89d1b64bd0c9e2ecdc715d869a58f9c629e7c045e7",
+      "targetSha256": "052dd8dfac58c0e225278b89d1b64bd0c9e2ecdc715d869a58f9c629e7c045e7",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 2,
+      "applicableAxeViolations": 0,
+      "a11yScope": "JSON protocol response: browser-generated viewer is outside HTML author control; exact response bytes are checked",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/manage",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 401,
+      "targetStatus": 401,
+      "legacySha256": "be28c2cb4b68fdcfa0a07d6cc1781487bee1d82481eff89e92dd605ad278e782",
+      "targetSha256": "be28c2cb4b68fdcfa0a07d6cc1781487bee1d82481eff89e92dd605ad278e782",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 2,
+      "applicableAxeViolations": 0,
+      "a11yScope": "JSON protocol response: browser-generated viewer is outside HTML author control; exact response bytes are checked",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/manage?institution_id=1",
+      "state": "manage-edit-name",
+      "authenticated": true,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "91ed71429a01bf82ed714d9eca5fc96d3aae37fd69796ac4ad5f8ccdfc074abb",
+      "targetSha256": "0cc2aae871a2a8d6fa535e3fee423e284edc9fc3ea6a212101b8f256d381d706",
+      "changedPixels": 3136,
+      "pixelDiffRatio": 0.002419753086419753,
+      "rawPixelDiffRatio": 0.002419753086419753,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.042717013888888884,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.042717013888888884,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/platform-posts/1",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "11cde77965c186b085452794c7ddc686dbeb3093cf954b3f6fa34670adf33f9e",
+      "targetSha256": "4199e9581c2f906d7237b2e05ce1699aa50be7ce98fbd0d61dbf60ff7852c416",
+      "changedPixels": 64,
+      "pixelDiffRatio": 0.00019443431765706648,
+      "rawPixelDiffRatio": 0.00019443431765706648,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/channels/99999999",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 404,
+      "targetStatus": 404,
+      "legacySha256": "c77873a5dd484ebc8012c927c40de87e2086d3c1525cecfc4598becb88af9dd1",
+      "targetSha256": "c77873a5dd484ebc8012c927c40de87e2086d3c1525cecfc4598becb88af9dd1",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/manage?institution_id=1",
+      "state": "manage-matrix",
+      "authenticated": true,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "94f351c500e418c751afb73fd05a603b464e99a60c749cc55200af6360a2266c",
+      "targetSha256": "94f351c500e418c751afb73fd05a603b464e99a60c749cc55200af6360a2266c",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.06753554502369669,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.06753554502369669,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/manage?institution_id=1",
+      "state": "manage-overview",
+      "authenticated": true,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "98cac6a9c181138247853e0bd7a1a8a0fc973fd98ee10e3a4e9fb3db242ddb3d",
+      "targetSha256": "98cac6a9c181138247853e0bd7a1a8a0fc973fd98ee10e3a4e9fb3db242ddb3d",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.06753554502369669,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.06753554502369669,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/manage?institution_id=1",
+      "state": "manage-edit-name",
+      "authenticated": true,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "289189a2d8d022fe6945d24e99636831d77a39e7df940500bea238913b19363e",
+      "targetSha256": "289189a2d8d022fe6945d24e99636831d77a39e7df940500bea238913b19363e",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.06753554502369669,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.06753554502369669,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    }
+  ]
+}

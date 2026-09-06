@@ -108,9 +108,11 @@ route_switch="$script_dir/switch-routing.sh"
 mranked_transition_require_active_file \
   "$route_switch" operations/scripts/switch-routing.sh true
 
-# Reads move first. No target data or release is removed.
-"$route_switch" --phase legacy --confirm "ROUTE:legacy:${CHANGE_TICKET}"
+# Reads move first, but neither legacy forms nor target admin commands may
+# write until the reverse drain is verified. A failure leaves this fence closed.
+"$route_switch" --phase rollback-freeze --confirm "ROUTE:rollback-freeze:${CHANGE_TICKET}"
 systemctl stop \
+  m-ranked-target-api.service \
   m-ranked-target-collector@telegram.service \
   m-ranked-target-collector@vk.service \
   m-ranked-target-collector@max.service \
@@ -125,11 +127,12 @@ fi
 "$REVERSE_SYNC_EXECUTABLE" verify
 "$REVERSE_SYNC_EXECUTABLE" stop
 
-systemctl start m-ranked-collector.service
 if ! curl --fail --silent --show-error --max-time 15 "$LEGACY_HEALTH_URL" >/dev/null; then
-  echo "legacy health failed after rollback" >&2
+  echo "legacy health failed; rollback admin writes remain frozen" >&2
   exit 1
 fi
+"$route_switch" --phase legacy --confirm "ROUTE:legacy:${CHANGE_TICKET}"
+systemctl start m-ranked-collector.service
 
 state_dir=/var/lib/m-ranked/cutover
 install -d -m 0700 "$state_dir"
@@ -138,7 +141,8 @@ state_file="$state_dir/rollback-$stamp.json"
 jq -n --arg status pass --arg operator "$OPERATOR_ID" --arg ticket "$CHANGE_TICKET" \
   --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{status:$status,operator:$operator,changeTicket:$ticket,completedAt:$completedAt,
-    publicRoute:"legacy",targetCollectorsStopped:true,reverseSyncDrained:true,
+    publicRoute:"legacy",targetApiStopped:true,targetCollectorsStopped:true,
+    adminWritesFrozenDuringDrain:true,reverseSyncDrained:true,
     legacyCollectorStarted:true,targetDataDeleted:false}' >"$state_file"
 chmod 0600 "$state_file"
 

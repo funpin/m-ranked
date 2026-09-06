@@ -33,10 +33,10 @@ class ComparisonSelectionTest {
                 .hasMessageContaining("positive integers");
         assertThatThrownBy(() -> new ComparisonSelection(
                 ComparisonSelectionType.INSTITUTIONS,
-                LongStream.rangeClosed(1, 51).boxed().toList()
+                LongStream.rangeClosed(1, 2001).boxed().toList()
         ))
                 .isInstanceOf(InvalidComparisonSelectionException.class)
-                .hasMessageContaining("At most 50");
+                .hasMessageContaining("At most 2000");
     }
 
     @Test

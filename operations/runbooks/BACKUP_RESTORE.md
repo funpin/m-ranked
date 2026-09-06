@@ -107,8 +107,8 @@ never be the production PGDATA. The restored PostgreSQL listens on no network
 interface; its `trust` rule applies only to a mode-0700 temporary Unix socket.
 
 The script verifies page checksums, starts recovery, requires exact PostgreSQL
-18.6, requires the exact successful Flyway V1-V8 scripts and checksums, promotion
-out of recovery and all six core projections ready at the latest dataset revision, records the last
+18.6, requires the exact successful Flyway V1-V29 scripts and checksums, promotion
+out of recovery and all nine required projections ready at the latest dataset revision, records the last
 replayed WAL LSN/transaction time, runs `pg_amcheck --all`, stops the ephemeral
 server, records elapsed seconds and removes only its own temporary directory.
 Enable daily verification after a manual successful run:
@@ -118,7 +118,7 @@ rtk sudo systemctl enable --now m-ranked-target-restore-verify.timer
 ```
 
 The JSON report must have `status=pass`, `rtoMet=true`, all check flags true,
-and the ordered V1-V8 version/script/Flyway-checksum manifest. Only after
+and the ordered V1-V29 version/script/Flyway-checksum manifest. Only after
 rechecking its SHA-256, the script atomically publishes successful daily
 evidence as `latest.json`; a failed run never replaces it. Successful quarterly
 evidence is published separately as `latest-pitr.json`.
@@ -149,6 +149,16 @@ sign the report; the timer alone is not evidence of success.
 5. Only explicit incident authorization may promote the restored host or change
    HAProxy/DNS. Application rollback is described separately.
 
-Cold Parquet archives, platform sessions and SQLite S-final are separate assets.
-Session backups use a different encryption key and are never placed in the
-analytics archive.
+Cold Parquet archives, platform sessions, every original SQLite import artifact,
+and `/var/lib/m-ranked/identity-receipts` are separate recovery assets. Provision
+the dedicated `m-ranked-identity-readers` supplementary group for backup and
+restore services on their respective hosts; `2750` writer directories and
+`0440` receipt files provide read access without changing primary groups or
+granting either reader write access. PostgreSQL
+base/WAL backups do not contain the receipt files. Retain every committed
+receipt and original `--historical-source` artifact with the restored revision,
+then run the independent projection and full identity-history reconciliation
+against the protected restored inventory; physical restore success alone is
+insufficient. Follow [IDENTITY_RECEIPTS.md](IDENTITY_RECEIPTS.md) without widening
+production writer directories. Session backups use a different encryption key
+and are never placed in the analytics archive.

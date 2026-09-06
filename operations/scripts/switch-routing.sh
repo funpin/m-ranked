@@ -75,7 +75,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --phase) phase="${2:-}"; shift 2 ;;
     --confirm) confirmation="${2:-}"; shift 2 ;;
-    *) echo "usage: $0 --phase legacy|overview|public-read|writer-freeze --confirm TOKEN" >&2; exit 64 ;;
+    *) echo "usage: $0 --phase legacy|overview|public-read|writer-freeze|rollback-freeze --confirm TOKEN" >&2; exit 64 ;;
   esac
 done
 
@@ -84,6 +84,7 @@ case "$phase" in
   overview) route_file=phase-1-overview.conf ;;
   public-read) route_file=phase-2-public-read.conf ;;
   writer-freeze) route_file=phase-3-writer-freeze.conf ;;
+  rollback-freeze) route_file=phase-4-rollback-freeze.conf ;;
   *) echo "invalid routing phase" >&2; exit 64 ;;
 esac
 
@@ -93,6 +94,7 @@ esac
 : "${NGINX_CONFIG:=/etc/nginx/nginx.conf}"
 : "${NGINX_BIN:=/usr/sbin/nginx}"
 : "${NGINX_ROUTE_LOCK:=/run/lock/m-ranked-routing.lock}"
+: "${NGINX_FREEZE_TIMEOUT_SECONDS:=30}"
 : "${ROUTING_REPORT_DIR:=/var/lib/m-ranked/cutover}"
 : "${MRANKED_INSTALL_ROOT:=/opt/m-ranked/releases}"
 : "${MRANKED_CURRENT_LINK:=/opt/m-ranked/current}"
@@ -121,7 +123,7 @@ if [[ ! -x "$NGINX_BIN" ]]; then
   echo "nginx executable is unavailable: $NGINX_BIN" >&2
   exit 69
 fi
-for command_name in install mktemp mv rm dirname systemctl flock jq date sha256sum chmod cut; do
+for command_name in install mktemp mv rm dirname systemctl flock jq date sha256sum chmod cut tr sleep; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "required command is missing: $command_name" >&2
     exit 69
@@ -130,8 +132,18 @@ done
 
 if [[ "$phase" == writer-freeze ]]; then
   "$preflight" --mode writer-cutover
-elif [[ "$phase" != legacy ]]; then
+elif [[ "$phase" != legacy && "$phase" != rollback-freeze ]]; then
   "$preflight" --mode public-read
+fi
+
+freeze_barrier=false
+if [[ "$phase" == writer-freeze || "$phase" == rollback-freeze ]]; then
+  freeze_barrier=true
+  barrier_helper="$script_dir/nginx-freeze-barrier.sh"
+  mranked_transition_require_active_file \
+    "$barrier_helper" operations/scripts/nginx-freeze-barrier.sh
+  # shellcheck source=operations/scripts/nginx-freeze-barrier.sh
+  source "$barrier_helper"
 fi
 
 active_dir="$(dirname -- "$NGINX_ACTIVE_ROUTES")"
@@ -173,6 +185,10 @@ install -m 0644 "$NGINX_ACTIVE_ROUTES" "$old_file"
 new_hash="$(sha256sum "$new_file" | cut -d' ' -f1)"
 old_hash="$(sha256sum "$old_file" | cut -d' ' -f1)"
 
+if [[ "$freeze_barrier" == true ]]; then
+  mranked_nginx_freeze_capture "$NGINX_BIN"
+fi
+
 mv -- "$new_file" "$NGINX_ACTIVE_ROUTES"
 new_file=""
 if ! "$NGINX_BIN" -t -c "$NGINX_CONFIG"; then
@@ -193,6 +209,13 @@ if ! systemctl reload nginx.service; then
   exit 75
 fi
 
+if [[ "$freeze_barrier" == true ]] && ! mranked_nginx_freeze_wait "$NGINX_BIN" "$NGINX_FREEZE_TIMEOUT_SECONDS"; then
+  # A successful reload already installed the safe file. Never restore old
+  # writable routes because a surviving old worker failed to drain in time.
+  echo "nginx freeze generation was not verified; no writer transition may proceed" >&2
+  exit 75
+fi
+
 install -d -m 0700 "$ROUTING_REPORT_DIR"
 completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -201,9 +224,11 @@ report_final="$ROUTING_REPORT_DIR/route-${phase}-${stamp}.json"
 jq -n --arg status pass --arg phase "$phase" --arg operator "$OPERATOR_ID" \
   --arg ticket "$CHANGE_TICKET" --arg completedAt "$completed_at" \
   --arg previousSha256 "$old_hash" --arg activeSha256 "$new_hash" \
+  --argjson oldWorkersDrained "$freeze_barrier" \
   '{status:$status,phase:$phase,operator:$operator,changeTicket:$ticket,
     completedAt:$completedAt,previousRouteSha256:$previousSha256,
-    activeRouteSha256:$activeSha256,dnsChanged:false,upstreamChanged:false}' \
+    activeRouteSha256:$activeSha256,oldWorkersDrained:$oldWorkersDrained,
+    dnsChanged:false,upstreamChanged:false}' \
   >"$report_tmp"
 chmod 0600 "$report_tmp"
 mv -- "$report_tmp" "$report_final"

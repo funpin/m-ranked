@@ -1,0 +1,76 @@
+{
+  "status": "pass",
+  "proof": {
+    "status": "pass",
+    "sourceSha256": "5ae4ca0322c22d2a447cda95c941adbb60846c3b86b15fdf0b59f33b42c7a42e",
+    "sourceUnchanged": true,
+    "sourceArtifacts": [
+      "32f5c9cc2d7ac2d4ccbf73ea27bb7eb6d5581b5320d63fc13ccb6194c361ea14",
+      "5ae4ca0322c22d2a447cda95c941adbb60846c3b86b15fdf0b59f33b42c7a42e",
+      "6ada28f425f803b788c359b87fc75b6b93606e805cc90dc657804934ff2ab778",
+      "f8cf66fa596364434b909b8a1551ec59498e9e7a25cb0709815006cec711ed62"
+    ],
+    "datasetRevision": 102,
+    "asOf": "2026-08-01T12:00:00+00:00",
+    "checks": [
+      {
+        "name": "presentation",
+        "status": "pass",
+        "expected": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "131f8fc12f8670d8127da9d3a8d3fe38026cb40ade4775a055c91aab8aee6c5f"
+        },
+        "actual": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "131f8fc12f8670d8127da9d3a8d3fe38026cb40ade4775a055c91aab8aee6c5f"
+        },
+        "changedKeysSample": []
+      },
+      {
+        "name": "native",
+        "status": "pass",
+        "expected": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "00a7f79d51bed0be5ad95ba77cb484fd2082537c8d78618e92abe4d2b0ba8a63"
+        },
+        "actual": {
+          "rows": 3,
+          "distinctKeys": 3,
+          "duplicateKeys": 0,
+          "sha256": "00a7f79d51bed0be5ad95ba77cb484fd2082537c8d78618e92abe4d2b0ba8a63"
+        },
+        "changedKeysSample": []
+      }
+    ]
+  },
+  "tamperCases": [
+    "closed_username",
+    "closed_title",
+    "closed_url",
+    "closed_from",
+    "closed_to",
+    "closed_native",
+    "closed_namespace",
+    "closed_native_from",
+    "closed_native_to",
+    "closed_verified",
+    "closed_provenance",
+    "missing_presentation",
+    "missing_native",
+    "extra_closed"
+  ],
+  "eachTamperOverallNoGo": true,
+  "migrationBridgeRole": "pass",
+  "clearReenrollOldBatchReplay": "pass",
+  "missingPrior": "fail-closed",
+  "compoundDeletedClosedAndBackdatedCurrent": "fail-closed with and without prior artifacts",
+  "nonMigrationAuthority": "fail-closed",
+  "requiredSFinal": "pass",
+  "boundedLimits": "pass"
+}

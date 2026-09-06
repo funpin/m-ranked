@@ -1,38 +1,16 @@
-import { MAX_COMPARISON_INSTITUTIONS } from "./types";
-import type {
-  AccountView,
-  ActivityRatingRequest,
-  ApiProblem,
-  ComparisonRequest,
-  ComparisonView,
-  InstitutionView,
-  LegacyAccountType,
-  LegacyPublicationType,
-  OverviewPage,
-  Period,
-  Platform,
-  PublicationView,
-  RatingView,
-  SortDirection,
-} from "./types";
+import createClient from "openapi-fetch";
+import type { paths } from "../../contracts/openapi/m-ranked-v1-client";
+import { MAX_COMPARISON_INSTITUTIONS, COMPARISON_PAGE_SIZE } from "./types";
+import type { ActivityRatingRequest, ApiProblem, ComparisonRequest, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection } from "./types";
 import type { OverviewSort } from "./params";
+import { revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-
-interface CacheEntry {
-  etag: string;
-  payload: unknown;
-}
+interface CacheEntry { etag: string; body: string; headers: [string, string][] }
 
 export class ApiError extends Error {
-  readonly status: number;
-  readonly problem: ApiProblem | null;
-
-  constructor(status: number, message: string, problem: ApiProblem | null = null) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.problem = problem;
+  constructor(readonly status: number, message: string, readonly problem: ApiProblem | null = null) {
+    super(message); this.name = "ApiError";
   }
 }
 
@@ -41,184 +19,122 @@ export interface ApiClientOptions {
   fetcher?: Fetcher;
   timeoutMs?: number;
   cacheEntries?: number;
-}
-
-function normalizedBaseUrl(value: string): URL {
-  const base = new URL(value);
-  if (base.protocol !== "http:" && base.protocol !== "https:") {
-    throw new Error("API_BASE_URL must use HTTP or HTTPS");
-  }
-  base.pathname = base.pathname.replace(/\/$/, "");
-  return base;
-}
-
-async function problemFrom(response: Response): Promise<ApiProblem | null> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("json")) return null;
-  try {
-    return (await response.json()) as ApiProblem;
-  } catch {
-    return null;
-  }
+  publicCache?: PublicResponseCache;
 }
 
 export function createApiClient(options: ApiClientOptions = {}) {
-  const baseUrl = normalizedBaseUrl(
-    options.baseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:8080",
-  );
+  const base = new URL(options.baseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:8080");
+  if (!["https:", "http:"].includes(base.protocol) || base.username || base.password) throw new Error("API_BASE_URL must be an HTTP(S) origin without credentials");
   const fetcher: Fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
   const timeoutMs = options.timeoutMs ?? 8_000;
-  const cacheLimit = options.cacheEntries ?? 128;
+  const limit = Math.max(0, options.cacheEntries ?? 128);
   const cache = new Map<string, CacheEntry>();
 
-  type RequestValue = string | number | boolean | readonly number[] | undefined;
-
-  async function request<T>(path: string, params: Record<string, RequestValue>): Promise<T> {
-    const url = new URL(`/api/v1${path}`, baseUrl);
-    for (const [key, value] of Object.entries(params)) {
-      if (Array.isArray(value)) {
-        for (const entry of value) url.searchParams.append(key, String(entry));
-      } else if (value !== undefined && value !== "") {
-        url.searchParams.set(key, String(value));
-      }
-    }
-    const cacheKey = url.toString();
-    const cached = cache.get(cacheKey);
+  async function revalidate(url: URL): Promise<Response> {
+    const key = url.toString();
+    const cached = cache.get(key);
     const headers = new Headers({ Accept: "application/json" });
-    if (cached?.etag) headers.set("If-None-Match", cached.etag);
-
+    if (cached) headers.set("If-None-Match", cached.etag);
     let response: Response;
     try {
-      response = await fetcher(url, {
-        method: "GET",
-        headers,
-        cache: "no-store",
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (error) {
-      throw new ApiError(0, "Spring API is unavailable", null);
-    }
-
+      response = await fetcher(url, { method: "GET", headers, cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+    } catch { throw new ApiError(0, "Spring API is unavailable"); }
     if (response.status === 304) {
       if (!cached) throw new ApiError(502, "API returned 304 without a cached representation");
-      return cached.payload as T;
+      return new Response(cached.body, { headers: cached.headers });
     }
-    if (!response.ok) {
-      const problem = await problemFrom(response);
-      throw new ApiError(
-        response.status,
-        problem?.detail || problem?.title || `API request failed with ${response.status}`,
-        problem,
-      );
-    }
-
-    const payload = (await response.json()) as T;
     const etag = response.headers.get("etag");
-    if (etag) {
-      if (!cache.has(cacheKey) && cache.size >= cacheLimit) {
-        const oldest = cache.keys().next().value as string | undefined;
-        if (oldest) cache.delete(oldest);
+    if (response.ok && etag && limit > 0) {
+      if (!cache.has(key) && cache.size >= limit) cache.delete(cache.keys().next().value!);
+      cache.set(key, { etag, body: await response.clone().text(), headers: [...response.headers] });
+    }
+    return response;
+  }
+
+  const client = createClient<paths>({
+    baseUrl: base.origin,
+    querySerializer: { array: { style: "form", explode: true } },
+    fetch: async (request) => {
+      const url = new URL(request.url);
+      if (options.publicCache) {
+        return revisionCachedResponse(url, options.publicCache, revalidate, async () => {
+          const response = await fetcher(new URL("/api/v1/revision", base), {
+            method: "GET", headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(timeoutMs),
+          });
+          if (!response.ok) throw new ApiError(response.status, "Authoritative revision is unavailable");
+          const value = await response.json() as { datasetRevision: number; representationVersion:string };
+          if (!Number.isSafeInteger(value.datasetRevision) || value.datasetRevision < 0) throw new ApiError(502, "Invalid authoritative revision");
+          if(!/^[a-f0-9]{64}$/.test(value.representationVersion)) throw new ApiError(502,"Invalid authoritative representation version");
+          return value;
+        });
       }
-      cache.set(cacheKey, { etag, payload });
+      return revalidate(url);
+    },
+  });
+
+  function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
+    if (result.error || !result.response.ok) {
+      const problem = (result.error && typeof result.error === "object" ? result.error : null) as ApiProblem | null;
+      throw new ApiError(result.response.status, problem?.detail || problem?.title || `API request failed with ${result.response.status}`, problem);
     }
-    return payload;
+    if (result.data === undefined) throw new ApiError(502, "API returned no representation");
+    return result.data;
   }
 
   return {
-    overview(input: {
-      platform: Platform;
-      period: Period;
-      q?: string;
-      sort?: OverviewSort;
-      direction?: SortDirection;
-      limit?: number;
-      cursor?: string;
-    }): Promise<OverviewPage> {
-      return request("/overview", {
-        platform: input.platform,
-        period: input.period,
-        q: (input.q ?? "").trim().slice(0, 200),
-        sort: input.sort,
-        direction: input.direction,
-        limit: Math.min(200, Math.max(1, input.limit ?? 50)),
-        cursor: input.cursor,
-      });
+    overview(input: { platform: Platform; period: Period; q?: string; sort?: OverviewSort; direction?: SortDirection; limit?: number; cursor?: string }) {
+      const q = (input.q ?? "").trim();
+      if ([...(input.q ?? "")].length > 200) throw new RangeError("q must contain at most 200 characters");
+      return client.GET("/api/v1/overview", { params: { query: { ...input, q: q || undefined, limit: Math.min(200, Math.max(1, input.limit ?? 50)) } } }).then(unwrap);
     },
-
-    institution(legacyId: number, platform: Platform, period: Period): Promise<InstitutionView> {
-      return request(`/institutions/${legacyId}`, { platform, period });
+    institution(legacyId: number, platform: Platform, period: Period) {
+      return client.GET("/api/v1/institutions/{legacyId}", { params: { path: { legacyId }, query: { platform, period } } }).then(unwrap);
     },
-
-    publication(legacyId: number, legacyType: LegacyPublicationType): Promise<PublicationView> {
-      return request(`/publications/${legacyId}`, { legacyType });
+    publication(legacyId: number, legacyType: LegacyPublicationType) {
+      return client.GET("/api/v1/publications/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
     },
-
-    account(legacyId: number, legacyType: LegacyAccountType): Promise<AccountView> {
-      return request(`/accounts/${legacyId}`, { legacyType });
+    account(legacyId: number, legacyType: LegacyAccountType) {
+      return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
     },
-
-    comparison(input: ComparisonRequest): Promise<ComparisonView> {
-      const { channels, institutions } = normalizeComparisonSelection(input);
-      return request("/compare", {
-        platform: input.platform,
-        horizonHours: input.horizonHours,
-        includePartial: input.includePartial,
-        metric: input.metric,
-        aggregation: input.aggregation,
-        institutionLimit: Math.min(
-          MAX_COMPARISON_INSTITUTIONS,
-          Math.max(1, input.institutionLimit ?? MAX_COMPARISON_INSTITUTIONS),
-        ),
-        institutions,
-        channels,
-      });
+    accountPublications(legacyId: number, legacyType: LegacyAccountType, cursor?: string) {
+      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: 200, cursor } } }).then(unwrap);
     },
-
-    rating(input: ActivityRatingRequest): Promise<RatingView> {
-      return request("/rating", {
-        platform: input.platform,
-        period: input.period,
-        channel_sort: input.channelSort,
-        channel_direction: input.channelDirection,
-        post_sort: input.postSort,
-        post_direction: input.postDirection,
-        entityLimit: Math.min(200, Math.max(1, input.entityLimit ?? 200)),
-      });
+    institutionAccounts(legacyId: number, platform: Platform, cursor?: string) {
+      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: 200, cursor } } }).then(unwrap);
+    },
+    publicationHistory(legacyId: number, legacyType: LegacyPublicationType, cursor?: string) {
+      return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: 2000, cursor } } }).then(unwrap);
+    },
+    comparisonCandidates(platform: Exclude<Platform, "all">, cursor?: string) {
+      return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: 200, cursor } } }).then(unwrap);
+    },
+    comparison(input: ComparisonRequest) {
+      const channels = input.platform === "telegram" ? normalizeComparisonIds("channels", input.channels) : undefined;
+      const institutions = input.platform === "telegram" ? undefined : normalizeComparisonIds("institutions", input.institutions);
+      return client.GET("/api/v1/compare", { params: { query: { ...input, channels: channels && [...channels], institutions: institutions && [...institutions], institutionLimit: Math.min(COMPARISON_PAGE_SIZE, Math.max(1, input.institutionLimit ?? COMPARISON_PAGE_SIZE)) } } }).then(unwrap);
+    },
+    rating(input: ActivityRatingRequest) {
+      return client.GET("/api/v1/rating", { params: { query: {
+        platform: input.platform, period: input.period, channel_sort: input.channelSort,
+        channel_direction: input.channelDirection, post_sort: input.postSort,
+        post_direction: input.postDirection, entityLimit: Math.min(200, Math.max(1, input.entityLimit ?? 200)),
+        ...(input.entityCursor ? { entityCursor: input.entityCursor } : {}),
+      } } }).then(unwrap);
     },
   };
 }
 
-export const api = createApiClient();
+const nextPublicCache: PublicResponseCache = {
+  async load(key, tags, produce) {
+    const { unstable_cache } = await import("next/cache");
+    return unstable_cache(produce, key, { tags, revalidate: 300 })();
+  },
+};
+export const api = createApiClient({ publicCache: process.env.NEXT_PUBLIC_DATA_CACHE === "disabled" ? undefined : nextPublicCache });
 
-function normalizeComparisonIds(
-  parameter: "channels" | "institutions",
-  value: readonly number[] | undefined,
-): readonly number[] | undefined {
+function normalizeComparisonIds(parameter: "channels" | "institutions", value: readonly number[] | undefined): readonly number[] | undefined {
   if (value === undefined) return undefined;
-  if (value.length === 0 || value.length > MAX_COMPARISON_INSTITUTIONS) {
-    throw new RangeError(
-      `${parameter} must contain between 1 and ${MAX_COMPARISON_INSTITUTIONS} IDs`,
-    );
-  }
-  const unique = new Set<number>();
-  for (const legacyId of value) {
-    if (!Number.isSafeInteger(legacyId) || legacyId <= 0) {
-      throw new RangeError(`${parameter} IDs must be positive safe integers`);
-    }
-    unique.add(legacyId);
-  }
-  return [...unique];
-}
-
-function normalizeComparisonSelection(input: ComparisonRequest): {
-  channels: readonly number[] | undefined;
-  institutions: readonly number[] | undefined;
-} {
-  const telegram = input.platform === "telegram";
-  return {
-    channels: telegram ? normalizeComparisonIds("channels", input.channels) : undefined,
-    institutions: telegram
-      ? undefined
-      : normalizeComparisonIds("institutions", input.institutions),
-  };
+  if (value.length === 0 || value.length > MAX_COMPARISON_INSTITUTIONS) throw new RangeError(`${parameter} must contain between 1 and ${MAX_COMPARISON_INSTITUTIONS} IDs`);
+  for (const id of value) if (!Number.isSafeInteger(id) || id <= 0) throw new RangeError(`${parameter} IDs must be positive safe integers`);
+  return [...new Set(value)];
 }

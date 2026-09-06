@@ -1,0 +1,14 @@
+{
+  "frontendStatus": 200,
+  "cookiePresent": true,
+  "hiddenTokenCount": 14,
+  "hiddenTokensEqualCookie": true,
+  "upstreamStatus": 200,
+  "upstreamHeaderName": "X-XSRF-TOKEN",
+  "upstreamTokenEqualsCookie": false,
+  "repeatedUpstreamTokenStable": false,
+  "upstreamCookieNames": [
+    "XSRF-TOKEN",
+    "XSRF-TOKEN"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "date": "2026-09-06",
+  "scope": "Legacy static screenshot producer scheduling only",
+  "priorRun": "evidence/visual-full-v29-r2-instrumented",
+  "priorGate": "NO-GO",
+  "cause": "With browser Date truly frozen, Chart.js animation continued before the old post-readiness stop. Large mobile series starved the RAF readiness wait and timed out before any legacy PNG.",
+  "change": "A legacy-only plain-JavaScript initialization hook sets Chart.defaults.animation=false on the original library assignment, before first chart construction; post-navigation stop now precedes readiness wait.",
+  "unchanged": [
+    "Original pinned Chart.js library bytes",
+    "Source chart data",
+    "Axes and tooltip callbacks",
+    "Target runtime artifact",
+    "Capture thresholds",
+    "Mobile performance animation and clock"
+  ],
+  "verification": {
+    "unitTests": 5,
+    "passed": 5,
+    "failed": 0,
+    "smoke": "evidence/visual-animation-smoke-v29-r2/report.json"
+  },
+  "instrumentationVersion": 3
+}

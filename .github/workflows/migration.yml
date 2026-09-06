@@ -1,0 +1,70 @@
+name: Required migration gates
+on:
+  pull_request:
+  push:
+    branches: [alpha, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: python -m pip install -r requirements.txt -r operations/requirements.txt
+      - run: python -m migration.integration.run --output migration/reports/ci-integrity
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: canonical-integrity-evidence
+          path: |
+            migration/reports/ci-integrity
+            !migration/reports/ci-integrity/backend-build
+  browser-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: python -m pip install -r requirements.txt -r operations/requirements.txt
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      - run: pnpm lint && pnpm typecheck && pnpm check:api && pnpm test && pnpm test:e2e
+        working-directory: frontend
+      - run: python -m migration.integration.run --visual-only --output migration/reports/ci-visual
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-parity-evidence
+          path: |
+            frontend/test-results
+            migration/reports/ci-visual
+            !migration/reports/ci-visual/backend-build

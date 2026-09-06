@@ -23,8 +23,20 @@ public record AccountView(
         long publicationCount,
         Instant latestObservedAt,
         long datasetRevision,
-        Instant asOf
+        Instant asOf,
+        AccountStats stats
 ) {
+    public AccountView(UUID id,long legacyId,LegacyEntityType legacyEntityType,Long channelLegacyId,
+            Long platformAccountLegacyId,InstitutionIdentity institution,Platform platform,String canonicalExternalId,
+            String username,String title,String url,String accessMode,boolean enabled,long publicationCount,
+            Instant latestObservedAt,long datasetRevision,Instant asOf) {
+        this(id,legacyId,legacyEntityType,channelLegacyId,platformAccountLegacyId,institution,platform,
+                canonicalExternalId,username,title,url,accessMode,enabled,publicationCount,latestObservedAt,datasetRevision,asOf,null);
+    }
+    public AccountView withStats(AccountStats value) {
+        return new AccountView(id,legacyId,legacyEntityType,channelLegacyId,platformAccountLegacyId,institution,
+                platform,canonicalExternalId,username,title,url,accessMode,enabled,publicationCount,latestObservedAt,datasetRevision,asOf,value);
+    }
     public AccountView withFallbackAsOf(Instant fallback) {
         if (asOf != null) {
             return this;
@@ -33,7 +45,7 @@ public record AccountView(
                 id, legacyId, legacyEntityType, channelLegacyId, platformAccountLegacyId,
                 institution, platform, canonicalExternalId,
                 username, title, url, accessMode, enabled, publicationCount, latestObservedAt,
-                datasetRevision, fallback
+                datasetRevision, fallback, stats
         );
     }
 }

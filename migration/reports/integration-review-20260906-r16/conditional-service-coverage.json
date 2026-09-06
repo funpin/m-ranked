@@ -1,0 +1,763 @@
+{
+  "method": "Read-only collection plus reviewed runtime guards; full Python log did not retain individual skip reasons. Mapping uses only mandatory JUnit actually retained in this run.",
+  "expectedConditionalSkips": 108,
+  "covered": 107,
+  "tests": [
+    {
+      "nodeid": "tests/test_bridge_actual_target_postgres.py::test_reconciliation_detects_actual_canonical_corruption",
+      "reason": "requires disposable PostgreSQL admin DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "bridge.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_bridge_actual_target_postgres.py::test_changed_legacy_fact_appends_correction_and_preserves_original_bytes",
+      "reason": "requires disposable PostgreSQL admin DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "bridge.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_bridge_actual_target_postgres.py::test_cleared_native_identity_closes_history_and_reenrollment_appends",
+      "reason": "requires disposable PostgreSQL admin DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "native-identity.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_bridge_actual_target_postgres.py::test_missing_source_row_requires_verified_owner_ledger_and_remains_checked",
+      "reason": "requires disposable PostgreSQL admin DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "preserved-source.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_cold_archive_postgres.py::test_real_postgres_partition_archive_is_verified_and_idempotent",
+      "reason": "set MRANKED_TEST_MAINTENANCE_DSN after loading the golden bridge fixture",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "archive.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_identity_history_postgres.py::test_complete_identity_history_is_independent_and_replayable",
+      "reason": "requires disposable PostgreSQL admin DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "identity-history.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_migration_bridge_postgres.py::test_postgres_bridge_repeat_catch_up_delete_gate_and_rollback",
+      "reason": "set MRANKED_TEST_POSTGRES_DSN to run PostgreSQL bridge integration",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "bridge.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_exact_replay_corrections_immutable_and_independent_metric_projection[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_account_corrections_preserve_lineage_and_active_tip[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_archive_fences_concurrent_correction_and_revalidates_digest[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_empty_partition_canonical_archive[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_collector_role_commits_retrievable_evidence_quality_and_corrections[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_drop_recomputes_digest_after_independent_attestation[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_v8_backfill_is_explicit_and_constraints_are_validated[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_quality_belongs_to_each_metric_in_latest_hourly_period_and_comparison[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_raw_expiry_gc_keeps_active_reference_then_removes_file_and_metadata[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_overview_metadata_uses_independent_candidate_sets[clean]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_exact_replay_corrections_immutable_and_independent_metric_projection[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_account_corrections_preserve_lineage_and_active_tip[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_archive_fences_concurrent_correction_and_revalidates_digest[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_empty_partition_canonical_archive[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_collector_role_commits_retrievable_evidence_quality_and_corrections[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_drop_recomputes_digest_after_independent_attestation[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_v8_backfill_is_explicit_and_constraints_are_validated[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_quality_belongs_to_each_metric_in_latest_hourly_period_and_comparison[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_raw_expiry_gc_keeps_active_reference_then_removes_file_and_metadata[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_observation_integrity_postgres.py::test_overview_metadata_uses_independent_candidate_sets[v8-upgrade]",
+      "reason": "integration runner must provide local PostgreSQL bootstrap DSN",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[none-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[none-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[none-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[none-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[none-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_history-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_history-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_history-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_history-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_history-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_content-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_content-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_content-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_content-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_content-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_exports-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_exports-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_exports-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_exports-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[missing_exports-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[six_only-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[six_only-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[six_only-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[six_only-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[six_only-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[extra-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[extra-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[extra-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[extra-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[extra-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[wrong_name-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[wrong_name-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[wrong_name-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[wrong_name-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[wrong_name-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[stale-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[stale-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[stale-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[stale-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[stale-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[future-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[future-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[future-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[future-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[future-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_status-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_status-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_status-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_status-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_status-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_revision-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_revision-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_revision-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_revision-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[null_revision-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[rebuilding-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[rebuilding-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[rebuilding-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[rebuilding-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[rebuilding-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[failed-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[failed-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[failed-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[failed-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[failed-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[no_revision-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[no_revision-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[no_revision-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[no_revision-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[no_revision-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[advanced_revision-inspect]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[advanced_revision-publish]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[advanced_revision-preflight]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[advanced_revision-writer]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_exact_nine_state_and_revision_guards_execute_in_postgres[advanced_revision-restore]",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_publisher_finalizes_only_complete_revision_with_pending_requests",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operational_projection_guards.py::test_writer_accepts_immutable_correction_but_rejects_exact_replay_duplicates",
+      "reason": "MRANKED_TEST_POSTGRES_ADMIN_DSN absent; guard_db runtime fixture",
+      "mechanism": "reviewed runtime skip in tests/test_operational_projection_guards.py:50",
+      "mandatoryJunit": "observations.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_operations_metrics_postgres.py::test_real_operational_sources_are_healthy_bounded_and_secret_free",
+      "reason": "requires disposable monitoring/application/Redis fixture endpoints",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": "metrics.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_reverse_sync_postgres.py::test_postgres_reverse_sync_round_trip_preserves_target_identity",
+      "reason": "set MRANKED_TEST_REVERSE_SYNC_POSTGRES_DSN to an empty disposable Flyway-latest PostgreSQL database",
+      "mechanism": "pytest skip/skipif marker",
+      "mandatoryJunit": null,
+      "executedInThisRun": false
+    },
+    {
+      "nodeid": "tests/test_target_collectors_postgres.py::test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible",
+      "reason": "MRANKED_TEST_POSTGRES_DSN absent; _dsn runtime check",
+      "mechanism": "reviewed runtime skip in tests/test_target_collectors_postgres.py:32",
+      "mandatoryJunit": "collectors.xml",
+      "executedInThisRun": true
+    },
+    {
+      "nodeid": "tests/test_target_collectors_postgres.py::test_real_postgres_account_transaction_is_idempotent_and_atomic",
+      "reason": "MRANKED_TEST_POSTGRES_DSN absent; _dsn runtime check",
+      "mechanism": "reviewed runtime skip in tests/test_target_collectors_postgres.py:32",
+      "mandatoryJunit": "collectors.xml",
+      "executedInThisRun": true
+    }
+  ]
+}

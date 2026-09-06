@@ -15,8 +15,8 @@ semantics, retention change or target-only feature enters this window.
 so it can take the mode-`0600` transition lock, and fails closed. Required evidence:
 
 - legacy, target API and target Web are healthy;
-- the checksummed shadow deploy report proves schema version 8, exactly eight
-  successful migrations, the frozen V1/V2/V3/V4/V5/V6/V7/V8 SHA-256 set,
+- the checksummed shadow deploy report proves schema version 29, exactly 29
+  successful migrations, the frozen V1–V29 SHA-256 set,
   `releaseId` and `releaseManifestSha256=SHA256(SHA256SUMS)`, and its
   `releasePath`/ID/hash equal the resolved `MRANKED_CURRENT_LINK` tree after two
   exact-coverage manifest checks. Each check also recomputes the canonical
@@ -25,15 +25,36 @@ so it can take the mode-`0600` transition lock, and fails closed. Required evide
 - contract, visual and performance JSON reports expose `status: "pass"`;
 - newest reconciliation is at most 30 minutes old, `gate.status=pass` and has
   zero critical mismatches, including NULL/zero, identities and time ranges;
-- all six projections are ready at the latest dataset revision;
+- S_final includes the mandatory `projection_verification` proof: all four
+  platforms and UI periods, all five comparison horizons and both partial
+  history modes, with the exact source SHA and published revision. A report
+  carrying only `gate.status=pass` is rejected. Owner-preserved source rows
+  require the verified prior artifacts (`--preserved-source`) described in
+  [the independent oracle contract](../../migration/bridge/PROJECTION_RECONCILIATION.md);
+- S_final also includes `identity_history_verification`, independently replayed
+  from every original accepted account-stream SQLite artifact, including closed
+  presentation/native-ID intervals. Supply each earlier artifact explicitly with
+  repeatable `--historical-source`; a current snapshot cannot substitute for
+  missing history. See [the history authority contract](../../migration/IDENTITY_HISTORY_RECONCILIATION.md).
+  Missing non-migration command/collector authority fails closed and requires an
+  accepted receipt protocol before a later post-cutover re-release can pass;
+- every committed original receipt is readable by the actual reverse user and
+  recovery reader, using the `2750`/`0440` writer-owned reader-group layout in
+  [IDENTITY_RECEIPTS.md](IDENTITY_RECEIPTS.md). API, collectors, bridge and reverse
+  must use the same explicit `MRANKED_IDENTITY_RECEIPT_DIR`; writers must not
+  belong to `m-ranked-identity-readers`;
+- exactly these nine projections are ready at the latest dataset revision:
+  `publication_latest`, `publication_hourly`, `institution_daily_metrics`,
+  `institution_monthly_metrics`, `institution_period_metrics`, `comparison`,
+  `publication_history`, `publication_content` and `legacy_exports`;
 - the continuous projection publisher is active;
 - oldest pending outbox event is at most 60 seconds old;
 - WAL archive and streaming-standby replay are at most 15 minutes behind;
 - a successful isolated restore report is no older than 24 hours, met RTO and
-  proves the exact V1-V8 version/script/Flyway-checksum manifest;
+  proves the exact V1-V29 version/script/Flyway-checksum manifest;
 - database filesystem is below 70%;
 - writer cutover additionally has the shipped PG-to-legacy adapter, a passing
-  production-like reverse-sync rehearsal report in the strict v3 Gate W
+  production-like reverse-sync rehearsal report in the strict v4 Gate W
   schema and its valid sibling `.sha256`. The JSON mtime, sidecar mtime and
   `generatedAt` age must each be within
   `0..REVERSE_SYNC_REHEARSAL_MAX_AGE_SECONDS`; neither evidence file may be
@@ -82,6 +103,12 @@ Unmatched URLs always go to FastAPI. Nginx never automatically masks a target
    `/platform-accounts` remain on legacy until their separate gates pass.
 4. `writer-freeze`: public reads are unchanged, legacy `/manage` mutations are
    denied and legacy collection is stopped for S-final.
+5. `rollback-freeze`: public GET/HEAD reads return to legacy, all public mutations
+   are denied and the modern admin API is closed. Target API/collectors stop and
+   reverse synchronization drains/verifies before the normal legacy route
+   reopens administrative writes. This emergency phase uses the existing
+   protected transition lock and route-file checks; it does not require passing
+   a forward cutover preflight while recovering from an incident.
 
 Each public route change is separately approved and reversible:
 
@@ -104,12 +131,19 @@ rtk sudo /bin/bash -p -c '
 '
 ```
 
-The script reruns preflight, installs one route file atomically, executes
+For forward phases the script reruns preflight, installs one route file atomically, executes
 `nginx -t`, reloads Nginx, and restores the preceding route file on failure. It
 does not change DNS or HAProxy. Every successful switch writes a mode-`0600`
 operator/ticket report with old and new route SHA-256 under
 `/var/lib/m-ranked/cutover`; `writer-freeze` always runs the stricter writer
 preflight.
+
+Both freeze phases also wait for the pre-reload Nginx worker PID/start-time
+generation to exit under the same verified master. Existing keepalive or
+in-flight requests cannot outlive a successful freeze admission. The default
+30-second bounded barrier sends no kill signals; inability to verify/drain the
+generation fails closed and retains the freeze file without advancing writers.
+See [ROLLBACK.md](ROLLBACK.md) for timeout and recovery behavior.
 
 ## Writer cutover Gate W
 
@@ -123,7 +157,7 @@ self-assert parity, reuse an old journal/report, or set
 four-boolean collector JSON is explicitly rejected. The current report is
 sealed and verified by the active release's
 `operations/bin/collector-parity-evidence`; it has exact object shapes,
-freshness/sidecar/raw-file checks and active release, deploy, V1-V8, namespace,
+freshness/sidecar/raw-file checks and active release, deploy, V1-V29, namespace,
 operator and dedicated `COLLECTOR_PARITY_APPROVAL_TICKET` bindings.
 
 The collector verifier validates integrity and declared invariants; it does not
@@ -134,19 +168,22 @@ workflow are part of the operational boundary; local validator tests are never
 production acceptance evidence.
 
 The reverse rehearsal report contract is documented in
-`operations/interfaces/pg-to-legacy-sync.md`. Contract v3 has exact object
+`operations/interfaces/pg-to-legacy-sync.md`. Contract v4 has exact object
 shapes and machine-enforces the production-like environment, active release ID,
 SHA-256 of that release's `SHA256SUMS`, operator, dedicated
-`REVERSE_SYNC_APPROVAL_TICKET`, source namespace, exact V1-V8 file and database
-manifests, all duplicate/preservation zeros, S-final gate/batch/source hash, and
-state-v3 baseline/fixed counts and hashes plus the canonical plan hash.
+`REVERSE_SYNC_APPROVAL_TICKET`, source namespace, exact V1-V29 file and database
+manifests, all duplicate/preservation zeros, both S-final source/revision-bound
+independent proofs, the second batch's zero-write repeat, original-input fault
+probes, real HTTP/admin/collector writer ownership, and state-v3 baseline/fixed
+counts and hashes plus the canonical plan hash.
 `REVERSE_SYNC_APPROVAL_TICKET` is never inferred from `CHANGE_TICKET`; local
 policy may point both variables at one umbrella ticket only when that ticket
 contains the independent Gate W approval.
 
-The repository retains a successful local disposable-database proof at
-`migration/reports/reverse-sync-rehearsal-v8-local-v3.json`. It demonstrates the
-test harness and round-trip implementation, but its
+The repository retains the current local V29 proof at
+`operations/http_transition/evidence/local-v29-final-r1/reverse-http.json`, plus
+historical V8/V27 and failed V28 evidence. The V29 artifact demonstrates the
+complete second S-final and real HTTP/admin/collector round trip, but its
 `environment=disposable-postgresql-integration` is not production approval and
 cannot pass the hardcoded production-like predicate regardless of its path.
 Do not install either that report or its sidecar as
@@ -178,9 +215,9 @@ nested sibling belong to the canonical release selected by
 `MRANKED_CURRENT_LINK`. Therefore invoke the absolute active-link path shown in
 this runbook, never `operations/scripts/...` from a checkout.
 
-Only after every gate above is closed—including
-strict collector evidence and a production-like v3 reverse report for the
-active V1-V8 release—the rehearsed command is:
+Only after every required gate above has passed—including
+strict collector evidence and a production-like v4 reverse report for the
+active V1-V29 release—the rehearsed command is:
 
 ```bash
 rtk sudo /bin/bash -p -c '
@@ -189,9 +226,17 @@ rtk sudo /bin/bash -p -c '
   set -a; source /etc/m-ranked/cutover.env; set +a
   release_path="$(/usr/bin/readlink -f -- "$MRANKED_CURRENT_LINK")"
   exec "$release_path/operations/scripts/writer-cutover.sh" \
-    --confirm WRITER-CUTOVER:CHANGE
+    --confirm WRITER-CUTOVER:CHANGE \
+    --historical-source /var/lib/m-ranked/migration-snapshots/S0.sqlite3 \
+    --historical-source /var/lib/m-ranked/migration-snapshots/catch-up.sqlite3
 '
 ```
+
+The named historical files are examples: enumerate every original accepted
+artifact for the actual namespace. Files must be protected, root-owned regular
+direct children of `MIGRATION_SNAPSHOT_DIR`, without SQLite sidecars. Path checks
+run before writer freeze; the SHA must also match the recorded accepted import.
+The script does not discover or approve unlisted files.
 
 It freezes admin mutations, stops only the legacy collector, creates a verified
 SQLite Backup API S-final, and performs the final idempotent
@@ -202,7 +247,7 @@ before the systemd worker or any target collector starts. The script starts the
 publisher and four target collector units only after reverse sync is active.
 
 The post-start gate requires dataset revision advancement, an in-window
-successful run from every platform, the publisher still active, all six named
+successful run from every platform, the publisher still active, all nine named
 projections `ready` at that exact new revision, the API readiness response `UP`
 at that same revision, zero duplicate idempotency keys and reverse-sync lag
 zero. The equality is recorded in the cutover state JSON. Collector units

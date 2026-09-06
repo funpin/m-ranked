@@ -4,6 +4,9 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
+import os
+from pathlib import Path
+import time
 from typing import Iterable
 
 from .model import (
@@ -12,8 +15,10 @@ from .model import (
     Platform,
     PlatformOutcome,
     RunSummary,
+    RunStatus,
     utc,
 )
+from .metrics import CollectorMetrics
 from .normalize import CanonicalNormalizer, sanitize_error_code
 from .ports import CollectorRepository, LeaseProvider, PlatformCollector, UtcClock
 
@@ -42,6 +47,7 @@ class PollCycleCoordinator:
         account_concurrency: int = 1,
         normalizer: CanonicalNormalizer | None = None,
         clock: UtcClock | None = None,
+        metrics: CollectorMetrics | None = None,
     ) -> None:
         if adapter.platform != platform:
             raise ValueError("adapter platform does not match coordinator platform")
@@ -56,6 +62,8 @@ class PollCycleCoordinator:
         self.account_concurrency = account_concurrency
         self.normalizer = normalizer or CanonicalNormalizer()
         self.clock = clock or SystemUtcClock()
+        output = os.environ.get("COLLECTOR_METRICS_FILE")
+        self.metrics = metrics or CollectorMetrics(Path(output) if output else None)
 
     async def run(self, scheduled_at: datetime | None = None) -> RunSummary:
         started_at = utc(self.clock.now(), "clock.now")
@@ -69,7 +77,9 @@ class PollCycleCoordinator:
         )
         lease = self.lease_provider.acquire(self.platform, self.partition_key)
         if lease is None:
-            return self.repository.record_skipped_run(context)
+            summary = self.repository.record_skipped_run(context)
+            self._observe_run(summary.status)
+            return summary
 
         run_started = False
         try:
@@ -87,10 +97,19 @@ class PollCycleCoordinator:
                         context, account, account_started,
                     ):
                         return
+                    began = time.monotonic()
+                    succeeded = False
+                    snapshots = 0
                     try:
                         raw = await self.adapter.collect(account, context)
-                        batch = self.normalizer.normalize(raw, context)
-                        self.repository.persist_account_batch(batch)
+                        try:
+                            batch = self.normalizer.normalize(raw, context)
+                        except Exception as rejected:
+                            self.repository.quarantine_rejected_batch(raw, context, sanitize_error_code(rejected))
+                            raise
+                        result = self.repository.persist_account_batch(batch)
+                        snapshots = getattr(result, "snapshot_count", 0)
+                        succeeded = True
                     except asyncio.CancelledError:
                         self.repository.record_account_failure(
                             context,
@@ -113,6 +132,12 @@ class PollCycleCoordinator:
                             account.id,
                             code,
                         )
+                    finally:
+                        try:
+                            self.metrics.account(self.platform, succeeded=succeeded,
+                                                 duration=time.monotonic()-began, snapshots=snapshots)
+                        except Exception as metric_error:
+                            logger.warning("collector metrics unavailable code=%s", sanitize_error_code(metric_error))
 
             results = await asyncio.gather(
                 *(collect_account(account) for account in accounts),
@@ -124,19 +149,29 @@ class PollCycleCoordinator:
             )
             if fatal is not None:
                 raise fatal
-            return self.repository.finish_run(
+            summary = self.repository.finish_run(
                 context, utc(self.clock.now(), "run.completed_at"),
             )
+            self._observe_run(summary.status)
+            return summary
         except asyncio.CancelledError:
             if run_started:
                 self._best_effort_fail(context)
+                self._observe_run(RunStatus.FAILED)
             raise
         except Exception:
             if run_started:
                 self._best_effort_fail(context)
+                self._observe_run(RunStatus.FAILED)
             raise
         finally:
             lease.release()
+
+    def _observe_run(self, status: RunStatus) -> None:
+        try:
+            self.metrics.run(self.platform, status)
+        except Exception as error:
+            logger.warning("collector metrics unavailable code=%s", sanitize_error_code(error))
 
     def _best_effort_fail(self, context: CollectionContext) -> None:
         try:

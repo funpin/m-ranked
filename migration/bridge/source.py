@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -80,11 +80,18 @@ def create_online_backup(source: Path, destination: Path) -> dict[str, Any]:
     if destination.exists():
         raise FileExistsError(destination)
     source_uri = f"{source.as_uri()}?mode=ro"
-    with sqlite3.connect(source_uri, uri=True, timeout=30) as source_conn:
-        with sqlite3.connect(destination) as destination_conn:
+    with closing(sqlite3.connect(source_uri, uri=True, timeout=30)) as source_conn:
+        with closing(sqlite3.connect(destination)) as destination_conn:
             source_conn.backup(destination_conn, pages=1_000)
+            # The private artifact is no longer a live WAL database. Otherwise
+            # a later read-only Backup API call can create WAL/SHM sidecars on
+            # this accepted source, invalidating its standalone-artifact gate.
+            # Change only the destination header before computing its checksum.
+            mode = destination_conn.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+            if str(mode).lower() != "delete":
+                raise RuntimeError("backup could not become a standalone SQLite artifact")
     destination.chmod(0o600)
-    with sqlite3.connect(f"{destination.as_uri()}?mode=ro", uri=True) as verify:
+    with closing(sqlite3.connect(f"{destination.as_uri()}?mode=ro&immutable=1", uri=True)) as verify:
         quick_check = str(verify.execute("PRAGMA quick_check").fetchone()[0])
         fk_violations = len(list(verify.execute("PRAGMA foreign_key_check")))
     if quick_check != "ok" or fk_violations:

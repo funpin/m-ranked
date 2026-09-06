@@ -1,0 +1,680 @@
+{
+  "generatedAt": "2026-09-06T14:13:00.430Z",
+  "producerFilesSha256": {
+    "visual-parity.mts": "debfd5d305ddb73a4729152abd1f0f0930a107788e1dad61cc645fc27f2dcc7e",
+    "browser-instrumentation.mts": "3df61491273969c5f700e7121045af9205c07bd12df7c8ffd0acddf926b4b6c7",
+    "overview-semantics.mts": "8a344c719611965136ea759aacf888cd40717391b85b65385a09b14257238971",
+    "visual-privacy.mts": "7e1c1f4e1854588cec2bacc2d59b9637ed33d268dfc12b48059af0f32fcdd146",
+    "visual-dynamic-values.mts": "832e2e6e26ee60161986b50ca49e1b5ad07053bd6dfd262798e1444c26a8ebe9"
+  },
+  "legacyOrigin": "http://127.0.0.1:18088",
+  "targetOrigin": "http://127.0.0.1:18107",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "sourceSha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+  "buildId": "S1bNtv272Sw_pPvSFsZqO",
+  "runtimeEvidencePath": "../migration/reports/runtime-final-v29-20260906-r2/runtime-visual.json",
+  "runtimeEvidence": {
+    "environment": "local synthetic representative fixture",
+    "productionAcceptance": false,
+    "apiBaseUrl": "http://127.0.0.1:57675",
+    "pid": 34582,
+    "jarPath": "/private/tmp/mranked-review-v29-final-r2-build/m-ranked-backend-0.1.0-SNAPSHOT.jar",
+    "jarSha256": "db588efb5e8c33d8300a44d32b3e64725ece1b6dcb61a036544b466ab29f69aa",
+    "database": {
+      "name": "admin_review_visual_v7_it",
+      "bytes": 3952768703,
+      "institutions": 207,
+      "accounts": 824,
+      "publications": 824,
+      "snapshots": 9026,
+      "comparisonPoints": 8534560,
+      "datasetRevision": 30,
+      "flyway": [
+        {
+          "version": "1",
+          "script": "V1__target_baseline.sql",
+          "checksum": -1636077697,
+          "success": true
+        },
+        {
+          "version": "2",
+          "script": "V2__rebuild_core_projections.sql",
+          "checksum": 839607018,
+          "success": true
+        },
+        {
+          "version": "3",
+          "script": "V3__collector_observation_times_and_identity_grants.sql",
+          "checksum": -1456658399,
+          "success": true
+        },
+        {
+          "version": "4",
+          "script": "V4__admin_collection_run_status_grants.sql",
+          "checksum": 1318350062,
+          "success": true
+        },
+        {
+          "version": "5",
+          "script": "V5__legacy_activity_period_projection.sql",
+          "checksum": -1313754193,
+          "success": true
+        },
+        {
+          "version": "6",
+          "script": "V6__comparison_valid_observation_hourly_projection.sql",
+          "checksum": -290358219,
+          "success": true
+        },
+        {
+          "version": "7",
+          "script": "V7__activity_rating_read_grants.sql",
+          "checksum": -1228913579,
+          "success": true
+        },
+        {
+          "version": "8",
+          "script": "V8__legacy_overview_projection.sql",
+          "checksum": -574188650,
+          "success": true
+        },
+        {
+          "version": "9",
+          "script": "V9__immutable_observations_quality_archive_fence.sql",
+          "checksum": 1058556652,
+          "success": true
+        },
+        {
+          "version": "10",
+          "script": "V10__consistent_public_queries_and_formula_guards.sql",
+          "checksum": -1148603410,
+          "success": true
+        },
+        {
+          "version": "11",
+          "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+          "checksum": 1679789143,
+          "success": true
+        },
+        {
+          "version": "12",
+          "script": "V12__detail_history_projection.sql",
+          "checksum": 1453326243,
+          "success": true
+        },
+        {
+          "version": "13",
+          "script": "V13__immutable_account_identity_history.sql",
+          "checksum": -185639607,
+          "success": true
+        },
+        {
+          "version": "14",
+          "script": "V14__public_archived_publication_text.sql",
+          "checksum": -956321170,
+          "success": true
+        },
+        {
+          "version": "15",
+          "script": "V15__verified_source_preservation.sql",
+          "checksum": -1953543117,
+          "success": true
+        },
+        {
+          "version": "16",
+          "script": "V16__audited_catalog_commands.sql",
+          "checksum": -888916335,
+          "success": true
+        },
+        {
+          "version": "17",
+          "script": "V17__legacy_csv_compatibility_projection.sql",
+          "checksum": 2060863494,
+          "success": true
+        },
+        {
+          "version": "18",
+          "script": "V18__official_rating_commands.sql",
+          "checksum": 875583974,
+          "success": true
+        },
+        {
+          "version": "19",
+          "script": "V19__safe_health_operational_snapshot.sql",
+          "checksum": -1653532549,
+          "success": true
+        },
+        {
+          "version": "20",
+          "script": "V20__catalog_url_and_version_compatibility.sql",
+          "checksum": 925593865,
+          "success": true
+        },
+        {
+          "version": "21",
+          "script": "V21__legacy_period_first_observation_policy.sql",
+          "checksum": -900669350,
+          "success": true
+        },
+        {
+          "version": "22",
+          "script": "V22__durable_legacy_csv_archive_facts.sql",
+          "checksum": 2064364640,
+          "success": true
+        },
+        {
+          "version": "23",
+          "script": "V23__official_rating_entity_context.sql",
+          "checksum": 890722389,
+          "success": true
+        },
+        {
+          "version": "24",
+          "script": "V24__ordered_history_reaction_details.sql",
+          "checksum": 1889276383,
+          "success": true
+        },
+        {
+          "version": "25",
+          "script": "V25__safe_legacy_account_presentation.sql",
+          "checksum": 381330844,
+          "success": true
+        },
+        {
+          "version": "26",
+          "script": "V26__independent_projection_verifier_reads.sql",
+          "checksum": -1482835665,
+          "success": true
+        },
+        {
+          "version": "27",
+          "script": "V27__retained_disabled_platform_period_metrics.sql",
+          "checksum": -1466195806,
+          "success": true
+        },
+        {
+          "version": "28",
+          "script": "V28__identity_command_receipt_verifier_acl.sql",
+          "checksum": 1374125493,
+          "success": true
+        },
+        {
+          "version": "29",
+          "script": "V29__monotonic_native_identity_transitions.sql",
+          "checksum": -1547328464,
+          "success": true
+        }
+      ]
+    },
+    "revision": {
+      "asOf": "2026-08-01T12:00:00Z",
+      "representationVersion": "d7ce38b53353c9118c61ad20713989e06325e931af77bc013950610c821a315b",
+      "datasetRevision": 30
+    },
+    "sourceSha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "sourceClock": "2026-08-01T12:00:00Z",
+    "writerGate": "CLOSED"
+  },
+  "revisionBefore": {
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "d7ce38b53353c9118c61ad20713989e06325e931af77bc013950610c821a315b",
+    "datasetRevision": 30
+  },
+  "revisionAfter": {
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "d7ce38b53353c9118c61ad20713989e06325e931af77bc013950610c821a315b",
+    "datasetRevision": 30
+  },
+  "coherent": true,
+  "browser": "Playwright pinned Chromium",
+  "instrumentation": {
+    "version": 3,
+    "frozenClockRequired": true,
+    "cls": "Maximum 5s session with gaps below 1s; registered observer required, no missing-value fallback",
+    "chartStills": "A legacy-only init hook sets Chart.defaults.animation=false when the original library is assigned to window.Chart, before any chart construction; a post-navigation stop confirms the final endpoint. Library bytes, data, scales, tooltip formatting and natural pointer selection are unchanged. Performance runs do not install this hook or freeze time."
+  },
+  "captureOnly": false,
+  "fullScope": false,
+  "authenticatedManageCoverage": "NOT_RUN_MISSING_CREDENTIALS",
+  "secretHandling": "Administrator credentials stay in per-origin browser authentication contexts. CSRF/password values are redacted from text artifacts; raw screenshots have no masks. Explicit VISUAL_STORAGE_MASKS may create separate comparison screenshots for only paired live storage values; every rectangle is reported.",
+  "gate": "PASS",
+  "results": [
+    {
+      "worker": 0,
+      "path": "/compare?platform=telegram&period=168",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "abe969c7d2c76f8fbca9d988412b8b347cb42c533dcf5142cf1ea99ad36c5a71",
+      "targetSha256": "cf2a50ce9ee7a04280833c4501de9e8b07f1c5607035b4950a225890c56f100f",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.0000046296296296296296,
+      "rawPixelDiffRatio": 0.0000046296296296296296,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/compare?platform=telegram&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "06750f2583e3b104d850d7d93e9082408de0516c5993704a0077272f37923b4c",
+      "targetSha256": "581c7fc12465875bcc2d59a4bcf35af62e275c6aaa72c075a7ca221784f09919",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.0000046296296296296296,
+      "rawPixelDiffRatio": 0.0000046296296296296296,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=vk&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "a48d3e0ab601ec603c077b9daeca4aa3e644a814f4f41c1ea413fc551c05a8de",
+      "targetSha256": "f262ce033e3093155d52a4eced74e1237af5eff13ca730fcb2b299c03d82dc72",
+      "changedPixels": 36,
+      "pixelDiffRatio": 0.00002777777777777778,
+      "rawPixelDiffRatio": 0.00002777777777777778,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0.00023301504629629627,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.00023301504629629627,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/compare?platform=rutube&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "ad9602a05dde333a3c2db7442d51ae3f4f0bfb3126d27bf06b1d690d20d6303f",
+      "targetSha256": "53b1e878a9b2063951934968d1fdd548d1740f7df1e54e18e770478e1e2f8a69",
+      "changedPixels": 42,
+      "pixelDiffRatio": 0.00003240740740740741,
+      "rawPixelDiffRatio": 0.00003240740740740741,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=telegram&period=168",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "5aae084c775b4836bf157a4cc4293de63dd9c90711800c05c3a1cae37f4f69ea",
+      "targetSha256": "4ad0c9733ae5f581175823be588140c1a45db27175345f26bf0df9abd92a2a34",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.00001822821728034998,
+      "rawPixelDiffRatio": 0.00001822821728034998,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/compare?platform=telegram&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "5aae084c775b4836bf157a4cc4293de63dd9c90711800c05c3a1cae37f4f69ea",
+      "targetSha256": "4ad0c9733ae5f581175823be588140c1a45db27175345f26bf0df9abd92a2a34",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.00001822821728034998,
+      "rawPixelDiffRatio": 0.00001822821728034998,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=vk&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "751326b89ddb7ffd922d8cf7999cae2baf871f4920de7f92a9ddf194428377a6",
+      "targetSha256": "f2cc4a038e46edd247686b0f499a8988d7ab2734d0e30cd0fd1b2cd77efce32a",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.00001822821728034998,
+      "rawPixelDiffRatio": 0.00001822821728034998,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/compare?platform=rutube&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "adeeb575c92de45a8b26781cbd0f81a852a41eeaa8d2c814753e6793f187e20b",
+      "targetSha256": "9ad28faefca889f63bccfcad92ccbed635543bc906e81847cfa99fbd70adfb08",
+      "changedPixels": 12,
+      "pixelDiffRatio": 0.00003645643456069996,
+      "rawPixelDiffRatio": 0.00003645643456069996,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    }
+  ]
+}

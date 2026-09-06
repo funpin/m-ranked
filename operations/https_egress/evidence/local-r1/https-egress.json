@@ -1,0 +1,149 @@
+{
+  "reportVersion": 1,
+  "status": "pass",
+  "environment": "isolated-local-dns-tls",
+  "productionAcceptance": false,
+  "externalEgressPolicyExercised": true,
+  "cases": [
+    {
+      "sha256": "f42dae6748ea9588c7f18284afeeca93b69985974cd9ade0f652cfb9a1e2ba27",
+      "status": "pass",
+      "dnsQueries": 1,
+      "case": "actual-dns-tls-pinned-connect",
+      "bytes": 68
+    },
+    {
+      "case": "manual-relative-redirect",
+      "status": "pass",
+      "httpRequests": 2
+    },
+    {
+      "status": "pass",
+      "case": "private-redirect-rejected-before-network"
+    },
+    {
+      "case": "scheme-host-port-userinfo-fragment-corpus",
+      "cases": 6,
+      "status": "pass"
+    },
+    {
+      "status": "pass",
+      "case": "tls-peer-hostname-mismatch"
+    },
+    {
+      "case": "stream-byte-cap-and-cancel",
+      "status": "pass",
+      "retainedBytes": 1025
+    },
+    {
+      "case": "slow-body-total-deadline",
+      "status": "pass",
+      "durationMs": 154
+    },
+    {
+      "status": "pass",
+      "case": "header-count-cap"
+    },
+    {
+      "case": "production-private-ip-policy",
+      "status": "pass",
+      "httpRequests": 0
+    },
+    {
+      "case": "mixed-public-private-answer-set",
+      "status": "pass",
+      "httpRequests": 0
+    },
+    {
+      "httpRequests": 1,
+      "dnsQueries": 2,
+      "case": "dns-rebinding-between-redirect-hops",
+      "status": "pass"
+    },
+    {
+      "destination": "RFC5737 TEST-NET-2:443",
+      "case": "kernel-network-namespace-egress-denied",
+      "status": "pass",
+      "policy": "Docker --network none; only loopback exists"
+    }
+  ],
+  "durationSeconds": 1.369579584,
+  "limitations": [
+    "Test-only constructor permits exactly 127.0.0.1 for the positive TLS fixture; default production policy is separately proven to reject it",
+    "No request to live Telegram/CDN or production egress configuration; live provider acceptance and approved network policy remain external gates"
+  ],
+  "containerImage": "eclipse-temurin@sha256:7a65df4b22d2de92d4e04056e884f3b9122d70b21e2847fd66084278bd0ce037",
+  "containerRemoved": true,
+  "containerUser": 501,
+  "capabilities": [],
+  "readOnlyRoot": true,
+  "heapLimitBytes": 134217728,
+  "containerMemoryBytes": 402653184,
+  "commands": [
+    {
+      "name": "network-tests",
+      "command": [
+        "/Users/funpin/Documents/ChatGPT/TG-monitoring/backend/mvnw",
+        "-Dmranked.build.directory=/private/tmp/mranked-https-egress-r1/backend-build",
+        "-Dmaven.repo.local=/private/tmp/mranked-maven-repository",
+        "-Dtest=PinnedHttpsClientNetworkTest,TelegramEmojiHttpGatewayTest,CustomEmojiServiceTest",
+        "test"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 7.656
+    },
+    {
+      "name": "isolated-egress",
+      "command": [
+        "docker",
+        "run",
+        "--name",
+        "mranked-egress-it-4d6caf66b707",
+        "--pull",
+        "never",
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--pids-limit",
+        "128",
+        "--memory",
+        "384m",
+        "--cpus",
+        "2",
+        "--user",
+        "501:20",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,size=64m",
+        "--mount",
+        "type=bind,source=/private/tmp/mranked-https-egress-r1,target=/rehearsal,readonly",
+        "--mount",
+        "type=bind,source=/private/tmp/mranked-https-egress-r1/network-evidence,target=/evidence",
+        "eclipse-temurin@sha256:7a65df4b22d2de92d4e04056e884f3b9122d70b21e2847fd66084278bd0ce037",
+        "java",
+        "-Xmx128m",
+        "-cp",
+        "/rehearsal/backend-build/classes:/rehearsal/backend-build/test-classes:/rehearsal/lib/*",
+        "org.mranked.operations.infrastructure.HttpsNetworkRehearsal",
+        "/evidence",
+        "--require-egress-denied"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 1.947
+    },
+    {
+      "name": "cleanup",
+      "command": [
+        "docker",
+        "rm",
+        "--force",
+        "mranked-egress-it-4d6caf66b707"
+      ],
+      "exitCode": 0,
+      "durationSeconds": 0.044
+    }
+  ]
+}

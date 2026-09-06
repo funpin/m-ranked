@@ -5,6 +5,19 @@ package org.mranked.query.infrastructure;
  * the rebuilt latest projection and never rescan raw publication snapshots.
  */
 final class ActivityRatingSql {
+    static String entityPageSql(String sql) {
+        int selection = sql.lastIndexOf("\nSELECT entity_id");
+        int ordering = sql.lastIndexOf("ORDER BY");
+        String order = sql.substring(ordering + "ORDER BY".length(), sql.lastIndexOf("LIMIT")).strip();
+        String prefix = sql.substring(0, selection);
+        String columns = sql.substring(selection, ordering).replace("SELECT entity_id", "SELECT page_position, entity_id").replace("FROM sortable", "FROM positioned");
+        return prefix + ", positioned AS (SELECT sortable.*, row_number() OVER (ORDER BY "
+                + order + ") AS page_position FROM sortable) " + columns
+                + " WHERE CAST(:afterEntityId AS uuid) IS NULL OR page_position > "
+                + "(SELECT page_position FROM positioned WHERE entity_id = CAST(:afterEntityId AS uuid)) "
+                + " ORDER BY page_position LIMIT :entityFetchLimit";
+    }
+
     private ActivityRatingSql() {
     }
 
@@ -22,17 +35,11 @@ final class ActivityRatingSql {
                  WHERE revision.id = :revision
             ),
             latest_subscribers AS (
-                SELECT DISTINCT ON (snapshot.platform_account_id)
-                       snapshot.platform_account_id,
-                       snapshot.subscriber_count
-                  FROM ingest.account_metric_snapshot snapshot
-                  CROSS JOIN selected_revision revision
-                 WHERE snapshot.observed_at <= revision.as_of
-                   AND snapshot.collected_at <= revision.as_of
-                   AND snapshot.quality <> 'invalid'
-                 ORDER BY snapshot.platform_account_id,
-                          snapshot.observed_at DESC,
-                          snapshot.id DESC
+                SELECT snapshot.platform_account_id,
+                       snapshot.value AS subscriber_count
+                  FROM analytics.account_latest snapshot
+                 WHERE snapshot.dataset_revision_id = :revision
+                   AND snapshot.metric_key = 'subscribers'
             ),
             enabled_channels AS (
                 SELECT account.id AS entity_id,
@@ -46,11 +53,11 @@ final class ActivityRatingSql {
                        account.current_username AS username,
                        account.current_title AS title,
                        subscriber.subscriber_count
-                  FROM catalog.platform_account account
+                  FROM catalog.visible_platform_account account
                   JOIN catalog.legacy_entity_alias channel_alias
                     ON channel_alias.target_uuid = account.id
                    AND channel_alias.entity_type = 'channels'
-                  JOIN catalog.institution institution
+                  JOIN catalog.visible_institution institution
                     ON institution.id = account.institution_id
                   LEFT JOIN catalog.legacy_entity_alias institution_alias
                     ON institution_alias.target_uuid = institution.id
@@ -70,7 +77,7 @@ final class ActivityRatingSql {
                   JOIN analytics.publication_latest latest
                     ON latest.dataset_revision_id = revision.id
                    AND latest.platform = 'telegram'
-                  JOIN ingest.publication publication
+                  JOIN ingest.visible_publication publication
                     ON publication.id = latest.publication_id
                    AND publication.published_at >= revision.cutoff
             ),
@@ -150,22 +157,16 @@ final class ActivityRatingSql {
                  WHERE revision.id = :revision
             ),
             latest_subscribers AS (
-                SELECT DISTINCT ON (snapshot.platform_account_id)
-                       snapshot.platform_account_id,
-                       snapshot.subscriber_count
-                  FROM ingest.account_metric_snapshot snapshot
-                  CROSS JOIN selected_revision revision
-                 WHERE snapshot.observed_at <= revision.as_of
-                   AND snapshot.collected_at <= revision.as_of
-                   AND snapshot.quality <> 'invalid'
-                 ORDER BY snapshot.platform_account_id,
-                          snapshot.observed_at DESC,
-                          snapshot.id DESC
+                SELECT snapshot.platform_account_id,
+                       snapshot.value AS subscriber_count
+                  FROM analytics.account_latest snapshot
+                 WHERE snapshot.dataset_revision_id = :revision
+                   AND snapshot.metric_key = 'subscribers'
             ),
             subscriber_totals AS (
                 SELECT account.institution_id,
                        sum(subscriber.subscriber_count)::bigint AS subscriber_count
-                  FROM catalog.platform_account account
+                  FROM catalog.visible_platform_account account
                   LEFT JOIN latest_subscribers subscriber
                     ON subscriber.platform_account_id = account.id
                  WHERE account.platform::text = :platform
@@ -211,10 +212,10 @@ final class ActivityRatingSql {
                   JOIN analytics.publication_latest latest
                     ON latest.dataset_revision_id = revision.id
                    AND latest.platform::text = :platform
-                  JOIN ingest.publication publication
+                  JOIN ingest.visible_publication publication
                     ON publication.id = latest.publication_id
                    AND publication.published_at >= revision.cutoff
-                  JOIN catalog.platform_account account
+                  JOIN catalog.visible_platform_account account
                     ON account.id = latest.platform_account_id
                    AND account.enabled
             ),
@@ -257,7 +258,7 @@ final class ActivityRatingSql {
                        END AS engagement_rate,
                        subscribers.subscriber_count
                   FROM aggregate_facts aggregate
-                  JOIN catalog.institution institution
+                  JOIN catalog.visible_institution institution
                     ON institution.id = aggregate.institution_id
                   JOIN catalog.legacy_entity_alias institution_alias
                     ON institution_alias.target_uuid = institution.id
@@ -304,17 +305,11 @@ final class ActivityRatingSql {
                  WHERE revision.id = :revision
             ),
             latest_subscribers AS (
-                SELECT DISTINCT ON (snapshot.platform_account_id)
-                       snapshot.platform_account_id,
-                       snapshot.subscriber_count
-                  FROM ingest.account_metric_snapshot snapshot
-                  CROSS JOIN selected_revision revision
-                 WHERE snapshot.observed_at <= revision.as_of
-                   AND snapshot.collected_at <= revision.as_of
-                   AND snapshot.quality <> 'invalid'
-                 ORDER BY snapshot.platform_account_id,
-                          snapshot.observed_at DESC,
-                          snapshot.id DESC
+                SELECT snapshot.platform_account_id,
+                       snapshot.value AS subscriber_count
+                  FROM analytics.account_latest snapshot
+                 WHERE snapshot.dataset_revision_id = :revision
+                   AND snapshot.metric_key = 'subscribers'
             ),
             publication_rows AS (
                 SELECT publication.id AS publication_id,
@@ -372,13 +367,13 @@ final class ActivityRatingSql {
                   JOIN analytics.publication_latest latest
                     ON latest.dataset_revision_id = revision.id
                    AND latest.platform = 'telegram'
-                  JOIN ingest.publication publication
+                  JOIN ingest.visible_publication publication
                     ON publication.id = latest.publication_id
                    AND publication.published_at >= revision.cutoff
-                  JOIN catalog.platform_account account
+                  JOIN catalog.visible_platform_account account
                     ON account.id = latest.platform_account_id
                    AND account.enabled
-                  JOIN catalog.institution institution
+                  JOIN catalog.visible_institution institution
                     ON institution.id = latest.institution_id
                   JOIN catalog.legacy_entity_alias institution_alias
                     ON institution_alias.target_uuid = institution.id
@@ -556,13 +551,13 @@ final class ActivityRatingSql {
                   JOIN analytics.publication_latest latest
                     ON latest.dataset_revision_id = revision.id
                    AND latest.platform::text = :platform
-                  JOIN ingest.publication publication
+                  JOIN ingest.visible_publication publication
                     ON publication.id = latest.publication_id
                    AND publication.published_at >= revision.cutoff
-                  JOIN catalog.platform_account account
+                  JOIN catalog.visible_platform_account account
                     ON account.id = latest.platform_account_id
                    AND account.enabled
-                  JOIN catalog.institution institution
+                  JOIN catalog.visible_institution institution
                     ON institution.id = latest.institution_id
                   JOIN catalog.legacy_entity_alias institution_alias
                     ON institution_alias.target_uuid = institution.id

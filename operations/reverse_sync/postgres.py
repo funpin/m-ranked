@@ -9,6 +9,9 @@ from uuid import UUID
 import psycopg
 from psycopg.rows import dict_row
 
+from collector_target.identity_evidence import accepted_admin_input, IdentityEvidenceUnavailable
+from migration.bridge.model import stable_uuid
+
 from collector_target.lease import advisory_lock_key, lease_name
 from collector_target.model import Platform
 
@@ -68,7 +71,7 @@ LEFT JOIN LATERAL (
            snapshot.subscriber_display,
            snapshot.observed_at,
            snapshot.quality
-    FROM ingest.account_metric_snapshot AS snapshot
+    FROM ingest.account_metric_snapshot_active AS snapshot
     WHERE snapshot.platform_account_id=account.id
     ORDER BY snapshot.observed_at DESC, snapshot.id DESC
     LIMIT 1
@@ -178,18 +181,50 @@ SELECT snapshot.published_month,
        snapshot.comments_count,
        snapshot.shares_count,
        snapshot.quality::text AS quality,
+       snapshot.views_quality::text AS views_quality,
+       snapshot.reactions_quality::text AS reactions_quality,
+       snapshot.comments_quality::text AS comments_quality,
+       snapshot.shares_quality::text AS shares_quality,
+       snapshot.metric_evidence,
        snapshot.interval_uncertain,
        snapshot.synthetic,
        snapshot.metric_semantics_version,
        snapshot.capability_version,
        snapshot.source_fingerprint,
        snapshot.created_at,
+       snapshot.correction_sequence,
+       snapshot.supersedes_snapshot_id,
+       native_csv.fields->>'raw_json' AS legacy_csv_raw_json,
+       ARRAY(SELECT old.id FROM ingest.publication_metric_snapshot old
+             WHERE old.published_month=snapshot.published_month
+               AND old.publication_id=snapshot.publication_id
+               AND old.sampling_bucket=snapshot.sampling_bucket
+               AND old.correction_sequence<snapshot.correction_sequence
+             ORDER BY old.correction_sequence) AS superseded_ids,
+       (SELECT m.source_pk::bigint FROM migration.identity_map_history m
+        JOIN ingest.publication_metric_snapshot old ON old.id=m.target_bigint
+        WHERE m.target_type='publication_metric_snapshot'
+          AND old.published_month=snapshot.published_month
+          AND old.publication_id=snapshot.publication_id
+          AND old.sampling_bucket=snapshot.sampling_bucket
+          AND m.source_table IN ('reaction_snapshots','platform_snapshots')
+        ORDER BY m.id LIMIT 1) AS legacy_source_snapshot_id,
+       (SELECT m.source_row_hash FROM migration.identity_map_history m
+        JOIN ingest.publication_metric_snapshot old ON old.id=m.target_bigint
+        WHERE m.target_type='publication_metric_snapshot'
+          AND old.published_month=snapshot.published_month
+          AND old.publication_id=snapshot.publication_id
+          AND old.sampling_bucket=snapshot.sampling_bucket
+          AND m.source_table IN ('reaction_snapshots','platform_snapshots')
+        ORDER BY m.id LIMIT 1) AS legacy_source_row_hash,
        CASE WHEN account.platform='telegram'
             THEN post_alias.legacy_id
             ELSE platform_post_alias.legacy_id
        END AS publication_legacy_id,
        COALESCE(reactions.breakdown, '{}'::jsonb) AS reaction_breakdown
-FROM ingest.publication_metric_snapshot AS snapshot
+FROM ingest.publication_metric_snapshot_active AS snapshot
+LEFT JOIN analytics.legacy_native_export_lexeme native_csv
+  ON native_csv.published_month=snapshot.published_month AND native_csv.snapshot_id=snapshot.id
 JOIN ingest.publication AS publication ON publication.id=snapshot.publication_id
 JOIN catalog.platform_account AS account ON account.id=publication.primary_account_id
 LEFT JOIN catalog.legacy_entity_alias AS post_alias
@@ -247,6 +282,8 @@ class PostgresReverseSource:
             privileges = connection.execute(
                 """WITH required(relation_name) AS (VALUES
                        ('migration.import_batch'),
+                       ('migration.legacy_identity_map'),
+                       ('ops_and_admin.catalog_command_receipt'),
                        ('analytics.dataset_revision'),
                        ('catalog.legacy_entity_alias'),
                        ('catalog.institution'),
@@ -254,10 +291,11 @@ class PostgresReverseSource:
                        ('catalog.account_external_identity'),
                        ('ingest.collection_run'),
                        ('ingest.collection_account_result'),
-                       ('ingest.account_metric_snapshot'),
+                       ('ingest.account_metric_snapshot_active'),
                        ('ingest.publication'),
                        ('ingest.publication_identity'),
-                       ('ingest.publication_metric_snapshot'),
+                       ('ingest.publication_metric_snapshot_active'),
+                       ('migration.identity_map_history'),
                        ('ingest.reaction_breakdown'),
                        ('ingest.deletion_observation'),
                        ('ops_and_admin.operational_checkpoint')
@@ -403,25 +441,27 @@ class PostgresReverseSource:
         if not set(baseline).issubset(visible_ids):
             raise RuntimeError("baseline dataset revision set is no longer visible")
         delta = tuple(item for item in all_revisions if item.id not in baseline_set)
-        unsupported = [item for item in delta if item.cause != "ingestion"]
-        if unsupported:
-            raise RuntimeError(
-                "rollback window contains a non-ingestion dataset revision"
-            )
         revision_ids = tuple(item.id for item in delta)
-        run_ids = tuple(
-            dict.fromkeys(
-                item.source_run_id for item in delta if item.source_run_id is not None
-            )
-        )
-        if any(item.source_run_id is None for item in delta):
+        ingestion = tuple(item for item in delta if item.cause == "ingestion")
+        run_ids = tuple(dict.fromkeys(item.source_run_id for item in ingestion))
+        if any(item.source_run_id is None for item in ingestion):
             raise RuntimeError("ingestion revision is missing source_run_id")
         revision_accounts: set[UUID] = set()
+        authoritative_native: set[UUID] = set()
+        authoritative_presentation: set[UUID] = set()
         for revision in delta:
-            raw_account = revision.metadata.get("account_id")
-            if raw_account is None:
-                raise RuntimeError("ingestion revision is missing account_id metadata")
-            revision_accounts.add(UUID(str(raw_account)))
+            if revision.cause == "ingestion":
+                raw_account = revision.metadata.get("account_id")
+                if raw_account is None:
+                    raise RuntimeError("ingestion revision is missing account_id metadata")
+                revision_accounts.add(UUID(str(raw_account)))
+            elif revision.cause == "configuration":
+                account, action = self._verified_identity_command(connection, revision)
+                revision_accounts.add(account)
+                (authoritative_native if action == "account.native_id"
+                 else authoritative_presentation).add(account)
+            else:
+                raise RuntimeError("rollback window contains an unsupported dataset revision")
         result_rows = connection.execute(
             """SELECT DISTINCT result.platform_account_id
                FROM ingest.collection_account_result AS result
@@ -434,6 +474,10 @@ class PostgresReverseSource:
         )
         account_ids = tuple(sorted(revision_accounts, key=str))
         accounts = self._rows(connection, ACCOUNT_SQL, (list(account_ids),)) if account_ids else ()
+        accounts = tuple(dict(account,
+            native_identity_authoritative=UUID(str(account["id"])) in authoritative_native,
+            presentation_authoritative=UUID(str(account["id"])) in authoritative_presentation
+        ) for account in accounts)
         publications = (
             self._rows(connection, PUBLICATION_SQL, (list(account_ids),))
             if account_ids else ()
@@ -462,6 +506,73 @@ class PostgresReverseSource:
             collection_runs=collection_runs,
             generated_at=utc_now(),
         )
+
+    def _verified_identity_command(
+        self, connection: psycopg.Connection[Any], revision: Revision
+    ) -> tuple[UUID, str]:
+        # The immutable DB receipt proves acceptance. Only the original durable
+        # command supplies expected values; the response's state is never input.
+        try:
+            receipt = accepted_admin_input(connection, revision.id, revision.correlation_id)
+        except IdentityEvidenceUnavailable as error:
+            raise RuntimeError("reverse identity command " + str(error)) from error
+        if receipt is None:
+            raise RuntimeError("configuration revision lacks an accepted original identity receipt")
+        original = receipt["input"]
+        action = original["action"]
+        if action not in {"account.upsert", "account.native_id"}:
+            raise RuntimeError("configuration command is not a supported identity edit")
+        try:
+            account_id = UUID(str(receipt["target_id"]))
+        except (TypeError, ValueError) as error:
+            raise RuntimeError("identity command target is invalid") from error
+        namespace = stable_uuid("m-ranked-bridge", "source_namespace", {"name": self.source_namespace})
+        bound = connection.execute("""SELECT account.id, account.institution_id,
+                   account.platform::text AS platform, account.canonical_external_id,
+                   account.access_mode::text AS access_mode, account.enabled,
+                   account.deleted_at, alias.legacy_id
+            FROM catalog.platform_account account
+            JOIN migration.legacy_identity_map mapping ON mapping.target_uuid=account.id
+                AND mapping.target_type='platform_account' AND mapping.source_table='platform_accounts'
+                AND mapping.source_namespace=%s
+            JOIN migration.import_batch first_batch ON first_batch.id=mapping.first_batch_id
+            JOIN catalog.legacy_entity_alias alias ON alias.entity_type='platform_accounts'
+                AND alias.target_uuid=account.id AND alias.legacy_id::text=mapping.source_pk
+            WHERE account.id=%s AND first_batch.finished_at<=%s""",
+            (namespace, account_id, self.s_final(connection)["finished_at"])).fetchall()
+        if len(bound) != 1 or bound[0]["deleted_at"] is not None:
+            raise RuntimeError("identity command account is not bound to the immutable S-final aliases")
+        self._validate_identity_input(original, bound[0])
+        return account_id, action
+
+    @staticmethod
+    def _validate_identity_input(original: Mapping[str, Any], account: Mapping[str, Any]) -> None:
+        action, body = original["action"], original["body"]
+        target = str(account["id"])
+        expected = original.get("expected")
+        if expected is not None and (type(expected) is not int or expected < 0):
+            raise RuntimeError("identity command version is invalid")
+        if action == "account.native_id":
+            if original.get("target") != target or set(body) != {"nativeId"}:
+                raise RuntimeError("native identity command target or shape is invalid")
+            native = body["nativeId"]
+            if native is not None and (not isinstance(native, str) or len(native) > 256):
+                raise RuntimeError("native identity command value is invalid")
+        else:
+            required = {"institutionId", "platform", "externalKey", "username", "title", "url", "accessMode"}
+            optional = {"expectedAccountVersions", "expectedInstitutionVersion"}
+            if not required <= set(body) or set(body) - required - optional:
+                raise RuntimeError("account identity command shape is invalid")
+            if (original.get("target") not in (None, target)
+                    or body["institutionId"] != str(account["institution_id"])
+                    or body["platform"] != account["platform"]
+                    or body["externalKey"] != account["canonical_external_id"]
+                    or body["accessMode"] != account["access_mode"]
+                    or account["enabled"] is not True):
+                raise RuntimeError("account identity command changes administrative or canonical fields")
+            if any(body[key] is not None and not isinstance(body[key], str)
+                   for key in ("username", "title", "url")):
+                raise RuntimeError("account identity command presentation is invalid")
 
     def reserve_publication_aliases(
         self,

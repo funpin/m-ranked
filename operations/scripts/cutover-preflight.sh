@@ -172,6 +172,54 @@ check_json_gate() {
     fail "$description is not pass"
   fi
 }
+check_reconciliation_projection_gate() {
+  local path="$1"
+  local projection_filter='
+    .projection_verification as $proof
+    | .gate.status == "pass" and .gate.critical_mismatches == 0
+      and $proof.status == "pass"
+      and $proof.sourceUnchanged == true
+      and ($proof.sourceSha256 | type == "string" and test("^[0-9a-f]{64}$"))
+      and $proof.sourceSha256 == .source.source_sha256
+      and ($proof.datasetRevision | type == "number" and . > 0 and . == floor)
+      and $proof.datasetRevision == .dataset_revision
+      and ($proof.asOf | type == "string" and test("(Z|\\+00:00)$"))
+      and $proof.horizons == [24,48,72,168,336]
+      and ($proof.checks | keys == ["fixedCohort","overview","periodMetrics"])
+      and all($proof.checks[]; .status == "pass" and .expected == .actual
+        and .expected.duplicateKeys == 0)
+      and any(.checks[]; .check == "derived_projection_parity" and .critical == true
+        and .status == "pass" and .details == $proof)
+  '
+  if jq -e "$projection_filter" "$path" >/dev/null; then
+    pass "original-formula projection parity matches reconciliation source and revision"
+  else
+    fail "reconciliation lacks matching mandatory original-formula projection proof"
+  fi
+}
+check_reconciliation_identity_history_gate() {
+  local path="$1"
+  local identity_history_filter='
+    .identity_history_verification as $proof
+    | .gate.status == "pass" and .gate.critical_mismatches == 0
+      and $proof.status == "pass" and $proof.sourceUnchanged == true
+      and ($proof.sourceSha256 | type == "string" and test("^[0-9a-f]{64}$"))
+      and $proof.sourceSha256 == .source.source_sha256
+      and ($proof.datasetRevision | type == "number" and . > 0 and . == floor)
+      and $proof.datasetRevision == .dataset_revision
+      and ($proof.asOf | type == "string" and test("(Z|\\+00:00)$"))
+      and ([$proof.checks[].name] | sort) == ["native","presentation"]
+      and all($proof.checks[]; .status == "pass" and .expected == .actual
+        and .expected.duplicateKeys == 0)
+      and any(.checks[]; .check == "canonical_identity_history" and .critical == true
+        and .status == "pass" and .details == $proof)
+  '
+  if jq -e "$identity_history_filter" "$path" >/dev/null; then
+    pass "complete identity history matches verified original artifacts"
+  else
+    fail "reconciliation lacks matching mandatory identity history proof"
+  fi
+}
 check_reverse_sync_rehearsal_gate() {
   local path="$1"
   local deploy_release_id="$2"
@@ -225,52 +273,55 @@ check_reverse_sync_rehearsal_gate() {
       def uuid:
         type == "string"
         and test("^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
+      def matching_check:
+        type == "object" and .status == "pass" and .expected == .actual
+        and (.expected | type == "object") and (.expected.sha256 | sha256)
+        and (.expected.rows | type == "number" and . >= 0 and . == floor)
+        and .expected.distinctKeys == .expected.rows and .expected.duplicateKeys == 0;
+      def final_proofs:
+        . as $final | ($final.batchId | uuid) and ($final.sourceSha256 | sha256) and $final.gate == "pass"
+        and all([$final.identityHistoryVerification, $final.projectionVerification][];
+          .status == "pass" and .sourceUnchanged == true
+          and .sourceSha256 == $final.sourceSha256 and (.datasetRevision | positive_integer))
+        and $final.identityHistoryVerification.datasetRevision == $final.projectionVerification.datasetRevision
+        and ([$final.identityHistoryVerification.checks[].name] | sort) == ["native","presentation"]
+        and all($final.identityHistoryVerification.checks[]; matching_check)
+        and ($final.projectionVerification.checks | keys) == ["fixedCohort","overview","periodMetrics"]
+        and all($final.projectionVerification.checks[]; matching_check)
+        and $final.projectionVerification.horizons == [24,48,72,168,336];
       type == "object"
       and keys == [
-        "changeTicket", "database", "duplicates", "environment", "flyway",
+        "accountIdentityTransitions", "changeTicket", "cutoverPhases", "database", "duplicates", "environment", "flyway",
         "forwardReconciliation", "generatedAt", "operator", "platforms",
         "preservation", "release", "replay", "reportType", "reportVersion",
-        "reverseSync", "sFinal", "sourceNamespace", "status"
+        "reverseSync", "sFinal", "secondSFinal", "sourceNamespace", "status"
       ]
       and .reportType == "reverse-sync-rehearsal"
-      and .reportVersion == 3
+      and .reportVersion == 4
       and .status == "pass"
-      and .environment == "production-like"
+      and (.environment == "production-like" or ($protocolOnly == true and .environment == "disposable-postgresql-integration"))
       and (.generatedAt | type) == "string"
       and (.database | type) == "string"
       and (.database | test("^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"))
-      and .operator == $operator
-      and .changeTicket == $approvalTicket
-      and .sourceNamespace == $sourceNamespace
+      and (.operator | type == "string" and length > 0)
+      and ($protocolOnly == true or .operator == $operator)
+      and (.changeTicket | type == "string" and length > 0)
+      and ($protocolOnly == true or .changeTicket == $approvalTicket)
+      and (.sourceNamespace | type == "string" and length > 0)
+      and ($protocolOnly == true or .sourceNamespace == $sourceNamespace)
       and (.release | type == "object" and keys == ["id", "sha256SumsSha256"])
-      and .release.id == $releaseId
+      and (.release.id | type == "string" and length > 0)
+      and ($protocolOnly == true or .release.id == $releaseId)
       and (.release.sha256SumsSha256 | sha256)
-      and .release.sha256SumsSha256 == $manifestSha256
+      and (.release.sha256SumsSha256 | type == "string" and length > 0)
+      and ($protocolOnly == true or .release.sha256SumsSha256 == $manifestSha256)
       and (.flyway | type == "object" and keys == [
         "databaseMigrations", "fileSha256", "migrationCount", "schemaVersion"
       ])
-      and .flyway.schemaVersion == 8
-      and .flyway.migrationCount == 8
-      and (.flyway.fileSha256 | type == "object" and keys == [
-        "V1__target_baseline.sql",
-        "V2__rebuild_core_projections.sql",
-        "V3__collector_observation_times_and_identity_grants.sql",
-        "V4__admin_collection_run_status_grants.sql",
-        "V5__legacy_activity_period_projection.sql",
-        "V6__comparison_valid_observation_hourly_projection.sql",
-        "V7__activity_rating_read_grants.sql",
-        "V8__legacy_overview_projection.sql"
-      ])
-      and .flyway.fileSha256 == {
-        "V1__target_baseline.sql":"dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1",
-        "V2__rebuild_core_projections.sql":"113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd",
-        "V3__collector_observation_times_and_identity_grants.sql":"5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1",
-        "V4__admin_collection_run_status_grants.sql":"d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82",
-        "V5__legacy_activity_period_projection.sql":"d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41",
-        "V6__comparison_valid_observation_hourly_projection.sql":"4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64",
-        "V7__activity_rating_read_grants.sql":"95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb",
-        "V8__legacy_overview_projection.sql":"dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c"
-      }
+      and .flyway.schemaVersion == 29
+      and .flyway.migrationCount == 29
+      and (.flyway.fileSha256 | type == "object" and keys == ["V10__consistent_public_queries_and_formula_guards.sql", "V11__bridge_identity_lineage_and_reconciliation.sql", "V12__detail_history_projection.sql", "V13__immutable_account_identity_history.sql", "V14__public_archived_publication_text.sql", "V15__verified_source_preservation.sql", "V16__audited_catalog_commands.sql", "V17__legacy_csv_compatibility_projection.sql", "V18__official_rating_commands.sql", "V19__safe_health_operational_snapshot.sql", "V1__target_baseline.sql", "V20__catalog_url_and_version_compatibility.sql", "V21__legacy_period_first_observation_policy.sql", "V22__durable_legacy_csv_archive_facts.sql", "V23__official_rating_entity_context.sql", "V24__ordered_history_reaction_details.sql", "V25__safe_legacy_account_presentation.sql", "V26__independent_projection_verifier_reads.sql", "V27__retained_disabled_platform_period_metrics.sql", "V28__identity_command_receipt_verifier_acl.sql", "V29__monotonic_native_identity_transitions.sql", "V2__rebuild_core_projections.sql", "V3__collector_observation_times_and_identity_grants.sql", "V4__admin_collection_run_status_grants.sql", "V5__legacy_activity_period_projection.sql", "V6__comparison_valid_observation_hourly_projection.sql", "V7__activity_rating_read_grants.sql", "V8__legacy_overview_projection.sql", "V9__immutable_observations_quality_archive_fence.sql"])
+      and .flyway.fileSha256 == {"V10__consistent_public_queries_and_formula_guards.sql": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b", "V11__bridge_identity_lineage_and_reconciliation.sql": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff", "V12__detail_history_projection.sql": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100", "V13__immutable_account_identity_history.sql": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0", "V14__public_archived_publication_text.sql": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6", "V15__verified_source_preservation.sql": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941", "V16__audited_catalog_commands.sql": "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad", "V17__legacy_csv_compatibility_projection.sql": "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83", "V18__official_rating_commands.sql": "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9", "V19__safe_health_operational_snapshot.sql": "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503", "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1", "V20__catalog_url_and_version_compatibility.sql": "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2", "V21__legacy_period_first_observation_policy.sql": "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8", "V22__durable_legacy_csv_archive_facts.sql": "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f", "V23__official_rating_entity_context.sql": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c", "V24__ordered_history_reaction_details.sql": "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db", "V25__safe_legacy_account_presentation.sql": "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1", "V26__independent_projection_verifier_reads.sql": "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8", "V27__retained_disabled_platform_period_metrics.sql": "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97", "V28__identity_command_receipt_verifier_acl.sql": "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020", "V29__monotonic_native_identity_transitions.sql": "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de", "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd", "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1", "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82", "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41", "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64", "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb", "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c", "V9__immutable_observations_quality_archive_fence.sql": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"}
       and .flyway.databaseMigrations == [
         {version:"1",script:"V1__target_baseline.sql",checksum:-1636077697,success:true},
         {version:"2",script:"V2__rebuild_core_projections.sql",checksum:839607018,success:true},
@@ -279,7 +330,28 @@ check_reverse_sync_rehearsal_gate() {
         {version:"5",script:"V5__legacy_activity_period_projection.sql",checksum:-1313754193,success:true},
         {version:"6",script:"V6__comparison_valid_observation_hourly_projection.sql",checksum:-290358219,success:true},
         {version:"7",script:"V7__activity_rating_read_grants.sql",checksum:-1228913579,success:true},
-        {version:"8",script:"V8__legacy_overview_projection.sql",checksum:-574188650,success:true}
+        {version:"8",script:"V8__legacy_overview_projection.sql",checksum:-574188650,success:true},
+        {version:"9",script:"V9__immutable_observations_quality_archive_fence.sql",checksum:1058556652,success:true},
+        {version:"10",script:"V10__consistent_public_queries_and_formula_guards.sql",checksum:-1148603410,success:true},
+        {version:"11",script:"V11__bridge_identity_lineage_and_reconciliation.sql",checksum:1679789143,success:true},
+        {version:"12",script:"V12__detail_history_projection.sql",checksum:1453326243,success:true},
+        {version:"13",script:"V13__immutable_account_identity_history.sql",checksum:-185639607,success:true},
+        {version:"14",script:"V14__public_archived_publication_text.sql",checksum:-956321170,success:true},
+        {version:"15",script:"V15__verified_source_preservation.sql",checksum:-1953543117,success:true},
+        {version:"16",script:"V16__audited_catalog_commands.sql",checksum:-888916335,success:true},
+        {version:"17",script:"V17__legacy_csv_compatibility_projection.sql",checksum:2060863494,success:true},
+        {version:"18",script:"V18__official_rating_commands.sql",checksum:875583974,success:true},
+        {version:"19",script:"V19__safe_health_operational_snapshot.sql",checksum:-1653532549,success:true},
+        {version:"20",script:"V20__catalog_url_and_version_compatibility.sql",checksum:925593865,success:true},
+        {version:"21",script:"V21__legacy_period_first_observation_policy.sql",checksum:-900669350,success:true},
+        {version:"22",script:"V22__durable_legacy_csv_archive_facts.sql",checksum:2064364640,success:true},
+        {version:"23",script:"V23__official_rating_entity_context.sql",checksum:890722389,success:true},
+        {version:"24",script:"V24__ordered_history_reaction_details.sql",checksum:1889276383,success:true},
+        {version:"25",script:"V25__safe_legacy_account_presentation.sql",checksum:381330844,success:true},
+        {version:"26",script:"V26__independent_projection_verifier_reads.sql",checksum:-1482835665,success:true},
+        {version:"27",script:"V27__retained_disabled_platform_period_metrics.sql",checksum:-1466195806,success:true},
+        {version:"28",script:"V28__identity_command_receipt_verifier_acl.sql",checksum:1374125493,success:true},
+        {version:"29",script:"V29__monotonic_native_identity_transitions.sql",checksum:-1547328464,success:true}
       ]
       and (.platforms | type) == "array"
       and (.platforms | length) == 4
@@ -316,21 +388,70 @@ check_reverse_sync_rehearsal_gate() {
       and .reverseSync.fixedRevisionCount >= 4
       and (.reverseSync.fixedRevisionSetSha256 | sha256)
       and (.reverseSync.planSha256 | sha256)
-      and (.sFinal | type == "object" and keys == ["batchId", "gate", "sourceSha256"])
-      and (.sFinal.batchId | uuid)
-      and (.sFinal.sourceSha256 | sha256)
-      and .sFinal.gate == "pass"
+      and (.sFinal | type == "object" and keys == ["batchId", "gate", "identityHistoryVerification", "projectionVerification", "sourceSha256"])
+      and (.secondSFinal | type == "object" and keys == ["batchId", "gate", "identityHistoryVerification", "projectionVerification", "repeat", "sourceSha256"])
+      and (.sFinal | final_proofs) and (.secondSFinal | final_proofs)
+      and .secondSFinal.batchId != .sFinal.batchId
+      and .secondSFinal.sourceSha256 != .sFinal.sourceSha256
+      and .secondSFinal.repeat.gate == "pass" and (.secondSFinal.repeat.rowsWritten | zero_integer)
+      and .secondSFinal.repeat.batchId == .secondSFinal.batchId
+      and .secondSFinal.repeat.datasetRevisionBefore == .secondSFinal.identityHistoryVerification.datasetRevision
+      and .secondSFinal.repeat.datasetRevisionAfter == .secondSFinal.repeat.datasetRevisionBefore
+      and (. as $report | .accountIdentityTransitions as $identity | ($identity.accountId | uuid) and ($identity.canonicalExternalId | type == "string" and length > 0)
+      and $identity.nativeSequence == [null,"-20001","-20002","-20003",null,"-20004"]
+      and ($identity.presentationRows | positive_integer) and ($identity.nativeRows | positive_integer)
+      and $identity.presentationRows >= 4 and $identity.nativeRows >= 4
+      and ($identity.fullHistorySha256BeforeSecondSFinal | sha256)
+      and $identity.fullHistoryUnchangedAfterSecondSFinalAndRepeat == true
+      and ($identity.originalReceiptsSha256 | type == "object" and length >= 10)
+      and all($identity.originalReceiptsSha256 | to_entries[];
+        (.value | sha256) and (.key | test("^(admin|collector/(max|rutube|telegram|vk))/[0-9a-f]{64}\\.json$"))
+        and (.value as $digest | .key | endswith($digest + ".json")))
+      and ([$identity.receiptFaults[] | [.kind,.fault]] | sort) == [["admin","corrupt"],["admin","missing"],["collector","corrupt"],["collector","missing"]]
+      and all($identity.receiptFaults[]; .status == "blocked" and .identityProof.status == "fail"
+        and .identityProof.errorCode == (if .fault == "missing" then "HISTORY_IDENTITY_RECEIPT_MISSING" else "HISTORY_IDENTITY_RECEIPT_HASH_MISMATCH" end))
+      and ($identity.javaAdminCommands | length) == 4
+      and all($identity.javaAdminCommands[]; .outcome == "succeeded" and .targetId == $identity.accountId and (.datasetRevision | positive_integer))
+      and ([$report.secondSFinal.identityHistoryVerification.identitySourceReceipts[] | select(.kind == "admin")] | length) >= 4
+      and ([$report.secondSFinal.identityHistoryVerification.identitySourceReceipts[] | select(.kind == "collector")] | length) >= 6
+      and all($report.secondSFinal.identityHistoryVerification.identitySourceReceipts[];
+        .sha256 as $hash | ($hash | sha256) and any($identity.originalReceiptsSha256[]; . == $hash))
+      and .cutoverPhases.repeatedForwardCutover == "pass"
+      and (.cutoverPhases.legacyRestart | length) == 4 and all(.cutoverPhases.legacyRestart[]; .status == 200)
+      and (. as $bound | .cutoverPhases.httpUpstreamTransition as $http | $http.status == "pass" and $http.failures == 0 and ($http.requests | positive_integer)
+      and $http.database == $bound.database and ($http.springJarSha256 | sha256)
+      and $http.routeSequence == ["initial-legacy","target","legacy","target"]
+      and ([$http.transitions[] | [.from,.to]]) == [["legacy","target"],["target","legacy"],["legacy","target"]]
+      and all($http.transitions[]; (.routeSwitchSeconds | type == "number" and . >= 0)
+        and (.verifiedSeconds | type == "number" and . >= 0))
+      and $http.healthCompatibility.status == "pass" and $http.healthCompatibility.fieldsEqual == true
+      and ($http.observations | length) == $http.requests
+      and all($http.observations[]; .valid == true and .status == 200
+        and .upstream == (if .phase == 0 or .phase == 2 then "legacy" else "target" end))
+      and all(range(0;4); . as $phase |
+        ([$http.observations[] | select(.phase == $phase) | .path] | unique | sort) ==
+        ["/health","/read?platform=max","/read?platform=rutube","/read?platform=telegram","/read?platform=vk"])
+      and ($http.rejectedGates | length) == 7
+      and all($http.rejectedGates[]; .routingUnchanged == true and .writersUnchanged == true)
+      and ([$http.writerChecks[].owner] | unique | sort) == ["legacy","none","target"]
+      and all($http.writerChecks[]; .postgresCollectorWriteAllowed == (.owner == "target")
+        and .postgresAdminWriteAllowed == (.owner == "target") and .legacySqliteWriteAllowed == (.owner == "legacy"))
+      and ($http.actualJavaAdminCommands | length) == 4
+      and all($http.actualJavaAdminCommands[]; .sameCommandReplayUnchanged == true and .targetId == $identity.accountId)
+      and ([$http.actualJavaAdminCommands[].datasetRevision] | sort) == ([$identity.javaAdminCommands[].datasetRevision] | sort)
+))
     '
   if jq -e \
+      --argjson protocolOnly false \
       --arg releaseId "$deploy_release_id" \
       --arg manifestSha256 "$deploy_manifest_sha256" \
       --arg sourceNamespace "$source_namespace" \
       --arg approvalTicket "$approval_ticket" \
       --arg operator "$operator" \
       "$contract_filter" "$path" >/dev/null; then
-    pass "reverse-sync rehearsal v3 is fresh and bound to release, namespace and approval"
+    pass "reverse-sync rehearsal v4 is fresh and bound to release, namespace and approval"
   else
-    fail "reverse-sync rehearsal v3 evidence is incomplete, malformed or unbound"
+    fail "reverse-sync rehearsal v4 evidence is incomplete, malformed or unbound"
   fi
 }
 check_collector_parity_gate() {
@@ -744,8 +865,8 @@ check_active_release_gate() {
       and .releaseManifestSha256 == $manifestSha256
       and (.releaseManifestSha256 | test("^[0-9a-f]{64}$"))
       and .flyway.validated == true
-      and .flyway.schemaVersion == "8"
-      and .flyway.migrationCount == 8
+      and .flyway.schemaVersion == "29"
+      and .flyway.migrationCount == 29
       and .flyway.v1Sha256 == "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1"
       and .flyway.v2Sha256 == "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd"
       and .flyway.v3Sha256 == "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1"
@@ -754,6 +875,27 @@ check_active_release_gate() {
       and .flyway.v6Sha256 == "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64"
       and .flyway.v7Sha256 == "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb"
       and .flyway.v8Sha256 == "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c"
+      and .flyway.v9Sha256 == "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"
+      and .flyway.v10Sha256 == "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b"
+      and .flyway.v11Sha256 == "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff"
+      and .flyway.v12Sha256 == "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100"
+      and .flyway.v13Sha256 == "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0"
+      and .flyway.v14Sha256 == "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6"
+      and .flyway.v15Sha256 == "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941"
+      and .flyway.v16Sha256 == "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad"
+      and .flyway.v17Sha256 == "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83"
+      and .flyway.v18Sha256 == "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9"
+      and .flyway.v19Sha256 == "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503"
+      and .flyway.v20Sha256 == "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2"
+      and .flyway.v21Sha256 == "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8"
+      and .flyway.v22Sha256 == "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f"
+      and .flyway.v23Sha256 == "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c"
+      and .flyway.v24Sha256 == "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db"
+      and .flyway.v25Sha256 == "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1"
+      and .flyway.v26Sha256 == "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8"
+      and .flyway.v27Sha256 == "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97"
+      and .flyway.v28Sha256 == "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020"
+      and .flyway.v29Sha256 == "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de"
       and .projectionPublisherActive == true
     ' "$report_path" >/dev/null; then
     fail "shadow deployment, active release or Flyway checksum evidence is invalid"
@@ -784,7 +926,7 @@ check_active_release_gate() {
     deploy_release_id="$release_id"
     deploy_manifest_sha256="$manifest_sha256"
     deploy_release_path="$current_release_path"
-    pass "shadow deployment is bound to the active immutable release and frozen V1-V8"
+    pass "shadow deployment is bound to the active immutable release and frozen V1-V29"
     return 0
   fi
   return 1
@@ -862,6 +1004,8 @@ check_active_release_gate \
   "$DEPLOY_REPORT" "$MRANKED_INSTALL_ROOT" "$MRANKED_CURRENT_LINK" || true
 
 if require_readable "$RECONCILIATION_REPORT" "reconciliation report"; then
+  check_reconciliation_projection_gate "$RECONCILIATION_REPORT"
+  check_reconciliation_identity_history_gate "$RECONCILIATION_REPORT"
   if jq -e '.gate.status == "pass" and .gate.critical_mismatches == 0' \
       "$RECONCILIATION_REPORT" >/dev/null; then
     pass "reconciliation has zero critical mismatches"
@@ -885,8 +1029,18 @@ if require_readable "$RESTORE_VERIFICATION_REPORT" "restore verification report"
       and .checks.pageChecksums == true
       and .checks.databaseAssertions == true
       and .checks.pgAmcheck == true
-      and .database.flywaySchemaVersion == 8
-      and .database.flywayMigrationCount == 8
+      and (.database.datasetRevision | type == "number" and . > 0 and . == floor)
+      and .database.coreReadyProjections == 9
+      and ([.database.projectionStates[].name] | sort) == [
+          "comparison", "institution_daily_metrics", "institution_monthly_metrics",
+          "institution_period_metrics", "legacy_exports", "publication_content",
+          "publication_history", "publication_hourly", "publication_latest"
+      ]
+      and (.database.datasetRevision as $revision
+          | all(.database.projectionStates[];
+              .status == "ready" and .datasetRevision == $revision))
+      and .database.flywaySchemaVersion == 29
+      and .database.flywayMigrationCount == 29
       and .database.flywayMigrations == [
           {version:"1",script:"V1__target_baseline.sql",checksum:-1636077697},
           {version:"2",script:"V2__rebuild_core_projections.sql",checksum:839607018},
@@ -895,11 +1049,32 @@ if require_readable "$RESTORE_VERIFICATION_REPORT" "restore verification report"
           {version:"5",script:"V5__legacy_activity_period_projection.sql",checksum:-1313754193},
           {version:"6",script:"V6__comparison_valid_observation_hourly_projection.sql",checksum:-290358219},
           {version:"7",script:"V7__activity_rating_read_grants.sql",checksum:-1228913579},
-          {version:"8",script:"V8__legacy_overview_projection.sql",checksum:-574188650}
+          {version:"8",script:"V8__legacy_overview_projection.sql",checksum:-574188650},
+          {version:"9",script:"V9__immutable_observations_quality_archive_fence.sql",checksum:1058556652},
+          {version:"10",script:"V10__consistent_public_queries_and_formula_guards.sql",checksum:-1148603410},
+          {version:"11",script:"V11__bridge_identity_lineage_and_reconciliation.sql",checksum:1679789143},
+          {version:"12",script:"V12__detail_history_projection.sql",checksum:1453326243},
+          {version:"13",script:"V13__immutable_account_identity_history.sql",checksum:-185639607},
+          {version:"14",script:"V14__public_archived_publication_text.sql",checksum:-956321170},
+          {version:"15",script:"V15__verified_source_preservation.sql",checksum:-1953543117},
+          {version:"16",script:"V16__audited_catalog_commands.sql",checksum:-888916335},
+          {version:"17",script:"V17__legacy_csv_compatibility_projection.sql",checksum:2060863494},
+          {version:"18",script:"V18__official_rating_commands.sql",checksum:875583974},
+          {version:"19",script:"V19__safe_health_operational_snapshot.sql",checksum:-1653532549},
+          {version:"20",script:"V20__catalog_url_and_version_compatibility.sql",checksum:925593865},
+          {version:"21",script:"V21__legacy_period_first_observation_policy.sql",checksum:-900669350},
+          {version:"22",script:"V22__durable_legacy_csv_archive_facts.sql",checksum:2064364640},
+          {version:"23",script:"V23__official_rating_entity_context.sql",checksum:890722389},
+          {version:"24",script:"V24__ordered_history_reaction_details.sql",checksum:1889276383},
+          {version:"25",script:"V25__safe_legacy_account_presentation.sql",checksum:381330844},
+          {version:"26",script:"V26__independent_projection_verifier_reads.sql",checksum:-1482835665},
+          {version:"27",script:"V27__retained_disabled_platform_period_metrics.sql",checksum:-1466195806},
+          {version:"28",script:"V28__identity_command_receipt_verifier_acl.sql",checksum:1374125493},
+          {version:"29",script:"V29__monotonic_native_identity_transitions.sql",checksum:-1547328464}
       ]
   ' \
       "$RESTORE_VERIFICATION_REPORT" >/dev/null; then
-    pass "latest backup has a successful V1-V8 restore verification"
+    pass "latest backup has a successful V1-V29 restore verification"
   else
     fail "latest backup restore verification is incomplete or failed"
   fi
@@ -921,7 +1096,8 @@ WITH latest AS (
 ), core(name) AS (VALUES
     ('publication_latest'), ('publication_hourly'),
     ('institution_daily_metrics'), ('institution_monthly_metrics'),
-    ('institution_period_metrics'), ('comparison')
+    ('institution_period_metrics'), ('comparison'),
+    ('publication_history'), ('publication_content'), ('legacy_exports')
 )
 SELECT latest.id,
        count(*) FILTER (
@@ -929,9 +1105,10 @@ SELECT latest.id,
              AND state.dataset_revision_id = latest.id
        ),
        count(*) FILTER (
-           WHERE state.status <> 'ready'
-              OR state.dataset_revision_id <> latest.id
-       )
+           WHERE state.status IS DISTINCT FROM 'ready'
+              OR state.dataset_revision_id IS DISTINCT FROM latest.id
+       ),
+       (SELECT count(*) FROM analytics.projection_state)
   FROM latest
  CROSS JOIN core
   LEFT JOIN analytics.projection_state AS state
@@ -939,11 +1116,12 @@ SELECT latest.id,
  GROUP BY latest.id;
 SQL
   )" || projection_state=""
-  IFS='|' read -r revision ready_count stale_count <<<"$projection_state"
-  if [[ "$revision" =~ ^[1-9][0-9]*$ && "$ready_count" == 6 && "$stale_count" == 0 ]]; then
-    pass "all six projections are ready at dataset revision $revision"
+  IFS='|' read -r revision ready_count stale_count state_count extra <<<"$projection_state"
+  if [[ "$revision" =~ ^[1-9][0-9]*$ && "$ready_count" == 9 \
+        && "$stale_count" == 0 && "$state_count" == 9 && -z "${extra:-}" ]]; then
+    pass "all nine projections are ready at dataset revision $revision"
   else
-    fail "core projections are missing, stale or rebuilding"
+    fail "projection state set is unexpected, missing, stale or rebuilding"
   fi
 fi
 

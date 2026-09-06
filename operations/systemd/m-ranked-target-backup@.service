@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=oneshot
 User=m-ranked-backup
 Group=m-ranked-backup-readers
+SupplementaryGroups=m-ranked-identity-readers
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/backup.env
 LoadCredential=pgbackrest.conf:/etc/m-ranked/credentials/pgbackrest-repository.conf

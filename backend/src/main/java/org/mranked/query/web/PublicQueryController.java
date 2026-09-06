@@ -44,15 +44,64 @@ public class PublicQueryController {
     private final PublicQueryService queryService;
     private final PublicDtoCache responseCache;
     private final ETagFactory etagFactory;
+    private final org.mranked.query.application.ProviderConfiguration providers;
 
     public PublicQueryController(
             PublicQueryService queryService,
             PublicDtoCache responseCache,
             ETagFactory etagFactory
     ) {
-        this.queryService = queryService;
-        this.responseCache = responseCache;
-        this.etagFactory = etagFactory;
+        this(queryService,responseCache,etagFactory,org.mranked.query.application.ProviderConfiguration.unknown());
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public PublicQueryController(PublicQueryService queryService,PublicDtoCache responseCache,ETagFactory etagFactory,
+            org.mranked.query.application.ProviderConfiguration providers) {
+        this.queryService=queryService;this.responseCache=responseCache;this.etagFactory=etagFactory;this.providers=providers;
+    }
+
+    @GetMapping("/accounts/{legacyId}/publications")
+    public ResponseEntity<?> accountPublications(@PathVariable @Positive long legacyId,
+            @RequestParam(defaultValue="platform_accounts") @Pattern(regexp="channels|platform_accounts") String legacyType,
+            @RequestParam(defaultValue="50") @Min(1) @Max(200) int limit,
+            @RequestParam(required=false) @Size(max=512) String cursor,
+            @RequestHeader(value=HttpHeaders.IF_NONE_MATCH,required=false) String validator) {
+        var type=LegacyEntityType.accountFromApiValue(legacyType);
+        var request=responseCache.prepare("account-publications",Map.of("legacyId",legacyId,"legacyType",legacyType,
+                "limit",limit,"cursor",cursor==null?"":cursor));
+        return cached(request,validator,org.mranked.query.domain.PageResult.class,
+                revision->queryService.accountPublicationsAtRevision(legacyId,type,limit,cursor,revision));
+    }
+    @GetMapping("/institutions/{legacyId}/accounts")
+    public ResponseEntity<?> institutionAccounts(@PathVariable @Positive long legacyId,
+            @RequestParam(defaultValue="all") @Pattern(regexp="all|telegram|vk|max|rutube") String platform,
+            @RequestParam(defaultValue="50") @Min(1) @Max(200) int limit,
+            @RequestParam(required=false) @Size(max=512) String cursor,
+            @RequestHeader(value=HttpHeaders.IF_NONE_MATCH,required=false) String validator) {
+        var parsed=Platform.fromApiValue(platform);
+        var request=responseCache.prepare("institution-accounts",Map.of("legacyId",legacyId,"platform",platform,
+                "limit",limit,"cursor",cursor==null?"":cursor));
+        return cached(request,validator,PublicApiModels.InstitutionAccounts.class,
+                revision->PublicApiModels.institutionAccounts(queryService.institutionAccountsAtRevision(legacyId,parsed,limit,cursor,revision)));
+    }
+    @GetMapping("/publications/{legacyId}/history")
+    public ResponseEntity<?> publicationHistory(@PathVariable @Positive long legacyId,
+            @RequestParam(defaultValue="posts") @Pattern(regexp="posts|platform_posts") String legacyType,
+            @RequestParam(defaultValue="200") @Min(1) @Max(2000) int limit,
+            @RequestParam(required=false) @Size(max=512) String cursor,
+            @RequestHeader(value=HttpHeaders.IF_NONE_MATCH,required=false) String validator) {
+        var type=LegacyEntityType.fromApiValue(legacyType);
+        var request=responseCache.prepare("publication-history",Map.of("legacyId",legacyId,"legacyType",legacyType,
+                "limit",limit,"cursor",cursor==null?"":cursor));
+        return cached(request,validator,PublicApiModels.PublicationHistory.class,
+                revision->PublicApiModels.history(queryService.publicationHistoryAtRevision(legacyId,type,limit,cursor,revision)));
+    }
+
+    @GetMapping("/revision")
+    public ResponseEntity<Map<String, Object>> revision() {
+        var revision = queryService.currentRevision();
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(Map.of("datasetRevision", revision.id(), "asOf", revision.committedAt(),
+                        "representationVersion",providers.representationVersion(responseCache.representationVersion())));
     }
 
     @GetMapping("/overview")
@@ -77,6 +126,8 @@ public class PublicQueryController {
         String normalizedCursor = queryService.normalizeCursor(cursor);
         PublicCacheRequest cacheRequest = responseCache.prepare("overview", Map.of(
                 "platform", query.platform().databaseValue(),
+                "integrationStatus",providers.status(parsedPlatform),
+                "integrationWarning",java.util.Objects.toString(providers.warning(parsedPlatform),""),
                 "period", query.period().databaseValue(),
                 "q", query.search(),
                 "sort", query.sort(),
@@ -87,7 +138,7 @@ public class PublicQueryController {
         return cached(cacheRequest, ifNoneMatch, PublicApiModels.OverviewPage.class, revision ->
                 PublicApiModels.overview(queryService.overviewAtRevision(
                         query, limit, normalizedCursor, revision
-                ))
+                ),providers.status(parsedPlatform),providers.warning(parsedPlatform))
         );
     }
 
@@ -148,6 +199,7 @@ public class PublicQueryController {
             @RequestParam(name = "post_direction", defaultValue = "desc")
             @Size(max = 16) String postDirection,
             @RequestParam(defaultValue = "200") @Min(1) @Max(200) int entityLimit,
+            @RequestParam(required = false) @Size(max = 512) String entityCursor,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
     ) {
         ActivityRatingQuery query = ActivityRatingQuery.normalized(
@@ -161,13 +213,27 @@ public class PublicQueryController {
                 "channelDirection", query.channelDirection(),
                 "postSort", query.postSort(),
                 "postDirection", query.postDirection(),
-                "entityLimit", entityLimit
+                "entityLimit", entityLimit,
+                "entityCursor", entityCursor == null ? "" : entityCursor
         ));
         return cached(cacheRequest, ifNoneMatch, PublicApiModels.Rating.class, revision ->
-                PublicApiModels.rating(queryService.ratingAtRevision(
-                        query, entityLimit, revision
+                PublicApiModels.rating(queryService.ratingPageAtRevision(
+                        query, entityLimit, entityCursor, revision
                 ))
         );
+    }
+
+    @GetMapping("/compare/candidates")
+    public ResponseEntity<?> comparisonCandidates(
+            @RequestParam(defaultValue="telegram") @Pattern(regexp="telegram|vk|max|rutube") String platform,
+            @RequestParam(defaultValue="50") @Min(1) @Max(200) int limit,
+            @RequestParam(required=false) @Size(max=512) String cursor,
+            @RequestHeader(value=HttpHeaders.IF_NONE_MATCH,required=false) String ifNoneMatch) {
+        Platform parsed=Platform.fromApiValue(platform);
+        var request=responseCache.prepare("comparison-candidates",Map.of("platform",platform,"limit",limit,
+                "cursor",cursor==null?"":cursor));
+        return cached(request,ifNoneMatch,org.mranked.query.domain.PageResult.class,
+                revision->queryService.comparisonCandidatesAtRevision(parsed,limit,cursor,revision));
     }
 
     @GetMapping("/compare")
@@ -184,6 +250,7 @@ public class PublicQueryController {
             @RequestParam(defaultValue = "25") @Min(1) @Max(50) int institutionLimit,
             @RequestParam(name = "institutions", required = false) List<String> institutions,
             @RequestParam(name = "channels", required = false) List<String> channels,
+            @RequestParam(required=false) @Size(max=512) String selectionCursor,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
     ) {
         int parsedHorizon = Integer.parseInt(horizonHours);
@@ -191,9 +258,7 @@ public class PublicQueryController {
         ComparisonSelection selection = comparisonSelection(
                 parsedPlatform, channels, institutions
         );
-        int effectiveInstitutionLimit = !selection.explicit()
-                ? institutionLimit
-                : selection.legacyIds().size();
+        int effectiveInstitutionLimit = institutionLimit;
         String entitySelection = !selection.explicit()
                 ? "default"
                 : selection.legacyIds().stream().map(String::valueOf)
@@ -206,12 +271,13 @@ public class PublicQueryController {
                 "aggregation", aggregation,
                 "institutionLimit", effectiveInstitutionLimit,
                 "selectionType", selection.type().apiValue(),
-                "selection", entitySelection
+                "selection", entitySelection,
+                "selectionCursor", selectionCursor==null?"":selectionCursor
         ));
         return cached(cacheRequest, ifNoneMatch, PublicApiModels.Comparison.class, revision ->
-                PublicApiModels.comparison(queryService.comparisonAtRevision(
+                PublicApiModels.comparison(queryService.comparisonPageAtRevision(
                         parsedPlatform, parsedHorizon, includePartial, metric,
-                        aggregation, effectiveInstitutionLimit, selection, revision
+                        aggregation, effectiveInstitutionLimit, selection, selectionCursor, revision
                 ))
         );
     }
@@ -242,11 +308,13 @@ public class PublicQueryController {
             Class<T> dtoType,
             Function<DatasetRevision, T> loader
     ) {
-        String etag = etagFactory.create(cacheRequest.key());
+        var loaded = responseCache.getOrLoadSnapshot(cacheRequest, dtoType,
+                () -> queryService.readSnapshot(loader));
+        String etag = etagFactory.create(cacheRequest.key().atRevision(loaded.revision()));
         if (etagFactory.matches(ifNoneMatch, etag)) {
             return notModified(etag);
         }
-        T body = responseCache.getOrLoad(cacheRequest, dtoType, loader);
+        T body = loaded.value();
         return ResponseEntity.ok().cacheControl(PUBLIC_CACHE).eTag(etag).body(body);
     }
 

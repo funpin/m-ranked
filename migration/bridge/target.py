@@ -223,9 +223,13 @@ class PostgresTarget:
                DO UPDATE SET
                    source_row_hash=excluded.source_row_hash,
                    natural_key=excluded.natural_key,
+                   target_uuid=excluded.target_uuid,
+                   target_bigint=excluded.target_bigint,
                    last_seen_batch_id=excluded.last_seen_batch_id
-               WHERE migration.legacy_identity_map.target_uuid IS NOT DISTINCT FROM excluded.target_uuid
-                 AND migration.legacy_identity_map.target_bigint IS NOT DISTINCT FROM excluded.target_bigint""",
+               WHERE (migration.legacy_identity_map.target_uuid IS NOT DISTINCT FROM excluded.target_uuid
+                 AND migration.legacy_identity_map.target_bigint IS NOT DISTINCT FROM excluded.target_bigint)
+                  OR excluded.target_type IN ('publication_metric_snapshot','account_metric_snapshot')
+                  OR excluded.target_type LIKE 'official_rating_observation:%%'""",
             (
                 source_namespace,
                 source_table,
@@ -338,16 +342,19 @@ class PostgresTarget:
         source_run_id: UUID | None,
         stream_name: str,
         affected_tags: list[str],
+        *,
+        committed_at: datetime | None = None,
     ) -> int:
         row = self.fetchone(
             """INSERT INTO analytics.dataset_revision(
-                   cause, correlation_id, source_run_id, metadata
-               ) VALUES ('migration',%s,%s,%s::jsonb)
+                   cause, correlation_id, source_run_id, metadata,committed_at
+               ) VALUES ('migration',%s,%s,%s::jsonb,COALESCE(%s,transaction_timestamp()))
                RETURNING id""",
             (
                 batch_id,
                 source_run_id,
                 json.dumps({"stream": stream_name}, sort_keys=True),
+                committed_at,
             ),
         )
         if row is None:

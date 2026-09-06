@@ -1,0 +1,1672 @@
+{
+  "backupManifestSha256": "6fcd0d1fb25dac6b10e5f8fe3fbaad9c4dbabefdf68877b022bb81854951544c",
+  "checks": {
+    "independentSourceClone": true,
+    "physicalBackupVerified": true
+  },
+  "coldArchive": {
+    "canonicalSha256": "7be1c532c0e2517aa627c29947bb53e64d715025b9689785a407b93151477da5",
+    "exportSeconds": 3.8177,
+    "path": "cold-2d624057bf88.parquet",
+    "providerAttestation": false,
+    "rowCount": 9025,
+    "schemaVersion": 3,
+    "sha256": "9fa04959820bc7f175522238095bac38196ddc9680f2f1200cacd435ca556818"
+  },
+  "commands": [
+    {
+      "action": "SQL verification in mranked-review-it-postgres-1",
+      "durationSeconds": 2.8967,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:40.315811+00:00"
+    },
+    {
+      "action": "network create --internal --label org.mranked.disposable-dr=2d624057bf88 mranked-dr-2d624057bf88-net",
+      "durationSeconds": 0.0323,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:43.212797+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=2d624057bf88 mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.0224,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:43.245096+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=2d624057bf88 mranked-dr-2d624057bf88-wal",
+      "durationSeconds": 0.0211,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:43.267579+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=2d624057bf88 mranked-dr-2d624057bf88-backup",
+      "durationSeconds": 0.0216,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:43.288767+00:00"
+    },
+    {
+      "action": "run --rm -v mranked-dr-2d624057bf88-wal:/archive -v mranked-dr-2d624057bf88-backup:/backup postgres:18.6 sh -ec chown postgres:postgres /archive /backup; chmod 0700 /archive /backup",
+      "durationSeconds": 0.2564,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:43.310380+00:00"
+    },
+    {
+      "action": "Start own checksum-enabled primary with independent WAL/basebackup volumes",
+      "durationSeconds": 0.1586,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:43.567066+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.1024,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:08:43.725771+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.1202,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:08:44.078644+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.0923,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:08:44.457721+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.0882,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:44.810208+00:00"
+    },
+    {
+      "action": "Allow password-authenticated replication only inside the isolated Docker network",
+      "durationSeconds": 0.0604,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:44.898414+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.0736,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:08:44.958818+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-review-it-postgres-1",
+      "durationSeconds": 3.0881,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:32.596093+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 2.7462,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:35.687851+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.1025,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:38.434274+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.0812,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:38.536836+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 2.5158,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:38.618115+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.0868,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:44.864912+00:00"
+    },
+    {
+      "action": "Bounded maintenance-role Parquet export and full canonical verification",
+      "durationSeconds": 3.8177,
+      "exitCode": 0
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.0783,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:44.952267+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-primary",
+      "durationSeconds": 0.0741,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:45.030617+00:00"
+    },
+    {
+      "action": "pg_basebackup using restricted replication role",
+      "durationSeconds": 4.7531,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:45.104841+00:00"
+    },
+    {
+      "action": "pg_verifybackup validates manifest and WAL",
+      "durationSeconds": 0.7655,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:49.858044+00:00"
+    },
+    {
+      "action": "exec mranked-dr-2d624057bf88-primary sha256sum /backup/base/backup_manifest",
+      "durationSeconds": 0.0748,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:50.623575+00:00"
+    },
+    {
+      "action": "volume create --label org.mranked.disposable-dr=2d624057bf88 mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0246,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:50.698436+00:00"
+    },
+    {
+      "action": "Restore physical base backup into own empty volume",
+      "durationSeconds": 3.2723,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:50.723107+00:00"
+    },
+    {
+      "action": "Write isolated recovery configuration (credentials omitted)",
+      "durationSeconds": 0.3148,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:53.995554+00:00"
+    },
+    {
+      "action": "run -d --name mranked-dr-2d624057bf88-standby --label org.mranked.disposable-dr=2d624057bf88 --network mranked-dr-2d624057bf88-net -e PGDATA=/data -v mranked-dr-2d624057bf88-standby:/data -v mranked-dr-2d624057bf88-wal:/archive:ro postgres:18.6 postgres -c listen_addresses=* -c archive_mode=off",
+      "durationSeconds": 0.1927,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:09:54.310401+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0894,
+      "exitCode": 2,
+      "startedAt": "2026-09-05T03:09:54.503239+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0605,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:54.843979+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0304,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:55.158479+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0254,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:55.450374+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0267,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:55.734652+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0241,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:56.015355+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0249,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:56.299560+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0279,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:56.578284+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0242,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:56.864699+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0285,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:57.149055+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0298,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:57.429106+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0303,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:57.713862+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0313,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:58.004460+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.03,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:58.295826+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.031,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:58.586005+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.03,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:58.870738+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0291,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:59.160844+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0258,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:59.450068+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0264,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:09:59.730666+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0236,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:00.016702+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0304,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:00.298213+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0279,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:00.588740+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0277,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:00.873874+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0284,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:01.161654+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0266,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:01.445247+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0241,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:01.731961+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0345,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:02.011697+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0264,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:02.299124+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0313,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:02.580524+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0284,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:02.863764+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0336,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:03.147219+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0326,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:03.440932+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.026,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:03.734323+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0289,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:04.020187+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0285,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:04.303906+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.027,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:04.584973+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0227,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:04.867901+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0276,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:05.149524+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0259,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:05.430925+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0247,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:05.714644+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0265,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:05.990608+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0305,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:06.268698+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0249,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:06.554554+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0261,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:06.830706+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.027,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:07.111773+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0343,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:07.394972+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0268,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:07.682804+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0301,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:07.959893+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0287,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:08.241796+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0248,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:08.529344+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0229,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:08.809767+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0262,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:09.092782+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0402,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:09.379116+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0297,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:09.669670+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0271,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:09.956697+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0295,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:10.243968+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0271,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:10.526929+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0256,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:10.810695+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.027,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:11.096451+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.024,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:11.375079+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0289,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:11.653961+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0298,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:11.935142+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0276,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:12.225787+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0255,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:12.513513+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0321,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:12.790273+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0267,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:13.073010+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0243,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:13.354335+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0345,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:13.630657+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0323,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:13.917052+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0289,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:14.209977+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0289,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:14.491916+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0278,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:14.772638+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0244,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:15.052586+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0359,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:15.337093+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.026,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:15.623897+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0329,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:15.910169+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0317,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:16.197111+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0391,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:16.489003+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.029,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:16.785664+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0235,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:17.073530+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0331,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:17.353298+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0301,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:17.646518+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.032,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:17.933429+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0294,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:18.216208+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0443,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:18.504562+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.038,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:18.807474+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0315,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:19.105658+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0305,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:19.387415+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0334,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:19.668818+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0294,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:19.960297+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0435,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:20.242019+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0323,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:20.545644+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0365,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:20.836494+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0304,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:21.123889+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0287,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:21.414442+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0328,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:21.706908+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0273,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:21.999855+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0282,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:22.285775+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0283,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:22.566708+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0311,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:22.855134+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.04,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:23.141854+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0357,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:23.434756+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.03,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:23.722424+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0287,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:24.002875+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0654,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:24.283166+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0247,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:24.604298+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0244,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:24.888637+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0259,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:25.173202+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0268,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:25.450864+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0316,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:25.728232+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0259,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:26.013376+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0304,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:26.293003+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0432,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:26.583536+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0279,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:26.887309+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0258,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:27.168394+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0234,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:27.454256+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0249,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:27.738765+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.027,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:28.022127+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0284,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:28.314071+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0287,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:28.602643+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.027,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:28.891499+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0245,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:29.178615+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0238,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:29.457054+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0276,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:29.740865+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.027,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:30.021818+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0228,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:30.300811+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0433,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:30.575143+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0251,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:30.868851+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0404,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:31.147112+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0395,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:31.445003+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0313,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:31.744653+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0332,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:32.036024+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0337,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:32.325949+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.031,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:32.619776+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0294,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:32.910920+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0417,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:33.191603+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0354,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:33.491868+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0314,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:33.777465+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0298,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:34.068999+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0382,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:34.354897+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0289,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:34.646866+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0277,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:34.931971+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.026,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:35.219722+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0267,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:35.499297+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.032,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:35.786250+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0284,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:36.078348+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0262,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:36.368156+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0324,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:36.647790+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0398,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:36.940422+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0369,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:37.238919+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0326,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:37.536027+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.034,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:37.828746+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0353,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:38.122973+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0333,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:38.418380+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.029,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:38.711840+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0338,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:39.000986+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0321,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:39.291329+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0269,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:39.576459+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0269,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:39.860163+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0259,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:40.143963+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0455,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:40.427043+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0301,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:40.726134+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0241,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:41.009829+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0415,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:41.285647+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0395,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:41.587308+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0328,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:41.887156+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0303,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:42.180013+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0328,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:42.464747+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0369,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:42.749669+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0341,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:43.047896+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0309,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:43.335141+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0264,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:43.626189+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0283,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:43.905388+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0338,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:44.193854+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0427,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:44.483898+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0302,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:44.786708+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0317,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:45.068462+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0332,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:45.350560+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0292,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:45.634366+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0403,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:45.923726+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0261,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:46.217053+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0229,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:46.502727+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0334,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:46.782807+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0276,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:47.073560+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0277,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:47.361363+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0354,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:47.649032+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0298,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:47.942746+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.037,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:48.230569+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0301,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:48.520640+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0457,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:48.810884+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0297,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:49.115236+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0338,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:49.401031+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0503,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:49.685933+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.035,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:49.996329+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0307,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:50.290886+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0434,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:50.580655+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0351,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:50.882125+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.052,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:51.168202+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0337,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:51.482015+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.04,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:51.768504+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0292,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:52.061871+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0271,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:52.351132+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0326,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:52.636431+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0342,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:52.926353+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0329,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:53.222040+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0291,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:53.507056+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0422,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:53.796278+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0273,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:54.098640+00:00"
+    },
+    {
+      "action": "SQL verification in mranked-dr-2d624057bf88-standby",
+      "durationSeconds": 0.0362,
+      "exitCode": 1,
+      "startedAt": "2026-09-05T03:10:54.385920+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.0444,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:10:54.683265+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture container",
+      "durationSeconds": 0.8359,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:10:54.727720+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.0613,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:10:55.563655+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.1149,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:10:55.625025+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.1389,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:10:55.739919+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture volume",
+      "durationSeconds": 0.1927,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:10:55.878907+00:00"
+    },
+    {
+      "action": "Cleanup UUID-owned fixture network",
+      "durationSeconds": 0.1514,
+      "exitCode": 0,
+      "startedAt": "2026-09-05T03:10:56.071695+00:00"
+    }
+  ],
+  "durationSeconds": 135.908,
+  "error": "standby readiness",
+  "externalGates": [
+    "Separate physical DR host and encrypted channel",
+    "Production-like capacity and concurrent workload",
+    "pgBackRest encrypted multi-repository retention acceptance",
+    "Provider immutable cold archive attestation",
+    "Production RPO/RTO acceptance and named operator approval"
+  ],
+  "finishedAt": "2026-09-05T03:10:56.223126+00:00",
+  "fixtureDumpSha256": "e6937bc1aeca57f0d678bf766fed779e4630c8bf8e1ff9bdf0382661cf57dea6",
+  "formatVersion": 1,
+  "image": "postgres:18.6",
+  "measurements": {
+    "baseBackupSeconds": 5.5187
+  },
+  "productionAcceptance": false,
+  "roles": {
+    "backupCreateDb": false,
+    "backupCreateRole": false,
+    "backupReplication": true,
+    "backupSuperuser": false
+  },
+  "runId": "2d624057bf88",
+  "scope": "disposable-local-physical-rehearsal",
+  "sourceContainer": "mranked-review-it-postgres-1",
+  "sourceDatabase": "visual_review_v2_it",
+  "sourceState": {
+    "accounts": 824,
+    "canonicalSha256": "2fbe65c3ec8d46768f3bb9adb2cbfb3086b8321299636b184ef475575c3af8b1",
+    "flyway": [
+      {
+        "checksum": null,
+        "script": "\"flyway\"",
+        "success": true,
+        "version": null
+      },
+      {
+        "checksum": -1636077697,
+        "script": "V1__target_baseline.sql",
+        "success": true,
+        "version": "1"
+      },
+      {
+        "checksum": 839607018,
+        "script": "V2__rebuild_core_projections.sql",
+        "success": true,
+        "version": "2"
+      },
+      {
+        "checksum": -1456658399,
+        "script": "V3__collector_observation_times_and_identity_grants.sql",
+        "success": true,
+        "version": "3"
+      },
+      {
+        "checksum": 1318350062,
+        "script": "V4__admin_collection_run_status_grants.sql",
+        "success": true,
+        "version": "4"
+      },
+      {
+        "checksum": -1313754193,
+        "script": "V5__legacy_activity_period_projection.sql",
+        "success": true,
+        "version": "5"
+      },
+      {
+        "checksum": -290358219,
+        "script": "V6__comparison_valid_observation_hourly_projection.sql",
+        "success": true,
+        "version": "6"
+      },
+      {
+        "checksum": -1228913579,
+        "script": "V7__activity_rating_read_grants.sql",
+        "success": true,
+        "version": "7"
+      },
+      {
+        "checksum": -574188650,
+        "script": "V8__legacy_overview_projection.sql",
+        "success": true,
+        "version": "8"
+      },
+      {
+        "checksum": 1058556652,
+        "script": "V9__immutable_observations_quality_archive_fence.sql",
+        "success": true,
+        "version": "9"
+      },
+      {
+        "checksum": -1148603410,
+        "script": "V10__consistent_public_queries_and_formula_guards.sql",
+        "success": true,
+        "version": "10"
+      },
+      {
+        "checksum": 1679789143,
+        "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+        "success": true,
+        "version": "11"
+      },
+      {
+        "checksum": 1453326243,
+        "script": "V12__detail_history_projection.sql",
+        "success": true,
+        "version": "12"
+      },
+      {
+        "checksum": -185639607,
+        "script": "V13__immutable_account_identity_history.sql",
+        "success": true,
+        "version": "13"
+      }
+    ],
+    "institutions": 207,
+    "partitions": [
+      {
+        "canonical_sha256": "7be1c532c0e2517aa627c29947bb53e64d715025b9689785a407b93151477da5",
+        "max_observed_at": "2026-08-01T12:00:00+00:00",
+        "min_observed_at": "2026-07-16T12:00:00+00:00",
+        "month": "2026-07-01",
+        "row_count": 9025
+      },
+      {
+        "canonical_sha256": "b313141455ede8b6959c2a1c096c0c07757ae651781dc28ea5fd642b75f6f118",
+        "max_observed_at": "2026-08-01T07:00:00+00:00",
+        "min_observed_at": "2026-08-01T07:00:00+00:00",
+        "month": "2026-08-01",
+        "row_count": 1
+      }
+    ],
+    "projections": [
+      {
+        "name": "comparison",
+        "revision": 29,
+        "rowCount": 8534560,
+        "status": "ready"
+      },
+      {
+        "name": "institution_daily_metrics",
+        "revision": 29,
+        "rowCount": 8264,
+        "status": "ready"
+      },
+      {
+        "name": "institution_monthly_metrics",
+        "revision": 29,
+        "rowCount": 8256,
+        "status": "ready"
+      },
+      {
+        "name": "institution_period_metrics",
+        "revision": 29,
+        "rowCount": 32960,
+        "status": "ready"
+      },
+      {
+        "name": "publication_history",
+        "revision": 29,
+        "rowCount": 9026,
+        "status": "ready"
+      },
+      {
+        "name": "publication_hourly",
+        "revision": 29,
+        "rowCount": 315706,
+        "status": "ready"
+      },
+      {
+        "name": "publication_latest",
+        "revision": 29,
+        "rowCount": 824,
+        "status": "ready"
+      }
+    ],
+    "publications": 824,
+    "revision": 29,
+    "sizeBytes": 3082892991,
+    "snapshots": 9026,
+    "unvalidatedConstraints": 0
+  },
+  "startedAt": "2026-09-05T03:08:40.314788+00:00",
+  "status": "fail"
+}

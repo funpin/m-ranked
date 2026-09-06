@@ -47,7 +47,21 @@ def archive_row(**changes):
         "created_at": datetime(2026, 1, 2, 11, 0, 1, tzinfo=UTC),
         "reaction_breakdown_json": {"custom:1": 0, "👍": 2},
     }
+    row.update({
+        "correction_sequence": 0, "supersedes_snapshot_id": None,
+        "correction_reason": None,
+        "views_quality": "exact", "reactions_quality": "exact",
+        "comments_quality": "exact", "shares_quality": "exact",
+        "metric_evidence_json": {},
+    })
     row.update(changes)
+    canonical = dict(row)
+    canonical["id"] = canonical.pop("snapshot_id")
+    canonical["reaction_breakdown"] = canonical.pop("reaction_breakdown_json")
+    if isinstance(canonical["reaction_breakdown"], str):
+        canonical["reaction_breakdown"] = json.loads(canonical["reaction_breakdown"])
+    canonical["metric_evidence"] = canonical.pop("metric_evidence_json")
+    row["canonical_record"] = json.dumps(canonical, default=str, sort_keys=True)
     return row
 
 
@@ -125,6 +139,36 @@ def test_archive_verification_detects_checksum_corruption(tmp_path: Path):
         stream.write(b"corruption")
     with pytest.raises(ValueError, match="SHA-256"):
         verify_archive(path, expected_sha256=verified.sha256)
+
+
+@pytest.mark.parametrize("stop_after", [1, 2])
+def test_archive_verification_honors_deadline_during_hash_and_batches(tmp_path: Path, stop_after: int):
+    path = tmp_path / "deadline.parquet"
+    with ParquetArchiveWriter(path) as writer:
+        writer.append([archive_row()])
+    callbacks = 0
+
+    def deadline():
+        nonlocal callbacks
+        callbacks += 1
+        if callbacks == stop_after:
+            raise TimeoutError("verification deadline")
+
+    with pytest.raises(TimeoutError, match="verification deadline"):
+        verify_archive(path, sample_size=1, on_batch=deadline)
+    assert callbacks == stop_after
+
+
+def test_archive_order_supports_bridge_negative_bigint_ids_and_rejects_duplicates(tmp_path: Path):
+    path=tmp_path/'negative-ids.parquet'
+    with ParquetArchiveWriter(path) as writer:
+        writer.append([archive_row(snapshot_id=-(2**63)),archive_row(snapshot_id=-17)])
+        writer.append([archive_row(snapshot_id=-1),archive_row(snapshot_id=0)])
+    assert verify_archive(path,expected_row_count=4,sample_size=1).row_count==4
+    with ParquetArchiveWriter(path) as writer:
+        writer.append([archive_row(snapshot_id=-17),archive_row(snapshot_id=-17)])
+    with pytest.raises(ValueError,match='ordering or uniqueness'):
+        verify_archive(path,sample_size=1)
 
 
 def test_drop_requires_exact_confirmation(tmp_path: Path):

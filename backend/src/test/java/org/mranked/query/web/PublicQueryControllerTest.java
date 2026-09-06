@@ -61,6 +61,26 @@ import org.slf4j.LoggerFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 class PublicQueryControllerTest {
+    @Test
+    void providerConfigurationChangesInvalidateCachedBodyEtagAndNextRepresentation() throws Exception {
+        DatasetRevisionProvider revisions=()->new DatasetRevision(88,Instant.EPOCH);
+        var service=new PublicQueryService(new StubRepository(),revisions,new CursorCodec());
+        var shared=new PublicDtoCache(revisions,new PublicCacheKeyFactory(),
+                Caffeine.newBuilder().maximumSize(100).build(),new DisabledPublicCacheStore(),new JsonMapper(),Duration.ofMinutes(10));
+        var phone=new org.mranked.query.application.ProviderConfiguration("configured","missing","missing","configured",false);
+        var session=new org.mranked.query.application.ProviderConfiguration("configured","missing","missing","configured",true);
+        var before=MockMvcBuilders.standaloneSetup(new PublicQueryController(service,shared,new ETagFactory(),phone)).build();
+        var after=MockMvcBuilders.standaloneSetup(new PublicQueryController(service,shared,new ETagFactory(),session)).build();
+        var first=before.perform(get("/api/v1/overview?platform=max")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.integrationWarning").value("max_phone_required")).andReturn().getResponse();
+        after.perform(get("/api/v1/overview?platform=max").header(HttpHeaders.IF_NONE_MATCH,first.getHeader(HttpHeaders.ETAG)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.datasetRevision").value(88))
+                .andExpect(jsonPath("$.integrationWarning").value("max_session_required"));
+        var json=new JsonMapper();
+        var oldVersion=json.readTree(before.perform(get("/api/v1/revision")).andReturn().getResponse().getContentAsString()).path("representationVersion").asString();
+        var newVersion=json.readTree(after.perform(get("/api/v1/revision")).andReturn().getResponse().getContentAsString()).path("representationVersion").asString();
+        assertThat(newVersion).matches("[0-9a-f]{64}").isNotEqualTo(oldVersion);
+    }
     private StubRepository repository;
     private MockMvc mvc;
     private AtomicInteger revisionReads;
@@ -131,7 +151,7 @@ class PublicQueryControllerTest {
                 .andExpect(header().string(HttpHeaders.ETAG, etag))
                 .andExpect(content().string(""));
 
-        assertThat(revisionReads).hasValue(2);
+        assertThat(revisionReads).hasValue(3); // preliminary reads + transactional cache miss
         assertThat(repository.overviewCalls).isEqualTo(1);
     }
 
@@ -163,7 +183,7 @@ class PublicQueryControllerTest {
                         org.hamcrest.Matchers.not(oldEtag)))
                 .andExpect(jsonPath("$.datasetRevision").value(89));
 
-        assertThat(revisionReads).hasValue(2);
+        assertThat(revisionReads).hasValue(4); // both misses independently pin the body revision
         assertThat(repository.overviewCalls).isEqualTo(2);
     }
 
@@ -415,13 +435,13 @@ class PublicQueryControllerTest {
                         "Institution IDs must be positive integers"
                 ));
 
-        String[] excess = java.util.stream.LongStream.rangeClosed(1, 51)
+        String[] excess = java.util.stream.LongStream.rangeClosed(1, 2001)
                 .mapToObj(String::valueOf)
                 .toArray(String[]::new);
         mvc.perform(get("/api/v1/compare").param("channels", excess))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.detail").value("At most 50 channel IDs may be selected"));
+                .andExpect(jsonPath("$.detail").value("At most 2000 channel IDs may be selected"));
 
         assertThat(repository.comparisonCalls).isEqualTo(0);
     }
@@ -477,7 +497,7 @@ class PublicQueryControllerTest {
     }
 
     @Test
-    void comparisonCacheIdentityIncludesOrderButNormalizesTheIgnoredDefaultLimit() throws Exception {
+    void comparisonCacheIdentityIncludesSelectionOrderAndBoundedPageSize() throws Exception {
         Instant asOf = Instant.parse("2026-09-03T10:20:00Z");
         InstitutionIdentity institution = new InstitutionIdentity(
                 UUID.fromString("00000000-0000-0000-0000-000000000012"),
@@ -513,7 +533,7 @@ class PublicQueryControllerTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getHeader(HttpHeaders.ETAG);
 
-        assertThat(sameSelection).isEqualTo(first);
+        assertThat(sameSelection).isNotEqualTo(first);
         assertThat(reversed).isNotEqualTo(first);
     }
 

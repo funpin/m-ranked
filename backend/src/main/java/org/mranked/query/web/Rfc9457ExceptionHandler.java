@@ -24,6 +24,14 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class Rfc9457ExceptionHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(Rfc9457ExceptionHandler.class);
 
+    @ExceptionHandler(org.mranked.query.application.CsvExportLimitException.class)
+    public org.springframework.http.ResponseEntity<org.springframework.http.ProblemDetail> exportLimit(
+            org.mranked.query.application.CsvExportLimitException exception) {
+        var problem = org.springframework.http.ProblemDetail.forStatusAndDetail(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+        return org.springframework.http.ResponseEntity.status(429).header("Retry-After", "60")
+                .header("Cache-Control", "no-store").body(problem);
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ProblemDetail> notFound(
             ResourceNotFoundException exception,

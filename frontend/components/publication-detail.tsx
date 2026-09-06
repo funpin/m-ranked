@@ -1,56 +1,15 @@
 import Link from "next/link";
-import { DataProvenance, InfoNotice, Metric, PageHeader, StatusPill } from "./ui";
-import { formatDate, PLATFORM_LONG_LABELS, qualityLabel } from "@/lib/format";
-import type { PublicationView } from "@/lib/types";
-
-export function PublicationDetail({
-  publication,
-  historyLimit,
-}: {
-  publication: PublicationView;
-  historyLimit?: number;
-}) {
-  const deleted = Boolean(publication.deletedAt);
-  return (
-    <>
-      <nav className="breadcrumbs" aria-label="Хлебные крошки">
-        <Link href="/">Обзор</Link><span aria-hidden="true">/</span><span>Публикация №{publication.legacyId}</span>
-      </nav>
-      <PageHeader
-        eyebrow={`${PLATFORM_LONG_LABELS[publication.platform]} · ${publication.publicationType}`}
-        title={`Публикация №${publication.legacyId}`}
-        description={`Опубликована ${formatDate(publication.publishedAt)}`}
-        meta={<StatusPill tone={deleted ? "red" : "green"}>{deleted ? "удалена" : "доступна"}</StatusPill>}
-      />
-      {publication.intervalUncertain ? (
-        <InfoNotice tone="amber">Интервал между измерениями превышает ожидаемый; дельты следует интерпретировать осторожно.</InfoNotice>
-      ) : null}
-      {publication.synthetic ? (
-        <InfoNotice tone="amber">Последняя доступная точка помечена как synthetic baseline, а не как прямое наблюдение.</InfoNotice>
-      ) : null}
-      <section className="panel detail-panel">
-        <div className="section-head"><div><p className="eyebrow">Последний замер</p><h2>Счётчики публикации</h2></div><StatusPill tone="blue">{publication.legacyType}</StatusPill></div>
-        <div className="metrics-grid publication-metrics">
-          <Metric label="реакции" value={publication.reactions.value} hint={qualityLabel(publication.reactions.quality)} />
-          <Metric label="просмотры" value={publication.views.value} hint={qualityLabel(publication.views.quality)} />
-          <Metric label="комментарии" value={publication.comments.value} hint={qualityLabel(publication.comments.quality)} />
-          <Metric label="репосты" value={publication.shares.value} hint={qualityLabel(publication.shares.quality)} />
-        </div>
-        <DataProvenance
-          quality={publication.quality}
-          sampleSize={1}
-          coverage={publication.historyCompleteness === "complete" ? 1 : null}
-          asOf={publication.asOf}
-          revision={publication.datasetRevision}
-        />
-      </section>
-      <section className="panel section">
-        <div className="section-head"><div><p className="eyebrow">История</p><h2>Динамика показателей</h2></div>{historyLimit ? <StatusPill tone="neutral">лимит {historyLimit}</StatusPill> : null}</div>
-        <div className="embedded-empty">
-          <p>Публичный Spring API сейчас отдаёт только последний согласованный замер.</p>
-          <p className="muted">Параметр истории сохранён в URL-контракте, но ряд не выдумывается без bounded time-series endpoint.</p>
-        </div>
-      </section>
-    </>
-  );
+import { legacyDate, PLATFORM_LONG_LABELS, postTypeLabel, publicationLabel } from "@/lib/format";
+import type { DetailHistory } from "@/lib/detail-data";
+import { PublicationMeasurements } from "./publication-measurements";
+export function PublicationDetail({history,historyLimit=100}:{history:DetailHistory;historyLimit?:number}) {
+  const p=history.publication, telegram=p.platform === "telegram", root=telegram ? "/posts" : "/platform-posts";
+  const accountRoot=p.accountLegacyType === "channels" ? "/channels" : "/platform-accounts";
+  const url=telegram && p.deletedAt && p.accountUsername ? `https://tgstat.ru/channel/@${p.accountUsername}/${p.displayExternalId ?? p.externalId}` : p.publicUrl;
+  const label=`${publicationLabel(p.displayExternalId ?? p.externalId,p.platform)}${telegram && p.deletedAt ? " в TGStat" : ""}`;
+  return <><span data-active-platform={p.platform} hidden /><div className="post-heading"><div><h1>{p.accountLegacyId ? <Link href={`${accountRoot}/${p.accountLegacyId}`}>{history.accountDisplayName || p.accountName || p.accountUsername}</Link> : p.accountName}{" / "}{url?.startsWith("https://") ? <a className="external" href={url} target="_blank" rel="noopener noreferrer">{label}</a> : label}</h1><p className="muted">Опубликовано: <b>{legacyDate(p.publishedAt,true)}</b> · история {p.historyCompleteness === "complete" ? "полная" : "неполная"} · тип: {postTypeLabel(p.publicationType)}{telegram ? "" : ` · ${PLATFORM_LONG_LABELS[p.platform]}`}{p.deletedAt ? <> · <span className="pill deleted">удалена из {PLATFORM_LONG_LABELS[p.platform]}</span></> : null}{p.repost ? <> · <span className="pill repost">репост</span></> : null}{p.ambiguousAlbumReactions ? <> · <span className="warn">реакции элементов альбома различаются</span></> : null}{p.joint ? <> · <span className="pill coauthor">+{p.additionalAuthorCount} авт.</span></> : null}</p></div>
+    <nav className="post-navigation" aria-label="Навигация по публикациям">{history.previousLegacyId ? <Link className="post-nav-link" href={`${root}/${history.previousLegacyId}`} rel="prev"><span>← Назад</span><small>{history.previousDisplayId ? publicationLabel(history.previousDisplayId,p.platform) : "Предыдущая публикация"}</small></Link> : <span className="post-nav-link disabled"><span>← Назад</span><small>Нет более раннего</small></span>}{history.nextLegacyId ? <Link className="post-nav-link next" href={`${root}/${history.nextLegacyId}`} rel="next"><span>Вперёд →</span><small>{history.nextDisplayId ? publicationLabel(history.nextDisplayId,p.platform) : "Следующая публикация"}</small></Link> : <span className="post-nav-link next disabled"><span>Вперёд →</span><small>Нет более нового</small></span>}</nav></div>
+    {p.deletedAt && history.archivedText ? <section className="panel archived-publication"><h2>Сохранённый текст публикации</h2><p className="panel-note">Последняя копия, полученная до удаления из {PLATFORM_LONG_LABELS[p.platform]}.</p><div className="archived-publication-text">{history.archivedText}</div></section> : null}
+    <PublicationMeasurements rows={history.items} platform={p.platform} historyLimit={telegram ? historyLimit : history.items.length} />
+  </>;
 }

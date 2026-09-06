@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-09-05T06:20:30.095081+00:00",
+  "environment": "disposable PostgreSQL 18.6",
+  "tests": 2,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "scenarios": [
+    "clean V1-latest, independent original SQLite institution/channel ranks, absent import status",
+    "populated V22-latest upgrade, original scalar import state and safe error capsule"
+  ],
+  "schemaV23Sha256": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c",
+  "junitSha256": "cb290f7a0e3c801818df539416fcd6eefddbdf5ecab05b7864ecc0603d4b4787",
+  "productionAcceptance": false,
+  "writerGate": "CLOSED"
+}

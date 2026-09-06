@@ -11,11 +11,13 @@ import sys
 import time
 import zlib
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_DIR = ROOT / "backend/src/main/resources/db/migration"
 
-EXPECTED_MIGRATIONS = (
+FROZEN_V8_MIGRATIONS = (
     (
         "1",
         "V1__target_baseline.sql",
@@ -67,6 +69,9 @@ EXPECTED_MIGRATIONS = (
 )
 
 
+from operations.collector_parity_evidence import EXPECTED_MIGRATIONS
+assert EXPECTED_MIGRATIONS[:8] == FROZEN_V8_MIGRATIONS
+
 def _flyway_crc32(path: Path) -> int:
     checksum = 0
     with path.open("rb") as stream:
@@ -89,11 +94,11 @@ def test_deploy_and_cutover_require_the_complete_frozen_manifest() -> None:
     deploy = (ROOT / "operations/scripts/deploy-shadow.sh").read_text(encoding="utf-8")
     preflight = (ROOT / "operations/scripts/cutover-preflight.sh").read_text(encoding="utf-8")
 
-    assert '.schemaVersion == "8"' in deploy
+    assert f'.schemaVersion == "{len(EXPECTED_MIGRATIONS)}"' in deploy
     assert "actual_migration_files" in deploy
-    assert '(.migrations | length) == 8' in deploy
+    assert f'(.migrations | length) == {len(EXPECTED_MIGRATIONS)}' in deploy
     assert 'all(.migrations[]; .category == "Versioned" and .state == "Success")' in deploy
-    assert 'schemaVersion:"8",migrationCount:8' in deploy
+    assert f'schemaVersion:"{len(EXPECTED_MIGRATIONS)}",migrationCount:{len(EXPECTED_MIGRATIONS)}' in deploy
     assert "SYMLINKS.sha256" in deploy
     assert deploy.count('validate_release_symlinks "$release_path"') == 3
     assert 'validate_release_symlinks "$release_source"' in deploy
@@ -175,11 +180,11 @@ def test_deploy_and_cutover_require_the_complete_frozen_manifest() -> None:
         'mv -Tf -- "$current_sidecar_tmp" "$DEPLOY_REPORT_DIR/current.json.sha256"'
         in deploy
     )
-    assert '.flyway.schemaVersion == "8"' in preflight
+    assert f'.flyway.schemaVersion == "{len(EXPECTED_MIGRATIONS)}"' in preflight
     assert '.releaseManifestSha256 | test("^[0-9a-f]{64}$")' in preflight
-    assert ".flyway.migrationCount == 8" in preflight
-    assert ".database.flywaySchemaVersion == 8" in preflight
-    assert ".database.flywayMigrationCount == 8" in preflight
+    assert f".flyway.migrationCount == {len(EXPECTED_MIGRATIONS)}" in preflight
+    assert f".database.flywaySchemaVersion == {len(EXPECTED_MIGRATIONS)}" in preflight
+    assert f".database.flywayMigrationCount == {len(EXPECTED_MIGRATIONS)}" in preflight
     assert preflight.count('verify_exact_release_manifest "$current_release_path"') == 2
     assert 'validate_release_symlinks "$tree"' in preflight
 
@@ -314,8 +319,8 @@ def _active_release_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
 
     flyway = {
         "validated": True,
-        "schemaVersion": "8",
-        "migrationCount": 8,
+        "schemaVersion": str(len(EXPECTED_MIGRATIONS)),
+        "migrationCount": len(EXPECTED_MIGRATIONS),
         **{
             f"v{version}Sha256": sha256
             for version, _filename, sha256, _checksum in EXPECTED_MIGRATIONS
@@ -799,8 +804,9 @@ test "$failures" -eq 1
 def test_restore_verifier_requires_exact_v1_v8_history() -> None:
     restore = (ROOT / "operations/scripts/restore-verify.sh").read_text(encoding="utf-8")
 
-    assert "migration_count <> 8 OR latest_migration <> 8" in restore
-    assert "ARRAY['1', '2', '3', '4', '5', '6', '7', '8']::text[]" in restore
+    assert f"migration_count <> {len(EXPECTED_MIGRATIONS)} OR latest_migration <> {len(EXPECTED_MIGRATIONS)}" in restore
+    versions = ", ".join("'"+item[0]+"'" for item in EXPECTED_MIGRATIONS)
+    assert "ARRAY["+versions+"]::text[]" in restore
     assert "WHERE version IS NULL" in restore
     assert "'flywayMigrations'" in restore
     for version, filename, _sha256, flyway_checksum in EXPECTED_MIGRATIONS:
@@ -863,6 +869,10 @@ def test_writer_cutover_validates_exact_s_final_and_reverse_binding() -> None:
     source_path = "/var/lib/m-ranked/snapshots/S-final.sqlite3"
     source_sha256 = "a" * 64
     batch_id = "11111111-1111-4111-8111-111111111111"
+    history_digest = {"rows":1,"distinctKeys":1,"duplicateKeys":0,"sha256":"b"*64}
+    history_proof = {"status":"pass","sourceUnchanged":True,"sourceSha256":source_sha256,
+        "datasetRevision":42,"checks":[{"name":name,"status":"pass","expected":history_digest,"actual":history_digest}
+            for name in ("native","presentation")]}
     import_filter = _writer_jq_filter(
         'if ! jq -e --arg sFinal "$s_final" --arg sFinalSha256 "$s_final_sha256" \'\n',
         '\n  \' "$report_json" >/dev/null; then',
@@ -878,6 +888,9 @@ def test_writer_cutover_validates_exact_s_final_and_reverse_binding() -> None:
             "foreign_key_violations": 0,
         },
         "batch_id": batch_id,
+        "dataset_revision":42,
+        "identity_history_verification":history_proof,
+        "checks":[{"check":"canonical_identity_history","critical":True,"status":"pass","details":history_proof}],
         "bridge": {
             "batch_id": batch_id,
             "source_sha256": source_sha256,
@@ -891,6 +904,7 @@ def test_writer_cutover_validates_exact_s_final_and_reverse_binding() -> None:
     )
     assert _jq_filter_accepts(import_filter, import_report, *import_arguments)
     for invalid_report in (
+        {**import_report,"identity_history_verification":None},
         {**import_report, "batch_id": "22222222-2222-4222-8222-222222222222"},
         {
             **import_report,
@@ -949,9 +963,9 @@ def _reverse_rehearsal_jq_filter() -> str:
 
 
 def _reverse_rehearsal_evidence() -> dict[str, object]:
-    return {
+    evidence = {
         "reportType": "reverse-sync-rehearsal",
-        "reportVersion": 3,
+        "reportVersion": 4,
         "status": "pass",
         "environment": "production-like",
         "generatedAt": "2026-09-05T12:00:00+00:00",
@@ -964,8 +978,8 @@ def _reverse_rehearsal_evidence() -> dict[str, object]:
         "sourceNamespace": "m-ranked-production",
         "database": "mranked_rehearsal_20260905",
         "flyway": {
-            "schemaVersion": 8,
-            "migrationCount": 8,
+            "schemaVersion": len(EXPECTED_MIGRATIONS),
+            "migrationCount": len(EXPECTED_MIGRATIONS),
             "fileSha256": {
                 filename: sha256
                 for _version, filename, sha256, _checksum in EXPECTED_MIGRATIONS
@@ -1011,11 +1025,43 @@ def _reverse_rehearsal_evidence() -> dict[str, object]:
         },
     }
 
+    from copy import deepcopy
+    digest={"rows":4,"distinctKeys":4,"duplicateKeys":0,"sha256":"9"*64}
+    check={"status":"pass","expected":digest,"actual":deepcopy(digest)}
+    def proofs(final,revision):
+        common={"status":"pass","sourceUnchanged":True,"sourceSha256":final["sourceSha256"],"datasetRevision":revision}
+        final["identityHistoryVerification"]=common|{"checks":[check|{"name":name} for name in ("native","presentation")],"sourceArtifacts":[final["sourceSha256"]],"identitySourceReceipts":[]}
+        final["projectionVerification"]=common|{"horizons":[24,48,72,168,336],"checks":{name:deepcopy(check) for name in ("fixedCohort","overview","periodMetrics")}}
+    proofs(evidence["sFinal"],10)
+    evidence["secondSFinal"]={"batchId":"22222222-2222-4222-8222-222222222222","gate":"pass","sourceSha256":"f"*64}
+    proofs(evidence["secondSFinal"],30)
+    evidence["secondSFinal"]["repeat"]={"gate":"pass","rowsWritten":0,"batchId":evidence["secondSFinal"]["batchId"],"datasetRevisionBefore":30,"datasetRevisionAfter":30}
+    account="33333333-3333-4333-8333-333333333333"
+    receipts=[{"kind":"admin" if i<4 else "collector","platform":"" if i<4 else "max","sha256":f"{i:064x}"} for i in range(10)]
+    evidence["secondSFinal"]["identityHistoryVerification"]["identitySourceReceipts"]=receipts
+    commands=[{"targetId":account,"datasetRevision":20+i,"outcome":"succeeded"} for i in range(4)]
+    evidence["accountIdentityTransitions"]={"accountId":account,"canonicalExternalId":"original",
+        "nativeSequence":[None,"-20001","-20002","-20003",None,"-20004"],"presentationRows":4,"nativeRows":4,
+        "fullHistorySha256BeforeSecondSFinal":"7"*64,"fullHistoryUnchangedAfterSecondSFinalAndRepeat":True,
+        "originalReceiptsSha256":{("admin/" if r["kind"]=="admin" else "collector/max/")+r["sha256"]+".json":r["sha256"] for r in receipts},
+        "receiptFaults":[{"kind":kind,"fault":fault,"status":"blocked","identityProof":{"status":"fail","errorCode":"HISTORY_IDENTITY_RECEIPT_MISSING" if fault=="missing" else "HISTORY_IDENTITY_RECEIPT_HASH_MISMATCH"}} for kind in ("admin","collector") for fault in ("missing","corrupt")],
+        "javaAdminCommands":commands}
+    paths=["/health",*["/read?platform="+p for p in ("max","rutube","telegram","vk")]]
+    observations=[{"phase":phase,"path":path,"status":200,"valid":True,"upstream":"legacy" if phase in (0,2) else "target"} for phase in range(4) for path in paths]
+    http={"status":"pass","failures":0,"requests":len(observations),"observations":observations,
+          "database":evidence["database"],"springJarSha256":"6"*64,"routeSequence":["initial-legacy","target","legacy","target"],
+          "transitions":[{"from":a,"to":b,"routeSwitchSeconds":0.1,"verifiedSeconds":0.2} for a,b in (("legacy","target"),("target","legacy"),("legacy","target"))],"healthCompatibility":{"status":"pass","fieldsEqual":True},"rejectedGates":[{"routingUnchanged":True,"writersUnchanged":True} for _ in range(7)],
+          "writerChecks":[{"owner":owner,"postgresCollectorWriteAllowed":owner=="target","postgresAdminWriteAllowed":owner=="target","legacySqliteWriteAllowed":owner=="legacy"} for owner in ("legacy","none","target")],
+          "actualJavaAdminCommands":[{"targetId":account,"datasetRevision":20+i,"sameCommandReplayUnchanged":True} for i in range(4)]}
+    evidence["cutoverPhases"]={"repeatedForwardCutover":"pass","legacyRestart":[{"status":200} for _ in range(4)],"httpUpstreamTransition":http}
+    return evidence
+
 
 def _jq_accepts_rehearsal(payload: dict[str, object]) -> bool:
     return _jq_filter_accepts(
         _reverse_rehearsal_jq_filter(),
         payload,
+        "--argjson", "protocolOnly", "false",
         "--arg", "releaseId", "release-2026-09-05",
         "--arg", "manifestSha256", "a" * 64,
         "--arg", "sourceNamespace", "m-ranked-production",
@@ -1986,3 +2032,55 @@ def test_privileged_entrypoints_ignore_hostile_shell_environment_and_helper(
         assert result.returncode != 0
         assert not marker.exists(), name
         assert not helper_marker.exists(), name
+
+
+@pytest.mark.parametrize("path,value", [
+ (("reportVersion",),3),
+ (("secondSFinal",),None),
+ (("secondSFinal","repeat","rowsWritten"),1),
+ (("secondSFinal","repeat","datasetRevisionAfter"),31),
+ (("secondSFinal","repeat","batchId"),"11111111-1111-4111-8111-111111111111"),
+ (("secondSFinal","identityHistoryVerification","status"),"fail"),
+ (("secondSFinal","identityHistoryVerification","datasetRevision"),29),
+ (("secondSFinal","identityHistoryVerification","identitySourceReceipts"),[]),
+ (("secondSFinal","projectionVerification","sourceSha256"),"e"*64),
+ (("secondSFinal","projectionVerification","checks","overview","actual","rows"),5),
+ (("accountIdentityTransitions","fullHistoryUnchangedAfterSecondSFinalAndRepeat"),False),
+ (("accountIdentityTransitions","originalReceiptsSha256"),{}),
+ (("accountIdentityTransitions","receiptFaults"),[]),
+ (("accountIdentityTransitions","javaAdminCommands"),[]),
+ (("accountIdentityTransitions","nativeSequence"),[None,"-20001","-20002"]),
+ (("cutoverPhases","httpUpstreamTransition"),"not exercised"),
+ (("cutoverPhases","httpUpstreamTransition","failures"),1),
+ (("cutoverPhases","httpUpstreamTransition","rejectedGates"),[]),
+ (("cutoverPhases","httpUpstreamTransition","writerChecks",1,"postgresAdminWriteAllowed"),True),
+ (("cutoverPhases","httpUpstreamTransition","observations",0,"upstream"),"target"),
+ (("cutoverPhases","httpUpstreamTransition","observations",0,"status"),503),
+ (("cutoverPhases","httpUpstreamTransition","healthCompatibility","fieldsEqual"),False),
+ (("cutoverPhases","httpUpstreamTransition","actualJavaAdminCommands",0,"sameCommandReplayUnchanged"),False),
+])
+def test_v4_writer_gate_rejects_missing_second_cutover_or_original_input_proofs(path,value):
+    from copy import deepcopy
+    evidence=deepcopy(_reverse_rehearsal_evidence())
+    cursor=evidence
+    for key in path[:-1]: cursor=cursor[key]
+    cursor[path[-1]]=value
+    assert not _jq_accepts_rehearsal(evidence)
+
+
+@pytest.mark.parametrize("missing_proof", [False,True])
+def test_same_jq_protocol_validator_preserves_local_artifact_and_cannot_grant_production(tmp_path,missing_proof):
+    from operations.reverse_sync.rehearsal_contract import verify
+    evidence=_reverse_rehearsal_evidence()
+    evidence["environment"]="disposable-postgresql-integration"
+    evidence["release"]["id"]="local-unbound"
+    if missing_proof: evidence["secondSFinal"].pop("identityHistoryVerification")
+    artifact=tmp_path/"actual-shape.json"
+    artifact.write_text(json.dumps(evidence))
+    original=artifact.read_bytes()
+    result=verify(artifact)
+    assert result["status"] == ("fail" if missing_proof else "pass")
+    assert result["inputUnchanged"] and artifact.read_bytes()==original
+    assert result["productionAcceptance"] is False
+    assert result["externalReleaseAndOperatorApprovalVerified"] is False
+    assert not _jq_accepts_rehearsal(evidence)

@@ -14,28 +14,16 @@ public final class RedisPublicCacheStore implements PublicCacheStore {
 
     @Override
     public Optional<String> get(String opaqueKey) {
-        try {
-            return Optional.ofNullable(redis.opsForValue().get(opaqueKey));
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
-        }
+        return Optional.ofNullable(redis.opsForValue().get(opaqueKey));
     }
 
     @Override
     public void put(String opaqueKey, String publicDtoJson, Duration ttl) {
-        try {
-            redis.opsForValue().set(opaqueKey, publicDtoJson, ttl);
-        } catch (RuntimeException ignored) {
-            // Redis failure must never change public response correctness.
-        }
+        redis.opsForValue().set(opaqueKey, publicDtoJson, ttl);
     }
 
     @Override
     public void remove(String opaqueKey) {
-        try {
-            redis.delete(opaqueKey);
-        } catch (RuntimeException ignored) {
-            // Redis failure must never change public response correctness.
-        }
+        redis.delete(opaqueKey);
     }
 }

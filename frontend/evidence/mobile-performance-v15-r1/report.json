@@ -1,0 +1,2031 @@
+{
+  "generatedAt": "2026-09-05T05:20:37.447Z",
+  "origin": "http://127.0.0.1:18087",
+  "apiOrigin": "http://127.0.0.1:57565",
+  "release": "a7a2f09ff156eb72445f04f40dbe0e93d3378911",
+  "workingTreeDiff": ".gitignore                                         |    1 +\n backend/pom.xml                                    |   37 +\n .../infrastructure/AdminDatabaseConfiguration.java |   22 +\n .../infrastructure/ApiSecurityConfiguration.java   |   10 +\n .../infrastructure/JdbcAdminCommandRepository.java |    2 +-\n .../infrastructure/JdbcAdminQueryRepository.java   |    2 +-\n .../admin/web/AdminRfc9457ExceptionHandler.java    |   10 +-\n .../org/mranked/analytics/domain/MetricSet.java    |   10 +-\n .../mranked/cache/application/PublicCacheKey.java  |    5 +\n .../cache/application/PublicCacheKeyFactory.java   |   20 +-\n .../mranked/cache/application/PublicDtoCache.java  |   39 +-\n .../infrastructure/RedisPublicCacheStore.java      |   18 +-\n .../emoji/application/CustomEmojiAsset.java        |    1 +\n .../emoji/application/CustomEmojiService.java      |   30 +-\n .../infrastructure/TelegramEmojiHttpGateway.java   |   30 +-\n .../query/application/CsvExportService.java        |   84 +-\n .../org/mranked/query/application/CursorCodec.java |   24 +\n .../query/application/PublicQueryRepository.java   |   22 +\n .../query/application/PublicQueryService.java      |  125 +-\n .../query/application/PublicationCsvRowSource.java |    5 +\n .../java/org/mranked/query/domain/AccountView.java |   16 +-\n .../mranked/query/domain/ActivityRatingResult.java |    5 +-\n .../mranked/query/domain/ComparisonSelection.java  |    2 +-\n .../org/mranked/query/domain/ComparisonView.java   |    9 +-\n .../org/mranked/query/domain/InstitutionView.java  |   11 +-\n .../org/mranked/query/domain/OverviewMetric.java   |    9 +-\n .../org/mranked/query/domain/PublicationView.java  |   12 +-\n .../java/org/mranked/query/domain/RatingPage.java  |   13 +-\n .../query/infrastructure/ActivityRatingSql.java    |   87 +-\n .../query/infrastructure/ComparisonSql.java        |   30 +-\n .../JdbcProjectionQueryRepository.java             |  197 +-\n .../JdbcPublicationCsvRowSource.java               |   21 +-\n .../org/mranked/query/web/CsvExportController.java |    7 +-\n .../org/mranked/query/web/PublicApiModels.java     |   58 +-\n .../mranked/query/web/PublicQueryController.java   |   97 +-\n .../mranked/query/web/Rfc9457ExceptionHandler.java |    8 +\n .../AdminPostgresIntegrationTest.java              |   10 +-\n .../application/PublicCacheKeyFactoryTest.java     |    8 +\n .../cache/application/PublicDtoCacheTest.java      |   14 +\n .../org/mranked/contract/OpenApiContractTest.java  |   41 +-\n .../query/application/CsvExportServiceTest.java    |   52 +\n .../mranked/query/application/CursorCodecTest.java |   11 +\n .../query/domain/ComparisonSelectionTest.java      |    4 +-\n .../ActivityRatingPostgresIntegrationTest.java     |   11 +\n .../query/infrastructure/ComparisonSqlTest.java    |    4 +-\n .../query/web/PublicQueryControllerTest.java       |   12 +-\n collector_target/README.md                         |   55 +-\n collector_target/coordinator.py                    |   43 +-\n collector_target/normalize.py                      |    1 +\n collector_target/ports.py                          |    3 +\n collector_target/repository.py                     |   63 +-\n contracts/openapi/m-ranked-v1-client.ts            | 3505 ++++++++++++++---\n contracts/openapi/m-ranked-v1.yaml                 | 2517 ++++++++++++-\n frontend/.gitignore                                |   15 +-\n frontend/README.md                                 |  104 +-\n frontend/app/(overview)/page.tsx                   |   83 +-\n frontend/app/channels/[id]/page.tsx                |   13 +-\n frontend/app/compare/page.tsx                      |  303 +-\n frontend/app/globals.css                           |  443 +--\n frontend/app/institutions/[id]/page.tsx            |   37 +-\n frontend/app/layout.tsx                            |   23 +-\n frontend/app/manage/page.tsx                       |   71 +-\n frontend/app/platform-accounts/[id]/page.tsx       |    9 +-\n frontend/app/platform-posts/[id]/page.tsx          |    8 +-\n frontend/app/posts/[id]/page.tsx                   |   10 +-\n frontend/app/rating/page.tsx                       |  227 +-\n frontend/components/account-detail.tsx             |   94 +-\n frontend/components/comparison-chart.tsx           |  202 +-\n frontend/components/institution-detail.tsx         |   71 +-\n frontend/components/overview-card.tsx              |  112 +-\n frontend/components/publication-detail.tsx         |   67 +-\n frontend/components/site-header.tsx                |   67 +-\n frontend/components/theme-toggle.tsx               |   22 +-\n frontend/components/ui.tsx                         |   14 +-\n frontend/lib/admin-api.ts                          |   51 +-\n frontend/lib/api.ts                                |  274 +-\n frontend/lib/format.ts                             |   29 +-\n frontend/lib/params.ts                             |   14 +-\n frontend/lib/types.ts                              |  266 +-\n frontend/next-env.d.ts                             |    4 +-\n frontend/next.config.ts                            |    2 +\n frontend/package.json                              |   21 +-\n frontend/pnpm-lock.yaml                            | 3961 ++++++++++++++++++--\n frontend/pnpm-workspace.yaml                       |    1 +\n frontend/tests/api.test.ts                         |    8 +-\n frontend/tests/params.test.ts                      |    6 +-\n frontend/tsconfig.json                             |    7 +-\n migration/bridge/cli.py                            |   44 +\n migration/bridge/model.py                          |    2 +-\n migration/bridge/service.py                        |  227 +-\n migration/bridge/target.py                         |   15 +-\n migration/reverse_sync_format.py                   |   29 +-\n operations/cold_archive/README.md                  |   43 +\n operations/cold_archive/model.py                   |    2 +\n operations/cold_archive/parquet.py                 |   56 +-\n operations/cold_archive/service.py                 |   32 +-\n operations/collector_parity_evidence.py            |   91 +-\n operations/requirements.txt                        |    1 +\n operations/reverse_sync/cli.py                     |    4 +\n operations/reverse_sync/journal.py                 |   32 +\n operations/reverse_sync/postgres.py                |   41 +-\n operations/reverse_sync/service.py                 |   38 +-\n operations/reverse_sync/sqlite_target.py           |   64 +-\n operations/scripts/cutover-preflight.sh            |   63 +-\n operations/scripts/deploy-shadow.sh                |   87 +-\n operations/scripts/restore-verify.sh               |   17 +-\n tests/test_cold_archive.py                         |   26 +\n tests/test_collector_parity_evidence.py            |   10 +-\n tests/test_operational_flyway_gates.py             |   31 +-\n tests/test_reverse_sync_postgres.py                |  104 +-\n tests/test_target_collectors.py                    |    3 +\n tests/test_target_collectors_postgres.py           |    9 +-\n 112 files changed, 11803 insertions(+), 3340 deletions(-)",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "sourceSha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+  "databaseBytes": 3154409151,
+  "runtimeEvidence": {
+    "path": "../operations/performance/evidence/public-read-review-r1/report.json",
+    "jarSha256": "bd9216aed69f46a24ce7b719f2f6109503a2c53af0005d25ca3bf39c149806b0",
+    "database": {
+      "name": "visual_review_v2_it",
+      "bytes": 3154409151,
+      "institutions": 207,
+      "accounts": 824,
+      "publications": 824,
+      "snapshots": 9026,
+      "comparisonPoints": 8534560,
+      "datasetRevision": 29,
+      "flyway": [
+        {
+          "version": "1",
+          "script": "V1__target_baseline.sql",
+          "checksum": -1636077697,
+          "success": true
+        },
+        {
+          "version": "2",
+          "script": "V2__rebuild_core_projections.sql",
+          "checksum": 839607018,
+          "success": true
+        },
+        {
+          "version": "3",
+          "script": "V3__collector_observation_times_and_identity_grants.sql",
+          "checksum": -1456658399,
+          "success": true
+        },
+        {
+          "version": "4",
+          "script": "V4__admin_collection_run_status_grants.sql",
+          "checksum": 1318350062,
+          "success": true
+        },
+        {
+          "version": "5",
+          "script": "V5__legacy_activity_period_projection.sql",
+          "checksum": -1313754193,
+          "success": true
+        },
+        {
+          "version": "6",
+          "script": "V6__comparison_valid_observation_hourly_projection.sql",
+          "checksum": -290358219,
+          "success": true
+        },
+        {
+          "version": "7",
+          "script": "V7__activity_rating_read_grants.sql",
+          "checksum": -1228913579,
+          "success": true
+        },
+        {
+          "version": "8",
+          "script": "V8__legacy_overview_projection.sql",
+          "checksum": -574188650,
+          "success": true
+        },
+        {
+          "version": "9",
+          "script": "V9__immutable_observations_quality_archive_fence.sql",
+          "checksum": 1058556652,
+          "success": true
+        },
+        {
+          "version": "10",
+          "script": "V10__consistent_public_queries_and_formula_guards.sql",
+          "checksum": -1148603410,
+          "success": true
+        },
+        {
+          "version": "11",
+          "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+          "checksum": 1679789143,
+          "success": true
+        },
+        {
+          "version": "12",
+          "script": "V12__detail_history_projection.sql",
+          "checksum": 1453326243,
+          "success": true
+        },
+        {
+          "version": "13",
+          "script": "V13__immutable_account_identity_history.sql",
+          "checksum": -185639607,
+          "success": true
+        },
+        {
+          "version": "14",
+          "script": "V14__public_archived_publication_text.sql",
+          "checksum": -956321170,
+          "success": true
+        },
+        {
+          "version": "15",
+          "script": "V15__verified_source_preservation.sql",
+          "checksum": -1953543117,
+          "success": true
+        }
+      ]
+    }
+  },
+  "revisionBefore": {
+    "datasetRevision": 29,
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "86f186dcdd8c1d3670378a441e07d68f3c0371424f99e4e7eec672ac5f1b3ee4"
+  },
+  "revisionAfter": {
+    "datasetRevision": 29,
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "86f186dcdd8c1d3670378a441e07d68f3c0371424f99e4e7eec672ac5f1b3ee4"
+  },
+  "coherent": true,
+  "buildId": "6-v68i1B49iJ8MvlrLQe-",
+  "buildMode": "production",
+  "scope": "Interim V15 actual API. Synthetic 207-entity representative corpus; database size includes indexes and comparison projections. Mobile lab measurements, not production field Core Web Vitals. Each route has an independent cold browser cache; API cache remains under its runtime policy.",
+  "methodology": {
+    "cls": "Maximum 5s session window with <1s gaps; excludes hadRecentInput",
+    "inp": "Event Timing of exercised theme/menu/search/chart interactions; durations <16ms are below observer threshold",
+    "initialJs": "Every script fetched through initial network idle/chart readiness, individually gzip level 9; includes dynamically loaded initial charts",
+    "sources": [
+      "https://web.dev/articles/cls",
+      "https://web.dev/articles/inp"
+    ]
+  },
+  "browser": "151.0.7922.34",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "throttling": {
+    "cpu": 4,
+    "latencyMs": 150,
+    "downloadBitsPerSecond": 1600000,
+    "uploadBitsPerSecond": 750000
+  },
+  "sampleCount": 5,
+  "gate": "NO-GO",
+  "summaries": [
+    {
+      "path": "/?platform=telegram",
+      "samples": 5,
+      "lcpP75Ms": 1024,
+      "inpP75Ms": 128,
+      "clsP75": 0,
+      "initialJsGzipBytes": 145569,
+      "initialJsBudgetBytes": 174080,
+      "passed": true
+    },
+    {
+      "path": "/?platform=all",
+      "samples": 5,
+      "lcpP75Ms": 944,
+      "inpP75Ms": 88,
+      "clsP75": 0,
+      "initialJsGzipBytes": 145569,
+      "initialJsBudgetBytes": 174080,
+      "passed": true
+    },
+    {
+      "path": "/rating?platform=telegram",
+      "samples": 5,
+      "lcpP75Ms": 960,
+      "inpP75Ms": 104,
+      "clsP75": 0,
+      "initialJsGzipBytes": 146101,
+      "initialJsBudgetBytes": 174080,
+      "passed": true
+    },
+    {
+      "path": "/compare?platform=vk",
+      "samples": 5,
+      "lcpP75Ms": 2440,
+      "inpP75Ms": 984,
+      "clsP75": 0.01943814152418133,
+      "initialJsGzipBytes": 217340,
+      "initialJsBudgetBytes": 174080,
+      "passed": false
+    },
+    {
+      "path": "/posts/1",
+      "samples": 5,
+      "lcpP75Ms": 660,
+      "inpP75Ms": 72,
+      "clsP75": 0,
+      "initialJsGzipBytes": 219476,
+      "initialJsBudgetBytes": 174080,
+      "passed": false
+    }
+  ],
+  "rows": [
+    {
+      "path": "/?platform=telegram",
+      "sample": 0,
+      "status": 200,
+      "lcp": 1140,
+      "inp": 152,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "4822": 152,
+        "4829": 64,
+        "4836": 16,
+        "4843": 16,
+        "4850": 32,
+        "4857": 24
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=telegram",
+      "sample": 1,
+      "status": 200,
+      "lcp": 1012,
+      "inp": 112,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "285": 112,
+        "292": 72,
+        "299": 16,
+        "306": 16,
+        "313": 32,
+        "320": 24
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=telegram",
+      "sample": 2,
+      "status": 200,
+      "lcp": 1024,
+      "inp": 120,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "8559": 120,
+        "8566": 72,
+        "8573": 16,
+        "8587": 32,
+        "8594": 24
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=telegram",
+      "sample": 3,
+      "status": 200,
+      "lcp": 1008,
+      "inp": 128,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "301": 128,
+        "308": 80,
+        "315": 16,
+        "322": 16,
+        "329": 32,
+        "336": 32
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=telegram",
+      "sample": 4,
+      "status": 200,
+      "lcp": 1000,
+      "inp": 120,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "398": 120,
+        "405": 72,
+        "426": 32,
+        "433": 24
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=all",
+      "sample": 0,
+      "status": 200,
+      "lcp": 952,
+      "inp": 88,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "3780": 88,
+        "3787": 40,
+        "3794": 16,
+        "3808": 24,
+        "3815": 16
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=all",
+      "sample": 1,
+      "status": 200,
+      "lcp": 940,
+      "inp": 88,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "993": 88,
+        "1000": 40,
+        "1007": 16,
+        "1014": 16,
+        "1021": 24,
+        "1028": 16
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=all",
+      "sample": 2,
+      "status": 200,
+      "lcp": 940,
+      "inp": 80,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "2933": 80,
+        "2940": 40,
+        "2947": 16,
+        "2954": 16,
+        "2961": 24,
+        "2968": 16
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=all",
+      "sample": 3,
+      "status": 200,
+      "lcp": 944,
+      "inp": 88,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "665": 88,
+        "672": 40,
+        "693": 24,
+        "700": 16
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/?platform=all",
+      "sample": 4,
+      "status": 200,
+      "lcp": 944,
+      "inp": 88,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "7382": 88,
+        "7389": 40,
+        "7396": 16,
+        "7410": 24,
+        "7417": 16
+      },
+      "initialScriptBytes": 149714,
+      "initialScriptGzipBytes": 145569,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/rating?platform=telegram",
+      "sample": 0,
+      "status": 200,
+      "lcp": 944,
+      "inp": 104,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "9768": 104,
+        "9775": 40,
+        "9782": 24,
+        "9789": 16
+      },
+      "initialScriptBytes": 150799,
+      "initialScriptGzipBytes": 146101,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/33v7u_wdaj72o.js",
+          "gzipBytes": 532,
+          "sha256": "5a34fa337baf2299a511f5603f3cc78327ef76f6211e610ecdb4befaa9493c7f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/rating?platform=telegram",
+      "sample": 1,
+      "status": 200,
+      "lcp": 956,
+      "inp": 120,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "4964": 120,
+        "4971": 40,
+        "4978": 24,
+        "4985": 16
+      },
+      "initialScriptBytes": 150799,
+      "initialScriptGzipBytes": 146101,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/33v7u_wdaj72o.js",
+          "gzipBytes": 532,
+          "sha256": "5a34fa337baf2299a511f5603f3cc78327ef76f6211e610ecdb4befaa9493c7f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/rating?platform=telegram",
+      "sample": 2,
+      "status": 200,
+      "lcp": 964,
+      "inp": 104,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "9289": 104,
+        "9296": 40,
+        "9303": 24,
+        "9310": 16
+      },
+      "initialScriptBytes": 150799,
+      "initialScriptGzipBytes": 146101,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/33v7u_wdaj72o.js",
+          "gzipBytes": 532,
+          "sha256": "5a34fa337baf2299a511f5603f3cc78327ef76f6211e610ecdb4befaa9493c7f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/rating?platform=telegram",
+      "sample": 3,
+      "status": 200,
+      "lcp": 960,
+      "inp": 88,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "1415": 88,
+        "1422": 40,
+        "1429": 24,
+        "1436": 24
+      },
+      "initialScriptBytes": 150799,
+      "initialScriptGzipBytes": 146101,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/33v7u_wdaj72o.js",
+          "gzipBytes": 532,
+          "sha256": "5a34fa337baf2299a511f5603f3cc78327ef76f6211e610ecdb4befaa9493c7f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/rating?platform=telegram",
+      "sample": 4,
+      "status": 200,
+      "lcp": 956,
+      "inp": 104,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "9946": 104,
+        "9953": 40,
+        "9960": 24,
+        "9967": 16
+      },
+      "initialScriptBytes": 150799,
+      "initialScriptGzipBytes": 146101,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/33v7u_wdaj72o.js",
+          "gzipBytes": 532,
+          "sha256": "5a34fa337baf2299a511f5603f3cc78327ef76f6211e610ecdb4befaa9493c7f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 0,
+      "status": 200,
+      "lcp": 2796,
+      "inp": 984,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "2334": 984,
+        "2341": 912,
+        "2355": 24,
+        "2376": 448,
+        "2383": 24,
+        "2390": 16
+      },
+      "initialScriptBytes": 222444,
+      "initialScriptGzipBytes": 217340,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/2v7edb4jf75sp.js",
+          "gzipBytes": 4379,
+          "sha256": "d5980756dfc40b04eff478c808f18f5144f7031f5717d575716d021d0443f734"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 1,
+      "status": 200,
+      "lcp": 2416,
+      "inp": 968,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "8882": 968,
+        "8889": 904,
+        "8903": 24,
+        "8924": 440,
+        "8931": 24,
+        "8938": 16
+      },
+      "initialScriptBytes": 222444,
+      "initialScriptGzipBytes": 217340,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/2v7edb4jf75sp.js",
+          "gzipBytes": 4379,
+          "sha256": "d5980756dfc40b04eff478c808f18f5144f7031f5717d575716d021d0443f734"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 2,
+      "status": 200,
+      "lcp": 2416,
+      "inp": 984,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "5351": 984,
+        "5358": 888,
+        "5372": 24,
+        "5393": 448,
+        "5400": 24,
+        "5407": 16
+      },
+      "initialScriptBytes": 222444,
+      "initialScriptGzipBytes": 217340,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/2v7edb4jf75sp.js",
+          "gzipBytes": 4379,
+          "sha256": "d5980756dfc40b04eff478c808f18f5144f7031f5717d575716d021d0443f734"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 3,
+      "status": 200,
+      "lcp": 2428,
+      "inp": 984,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "210": 984,
+        "217": 896,
+        "231": 24,
+        "252": 448,
+        "259": 24,
+        "266": 24
+      },
+      "initialScriptBytes": 222444,
+      "initialScriptGzipBytes": 217340,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/2v7edb4jf75sp.js",
+          "gzipBytes": 4379,
+          "sha256": "d5980756dfc40b04eff478c808f18f5144f7031f5717d575716d021d0443f734"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 4,
+      "status": 200,
+      "lcp": 2440,
+      "inp": 984,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "7110": 984,
+        "7117": 896,
+        "7131": 24,
+        "7152": 448,
+        "7159": 24,
+        "7166": 24
+      },
+      "initialScriptBytes": 222444,
+      "initialScriptGzipBytes": 217340,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/2v7edb4jf75sp.js",
+          "gzipBytes": 4379,
+          "sha256": "d5980756dfc40b04eff478c808f18f5144f7031f5717d575716d021d0443f734"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 0,
+      "status": 200,
+      "lcp": 672,
+      "inp": 72,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "9722": 72,
+        "9729": 24,
+        "9736": 24,
+        "9743": 24,
+        "9750": 16,
+        "9757": 16,
+        "9764": 16
+      },
+      "initialScriptBytes": 224585,
+      "initialScriptGzipBytes": 219476,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0cej__6-al0tt.js",
+          "gzipBytes": 6515,
+          "sha256": "c3150c3e4df31d9c1ce0635287ba44ee909de0ca013004fad9e438376bcd9c1b"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 1,
+      "status": 200,
+      "lcp": 660,
+      "inp": 72,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "3606": 72,
+        "3613": 24,
+        "3620": 32,
+        "3627": 24,
+        "3634": 16,
+        "3641": 16,
+        "3648": 16
+      },
+      "initialScriptBytes": 224585,
+      "initialScriptGzipBytes": 219476,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0cej__6-al0tt.js",
+          "gzipBytes": 6515,
+          "sha256": "c3150c3e4df31d9c1ce0635287ba44ee909de0ca013004fad9e438376bcd9c1b"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 2,
+      "status": 200,
+      "lcp": 652,
+      "inp": 72,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "3984": 72,
+        "3991": 24,
+        "3998": 32,
+        "4005": 24,
+        "4012": 16,
+        "4019": 16,
+        "4026": 16
+      },
+      "initialScriptBytes": 224585,
+      "initialScriptGzipBytes": 219476,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0cej__6-al0tt.js",
+          "gzipBytes": 6515,
+          "sha256": "c3150c3e4df31d9c1ce0635287ba44ee909de0ca013004fad9e438376bcd9c1b"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 3,
+      "status": 200,
+      "lcp": 644,
+      "inp": 72,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "9047": 72,
+        "9054": 24,
+        "9061": 32,
+        "9068": 24,
+        "9075": 16,
+        "9082": 16,
+        "9089": 16
+      },
+      "initialScriptBytes": 224585,
+      "initialScriptGzipBytes": 219476,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0cej__6-al0tt.js",
+          "gzipBytes": 6515,
+          "sha256": "c3150c3e4df31d9c1ce0635287ba44ee909de0ca013004fad9e438376bcd9c1b"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 4,
+      "status": 200,
+      "lcp": 652,
+      "inp": 72,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "1453": 72,
+        "1460": 24,
+        "1467": 32,
+        "1474": 24,
+        "1481": 24,
+        "1488": 16,
+        "1495": 16
+      },
+      "initialScriptBytes": 224585,
+      "initialScriptGzipBytes": 219476,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0cej__6-al0tt.js",
+          "gzipBytes": 6515,
+          "sha256": "c3150c3e4df31d9c1ce0635287ba44ee909de0ca013004fad9e438376bcd9c1b"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/3h5suurxn5h-i.js",
+          "gzipBytes": 67392,
+          "sha256": "c88ae01bf6e9d674d3fb887661a27492aee1ace7756230005bcde352da75ce18"
+        },
+        {
+          "url": "http://127.0.0.1:18087/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    }
+  ]
+}

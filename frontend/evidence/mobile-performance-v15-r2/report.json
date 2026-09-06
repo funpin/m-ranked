@@ -1,0 +1,1038 @@
+{
+  "generatedAt": "2026-09-05T05:32:20.029Z",
+  "origin": "http://127.0.0.1:18089",
+  "apiOrigin": "http://127.0.0.1:57565",
+  "release": "a7a2f09ff156eb72445f04f40dbe0e93d3378911",
+  "workingTreeDiff": ".gitignore                                         |    1 +\n backend/pom.xml                                    |   37 +\n .../infrastructure/AdminDatabaseConfiguration.java |   36 +\n .../infrastructure/ApiSecurityConfiguration.java   |   10 +\n .../infrastructure/JdbcAdminCommandRepository.java |    2 +-\n .../infrastructure/JdbcAdminQueryRepository.java   |    2 +-\n .../admin/web/AdminRfc9457ExceptionHandler.java    |   10 +-\n .../org/mranked/analytics/domain/MetricSet.java    |   10 +-\n .../mranked/cache/application/PublicCacheKey.java  |    5 +\n .../cache/application/PublicCacheKeyFactory.java   |   20 +-\n .../mranked/cache/application/PublicDtoCache.java  |   39 +-\n .../JdbcDatasetRevisionProvider.java               |    7 +-\n .../infrastructure/RedisPublicCacheStore.java      |   18 +-\n .../emoji/application/CustomEmojiAsset.java        |    1 +\n .../emoji/application/CustomEmojiService.java      |   30 +-\n .../infrastructure/TelegramEmojiHttpGateway.java   |   30 +-\n .../infrastructure/JdbcReadinessProbe.java         |    7 +-\n .../query/application/CsvExportService.java        |   84 +-\n .../org/mranked/query/application/CursorCodec.java |   24 +\n .../query/application/PublicQueryRepository.java   |   22 +\n .../query/application/PublicQueryService.java      |  125 +-\n .../query/application/PublicationCsvRowSource.java |    5 +\n .../java/org/mranked/query/domain/AccountView.java |   16 +-\n .../mranked/query/domain/ActivityRatingResult.java |    5 +-\n .../mranked/query/domain/ComparisonSelection.java  |    2 +-\n .../org/mranked/query/domain/ComparisonView.java   |    9 +-\n .../org/mranked/query/domain/InstitutionView.java  |   11 +-\n .../org/mranked/query/domain/OverviewMetric.java   |    9 +-\n .../org/mranked/query/domain/PublicationView.java  |   12 +-\n .../java/org/mranked/query/domain/RatingPage.java  |   13 +-\n .../query/infrastructure/ActivityRatingSql.java    |   87 +-\n .../query/infrastructure/ComparisonSql.java        |   30 +-\n .../JdbcProjectionQueryRepository.java             |  197 +-\n .../JdbcPublicationCsvRowSource.java               |   21 +-\n .../org/mranked/query/web/CsvExportController.java |    7 +-\n .../org/mranked/query/web/PublicApiModels.java     |   58 +-\n .../mranked/query/web/PublicQueryController.java   |   97 +-\n .../mranked/query/web/Rfc9457ExceptionHandler.java |    8 +\n .../AdminPostgresIntegrationTest.java              |   10 +-\n .../application/PublicCacheKeyFactoryTest.java     |    8 +\n .../cache/application/PublicDtoCacheTest.java      |   14 +\n .../JdbcDatasetRevisionProviderTest.java           |    4 +-\n .../org/mranked/contract/OpenApiContractTest.java  |   42 +-\n .../emoji/application/CustomEmojiServiceTest.java  |   15 +\n .../TelegramEmojiHttpGatewayTest.java              |    5 +\n .../infrastructure/JdbcReadinessProbeTest.java     |    5 +-\n .../query/application/CsvExportServiceTest.java    |   52 +\n .../mranked/query/application/CursorCodecTest.java |   11 +\n .../query/domain/ComparisonSelectionTest.java      |    4 +-\n .../ActivityRatingPostgresIntegrationTest.java     |   11 +\n .../query/infrastructure/ComparisonSqlTest.java    |    4 +-\n .../query/web/PublicQueryControllerTest.java       |   12 +-\n collector_target/README.md                         |   55 +-\n collector_target/coordinator.py                    |   43 +-\n collector_target/normalize.py                      |    1 +\n collector_target/ports.py                          |    3 +\n collector_target/repository.py                     |   63 +-\n contracts/openapi/m-ranked-v1-client.ts            | 3505 ++++++++++++++---\n contracts/openapi/m-ranked-v1.yaml                 | 2517 ++++++++++++-\n frontend/.gitignore                                |   15 +-\n frontend/README.md                                 |  108 +-\n frontend/app/(overview)/page.tsx                   |   83 +-\n frontend/app/channels/[id]/page.tsx                |   13 +-\n frontend/app/compare/page.tsx                      |  303 +-\n frontend/app/globals.css                           |  443 +--\n frontend/app/institutions/[id]/page.tsx            |   37 +-\n frontend/app/layout.tsx                            |   23 +-\n frontend/app/manage/page.tsx                       |   75 +-\n frontend/app/platform-accounts/[id]/page.tsx       |    9 +-\n frontend/app/platform-posts/[id]/page.tsx          |    8 +-\n frontend/app/posts/[id]/page.tsx                   |   10 +-\n frontend/app/rating/page.tsx                       |  227 +-\n frontend/components/account-detail.tsx             |   94 +-\n frontend/components/comparison-chart.tsx           |  207 +-\n frontend/components/institution-detail.tsx         |   71 +-\n frontend/components/overview-card.tsx              |  112 +-\n frontend/components/publication-detail.tsx         |   67 +-\n frontend/components/site-header.tsx                |   67 +-\n frontend/components/theme-toggle.tsx               |   22 +-\n frontend/components/ui.tsx                         |   14 +-\n frontend/lib/admin-api.ts                          |   51 +-\n frontend/lib/api.ts                                |  274 +-\n frontend/lib/format.ts                             |   29 +-\n frontend/lib/params.ts                             |   14 +-\n frontend/lib/types.ts                              |  266 +-\n frontend/next-env.d.ts                             |    4 +-\n frontend/next.config.ts                            |    2 +\n frontend/package.json                              |   21 +-\n frontend/pnpm-lock.yaml                            | 3961 ++++++++++++++++++--\n frontend/pnpm-workspace.yaml                       |    1 +\n frontend/tests/api.test.ts                         |    8 +-\n frontend/tests/params.test.ts                      |    6 +-\n frontend/tsconfig.json                             |    9 +-\n migration/bridge/cli.py                            |   44 +\n migration/bridge/model.py                          |    2 +-\n migration/bridge/service.py                        |  227 +-\n migration/bridge/target.py                         |   15 +-\n migration/reverse_sync_format.py                   |   29 +-\n operations/cold_archive/README.md                  |   43 +\n operations/cold_archive/model.py                   |    2 +\n operations/cold_archive/parquet.py                 |   56 +-\n operations/cold_archive/service.py                 |   32 +-\n operations/collector_parity_evidence.py            |   91 +-\n operations/requirements.txt                        |    1 +\n operations/reverse_sync/cli.py                     |    4 +\n operations/reverse_sync/journal.py                 |   32 +\n operations/reverse_sync/postgres.py                |   41 +-\n operations/reverse_sync/service.py                 |   38 +-\n operations/reverse_sync/sqlite_target.py           |   64 +-\n operations/scripts/cutover-preflight.sh            |   63 +-\n operations/scripts/deploy-shadow.sh                |   87 +-\n operations/scripts/restore-verify.sh               |   17 +-\n tests/test_cold_archive.py                         |   26 +\n tests/test_collector_parity_evidence.py            |   10 +-\n tests/test_operational_flyway_gates.py             |   31 +-\n tests/test_reverse_sync_postgres.py                |  104 +-\n tests/test_target_collectors.py                    |   18 +-\n tests/test_target_collectors_postgres.py           |    9 +-\n 118 files changed, 11882 insertions(+), 3349 deletions(-)",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "sourceSha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+  "databaseBytes": 3154409151,
+  "runtimeEvidence": {
+    "path": "../operations/performance/evidence/public-read-review-r1/report.json",
+    "jarSha256": "bd9216aed69f46a24ce7b719f2f6109503a2c53af0005d25ca3bf39c149806b0",
+    "database": {
+      "name": "visual_review_v2_it",
+      "bytes": 3154409151,
+      "institutions": 207,
+      "accounts": 824,
+      "publications": 824,
+      "snapshots": 9026,
+      "comparisonPoints": 8534560,
+      "datasetRevision": 29,
+      "flyway": [
+        {
+          "version": "1",
+          "script": "V1__target_baseline.sql",
+          "checksum": -1636077697,
+          "success": true
+        },
+        {
+          "version": "2",
+          "script": "V2__rebuild_core_projections.sql",
+          "checksum": 839607018,
+          "success": true
+        },
+        {
+          "version": "3",
+          "script": "V3__collector_observation_times_and_identity_grants.sql",
+          "checksum": -1456658399,
+          "success": true
+        },
+        {
+          "version": "4",
+          "script": "V4__admin_collection_run_status_grants.sql",
+          "checksum": 1318350062,
+          "success": true
+        },
+        {
+          "version": "5",
+          "script": "V5__legacy_activity_period_projection.sql",
+          "checksum": -1313754193,
+          "success": true
+        },
+        {
+          "version": "6",
+          "script": "V6__comparison_valid_observation_hourly_projection.sql",
+          "checksum": -290358219,
+          "success": true
+        },
+        {
+          "version": "7",
+          "script": "V7__activity_rating_read_grants.sql",
+          "checksum": -1228913579,
+          "success": true
+        },
+        {
+          "version": "8",
+          "script": "V8__legacy_overview_projection.sql",
+          "checksum": -574188650,
+          "success": true
+        },
+        {
+          "version": "9",
+          "script": "V9__immutable_observations_quality_archive_fence.sql",
+          "checksum": 1058556652,
+          "success": true
+        },
+        {
+          "version": "10",
+          "script": "V10__consistent_public_queries_and_formula_guards.sql",
+          "checksum": -1148603410,
+          "success": true
+        },
+        {
+          "version": "11",
+          "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+          "checksum": 1679789143,
+          "success": true
+        },
+        {
+          "version": "12",
+          "script": "V12__detail_history_projection.sql",
+          "checksum": 1453326243,
+          "success": true
+        },
+        {
+          "version": "13",
+          "script": "V13__immutable_account_identity_history.sql",
+          "checksum": -185639607,
+          "success": true
+        },
+        {
+          "version": "14",
+          "script": "V14__public_archived_publication_text.sql",
+          "checksum": -956321170,
+          "success": true
+        },
+        {
+          "version": "15",
+          "script": "V15__verified_source_preservation.sql",
+          "checksum": -1953543117,
+          "success": true
+        }
+      ]
+    }
+  },
+  "revisionBefore": {
+    "datasetRevision": 29,
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "86f186dcdd8c1d3670378a441e07d68f3c0371424f99e4e7eec672ac5f1b3ee4"
+  },
+  "revisionAfter": {
+    "datasetRevision": 29,
+    "asOf": "2026-08-01T12:00:00Z",
+    "representationVersion": "86f186dcdd8c1d3670378a441e07d68f3c0371424f99e4e7eec672ac5f1b3ee4"
+  },
+  "coherent": true,
+  "buildId": "PwOJHP5gxvy9JKLBZnGuv",
+  "buildMode": "production",
+  "scope": "Interim V15 actual API. Synthetic 207-entity representative corpus; database size includes indexes and comparison projections. Mobile lab measurements, not production field Core Web Vitals. Each route has an independent cold browser cache; API cache remains under its runtime policy.",
+  "methodology": {
+    "cls": "Maximum 5s session window with <1s gaps; excludes hadRecentInput",
+    "inp": "Event Timing of exercised theme/menu/search/chart interactions; durations <16ms are below observer threshold",
+    "initialJs": "Every script fetched through initial network idle/chart readiness, individually gzip level 9; includes dynamically loaded initial charts",
+    "sources": [
+      "https://web.dev/articles/cls",
+      "https://web.dev/articles/inp"
+    ]
+  },
+  "browser": "151.0.7922.34",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "throttling": {
+    "cpu": 4,
+    "latencyMs": 150,
+    "downloadBitsPerSecond": 1600000,
+    "uploadBitsPerSecond": 750000
+  },
+  "sampleCount": 5,
+  "gate": "NO-GO",
+  "summaries": [
+    {
+      "path": "/compare?platform=vk",
+      "samples": 5,
+      "lcpP75Ms": 2432,
+      "inpP75Ms": 896,
+      "clsP75": 0.01943814152418133,
+      "initialJsGzipBytes": 204347,
+      "initialJsBudgetBytes": 174080,
+      "passed": false
+    },
+    {
+      "path": "/posts/1",
+      "samples": 5,
+      "lcpP75Ms": 664,
+      "inpP75Ms": 80,
+      "clsP75": 0,
+      "initialJsGzipBytes": 206434,
+      "initialJsBudgetBytes": 174080,
+      "passed": false
+    }
+  ],
+  "rows": [
+    {
+      "path": "/compare?platform=vk",
+      "sample": 0,
+      "status": 200,
+      "lcp": 2792,
+      "inp": 896,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "1905": 896,
+        "1912": 808,
+        "1926": 24,
+        "1947": 392,
+        "1954": 24,
+        "1961": 16
+      },
+      "initialScriptBytes": 209810,
+      "initialScriptGzipBytes": 204347,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/280hjkrdlib8v.js",
+          "gzipBytes": 4468,
+          "sha256": "e9cbf239e580be1f59731e30395f9bd21aa45dfe2f0c1f9f5839f4028f343890"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ofbcug8cifto.js",
+          "gzipBytes": 227,
+          "sha256": "8603525afa322c3069d4e86a4b41a2d5aab43a687be6b5446dea04881f0c1d50"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 1,
+      "status": 200,
+      "lcp": 2420,
+      "inp": 872,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "7738": 872,
+        "7745": 824,
+        "7759": 24,
+        "7780": 392,
+        "7787": 24,
+        "7794": 16
+      },
+      "initialScriptBytes": 209810,
+      "initialScriptGzipBytes": 204347,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/280hjkrdlib8v.js",
+          "gzipBytes": 4468,
+          "sha256": "e9cbf239e580be1f59731e30395f9bd21aa45dfe2f0c1f9f5839f4028f343890"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ofbcug8cifto.js",
+          "gzipBytes": 227,
+          "sha256": "8603525afa322c3069d4e86a4b41a2d5aab43a687be6b5446dea04881f0c1d50"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 2,
+      "status": 200,
+      "lcp": 2432,
+      "inp": 880,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "4614": 880,
+        "4621": 832,
+        "4635": 24,
+        "4656": 368,
+        "4663": 24,
+        "4670": 16
+      },
+      "initialScriptBytes": 209810,
+      "initialScriptGzipBytes": 204347,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/280hjkrdlib8v.js",
+          "gzipBytes": 4468,
+          "sha256": "e9cbf239e580be1f59731e30395f9bd21aa45dfe2f0c1f9f5839f4028f343890"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ofbcug8cifto.js",
+          "gzipBytes": 227,
+          "sha256": "8603525afa322c3069d4e86a4b41a2d5aab43a687be6b5446dea04881f0c1d50"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 3,
+      "status": 200,
+      "lcp": 2432,
+      "inp": 936,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "6704": 936,
+        "6711": 848,
+        "6725": 24,
+        "6746": 400,
+        "6753": 24,
+        "6760": 16
+      },
+      "initialScriptBytes": 209810,
+      "initialScriptGzipBytes": 204347,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/280hjkrdlib8v.js",
+          "gzipBytes": 4468,
+          "sha256": "e9cbf239e580be1f59731e30395f9bd21aa45dfe2f0c1f9f5839f4028f343890"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ofbcug8cifto.js",
+          "gzipBytes": 227,
+          "sha256": "8603525afa322c3069d4e86a4b41a2d5aab43a687be6b5446dea04881f0c1d50"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/compare?platform=vk",
+      "sample": 4,
+      "status": 200,
+      "lcp": 2396,
+      "inp": 872,
+      "inpBelow16ms": false,
+      "cls": 0.01943814152418133,
+      "interactionDurations": {
+        "7529": 872,
+        "7536": 816,
+        "7550": 24,
+        "7571": 392,
+        "7578": 24,
+        "7585": 24
+      },
+      "initialScriptBytes": 209810,
+      "initialScriptGzipBytes": 204347,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/280hjkrdlib8v.js",
+          "gzipBytes": 4468,
+          "sha256": "e9cbf239e580be1f59731e30395f9bd21aa45dfe2f0c1f9f5839f4028f343890"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ofbcug8cifto.js",
+          "gzipBytes": 227,
+          "sha256": "8603525afa322c3069d4e86a4b41a2d5aab43a687be6b5446dea04881f0c1d50"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 0,
+      "status": 200,
+      "lcp": 664,
+      "inp": 80,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "4904": 80,
+        "4911": 24,
+        "4918": 24,
+        "4925": 16,
+        "4932": 16,
+        "4939": 16,
+        "4946": 16
+      },
+      "initialScriptBytes": 211938,
+      "initialScriptGzipBytes": 206434,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/39czqan-817iz.js",
+          "gzipBytes": 6537,
+          "sha256": "1f6787f7afa913340a81fe0fadd8c166c757e551dd7736fd6b071c9d75d2b42d"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1wvvdg4ys-qed.js",
+          "gzipBytes": 245,
+          "sha256": "b3ba7b787e5c95413b2ea44bdefc3ad5bf718668e0ceea460557c4e2f7fc9183"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 1,
+      "status": 200,
+      "lcp": 656,
+      "inp": 72,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "8447": 72,
+        "8454": 24,
+        "8461": 16,
+        "8468": 16,
+        "8475": 16,
+        "8482": 16,
+        "8489": 16
+      },
+      "initialScriptBytes": 211938,
+      "initialScriptGzipBytes": 206434,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/39czqan-817iz.js",
+          "gzipBytes": 6537,
+          "sha256": "1f6787f7afa913340a81fe0fadd8c166c757e551dd7736fd6b071c9d75d2b42d"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1wvvdg4ys-qed.js",
+          "gzipBytes": 245,
+          "sha256": "b3ba7b787e5c95413b2ea44bdefc3ad5bf718668e0ceea460557c4e2f7fc9183"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 2,
+      "status": 200,
+      "lcp": 652,
+      "inp": 80,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "1448": 80,
+        "1455": 24,
+        "1462": 24,
+        "1469": 16,
+        "1476": 16,
+        "1483": 16,
+        "1490": 16
+      },
+      "initialScriptBytes": 211938,
+      "initialScriptGzipBytes": 206434,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/39czqan-817iz.js",
+          "gzipBytes": 6537,
+          "sha256": "1f6787f7afa913340a81fe0fadd8c166c757e551dd7736fd6b071c9d75d2b42d"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1wvvdg4ys-qed.js",
+          "gzipBytes": 245,
+          "sha256": "b3ba7b787e5c95413b2ea44bdefc3ad5bf718668e0ceea460557c4e2f7fc9183"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 3,
+      "status": 200,
+      "lcp": 656,
+      "inp": 72,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "6489": 72,
+        "6496": 24,
+        "6503": 24,
+        "6510": 16,
+        "6517": 16,
+        "6524": 16,
+        "6531": 16
+      },
+      "initialScriptBytes": 211938,
+      "initialScriptGzipBytes": 206434,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/39czqan-817iz.js",
+          "gzipBytes": 6537,
+          "sha256": "1f6787f7afa913340a81fe0fadd8c166c757e551dd7736fd6b071c9d75d2b42d"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1wvvdg4ys-qed.js",
+          "gzipBytes": 245,
+          "sha256": "b3ba7b787e5c95413b2ea44bdefc3ad5bf718668e0ceea460557c4e2f7fc9183"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    },
+    {
+      "path": "/posts/1",
+      "sample": 4,
+      "status": 200,
+      "lcp": 692,
+      "inp": 80,
+      "inpBelow16ms": false,
+      "cls": 0,
+      "interactionDurations": {
+        "2134": 80,
+        "2141": 24,
+        "2148": 24,
+        "2155": 16,
+        "2162": 16,
+        "2169": 16,
+        "2176": 16
+      },
+      "initialScriptBytes": 211938,
+      "initialScriptGzipBytes": 206434,
+      "initialScripts": [
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3re0zp6va3y9t.js",
+          "gzipBytes": 2027,
+          "sha256": "cc194e15cb644ad1a57ddd61f1502d9266c6a0ee0772a6e6aa214184c0f72e74"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/turbopack-0qlgymrj9jqp9.js",
+          "gzipBytes": 3851,
+          "sha256": "2322813a5c3e5182a152875cb2075b73a7d96eae8891c6261a1737ea58c8b27e"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/048q0lqqe7ez5.js",
+          "gzipBytes": 7714,
+          "sha256": "0c5da99913826a03d434b005c02a045a07b6c2a0a7add189106400948d633014"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1ucaowk-_0vv6.js",
+          "gzipBytes": 3655,
+          "sha256": "4eabfe27e54d4982888a172b4650fd3e535ff7b23ff2ce2257fcc99b86d86d2f"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1spp3f9rwtqlp.js",
+          "gzipBytes": 504,
+          "sha256": "3cd3148963241e7644a4439e6750a4ca737029bd9abb0322bd29b6f09595afea"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/17p2k-ufktxiy.js",
+          "gzipBytes": 10756,
+          "sha256": "884b0e5d07a851b31f0bfd37719e1ac0312319444cc9205026616963c75eb6e9"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/39czqan-817iz.js",
+          "gzipBytes": 6537,
+          "sha256": "1f6787f7afa913340a81fe0fadd8c166c757e551dd7736fd6b071c9d75d2b42d"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1119ajv4ocp5q.js",
+          "gzipBytes": 44981,
+          "sha256": "431ffa6827464545ef6253973f035af2c12ffd2cfc337a6a5119b7b8b66920d1"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/3uk6kowe5-_fl.js",
+          "gzipBytes": 71412,
+          "sha256": "592a2368c70c07fce11521faaa6938a9947e2e6784db3e27bc8f5f62d229a7be"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/1wvvdg4ys-qed.js",
+          "gzipBytes": 245,
+          "sha256": "b3ba7b787e5c95413b2ea44bdefc3ad5bf718668e0ceea460557c4e2f7fc9183"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0w4f_mwewzmch.js",
+          "gzipBytes": 54083,
+          "sha256": "2d8d3fa5fecb332f21536ceaee2474dc69cd3499d4d38dd3bab62113a0c6ba79"
+        },
+        {
+          "url": "http://127.0.0.1:18089/_next/static/chunks/0flca4qp8chs6.js",
+          "gzipBytes": 669,
+          "sha256": "3745f77e521d4bb42e5594f9b6ef4210db1fa9af3133666e177f2147573ec948"
+        }
+      ],
+      "development": false
+    }
+  ]
+}

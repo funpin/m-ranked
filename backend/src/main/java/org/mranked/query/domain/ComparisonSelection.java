@@ -7,7 +7,7 @@ public record ComparisonSelection(
         ComparisonSelectionType type,
         List<Long> legacyIds
 ) {
-    public static final int MAX_INSTITUTIONS = 50;
+    public static final int MAX_INSTITUTIONS = 2000;
 
     public ComparisonSelection {
         if (type == null) {

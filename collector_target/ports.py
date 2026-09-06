@@ -57,6 +57,9 @@ class CollectorRepository(Protocol):
     def persist_account_batch(self, batch: CanonicalAccountBatch) -> IngestionResult:
         ...
 
+    def quarantine_rejected_batch(self, raw: RawCollectionBatch, context: CollectionContext, error_code: str) -> None:
+        ...
+
     def record_account_failure(
         self,
         context: CollectionContext,

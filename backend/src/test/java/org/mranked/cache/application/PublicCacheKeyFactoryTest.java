@@ -9,6 +9,14 @@ import org.junit.jupiter.api.Test;
 import org.mranked.cache.domain.DatasetRevision;
 
 class PublicCacheKeyFactoryTest {
+    @Test void schemaOnlyDeployChangesBothStorageKeysAndHttpValidatorsAtTheSameRevision() {
+        var revision=new DatasetRevision(29,Instant.EPOCH);
+        var before=new PublicCacheKeyFactory("schema-one").create("publication",revision,Map.of("legacyId",1));
+        var after=new PublicCacheKeyFactory("schema-two").create("publication",revision,Map.of("legacyId",1));
+        assertThat(after.redisKey()).isNotEqualTo(before.redisKey());
+        assertThat(new ETagFactory().create(after)).isNotEqualTo(new ETagFactory().create(before));
+        assertThat(new PublicCacheKeyFactory().representationVersion()).matches("[0-9a-f]{64}");
+    }
     private final PublicCacheKeyFactory factory = new PublicCacheKeyFactory();
     private final DatasetRevision revision = new DatasetRevision(
             19, Instant.parse("2026-09-03T10:00:00Z")

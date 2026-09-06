@@ -13,6 +13,21 @@ import org.junit.jupiter.api.Test;
 
 class CustomEmojiServiceTest {
     @Test
+    void boundsAssetCacheByBytesAndCoalescesIdenticalConcurrentMisses() throws Exception {
+        var fetches = new AtomicInteger();
+        var service = new CustomEmojiService(id -> {
+            fetches.incrementAndGet(); return new CustomEmojiAsset(new byte[2_000_000], "image/webp");
+        }, Clock.systemUTC());
+        try(var workers = java.util.concurrent.Executors.newFixedThreadPool(8)) {
+            var tasks = new java.util.ArrayList<java.util.concurrent.Callable<Integer>>();
+            for(int index=0;index<16;index++) tasks.add(() -> service.get("42").sizeBytes());
+            for(var value:workers.invokeAll(tasks)) assertThat(value.get()).isEqualTo(2_000_000);
+        }
+        assertThat(fetches).hasValue(1);
+        for(int index=100;index<130;index++) service.get(Integer.toString(index));
+        assertThat(service.cachedWeight()).isLessThanOrEqualTo(CustomEmojiService.CACHE_MAX_BYTES);
+    }
+    @Test
     void acceptsOnlyOneToThirtyTwoAsciiDigits() {
         AtomicInteger fetches = new AtomicInteger();
         CustomEmojiService service = new CustomEmojiService(identifier -> {

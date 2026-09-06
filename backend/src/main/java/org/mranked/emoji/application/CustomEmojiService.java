@@ -2,27 +2,36 @@ package org.mranked.emoji.application;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Ticker;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public final class CustomEmojiService {
     static final Duration CACHE_TTL = Duration.ofHours(6);
+    static final long CACHE_MAX_BYTES = 32L * 1024 * 1024;
 
     private final TelegramEmojiGateway gateway;
-    private final Clock clock;
-    private final ConcurrentMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
+    private final Cache<String, CustomEmojiAsset> cache;
 
+    @Autowired
     public CustomEmojiService(TelegramEmojiGateway gateway) {
-        this(gateway, Clock.systemUTC());
+        this(gateway, Clock.systemUTC(), Ticker.systemTicker());
     }
 
     CustomEmojiService(TelegramEmojiGateway gateway, Clock clock) {
+        this(gateway, clock, () -> java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(clock.millis()));
+    }
+
+    private CustomEmojiService(TelegramEmojiGateway gateway, Clock clock, Ticker ticker) {
         this.gateway = Objects.requireNonNull(gateway, "gateway");
-        this.clock = Objects.requireNonNull(clock, "clock");
+        Objects.requireNonNull(clock, "clock");
+        this.cache = Caffeine.newBuilder().maximumWeight(CACHE_MAX_BYTES)
+                .weigher((String key, CustomEmojiAsset value) -> key.length() * 2 + value.sizeBytes() + 128)
+                .expireAfterWrite(CACHE_TTL).ticker(ticker).build();
     }
 
     public CustomEmojiAsset get(String emojiId) {
@@ -30,15 +39,7 @@ public final class CustomEmojiService {
             throw new CustomEmojiNotFoundException();
         }
 
-        Instant now = clock.instant();
-        CacheEntry cached = cache.get(emojiId);
-        if (cached != null && cached.expiresAt().isAfter(now)) {
-            return cached.asset();
-        }
-
-        CustomEmojiAsset asset = gateway.fetch(emojiId);
-        cache.put(emojiId, new CacheEntry(now.plus(CACHE_TTL), asset));
-        return asset;
+        return cache.get(emojiId, gateway::fetch);
     }
 
     static boolean isLegacyIdentifier(String value) {
@@ -54,6 +55,5 @@ public final class CustomEmojiService {
         return true;
     }
 
-    private record CacheEntry(Instant expiresAt, CustomEmojiAsset asset) {
-    }
+    long cachedWeight() { cache.cleanUp(); return cache.policy().eviction().orElseThrow().weightedSize().orElseThrow(); }
 }

@@ -18,6 +18,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 public class PublicDtoCache {
+    public String representationVersion() {return keyFactory.representationVersion();}
     private final DatasetRevisionProvider revisionProvider;
     private final PublicCacheKeyFactory keyFactory;
     private final Cache<String, String> l1;
@@ -25,6 +26,10 @@ public class PublicDtoCache {
     private final ObjectMapper objectMapper;
     private final Duration l2Ttl;
     private final AtomicLong highestObservedRevision = new AtomicLong(Long.MIN_VALUE);
+    private final java.util.concurrent.atomic.LongAdder localHits = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder remoteHits = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder misses = new java.util.concurrent.atomic.LongAdder();
+    private final java.util.concurrent.atomic.LongAdder storeFailures = new java.util.concurrent.atomic.LongAdder();
 
     public PublicDtoCache(
             DatasetRevisionProvider revisionProvider,
@@ -51,35 +56,47 @@ public class PublicDtoCache {
         return new PublicCacheRequest(keyFactory.create(namespace, revision, normalizedQuery));
     }
 
-    public <T> T getOrLoad(
+    public <T> RevisionedValue<T> getOrLoadSnapshot(
             PublicCacheRequest request,
             Class<T> dtoType,
-            Function<DatasetRevision, T> loader
+            java.util.function.Supplier<RevisionedValue<T>> loader
     ) {
         if (request.revision().id() == 0) {
-            return loader.apply(request.revision());
+            misses.increment();
+            return loader.get();
         }
         String key = request.key().redisKey();
         Optional<T> local = decode(l1.getIfPresent(key), dtoType);
         if (local.isPresent()) {
-            return local.get();
+            localHits.increment();
+            return new RevisionedValue<>(request.revision(), local.get());
         }
 
         Optional<String> remotePayload = safeGet(key);
         Optional<T> remote = remotePayload.flatMap(payload -> decode(payload, dtoType));
         if (remote.isPresent()) {
+            remoteHits.increment();
             l1.put(key, remotePayload.orElseThrow());
-            return remote.get();
+            return new RevisionedValue<>(request.revision(), remote.get());
         }
         if (remotePayload.isPresent()) {
             safeRemove(key);
         }
 
-        T loaded = loader.apply(request.revision());
-        String encoded = encode(loaded);
+        misses.increment();
+        RevisionedValue<T> loaded = loader.get();
+        key = request.key().atRevision(loaded.revision()).redisKey();
+        String encoded = encode(loaded.value());
         l1.put(key, encoded);
         safePut(key, encoded);
         return loaded;
+    }
+
+    /** Compatibility adapter for callers that already own a pinned snapshot. */
+    public <T> T getOrLoad(PublicCacheRequest request, Class<T> dtoType,
+                           Function<DatasetRevision, T> loader) {
+        return getOrLoadSnapshot(request, dtoType,
+                () -> new RevisionedValue<>(request.revision(), loader.apply(request.revision()))).value();
     }
 
     public void invalidateLocal() {
@@ -89,6 +106,11 @@ public class PublicDtoCache {
     public long estimatedLocalSize() {
         return l1.estimatedSize();
     }
+
+    public long localHitCount() { return localHits.sum(); }
+    public long remoteHitCount() { return remoteHits.sum(); }
+    public long missCount() { return misses.sum(); }
+    public long storeFailureCount() { return storeFailures.sum(); }
 
     private <T> Optional<T> decode(String encoded, Class<T> dtoType) {
         if (encoded == null) {
@@ -113,6 +135,7 @@ public class PublicDtoCache {
         try {
             return l2.get(key);
         } catch (RuntimeException ignored) {
+            storeFailures.increment();
             return Optional.empty();
         }
     }
@@ -121,6 +144,7 @@ public class PublicDtoCache {
         try {
             l2.put(key, value, l2Ttl);
         } catch (RuntimeException ignored) {
+            storeFailures.increment();
             // L2 is optional; the authoritative revision and database remain available.
         }
     }
@@ -129,6 +153,7 @@ public class PublicDtoCache {
         try {
             l2.remove(key);
         } catch (RuntimeException ignored) {
+            storeFailures.increment();
             // A malformed remote entry is unreachable after expiry or revision advance.
         }
     }

@@ -1,11 +1,15 @@
+import { headers } from "next/headers";
+import { api } from "@/lib/api";
+import type { Platform } from "@/lib/types";
 import type { Metadata, Viewport } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import favicon from "../../app/web/static/favicon.png";
 import { SiteHeader } from "@/components/site-header";
+import { publicOrigin } from "@/lib/deployment";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://m-ranked.ru"),
+  metadataBase: publicOrigin(),
   title: {
     default: "m-ranked — аналитика соцсетей вузов",
     template: "%s · m-ranked",
@@ -47,13 +51,22 @@ const themeScript = `(() => {
   document.documentElement.dataset.theme = theme;
 })();`;
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const path = (await headers()).get("x-mranked-path") ?? "/";
+  let activePlatform: Platform = path.startsWith("/institutions/") ? "all" : "telegram";
+  const identity = /^\/(platform-accounts|platform-posts)\/(\d+)$/.exec(path);
+  if (identity) {
+    try {
+      const value = identity[1] === "platform-accounts" ? await api.account(Number(identity[2]),"platform_accounts") : await api.publication(Number(identity[2]),"platform_posts");
+      activePlatform = value.platform;
+    } catch { /* The page owns unavailable/404 handling; header remains usable. */ }
+  }
   return (
-    <html lang="ru" data-theme="dark" suppressHydrationWarning>
+    <html lang="ru" data-theme="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         <a className="skip-link" href="#main-content">Перейти к содержимому</a>
-        <SiteHeader />
+        <Suspense><SiteHeader initialPlatform={activePlatform} /></Suspense>
         <main id="main-content" className="page-shell">{children}</main>
       </body>
     </html>

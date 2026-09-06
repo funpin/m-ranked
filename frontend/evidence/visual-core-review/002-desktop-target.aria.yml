@@ -1,0 +1,27 @@
+- link "Перейти к содержимому":
+  - /url: "#main-content"
+- navigation "Основная навигация":
+  - link "m-ranked — обзор":
+    - /url: /?platform=telegram
+    - strong: m-ranked
+  - link "Обзор":
+    - /url: /?platform=telegram
+  - link "Рейтинг":
+    - /url: /rating?platform=telegram
+  - link "Сравнение":
+    - /url: /compare?platform=telegram
+  - link "Экспорт CSV":
+    - /url: /export/snapshots.csv?platform=telegram
+  - link "Управление":
+    - /url: /manage?platform=telegram
+  - button "Включить светлую тему": Тёмная
+- main:
+  - heading "Рейтинг каналов и публикаций" [level=1]
+  - paragraph: Сравнение активности по последнему замеру каждой публикации.
+  - alert:
+    - text: API недоступен
+    - heading "Не удалось загрузить данные" [level=2]
+    - paragraph: Проверьте готовность Spring API и повторите запрос. Интерфейс не подменяет ответ демонстрационными данными.
+    - link "Повторить":
+      - /url: /rating?platform=telegram&period=30d&channel_sort=engagement&channel_direction=desc&post_sort=view_share&post_direction=desc
+- alert

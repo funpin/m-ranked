@@ -190,8 +190,8 @@ def evidence_workspace(tmp_path: Path) -> dict[str, Any]:
         "finishedAt": _utc(now - timedelta(hours=2)),
         "flyway": {
             "engineVersion": "12.0.0",
-            "migrationCount": 8,
-            "schemaVersion": "8",
+            "migrationCount": 29,
+            "schemaVersion": "29",
             "validated": True,
             **{
                 f"v{version}Sha256": sha256sum
@@ -643,8 +643,8 @@ def test_symlink_manifest_rejects_external_alias_returning_inside(
         )
 
 
-@pytest.mark.parametrize("filename", ("V9__unapproved.sql", "R__repeatable.sql"))
-def test_release_manifest_rejects_v9_and_repeatable_migrations(
+@pytest.mark.parametrize("filename", ("V30__unapproved.sql", "R__repeatable.sql"))
+def test_release_manifest_rejects_unapproved_and_repeatable_migrations(
     evidence_workspace: dict[str, Any], filename: str
 ) -> None:
     migration = (
@@ -660,7 +660,7 @@ def test_release_manifest_rejects_v9_and_repeatable_migrations(
         )
     _refresh_deploy_report(evidence_workspace)
 
-    with pytest.raises(EvidenceError, match="exactly regular V1-V8"):
+    with pytest.raises(EvidenceError, match="exactly regular V1-V29"):
         seal_report(
             evidence_workspace["source"],
             output_path=evidence_workspace["evidence_root"] / "extra-migration.json",

@@ -1,0 +1,444 @@
+{
+  "worker": 1,
+  "scope": "worker",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "results": [
+    {
+      "worker": 1,
+      "path": "/platform-posts/1",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "df9b77333247b5a45d639b308a88f8f720cfbf815cba296332c8466b2297b9c8",
+      "targetSha256": "1d8c34c8e937e95ddfefdf0340f161ce0079bf7ee67706859c287d7a60c3c5e1",
+      "changedPixels": 117,
+      "pixelDiffRatio": 0.00009027777777777777,
+      "rawPixelDiffRatio": 0.00009027777777777777,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/channels/99999999",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 404,
+      "targetStatus": 404,
+      "legacySha256": "5c587d85a38a8f27c7e692a7735809d9f72799c59b32322f027a1462dbfdd0cc",
+      "targetSha256": "5c587d85a38a8f27c7e692a7735809d9f72799c59b32322f027a1462dbfdd0cc",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/manage?institution_id=1",
+      "state": "manage-overview",
+      "authenticated": true,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "4b4e11ab331f6470f30213e5426817b6d02bb8feaa7549b7cb1e20d2d79ec296",
+      "targetSha256": "023ee28a9d68cb908ef06c974a544719cfadddde82f44eea7162fdb95be9e628",
+      "changedPixels": 3356,
+      "pixelDiffRatio": 0.0025895061728395063,
+      "rawPixelDiffRatio": 0.0025895061728395063,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.042717013888888884,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.042717013888888884,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/manage?institution_id=1",
+      "state": "manage-edit-name",
+      "authenticated": true,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "91ed71429a01bf82ed714d9eca5fc96d3aae37fd69796ac4ad5f8ccdfc074abb",
+      "targetSha256": "0cc2aae871a2a8d6fa535e3fee423e284edc9fc3ea6a212101b8f256d381d706",
+      "changedPixels": 3136,
+      "pixelDiffRatio": 0.002419753086419753,
+      "rawPixelDiffRatio": 0.002419753086419753,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.042717013888888884,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.042717013888888884,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/platform-posts/1",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "11cde77965c186b085452794c7ddc686dbeb3093cf954b3f6fa34670adf33f9e",
+      "targetSha256": "4199e9581c2f906d7237b2e05ce1699aa50be7ce98fbd0d61dbf60ff7852c416",
+      "changedPixels": 64,
+      "pixelDiffRatio": 0.00019443431765706648,
+      "rawPixelDiffRatio": 0.00019443431765706648,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/channels/99999999",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 404,
+      "targetStatus": 404,
+      "legacySha256": "c77873a5dd484ebc8012c927c40de87e2086d3c1525cecfc4598becb88af9dd1",
+      "targetSha256": "c77873a5dd484ebc8012c927c40de87e2086d3c1525cecfc4598becb88af9dd1",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/manage?institution_id=1",
+      "state": "manage-overview",
+      "authenticated": true,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "98cac6a9c181138247853e0bd7a1a8a0fc973fd98ee10e3a4e9fb3db242ddb3d",
+      "targetSha256": "98cac6a9c181138247853e0bd7a1a8a0fc973fd98ee10e3a4e9fb3db242ddb3d",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.06753554502369669,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.06753554502369669,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 1,
+      "path": "/manage?institution_id=1",
+      "state": "manage-edit-name",
+      "authenticated": true,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "289189a2d8d022fe6945d24e99636831d77a39e7df940500bea238913b19363e",
+      "targetSha256": "289189a2d8d022fe6945d24e99636831d77a39e7df940500bea238913b19363e",
+      "changedPixels": 0,
+      "pixelDiffRatio": 0,
+      "rawPixelDiffRatio": 0,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0.06753554502369669,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.06753554502369669,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 0,
+      "targetScrollWidth": 390,
+      "passed": true
+    }
+  ]
+}

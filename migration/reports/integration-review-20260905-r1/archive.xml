@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="0.361" timestamp="2026-09-05T06:01:42.478817+03:00" hostname="MacBook-funpin.local"><testcase classname="tests.test_cold_archive_postgres" name="test_real_postgres_partition_archive_is_verified_and_idempotent" time="0.091"><failure message="ValueError: archive snapshot ordering or uniqueness mismatch">tmp_path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-443/test_real_postgres_partition_a0')
+
+    @pytest.mark.skipif(
+        not MAINTENANCE_DSN,
+        reason="set MRANKED_TEST_MAINTENANCE_DSN after loading the golden bridge fixture",
+    )
+    def test_real_postgres_partition_archive_is_verified_and_idempotent(tmp_path: Path):
+        with psycopg.connect(str(MAINTENANCE_DSN)) as connection:
+            month = connection.execute(
+                "SELECT min(published_month) FROM ingest.publication_metric_snapshot"
+            ).fetchone()[0]
+        if month is None:
+            pytest.skip("target database has no snapshot fixture")
+    
+        service = ColdArchiveService(
+            str(MAINTENANCE_DSN), tmp_path, batch_size=2, min_free_bytes=0
+        )
+&gt;       first = service.archive(MonthRange(month))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_cold_archive_postgres.py:31: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+operations/cold_archive/service.py:118: in archive
+    verification = verify_archive(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-443/test_real_postgres_partition_a0/.publication_metric_snapshot-2026-07-vcy_6m1q.parquet.staging')
+
+    def verify_archive(
+        path: Path,
+        *,
+        expected_row_count: int | None = None,
+        expected_sha256: str | None = None,
+        sample_size: int = 16,
+    ) -&gt; ArchiveVerification:
+        if sample_size &lt; 1 or sample_size &gt; 10_000:
+            raise ValueError("sample_size must be between 1 and 10000")
+        digest = sha256_file(path)
+        if expected_sha256 is not None and digest != expected_sha256:
+            raise ValueError("archive SHA-256 mismatch")
+    
+        parquet = pq.ParquetFile(path)
+        schema = parquet.schema_arrow
+        if schema != ARCHIVE_SCHEMA:
+            raise ValueError(
+                f"archive Arrow schema or metadata does not match version {SCHEMA_VERSION}"
+            )
+        row_count = parquet.metadata.num_rows
+        if expected_row_count is not None and row_count != expected_row_count:
+            raise ValueError(
+                f"archive row count mismatch: expected {expected_row_count}, got {row_count}"
+            )
+    
+        compressions = {
+            parquet.metadata.row_group(group).column(column).compression.lower()
+            for group in range(parquet.metadata.num_row_groups)
+            for column in range(parquet.metadata.row_group(group).num_columns)
+        }
+        if compressions and compressions != {COMPRESSION}:
+            raise ValueError(f"archive compression mismatch: {sorted(compressions)}")
+    
+        min_observed_at: datetime | None = None
+        max_observed_at: datetime | None = None
+        sample_rows_read = 0
+        sample_validated = False
+        chain = hashlib.sha256(b"").digest()
+        previous_id = -1
+        for batch in parquet.iter_batches(
+            batch_size=max(1, sample_size),
+    
+        ):
+            for record in batch.to_pylist():
+                _verify_canonical_fields(record)
+                if record["snapshot_id"] &lt;= previous_id:
+&gt;                   raise ValueError("archive snapshot ordering or uniqueness mismatch")
+E                   ValueError: archive snapshot ordering or uniqueness mismatch
+
+operations/cold_archive/parquet.py:241: ValueError</failure></testcase></testsuite></testsuites>

@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.mranked.analytics.domain.CounterMetric;
+import org.mranked.analytics.domain.AggregateMetric;
 import org.mranked.analytics.domain.MetricSet;
 import org.mranked.analytics.domain.PeriodKey;
 import org.mranked.analytics.domain.Platform;
@@ -41,6 +42,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcProjectionQueryRepository implements PublicQueryRepository {
+    private static final tools.jackson.databind.ObjectMapper METADATA_JSON = new tools.jackson.databind.json.JsonMapper();
     static final String OVERVIEW_SQL = """
             WITH filtered AS (
                 SELECT card.*,
@@ -149,6 +151,7 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                    page.delta_total_shares,
                    page.delta_median_shares,
                    page.as_of,
+                   page.aggregate_metadata,
                    account.account_id,
                    account.legacy_id AS account_legacy_id,
                    account.legacy_route AS account_legacy_route,
@@ -208,7 +211,14 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                            WHEN 5 THEN 'suspected_reset'
                            ELSE 'invalid'
                        END AS quality,
-                       min(m.as_of) AS as_of
+                       min(m.as_of) AS as_of,
+                       jsonb_object_agg(
+                           CASE m.aggregation::text WHEN 'sum' THEN 'total' ELSE 'median' END
+                           || CASE m.metric_key::text WHEN 'views' THEN 'Views' ELSE 'Reactions' END,
+                           jsonb_build_object('value', m.value, 'sampleSize', m.sample_size,
+                               'coverage', m.coverage, 'quality', m.quality,
+                               'asOf', m.as_of, 'datasetRevision', m.dataset_revision_id)
+                       ) AS aggregate_metadata
                 FROM analytics.institution_period_metrics m
                 WHERE m.dataset_revision_id = :revision
                   AND m.period_key = :period
@@ -228,9 +238,10 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                    metrics.sample_size,
                    metrics.coverage,
                    metrics.quality,
-                   metrics.as_of
+                   metrics.as_of,
+                   metrics.aggregate_metadata
             FROM catalog.legacy_entity_alias alias
-            JOIN catalog.institution i ON i.id = alias.target_uuid
+            JOIN catalog.visible_institution i ON i.id = alias.target_uuid
             LEFT JOIN metrics ON metrics.institution_id = i.id
             WHERE alias.entity_type = 'institutions' AND alias.legacy_id = :legacyId
             """;
@@ -240,8 +251,12 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                    alias.legacy_id,
                    alias.entity_type,
                    account.institution_id,
+                   account_alias.legacy_id AS account_legacy_id,account_alias.entity_type AS account_legacy_type,
+                   account.current_title AS account_name,account.current_username AS account_username,
+                   primary_identity.external_id,primary_identity.public_url,
                    p.published_at,
-                   p.publication_type,
+                   p.publication_type,p.is_repost,p.quality_flags AS presentation_flags,
+                   (SELECT count(*) FROM ingest.publication_identity i WHERE i.publication_id=p.id AND i.role='joint_author') AS joint_authors,
                    p.deleted_at,
                    account.platform::text AS platform,
                    latest.views_count,
@@ -266,8 +281,13 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                    latest.observed_at,
                    :revision AS dataset_revision_id
             FROM catalog.legacy_entity_alias alias
-            JOIN ingest.publication p ON p.id = alias.target_uuid
-            JOIN catalog.platform_account account ON account.id = p.primary_account_id
+            JOIN ingest.visible_publication p ON p.id = alias.target_uuid
+            JOIN catalog.visible_platform_account account ON account.id = p.primary_account_id
+            LEFT JOIN LATERAL (SELECT a.* FROM catalog.legacy_entity_alias a
+                WHERE a.target_uuid=account.id AND a.entity_type IN ('channels','platform_accounts')
+                ORDER BY CASE WHEN a.entity_type='channels' AND account.platform='telegram' THEN 0 ELSE 1 END LIMIT 1) account_alias ON true
+            LEFT JOIN LATERAL (SELECT i.external_id,i.public_url FROM ingest.publication_identity i
+                WHERE i.publication_id=p.id AND i.role='primary' ORDER BY i.id LIMIT 1) primary_identity ON true
             LEFT JOIN analytics.publication_latest latest
               ON latest.publication_id = p.id
              AND latest.dataset_revision_id = :revision
@@ -304,10 +324,10 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 SELECT account.institution_id,
                        min(lower(institution.canonical_name)) AS sort_name
                 FROM selected_cohort cohort
-                JOIN catalog.platform_account account
+                JOIN catalog.visible_platform_account account
                   ON account.platform = cohort.platform
                  AND account.enabled
-                JOIN catalog.institution institution ON institution.id = account.institution_id
+                JOIN catalog.visible_institution institution ON institution.id = account.institution_id
                 WHERE NOT EXISTS (SELECT 1 FROM requested_legacy_ids)
                 GROUP BY account.institution_id
                 ORDER BY sort_name, account.institution_id
@@ -322,7 +342,7 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                  AND alias.legacy_id = requested.legacy_id
                  AND EXISTS (
                      SELECT 1
-                     FROM catalog.platform_account selected_account
+                     FROM catalog.visible_platform_account selected_account
                      WHERE selected_account.institution_id = alias.target_uuid
                        AND selected_account.platform::text = :platform
                        AND selected_account.enabled
@@ -359,7 +379,7 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                    point.quality::text AS quality
             FROM selected_institutions selected
             LEFT JOIN selected_cohort cohort ON true
-            LEFT JOIN catalog.institution institution ON institution.id = selected.institution_id
+            LEFT JOIN catalog.visible_institution institution ON institution.id = selected.institution_id
             LEFT JOIN analytics.comparison_metric_point point
               ON point.cohort_id = cohort.id
              AND point.institution_id = selected.institution_id
@@ -413,13 +433,13 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                            institution.canonical_name
                        )) AS sort_name
                 FROM selected_cohort cohort
-                JOIN catalog.platform_account account
+                JOIN catalog.visible_platform_account account
                   ON account.platform = cohort.platform
                  AND account.enabled
                 JOIN catalog.legacy_entity_alias channel_alias
                   ON channel_alias.entity_type = 'channels'
                  AND channel_alias.target_uuid = account.id
-                JOIN catalog.institution institution ON institution.id = account.institution_id
+                JOIN catalog.visible_institution institution ON institution.id = account.institution_id
                 WHERE NOT EXISTS (SELECT 1 FROM requested_legacy_ids)
                 GROUP BY channel_alias.legacy_id, account.id, account.institution_id,
                          account.current_title, account.current_username,
@@ -451,11 +471,11 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 LEFT JOIN catalog.legacy_entity_alias channel_alias
                   ON channel_alias.entity_type = 'channels'
                  AND channel_alias.legacy_id = requested.legacy_id
-                LEFT JOIN catalog.platform_account account
+                LEFT JOIN catalog.visible_platform_account account
                   ON account.id = channel_alias.target_uuid
                  AND account.platform::text = :platform
                  AND account.enabled
-                LEFT JOIN catalog.institution institution ON institution.id = account.institution_id
+                LEFT JOIN catalog.visible_institution institution ON institution.id = account.institution_id
                 UNION ALL
                 SELECT default_channel.legacy_id,
                        default_channel.selection_order,
@@ -511,7 +531,7 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                        hourly.quality::text AS quality
                 FROM selected_channels selected
                 LEFT JOIN selected_cohort cohort ON true
-                LEFT JOIN catalog.institution institution
+                LEFT JOIN catalog.visible_institution institution
                   ON institution.id = selected.institution_id
                 LEFT JOIN catalog.legacy_entity_alias institution_alias
                   ON institution_alias.entity_type = 'institutions'
@@ -636,8 +656,8 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                    coalesce(metrics.publication_count, 0) AS publication_count,
                    metrics.latest_observed_at
             FROM catalog.legacy_entity_alias account_alias
-            JOIN catalog.platform_account account ON account.id = account_alias.target_uuid
-            JOIN catalog.institution institution ON institution.id = account.institution_id
+            JOIN catalog.visible_platform_account account ON account.id = account_alias.target_uuid
+            JOIN catalog.visible_institution institution ON institution.id = account.institution_id
             JOIN catalog.legacy_entity_alias institution_alias
               ON institution_alias.target_uuid = institution.id
              AND institution_alias.entity_type = 'institutions'
@@ -648,9 +668,17 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             """;
 
     private final JdbcClient jdbcClient;
+    private final int retentionDays;
 
     public JdbcProjectionQueryRepository(JdbcClient jdbcClient) {
-        this.jdbcClient = jdbcClient;
+        this(jdbcClient,70);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public JdbcProjectionQueryRepository(JdbcClient jdbcClient,
+            @org.springframework.beans.factory.annotation.Value("${mranked.retention-days:70}") int retentionDays) {
+        this.jdbcClient=jdbcClient;
+        if(retentionDays<1)throw new IllegalArgumentException("retention-days must be positive");
+        this.retentionDays=retentionDays;
     }
 
     @Override
@@ -721,20 +749,32 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             int entityLimit,
             long datasetRevision
     ) {
+        return findActivityRatingPage(query, entityLimit, datasetRevision, null);
+    }
+
+    @Override
+    public ActivityRatingResult findActivityRatingPage(
+            ActivityRatingQuery query, int entityLimit, long datasetRevision, UUID afterEntityId
+    ) {
         String entitySql = query.platform() == Platform.TELEGRAM
                 ? ActivityRatingSql.TELEGRAM_ENTITIES
                 : ActivityRatingSql.PLATFORM_ENTITIES;
         String publicationSql = query.platform() == Platform.TELEGRAM
                 ? ActivityRatingSql.TELEGRAM_PUBLICATIONS
                 : ActivityRatingSql.PLATFORM_PUBLICATIONS;
-        List<ActivityRatingEntity> fetchedEntities = jdbcClient.sql(entitySql)
+        int[] entityOffset = {0};
+        List<ActivityRatingEntity> fetchedEntities = jdbcClient.sql(ActivityRatingSql.entityPageSql(entitySql))
+                .param("afterEntityId", afterEntityId, Types.OTHER)
                 .param("revision", datasetRevision)
                 .param("period", query.period().databaseValue())
                 .param("platform", query.platform().databaseValue())
                 .param("channelSort", query.channelSort())
                 .param("channelDirection", query.channelDirection())
                 .param("entityFetchLimit", entityLimit + 1)
-                .query((resultSet, rowNumber) -> activityRatingEntity(resultSet))
+                .query((resultSet, rowNumber) -> {
+                    if (rowNumber == 0) entityOffset[0] = resultSet.getInt("page_position") - 1;
+                    return activityRatingEntity(resultSet);
+                })
                 .list();
         boolean truncated = fetchedEntities.size() > entityLimit;
         List<ActivityRatingEntity> entities = List.copyOf(fetchedEntities.subList(
@@ -748,7 +788,48 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 .param("postDirection", query.postDirection())
                 .query((resultSet, rowNumber) -> activityRatingPublication(resultSet))
                 .list();
-        return new ActivityRatingResult(entities, publications, truncated);
+        return new ActivityRatingResult(entities, publications, truncated, entityOffset[0]);
+    }
+
+    @Override
+    public List<org.mranked.query.domain.ComparisonCandidate> findComparisonCandidates(
+            Platform platform, int limit, UUID afterId, long revision) {
+        return jdbcClient.sql("""
+            WITH candidates AS (
+                SELECT card.entity_id, card.entity_type, card.legacy_id, card.institution_id,
+                       card.canonical_name,
+                       CASE WHEN card.platform='telegram' THEN concat(
+                           CASE WHEN nullif(account.username,'') IS NOT NULL THEN '@'||account.username||' · ' ELSE '' END,
+                           coalesce(account.subscriber_display,account.subscriber_count::text,'—'),' подписчиков')
+                           ELSE (SELECT string_agg(coalesce(nullif(a.title,''),
+                               CASE WHEN nullif(a.username,'') IS NOT NULL THEN '@'||a.username END,a.canonical_external_id),' · ' ORDER BY a.position)
+                             FROM analytics.legacy_overview_account a WHERE a.entity_id=card.entity_id
+                               AND a.platform=card.platform AND a.dataset_revision_id=card.dataset_revision_id) END AS description,
+                       CASE WHEN card.platform='telegram' THEN coalesce(nullif(account.title,''),
+                           CASE WHEN nullif(account.username,'') IS NOT NULL THEN '@'||account.username END,
+                           card.short_name,card.canonical_name)
+                           ELSE coalesce(card.short_name,card.canonical_name) END AS label,
+                       row_number() OVER (ORDER BY
+                           CASE WHEN card.platform='telegram' THEN lower(coalesce(nullif(account.title,''),
+                               nullif(account.username,''),card.short_name,card.canonical_name))
+                               ELSE lower(card.canonical_name) END,card.entity_id) position
+                FROM analytics.legacy_overview_card card
+                LEFT JOIN analytics.legacy_overview_account account
+                  ON card.platform='telegram' AND account.platform=card.platform
+                 AND account.entity_id=card.entity_id AND account.dataset_revision_id=card.dataset_revision_id
+                 AND account.position=1
+                WHERE card.platform::text=:platform AND card.period_key='1d'
+                  AND card.dataset_revision_id=:revision AND card.enabled_account_count>0
+            )
+            SELECT * FROM candidates WHERE CAST(:afterId AS uuid) IS NULL OR position>
+                (SELECT position FROM candidates WHERE entity_id=CAST(:afterId AS uuid))
+            ORDER BY position LIMIT :limit
+            """).param("platform",platform.databaseValue()).param("revision",revision)
+                .param("afterId",afterId,Types.OTHER).param("limit",limit)
+                .query((row,index)->new org.mranked.query.domain.ComparisonCandidate(
+                        row.getObject("entity_id",UUID.class),row.getString("entity_type"),row.getLong("legacy_id"),
+                        row.getString("label"),row.getObject("institution_id",UUID.class),row.getString("canonical_name"),row.getString("description")))
+                .list();
     }
 
     @Override
@@ -819,6 +900,29 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
         ));
     }
 
+    @Override public List<org.mranked.query.domain.PublicationListItem> findAccountPublications(
+            UUID account,LegacyEntityType accountType,int limit,UUID after,long revision) {
+        return new JdbcDetailQueries(jdbcClient).publications(account,accountType,limit,after,revision,retentionDays);
+    }
+    @Override public List<AccountView> findInstitutionAccounts(long legacy,Platform platform,int limit,UUID after,long revision) {
+        return new JdbcDetailQueries(jdbcClient).accounts(legacy,platform,limit,after,revision);
+    }
+    @Override public long countInstitutionAccounts(long legacy,Platform platform) {
+        return new JdbcDetailQueries(jdbcClient).accountCount(legacy,platform);
+    }
+    @Override public List<org.mranked.query.domain.HistorySnapshot> findPublicationHistory(
+            UUID publication,int limit,Long after,long revision) {
+        return new JdbcDetailQueries(jdbcClient).history(publication,limit,after,revision);
+    }
+    @Override public List<Long> findPublicationNeighbours(UUID publication,LegacyEntityType type) {
+        return new JdbcDetailQueries(jdbcClient).neighbours(publication,type);
+    }
+
+    @Override public String findPublicationArchivedText(UUID publicationId,long revision) {
+        return jdbcClient.sql("SELECT archived_text FROM analytics.publication_content WHERE publication_id=:id AND dataset_revision_id=:revision")
+                .param("id",publicationId).param("revision",revision).query(String.class).optional().orElse(null);
+    }
+
     @Override
     public Optional<AccountView> findAccount(
             long legacyId,
@@ -853,7 +957,8 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                         datasetRevision,
                         instant(resultSet, "latest_observed_at")
                 ))
-                .optional();
+                .optional().map(account -> account.withStats(new JdbcDetailQueries(jdbcClient)
+                        .stats(account.id(),account.platform(),retentionDays,datasetRevision)));
     }
 
     private static OverviewSqlRow overviewRow(ResultSet resultSet) throws SQLException {
@@ -924,8 +1029,45 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 resultSet.getObject("previous_total_" + metric, BigDecimal.class),
                 resultSet.getObject("previous_median_" + metric, BigDecimal.class),
                 resultSet.getObject("delta_total_" + metric, BigDecimal.class),
-                resultSet.getObject("delta_median_" + metric, BigDecimal.class)
+                resultSet.getObject("delta_median_" + metric, BigDecimal.class),
+                overviewAggregate(resultSet, metric, "total", 0),
+                overviewAggregate(resultSet, metric, "median", 0),
+                overviewAggregate(resultSet, metric, "total", 1),
+                overviewAggregate(resultSet, metric, "median", 1)
         );
+    }
+
+    private static AggregateMetric overviewAggregate(ResultSet row, String metric, String aggregation,
+                                                     int window) throws SQLException {
+        BigDecimal value = row.getObject((window == 1 ? "previous_" : "") + aggregation + "_" + metric, BigDecimal.class);
+        String json = row.getString("aggregate_metadata");
+        var node = json == null ? null : METADATA_JSON.readTree(json).get(metric + ":" + window);
+        return aggregate(node, value, instant(row, "as_of"), row.getLong("dataset_revision_id"));
+    }
+
+    private static Map<String, AggregateMetric> aggregateMap(String json) {
+        Map<String, AggregateMetric> result = new LinkedHashMap<>();
+        if (json == null) return result;
+        var tree = METADATA_JSON.readTree(json);
+        for (String key : List.of("totalReactions", "totalViews", "medianReactions", "medianViews")) {
+            var node = tree.get(key);
+            if (node != null) result.put(key, aggregate(node, decimal(node.get("value")), null, 0));
+        }
+        return result;
+    }
+
+    private static AggregateMetric aggregate(tools.jackson.databind.JsonNode node, BigDecimal value,
+                                              Instant fallbackAsOf, long fallbackRevision) {
+        if (node == null || node.isNull()) return new AggregateMetric(value, fallbackAsOf, fallbackRevision, 0, null, "unknown");
+        var time = node.get("asOf");
+        return new AggregateMetric(value,
+                time == null || time.isNull() ? fallbackAsOf : OffsetDateTime.parse(time.asText()).toInstant(),
+                node.path("datasetRevision").asLong(fallbackRevision), node.path("sampleSize").asInt(),
+                decimal(node.get("coverage")), node.path("quality").asText("unknown"));
+    }
+
+    private static BigDecimal decimal(tools.jackson.databind.JsonNode node) {
+        return node == null || node.isNull() ? null : node.decimalValue();
     }
 
     private static InstitutionIdentity institution(ResultSet resultSet) throws SQLException {
@@ -948,7 +1090,7 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 resultSet.getObject("coverage", BigDecimal.class),
                 resultSet.getString("quality"),
                 instant(resultSet, "as_of"),
-                datasetRevision
+                datasetRevision, aggregateMap(resultSet.getString("aggregate_metadata"))
         );
     }
 
@@ -977,7 +1119,12 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 resultSet.getBoolean("synthetic"),
                 resultSet.getString("history_completeness"),
                 instant(resultSet, "observed_at"),
-                resultSet.getLong("dataset_revision_id")
+                resultSet.getLong("dataset_revision_id"),resultSet.getObject("account_legacy_id",Long.class),
+                resultSet.getString("account_legacy_type"),resultSet.getString("account_name"),resultSet.getString("account_username"),
+                resultSet.getString("external_id"),resultSet.getString("public_url"),
+                PublicationPresentationMapper.map(resultSet.getString("platform"),resultSet.getString("external_id"),
+                        resultSet.getString("public_url"),resultSet.getBoolean("is_repost"),resultSet.getString("presentation_flags"),
+                        resultSet.getInt("joint_authors"))
         );
     }
 

@@ -11,6 +11,11 @@ public record PublicCacheKey(
         String fingerprint,
         DatasetRevision revision
 ) {
+    public PublicCacheKey atRevision(DatasetRevision actualRevision) {
+        String updatedKey = redisKey.replace(":r" + revision.id() + ":q", ":r" + actualRevision.id() + ":q");
+        return new PublicCacheKey(updatedKey, fingerprint, actualRevision);
+    }
+
     public PublicCacheKey {
         if (redisKey == null || redisKey.isBlank()) {
             throw new IllegalArgumentException("redis key is required");

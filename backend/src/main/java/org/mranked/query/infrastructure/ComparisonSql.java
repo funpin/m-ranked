@@ -23,12 +23,6 @@ final class ComparisonSql {
                   AND cohort.platform::text = :platform
                   AND cohort.horizon_seconds = :horizonSeconds
                   AND (cohort.filter_definition->>'include_partial')::boolean = :includePartial
-                  AND EXISTS (
-                      SELECT 1
-                      FROM analytics.comparison_publication_hourly prepared
-                      WHERE prepared.dataset_revision_id = cohort.dataset_revision_id
-                        AND prepared.platform = cohort.platform
-                  )
                 ORDER BY cohort.as_of DESC, cohort.id
                 LIMIT 1
             ), requested_legacy_ids AS (
@@ -41,10 +35,10 @@ final class ComparisonSql {
                 SELECT account.institution_id,
                        min(lower(institution.canonical_name)) AS sort_name
                 FROM selected_cohort cohort
-                JOIN catalog.platform_account account
+                JOIN catalog.visible_platform_account account
                   ON account.platform = cohort.platform
                  AND account.enabled
-                JOIN catalog.institution institution ON institution.id = account.institution_id
+                JOIN catalog.visible_institution institution ON institution.id = account.institution_id
                 WHERE NOT EXISTS (SELECT 1 FROM requested_legacy_ids)
                 GROUP BY account.institution_id
                 ORDER BY sort_name, account.institution_id
@@ -59,7 +53,7 @@ final class ComparisonSql {
                  AND alias.legacy_id = requested.legacy_id
                  AND EXISTS (
                      SELECT 1
-                     FROM catalog.platform_account selected_account
+                     FROM catalog.visible_platform_account selected_account
                      WHERE selected_account.institution_id = alias.target_uuid
                        AND selected_account.platform::text = :platform
                        AND selected_account.enabled
@@ -270,7 +264,7 @@ final class ComparisonSql {
                    END AS engagement_quality
             FROM selected_institutions selected
             LEFT JOIN selected_cohort cohort ON true
-            LEFT JOIN catalog.institution institution ON institution.id = selected.institution_id
+            LEFT JOIN catalog.visible_institution institution ON institution.id = selected.institution_id
             LEFT JOIN primary_sizes primary_size
               ON primary_size.selection_id = selected.institution_id
             LEFT JOIN engagement_sizes engagement_size
@@ -304,12 +298,6 @@ final class ComparisonSql {
                   AND cohort.platform::text = :platform
                   AND cohort.horizon_seconds = :horizonSeconds
                   AND (cohort.filter_definition->>'include_partial')::boolean = :includePartial
-                  AND EXISTS (
-                      SELECT 1
-                      FROM analytics.comparison_publication_hourly prepared
-                      WHERE prepared.dataset_revision_id = cohort.dataset_revision_id
-                        AND prepared.platform = cohort.platform
-                  )
                 ORDER BY cohort.as_of DESC, cohort.id
                 LIMIT 1
             ), requested_legacy_ids AS (
@@ -336,13 +324,13 @@ final class ComparisonSql {
                            institution.canonical_name
                        )) AS sort_name
                 FROM selected_cohort cohort
-                JOIN catalog.platform_account account
+                JOIN catalog.visible_platform_account account
                   ON account.platform = cohort.platform
                  AND account.enabled
                 JOIN catalog.legacy_entity_alias channel_alias
                   ON channel_alias.entity_type = 'channels'
                  AND channel_alias.target_uuid = account.id
-                JOIN catalog.institution institution ON institution.id = account.institution_id
+                JOIN catalog.visible_institution institution ON institution.id = account.institution_id
                 WHERE NOT EXISTS (SELECT 1 FROM requested_legacy_ids)
                 GROUP BY channel_alias.legacy_id, account.id, account.institution_id,
                          account.current_title, account.current_username,
@@ -374,11 +362,11 @@ final class ComparisonSql {
                 LEFT JOIN catalog.legacy_entity_alias channel_alias
                   ON channel_alias.entity_type = 'channels'
                  AND channel_alias.legacy_id = requested.legacy_id
-                LEFT JOIN catalog.platform_account account
+                LEFT JOIN catalog.visible_platform_account account
                   ON account.id = channel_alias.target_uuid
                  AND account.platform::text = :platform
                  AND account.enabled
-                LEFT JOIN catalog.institution institution ON institution.id = account.institution_id
+                LEFT JOIN catalog.visible_institution institution ON institution.id = account.institution_id
                 UNION ALL
                 SELECT default_channel.legacy_id,
                        default_channel.selection_order,
@@ -576,7 +564,7 @@ final class ComparisonSql {
                    END AS engagement_quality
             FROM selected_channels selected
             LEFT JOIN selected_cohort cohort ON true
-            LEFT JOIN catalog.institution institution ON institution.id = selected.institution_id
+            LEFT JOIN catalog.visible_institution institution ON institution.id = selected.institution_id
             LEFT JOIN catalog.legacy_entity_alias institution_alias
               ON institution_alias.entity_type = 'institutions'
              AND institution_alias.target_uuid = institution.id

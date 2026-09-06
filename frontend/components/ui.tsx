@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { formatCoverage, formatDate, formatMetric, qualityLabel } from "@/lib/format";
 import type { Metrics, MetricValue } from "@/lib/types";
+import { metricEvidence, type AggregateMetric } from "@/lib/metric-evidence";
 
 export function PageHeader({
   eyebrow,
@@ -33,17 +34,20 @@ export function Metric({
   value,
   hint,
   fraction = false,
+  evidence,
 }: {
   label: string;
   value: MetricValue;
   hint?: string;
   fraction?: boolean;
+  evidence?: AggregateMetric;
 }) {
   return (
-    <div className="metric-block">
+    <div className="metric-block" title={metricEvidence(evidence)}>
       <strong className="metric-value">{formatMetric(value, fraction)}</strong>
       <span className="metric-label">{label}</span>
       {hint ? <span className="metric-hint">{hint}</span> : null}
+      {evidence ? <span className="sr-only">{metricEvidence(evidence)}</span> : null}
     </div>
   );
 }
@@ -51,10 +55,10 @@ export function Metric({
 export function AggregateMetrics({ metrics }: { metrics: Metrics }) {
   return (
     <div className="metrics-grid">
-      <Metric label="реакций за период" value={metrics.totalReactions} />
-      <Metric label="просмотров за период" value={metrics.totalViews} />
-      <Metric label="медиана реакций" value={metrics.medianReactions} fraction />
-      <Metric label="медиана просмотров" value={metrics.medianViews} fraction />
+      <Metric label="реакций за период" value={metrics.totalReactions} evidence={metrics.aggregates.totalReactions} />
+      <Metric label="просмотров за период" value={metrics.totalViews} evidence={metrics.aggregates.totalViews} />
+      <Metric label="медиана реакций" value={metrics.medianReactions} evidence={metrics.aggregates.medianReactions} fraction />
+      <Metric label="медиана просмотров" value={metrics.medianViews} evidence={metrics.aggregates.medianViews} fraction />
     </div>
   );
 }
@@ -112,9 +116,9 @@ export function EmptyState({
 export function ApiFailureState({ retryHref = "/" }: { retryHref?: string }) {
   return (
     <section className="panel error-state" role="alert">
-      <StatusPill tone="red">API недоступен</StatusPill>
+      <StatusPill tone="red">Сервис временно недоступен</StatusPill>
       <h2>Не удалось загрузить данные</h2>
-      <p>Проверьте готовность Spring API и повторите запрос. Интерфейс не подменяет ответ демонстрационными данными.</p>
+      <p>Повторите попытку через некоторое время.</p>
       <Link className="button-link" href={retryHref}>Повторить</Link>
     </section>
   );

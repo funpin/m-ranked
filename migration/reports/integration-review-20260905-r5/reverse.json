@@ -1,0 +1,216 @@
+{
+  "changeTicket": "TEST-WRITER-GATE-W",
+  "cutoverPhases": {
+    "controlledTargetCollectors": [
+      "max",
+      "rutube",
+      "telegram",
+      "vk"
+    ],
+    "httpUpstreamTransition": "requires separate isolated HTTP deployment rehearsal",
+    "interruptionResume": "pass: committed checkpoint followed by new bridge instance",
+    "legacyRestart": [
+      {
+        "path": "/?platform=telegram",
+        "status": 200
+      },
+      {
+        "path": "/?platform=vk",
+        "status": 200
+      },
+      {
+        "path": "/?platform=max",
+        "status": 200
+      },
+      {
+        "path": "/?platform=rutube",
+        "status": 200
+      }
+    ],
+    "liveMutationCatchUp": {
+      "rowsWritten": 145,
+      "status": "pass"
+    },
+    "productionRouteSwitch": false,
+    "repeatedForwardCutover": "pass",
+    "s0Import": {
+      "batchId": "13bf13d3-5b67-50ab-802c-a1a6c747b209",
+      "status": "pass"
+    },
+    "s0OnlineBackup": {
+      "created_at": "2026-09-05T04:20:31.179941+00:00",
+      "destination": "/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-472/test_postgres_reverse_sync_rou0/s0-source.sqlite",
+      "foreign_key_violations": 0,
+      "quick_check": "ok",
+      "sha256": "c034fad56586813e12c1cad8d2ebd49587b02b52d7f7e3d976e1cf29d2bf42e7",
+      "size_bytes": 135168,
+      "source": "/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-472/test_postgres_reverse_sync_rou0/legacy-live.sqlite"
+    },
+    "writerFreeze": "pass: SQLite BEGIN IMMEDIATE rejects second writer during S-final Backup API"
+  },
+  "database": "reverse_it",
+  "duplicates": {
+    "identityCount": 0,
+    "observationCount": 0,
+    "primaryIdentityCount": 0,
+    "snapshotCount": 0
+  },
+  "environment": "disposable-postgresql-integration",
+  "flyway": {
+    "databaseMigrations": [
+      {
+        "checksum": -1636077697,
+        "script": "V1__target_baseline.sql",
+        "success": true,
+        "version": "1"
+      },
+      {
+        "checksum": 839607018,
+        "script": "V2__rebuild_core_projections.sql",
+        "success": true,
+        "version": "2"
+      },
+      {
+        "checksum": -1456658399,
+        "script": "V3__collector_observation_times_and_identity_grants.sql",
+        "success": true,
+        "version": "3"
+      },
+      {
+        "checksum": 1318350062,
+        "script": "V4__admin_collection_run_status_grants.sql",
+        "success": true,
+        "version": "4"
+      },
+      {
+        "checksum": -1313754193,
+        "script": "V5__legacy_activity_period_projection.sql",
+        "success": true,
+        "version": "5"
+      },
+      {
+        "checksum": -290358219,
+        "script": "V6__comparison_valid_observation_hourly_projection.sql",
+        "success": true,
+        "version": "6"
+      },
+      {
+        "checksum": -1228913579,
+        "script": "V7__activity_rating_read_grants.sql",
+        "success": true,
+        "version": "7"
+      },
+      {
+        "checksum": -574188650,
+        "script": "V8__legacy_overview_projection.sql",
+        "success": true,
+        "version": "8"
+      },
+      {
+        "checksum": 1058556652,
+        "script": "V9__immutable_observations_quality_archive_fence.sql",
+        "success": true,
+        "version": "9"
+      },
+      {
+        "checksum": -1148603410,
+        "script": "V10__consistent_public_queries_and_formula_guards.sql",
+        "success": true,
+        "version": "10"
+      },
+      {
+        "checksum": 1679789143,
+        "script": "V11__bridge_identity_lineage_and_reconciliation.sql",
+        "success": true,
+        "version": "11"
+      },
+      {
+        "checksum": 1453326243,
+        "script": "V12__detail_history_projection.sql",
+        "success": true,
+        "version": "12"
+      },
+      {
+        "checksum": -185639607,
+        "script": "V13__immutable_account_identity_history.sql",
+        "success": true,
+        "version": "13"
+      },
+      {
+        "checksum": -956321170,
+        "script": "V14__public_archived_publication_text.sql",
+        "success": true,
+        "version": "14"
+      },
+      {
+        "checksum": -1953543117,
+        "script": "V15__verified_source_preservation.sql",
+        "success": true,
+        "version": "15"
+      }
+    ],
+    "fileSha256": {
+      "V10__consistent_public_queries_and_formula_guards.sql": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b",
+      "V11__bridge_identity_lineage_and_reconciliation.sql": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff",
+      "V12__detail_history_projection.sql": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100",
+      "V13__immutable_account_identity_history.sql": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0",
+      "V14__public_archived_publication_text.sql": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6",
+      "V15__verified_source_preservation.sql": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941",
+      "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1",
+      "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd",
+      "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1",
+      "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82",
+      "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41",
+      "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64",
+      "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb",
+      "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c",
+      "V9__immutable_observations_quality_archive_fence.sql": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"
+    },
+    "migrationCount": 15,
+    "schemaVersion": 15
+  },
+  "forwardReconciliation": {
+    "criticalMismatches": 0,
+    "status": "pass"
+  },
+  "generatedAt": "2026-09-05T04:20:35.559500+00:00",
+  "operator": "pytest-reverse-sync",
+  "platforms": [
+    "max",
+    "rutube",
+    "telegram",
+    "vk"
+  ],
+  "preservation": {
+    "aliasMismatches": 0,
+    "identityMismatches": 0,
+    "publicationMismatches": 0,
+    "snapshotMismatches": 0
+  },
+  "release": {
+    "id": "local-unbound",
+    "sha256SumsSha256": "b681882b99e9f2e2d31ec9360b3e5ce9be483cbc184bb984a7c85bf2c31017d9"
+  },
+  "replay": {
+    "idempotent": true,
+    "runCount": 4
+  },
+  "reportType": "reverse-sync-rehearsal",
+  "reportVersion": 3,
+  "reverseSync": {
+    "baselineRevisionCount": 66,
+    "baselineRevisionSetSha256": "5717bdef4d885ce120a8d3cc41811e206d8aedb0883110fb7368d2f36ca87524",
+    "fixedRevisionCount": 4,
+    "fixedRevisionSetSha256": "3545d192eb1a830f584366e5612778871f0df16fe7ead6459ae5412e4c508afd",
+    "journalStateVersion": 3,
+    "planSha256": "acbe572427a0a2367b8d3d9a63f10b409faab9428673062d1e9cefe812fbedec",
+    "status": "stopped"
+  },
+  "sFinal": {
+    "batchId": "1c478299-b42c-5983-b0ac-9f3f2e9e295a",
+    "gate": "pass",
+    "sourceSha256": "826f230af9ced3f5df3e3eba64d34ff0fec2d4beacf6afb0e4fa2feb09aa8a9b"
+  },
+  "sourceNamespace": "pytest-reverse-sync-76dad13c-ac0d-4d0c-a7f7-b33cb738715b",
+  "status": "pass"
+}

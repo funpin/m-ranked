@@ -33,4 +33,15 @@ class CursorCodecTest {
         assertThatThrownBy(() -> codec.decode(shortValue))
                 .isInstanceOf(InvalidCursorException.class);
     }
+    @org.junit.jupiter.api.Test
+    void ratingCursorPinsBothQueryAndRevision() {
+        CursorCodec codec = new CursorCodec();
+        java.util.UUID id = java.util.UUID.randomUUID();
+        String cursor = codec.encodeRating(id, 42, "telegram:30d:engagement:desc");
+        org.assertj.core.api.Assertions.assertThat(codec.decodeRating(cursor,42,"telegram:30d:engagement:desc")).isEqualTo(id);
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->codec.decodeRating(cursor,43,"telegram:30d:engagement:desc"))
+                .isInstanceOf(InvalidCursorException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->codec.decodeRating(cursor,42,"vk:30d:engagement:desc"))
+                .isInstanceOf(InvalidCursorException.class);
+    }
 }

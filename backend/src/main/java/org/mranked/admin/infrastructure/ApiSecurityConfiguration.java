@@ -22,6 +22,7 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 
 @Configuration
 @EnableWebSecurity
@@ -65,6 +66,16 @@ public class ApiSecurityConfiguration {
                         .requestMatchers(HttpMethod.PUT,
                                 "/api/v1/admin/platform-accounts/*/enabled")
                         .hasAnyRole(WRITE_ROLES)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/exports").hasAnyRole(WRITE_ROLES)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/exports/*", "/api/v1/admin/exports/*/download")
+                        .hasAnyRole(WRITE_ROLES)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/exports/*").hasAnyRole(WRITE_ROLES)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/catalog/institutions", "/api/v1/admin/catalog/institutions/*/accounts", "/api/v1/admin/catalog/session", "/api/v1/admin/catalog/status").hasAnyRole(READ_ROLES)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/catalog/institutions", "/api/v1/admin/catalog/accounts", "/api/v1/admin/catalog/legacy-command",
+                                "/api/v1/admin/catalog/accounts/*/enable", "/api/v1/admin/catalog/accounts/*/disable",
+                                "/api/v1/admin/catalog/accounts/*/native-id").hasAnyRole(WRITE_ROLES)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/admin/catalog/institutions/*").hasAnyRole(WRITE_ROLES)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/catalog/institutions/*", "/api/v1/admin/catalog/accounts/*").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/**").denyAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/**").permitAll()
                         .anyRequest().denyAll())
@@ -73,6 +84,12 @@ public class ApiSecurityConfiguration {
                         .authenticationEntryPoint(problemSecurityHandler))
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokens)
+                        // Every stateless Basic request authenticates again. The
+                        // default authentication strategy rotates the cookie on
+                        // each session preflight, invalidating open HTML forms.
+                        // There is no form-login/session transition here; retain
+                        // the cookie while still checking CSRF on every write.
+                        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy())
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .httpBasic(Customizer.withDefaults())
                 .formLogin(form -> form.disable())

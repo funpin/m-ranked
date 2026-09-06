@@ -1,0 +1,45 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.0.8)
+
+2026-09-05T10:11:29.286+03:00  INFO 42959 --- [           main] org.mranked.MRankedApplication           : Starting MRankedApplication v0.1.0-SNAPSHOT using Java 21 with PID 42959 (/private/tmp/mranked-admin-visual-v26-build/m-ranked-backend-0.1.0-SNAPSHOT.jar started by funpin in /Users/funpin/Documents/ChatGPT/TG-monitoring)
+2026-09-05T10:11:29.288+03:00  INFO 42959 --- [           main] org.mranked.MRankedApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-09-05T10:11:30.015+03:00  INFO 42959 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-05T10:11:30.021+03:00  INFO 42959 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-09-05T10:11:30.045+03:00  INFO 42959 --- [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 13 ms. Found 0 Redis repository interfaces.
+2026-09-05T10:11:30.278+03:00  WARN 42959 --- [           main] trationDelegate$BeanPostProcessorChecker : Bean 'jdbcQueryCounters' of type [org.mranked.operations.infrastructure.JdbcQueryMetricsConfiguration$QueryCounters] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected/applied to a currently created BeanPostProcessor [meterJdbcDataSources]? Check the corresponding BeanPostProcessor declaration and its dependencies/advisors. If this bean does not have to be post-processed, declare it with ROLE_INFRASTRUCTURE.
+2026-09-05T10:11:30.596+03:00  INFO 42959 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 57554 (http)
+2026-09-05T10:11:30.607+03:00  INFO 42959 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-05T10:11:30.607+03:00  INFO 42959 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-09-05T10:11:30.623+03:00  INFO 42959 --- [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 1294 ms
+2026-09-05T10:11:31.077+03:00  WARN 42959 --- [           main] i.n.r.d.DnsServerAddressStreamProviders  : Can not find io.netty.resolver.dns.macos.MacOSDnsServerAddressStreamProvider in the classpath, fallback to system defaults. This may result in incorrect DNS resolutions on MacOS. Check whether you have a dependency on 'io.netty:netty-resolver-dns-native-macos'
+2026-09-05T10:11:31.384+03:00  INFO 42959 --- [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+2026-09-05T10:11:31.999+03:00  INFO 42959 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 57554 (http) with context path '/'
+2026-09-05T10:11:32.040+03:00  INFO 42959 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 57555 (http)
+2026-09-05T10:11:32.041+03:00  INFO 42959 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-05T10:11:32.041+03:00  INFO 42959 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-09-05T10:11:32.043+03:00  INFO 42959 --- [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 41 ms
+2026-09-05T10:11:32.057+03:00  INFO 42959 --- [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 2 endpoints beneath base path '/actuator'
+2026-09-05T10:11:32.081+03:00  INFO 42959 --- [.1-57554-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-05T10:11:32.081+03:00  INFO 42959 --- [.1-57554-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-09-05T10:11:32.082+03:00  INFO 42959 --- [.1-57554-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-09-05T10:11:32.091+03:00  INFO 42959 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 57555 (http) with context path '/'
+2026-09-05T10:11:32.099+03:00  INFO 42959 --- [           main] org.mranked.MRankedApplication           : Started MRankedApplication in 3.125 seconds (process running for 3.479)
+2026-09-05T10:11:32.119+03:00  INFO 42959 --- [.1-57554-exec-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-09-05T10:11:32.251+03:00  INFO 42959 --- [.1-57554-exec-1] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@6d1e5587
+2026-09-05T10:11:32.253+03:00  INFO 42959 --- [.1-57554-exec-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-09-05T10:11:33.315+03:00  INFO 42959 --- [.1-57555-exec-1] o.a.c.c.C.[Tomcat-1].[localhost].[/]     : Initializing Spring DispatcherServlet 'dispatcherServletRegistration'
+2026-09-05T10:11:33.315+03:00  INFO 42959 --- [.1-57555-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServletRegistration'
+2026-09-05T10:11:33.316+03:00  INFO 42959 --- [.1-57555-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-09-05T10:11:38.398+03:00  INFO 42959 --- [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-09-05T10:11:38.399+03:00  INFO 42959 --- [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-09-05T10:11:38.400+03:00  INFO 42959 --- [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-09-05T10:11:38.400+03:00  INFO 42959 --- [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-09-05T10:11:38.415+03:00  INFO 42959 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-09-05T10:11:38.416+03:00  INFO 42959 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.

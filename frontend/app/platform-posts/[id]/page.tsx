@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { loadPublicationHistory } from "@/lib/detail-data";
 import { PublicationDetail } from "@/components/publication-detail";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: PlatformPostPageProps): Promi
   try {
     const publication = await api.publication(legacyId, "platform_posts");
     const title = `Публикация ${publication.platform.toUpperCase()} №${publication.legacyId}`;
-    const description = "Последний согласованный замер публикации из публичного Spring API.";
+    const description = "История просмотров, реакций и других показателей публикации.";
     return {
       title,
       description,
@@ -45,7 +46,7 @@ export default async function PlatformPostPage({ params, searchParams }: Platfor
     if (error instanceof ApiError && error.status === 404) notFound();
     return (
       <>
-        <PageHeader title={`Публикация №${legacyId}`} description="Не удалось получить последний согласованный замер из Spring API." />
+        <PageHeader title={`Публикация №${legacyId}`} description="Не удалось загрузить показатели публикации." />
         <ApiFailureState retryHref={`/platform-posts/${legacyId}`} />
       </>
     );
@@ -53,5 +54,10 @@ export default async function PlatformPostPage({ params, searchParams }: Platfor
   const platformDecision = legacyPlatformDecision(query.platform, publication.platform, true);
   if (platformDecision === "not_found") notFound();
   if (platformDecision === "redirect") redirect(`/platform-posts/${legacyId}`);
-  return <PublicationDetail publication={publication} />;
+  let history;
+  try {
+    history = await loadPublicationHistory(legacyId,"platform_posts");
+
+  } catch { return <ApiFailureState retryHref={`/platform-posts/${legacyId}`} />; }
+  return <PublicationDetail history={history} />;
 }

@@ -1,0 +1,59 @@
+{
+  "status": "pass",
+  "productionOperations": false,
+  "schemaVersion": 26,
+  "schemaChanged": false,
+  "filesSha256": {
+    "migration/bridge/projection_reconciliation.py": "fbb43566504632d8deb5f9fe8fc34fc9b75fa606b859ff5e19fa0bfeb4766068",
+    "migration/bridge/projection_source.py": "d4368987624b593e5d55ee9703719bcdf800926b9addeed2acc18e4f4c53eb3b",
+    "migration/bridge/source.py": "2c4cc6ddcda94303d8519d8bb591c900a02b28fee5fcff91027fd17fc487eceb",
+    "migration/bridge/service.py": "2e448cfab0342549900365876a32f2884cd71069d6f74fb38b8036804b62ef83",
+    "migration/bridge/model.py": "30dd3f049e1684b3116002f65cb18a9a129d6a9ac8575fbb12388734d8c0520b",
+    "migration/bridge/cli.py": "0597dcc60373f3eca269c51a7b259de26f3b82f5760e8db5ecf5b0c4ef8a2d98",
+    "migration/bridge/preservation.py": "560043529e99d5c64879469b7bf8296ba50bcf77b45a14f9e69b6ac32874ad31",
+    "operations/scripts/cutover-preflight.sh": "e4c367141f37ce0f5b141b6705c0c1d8ce1e50c9440a1f8e5d09c3ce54d74ca7"
+  },
+  "requiredGate": {
+    "sFinal": "always required",
+    "otherSnapshotKinds": "--verify-projections",
+    "releasePreflight": "mandatory matching source/revision/full dimensions/critical proof"
+  },
+  "tests": {
+    "originalEndpointAndOverallTamperPostgres": {
+      "passed": 1,
+      "skipped": 0,
+      "seconds": 11.99
+    },
+    "ownerVerifiedPreservedSourcePostgres": {
+      "passed": 1,
+      "skipped": 0,
+      "seconds": 5.52
+    },
+    "coldArchiveCsvPostgresHttp": {
+      "passed": 3,
+      "skipped": 0,
+      "byteCases": 38
+    },
+    "pythonOperationalAndProjection": {
+      "passed": 58,
+      "seconds": 10.49
+    }
+  },
+  "preservationAssertions": [
+    "exact recorded prior SHA and source row hash",
+    "only owner-classified missing rows inserted into private overlay",
+    "current original source unchanged",
+    "restoredRows equals 1",
+    "missing prior produces critical NO-GO",
+    "unverified prior produces critical NO-GO",
+    "preserved canonical facts and ledger remain tamper checked",
+    "SQLite quick_check and FK validation",
+    "no raw PostgreSQL restoration or authority switch"
+  ],
+  "remainingGates": [
+    "Release-wide final integration/rehearsals on current source",
+    "Production representative artifacts and explicit first-age configuration",
+    "Closed identity history absent from all retained artifacts cannot be inferred",
+    "Over-bound source requires a separately bounded complete verification; no skip"
+  ]
+}

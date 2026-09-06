@@ -70,12 +70,18 @@ unset transition_secure_file transition_secure_dir transition_metadata \
   transition_mode transition_links transition_helper_identity
 
 confirmation=""
-if [[ "${1:-}" == "--confirm" && $# -eq 2 ]]; then
-  confirmation="$2"
-else
-  echo "usage: $0 --confirm WRITER-CUTOVER:<ticket>" >&2
-  exit 64
-fi
+historical_sources=()
+while (( $# )); do
+  case "$1" in
+    --confirm)
+      [[ $# -ge 2 && -z "$confirmation" ]] || exit 64
+      confirmation="$2"; shift 2 ;;
+    --historical-source)
+      [[ $# -ge 2 && ${#historical_sources[@]} -lt 63 ]] || exit 64
+      historical_sources+=("$2"); shift 2 ;;
+    *) echo "usage: $0 --confirm WRITER-CUTOVER:<ticket> [--historical-source <frozen SQLite>]..." >&2; exit 64 ;;
+  esac
+done
 
 : "${OPERATOR_ID:?OPERATOR_ID is required}"
 : "${CHANGE_TICKET:?CHANGE_TICKET is required}"
@@ -119,6 +125,40 @@ for directory_name in MIGRATION_SNAPSHOT_DIR MIGRATION_REPORT_DIR; do
     echo "$directory_name must not be a symlink" >&2
     exit 73
   fi
+done
+
+# Explicit history inputs are protected artifacts from the same snapshot
+# directory; the bridge separately verifies SHA membership in import history.
+history_bridge_args=()
+for historical_source in "${historical_sources[@]}"; do
+  if [[ ! -f "$historical_source" || -L "$historical_source" \
+        || "${historical_source%/*}" != "$MIGRATION_SNAPSHOT_DIR" ]]; then
+    echo "historical source must be a regular file directly in MIGRATION_SNAPSHOT_DIR" >&2
+    exit 73
+  fi
+  historical_metadata="$(stat -c '%u:%a:%h' -- "$historical_source")"
+  IFS=: read -r historical_owner historical_mode historical_links <<<"$historical_metadata"
+  if [[ "$historical_owner" != 0 || "$historical_links" != 1 \
+        || ! "$historical_mode" =~ ^[0-7]{3,4}$ ]] \
+      || (( (8#$historical_mode & 8#022) != 0 )); then
+    echo "historical source metadata is unsafe" >&2
+    exit 73
+  fi
+  historical_directory="$MIGRATION_SNAPSHOT_DIR"
+  while :; do
+    historical_metadata="$(stat -c '%u:%a' -- "$historical_directory")"
+    IFS=: read -r historical_owner historical_mode <<<"$historical_metadata"
+    if [[ -L "$historical_directory" || "$historical_owner" != 0 \
+          || ! "$historical_mode" =~ ^[0-7]{3,4}$ ]] \
+        || (( (8#$historical_mode & 8#022) != 0 )); then
+      echo "historical source directory chain is unsafe" >&2
+      exit 73
+    fi
+    [[ "$historical_directory" == / ]] && break
+    historical_directory="${historical_directory%/*}"
+    [[ -n "$historical_directory" ]] || historical_directory=/
+  done
+  history_bridge_args+=(--historical-source "$historical_source")
 done
 
 if [[ ! -f "$LEGACY_SQLITE_PATH" || -L "$LEGACY_SQLITE_PATH" ]]; then
@@ -205,13 +245,23 @@ PGPASSFILE="$MIGRATION_PGPASSFILE" "$python_bin" -m migration.bridge import "$s_
   --snapshot-kind s_final \
   --postgres-dsn "$MIGRATION_DATABASE_URL" \
   --report-dir "$MIGRATION_REPORT_DIR" \
-  --stem "$report_stem"
+  --stem "$report_stem" "${history_bridge_args[@]}"
 
 if ! jq -e --arg sFinal "$s_final" --arg sFinalSha256 "$s_final_sha256" '
     .report_type == "post-import-reconciliation"
     and .report_version == 1
     and .gate.status == "pass"
     and .gate.critical_mismatches == 0
+    and .identity_history_verification.status == "pass"
+    and .identity_history_verification.sourceUnchanged == true
+    and .identity_history_verification.sourceSha256 == $sFinalSha256
+    and .identity_history_verification.datasetRevision == .dataset_revision
+    and ([.identity_history_verification.checks[].name] | sort) == ["native","presentation"]
+    and all(.identity_history_verification.checks[];
+      .status == "pass" and .expected == .actual and .actual.duplicateKeys == 0)
+    and (.identity_history_verification as $proof
+      | any(.checks[]; .check == "canonical_identity_history" and .critical == true
+        and .status == "pass" and .details == $proof))
     and .source.source_path == $sFinal
     and .source.source_sha256 == $sFinalSha256
     and .source.quick_check == "ok"
@@ -287,6 +337,8 @@ deadline=$(( $(date -u +%s) + TARGET_COLLECTION_GATE_SECONDS ))
 revision_after="$revision_before"
 successful_platforms=0
 ready_core_projections=0
+projection_state_count=0
+projection_extra=""
 api_dataset_revision=0
 reverse_sync_lag=-1
 while (( $(date -u +%s) < deadline )); do
@@ -317,13 +369,15 @@ WITH latest AS (
 ), core(name) AS (VALUES
     ('publication_latest'), ('publication_hourly'),
     ('institution_daily_metrics'), ('institution_monthly_metrics'),
-    ('institution_period_metrics'), ('comparison')
+    ('institution_period_metrics'), ('comparison'),
+    ('publication_history'), ('publication_content'), ('legacy_exports')
 )
 SELECT latest.id,
        count(state.projection_name) FILTER (
            WHERE state.status = 'ready'
              AND state.dataset_revision_id = latest.id
-       )
+       ),
+       (SELECT count(*) FROM analytics.projection_state)
   FROM latest
  CROSS JOIN core
   LEFT JOIN analytics.projection_state AS state
@@ -331,7 +385,7 @@ SELECT latest.id,
  GROUP BY latest.id;
 SQL
   )"
-  IFS='|' read -r revision_after ready_core_projections <<<"$projection_state"
+  IFS='|' read -r revision_after ready_core_projections projection_state_count projection_extra <<<"$projection_state"
   successful_platforms="$(
     PGPASSFILE="$OUTBOX_PGPASSFILE" psql "$OUTBOX_DATABASE_URL" \
       --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
@@ -363,7 +417,8 @@ SQL
   if [[ "$revision_after" =~ ^[1-9][0-9]*$ \
         && "$revision_after" -gt "$revision_before" \
         && "$successful_platforms" == 4 \
-        && "$ready_core_projections" == 6 \
+        && "$ready_core_projections" == 9 \
+        && "$projection_state_count" == 9 && -z "${projection_extra:-}" \
         && "$api_dataset_revision" == "$revision_after" ]]; then
     reverse_sync_lag="$(
       "$REVERSE_SYNC_EXECUTABLE" status \
@@ -378,7 +433,8 @@ done
 if [[ ! "$revision_after" =~ ^[1-9][0-9]*$ \
       || "$revision_after" -le "$revision_before" \
       || "$successful_platforms" != 4 \
-      || "$ready_core_projections" != 6 \
+      || "$ready_core_projections" != 9 \
+      || "$projection_state_count" != 9 || -n "${projection_extra:-}" \
       || "$api_dataset_revision" != "$revision_after" \
       || "$reverse_sync_lag" != 0 ]] \
       || ! systemctl is-active --quiet m-ranked-target-projection-publisher.service \
@@ -392,9 +448,9 @@ duplicate_count="$(
     --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<'SQL'
 SELECT count(*)
   FROM (
-      SELECT published_month, publication_id, sampling_bucket
+      SELECT published_month, publication_id, sampling_bucket, source_fingerprint
         FROM ingest.publication_metric_snapshot
-       GROUP BY published_month, publication_id, sampling_bucket
+       GROUP BY published_month, publication_id, sampling_bucket, source_fingerprint
       HAVING count(*) > 1
   ) AS duplicates;
 SQL
@@ -414,12 +470,13 @@ jq -n \
   --arg sFinal "$s_final" --arg sFinalSha256 "$s_final_sha256" \
   --arg reconciliation "$report_json" --argjson revisionBefore "$revision_before" \
   --argjson revisionAfter "$revision_after" \
+  --argjson readyCoreProjections "$ready_core_projections" \
   --argjson apiDatasetRevision "$api_dataset_revision" \
   '{status:$status,operator:$operator,changeTicket:$ticket,startedAt:$startedAt,
     rollbackDeadline:$rollbackDeadline,sFinal:$sFinal,sFinalSha256:$sFinalSha256,
     reconciliation:$reconciliation,datasetRevisionBefore:$revisionBefore,
     datasetRevisionAfter:$revisionAfter,successfulCollectorPlatforms:4,
-    readyCoreProjections:6,projectionPublisherActive:true,
+    readyCoreProjections:$readyCoreProjections,projectionPublisherActive:true,
     apiReadiness:{status:"UP",datasetRevision:$apiDatasetRevision,
       matchesLatestPublished:true},
     duplicateIngestion:0,

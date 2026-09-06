@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { loadPublicationHistory } from "@/lib/detail-data";
 import { PublicationDetail } from "@/components/publication-detail";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -57,15 +58,20 @@ export default async function PostPage({ params, searchParams }: PostPageProps) 
   const historyLimit = normalizeHistoryLimit(query.history_limit);
 
   try {
-    const publication = await api.publication(legacyId, "posts");
-    return <PublicationDetail publication={publication} historyLimit={historyLimit} />;
+    await api.publication(legacyId, "posts");
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     return (
       <>
-        <PageHeader title={`Публикация №${legacyId}`} description="Не удалось получить последний согласованный замер из Spring API." />
+        <PageHeader title={`Публикация №${legacyId}`} description="Не удалось загрузить показатели публикации." />
         <ApiFailureState retryHref={queryHref(`/posts/${legacyId}`, { history_limit: historyLimit })} />
       </>
     );
   }
+  let history;
+  try {
+    history = await loadPublicationHistory(legacyId,"posts");
+
+  } catch { return <ApiFailureState retryHref={queryHref(`/posts/${legacyId}`,{history_limit:historyLimit})} />; }
+  return <PublicationDetail history={history} historyLimit={historyLimit} />;
 }

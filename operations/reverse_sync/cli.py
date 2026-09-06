@@ -265,9 +265,13 @@ def _dsn_contains_password(dsn: str) -> bool:
 
 
 def _result_exit_code(command: str, result: Mapping[str, Any]) -> int:
+    if result.get("status") in {"failed", "uninitialized", "interrupted"}:
+        return 1
     if command == "once" and result.get("caughtUp") is not True:
         return 75
     if command == "status":
+        if result.get("windowExpired") is True:
+            return 1
         if int(result.get("lagRevisionCount", 0)) > 0:
             return 75
         if result.get("unchangedSinceDrain") is False:

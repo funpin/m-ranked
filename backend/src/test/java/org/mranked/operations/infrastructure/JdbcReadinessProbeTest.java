@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 
 class JdbcReadinessProbeTest {
     @Test
-    void requiresAllSixCoreStatesAtTheLatestCommittedRevision() {
+    void requiresAllNineCoreStatesAtTheLatestCommittedRevision() {
         assertThat(JdbcReadinessProbe.LATEST_CORE_READINESS_SQL)
                 .contains("ORDER BY revision.id DESC")
                 .contains("LIMIT 1")
@@ -16,6 +16,9 @@ class JdbcReadinessProbeTest {
                 .contains("('institution_monthly_metrics')")
                 .contains("('institution_period_metrics')")
                 .contains("('comparison')")
+                .contains("('publication_history')")
+                .contains("('publication_content')")
+                .contains("('legacy_exports')")
                 .contains("state.dataset_revision_id = revision.id")
                 .contains("state.status = 'ready'")
                 .contains("count(state.projection_name) AS ready_count");

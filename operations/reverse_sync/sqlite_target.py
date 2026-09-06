@@ -14,6 +14,7 @@ from uuid import UUID
 from app.analytics import delta_by_reaction
 from app.telegram_identity import parse_telegram_external_id
 from migration.bridge.normalize import access_mode
+from migration.bridge.model import row_hash
 from migration.reverse_sync_format import (
     ReversePublicationEnvelope,
     ReverseSnapshotEnvelope,
@@ -99,6 +100,7 @@ class LegacySqliteTarget:
         self.path = Path(os.path.abspath(path.expanduser()))
         self.source_namespace = str(source_namespace).strip()
         self.min_free_bytes = int(min_free_bytes)
+        self.account_identity_baseline: Mapping[str, str] | None = None
         if not self.source_namespace:
             raise ValueError("source namespace must not be blank")
         if self.min_free_bytes < 0:
@@ -263,6 +265,15 @@ class LegacySqliteTarget:
                 ),
             }
 
+    def capture_account_baseline(self) -> dict[str, str]:
+        with self.connect() as connection:
+            return {
+                str(row["id"]): str(row["native_id"] or row["external_key"]).strip()
+                for row in connection.execute(
+                    "SELECT id,native_id,external_key FROM platform_accounts ORDER BY id"
+                )
+            }
+
     def apply(
         self,
         plan: SyncPlan,
@@ -281,11 +292,7 @@ class LegacySqliteTarget:
                 if publication["platform"] == "telegram":
                     if alias[0] != "posts":
                         raise RuntimeError("Telegram publication has the wrong alias type")
-                    affected_telegram_posts.add(
-                        self._apply_telegram_publication(
-                            connection, publication, int(alias[1])
-                        )
-                    )
+                    self._apply_telegram_publication(connection, publication, int(alias[1]))
                 else:
                     if alias[0] != "platform_posts":
                         raise RuntimeError("platform publication has the wrong alias type")
@@ -385,7 +392,7 @@ class LegacySqliteTarget:
             raise RuntimeError("S-final account alias does not resolve in legacy SQLite")
         if (
             str(institution["name"]).strip() != str(account["institution_name"]).strip()
-            or _optional_text(institution["short_name"])
+            or (str(institution["short_name"]).strip() if institution["short_name"] else None)
             != _optional_text(account.get("institution_short_name"))
         ):
             raise RuntimeError("institution metadata changed during rollback window")
@@ -408,8 +415,9 @@ class LegacySqliteTarget:
             ("current_title", "title"),
             ("current_url", "url"),
         ):
-            if account.get(target_key) is not None:
-                values[legacy_key] = str(account[target_key])
+            authoritative = account.get("native_identity_authoritative") if target_key == "native_external_id" else account.get("presentation_authoritative")
+            if account.get(target_key) is not None or authoritative:
+                values[legacy_key] = str(account[target_key]) if account.get(target_key) is not None else None
         if account.get("has_snapshot"):
             values.update({
                 "subscriber_count": account.get("subscriber_count"),
@@ -440,10 +448,10 @@ class LegacySqliteTarget:
         ):
             raise RuntimeError("administrative Telegram channel fields changed")
         channel_values: dict[str, Any] = {}
-        if account.get("native_external_id") is not None:
-            channel_values["telegram_id"] = _signed_integer(
+        if account.get("native_external_id") is not None or account.get("native_identity_authoritative"):
+            channel_values["telegram_id"] = (_signed_integer(
                 account["native_external_id"], "Telegram native identity"
-            )
+            ) if account.get("native_external_id") is not None else None)
         if account.get("current_username") is not None:
             username = str(account["current_username"]).lstrip("@").strip()
             if not username:
@@ -476,14 +484,14 @@ class LegacySqliteTarget:
             )
         self._update_columns(connection, "channels", channel_legacy_id, channel_values)
 
-    @staticmethod
     def _assert_canonical_account_identity(
-        legacy: sqlite3.Row, account: Mapping[str, Any]
+        self, legacy: sqlite3.Row, account: Mapping[str, Any]
     ) -> None:
-        platform = str(account["platform"])
         canonical = str(account["canonical_external_id"])
-        if platform == "telegram" and account.get("channel_legacy_id") is not None:
-            expected = str(legacy["native_id"] or legacy["external_key"]).strip()
+        if self.account_identity_baseline is not None:
+            expected = self.account_identity_baseline.get(str(legacy["id"]))
+            if expected is None:
+                raise RuntimeError("account is absent from immutable S-final baseline")
         else:
             expected = str(legacy["native_id"] or legacy["external_key"]).strip()
         if canonical != expected:
@@ -679,7 +687,7 @@ class LegacySqliteTarget:
                 snapshot["reactions_count"], "Telegram reactions"
             ),
             "reactions_json": canonical_json(normalized_breakdown),
-            "raw_state_json": envelope.as_json(),
+            "raw_state_json": self._native_csv_raw(snapshot,envelope),
             "delta_total": None,
             "delta_by_reaction_json": None,
             "delta_seconds": None,
@@ -697,7 +705,7 @@ class LegacySqliteTarget:
         }
         self._insert_snapshot_row(
             connection, "reaction_snapshots", legacy_row_id,
-            "post_id", post_id, expected,
+            "post_id", post_id, expected, snapshot=snapshot,
         )
 
     def _apply_platform_snapshot(
@@ -722,13 +730,27 @@ class LegacySqliteTarget:
                 snapshot.get("comments_count"), "comments"
             ),
             "shares_count": _nullable_nonnegative(snapshot.get("shares_count"), "shares"),
-            "raw_json": envelope.as_json(),
+            "raw_json": self._native_csv_raw(snapshot,envelope),
             "created_at": _timestamp(snapshot["created_at"]),
         }
         self._insert_snapshot_row(
             connection, "platform_snapshots", legacy_row_id,
-            "platform_post_id", platform_post_id, expected,
+            "platform_post_id", platform_post_id, expected, snapshot=snapshot,
         )
+
+    @staticmethod
+    def _native_csv_raw(snapshot: Mapping[str, Any], envelope: ReverseSnapshotEnvelope) -> str:
+        raw=snapshot.get("legacy_csv_raw_json")
+        if raw is None:
+            return envelope.as_json()
+        from migration.bridge.normalize import sanitize_evidence
+        try:
+            parsed=json.loads(raw)
+        except (ValueError,TypeError) as error:
+            raise RuntimeError("native CSV representation is invalid") from error
+        if sanitize_evidence(parsed)!=parsed or parse_reverse_snapshot_envelope(raw)!=envelope:
+            raise RuntimeError("native CSV representation does not match the exported observation")
+        return raw
 
     @staticmethod
     def _validate_snapshot(snapshot: Mapping[str, Any], *, telegram: bool) -> None:
@@ -773,6 +795,10 @@ class LegacySqliteTarget:
             capability_version=int(snapshot["capability_version"]),
             source_fingerprint=str(snapshot["source_fingerprint"]),
             created_at=_datetime(snapshot["created_at"]),
+            metric_quality={metric:str(snapshot.get(metric+"_quality",snapshot["quality"]))
+                            for metric in ("views","reactions","comments","shares")},
+            metric_evidence=dict(snapshot.get("metric_evidence") or {}),
+            reaction_breakdown=dict(snapshot.get("reaction_breakdown") or {}),
         )
 
     def _snapshot_legacy_id(
@@ -792,12 +818,29 @@ class LegacySqliteTarget:
         owner_column: str,
         owner_id: int,
         expected: Mapping[str, Any],
+        *, snapshot: Mapping[str, Any] | None = None,
     ) -> None:
         conflict = connection.execute(
             f"SELECT * FROM {table} WHERE {owner_column}=? AND measurement_bucket=?",
             (owner_id, expected["measurement_bucket"]),
         ).fetchone()
         if conflict is not None:
+            if snapshot is not None and int(snapshot.get("correction_sequence", 0)) > 0:
+                raw_column = "raw_state_json" if table == "reaction_snapshots" else "raw_json"
+                preceding = parse_reverse_snapshot_envelope(conflict[raw_column])
+                same_tip = preceding is not None and preceding.snapshot_id == int(snapshot["id"])
+                lineage = {int(value) for value in snapshot.get("superseded_ids", ())}
+                known_predecessor = (preceding is not None and preceding.snapshot_id in lineage)
+                imported_predecessor = (preceding is None and
+                    snapshot.get("legacy_source_snapshot_id") == int(conflict["id"]) and bool(lineage)
+                    and snapshot.get("legacy_source_row_hash") == row_hash(dict(conflict)))
+                if not same_tip and (known_predecessor or imported_predecessor):
+                    if int(conflict["id"]) != legacy_row_id:
+                        raise RuntimeError("correction must preserve legacy snapshot identity")
+                    assignments = ",".join(f"{column}=?" for column in expected)
+                    connection.execute(f"UPDATE {table} SET {assignments} WHERE id=?",
+                                       (*expected.values(), legacy_row_id))
+                    return
             comparable = dict(expected)
             if table == "reaction_snapshots":
                 for derived in (
@@ -1095,8 +1138,9 @@ class LegacySqliteTarget:
             ("current_title", "title"),
             ("current_url", "url"),
         ):
-            if account.get(source) is not None:
-                expected[target] = str(account[source])
+            authoritative = account.get("native_identity_authoritative") if source == "native_external_id" else account.get("presentation_authoritative")
+            if account.get(source) is not None or authoritative:
+                expected[target] = str(account[source]) if account.get(source) is not None else None
         if account.get("has_snapshot"):
             expected.update({
                 "subscriber_count": account.get("subscriber_count"),
@@ -1119,8 +1163,8 @@ class LegacySqliteTarget:
             if channel is None:
                 raise RuntimeError("legacy Telegram account verification failed")
             channel_expected: dict[str, Any] = {}
-            if account.get("native_external_id") is not None:
-                channel_expected["telegram_id"] = int(account["native_external_id"])
+            if account.get("native_external_id") is not None or account.get("native_identity_authoritative"):
+                channel_expected["telegram_id"] = int(account["native_external_id"]) if account.get("native_external_id") is not None else None
             if account.get("current_username") is not None:
                 channel_expected["username"] = str(account["current_username"]).lstrip("@")
             if account.get("current_title") is not None:

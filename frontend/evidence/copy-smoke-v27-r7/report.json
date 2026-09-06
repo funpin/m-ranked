@@ -1,0 +1,58 @@
+{
+  "buildId": "Vab5NxcLc_UWt_G_47o1t",
+  "scope": "Actual production SSR metadata and separate process with unavailable API; frozen API remains running",
+  "rows": [
+    {
+      "path": "/channels/1",
+      "kind": "metadata",
+      "status": 200,
+      "description": "Публикации и статистика Telegram-канала Альфа — официальный канал.",
+      "passed": true
+    },
+    {
+      "path": "/platform-accounts/2",
+      "kind": "metadata",
+      "status": 200,
+      "description": "Публикации и статистика аккаунта Альфа VK.",
+      "passed": true
+    },
+    {
+      "path": "/platform-posts/1",
+      "kind": "metadata",
+      "status": 200,
+      "description": "История просмотров, реакций и других показателей публикации.",
+      "passed": true
+    },
+    {
+      "path": "/channels/1",
+      "kind": "unavailable-api",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "path": "/platform-accounts/2",
+      "kind": "unavailable-api",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "path": "/platform-posts/1",
+      "kind": "unavailable-api",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "path": "/posts/1",
+      "kind": "unavailable-api",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "path": "/institutions/1",
+      "kind": "unavailable-api",
+      "status": 200,
+      "passed": true
+    }
+  ],
+  "gate": "PASS"
+}

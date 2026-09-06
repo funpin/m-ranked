@@ -1,0 +1,26 @@
+{
+  "recordedOn": "2026-09-06",
+  "scope": "Review note attached after the completed V27 chart capture; the original capture report is preserved unchanged.",
+  "captureReport": "frontend/evidence/visual-charts-v27-r1/report.json",
+  "capturedStates": 98,
+  "passedCaptureAssertions": 98,
+  "maximumPixelDiffRatio": 0.0031838619516344636,
+  "pixelThreshold": 0.005,
+  "masks": 0,
+  "datasetRevision": 30,
+  "buildId": "Vab5NxcLc_UWt_G_47o1t",
+  "releaseAcceptance": false,
+  "pendingOwnerDecision": {
+    "state": "Pointer tooltip over a missing bar value",
+    "legacyPresentation": "0",
+    "targetPresentation": "—",
+    "approvedDeviation": false,
+    "sourceTemplate": "app/web/templates/platform_publication.html:110",
+    "legacyBarController": "frontend/node_modules/chart.js/dist/chart.js:1437",
+    "legacyLinearScale": "frontend/node_modules/chart.js/dist/chart.js:10238",
+    "targetRenderer": "frontend/packages/legacy-chart/index.ts:236",
+    "dataInvariant": "API values, parsed values and table data remain null; the missing bar remains undrawn. This is an unresolved presentation-policy conflict, not permission to replace null metrics with zero."
+  },
+  "bindingLimit": "The old V27 chart capture and its complete-artifact baseline do not automatically accept a rebuilt frontend or the new V28 representation version. A fresh V28 capture is required and is being produced separately.",
+  "measurementLimit": "These are synthetic-fixture visual and accessibility assertions, not mobile performance measurements or proof of production workload equivalence."
+}

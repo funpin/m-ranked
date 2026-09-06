@@ -24,6 +24,30 @@ public class CursorCodec {
         }
     }
 
+    public String encodeRating(UUID id, long revision, Object query) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(
+                (revision + ":" + fingerprint(query) + ":" + id).getBytes(StandardCharsets.US_ASCII));
+    }
+
+    public UUID decodeRating(String cursor, long revision, Object query) {
+        if (cursor == null || cursor.isBlank()) return null;
+        try {
+            String[] parts = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.US_ASCII).split(":");
+            if (parts.length != 3 || Long.parseLong(parts[0]) != revision
+                    || !parts[1].equals(fingerprint(query))) throw new InvalidCursorException();
+            return UUID.fromString(parts[2]);
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidCursorException();
+        }
+    }
+
+    private static String fingerprint(Object query) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(query.toString().getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException exception) { throw new IllegalStateException(exception); }
+    }
+
     public String encode(UUID id) {
         return Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(id.toString().getBytes(StandardCharsets.US_ASCII));

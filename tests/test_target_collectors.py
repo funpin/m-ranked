@@ -1081,6 +1081,9 @@ class _MemoryRepository:
         self.states[(batch.context.run_id, batch.account.id)] = RunStatus.SUCCEEDED
         return None
 
+    def quarantine_rejected_batch(self, raw, context, error_code):
+        self.rejected = (raw, context, error_code)
+
     def record_account_failure(
         self,
         run_context: CollectionContext,
@@ -1280,7 +1283,15 @@ class _ScriptedConnection:
         self.closed = True
 
 
-def test_repository_commits_observation_lineage_revision_and_outbox_atomically() -> None:
+def _script_native_csv(connection,publication_id,month,snapshot_id,evidence):
+    # This unit isolates transaction orchestration. The real native serializer,
+    # privileges and round-trip bytes are covered by LegacyCsvPostgresIntegrationTest.
+    connection.execute("SELECT ops_and_admin.ensure_publication_legacy_alias(%s)",(publication_id,))
+    connection.execute("INSERT INTO analytics.legacy_native_export_lexeme VALUES (%s,%s)",(month,snapshot_id))
+
+
+def test_repository_commits_observation_lineage_revision_and_outbox_atomically(monkeypatch) -> None:
+    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv",_script_native_csv)
     connection = _ScriptedConnection()
     repository = PostgresCollectorRepository(connection_factory=lambda: connection)
     target = account(Platform.TELEGRAM)
@@ -1308,6 +1319,8 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically()
     assert connection.rollbacks == 0
     assert connection.closed
     assert "INSERT INTO ingest.raw_payload" in sql
+    assert "ensure_publication_legacy_alias" in sql
+    assert "INSERT INTO analytics.legacy_native_export_lexeme" in sql
     assert "INSERT INTO ingest.deletion_observation" in sql
     assert "INSERT INTO catalog.account_identity_history" in sql
     assert "INSERT INTO catalog.account_external_identity" in sql
@@ -1318,7 +1331,8 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically()
     assert "UPDATE ingest.collection_account_result" in sql
 
 
-def test_repository_rolls_back_whole_account_when_outbox_fails() -> None:
+def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch) -> None:
+    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv",_script_native_csv)
     connection = _ScriptedConnection(fail_on_outbox=True)
     repository = PostgresCollectorRepository(connection_factory=lambda: connection)
     target = account(Platform.TELEGRAM)

@@ -1,0 +1,24 @@
+- navigation "Основная навигация":
+  - link "Логотип m-ranked m-ranked":
+    - /url: /?platform=all
+    - img "Логотип m-ranked"
+    - strong: m-ranked
+  - link "Обзор":
+    - /url: /?platform=all
+  - link "Рейтинг":
+    - /url: /rating?platform=all
+  - link "Сравнение":
+    - /url: /compare?platform=all
+  - link "Экспорт CSV":
+    - /url: /export/snapshots.csv?platform=all
+  - link "Управление":
+    - /url: /manage?platform=all
+  - button "Включить светлую тему": Тёмная
+- main:
+  - heading "Рейтинг · Все соцсети" [level=1]
+  - paragraph: Рейтинг будет построен только по выбранной площадке.
+  - text: Все соцсети
+  - heading "Раздел не смешивает данные разных соцсетей" [level=2]
+  - paragraph: Платформенный контекст уже сохранён в адресе и навигации. Данные Telegram здесь намеренно не показываются вместо выбранной площадки. Полная аналитика появится после подключения её вертикального сценария.
+  - link "Вернуться к обзору":
+    - /url: /?platform=all

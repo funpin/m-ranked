@@ -16,8 +16,15 @@ public record ComparisonView(
         int cohortSampleSize,
         List<ComparisonSeries> series,
         long datasetRevision,
-        Instant asOf
+        Instant asOf,
+        String nextSelectionCursor
 ) {
+    public ComparisonView(UUID cohortId,Platform platform,int horizonHours,boolean includePartial,
+                          String metric,String aggregation,ComparisonSelectionType selectionType,
+                          int cohortSampleSize,List<ComparisonSeries> series,long datasetRevision,Instant asOf) {
+        this(cohortId,platform,horizonHours,includePartial,metric,aggregation,selectionType,
+                cohortSampleSize,series,datasetRevision,asOf,null);
+    }
     public ComparisonView {
         series = List.copyOf(series);
     }

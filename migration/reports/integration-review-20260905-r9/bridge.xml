@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="13.241" timestamp="2026-09-05T10:04:25.679576+03:00" hostname="MacBook-funpin.local"><testcase classname="tests.test_migration_bridge_postgres" name="test_postgres_bridge_repeat_catch_up_delete_gate_and_rollback" time="4.746" /><testcase classname="tests.test_bridge_actual_target_postgres" name="test_reconciliation_detects_actual_canonical_corruption" time="5.791" /><testcase classname="tests.test_bridge_actual_target_postgres" name="test_changed_legacy_fact_appends_correction_and_preserves_original_bytes" time="1.709" /><testcase classname="tests.test_bridge_actual_target_postgres" name="test_cleared_native_identity_closes_history_and_reenrollment_appends" time="0.920"><failure message="AssertionError: [{'actual': {'distinctKeys': 8, 'duplicateKeys': 0, 'rows': 8, 'sha256': '64edfa779e0a2def8e9e938e5bc9f4a8b77d2c03a3d6...', 1, 'posts', 1, 'views']], 'serialization': 'canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct'}, ...}]&#10;assert 'fail' == 'pass'&#10;  &#10;  - pass&#10;  + fail">tmp_path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-526/test_cleared_native_identity_c0')
+
+    @pytest.mark.skipif(not ADMIN_DSN, reason="requires disposable PostgreSQL admin DSN")
+    def test_cleared_native_identity_closes_history_and_reenrollment_appends(tmp_path: Path):
+        import json
+        from app.database import Database
+        initial = tmp_path / "native-initial.sqlite"
+        build_golden_fixture(initial, revision=2)
+        def bridge(path, target):
+            return BridgeService(BridgeOptions(source=path,source_namespace="pytest-golden-integration",batch_size=2),
+                                 LegacySource(path),target,snapshot_kind="catch_up")
+        with PostgresTarget(str(ADMIN_DSN)) as target:
+            _, baseline = bridge(initial,target).run()
+&gt;           assert baseline["gate"]["status"] == "pass", baseline["mismatches"]
+E           AssertionError: [{'actual': {'distinctKeys': 8, 'duplicateKeys': 0, 'rows': 8, 'sha256': '64edfa779e0a2def8e9e938e5bc9f4a8b77d2c03a3d6...', 1, 'posts', 1, 'views']], 'serialization': 'canonical-v1/UTF-8/UTC-microseconds/numeric-exact/NULL-distinct'}, ...}]
+E           assert 'fail' == 'pass'
+E             
+E             - pass
+E             + fail
+
+tests/test_bridge_actual_target_postgres.py:119: AssertionError</failure></testcase></testsuite></testsuites>
