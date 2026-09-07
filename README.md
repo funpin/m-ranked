@@ -320,12 +320,12 @@ rtk .venv/bin/python -m collector_target --platform rutube
 
 Python-команда `collect` запускает только сбор данных. Для интерфейса из `main`
 используйте Next.js и Spring; старые команды `web` и `run` больше недоступны.
-Сохранившийся unit сборщика можно установить отдельно:
+Инфраструктурный unit целевого сборщика:
 
 ```bash
-cp deploy/m-ranked-collector.service /etc/systemd/system/
+cp operations/systemd/m-ranked-target-collector@.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now m-ranked-collector.service
+systemctl enable --now m-ranked-target-collector@telegram.service
 ```
 
 Конфигурация целевого интерфейса находится в `operations/systemd/` и
@@ -336,25 +336,20 @@ systemctl enable --now m-ranked-collector.service
 Для отката требуется отдельно сохранённый production-релиз.
 Маршрутизация перехода на целевой стек описана в `operations/nginx/`.
 
-### Резервное копирование SQLite
+### Резервное копирование PostgreSQL
 
-В сборку входит ежедневный online-backup живой SQLite-базы. Копия создаётся
-штатным SQLite Backup API, проверяется через `PRAGMA quick_check`, атомарно
-публикуется с правами `600`; timer хранит одну последнюю плановую копию и не
-удаляет созданные вручную файлы.
+Новый стек работает через `m-ranked-target-backup@.service` и runbook-процедуры
+для PostgreSQL резервного копирования (pgBackRest/архив/WAL). Старые legacy
+юниты `deploy/m-ranked-backup.service` и `.timer` после миграции удалены.
 
 ```bash
-cp deploy/m-ranked-backup.service deploy/m-ranked-backup.timer /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now m-ranked-backup.timer
-systemctl list-timers m-ranked-backup.timer
+rtk sudo systemctl enable --now m-ranked-target-backup-daily.timer
+rtk sudo systemctl enable --now m-ranked-target-backup-weekly.timer
+rtk sudo systemctl enable --now m-ranked-target-backup-monthly.timer
 ```
 
-Timer запускается ежедневно в 03:15 по Europe/Moscow с небольшим случайным
-сдвигом. Проверить разовый запуск можно командой
-`systemctl start m-ranked-backup.service`; результат хранится только в
-`data/backups/scheduled/`. Профили Telegram Web, MAX-сессия и `.env` этим
-заданием не копируются.
+Таймеры запускают шаблонный backup unit с PostgreSQL-разделом и репозиторным
+выпуском в зависимости от политики среды.
 
 ## Страницы новой версии
 

@@ -132,6 +132,12 @@ corrupt evidence fails closed. This raw-evidence directory is not a cold archive
 Normalization rejection records sanitized retrievable evidence in
 `ingest.evidence_quarantine` without publishing canonical facts.
 
+Raw evidence is opt-in with `COLLECTOR_PERSIST_RAW_EVIDENCE=true`. Compact
+production collectors retain the canonical `source_fingerprint` without writing
+one filesystem object per observation. Target-generated legacy CSV lexemes are
+separately opt-in with `COLLECTOR_PERSIST_LEGACY_CSV=true` and stay disabled once
+the legacy stack has been retired.
+
 ## Collector metrics
 
 Set `COLLECTOR_METRICS_FILE` to an absolute, service-writable Prometheus textfile

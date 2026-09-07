@@ -90,6 +90,16 @@ def test_frozen_v1_v8_migration_bytes_match_operational_manifest() -> None:
         assert _flyway_crc32(path) == expected_flyway_checksum
 
 
+def test_cache_outbox_uses_supported_redis_cli_connection_flags() -> None:
+    script = (ROOT / "operations/scripts/cache-outbox-worker.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "--host" not in script
+    assert "--port" not in script
+    assert script.count('-h "$REDIS_HOST" -p "$REDIS_PORT"') == 2
+
+
 def test_deploy_and_cutover_require_the_complete_frozen_manifest() -> None:
     deploy = (ROOT / "operations/scripts/deploy-shadow.sh").read_text(encoding="utf-8")
     preflight = (ROOT / "operations/scripts/cutover-preflight.sh").read_text(encoding="utf-8")

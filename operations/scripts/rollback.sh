@@ -132,7 +132,11 @@ if ! curl --fail --silent --show-error --max-time 15 "$LEGACY_HEALTH_URL" >/dev/
   exit 1
 fi
 "$route_switch" --phase legacy --confirm "ROUTE:legacy:${CHANGE_TICKET}"
-systemctl start m-ranked-collector.service
+if [[ -f /etc/systemd/system/m-ranked-collector.service || -f /usr/lib/systemd/system/m-ranked-collector.service ]]; then
+  systemctl start m-ranked-collector.service
+else
+  echo "legacy collector unit is absent; operator must start legacy writer manually"
+fi
 
 state_dir=/var/lib/m-ranked/cutover
 install -d -m 0700 "$state_dir"

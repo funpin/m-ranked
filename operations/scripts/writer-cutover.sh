@@ -208,7 +208,11 @@ recover_pre_sync_failure() {
       collector_recovered=false
       "$route_switch" --phase legacy \
         --confirm "ROUTE:legacy:${CHANGE_TICKET}" && route_recovered=true
-      systemctl start m-ranked-collector.service && collector_recovered=true
+      if [[ -f /etc/systemd/system/m-ranked-collector.service || -f /usr/lib/systemd/system/m-ranked-collector.service ]]; then
+        systemctl start m-ranked-collector.service && collector_recovered=true
+      else
+        echo "legacy admin writer unit is absent; continuing with recovery route only"
+      fi
       if [[ "$route_recovered" == true && "$collector_recovered" == true ]]; then
         echo "pre-sync cutover failure recovered legacy route and collector" >&2
       else
@@ -236,7 +240,11 @@ report_json="$MIGRATION_REPORT_DIR/$report_stem.json"
 "$route_switch" --phase writer-freeze \
   --confirm "ROUTE:writer-freeze:${CHANGE_TICKET}"
 cutover_mutated=true
-systemctl stop m-ranked-collector.service
+if [[ -f /etc/systemd/system/m-ranked-collector.service || -f /usr/lib/systemd/system/m-ranked-collector.service ]]; then
+  systemctl stop m-ranked-collector.service
+else
+  echo "legacy admin writer unit is absent; skipping stop"
+fi
 
 "$python_bin" -m migration.bridge backup "$LEGACY_SQLITE_PATH" "$s_final"
 s_final_sha256="$(sha256sum "$s_final" | cut -d' ' -f1)"

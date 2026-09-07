@@ -646,6 +646,10 @@ def test_rutube_gateway_keeps_other_videos_when_one_metric_request_fails() -> No
                     "failed", "Failed", NOW - timedelta(minutes=5), 20,
                     "https://rutube.ru/video/failed/", {},
                 ),
+                RutubeVideo(
+                    "scheduled", "Premiere", NOW + timedelta(days=1), 0,
+                    "https://rutube.ru/video/scheduled/", {},
+                ),
             ]
             return channel, videos
 
@@ -653,6 +657,7 @@ def test_rutube_gateway_keeps_other_videos_when_one_metric_request_fails() -> No
             return 4
 
         async def video_metrics(self, video_id: str) -> RutubeVideoMetrics:
+            assert video_id != "scheduled", "Do not sample an unpublished premiere"
             if video_id == "failed":
                 raise ConnectionError("gateway secret")
             return RutubeVideoMetrics(2, 1, {"likes": 2, "comments": 1})
@@ -674,6 +679,7 @@ def test_rutube_gateway_keeps_other_videos_when_one_metric_request_fails() -> No
         adapter.collect(account(Platform.RUTUBE), context(Platform.RUTUBE)),
     )
     assert len(result.publications) == 2
+    CanonicalNormalizer().normalize(result, context(Platform.RUTUBE))
     by_id = {publication.external_id: publication for publication in result.publications}
     assert by_id["ok"].quality == ObservationQuality.EXACT
     assert by_id["failed"].quality == ObservationQuality.DEGRADED
@@ -1239,13 +1245,15 @@ class _Cursor:
 
 
 class _ScriptedConnection:
-    def __init__(self, *, fail_on_outbox: bool = False) -> None:
+    def __init__(self, *, fail_on_outbox: bool = False, prior_run_slot: bool = False) -> None:
         self.calls: list[tuple[str, Any]] = []
+        self.call_transactions: list[tuple[str, int]] = []
         self.transaction_entries = 0
         self.commits = 0
         self.rollbacks = 0
         self.closed = False
         self.fail_on_outbox = fail_on_outbox
+        self.prior_run_slot = prior_run_slot
 
     def transaction(self) -> _Transaction:
         return _Transaction(self)
@@ -1253,6 +1261,7 @@ class _ScriptedConnection:
     def execute(self, sql: str, params: Any = None) -> _Cursor:
         normalized = " ".join(sql.split())
         self.calls.append((normalized, params))
+        self.call_transactions.append((normalized, self.transaction_entries))
         if self.fail_on_outbox and "INSERT INTO ops_and_admin.outbox_event" in normalized:
             raise RuntimeError("outbox unavailable")
         if "INSERT INTO ingest.account_metric_snapshot" in normalized:
@@ -1265,6 +1274,8 @@ class _ScriptedConnection:
             return _Cursor({"publication_id": UUID("30000000-0000-4000-8000-000000000001")})
         if "INSERT INTO ingest.publication_metric_snapshot" in normalized:
             return _Cursor({"id": 10})
+        if "FROM ingest.publication_metric_snapshot" in normalized:
+            return _Cursor({"id": 9} if self.prior_run_slot else None)
         if "SELECT id, deleted_at FROM ingest.publication" in normalized:
             return _Cursor({"id": UUID("30000000-0000-4000-8000-000000000001"), "deleted_at": None})
         if "SELECT id FROM ingest.deletion_observation" in normalized:
@@ -1295,7 +1306,11 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
     monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv",_script_native_csv)
     connection = _ScriptedConnection()
-    repository = PostgresCollectorRepository(connection_factory=lambda: connection)
+    repository = PostgresCollectorRepository(
+        connection_factory=lambda: connection,
+        persist_raw_evidence=True,
+        persist_legacy_csv=True,
+    )
     target = account(Platform.TELEGRAM)
     raw = raw_batch(target, context())
     raw = replace(
@@ -1316,8 +1331,12 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     assert result.discovered_count == 1
     assert result.snapshot_count == 1
     assert result.revision_id == 30
-    assert connection.transaction_entries == 1
-    assert connection.commits == 1
+    assert connection.transaction_entries == 2
+    assert connection.commits == 2
+    assert all(transaction == 1 for statement, transaction in connection.call_transactions
+               if "ensure_publication_metric_partition" in statement)
+    assert all(transaction == 2 for statement, transaction in connection.call_transactions
+               if statement.startswith(("INSERT", "UPDATE")))
     assert connection.rollbacks == 0
     assert connection.closed
     assert "INSERT INTO ingest.raw_payload" in sql
@@ -1338,17 +1357,40 @@ def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch, tmp_
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
     monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv",_script_native_csv)
     connection = _ScriptedConnection(fail_on_outbox=True)
-    repository = PostgresCollectorRepository(connection_factory=lambda: connection)
+    repository = PostgresCollectorRepository(
+        connection_factory=lambda: connection,
+        persist_raw_evidence=True,
+        persist_legacy_csv=True,
+    )
     target = account(Platform.TELEGRAM)
     canonical = CanonicalNormalizer().normalize(raw_batch(target, context()), context())
 
     with pytest.raises(RuntimeError, match="outbox unavailable"):
         repository.persist_account_batch(canonical)
 
-    assert connection.transaction_entries == 1
-    assert connection.commits == 0
+    assert connection.transaction_entries == 2
+    assert connection.commits == 1  # Only empty partition infrastructure commits.
     assert connection.rollbacks == 1
     assert connection.closed
+
+
+def test_repository_compact_mode_skips_prior_run_slot_and_compatibility_copies(
+    monkeypatch, tmp_path,
+) -> None:
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    connection = _ScriptedConnection(prior_run_slot=True)
+    repository = PostgresCollectorRepository(connection_factory=lambda: connection)
+    target = account(Platform.TELEGRAM)
+    canonical = CanonicalNormalizer().normalize(raw_batch(target, context()), context())
+
+    result = repository.persist_account_batch(canonical)
+
+    sql = "\n".join(statement for statement, _ in connection.calls)
+    assert result.snapshot_count == 0
+    assert "INSERT INTO ingest.publication_metric_snapshot" not in sql
+    assert "INSERT INTO ingest.raw_payload" not in sql
+    assert "ensure_publication_legacy_alias" not in sql
+    assert "INSERT INTO analytics.legacy_native_export_lexeme" not in sql
 
 
 def test_runtime_protocols_and_cli_contract_are_explicit() -> None:

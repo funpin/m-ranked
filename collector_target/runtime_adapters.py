@@ -792,6 +792,10 @@ class RutubeGatewayCollector:
             self.client.videos(native_id, min(self.settings.discovery_limit, 100)),
             self.client.subscriber_count(native_id, account.current_url),
         )
+        # Public feeds include scheduled premieres. They are not observations
+        # of published videos yet and must not reject the whole account batch.
+        discovery_at = utc(self.clock.now(), "gateway.observed_at")
+        videos = [video for video in videos if utc(video.published_at, "published_at") <= discovery_at]
 
         async def metrics(video_id: str) -> RutubeVideoMetrics:
             async with self._request_semaphore:
@@ -836,6 +840,11 @@ class RutubeGatewayCollector:
             try:
                 async with self._request_semaphore:
                     video = await self.client.video(publication.external_id)
+                if utc(video.published_at, "published_at") > observed:
+                    return None, unsupported_probe(
+                        publication, observed, self.settings,
+                        "rutube_video_scheduled_not_published",
+                    )
                 return video, None
             except Exception as error:
                 status = getattr(getattr(error, "response", None), "status_code", None)

@@ -1,0 +1,31 @@
+[Unit]
+Description=M-Ranked temporary live database and disk status
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=m-ranked-progress
+Group=m-ranked-progress
+WorkingDirectory=/opt/m-ranked/releases/collectors-v30-20260907
+LoadCredential=pgpass:/etc/m-ranked/credentials/maintenance.pgpass
+Environment=PGPASSFILE=%d/pgpass
+Environment=MRANKED_STATUS_DATABASE_URL=postgresql://maintenance@127.0.0.1:5432/mranked
+ExecStart=/opt/m-ranked/releases/collectors-v30-20260907/.venv/bin/python /opt/m-ranked/releases/collectors-v30-20260907/operations/migration_status/live_status.py --output /var/www/m-ranked-migration/migration-status.json --disk-path / --interval 30
+Restart=on-failure
+RestartSec=10s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/www/m-ranked-migration
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target

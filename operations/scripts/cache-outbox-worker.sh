@@ -143,13 +143,13 @@ publish_event() {
 
   # Never let a delayed event move the shared revision backwards.
   REDISCLI_AUTH="$redis_password" redis-cli \
-    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning \
+    -h "$REDIS_HOST" -p "$REDIS_PORT" --no-auth-warning \
     EVAL \
     "local c=tonumber(redis.call('GET',KEYS[1])); if c==nil then c=-1 end; local n=tonumber(ARGV[1]); if n>c then redis.call('SET',KEYS[1],ARGV[1]); end; return n" \
     1 "$REDIS_REVISION_KEY" "$revision" >/dev/null
 
   printf '%s' "$payload" | REDISCLI_AUTH="$redis_password" redis-cli \
-    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning \
+    -h "$REDIS_HOST" -p "$REDIS_PORT" --no-auth-warning \
     -x PUBLISH "$REDIS_REVISION_CHANNEL" >/dev/null
 }
 

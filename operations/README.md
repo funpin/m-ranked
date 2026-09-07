@@ -3,7 +3,8 @@
 Alpha ships only the Next.js/Spring interface. Target unit names start with
 `m-ranked-target-`. The legacy UI and its web unit are no longer shipped here;
 production transition and rollback require a separately retained legacy release
-and its installed `m-ranked-web.service`. Collector units remain in `deploy/`.
+and its installed `m-ranked-web.service`. Collector units use
+`operations/systemd/m-ranked-target-collector@.service`.
 Reference-based checks use the [external legacy reference](../migration/legacy-reference.md).
 
 The operational order is:

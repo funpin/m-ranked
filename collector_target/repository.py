@@ -51,6 +51,18 @@ def _error_code(value: str) -> str:
     return value if _SAFE_ERROR_CODE.fullmatch(value) else "CollectorError"
 
 
+def _env_enabled(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean")
+
+
 class PostgresCollectorRepository:
     """Collector-facing PostgreSQL repository.
 
@@ -67,6 +79,8 @@ class PostgresCollectorRepository:
         raw_retention_days: int = 7,
         statement_timeout_seconds: int = 60,
         evidence_store: ImmutableEvidenceStore | None = None,
+        persist_raw_evidence: bool | None = None,
+        persist_legacy_csv: bool | None = None,
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
@@ -77,6 +91,19 @@ class PostgresCollectorRepository:
         self._factory = connection_factory or self._psycopg_factory(str(dsn))
         self.raw_retention = timedelta(days=raw_retention_days)
         self.statement_timeout_seconds = statement_timeout_seconds
+        self.persist_raw_evidence = (
+            persist_raw_evidence
+            if persist_raw_evidence is not None
+            else _env_enabled(
+                "COLLECTOR_PERSIST_RAW_EVIDENCE",
+                evidence_store is not None,
+            )
+        )
+        self.persist_legacy_csv = (
+            persist_legacy_csv
+            if persist_legacy_csv is not None
+            else _env_enabled("COLLECTOR_PERSIST_LEGACY_CSV", False)
+        )
         self.evidence_store = evidence_store or ImmutableEvidenceStore(
             Path(os.environ.get("COLLECTOR_RAW_EVIDENCE_DIR", "data/target-raw-evidence"))
         )
@@ -464,7 +491,15 @@ class PostgresCollectorRepository:
         deletion_probe_count = 0
         changed = False
         identity_receipt = None
+        # Partition DDL can lock both snapshot parents. Commit provisioning
+        # before taking any canonical write locks, otherwise concurrent
+        # platforms can deadlock INSERT against CREATE TABLE PARTITION OF.
+        # Only empty infrastructure may survive a failed account transaction.
         with self._connection() as connection, connection.transaction():
+            connection.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                ("collector:partition-provisioning",),
+            )
             for published_month in sorted({
                 publication.snapshot.published_month
                 for publication in batch.publications
@@ -473,6 +508,7 @@ class PostgresCollectorRepository:
                     "SELECT ops_and_admin.ensure_publication_metric_partition(%s::date)",
                     (published_month,),
                 )
+        with self._connection() as connection, connection.transaction():
             if batch.account_observation is not None:
                 identity_changed = self._persist_account_identity(
                     connection, batch, batch.account_observation,
@@ -962,7 +998,30 @@ class PostgresCollectorRepository:
                 identity_changed = True
 
         snapshot = publication.snapshot
-        snapshot_row = connection.execute(
+        observation_lock = (
+            f"observation:{snapshot.published_month}:"
+            f"{publication_id}:{snapshot.sampling_bucket}"
+        )
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            (observation_lock,),
+        )
+        prior_run_slot = connection.execute(
+            """SELECT id
+                 FROM ingest.publication_metric_snapshot
+                WHERE published_month=%s
+                  AND publication_id=%s
+                  AND sampling_bucket=%s
+                  AND collection_run_id<>%s
+                LIMIT 1""",
+            (
+                snapshot.published_month,
+                publication_id,
+                snapshot.sampling_bucket,
+                batch.context.run_id,
+            ),
+        ).fetchone()
+        snapshot_row = None if prior_run_slot is not None else connection.execute(
             """INSERT INTO ingest.publication_metric_snapshot(
                    published_month, publication_id, collection_run_id, observed_at,
                    collected_at, age_seconds, sampling_bucket, views_count, reactions_count,
@@ -1030,7 +1089,7 @@ class PostgresCollectorRepository:
                 snapshot.source_fingerprint,
                 snapshot.sanitized_source,
             )
-        if snapshot_inserted:
+        if snapshot_inserted and self.persist_legacy_csv:
             from .legacy_csv import persist_native_csv
             persist_native_csv(connection,publication_id,snapshot.published_month,snapshot_id,snapshot.sanitized_source)
         return (
@@ -1046,11 +1105,13 @@ class PostgresCollectorRepository:
         batch: CanonicalAccountBatch,
         probe: CanonicalDeletionProbe,
     ) -> bool:
+        # Only deleted_at changes here. Serialize deletion probes without
+        # blocking foreign-key checks from concurrent snapshot inserts.
         publication = connection.execute(
             """SELECT id, deleted_at
                  FROM ingest.publication
                 WHERE id=%s AND primary_account_id=%s
-                FOR UPDATE""",
+                FOR NO KEY UPDATE""",
             (probe.publication_id, batch.account.id),
         ).fetchone()
         if publication is None:
@@ -1133,6 +1194,8 @@ class PostgresCollectorRepository:
         fingerprint: str,
         evidence: Mapping[str, Any],
     ) -> None:
+        if not self.persist_raw_evidence:
+            return
         collected = utc(collected_at, "lineage.collected_at")
         connection.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",

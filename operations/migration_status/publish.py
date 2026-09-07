@@ -21,8 +21,6 @@ STREAMS = ('schema_migrations', 'app_state', 'institutions', 'platform_accounts'
            'channels', 'platform_posts', 'posts', 'post_messages',
            'platform_snapshots', 'reaction_snapshots')
 PHASES = {'preparing', 'importing', 'catch_up', 'verifying', 'blocked', 'complete'}
-
-
 class TransferEstimate:
     def __init__(self):
         self.reset()
@@ -70,6 +68,14 @@ class TransferEstimate:
                 round(self.smoothed_speed, 1))
 
 
+def _database_stats(db_connection):
+    rows = db_connection.execute(
+        "SELECT COALESCE(SUM(n_live_tup), 0) FROM pg_stat_user_tables"
+    ).fetchone()[0]
+    db_size = db_connection.execute('SELECT pg_database_size(current_database())').fetchone()[0]
+    return int(rows), round(db_size / (1024 ** 3), 2)
+
+
 def build_status(control: dict, inventory: dict, estimate=None) -> dict:
     if control['phase'] not in PHASES:
         raise ValueError('Invalid phase')
@@ -79,6 +85,10 @@ def build_status(control: dict, inventory: dict, estimate=None) -> dict:
     if any(type(value) is not int or value < 0 for value in totals.values()):
         raise ValueError('Invalid inventory')
     processed = 0
+    previously_transferred = None
+    delta_transferred = None
+    database_rows = None
+    database_size_gib = None
     eta_seconds = speed = None
     batch_id = control.get('batchId')
     if batch_id:
@@ -98,29 +108,65 @@ def build_status(control: dict, inventory: dict, estimate=None) -> dict:
                 if stream not in totals or source_table != stream or not 0 <= count <= totals[stream]:
                     raise ValueError('Invalid checkpoint')
                 processed += count
+            if control.get('baselineBatchId'):
+                baseline = db.execute(
+                    'SELECT source_name,source_sha256,dry_run,status::text '
+                    'FROM migration.import_batch WHERE id=%s',
+                    (control['baselineBatchId'],)).fetchone()
+                if (not baseline or baseline[:3] !=
+                        (control['sourceNamespace'], control['baselineSha256'], False)
+                        or control['baselineBatchId'] == batch_id):
+                    raise ValueError('Invalid baseline binding')
+                baseline_counts = db.execute(
+                    'SELECT stream_name,source_table,rows_processed,completed '
+                    'FROM migration.checkpoint WHERE batch_id=%s',
+                    (control['baselineBatchId'],)).fetchall()
+                if (len(baseline_counts) != len(STREAMS)
+                        or {row[0] for row in baseline_counts} != set(STREAMS)
+                        or any(table != stream or not completed or not 0 <= count <= totals[stream]
+                               for stream, table, count, completed in baseline_counts)):
+                    raise ValueError('Incomplete baseline transfer')
+                previously_transferred = sum(row[2] for row in baseline_counts)
+                if control.get('deltaCounter'):
+                    delta_counts = db.execute(
+                        'SELECT source_table,rows_added FROM migration.final_delta_progress_20260907 '
+                        'WHERE batch_id=%s', (batch_id,)).fetchall()
+                    baseline_totals = {row[0]: row[2] for row in baseline_counts}
+                    if (len({row[0] for row in delta_counts}) != len(delta_counts)
+                            or any(table not in totals or type(count) is not int
+                                   or not 0 <= count <= totals[table] - baseline_totals[table]
+                                   for table, count in delta_counts)):
+                        raise ValueError('Invalid delta counts')
+                    delta_transferred = sum(row[1] for row in delta_counts)
             if batch[3] in {'failed', 'cancelled'}:
                 control = dict(control, phase='blocked', message='Перенос приостановлен. Проверяем данные перед продолжением.')
-            if estimate is not None and control['phase'] in {'importing', 'catch_up'} and batch[3] == 'running':
+            if estimate is not None and previously_transferred is None and control['phase'] in {'importing', 'catch_up'} and batch[3] == 'running':
                 eta_seconds, speed = estimate.update(batch_id, processed, sum(totals.values()),
                                                     time.time())
             elif estimate is not None:
                 estimate.reset()
             if control['phase'] == 'complete':
                 raise ValueError('Final acceptance must be published by the verified cutover workflow')
+            database_rows, database_size_gib = _database_stats(db)
     elif control['phase'] not in {'preparing', 'blocked'}:
         raise ValueError('Active transfer requires exact batch binding')
     elif estimate is not None:
         estimate.reset()
-    collection = 'Проверяем состояние сбора новых данных.'
+    collection = control.get('collectionMessage', 'Проверяем состояние сбора новых данных.')
     try:
         with urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3) as response:
             health = json.load(response)
-        if health.get('collector_fresh') is True:
+        if not control.get('collectionMessage') and health.get('collector_fresh') is True:
             collection = 'Сбор данных продолжается в действующей версии сервиса.'
     except (OSError, ValueError):
         pass
     return {'phase': control['phase'], 'message': control['message'],
-            'total': sum(totals.values()), 'transferred': processed,
+            'total': sum(totals.values()),
+            'transferred': processed if delta_transferred is None else previously_transferred + delta_transferred,
+            'passProcessed': processed, 'deltaTransferred': delta_transferred,
+            'databaseRows': database_rows, 'diskUsageGiB': database_size_gib,
+            'counterKind': 'delta' if delta_transferred is not None else ('final_pass' if previously_transferred is not None else 'transfer'),
+            'previouslyTransferred': previously_transferred,
             'updatedAt': datetime.now(timezone.utc).isoformat(),
             'progressAvailable': True, 'collectionMessage': collection,
             'estimatedRemainingSeconds': eta_seconds, 'rowsPerSecond': speed}
