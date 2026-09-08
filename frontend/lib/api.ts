@@ -26,7 +26,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
   const base = new URL(options.baseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:8080");
   if (!["https:", "http:"].includes(base.protocol) || base.username || base.password) throw new Error("API_BASE_URL must be an HTTP(S) origin without credentials");
   const fetcher: Fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
-  const timeoutMs = options.timeoutMs ?? 8_000;
+  const timeoutMs = options.timeoutMs ?? 15_000;
   const limit = Math.max(0, options.cacheEntries ?? 128);
   const cache = new Map<string, CacheEntry>();
 
