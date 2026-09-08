@@ -119,8 +119,6 @@ mranked_transition_lock_acquire
 : "${MRANKED_INSTALL_ROOT:=/opt/m-ranked/releases}"
 : "${MRANKED_CURRENT_LINK:=/opt/m-ranked/current}"
 : "${DEPLOY_REPORT_DIR:=/var/lib/m-ranked/deploy-reports}"
-: "${FLYWAY_BIN:=/usr/local/bin/flyway}"
-: "${FLYWAY_CONFIG_FILES:=/etc/m-ranked/credentials/flyway.conf}"
 : "${TARGET_API_HEALTH_URL:=http://127.0.0.1:8080/api/v1/health/ready}"
 : "${TARGET_WEB_HEALTH_URL:=http://127.0.0.1:3000/}"
 : "${TARGET_ACTIVATION_GATE_SECONDS:=90}"
@@ -327,36 +325,8 @@ required_files=(
   SHA256SUMS
   SYMLINKS.sha256
   backend/m-ranked-backend.jar
-  backend/src/main/resources/db/migration/V1__target_baseline.sql
-  backend/src/main/resources/db/migration/V2__rebuild_core_projections.sql
-  backend/src/main/resources/db/migration/V3__collector_observation_times_and_identity_grants.sql
-  backend/src/main/resources/db/migration/V4__admin_collection_run_status_grants.sql
-  backend/src/main/resources/db/migration/V5__legacy_activity_period_projection.sql
-  backend/src/main/resources/db/migration/V6__comparison_valid_observation_hourly_projection.sql
-  backend/src/main/resources/db/migration/V7__activity_rating_read_grants.sql
-  backend/src/main/resources/db/migration/V8__legacy_overview_projection.sql
-  backend/src/main/resources/db/migration/V9__immutable_observations_quality_archive_fence.sql
-  backend/src/main/resources/db/migration/V10__consistent_public_queries_and_formula_guards.sql
-  backend/src/main/resources/db/migration/V11__bridge_identity_lineage_and_reconciliation.sql
-  backend/src/main/resources/db/migration/V12__detail_history_projection.sql
-  backend/src/main/resources/db/migration/V13__immutable_account_identity_history.sql
-  backend/src/main/resources/db/migration/V14__public_archived_publication_text.sql
-  backend/src/main/resources/db/migration/V15__verified_source_preservation.sql
-  backend/src/main/resources/db/migration/V16__audited_catalog_commands.sql
-  backend/src/main/resources/db/migration/V17__legacy_csv_compatibility_projection.sql
-  backend/src/main/resources/db/migration/V18__official_rating_commands.sql
-  backend/src/main/resources/db/migration/V19__safe_health_operational_snapshot.sql
-  backend/src/main/resources/db/migration/V20__catalog_url_and_version_compatibility.sql
-  backend/src/main/resources/db/migration/V21__legacy_period_first_observation_policy.sql
-  backend/src/main/resources/db/migration/V22__durable_legacy_csv_archive_facts.sql
-  backend/src/main/resources/db/migration/V23__official_rating_entity_context.sql
-  backend/src/main/resources/db/migration/V24__ordered_history_reaction_details.sql
-  backend/src/main/resources/db/migration/V25__safe_legacy_account_presentation.sql
-  backend/src/main/resources/db/migration/V26__independent_projection_verifier_reads.sql
-  backend/src/main/resources/db/migration/V27__retained_disabled_platform_period_metrics.sql
-  backend/src/main/resources/db/migration/V28__identity_command_receipt_verifier_acl.sql
-  backend/src/main/resources/db/migration/V29__monotonic_native_identity_transitions.sql
-  backend/src/main/resources/db/migration/V30__preserve_legacy_forced_history_baseline.sql
+  backend/src/main/resources/db/final-schema.sql
+  operations/sql/transition-production-to-final.sql
   frontend/server.js
   .venv/bin/python
   collector_target/__main__.py
@@ -366,8 +336,6 @@ required_files=(
   migration/bridge/reconciliation.py
   migration/bridge/preservation.py
   operations/env/projection-publisher.env.example
-  operations/collector_parity_evidence.py
-  operations/bin/collector-parity-evidence
   operations/bin/pg-to-legacy-sync
   operations/scripts/backup.sh
   operations/scripts/cache-outbox-worker.sh
@@ -386,7 +354,6 @@ required_files=(
   operations/tmpfiles.d/m-ranked-transition.conf
 )
 executable_files=(
-  operations/bin/collector-parity-evidence
   operations/bin/pg-to-legacy-sync
   operations/scripts/backup.sh
   operations/scripts/cache-outbox-worker.sh
@@ -454,46 +421,6 @@ validate_executable_cohort() {
 
 assert_release_source_stable
 validate_executable_cohort "$release_source"
-
-expected_migration_files="$(printf '%s\n' \
-  V10__consistent_public_queries_and_formula_guards.sql \
-  V11__bridge_identity_lineage_and_reconciliation.sql \
-  V12__detail_history_projection.sql \
-  V13__immutable_account_identity_history.sql \
-  V14__public_archived_publication_text.sql \
-  V15__verified_source_preservation.sql \
-  V16__audited_catalog_commands.sql \
-  V17__legacy_csv_compatibility_projection.sql \
-  V18__official_rating_commands.sql \
-  V19__safe_health_operational_snapshot.sql \
-  V1__target_baseline.sql \
-  V20__catalog_url_and_version_compatibility.sql \
-  V21__legacy_period_first_observation_policy.sql \
-  V22__durable_legacy_csv_archive_facts.sql \
-  V23__official_rating_entity_context.sql \
-  V24__ordered_history_reaction_details.sql \
-  V25__safe_legacy_account_presentation.sql \
-  V26__independent_projection_verifier_reads.sql \
-  V27__retained_disabled_platform_period_metrics.sql \
-  V28__identity_command_receipt_verifier_acl.sql \
-  V29__monotonic_native_identity_transitions.sql \
-  V2__rebuild_core_projections.sql \
-  V30__preserve_legacy_forced_history_baseline.sql \
-  V3__collector_observation_times_and_identity_grants.sql \
-  V4__admin_collection_run_status_grants.sql \
-  V5__legacy_activity_period_projection.sql \
-  V6__comparison_valid_observation_hourly_projection.sql \
-  V7__activity_rating_read_grants.sql \
-  V8__legacy_overview_projection.sql \
-  V9__immutable_observations_quality_archive_fence.sql)"
-actual_migration_files="$(
-  cd -- "$release_source/backend/src/main/resources/db/migration"
-  find . -mindepth 1 -maxdepth 1 -print | sed 's#^\./##' | sort
-)"
-if [[ "$actual_migration_files" != "$expected_migration_files" ]]; then
-  echo "Flyway migration directory does not match the frozen V1-V30 manifest" >&2
-  exit 65
-fi
 
 verify_release_tree() {
   local tree="$1"
@@ -717,68 +644,12 @@ validate_release_symlinks() {
 
 capture_frozen_release_provenance() {
   local tree="$1"
-  captured_manifest_sha256="$(sha256sum "$tree/SHA256SUMS" | cut -d' ' -f1)"
-  captured_v1_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V1__target_baseline.sql" | cut -d' ' -f1)"
-  captured_v2_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V2__rebuild_core_projections.sql" | cut -d' ' -f1)"
-  captured_v3_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V3__collector_observation_times_and_identity_grants.sql" | cut -d' ' -f1)"
-  captured_v4_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V4__admin_collection_run_status_grants.sql" | cut -d' ' -f1)"
-  captured_v5_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V5__legacy_activity_period_projection.sql" | cut -d' ' -f1)"
-  captured_v6_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V6__comparison_valid_observation_hourly_projection.sql" | cut -d' ' -f1)"
-  captured_v7_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V7__activity_rating_read_grants.sql" | cut -d' ' -f1)"
-  captured_v8_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V8__legacy_overview_projection.sql" | cut -d' ' -f1)"
-  captured_v9_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V9__immutable_observations_quality_archive_fence.sql" | cut -d' ' -f1)"
-  captured_v10_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V10__consistent_public_queries_and_formula_guards.sql" | cut -d' ' -f1)"
-  captured_v11_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V11__bridge_identity_lineage_and_reconciliation.sql" | cut -d' ' -f1)"
-  captured_v12_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V12__detail_history_projection.sql" | cut -d' ' -f1)"
-  captured_v13_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V13__immutable_account_identity_history.sql" | cut -d' ' -f1)"
-  captured_v14_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V14__public_archived_publication_text.sql" | cut -d' ' -f1)"
-  captured_v15_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V15__verified_source_preservation.sql" | cut -d' ' -f1)"
-  captured_v16_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V16__audited_catalog_commands.sql" | cut -d' ' -f1)"
-  captured_v17_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V17__legacy_csv_compatibility_projection.sql" | cut -d' ' -f1)"
-  captured_v18_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V18__official_rating_commands.sql" | cut -d' ' -f1)"
-  captured_v19_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V19__safe_health_operational_snapshot.sql" | cut -d' ' -f1)"
-  captured_v20_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V20__catalog_url_and_version_compatibility.sql" | cut -d' ' -f1)"
-  captured_v21_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V21__legacy_period_first_observation_policy.sql" | cut -d' ' -f1)"
-  captured_v22_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V22__durable_legacy_csv_archive_facts.sql" | cut -d' ' -f1)"
-  captured_v23_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V23__official_rating_entity_context.sql" | cut -d' ' -f1)"
-  captured_v24_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V24__ordered_history_reaction_details.sql" | cut -d' ' -f1)"
-  captured_v25_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V25__safe_legacy_account_presentation.sql" | cut -d' ' -f1)"
-  captured_v26_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V26__independent_projection_verifier_reads.sql" | cut -d' ' -f1)"
-  captured_v27_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V27__retained_disabled_platform_period_metrics.sql" | cut -d' ' -f1)"
-  captured_v28_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V28__identity_command_receipt_verifier_acl.sql" | cut -d' ' -f1)"
-  captured_v29_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V29__monotonic_native_identity_transitions.sql" | cut -d' ' -f1)"
-  captured_v30_sha256="$(sha256sum "$tree/backend/src/main/resources/db/migration/V30__preserve_legacy_forced_history_baseline.sql" | cut -d' ' -f1)"
-  if [[ "$captured_v1_sha256" != dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1 \
-        || "$captured_v2_sha256" != 113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd \
-        || "$captured_v3_sha256" != 5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1 \
-        || "$captured_v4_sha256" != d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82 \
-        || "$captured_v5_sha256" != d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41 \
-        || "$captured_v6_sha256" != 4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64 \
-        || "$captured_v7_sha256" != 95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb \
-        || "$captured_v8_sha256" != dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c \
-        || "$captured_v9_sha256" != 2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50 \
-        || "$captured_v10_sha256" != 126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b \
-        || "$captured_v11_sha256" != 1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff \
-        || "$captured_v12_sha256" != 60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100 \
-        || "$captured_v13_sha256" != ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0 \
-        || "$captured_v14_sha256" != 261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6 \
-        || "$captured_v15_sha256" != 07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941 \
-        || "$captured_v16_sha256" != a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad \
-        || "$captured_v17_sha256" != 44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83 \
-        || "$captured_v18_sha256" != 481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9 \
-        || "$captured_v19_sha256" != 85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503 \
-        || "$captured_v20_sha256" != e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2 \
-        || "$captured_v21_sha256" != 6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8 \
-        || "$captured_v22_sha256" != a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f \
-        || "$captured_v23_sha256" != dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c \
-        || "$captured_v24_sha256" != 0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db \
-        || "$captured_v25_sha256" != c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1 \
-        || "$captured_v26_sha256" != 1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8 \
-        || "$captured_v27_sha256" != 95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97 \
-        || "$captured_v28_sha256" != 215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020 \
-        || "$captured_v29_sha256" != b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de \
-        || "$captured_v30_sha256" != 79b4fa544c534f5c6794f99addd33827452300c55435721658799c1a8ae9ce46 ]]; then
-    echo "frozen Flyway V1-V30 checksum mismatch" >&2
+  captured_manifest_sha256="$(sha256sum "$tree/SHA256SUMS" | cut -d" " -f1)"
+  captured_schema_sha256="$(sha256sum "$tree/backend/src/main/resources/db/final-schema.sql" | cut -d" " -f1)"
+  captured_transition_sha256="$(sha256sum "$tree/operations/sql/transition-production-to-final.sql" | cut -d" " -f1)"
+  if [[ ! "$captured_schema_sha256" =~ ^[0-9a-f]{64}$ \
+        || ! "$captured_transition_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "final schema contract artifacts could not be hashed" >&2
     return 65
   fi
 }
@@ -915,99 +786,13 @@ if [[ "$captured_manifest_sha256" != "$staged_manifest_sha256" ]]; then
   exit 65
 fi
 release_manifest_sha256="$captured_manifest_sha256"
-v1_hash="$captured_v1_sha256"
-v2_hash="$captured_v2_sha256"
-v3_hash="$captured_v3_sha256"
-v4_hash="$captured_v4_sha256"
-v5_hash="$captured_v5_sha256"
-v6_hash="$captured_v6_sha256"
-v7_hash="$captured_v7_sha256"
-v8_hash="$captured_v8_sha256"
-v9_hash="$captured_v9_sha256"
-v10_hash="$captured_v10_sha256"
-v11_hash="$captured_v11_sha256"
-v12_hash="$captured_v12_sha256"
-v13_hash="$captured_v13_sha256"
-v14_hash="$captured_v14_sha256"
-v15_hash="$captured_v15_sha256"
-v16_hash="$captured_v16_sha256"
-v17_hash="$captured_v17_sha256"
-v18_hash="$captured_v18_sha256"
-v19_hash="$captured_v19_sha256"
-v20_hash="$captured_v20_sha256"
-v21_hash="$captured_v21_sha256"
-v22_hash="$captured_v22_sha256"
-v23_hash="$captured_v23_sha256"
-v24_hash="$captured_v24_sha256"
-v25_hash="$captured_v25_sha256"
-v26_hash="$captured_v26_sha256"
-v27_hash="$captured_v27_sha256"
-v28_hash="$captured_v28_sha256"
-v29_hash="$captured_v29_sha256"
-v30_hash="$captured_v30_sha256"
+schema_hash="$captured_schema_sha256"
+transition_hash="$captured_transition_sha256"
 assert_installed_release_stable
 
 if [[ "$activate_shadow" == false ]]; then
   echo "release staged path=$release_path operator=$operator ticket=$ticket"
   exit 0
-fi
-
-if [[ ! -x "$FLYWAY_BIN" || ! -r "$FLYWAY_CONFIG_FILES" ]]; then
-  echo "Flyway executable or migration-owner credential file is unavailable" >&2
-  exit 69
-fi
-
-previous_release=""
-if [[ -L "$MRANKED_CURRENT_LINK" ]]; then
-  previous_release="$(readlink -f -- "$MRANKED_CURRENT_LINK")"
-  previous_release_target="$(readlink -- "$MRANKED_CURRENT_LINK")"
-  case "$previous_release" in
-    "$MRANKED_INSTALL_ROOT"/*) ;;
-    *) echo "current release symlink escapes the immutable release root" >&2; exit 73 ;;
-  esac
-  if [[ "$previous_release_target" != "$previous_release" \
-        || "${previous_release#"$MRANKED_INSTALL_ROOT"/}" == */* \
-        || ! -d "$previous_release" || -L "$previous_release" ]] \
-      || ! _mranked_transition_secure_directory_chain "$previous_release" 0 /; then
-    echo "current release link is indirect, dangling or unsafe" >&2
-    exit 73
-  fi
-elif [[ -e "$MRANKED_CURRENT_LINK" ]]; then
-  echo "current release path exists but is not an atomic symlink" >&2
-  exit 73
-fi
-
-migration_location="filesystem:$release_path/backend/src/main/resources/db/migration"
-assert_installed_release_stable
-"$FLYWAY_BIN" -configFiles="$FLYWAY_CONFIG_FILES" \
-  -locations="$migration_location" validate
-assert_installed_release_stable
-"$FLYWAY_BIN" -configFiles="$FLYWAY_CONFIG_FILES" \
-  -locations="$migration_location" migrate
-assert_installed_release_stable
-"$FLYWAY_BIN" -configFiles="$FLYWAY_CONFIG_FILES" \
-  -locations="$migration_location" validate
-assert_installed_release_stable
-flyway_info_json="$(
-  "$FLYWAY_BIN" -configFiles="$FLYWAY_CONFIG_FILES" \
-    -locations="$migration_location" info -outputType=json
-)"
-assert_installed_release_stable
-if ! jq -e '
-    .schemaVersion == "30"
-    and (.migrations | type) == "array"
-    and (.migrations | length) == 30
-    and ([.migrations[] | .version] | sort)
-        == ["1", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "2", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "3", "30", "4", "5", "6", "7", "8", "9"]
-    and all(.migrations[]; .category == "Versioned" and .state == "Success")
-  ' <<<"$flyway_info_json" >/dev/null; then
-  echo "Flyway schema version/count/state does not match frozen V1-V30" >&2
-  exit 65
-fi
-flyway_engine_version="$(jq -r '.flywayVersion // empty' <<<"$flyway_info_json")"
-if [[ -z "$flyway_engine_version" ]]; then
-  echo "Flyway info did not report its engine version" >&2
-  exit 65
 fi
 
 assert_installed_release_stable
@@ -1028,18 +813,13 @@ if [[ "$activation_failed" == false ]]; then
   systemctl daemon-reload || activation_failed=true
 fi
 if [[ "$activation_failed" == false ]]; then
-  systemctl restart m-ranked-target-projection-publisher.service \
-    m-ranked-target-api.service m-ranked-target-web.service \
+  systemctl restart m-ranked-target-api.service m-ranked-target-web.service \
     m-ranked-target-cache-outbox.service || activation_failed=true
 fi
 if [[ "$activation_failed" == false ]]; then
   activation_deadline=$(( $(date -u +%s) + TARGET_ACTIVATION_GATE_SECONDS ))
   activation_healthy=false
   while (( $(date -u +%s) < activation_deadline )); do
-    if ! systemctl is-active --quiet m-ranked-target-projection-publisher.service; then
-      activation_failed=true
-      break
-    fi
     if curl --fail --silent --show-error --max-time 15 \
         "$TARGET_API_HEALTH_URL" >/dev/null \
         && curl --fail --silent --show-error --max-time 15 \
@@ -1078,42 +858,13 @@ if [[ "$activation_failed" == false ]]; then
     activation_failed=true
   else
     release_manifest_sha256="$captured_manifest_sha256"
-    v1_hash="$captured_v1_sha256"
-    v2_hash="$captured_v2_sha256"
-    v3_hash="$captured_v3_sha256"
-    v4_hash="$captured_v4_sha256"
-    v5_hash="$captured_v5_sha256"
-    v6_hash="$captured_v6_sha256"
-    v7_hash="$captured_v7_sha256"
-    v8_hash="$captured_v8_sha256"
-    v9_hash="$captured_v9_sha256"
-    v10_hash="$captured_v10_sha256"
-    v11_hash="$captured_v11_sha256"
-    v12_hash="$captured_v12_sha256"
-    v13_hash="$captured_v13_sha256"
-    v14_hash="$captured_v14_sha256"
-    v15_hash="$captured_v15_sha256"
-    v16_hash="$captured_v16_sha256"
-    v17_hash="$captured_v17_sha256"
-    v18_hash="$captured_v18_sha256"
-    v19_hash="$captured_v19_sha256"
-    v20_hash="$captured_v20_sha256"
-    v21_hash="$captured_v21_sha256"
-    v22_hash="$captured_v22_sha256"
-    v23_hash="$captured_v23_sha256"
-    v24_hash="$captured_v24_sha256"
-    v25_hash="$captured_v25_sha256"
-    v26_hash="$captured_v26_sha256"
-    v27_hash="$captured_v27_sha256"
-    v28_hash="$captured_v28_sha256"
-    v29_hash="$captured_v29_sha256"
-    v30_hash="$captured_v30_sha256"
+    schema_hash="$captured_schema_sha256"
+    transition_hash="$captured_transition_sha256"
   fi
 fi
 
 if [[ "$activation_failed" == true ]]; then
   if [[ -n "$previous_release" && -d "$previous_release" ]]; then
-    systemctl stop m-ranked-target-projection-publisher.service || true
     rollback_link="$MRANKED_CURRENT_LINK.rollback.$BASHPID"
     ln -s -- "$previous_release" "$rollback_link"
     mv -Tf -- "$rollback_link" "$MRANKED_CURRENT_LINK"
@@ -1121,8 +872,7 @@ if [[ "$activation_failed" == true ]]; then
       m-ranked-target-cache-outbox.service || true
   else
     systemctl stop m-ranked-target-api.service m-ranked-target-web.service \
-      m-ranked-target-cache-outbox.service \
-      m-ranked-target-projection-publisher.service || true
+      m-ranked-target-cache-outbox.service || true
     failed_link="$MRANKED_CURRENT_LINK.failed-$release_id.$BASHPID"
     mv -- "$MRANKED_CURRENT_LINK" "$failed_link"
   fi
@@ -1145,44 +895,16 @@ jq -n \
   --arg releaseManifestSha256 "$release_manifest_sha256" \
   --arg previousRelease "$previous_release" --arg operator "$operator" \
   --arg ticket "$ticket" --arg finishedAt "$finished_at" \
-  --arg v1Sha256 "$v1_hash" \
-  --arg v2Sha256 "$v2_hash" \
-  --arg v3Sha256 "$v3_hash" \
-  --arg v4Sha256 "$v4_hash" \
-  --arg v5Sha256 "$v5_hash" \
-  --arg v6Sha256 "$v6_hash" \
-  --arg v7Sha256 "$v7_hash" \
-  --arg v8Sha256 "$v8_hash" \
-  --arg v9Sha256 "$v9_hash" \
-  --arg v10Sha256 "$v10_hash" \
-  --arg v11Sha256 "$v11_hash" \
-  --arg v12Sha256 "$v12_hash" \
-  --arg v13Sha256 "$v13_hash" \
-  --arg v14Sha256 "$v14_hash" \
-  --arg v15Sha256 "$v15_hash" \
-  --arg v16Sha256 "$v16_hash" \
-  --arg v17Sha256 "$v17_hash" \
-  --arg v18Sha256 "$v18_hash" \
-  --arg v19Sha256 "$v19_hash" \
-  --arg v20Sha256 "$v20_hash" \
-  --arg v21Sha256 "$v21_hash" \
-  --arg v22Sha256 "$v22_hash" \
-  --arg v23Sha256 "$v23_hash" \
-  --arg v24Sha256 "$v24_hash" \
-  --arg v25Sha256 "$v25_hash" \
-  --arg v26Sha256 "$v26_hash" \
-  --arg v27Sha256 "$v27_hash" \
-  --arg v28Sha256 "$v28_hash" \
-  --arg v29Sha256 "$v29_hash" \
-  --arg v30Sha256 "$v30_hash" \
-  --arg flywayVersion "$flyway_engine_version" \
+  --arg schemaContract "storage-publisher-final-2026-09-08-r2" \
+  --arg finalSchemaSha256 "$schema_hash" \
+  --arg productionTransitionSha256 "$transition_hash" \
   '{status:$status,releaseId:$releaseId,
     releaseManifestSha256:$releaseManifestSha256,releasePath:$releasePath,
     previousRelease:(if $previousRelease=="" then null else $previousRelease end),
     operator:$operator,changeTicket:$ticket,finishedAt:$finishedAt,
-    flyway:{schemaVersion:"30",migrationCount:30,engineVersion:$flywayVersion,
-      v1Sha256:$v1Sha256,v2Sha256:$v2Sha256,v3Sha256:$v3Sha256,v4Sha256:$v4Sha256,v5Sha256:$v5Sha256,v6Sha256:$v6Sha256,v7Sha256:$v7Sha256,v8Sha256:$v8Sha256,v9Sha256:$v9Sha256,v10Sha256:$v10Sha256,v11Sha256:$v11Sha256,v12Sha256:$v12Sha256,v13Sha256:$v13Sha256,v14Sha256:$v14Sha256,v15Sha256:$v15Sha256,v16Sha256:$v16Sha256,v17Sha256:$v17Sha256,v18Sha256:$v18Sha256,v19Sha256:$v19Sha256,v20Sha256:$v20Sha256,v21Sha256:$v21Sha256,v22Sha256:$v22Sha256,v23Sha256:$v23Sha256,v24Sha256:$v24Sha256,v25Sha256:$v25Sha256,v26Sha256:$v26Sha256,v27Sha256:$v27Sha256,v28Sha256:$v28Sha256,v29Sha256:$v29Sha256,v30Sha256:$v30Sha256,validated:true},
-    projectionPublisherActive:true,
+    schemaContract:{id:$schemaContract,finalSchemaSha256:$finalSchemaSha256,
+      productionTransitionSha256:$productionTransitionSha256,validatedByServiceReadiness:true},
+    projectionPublisherStarted:false,
     publicRoutingChanged:false,legacyUnitsChanged:false}' >"$report_tmp"
 chmod 0600 "$report_tmp"
 report_sidecar_tmp="$(mktemp "$DEPLOY_REPORT_DIR/.deploy-${release_id}.sha256.XXXXXX")"

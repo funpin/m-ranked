@@ -117,13 +117,13 @@ class Gate:
             envfile.chmod(0o600)
             compose=['docker','compose','--project-name',project,'--env-file',str(envfile),'-f',str(ROOT/'infra/compose.yaml')]
             container=project+'-postgres-1'
-            dbnames=(('clean_it','upgrade_it','bridge_it') if visual or semantic_only else
-                     ('clean_it','upgrade_it','bridge_it','collector_it','reverse_it','ledger_it','catalog_it','native_it','history_it','partition_it'))
+            dbnames=(('clean_it','second_clean_it','bridge_it') if visual or semantic_only else
+                     ('clean_it','second_clean_it','bridge_it','collector_it','reverse_it','ledger_it','catalog_it','native_it','history_it','partition_it'))
             def url(db): return f'jdbc:postgresql://127.0.0.1:{pg_port}/{db}'
             def dsn(db,role,key):
                 return f'host=127.0.0.1 port={pg_port} dbname={db} user={role} password={self.secrets[key]}'
             migration_env={'MRANKED_MIGRATION_TEST_URL':url('clean_it'),
-                'MRANKED_MIGRATION_UPGRADE_TEST_URL':url('upgrade_it'),
+                'MRANKED_SECOND_SCHEMA_TEST_URL':url('second_clean_it'),
                 'MRANKED_MIGRATION_TEST_USER':'migration_owner',
                 'MRANKED_MIGRATION_TEST_PASSWORD':self.secrets['MIGRATION_DB_PASSWORD']}
             mvn=[maven,'-Dmranked.build.directory='+str(self.output/'backend-build'),*(['-Dmaven.repo.local='+os.environ['MRANKED_MAVEN_REPOSITORY']] if os.getenv('MRANKED_MAVEN_REPOSITORY') else [])]
@@ -133,9 +133,9 @@ class Gate:
                     self.command('create-'+db,['docker','exec',container,'psql','-U','mranked_bootstrap','-d','postgres','-v','ON_ERROR_STOP=1','-c',f'CREATE DATABASE {db} OWNER migration_owner'])
                 if not (visual or semantic_only):
                     self.command('create-golden_it',['docker','exec',container,'psql','-U','mranked_bootstrap','-d','postgres','-v','ON_ERROR_STOP=1','-c','CREATE DATABASE golden_it OWNER migration_owner'])
-                self.command('flyway-clean-upgrade',mvn+['-Pmigration-integration','-Dtest=MigrationInstallationTest#cleanInstallationAndFrozenV8UpgradeHaveTheSameManifest','test'],env=migration_env,cwd=ROOT/'backend')
+                self.command('final-schema-clean-install',mvn+['-Pschema-integration','-Dtest=MigrationInstallationTest#cleanInstallationCreatesFinalContract','test'],env=migration_env,cwd=ROOT/'backend')
                 for db in dbnames[2:]:
-                    self.command('flyway-'+db,mvn+['-Pmigration-integration','-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase','test'],env=migration_env|{'MRANKED_REHEARSAL_INSTALL_URL':url(db)},cwd=ROOT/'backend')
+                    self.command('final-schema-'+db,mvn+['-Pschema-integration','-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase','test'],env=migration_env|{'MRANKED_REHEARSAL_INSTALL_URL':url(db)},cwd=ROOT/'backend')
                 self.command('redis-ping',['docker','exec',project+'-redis-1','sh','-c','REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning ping'])
                 if visual or semantic_only:
                     self.visual(python=python,mvn=mvn,directory=Path(directory),database_url=url('bridge_it'),
@@ -244,7 +244,7 @@ class Gate:
               'TARGET_ADMIN_USERNAME':'visual-admin','TARGET_ADMIN_PASSWORD':password}
         api_env={'SPRING_DATASOURCE_URL':database_url,'SPRING_DATASOURCE_USERNAME':'api_read',
                  'SPRING_DATASOURCE_PASSWORD':self.secrets['API_READ_DB_PASSWORD'],
-                 'SPRING_FLYWAY_ENABLED':'false','MRANKED_ADMIN_DATABASE_ENABLED':'true',
+                 'MRANKED_ADMIN_DATABASE_ENABLED':'true',
                  'MRANKED_ADMIN_DATABASE_URL':database_url,'MRANKED_ADMIN_DATABASE_USERNAME':'api_write_admin',
                  'MRANKED_ADMIN_DATABASE_PASSWORD':self.secrets['API_WRITE_ADMIN_DB_PASSWORD'],
                  'MRANKED_ADMIN_OFFICIAL_RATING_ENABLED':'false',
@@ -286,7 +286,7 @@ class Gate:
             runtime={'apiBaseUrl':api,'sourceSha256':hashlib.sha256(fixture.read_bytes()).hexdigest(),
                      # The bridge role cannot read every analytics projection.
                      # The inspector enforces a read-only transaction while
-                     # reading counts and Flyway history through the owner.
+                     # reading counts and the final schema contract through the owner.
                      'database':inspect_database(inspect_dsn),'revision':revision,
                      'jarSha256':hashlib.sha256((self.output/'backend-build/m-ranked-backend-0.1.0-SNAPSHOT.jar').read_bytes()).hexdigest(),
                      'productionAcceptance':False,'writerGate':'CLOSED'}

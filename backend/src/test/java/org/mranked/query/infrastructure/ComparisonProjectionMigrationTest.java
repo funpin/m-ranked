@@ -8,17 +8,14 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class ComparisonProjectionMigrationTest {
-    private static String migration() throws IOException {
+    private static String schema() throws IOException {
         Path backend = Path.of(System.getProperty("basedir")).toAbsolutePath().normalize();
-        return Files.readString(backend.resolve(
-                "src/main/resources/db/migration/"
-                        + "V6__comparison_valid_observation_hourly_projection.sql"
-        ));
+        return Files.readString(backend.resolve("src/main/resources/db/final-schema.sql"));
     }
 
     @Test
     void sameHourNullSnapshotCannotHideTheEarlierValidObservation() throws IOException {
-        assertThat(migration())
+        assertThat(schema())
                 .contains("snapshot.views_count IS NOT NULL")
                 .contains("snapshot.reactions_count IS NOT NULL")
                 .contains("snapshot.comments_count IS NOT NULL")
@@ -32,7 +29,7 @@ class ComparisonProjectionMigrationTest {
 
     @Test
     void ratiosAreCalculatedPerSnapshotWithLegacyPlatformCapabilities() throws IOException {
-        assertThat(migration())
+        assertThat(schema())
                 .contains("WHEN target.platform = 'telegram'")
                 .contains("snapshot.reactions_count::numeric * 100::numeric")
                 .contains("WHEN target.platform IN ('vk', 'rutube')")
@@ -44,12 +41,11 @@ class ComparisonProjectionMigrationTest {
     }
 
     @Test
-    void v6KeepsThePublisherBoundaryAndLeastPrivilegeReadModel() throws IOException {
-        assertThat(migration())
-                .contains("RENAME TO rebuild_core_projections_v5")
-                .contains("REVOKE ALL ON FUNCTION analytics.rebuild_core_projections_v5(bigint)")
-                .contains("GRANT SELECT ON analytics.comparison_publication_hourly TO api_read")
-                .contains("GRANT EXECUTE ON FUNCTION analytics.rebuild_core_projections(bigint)")
+    void finalSchemaKeepsThePublisherBoundaryAndLeastPrivilegeReadModel() throws IOException {
+        assertThat(schema())
+                .contains("REVOKE ALL ON FUNCTION analytics.rebuild_core_projections_v5(p_dataset_revision_id bigint) FROM PUBLIC;")
+                .contains("GRANT SELECT ON TABLE analytics.comparison_publication_hourly TO api_read;")
+                .contains("GRANT ALL ON FUNCTION analytics.rebuild_core_projections(p_dataset_revision_id bigint) TO maintenance;")
                 .contains("'comparison_semantics_version', 2");
     }
 }

@@ -150,7 +150,7 @@ of the corresponding service. Examples intentionally contain no passwords.
 | projection publisher | `m-ranked-maintenance` | `maintenance` | `PGPASSFILE` credential |
 | cache outbox | `m-ranked-outbox` | `api_write_admin` | `PGPASSFILE` + Redis credential |
 | bounded maintenance | `m-ranked-maintenance` | `maintenance` | `PGPASSFILE` credential |
-| Flyway gate | deployment operator | `migration_owner` | root/group-readable Flyway config |
+| one-time database transition | database operator | `migration_owner` | libpq credential used only in the approved schema cutover |
 | backup monitoring | `m-ranked-backup` | `backup` | `PGPASSFILE` credential |
 | base backup/repository | DR `m-ranked-backup` | none; forced SSH to PG hosts | repository config/SSH key |
 | restore repository read | DR `m-ranked-backup-read` | none | read-only repository group + forced SSH |
@@ -158,9 +158,9 @@ of the corresponding service. Examples intentionally contain no passwords.
 
 The outbox uses only `SELECT` plus column-limited publication-state updates, but
 the frozen baseline has no dedicated outbox database role. Reusing
-`api_write_admin` also exposes the narrow V4 collection-status/rebuild grants
-that the worker does not need. This is the narrowest currently deployable role
-and remains a recorded privilege gap for a future additive migration.
+`api_write_admin` also exposes admin write capabilities that the worker does
+not need. The final contract removes that role's historical-bootstrap execution grant, but a
+dedicated least-privilege outbox role remains a future additive migration.
 
 Systemd credentials must be regular files, never symlinks. A libpq passfile is
 one line, mode `0600`, for example
@@ -203,21 +203,53 @@ encrypted secrets. Collectors receive no Redis credential because they commit
 the PostgreSQL outbox instead of publishing cache events directly.
 
 Collectors emit `projection.rebuild.requested`, not a cache-visible revision.
-The projection publisher reuses only the maintenance libpq credential; it has
-no platform, Redis, migration-owner or raw-payload credential. It coalesces
-pending requests to the newest `analytics.dataset_revision`, invokes only the
-current `SECURITY DEFINER` `analytics.rebuild_core_projections(bigint)` entry point,
-verifies all nine named states, and atomically emits idempotent
+They neither start nor require the projection publisher. An operator invokes
+the publisher explicitly with `--once`; its systemd unit is a bounded oneshot
+and is not enabled by either target. It reuses only the maintenance libpq
+credential and has no platform, Redis, migration-owner or raw-payload
+credential. It coalesces pending requests to the newest
+`analytics.dataset_revision`, invokes the serving-only rebuild entry point,
+verifies the seven serving states, including publication history, and atomically emits idempotent
 `dataset.revision.changed` plus `projection.published` events. The cache relay
-never claims rebuild requests and sends only the dataset event to Redis;
-`projection.published` is recorded without a duplicate invalidation. A stale
-revision race or rebuild failure rolls back and is retried with bounded backoff.
+never claims rebuild requests or lifecycle events and delivers all other
+cache-invalidation events, including the dataset event, to Redis. A stale
+revision race or rebuild failure rolls back. A later explicit invocation may
+retry after capacity and failure review; there is no daemon retry loop.
 
 Before every start, `collector-preflight.sh` refuses a missing, empty, symlinked,
 wrong-owner or non-`0600` Telegram MTProto/MAX session. Telegram Web mode
 similarly requires an owner-writable private browser-profile directory. Perform
 interactive authorization out of band as the platform Unix user; a production
 systemd service must never wait for a console password or OTP.
+
+## Database schema contract
+
+There is one supported database shape: `storage-publisher-final-2026-09-08-r2`.
+A clean PostgreSQL volume applies
+`backend/src/main/resources/db/final-schema.sql` directly after role creation.
+It does not create a Flyway schema or replay historical SQL files.
+
+An existing production database is changed exactly once with
+`operations/sql/transition-production-to-final.sql`. This is a separately
+approved database operation, never part of application startup or a normal
+deploy. Before running it, capture a current backup, prove an isolated restore,
+and rehearse the same file against a production-shaped restored copy. The SQL
+checks the observed source schema, runs in one transaction and refuses both an
+unknown source and an already-final database.
+
+The database operator applies the reviewed release copy with `psql
+--no-psqlrc --set ON_ERROR_STOP=1` using the
+`migration_owner` credential. After it commits, verify:
+
+```sql
+SELECT contract_id FROM ops_and_admin.schema_contract;
+```
+
+Only the exact value `storage-publisher-final-2026-09-08-r2` permits the new API,
+collectors, Publisher and outbox worker to start. Start the application release
+after the transition; never keep a compatibility mode that accepts both old
+and final schemas. The existing production Flyway history table may remain as
+inert audit data, but no process reads it.
 
 ## Release artifact
 
@@ -228,8 +260,8 @@ CI prepares one immutable directory containing:
   standalone build;
 - `.venv` and `collector_target` with the four-platform CLI;
 - the hardened projection-publisher unit, worker and non-secret env example;
-- Flyway source migrations V1–V29 and this `operations/`
-  tree;
+- the declarative `backend/src/main/resources/db/final-schema.sql`, the guarded
+  `operations/sql/transition-production-to-final.sql`, and this `operations/` tree;
 - `SYMLINKS.sha256`, with one newline-terminated, bytewise C-sorted
   `<sha256(raw symlink-target bytes)>  <relative link path>` record per shipped
   symlink (a zero-byte file when there are none), and `SHA256SUMS` covering
@@ -242,39 +274,9 @@ CI prepares one immutable directory containing:
   `.venv/bin/python3` and `.venv/bin/python3.13` resolving canonically to
   `/usr/bin/python3.13` or `/usr/local/bin/python3.13`.
 
-The migration files are immutable release inputs:
-
-| Migration | Required SHA-256 |
-|---|---|
-| `V1__target_baseline.sql` | `dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1` |
-| `V2__rebuild_core_projections.sql` | `113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd` |
-| `V3__collector_observation_times_and_identity_grants.sql` | `5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1` |
-| `V4__admin_collection_run_status_grants.sql` | `d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82` |
-| `V5__legacy_activity_period_projection.sql` | `d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41` |
-| `V6__comparison_valid_observation_hourly_projection.sql` | `4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64` |
-| `V7__activity_rating_read_grants.sql` | `95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb` |
-| `V8__legacy_overview_projection.sql` | `dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c` |
-| `V9__immutable_observations_quality_archive_fence.sql` | `2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50` |
-| `V10__consistent_public_queries_and_formula_guards.sql` | `126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b` |
-| `V11__bridge_identity_lineage_and_reconciliation.sql` | `1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff` |
-| `V12__detail_history_projection.sql` | `60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100` |
-| `V13__immutable_account_identity_history.sql` | `ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0` |
-| `V14__public_archived_publication_text.sql` | `261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6` |
-| `V15__verified_source_preservation.sql` | `07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941` |
-| `V16__audited_catalog_commands.sql` | `a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad` |
-| `V17__legacy_csv_compatibility_projection.sql` | `44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83` |
-| `V18__official_rating_commands.sql` | `481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9` |
-| `V19__safe_health_operational_snapshot.sql` | `85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503` |
-| `V20__catalog_url_and_version_compatibility.sql` | `e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2` |
-| `V21__legacy_period_first_observation_policy.sql` | `6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8` |
-| `V22__durable_legacy_csv_archive_facts.sql` | `a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f` |
-| `V23__official_rating_entity_context.sql` | `dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c` |
-| `V24__ordered_history_reaction_details.sql` | `0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db` |
-| `V25__safe_legacy_account_presentation.sql` | `c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1` |
-| `V26__independent_projection_verifier_reads.sql` | `1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8` |
-| `V27__retained_disabled_platform_period_metrics.sql` | `95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97` |
-| `V28__identity_command_receipt_verifier_acl.sql` | `215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020` |
-| `V29__monotonic_native_identity_transitions.sql` | `b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de` |
+The two database artifacts are immutable release inputs. Their SHA-256 values
+are captured from the release tree in the deploy report; no per-version SQL
+manifest exists.
 
 Do not build or download dependencies as root on the production host. Do not
 place `.env`, session files, private keys, database dumps or tokens in a release.
@@ -282,7 +284,7 @@ The deploy script rejects common secret/data filenames, verifies `SHA256SUMS`,
 recomputes the complete `SYMLINKS.sha256` inventory, rejects missing,
 retargeted, broken or escaping links and special files, then verifies the
 copied tree again in a unique temporary directory before an atomic rename. It
-derives the report manifest and frozen V1-V29 hashes again from the staging
+derives the report manifest and hashes of the final schema and production transition again from the staging
 tree, the installed tree, and the active tree after health checks; a
 source/staging or staging/installed provenance change fails closed. A failed
 copy is retained outside the release namespace for operator inspection and is
@@ -320,12 +322,11 @@ rtk sudo systemd-analyze verify /etc/systemd/system/m-ranked-target-*.service \
 rtk sudo nginx -t -c /etc/nginx/nginx.conf
 ```
 
-Activate only the shadow services. The script validates the frozen
-V1–V29 hashes, runs Flyway `validate → migrate → validate`,
-and then requires exactly 29 successful versioned migrations with schema
-version 29 before it atomically moves the `current` symlink. It starts the projection publisher
-before checking API/Web readiness, waits through the bounded activation gate
-for the latest nine-state publication, and restarts the outbox worker. It never
+Activate only the shadow services. The script validates the immutable release
+manifest and both schema artifacts, then requires the database's exact
+`storage-publisher-final-2026-09-08-r2` contract before it atomically moves the `current` symlink.
+It checks API/Web readiness against the newest already-published serving
+generation and restarts the outbox worker. It never
 starts target collectors, stops legacy units or reloads Nginx.
 
 The artifact copy of `deploy-shadow.sh` is the exceptional pre-activation
@@ -354,14 +355,14 @@ constant query counts and performance budgets. A failed activation returns the
 
 ## Unit ownership
 
-- `m-ranked-shadow.target`: target API, Web, cache-outbox and continuous
-  latest-revision projection publisher.
+- `m-ranked-shadow.target`: target API, Web and cache-outbox only.
 - `m-ranked-target.target`: post-writer-cutover target including four isolated
-  collectors; every collector requires and starts after the publisher. Never
-  enable before `CUTOVER.md` Gate W.
-- `m-ranked-target-projection-publisher.service`: performs a bounded `--once`
-  catch-up as `ExecStartPre`, then polls continuously under the maintenance
-  role. It never mutates ingestion facts or needs DDL/raw-payload privileges.
+  collectors. The collectors are independent of publication. Never enable
+  before `CUTOVER.md` Gate W.
+- `m-ranked-target-projection-publisher.service`: explicit bounded `--once`
+  publication under the maintenance role, protected by a process lock and a
+  free-capacity guard. It never mutates ingestion facts or needs
+  DDL/raw-payload privileges.
 - `m-ranked-target-maintenance.timer`: creates upcoming partitions and reports
   capacity/outbox/default-partition state. Raw payload purge is disabled unless
   explicitly set to `true` after retention acceptance.
@@ -373,14 +374,16 @@ image/data cache writes stay disposable and isolated from other Unix users.
 
 The collector command is exactly
 `.venv/bin/python -m collector_target --platform PLATFORM --partition default`;
-`--once` is reserved for controlled smoke runs. V3 is required because it adds
+`--once` is reserved for controlled smoke runs. The final schema contains
 independent `scheduled_at`/`collected_at` instants and the narrow identity-history
-grants used by this collector runtime. V4 grants the authenticated admin role
-collection-run reads plus execution of the existing audited projection rebuild,
-without direct observation/raw-payload access. V5 restores legacy-compatible
-activity-period projection semantics while preserving the narrow runtime grant
-boundary. Public readiness fails closed when the raw latest revision does not
-have all nine states ready, while ordinary public reads continue to resolve the
-newest fully published nine-state snapshot. The shadow API unit intentionally
+grants used by this collector runtime. It grants the authenticated admin role
+collection-run reads and routes audited admin changes through the
+projection-control outbox, without direct observation/raw-payload access. The final contract preserves
+legacy-compatible activity-period projection semantics and the narrow runtime grant
+boundary. Public readiness fails closed only when no complete seven-projection
+serving generation exists. Raw ingestion may safely advance beyond that
+watermark; ordinary public reads resolve the newest coherent serving
+generation. Content and legacy-export projections retain independent
+watermarks and are not part of readiness. The shadow API unit intentionally
 receives only `api_read`; target admin activation and credentials remain a
 separate parity/routing gate while legacy `/manage` owns administration.

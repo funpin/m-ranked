@@ -2,8 +2,7 @@
 Description=M-Ranked target %i collector
 Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
 AssertPathExists=/etc/m-ranked/collector-%i.env
-Requires=m-ranked-target-projection-publisher.service
-After=network-online.target m-ranked-target-projection-publisher.service
+After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=15min
 StartLimitBurst=5
@@ -58,6 +57,9 @@ RuntimeDirectoryMode=0700
 UMask=0077
 LimitNOFILE=32768
 TasksMax=256
+MemoryHigh=112M
+MemoryMax=128M
+MemorySwapMax=0
 
 [Install]
 WantedBy=m-ranked-target.target

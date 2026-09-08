@@ -114,13 +114,13 @@ before reopening writers. Gate W now requires report **v4**, including both
 S-final proofs, unchanged zero-write repeat and the actual HTTP/admin/collector
 transition evidence. Journal format remains v3.
 
-The frozen V1-V29 database has no dedicated reverse-sync role. Rollback therefore
+The observed production database has no dedicated reverse-sync role. Rollback therefore
 uses the `migration_bridge` credential, whose grants are broader than the
 adapter's required reads plus legacy-alias insert. Treat that as an explicit
 least-privilege residual risk: keep the credential host-local/private, use it
 only for the compatibility window, and retain the reported database/role with
-the incident evidence. A future narrow role requires its own reviewed migration;
-do not modify V1-V29 during an incident.
+the incident evidence. A future narrow role requires its own reviewed final-schema
+change; do not change the database contract during an incident.
 
 If PostgreSQL itself is damaged, use `BACKUP_RESTORE.md` to restore on a separate
 host to the point before the incident. RPO target is 15 minutes and RTO target is

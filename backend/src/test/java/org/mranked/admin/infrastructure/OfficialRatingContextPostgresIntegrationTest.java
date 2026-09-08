@@ -6,9 +6,8 @@ import java.nio.file.Files;
 import java.net.URI;
 import java.sql.DriverManager;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -20,8 +19,8 @@ import tools.jackson.databind.json.JsonMapper;
 @EnabledIfEnvironmentVariable(named="MRANKED_EXPORT_TEST_ADMIN_URL",matches=".+")
 class OfficialRatingContextPostgresIntegrationTest {
     @TempDir Path output;
-    @ParameterizedTest @ValueSource(booleans={false,true})
-    void independentLegacyInstitutionAndChannelRanksAndImportStatusRemainDistinct(boolean upgrade) throws Exception {
+    @Test
+    void independentLegacyInstitutionAndChannelRanksAndImportStatusRemainDistinct() throws Exception {
         String initial=System.getenv("MRANKED_EXPORT_TEST_ADMIN_URL");var base=URI.create(initial.substring(5));
         assertThat(base.getHost()).isIn("127.0.0.1","localhost");assertThat(base.getPath()).endsWith("_it");
         String name="mranked_official_"+UUID.randomUUID().toString().replace("-","")+"_it";
@@ -31,18 +30,13 @@ class OfficialRatingContextPostgresIntegrationTest {
         try(var control=DriverManager.getConnection(initial,owner,password)) {
             control.createStatement().execute("CREATE DATABASE "+name+" OWNER migration_owner");
             try {
-                var flyway=Flyway.configure().dataSource(url,owner,password).initSql("SET ROLE migration_owner").defaultSchema("flyway")
-                    .locations("filesystem:"+root.resolve("backend/src/main/resources/db/migration"));
-                if(upgrade) flyway.target("22");
-                flyway.load().migrate();
+                FinalSchemaInstaller.install(url, owner, password);
                 Path oracle=output.resolve("oracle.json");
                 var builder=new ProcessBuilder(org.mranked.testing.IntegrationRuntime.python(root),"-m","migration.integration.official_context_fixture",
                     "--database",output.resolve("source.sqlite").toString(),"--oracle",oracle.toString()).directory(root.toFile()).redirectErrorStream(true);
-                if(upgrade) builder.command().add("--with-state");
                 builder.environment().put("BRIDGE_DATABASE_URL","host="+base.getHost()+" port="+base.getPort()+" dbname="+name+" user=migration_bridge password="+System.getenv("MRANKED_LEGACY_CSV_BRIDGE_PASSWORD"));
                 var process=builder.start();String log=new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
                 assertThat(process.waitFor()).as(log).isZero();
-                if(upgrade) flyway.target("latest").load().migrate();
                 var expected=new JsonMapper().readTree(Files.readString(oracle));
                 var source=new DriverManagerDataSource(url,"api_write_admin",System.getenv("MRANKED_ADMIN_TEST_PASSWORD"));
                 var jdbc=JdbcClient.create(source);var repository=new JdbcCatalogRepository(jdbc,new TransactionTemplate(new DataSourceTransactionManager(source)));

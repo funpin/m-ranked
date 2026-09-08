@@ -60,7 +60,7 @@ Verification lives in `ExportJobServiceTest`, `ExportJobSecurityTest` and
 bootstrap authority through `MRANKED_EXPORT_TEST_ADMIN_URL`,
 `MRANKED_EXPORT_TEST_ADMIN_USERNAME`, `MRANKED_EXPORT_TEST_ADMIN_PASSWORD`, and
 the read-only role's `MRANKED_QUERY_TEST_PASSWORD`. It accepts only loopback
-`*_it` endpoints, creates a UUID-named temporary database, applies actual Flyway
+`*_it` endpoints, creates a UUID-named temporary database, applies the final schema
 as `migration_owner`, and drops only that database. Never grant database creation
 to a runtime or migration role for this test.
 

@@ -51,12 +51,12 @@ test("comparison selection preserves order and reports invalid bounded input", (
   assert.equal(parseComparisonSelection(["0"]).issue, "invalid");
   assert.equal(parseComparisonSelection(["not-a-number"]).issue, "invalid");
   assert.deepEqual(
-    parseComparisonSelection(Array.from({ length: 2001 }, (_, index) => String(index + 1))).issue,
+    parseComparisonSelection(Array.from({ length: 21 }, (_, index) => String(index + 1))).issue,
     "too_many",
   );
   assert.deepEqual(
     defaultComparisonSelection(Array.from({ length: 75 }, (_, index) => index + 1)),
-    Array.from({ length: 75 }, (_, index) => index + 1),
+    Array.from({ length: 20 }, (_, index) => index + 1),
   );
 });
 

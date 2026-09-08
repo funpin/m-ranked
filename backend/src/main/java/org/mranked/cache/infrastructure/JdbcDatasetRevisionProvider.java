@@ -16,9 +16,7 @@ public class JdbcDatasetRevisionProvider implements DatasetRevisionProvider {
                 ('institution_monthly_metrics'),
                 ('institution_period_metrics'),
                 ('comparison'),
-                ('publication_history'),
-                ('publication_content'),
-                ('legacy_exports')
+                ('publication_history')
             )
             SELECT revision.id, revision.committed_at
               FROM analytics.dataset_revision AS revision
@@ -28,7 +26,7 @@ public class JdbcDatasetRevisionProvider implements DatasetRevisionProvider {
                AND state.dataset_revision_id = revision.id
                AND state.status = 'ready'
              GROUP BY revision.id, revision.committed_at
-            HAVING count(state.projection_name) = 9
+            HAVING count(state.projection_name) = 7
              ORDER BY revision.id DESC
              LIMIT 1
             """;

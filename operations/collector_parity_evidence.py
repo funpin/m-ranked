@@ -1,3 +1,9 @@
+"""Archived SQLite cutover evidence verifier.
+
+This module is retained only to read previously sealed evidence. It is not part
+of the deploy artifact and must not be used as a runtime schema gate.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -15,9 +21,9 @@ from uuid import UUID
 
 
 REPORT_TYPE = "collector-parity-rehearsal"
-REPORT_VERSION = 1
+REPORT_VERSION = 2
 SOURCE_TYPE = "collector-parity-shadow-observations"
-SOURCE_VERSION = 1
+SOURCE_VERSION = 2
 DEFAULT_MAX_AGE_SECONDS = 86_400
 CLOCK_SKEW_SECONDS = 5
 MAX_JSON_BYTES = 2 * 1024 * 1024
@@ -25,38 +31,9 @@ MAX_RAW_EVIDENCE_BYTES = 64 * 1024 * 1024
 MAX_RELEASE_FILE_BYTES = 256 * 1024 * 1024
 MAX_RELEASE_TREE_BYTES = 4 * 1024 * 1024 * 1024
 
-EXPECTED_MIGRATIONS = (
-    ('1', 'V1__target_baseline.sql', 'dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1', -1636077697),
-    ('2', 'V2__rebuild_core_projections.sql', '113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd', 839607018),
-    ('3', 'V3__collector_observation_times_and_identity_grants.sql', '5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1', -1456658399),
-    ('4', 'V4__admin_collection_run_status_grants.sql', 'd5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82', 1318350062),
-    ('5', 'V5__legacy_activity_period_projection.sql', 'd56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41', -1313754193),
-    ('6', 'V6__comparison_valid_observation_hourly_projection.sql', '4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64', -290358219),
-    ('7', 'V7__activity_rating_read_grants.sql', '95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb', -1228913579),
-    ('8', 'V8__legacy_overview_projection.sql', 'dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c', -574188650),
-    ('9', 'V9__immutable_observations_quality_archive_fence.sql', '2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50', 1058556652),
-    ('10', 'V10__consistent_public_queries_and_formula_guards.sql', '126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b', -1148603410),
-    ('11', 'V11__bridge_identity_lineage_and_reconciliation.sql', '1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff', 1679789143),
-    ('12', 'V12__detail_history_projection.sql', '60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100', 1453326243),
-    ('13', 'V13__immutable_account_identity_history.sql', 'ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0', -185639607),
-    ('14', 'V14__public_archived_publication_text.sql', '261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6', -956321170),
-    ('15', 'V15__verified_source_preservation.sql', '07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941', -1953543117),
-    ('16', 'V16__audited_catalog_commands.sql', 'a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad', -888916335),
-    ('17', 'V17__legacy_csv_compatibility_projection.sql', '44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83', 2060863494),
-    ('18', 'V18__official_rating_commands.sql', '481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9', 875583974),
-    ('19', 'V19__safe_health_operational_snapshot.sql', '85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503', -1653532549),
-    ('20', 'V20__catalog_url_and_version_compatibility.sql', 'e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2', 925593865),
-    ('21', 'V21__legacy_period_first_observation_policy.sql', '6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8', -900669350),
-    ('22', 'V22__durable_legacy_csv_archive_facts.sql', 'a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f', 2064364640),
-    ('23', 'V23__official_rating_entity_context.sql', 'dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c', 890722389),
-    ('24', 'V24__ordered_history_reaction_details.sql', '0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db', 1889276383),
-    ('25', 'V25__safe_legacy_account_presentation.sql', 'c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1', 381330844),
-    ('26', 'V26__independent_projection_verifier_reads.sql', '1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8', -1482835665),
-    ('27', 'V27__retained_disabled_platform_period_metrics.sql', '95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97', -1466195806),
-    ('28', 'V28__identity_command_receipt_verifier_acl.sql', '215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020', 1374125493),
-    ('29', 'V29__monotonic_native_identity_transitions.sql', 'b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de', -1547328464),
-    ('30', 'V30__preserve_legacy_forced_history_baseline.sql', '79b4fa544c534f5c6794f99addd33827452300c55435721658799c1a8ae9ce46', 178291902),
-)
+SCHEMA_CONTRACT_ID = "storage-publisher-final-2026-09-08-r2"
+FINAL_SCHEMA_PATH = "backend/src/main/resources/db/final-schema.sql"
+TRANSITION_PATH = "operations/sql/transition-production-to-final.sql"
 
 PLATFORMS = ("max", "rutube", "telegram", "vk")
 PROJECTIONS = (
@@ -65,6 +42,7 @@ PROJECTIONS = (
     "institution_monthly_metrics",
     "institution_period_metrics",
     "publication_hourly",
+    "publication_history",
     "publication_latest",
 )
 AUTHORITATIVE_MISSING_REASONS = {
@@ -789,34 +767,11 @@ def _parse_release_manifest(release_path: Path) -> tuple[str, dict[str, str]]:
         )
         if candidate_snapshot.digest != expected_hash:
             _fail(f"active release manifest mismatch: {relative_name}")
-    migration_root = release_path / "backend/src/main/resources/db/migration"
-    expected_migration_names = {filename for _v, filename, _s, _c in EXPECTED_MIGRATIONS}
-    try:
-        migration_entries = list(os.scandir(migration_root))
-    except OSError as error:
-        _fail(f"active migration directory is unavailable: {error.__class__.__name__}")
-    if {entry.name for entry in migration_entries} != expected_migration_names or any(
-        not entry.is_file(follow_symlinks=False) for entry in migration_entries
-    ):
-        _fail("active migration directory must contain exactly regular V1-V30 files")
+    for required in (FINAL_SCHEMA_PATH, TRANSITION_PATH):
+        if required not in entries:
+            _fail(f"active release manifest does not cover {required}")
     _recheck_snapshot_path(manifest, manifest_snapshot, "active release SHA256SUMS")
     return manifest_snapshot.digest, entries
-
-
-def _expected_database_migrations() -> list[dict[str, Any]]:
-    return [
-        {
-            "checksum": checksum,
-            "script": filename,
-            "success": True,
-            "version": version,
-        }
-        for version, filename, _sha256sum, checksum in EXPECTED_MIGRATIONS
-    ]
-
-
-def _expected_file_hashes() -> dict[str, str]:
-    return {filename: sha256sum for _v, filename, sha256sum, _c in EXPECTED_MIGRATIONS}
 
 
 def _release_binding(
@@ -824,7 +779,7 @@ def _release_binding(
     install_root: Path,
     deploy_report_path: Path,
     approval_ticket: str,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     install_root = _real_directory(install_root, "release install root")
     if not active_release_link.is_absolute():
         _fail("active release link must be absolute")
@@ -850,10 +805,6 @@ def _release_binding(
         _fail("derived active release id is unsafe")
 
     manifest_sha256, manifest_entries = _parse_release_manifest(release_path)
-    for _version, filename, expected_hash, _checksum in EXPECTED_MIGRATIONS:
-        relative_name = f"backend/src/main/resources/db/migration/{filename}"
-        if manifest_entries.get(relative_name) != expected_hash:
-            _fail(f"active release does not contain frozen migration {filename}")
 
     deploy, deploy_snapshot, _deploy_sidecar_snapshot = _load_checksummed_json(
         deploy_report_path, "deploy report", basename_only=False
@@ -878,20 +829,32 @@ def _release_binding(
     if deploy_ticket == approval_ticket:
         _fail("collector approval must be independent of the deploy change ticket")
     deploy_finished_at = _timestamp(deploy.get("finishedAt"), "deploy finishedAt")
-    _true(deploy.get("projectionPublisherActive"), "deploy projectionPublisherActive")
+    _false(deploy.get("projectionPublisherStarted"), "deploy projectionPublisherStarted")
     _false(deploy.get("publicRoutingChanged"), "deploy publicRoutingChanged")
     _false(deploy.get("legacyUnitsChanged"), "deploy legacyUnitsChanged")
-    flyway = deploy.get("flyway")
-    if not isinstance(flyway, dict):
-        _fail("deploy flyway evidence must be an object")
-    if flyway.get("schemaVersion") != "30":
-        _fail("deploy Flyway schema is not the exact V1-V30 set")
-    if _integer(flyway.get("migrationCount"), "deploy flyway.migrationCount", 30) != 30:
-        _fail("deploy Flyway schema is not the exact V1-V30 set")
-    _true(flyway.get("validated"), "deploy flyway.validated")
-    for version, _filename, expected_hash, _checksum in EXPECTED_MIGRATIONS:
-        if flyway.get(f"v{version}Sha256") != expected_hash:
-            _fail(f"deploy Flyway V{version} checksum is invalid")
+    schema_contract = _object(
+        deploy.get("schemaContract"),
+        "deploy schemaContract",
+        {"id", "finalSchemaSha256", "productionTransitionSha256", "validatedByServiceReadiness"},
+    )
+    if schema_contract["id"] != SCHEMA_CONTRACT_ID:
+        _fail("deploy schema contract id is unsupported")
+    _true(
+        schema_contract["validatedByServiceReadiness"],
+        "deploy schemaContract.validatedByServiceReadiness",
+    )
+    final_schema_sha256 = _sha256(
+        schema_contract["finalSchemaSha256"],
+        "deploy schemaContract.finalSchemaSha256",
+    )
+    transition_sha256 = _sha256(
+        schema_contract["productionTransitionSha256"],
+        "deploy schemaContract.productionTransitionSha256",
+    )
+    if manifest_entries.get(FINAL_SCHEMA_PATH) != final_schema_sha256:
+        _fail("deploy final schema hash is not bound to the active release")
+    if manifest_entries.get(TRANSITION_PATH) != transition_sha256:
+        _fail("deploy transition hash is not bound to the active release")
     try:
         final_link_target_bytes, final_link_metadata = _read_stable_symlink(
             active_release_link, active_parent, "active release link"
@@ -914,6 +877,11 @@ def _release_binding(
         "deployTicket": deploy_ticket,
         "id": release_id,
         "sha256SumsSha256": manifest_sha256,
+        "schemaContract": {
+            "id": SCHEMA_CONTRACT_ID,
+            "finalSchemaSha256": final_schema_sha256,
+            "productionTransitionSha256": transition_sha256,
+        },
     }
 
 
@@ -954,34 +922,6 @@ def _validate_raw_evidence(
     ):
         _fail(f"{label} mtime must lie within its claimed capture window")
     return dict(evidence), (snapshot.device, snapshot.inode)
-
-
-def _validate_migration_rows(value: Any, label: str) -> list[dict[str, Any]]:
-    rows = _array(value, label)
-    expected = _expected_database_migrations()
-    if len(rows) != len(expected):
-        _fail(f"{label} must be exactly the successful frozen V1-V30 rows")
-    normalized: list[dict[str, Any]] = []
-    for index, (row_value, expected_row) in enumerate(zip(rows, expected)):
-        row = _object(
-            row_value,
-            f"{label}[{index}]",
-            {"checksum", "script", "success", "version"},
-        )
-        version = _string(row["version"], f"{label}[{index}].version")
-        script = _string(row["script"], f"{label}[{index}].script")
-        checksum = _integer(row["checksum"], f"{label}[{index}].checksum", None)
-        _true(row["success"], f"{label}[{index}].success")
-        normalized_row = {
-            "checksum": checksum,
-            "script": script,
-            "success": True,
-            "version": version,
-        }
-        if normalized_row != expected_row:
-            _fail(f"{label} must be exactly the successful frozen V1-V30 rows")
-        normalized.append(normalized_row)
-    return normalized
 
 
 def _validate_policy(value: Any, label: str) -> dict[str, int]:
@@ -1256,18 +1196,18 @@ def _validate_projection(
     projection = _object(
         value,
         label,
-        {"latestCollectorRevision", "latestDatasetRevision", "states"},
+        {"rawDatasetRevision", "publishedServingRevision", "states"},
     )
-    collector_revision = _integer(
-        projection["latestCollectorRevision"], f"{label}.latestCollectorRevision", 1
+    raw_revision = _integer(
+        projection["rawDatasetRevision"], f"{label}.rawDatasetRevision", 1
     )
-    dataset_revision = _integer(
-        projection["latestDatasetRevision"], f"{label}.latestDatasetRevision", 1
+    published_revision = _integer(
+        projection["publishedServingRevision"], f"{label}.publishedServingRevision", 1
     )
-    if collector_revision != dataset_revision:
-        _fail(f"{label} is not published at the latest collector revision")
-    if max(item["latestRevision"] for item in platforms) != collector_revision:
-        _fail(f"{label}.latestCollectorRevision is not the newest platform revision")
+    if published_revision > raw_revision:
+        _fail(f"{label}.publishedServingRevision is ahead of raw data")
+    if max(item["latestRevision"] for item in platforms) != raw_revision:
+        _fail(f"{label}.rawDatasetRevision is not the newest platform revision")
     states = _object(projection["states"], f"{label}.states", PROJECTIONS)
     normalized_states: dict[str, dict[str, Any]] = {}
     for name in PROJECTIONS:
@@ -1277,12 +1217,12 @@ def _validate_projection(
         state_revision = _integer(
             state["revision"], f"{label}.states.{name}.revision", 1
         )
-        if state["status"] != "ready" or state_revision != dataset_revision:
+        if state["status"] != "ready" or state_revision != published_revision:
             _fail(f"{label}.states.{name} is stale")
         normalized_states[name] = {"revision": state_revision, "status": "ready"}
     return {
-        "latestCollectorRevision": collector_revision,
-        "latestDatasetRevision": dataset_revision,
+        "rawDatasetRevision": raw_revision,
+        "publishedServingRevision": published_revision,
         "states": normalized_states,
     }
 
@@ -1340,14 +1280,9 @@ def _validate_report_body(
         "status",
     }
     if is_source:
-        required_keys = common_keys | {
-            "evidenceType",
-            "evidenceVersion",
-            "flywayDatabaseMigrations",
-        }
+        required_keys = common_keys | {"evidenceType", "evidenceVersion"}
     else:
         required_keys = common_keys | {
-            "flyway",
             "generatedAt",
             "release",
             "reportType",
@@ -1434,10 +1369,6 @@ def _validate_report_body(
         )
         if body["evidenceType"] != SOURCE_TYPE or evidence_version != SOURCE_VERSION:
             _fail("source evidence type/version is unsupported")
-        migrations = _validate_migration_rows(
-            body["flywayDatabaseMigrations"], "flywayDatabaseMigrations"
-        )
-        normalized["flywayDatabaseMigrations"] = migrations
         return normalized
 
     report_version = _integer(body["reportVersion"], "collector reportVersion", 1)
@@ -1455,6 +1386,7 @@ def _validate_report_body(
             "deployReportSha256",
             "deployTicket",
             "id",
+            "schemaContract",
             "sha256SumsSha256",
         },
     )
@@ -1463,28 +1395,19 @@ def _validate_report_body(
     _identity(release["deployTicket"], "release.deployTicket")
     _identity(release["id"], "release.id")
     _sha256(release["sha256SumsSha256"], "release.sha256SumsSha256")
+    schema_contract = _object(
+        release["schemaContract"],
+        "release.schemaContract",
+        {"id", "finalSchemaSha256", "productionTransitionSha256"},
+    )
+    if schema_contract["id"] != SCHEMA_CONTRACT_ID:
+        _fail("release schema contract id is unsupported")
+    _sha256(schema_contract["finalSchemaSha256"], "release.schemaContract.finalSchemaSha256")
+    _sha256(schema_contract["productionTransitionSha256"], "release.schemaContract.productionTransitionSha256")
     if dict(release) != dict(release_binding):
         _fail("collector report is not bound to the derived active release")
-    flyway = _object(
-        body["flyway"],
-        "flyway",
-        {"databaseMigrations", "fileSha256", "migrationCount", "schemaVersion"},
-    )
-    schema_version = _integer(flyway["schemaVersion"], "flyway.schemaVersion", 1)
-    migration_count = _integer(flyway["migrationCount"], "flyway.migrationCount", 1)
-    if schema_version != 30 or migration_count != 30:
-        _fail("collector report Flyway version/count must be exactly V1-V30")
-    if flyway["fileSha256"] != _expected_file_hashes():
-        _fail("collector report Flyway file hashes do not match frozen V1-V30")
-    migrations = _validate_migration_rows(flyway["databaseMigrations"], "flyway.databaseMigrations")
     normalized.update(
         {
-            "flyway": {
-                "databaseMigrations": migrations,
-                "fileSha256": _expected_file_hashes(),
-                "migrationCount": 30,
-                "schemaVersion": 30,
-            },
             "generatedAt": body["generatedAt"],
             "release": dict(release),
             "reportType": REPORT_TYPE,
@@ -1620,15 +1543,8 @@ def seal_report(
         release_binding=release,
         is_source=True,
     )
-    migrations = validated.pop("flywayDatabaseMigrations")
     report = {
         **validated,
-        "flyway": {
-            "databaseMigrations": migrations,
-            "fileSha256": _expected_file_hashes(),
-            "migrationCount": 30,
-            "schemaVersion": 30,
-        },
         "generatedAt": _format_timestamp(now),
         "release": release,
         "reportType": REPORT_TYPE,

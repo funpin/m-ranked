@@ -46,14 +46,14 @@ class AdminPostgresIntegrationTest {
         UUID updateCorrelation = UUID.randomUUID();
         UUID replayCorrelation = UUID.randomUUID();
         UUID conflictCorrelation = UUID.randomUUID();
-        UUID failedRebuildCorrelation = UUID.randomUUID();
+        UUID failedQueueCorrelation = UUID.randomUUID();
         UUID restoreCorrelation = UUID.randomUUID();
         List<UUID> ownedCorrelations = List.of(
                 initialCorrelation,
                 updateCorrelation,
                 replayCorrelation,
                 conflictCorrelation,
-                failedRebuildCorrelation,
+                failedQueueCorrelation,
                 restoreCorrelation
         );
         String actor = "admin-it-" + UUID.randomUUID();
@@ -62,7 +62,7 @@ class AdminPostgresIntegrationTest {
                 )
                 .query(Long.class)
                 .single();
-        boolean executeRevoked = false;
+        boolean outboxInsertRevoked = false;
 
         try {
             owner.sql("""
@@ -171,7 +171,16 @@ class AdminPostgresIntegrationTest {
                     """)
                     .param("revision", updated.datasetRevision())
                     .query(Integer.class)
-                    .single()).isEqualTo(9);
+                    .single()).isZero();
+            assertThat(admin.sql("""
+                    SELECT count(*)
+                      FROM ops_and_admin.outbox_event
+                     WHERE dataset_revision_id = :revision
+                       AND event_type = 'projection.rebuild.requested'
+                    """)
+                    .param("revision", updated.datasetRevision())
+                    .query(Integer.class)
+                    .single()).isEqualTo(1);
             assertThat(admin.sql("""
                     SELECT count(*)
                       FROM ops_and_admin.outbox_event
@@ -217,12 +226,12 @@ class AdminPostgresIntegrationTest {
                     .query(Integer.class)
                     .single()).isEqualTo(2);
 
-            executeRevoked = true;
-            owner.sql("REVOKE EXECUTE ON FUNCTION analytics.rebuild_core_projections(bigint) FROM api_write_admin")
+            outboxInsertRevoked = true;
+            owner.sql("REVOKE INSERT ON ops_and_admin.outbox_event FROM api_write_admin")
                     .update();
             assertThatThrownBy(() -> commands.setPlatformAccountEnabled(
                     new SetPlatformAccountEnabledCommand(
-                            accountId, true, 1, actor, failedRebuildCorrelation
+                            accountId, true, 1, actor, failedQueueCorrelation
                     )
             )).isInstanceOf(DataAccessException.class);
             assertThat(admin.sql("""
@@ -237,15 +246,14 @@ class AdminPostgresIntegrationTest {
                     SELECT count(*) FROM analytics.dataset_revision
                      WHERE correlation_id = :correlationId
                     """)
-                    .param("correlationId", failedRebuildCorrelation)
+                    .param("correlationId", failedQueueCorrelation)
                     .query(Integer.class)
                     .single()).isZero();
 
             owner.sql("""
-                    GRANT EXECUTE ON FUNCTION analytics.rebuild_core_projections(bigint)
-                    TO api_write_admin
+                    GRANT INSERT ON ops_and_admin.outbox_event TO api_write_admin
                     """).update();
-            executeRevoked = false;
+            outboxInsertRevoked = false;
 
             var restored = commands.setPlatformAccountEnabled(new SetPlatformAccountEnabledCommand(
                     accountId, true, 1, actor, restoreCorrelation
@@ -255,10 +263,9 @@ class AdminPostgresIntegrationTest {
             assertThat(restored.account().rowVersion()).isEqualTo(2);
         } finally {
             try {
-                if (executeRevoked) {
+                if (outboxInsertRevoked) {
                     owner.sql("""
-                            GRANT EXECUTE ON FUNCTION analytics.rebuild_core_projections(bigint)
-                            TO api_write_admin
+                            GRANT INSERT ON ops_and_admin.outbox_event TO api_write_admin
                             """).update();
                 }
             } finally {
@@ -296,10 +303,8 @@ class AdminPostgresIntegrationTest {
                 .query(Long.class)
                 .single()).isEqualTo(previousLatestRevision);
         assertThat(owner.sql("""
-                SELECT has_function_privilege(
-                    'api_write_admin',
-                    'analytics.rebuild_core_projections(bigint)',
-                    'EXECUTE'
+                SELECT has_table_privilege(
+                    'api_write_admin', 'ops_and_admin.outbox_event', 'INSERT'
                 )
                 """)
                 .query(Boolean.class)

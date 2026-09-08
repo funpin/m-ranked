@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 
--- Run as the local bootstrap role after Flyway has applied V1 through V8. The script is
--- read-only except for a transaction that is always rolled back.
+-- Run as the local bootstrap role after final-schema.sql. The script is
+-- read-only and validates the single supported final-schema contract.
 
 DO $assertions$
 DECLARE
@@ -18,7 +18,7 @@ BEGIN
       INTO missing_schemas
       FROM (VALUES
           ('catalog'), ('ingest'), ('analytics'), ('rating'),
-          ('ops_and_admin'), ('migration'), ('flyway')
+          ('ops_and_admin')
       ) AS required(name)
      WHERE to_regnamespace(required.name) IS NULL;
     IF missing_schemas IS NOT NULL THEN
@@ -49,15 +49,17 @@ BEGIN
           ('ops_and_admin.outbox_event'),
           ('ops_and_admin.operational_checkpoint'),
           ('ops_and_admin.recovery_policy'),
-          ('migration.import_batch'),
-          ('migration.legacy_identity_map'),
-          ('migration.checkpoint'),
-          ('migration.legacy_evidence'),
-          ('migration.reconciliation_result')
+          ('ops_and_admin.retention_policy'),
+          ('ops_and_admin.schema_contract')
       ) AS required(name)
      WHERE to_regclass(required.name) IS NULL;
     IF missing_relations IS NOT NULL THEN
         RAISE EXCEPTION 'missing relations: %', missing_relations;
+    END IF;
+
+    IF (SELECT contract_id FROM ops_and_admin.schema_contract)
+       IS DISTINCT FROM 'storage-publisher-final-2026-09-08-r2' THEN
+        RAISE EXCEPTION 'final schema contract mismatch';
     END IF;
 
     FOREACH role_name IN ARRAY ARRAY[
@@ -257,10 +259,16 @@ BEGIN
        ) THEN
         RAISE EXCEPTION 'api_write_admin is missing narrow collection run-status reads';
     END IF;
-    IF NOT has_function_privilege(
+    IF has_function_privilege(
         'api_write_admin', 'analytics.rebuild_core_projections(bigint)', 'EXECUTE'
+    ) OR has_function_privilege(
+        'collector_ingest', 'analytics.rebuild_core_projections(bigint)', 'EXECUTE'
+    ) OR NOT has_function_privilege(
+        'maintenance', 'analytics.rebuild_core_projections(bigint)', 'EXECUTE'
+    ) OR NOT has_function_privilege(
+        'migration_bridge', 'analytics.rebuild_core_projections(bigint)', 'EXECUTE'
     ) THEN
-        RAISE EXCEPTION 'api_write_admin cannot atomically publish configuration projections';
+        RAISE EXCEPTION 'historical projection bootstrap privilege boundary is invalid';
     END IF;
     IF has_function_privilege(
         'api_write_admin', 'analytics.rebuild_core_projections_v2(bigint)', 'EXECUTE'

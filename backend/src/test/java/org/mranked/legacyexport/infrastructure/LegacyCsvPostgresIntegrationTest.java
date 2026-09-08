@@ -7,7 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
@@ -22,7 +22,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
 
-/** Actual Flyway + bridge + api_read cursor + Spring MVC bytes versus original FastAPI. */
+/** Final schema + bridge + api_read cursor + Spring MVC bytes versus original FastAPI. */
 @EnabledIfEnvironmentVariable(named="MRANKED_EXPORT_TEST_ADMIN_URL",matches=".+")
 class LegacyCsvPostgresIntegrationTest {
     @TempDir Path output;
@@ -38,9 +38,7 @@ class LegacyCsvPostgresIntegrationTest {
         try(var control=DriverManager.getConnection(initial,owner,password)) {
             control.createStatement().execute("CREATE DATABASE "+name+" OWNER migration_owner");
             try {
-                Flyway.configure().dataSource(url,owner,password).initSql("SET ROLE migration_owner")
-                    .defaultSchema("flyway").locations("filesystem:"+root.resolve("backend/src/main/resources/db/migration"))
-                    .cleanDisabled(true).load().migrate();
+                FinalSchemaInstaller.install(url, owner, password);
                 var emptyData=new DriverManagerDataSource(url,"api_read",System.getenv("MRANKED_QUERY_TEST_PASSWORD"));
                 new JdbcLegacyCsvRows(emptyData).stream(new org.mranked.legacyexport.application.LegacyCsvFormat("posts","telegram"),0,
                     cells -> {throw new AssertionError("Empty database returned a CSV row");});

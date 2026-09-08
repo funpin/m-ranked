@@ -24,7 +24,10 @@ def verify(path: Path, *, root: Path | None = None) -> dict:
     if not match or "--argjson protocolOnly false" not in function:
         raise RuntimeError("the production preflight must explicitly disable protocol-only mode")
     command = ["jq", "-e", "--argjson", "protocolOnly", "true"]
-    for key in ("releaseId", "manifestSha256", "sourceNamespace", "approvalTicket", "operator"):
+    for key in (
+        "releaseId", "manifestSha256", "sourceNamespace", "approvalTicket",
+        "operator", "finalSchemaSha256", "transitionSha256",
+    ):
         command += ["--arg", key, ""]
     result = subprocess.run(command + [match["filter"]], input=before, capture_output=True, timeout=30)
     unchanged = path.read_bytes() == before

@@ -40,7 +40,7 @@ from migration.bridge.target import PostgresTarget
 
 POSTGRES_DSN = os.environ.get("MRANKED_TEST_REVERSE_SYNC_POSTGRES_DSN")
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION_DIR = ROOT / "backend/src/main/resources/db/migration"
+MIGRATION_DIR = ROOT / "backend/src/main/resources/db"
 LOCAL_REHEARSAL_ENVIRONMENT = "disposable-postgresql-integration"
 FROZEN_V8_MIGRATIONS = (
     (
@@ -92,13 +92,11 @@ FROZEN_V8_MIGRATIONS = (
         -574188650,
     ),
 )
-# Published V1-V8 hashes stay pinned. New migrations are bound to the exact
-# current release files; both their SHA-256 and Flyway CRC are verified below.
+# Retired report readers receive one compatibility record for the final schema.
 from migration.release_manifest import flyway_manifest
 _RELEASE_SCHEMA = flyway_manifest(MIGRATION_DIR)
-assert [tuple((m["version"], m["script"], m["sha256"], m["checksum"])) for m in _RELEASE_SCHEMA[:8]] == list(FROZEN_V8_MIGRATIONS)
-EXPECTED_FLYWAY_MIGRATIONS = FROZEN_V8_MIGRATIONS + tuple(
-    (m["version"], m["script"], m["sha256"], m["checksum"]) for m in _RELEASE_SCHEMA[8:]
+EXPECTED_FLYWAY_MIGRATIONS = tuple(
+    (m["version"], m["script"], m["sha256"], m["checksum"]) for m in _RELEASE_SCHEMA
 )
 LOCAL_RELEASE_MANIFEST_SHA256 = hashlib.sha256(
     b"disposable-postgresql-integration:unbound-release"
@@ -1666,7 +1664,7 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
     _write_rehearsal_evidence(
         {
             "reportType": "reverse-sync-rehearsal",
-            "reportVersion": 4,
+            "reportVersion": 5,
             "status": "pass",
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "environment": rehearsal_context["environment"],
@@ -1680,11 +1678,14 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
             "changeTicket": rehearsal_context["changeTicket"],
             "sourceNamespace": namespace,
             "database": database_name,
-            "flyway": {
-                "schemaVersion": int(flyway_manifest[-1]["version"]),
-                "migrationCount": len(flyway_manifest),
-                "fileSha256": file_sha256_manifest,
-                "databaseMigrations": flyway_manifest,
+            "schemaContract": {
+                "id": "storage-publisher-final-2026-09-08-r2",
+                "finalSchemaSha256": hashlib.sha256(
+                    (MIGRATION_DIR / "final-schema.sql").read_bytes()
+                ).hexdigest(),
+                "productionTransitionSha256": hashlib.sha256(
+                    (ROOT / "operations/sql/transition-production-to-final.sql").read_bytes()
+                ).hexdigest(),
             },
             "platforms": sorted(platform.value for platform in Platform),
             "replay": {

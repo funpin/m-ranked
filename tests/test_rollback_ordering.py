@@ -100,15 +100,15 @@ def test_rollback_route_bypasses_forward_preflight_but_preserves_protected_check
     assert '"$source_file" "operations/nginx/routes/$route_file"' in source
 
 
-def test_writer_report_serializes_the_validated_nine_projection_count(tmp_path):
+def test_writer_report_serializes_the_validated_serving_projection_count(tmp_path):
     source=(ROOT/'operations/scripts/writer-cutover.sh').read_text()
     names=re.findall(r"\('([^']+)'\)",re.search(r'core\(name\) AS \(VALUES(.*?)\n\)',source,re.S)[1])
-    assert len(names)==len(set(names))==9
-    assert '"$ready_core_projections" == 9' in source
+    assert len(names)==len(set(names))==7
+    assert '"$ready_serving_projections" == 7' in source
     start=source.index('jq -n \\\n  --arg status monitoring')
     end=source.index('\nchmod 0600 "$state_file"',start)
     env=dict(os.environ,state_file=str(tmp_path/'state.json'),OPERATOR_ID='fixture',CHANGE_TICKET='fixture',started_at='fixture',
-        rollback_deadline='fixture',s_final='fixture',s_final_sha256='0'*64,report_json='fixture',revision_before='1',revision_after='2',api_dataset_revision='2',ready_core_projections='9')
+        rollback_deadline='fixture',s_final='fixture',s_final_sha256='0'*64,report_json='fixture',revision_before='1',revision_after='2',published_revision='1',api_dataset_revision='1',ready_serving_projections='7')
     result=subprocess.run(['/bin/bash','-p','-c','set -Eeuo pipefail\n'+source[start:end]],env=env,capture_output=True,text=True)
     assert result.returncode==0,result.stderr
-    assert json.loads((tmp_path/'state.json').read_text())['readyCoreProjections']==len(names)
+    assert json.loads((tmp_path/'state.json').read_text())['readyServingProjections']==len(names)

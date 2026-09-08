@@ -107,8 +107,9 @@ never be the production PGDATA. The restored PostgreSQL listens on no network
 interface; its `trust` rule applies only to a mode-0700 temporary Unix socket.
 
 The script verifies page checksums, starts recovery, requires exact PostgreSQL
-18.6, requires the exact successful Flyway V1-V29 scripts and checksums, promotion
-out of recovery and all nine required projections ready at the latest dataset revision, records the last
+18.6, requires schema contract `storage-publisher-final-2026-09-08-r2`,
+promotion out of recovery and a complete seven-projection serving generation,
+records raw and published watermarks plus independent historical states and the last
 replayed WAL LSN/transaction time, runs `pg_amcheck --all`, stops the ephemeral
 server, records elapsed seconds and removes only its own temporary directory.
 Enable daily verification after a manual successful run:
@@ -118,7 +119,7 @@ rtk sudo systemctl enable --now m-ranked-target-restore-verify.timer
 ```
 
 The JSON report must have `status=pass`, `rtoMet=true`, all check flags true,
-and the ordered V1-V29 version/script/Flyway-checksum manifest. Only after
+and the exact final schema contract. Only after
 rechecking its SHA-256, the script atomically publishes successful daily
 evidence as `latest.json`; a failed run never replaces it. Successful quarterly
 evidence is published separately as `latest-pitr.json`.

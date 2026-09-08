@@ -36,7 +36,8 @@ final class JdbcDetailQueries {
             ), latest AS (
                 SELECT p.id,history.* FROM publications p
                 LEFT JOIN LATERAL (SELECT h.* FROM analytics.publication_history h WHERE h.publication_id=p.id
-                    AND h.dataset_revision_id=:revision AND (:platform<>'telegram' OR NOT h.synthetic)
+                    AND h.dataset_revision_id=:revision
+                    AND (:platform<>'telegram' OR NOT h.synthetic)
                     ORDER BY h.observed_at DESC,h.snapshot_id DESC LIMIT 1) history ON true
             ), metric AS (
                 SELECT v.key,percentile_cont(0.5) WITHIN GROUP(ORDER BY v.value) AS median_value,
@@ -113,7 +114,8 @@ final class JdbcDetailQueries {
             LEFT JOIN LATERAL (SELECT identity.external_id,identity.public_url FROM ingest.publication_identity identity
                 WHERE identity.publication_id=page.id AND identity.role='primary' ORDER BY identity.id LIMIT 1) identity ON true
             LEFT JOIN LATERAL (SELECT h.* FROM analytics.publication_history h WHERE h.publication_id=page.id
-                AND h.dataset_revision_id=:revision ORDER BY h.observed_at DESC,h.snapshot_id DESC LIMIT 1) history ON true
+                AND h.dataset_revision_id=:revision
+                ORDER BY h.observed_at DESC,h.snapshot_id DESC LIMIT 1) history ON true
             ORDER BY page.published_at DESC,page.id DESC
             """).param("account",account).param("days",retentionDays).param("limit",limit).param("after",after,Types.OTHER).param("revision",revision)
                 .param("publicationType",accountType==org.mranked.catalog.domain.LegacyEntityType.CHANNELS?"posts":"platform_posts")
@@ -178,13 +180,15 @@ final class JdbcDetailQueries {
     List<HistorySnapshot> history(UUID publication,int limit,Long after,long revision) {
         return jdbc.sql("""
             SELECT history.* FROM analytics.publication_history history
-            WHERE publication_id=:publication AND dataset_revision_id=:revision
+            WHERE publication_id=:publication
+              AND dataset_revision_id=:revision
               AND (CAST(:after AS bigint) IS NULL OR (observed_at,snapshot_id)<
                   (SELECT observed_at,snapshot_id FROM analytics.publication_history
-                    WHERE publication_id=:publication AND snapshot_id=CAST(:after AS bigint) AND dataset_revision_id=:revision))
+                    WHERE publication_id=:publication AND dataset_revision_id=:revision
+                      AND snapshot_id=CAST(:after AS bigint)))
             ORDER BY observed_at DESC,snapshot_id DESC LIMIT :limit
-            """).param("publication",publication).param("revision",revision).param("after",after,Types.BIGINT)
-                .param("limit",limit).query((row,index)->new HistorySnapshot(row.getString("snapshot_id"),instant(row,"observed_at"),
+            """).param("publication",publication).param("after",after,Types.BIGINT)
+                .param("limit",limit).param("revision",revision).query((row,index)->new HistorySnapshot(row.getString("snapshot_id"),instant(row,"observed_at"),
                         BigDecimal.valueOf(row.getLong("age_seconds")).divide(BigDecimal.valueOf(3600),8,RoundingMode.HALF_UP),
                         counter(row,"views"),counter(row,"reactions"),counter(row,"comments"),counter(row,"shares"),
                         row.getObject("delta_views",Long.class),row.getObject("delta_reactions",Long.class),

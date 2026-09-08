@@ -94,6 +94,7 @@ class Settings:
     telegram_web_concurrency: int = 3
     collector_refresh_limit: int = 100
     collector_refresh_scan_limit: int = 400
+    publication_snapshot_heartbeat_hours: int = 24
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -192,6 +193,9 @@ class Settings:
             collector_refresh_limit=_int("COLLECTOR_REFRESH_LIMIT", 100),
             collector_refresh_scan_limit=_int(
                 "COLLECTOR_REFRESH_SCAN_LIMIT", 400
+            ),
+            publication_snapshot_heartbeat_hours=_int(
+                "PUBLICATION_SNAPSHOT_HEARTBEAT_HOURS", 24
             ),
         )
 

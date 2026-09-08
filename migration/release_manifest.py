@@ -1,4 +1,4 @@
-"""Exact schema and source provenance for local rehearsals and packaged releases."""
+"""Exact final-schema and source provenance for rehearsals and releases."""
 from __future__ import annotations
 
 import hashlib
@@ -9,28 +9,48 @@ import subprocess
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATIONS = ROOT / "backend/src/main/resources/db/migration"
+FINAL_SCHEMA = ROOT / "backend/src/main/resources/db/final-schema.sql"
 
 
-def flyway_manifest(directory: Path = MIGRATIONS) -> list[dict]:
-    result = []
-    paths = sorted(directory.glob("V*__*.sql"), key=lambda p: int(p.name.split("__")[0][1:]))
-    for expected, path in enumerate(paths, 1):
-        match = re.fullmatch(r"V([1-9][0-9]*)__.+\.sql", path.name)
-        if not match or int(match[1]) != expected or path.is_symlink():
-            raise ValueError("schema manifest must contain sequential regular V1..Vn files")
-        data = path.read_bytes()
-        # Flyway's CRC32 excludes line terminators and an optional UTF-8 BOM.
-        checksum = 0
-        for line in data.decode("utf-8-sig").splitlines():
-            checksum = zlib.crc32(line.encode("utf-8"), checksum)
-        if checksum >= 2**31:
-            checksum -= 2**32
-        result.append({"version":str(expected),"script":path.name,"checksum":checksum,
-                       "sha256":hashlib.sha256(data).hexdigest(),"success":True})
-    if not result:
-        raise ValueError("empty schema manifest")
-    return result
+def schema_manifest(path: Path = FINAL_SCHEMA) -> dict:
+    """Return the single immutable database contract artifact."""
+    if path.is_dir():
+        path = path.parent / "final-schema.sql" if path.name == "migration" else path / "final-schema.sql"
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("final schema must be a regular file")
+    data = path.read_bytes()
+    if not data:
+        raise ValueError("final schema is empty")
+    return {
+        "contract": "storage-publisher-final-2026-09-08-r2",
+        "script": path.name,
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+
+
+def flyway_manifest(directory: Path = FINAL_SCHEMA.parent) -> list[dict]:
+    """Compatibility envelope for retired rehearsal report readers.
+
+    Runtime and deploy code must use :func:`schema_manifest`. This adapter emits
+    one record for old evidence JSON shapes; it does not describe migrations.
+    """
+    manifest = schema_manifest(directory)
+    data_path = FINAL_SCHEMA if directory == FINAL_SCHEMA.parent else (
+        directory.parent / "final-schema.sql" if directory.name == "migration"
+        else directory / "final-schema.sql"
+    )
+    checksum = 0
+    for line in data_path.read_text(encoding="utf-8-sig").splitlines():
+        checksum = zlib.crc32(line.encode("utf-8"), checksum)
+    if checksum >= 2**31:
+        checksum -= 2**32
+    return [{
+        "version": "1",
+        "script": manifest["script"],
+        "checksum": checksum,
+        "sha256": manifest["sha256"],
+        "success": True,
+    }]
 
 
 def release_identity(root: Path = ROOT) -> dict:

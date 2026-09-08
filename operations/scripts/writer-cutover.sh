@@ -321,12 +321,6 @@ if ! systemctl is-active --quiet m-ranked-target-reverse-sync.service; then
   exit 1
 fi
 
-systemctl start m-ranked-target-projection-publisher.service
-if ! systemctl is-active --quiet m-ranked-target-projection-publisher.service; then
-  echo "projection publisher is inactive before target collector start; run rollback now" >&2
-  exit 1
-fi
-
 systemctl start \
   m-ranked-target-collector@telegram.service \
   m-ranked-target-collector@vk.service \
@@ -336,16 +330,12 @@ systemctl start \
 deadline=$(( $(date -u +%s) + TARGET_COLLECTION_GATE_SECONDS ))
 revision_after="$revision_before"
 successful_platforms=0
-ready_core_projections=0
-projection_state_count=0
+published_revision=0
+ready_serving_projections=0
 projection_extra=""
 api_dataset_revision=0
 reverse_sync_lag=-1
 while (( $(date -u +%s) < deadline )); do
-  if ! systemctl is-active --quiet m-ranked-target-projection-publisher.service; then
-    echo "projection publisher became inactive; run rollback now" >&2
-    exit 1
-  fi
   if ! systemctl is-active --quiet m-ranked-target-reverse-sync.service; then
     echo "reverse-sync worker became inactive; run rollback now" >&2
     exit 1
@@ -369,23 +359,28 @@ WITH latest AS (
 ), core(name) AS (VALUES
     ('publication_latest'), ('publication_hourly'),
     ('institution_daily_metrics'), ('institution_monthly_metrics'),
-    ('institution_period_metrics'), ('comparison'),
-    ('publication_history'), ('publication_content'), ('legacy_exports')
+    ('institution_period_metrics'), ('comparison'), ('publication_history')
+), published AS (
+    SELECT revision.id
+      FROM analytics.dataset_revision AS revision
+     CROSS JOIN core
+      LEFT JOIN analytics.projection_state AS state
+        ON state.projection_name = core.name
+       AND state.dataset_revision_id = revision.id
+       AND state.status = 'ready'
+     GROUP BY revision.id
+    HAVING count(state.projection_name) = 7
+     ORDER BY revision.id DESC
+     LIMIT 1
 )
 SELECT latest.id,
-       count(state.projection_name) FILTER (
-           WHERE state.status = 'ready'
-             AND state.dataset_revision_id = latest.id
-       ),
-       (SELECT count(*) FROM analytics.projection_state)
+       published.id,
+       7
   FROM latest
- CROSS JOIN core
-  LEFT JOIN analytics.projection_state AS state
-    ON state.projection_name = core.name
- GROUP BY latest.id;
+  LEFT JOIN published ON true;
 SQL
   )"
-  IFS='|' read -r revision_after ready_core_projections projection_state_count projection_extra <<<"$projection_state"
+  IFS='|' read -r revision_after published_revision ready_serving_projections projection_extra <<<"$projection_state"
   successful_platforms="$(
     PGPASSFILE="$OUTBOX_PGPASSFILE" psql "$OUTBOX_DATABASE_URL" \
       --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
@@ -417,9 +412,9 @@ SQL
   if [[ "$revision_after" =~ ^[1-9][0-9]*$ \
         && "$revision_after" -gt "$revision_before" \
         && "$successful_platforms" == 4 \
-        && "$ready_core_projections" == 9 \
-        && "$projection_state_count" == 9 && -z "${projection_extra:-}" \
-        && "$api_dataset_revision" == "$revision_after" ]]; then
+        && "$published_revision" =~ ^[1-9][0-9]*$ \
+        && "$ready_serving_projections" == 7 && -z "${projection_extra:-}" \
+        && "$api_dataset_revision" == "$published_revision" ]]; then
     reverse_sync_lag="$(
       "$REVERSE_SYNC_EXECUTABLE" status \
         | jq -er 'select(.status == "active") | .lagRevisionCount'
@@ -433,13 +428,12 @@ done
 if [[ ! "$revision_after" =~ ^[1-9][0-9]*$ \
       || "$revision_after" -le "$revision_before" \
       || "$successful_platforms" != 4 \
-      || "$ready_core_projections" != 9 \
-      || "$projection_state_count" != 9 || -n "${projection_extra:-}" \
-      || "$api_dataset_revision" != "$revision_after" \
+      || ! "$published_revision" =~ ^[1-9][0-9]*$ \
+      || "$ready_serving_projections" != 7 || -n "${projection_extra:-}" \
+      || "$api_dataset_revision" != "$published_revision" \
       || "$reverse_sync_lag" != 0 ]] \
-      || ! systemctl is-active --quiet m-ranked-target-projection-publisher.service \
       || ! systemctl is-active --quiet m-ranked-target-reverse-sync.service; then
-  echo "collectors/revision/projection publisher/API did not satisfy the post-collector gate; run rollback now" >&2
+  echo "collectors/revision/serving generation/API did not satisfy the post-collector gate; run rollback now" >&2
   exit 1
 fi
 
@@ -470,15 +464,18 @@ jq -n \
   --arg sFinal "$s_final" --arg sFinalSha256 "$s_final_sha256" \
   --arg reconciliation "$report_json" --argjson revisionBefore "$revision_before" \
   --argjson revisionAfter "$revision_after" \
-  --argjson readyCoreProjections "$ready_core_projections" \
+  --argjson publishedRevision "$published_revision" \
+  --argjson readyServingProjections "$ready_serving_projections" \
   --argjson apiDatasetRevision "$api_dataset_revision" \
   '{status:$status,operator:$operator,changeTicket:$ticket,startedAt:$startedAt,
     rollbackDeadline:$rollbackDeadline,sFinal:$sFinal,sFinalSha256:$sFinalSha256,
     reconciliation:$reconciliation,datasetRevisionBefore:$revisionBefore,
     datasetRevisionAfter:$revisionAfter,successfulCollectorPlatforms:4,
-    readyCoreProjections:$readyCoreProjections,projectionPublisherActive:true,
+    publishedRevision:$publishedRevision,
+    readyServingProjections:$readyServingProjections,
+    projectionPublisherRequired:false,
     apiReadiness:{status:"UP",datasetRevision:$apiDatasetRevision,
-      matchesLatestPublished:true},
+      matchesPublishedServingGeneration:true},
     duplicateIngestion:0,
     legacyCollectorStopped:true,legacyAdminMutationsFrozen:true,
     reverseSyncActive:true,reverseSyncLagRevisions:0}' >"$state_file"

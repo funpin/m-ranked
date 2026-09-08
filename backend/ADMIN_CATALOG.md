@@ -91,8 +91,8 @@ Run the self-provisioning required gate from the repository root:
 python -m migration.integration.run --output migration/reports/admin-latest
 ```
 
-It provisions its own PostgreSQL/Redis project, runs actual Flyway clean and
-V8-upgrade installations, exercises dedicated-role and HTTP security tests, and
+It provisions its own PostgreSQL/Redis project, installs the final schema directly,
+exercises dedicated-role and HTTP security tests, and
 removes only its own databases/volumes. Java oracle launchers use the runner's
 Python interpreter, including CI without a local `.venv`.
 

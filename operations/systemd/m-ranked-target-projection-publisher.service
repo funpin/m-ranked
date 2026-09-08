@@ -1,15 +1,13 @@
 [Unit]
-Description=M-Ranked latest-revision core projection publisher
+Description=M-Ranked explicit bounded core projection publication
 Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
 After=network-online.target
 Wants=network-online.target
-Before=m-ranked-target-collector@telegram.service
-Before=m-ranked-target-collector@vk.service
-Before=m-ranked-target-collector@max.service
-Before=m-ranked-target-collector@rutube.service
+StartLimitIntervalSec=1h
+StartLimitBurst=3
 
 [Service]
-Type=simple
+Type=oneshot
 User=m-ranked-maintenance
 Group=m-ranked-maintenance
 WorkingDirectory=/opt/m-ranked/current
@@ -17,11 +15,9 @@ EnvironmentFile=/etc/m-ranked/projection-publisher.env
 LoadCredential=pgpass:/etc/m-ranked/credentials/maintenance-pgpass
 Environment=PGPASSFILE=%d/pgpass
 Environment=TZ=UTC
-ExecStartPre=/opt/m-ranked/current/operations/scripts/projection-publisher.sh --once
-ExecStart=/opt/m-ranked/current/operations/scripts/projection-publisher.sh
-Restart=on-failure
-RestartSec=5s
-TimeoutStartSec=20min
+ExecStart=/opt/m-ranked/current/operations/scripts/projection-publisher.sh --once
+Restart=no
+TimeoutStartSec=2h
 TimeoutStopSec=30s
 KillSignal=SIGINT
 NoNewPrivileges=true
@@ -50,6 +46,3 @@ RuntimeDirectoryMode=0700
 UMask=0077
 LimitNOFILE=8192
 TasksMax=64
-
-[Install]
-WantedBy=m-ranked-shadow.target

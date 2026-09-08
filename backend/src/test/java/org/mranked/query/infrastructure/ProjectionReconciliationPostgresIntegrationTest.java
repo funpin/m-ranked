@@ -6,7 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
@@ -25,9 +25,7 @@ class ProjectionReconciliationPostgresIntegrationTest {
         try(var control=DriverManager.getConnection(initial,owner,password)) {
             control.createStatement().execute("CREATE DATABASE "+name+" OWNER migration_owner");
             try {
-                Flyway.configure().dataSource(url,owner,password).initSql("SET ROLE migration_owner")
-                    .defaultSchema("flyway").locations("filesystem:"+root.resolve("backend/src/main/resources/db/migration"))
-                    .cleanDisabled(true).load().migrate();
+                FinalSchemaInstaller.install(url, owner, password);
                 var process=new ProcessBuilder(org.mranked.testing.IntegrationRuntime.python(root),"-m","migration.integration.projection_oracle_fixture",
                     "--output",output.toString()).directory(root.toFile()).redirectErrorStream(true)
                     .redirectOutput(output.resolve("oracle.log").toFile());

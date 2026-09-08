@@ -50,7 +50,7 @@ restore_command = 'pgbackrest --config=/etc/m-ranked/pgbackrest.conf --stanza=m-
 
 The DR repository service needs its write/read repository configurations and
 cipher secrets, while the standby PostgreSQL process receives only the
-archive-client config. Neither receives an application, collector, Flyway or
+archive-client config. Neither receives an application, collector, schema-owner or
 admin database credential. Start PostgreSQL only after confirming the generated
 `standby.signal` and private listener.
 

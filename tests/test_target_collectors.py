@@ -242,6 +242,85 @@ def test_normalization_preserves_zero_null_and_marks_invalid_and_resets() -> Non
     )
 
 
+def test_semantic_fingerprint_ignores_poll_timing_but_detects_metric_change() -> None:
+    target = account(Platform.TELEGRAM)
+    first_context = context()
+    first_raw = raw_batch(target, first_context)
+    first = CanonicalNormalizer().normalize(first_raw, first_context).publications[0]
+
+    later = NOW + timedelta(minutes=5)
+    later_context = CollectionContext.create(
+        Platform.TELEGRAM, "default", "test-v1", later, later,
+    )
+    later_publication = replace(
+        first_raw.publications[0],
+        observed_at=later,
+        collected_at=later,
+    )
+    unchanged = CanonicalNormalizer().normalize(
+        replace(first_raw, publications=(later_publication,)), later_context,
+    ).publications[0]
+    changed = CanonicalNormalizer().normalize(
+        replace(
+            first_raw,
+            publications=(replace(
+                later_publication,
+                metrics={**later_publication.metrics, "views": 1},
+            ),),
+        ),
+        later_context,
+    ).publications[0]
+
+    assert first.snapshot.source_fingerprint != unchanged.snapshot.source_fingerprint
+    assert first.snapshot.semantic_fingerprint == unchanged.snapshot.semantic_fingerprint
+    assert first.snapshot.semantic_fingerprint != changed.snapshot.semantic_fingerprint
+
+
+def test_account_semantic_fingerprint_ignores_poll_timing_but_detects_change() -> None:
+    target = account(Platform.VK)
+    first_context = context(Platform.VK)
+    first_raw = raw_batch(target, first_context)
+    first = CanonicalNormalizer().normalize(
+        first_raw, first_context,
+    ).account_observation
+    assert first is not None
+
+    later = NOW + timedelta(minutes=5)
+    later_context = CollectionContext.create(
+        Platform.VK, "default", "test-v2", later, later,
+    )
+    later_observation = replace(
+        first_raw.account_observation,
+        observed_at=later,
+        collected_at=later,
+        source={"provider_request_at": later.isoformat()},
+    )
+    unchanged = CanonicalNormalizer().normalize(
+        replace(
+            first_raw,
+            account_observation=later_observation,
+            source_version="transport-v2",
+        ),
+        later_context,
+    ).account_observation
+    changed = CanonicalNormalizer().normalize(
+        replace(
+            first_raw,
+            account_observation=replace(
+                later_observation,
+                subscriber_count=(later_observation.subscriber_count or 0) + 1,
+            ),
+        ),
+        later_context,
+    ).account_observation
+
+    assert unchanged is not None
+    assert changed is not None
+    assert first.source_fingerprint != unchanged.source_fingerprint
+    assert first.semantic_fingerprint == unchanged.semantic_fingerprint
+    assert first.semantic_fingerprint != changed.semantic_fingerprint
+
+
 def test_normalizer_rejects_impossible_collection_time() -> None:
     target = account(Platform.MAX)
     run_context = context(Platform.MAX)
@@ -1239,13 +1318,19 @@ class _Cursor:
 
 
 class _ScriptedConnection:
-    def __init__(self, *, fail_on_outbox: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail_on_outbox: bool = False,
+        latest_snapshot: dict[str, Any] | None = None,
+    ) -> None:
         self.calls: list[tuple[str, Any]] = []
         self.transaction_entries = 0
         self.commits = 0
         self.rollbacks = 0
         self.closed = False
         self.fail_on_outbox = fail_on_outbox
+        self.latest_snapshot = latest_snapshot
 
     def transaction(self) -> _Transaction:
         return _Transaction(self)
@@ -1265,14 +1350,14 @@ class _ScriptedConnection:
             return _Cursor({"publication_id": UUID("30000000-0000-4000-8000-000000000001")})
         if "INSERT INTO ingest.publication_metric_snapshot" in normalized:
             return _Cursor({"id": 10})
+        if "SELECT semantic_fingerprint, observed_at" in normalized:
+            return _Cursor(self.latest_snapshot)
         if "SELECT id, deleted_at FROM ingest.publication" in normalized:
             return _Cursor({"id": UUID("30000000-0000-4000-8000-000000000001"), "deleted_at": None})
-        if "SELECT id FROM ingest.deletion_observation" in normalized:
+        if "FROM ingest.publication_availability_state" in normalized:
             return _Cursor(None)
-        if "SELECT outcome::text AS outcome" in normalized:
-            return _Cursor(None)
-        if "INSERT INTO ingest.deletion_observation" in normalized:
-            return _Cursor({"id": 11})
+        if "INSERT INTO ingest.publication_availability_event" in normalized:
+            return _Cursor({"publication_id": UUID("30000000-0000-4000-8000-000000000001")})
         if "UPDATE ingest.collection_account_result" in normalized:
             return _Cursor({"id": 20})
         if "INSERT INTO analytics.dataset_revision" in normalized:
@@ -1323,7 +1408,8 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     assert "INSERT INTO ingest.raw_payload" in sql
     assert "ensure_publication_legacy_alias" in sql
     assert "INSERT INTO analytics.legacy_native_export_lexeme" in sql
-    assert "INSERT INTO ingest.deletion_observation" in sql
+    assert "INSERT INTO ingest.publication_availability_state" in sql
+    assert "INSERT INTO ingest.publication_availability_event" in sql
     assert "INSERT INTO catalog.account_identity_history" in sql
     assert "INSERT INTO catalog.account_external_identity" in sql
     assert "INSERT INTO analytics.dataset_revision" in sql
@@ -1349,6 +1435,61 @@ def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch, tmp_
     assert connection.commits == 0
     assert connection.rollbacks == 1
     assert connection.closed
+
+
+def test_repository_skips_unchanged_snapshot_before_heartbeat(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
+    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv", _script_native_csv)
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    canonical = CanonicalNormalizer().normalize(
+        raw_batch(target, run_context), run_context,
+    )
+    fingerprint = canonical.publications[0].snapshot.semantic_fingerprint
+    connection = _ScriptedConnection(latest_snapshot={
+        "semantic_fingerprint": fingerprint,
+        "observed_at": NOW - timedelta(minutes=5),
+    })
+    repository = PostgresCollectorRepository(
+        connection_factory=lambda: connection,
+        snapshot_heartbeat_hours=24,
+    )
+
+    result = repository.persist_account_batch(canonical)
+
+    sql = "\n".join(statement for statement, _ in connection.calls)
+    assert result.snapshot_count == 0
+    assert "INSERT INTO ingest.publication_metric_snapshot(" not in sql
+    assert "INSERT INTO ingest.reaction_breakdown(" not in sql
+
+
+def test_repository_persists_deterministic_unchanged_heartbeat(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
+    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv", _script_native_csv)
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    canonical = CanonicalNormalizer().normalize(
+        raw_batch(target, run_context), run_context,
+    )
+    fingerprint = canonical.publications[0].snapshot.semantic_fingerprint
+    connection = _ScriptedConnection(latest_snapshot={
+        "semantic_fingerprint": fingerprint,
+        "observed_at": NOW - timedelta(hours=24),
+    })
+    repository = PostgresCollectorRepository(
+        connection_factory=lambda: connection,
+        snapshot_heartbeat_hours=24,
+    )
+
+    result = repository.persist_account_batch(canonical)
+
+    assert result.snapshot_count == 1
+    assert any(
+        "INSERT INTO ingest.publication_metric_snapshot(" in statement
+        for statement, _params in connection.calls
+    )
 
 
 def test_runtime_protocols_and_cli_contract_are_explicit() -> None:

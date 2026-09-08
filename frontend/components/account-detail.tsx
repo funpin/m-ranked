@@ -4,7 +4,7 @@ import { duration, legacyDate, legacyNumber, PLATFORM_LABELS, PLATFORM_LONG_LABE
 import { metricEvidence } from "@/lib/metric-evidence";
 import type { AccountView, PublicationListItem } from "@/lib/types";
 
-export function AccountDetail({ account, posts }: { account: AccountView; posts: PublicationListItem[] }) {
+export function AccountDetail({ account, posts, truncated = false }: { account: AccountView; posts: PublicationListItem[]; truncated?: boolean }) {
   const name = account.title || account.institutionShortName || account.institutionName;
   const stats = account.stats;
   const telegram = account.platform === "telegram";
@@ -20,7 +20,7 @@ export function AccountDetail({ account, posts }: { account: AccountView; posts:
         <span className="has-tooltip" tabIndex={0} data-tooltip={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[account.platform]}.`}><b className="metric">{stats.ratingRank ? `№${stats.ratingRank}` : "—"}</b><small>М‑Рейтинг {PLATFORM_LABELS[account.platform]} ⓘ{stats.ratingPeriod ? ` · ${stats.ratingPeriod}` : ""}</small></span>
       </div></> : <p className="panel-note">Сводка публикаций ещё не рассчитана.</p>}
     </div>
-    <div className="panel mt table-wrap"><table><thead><tr><th>Публикация</th><th>Опубликовано, МСК</th><th>Возраст</th><th>История</th><th>{telegram ? "Реакции" : primary}</th><th>Просмотры</th><th>Комментарии</th><th>Тип</th></tr></thead><tbody>
+    <div className="panel mt table-wrap">{truncated ? <p className="panel-note">Показаны первые 100 публикаций. Более старые записи доступны через API с курсором.</p> : null}<table><thead><tr><th>Публикация</th><th>Опубликовано, МСК</th><th>Возраст</th><th>История</th><th>{telegram ? "Реакции" : primary}</th><th>Просмотры</th><th>Комментарии</th><th>Тип</th></tr></thead><tbody>
       {posts.map((post) => {
         const observedAt = post.reactions.observedAt ?? post.views.observedAt;
         const complete = post.historyCompleteness === "complete";

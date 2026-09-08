@@ -115,7 +115,7 @@ def run(output: Path, *, python: str, maven: str, jar: Path | None = None):
             gate.command("create-database", ["docker", "exec", project + "-postgres-1", "psql",
                          "-U", "mranked_bootstrap", "-d", "postgres", "-v", "ON_ERROR_STOP=1",
                          "-c", f"CREATE DATABASE {db} OWNER migration_owner"])
-            gate.command("flyway", mvn + ["-Pmigration-integration",
+            gate.command("final-schema", mvn + ["-Pschema-integration",
                          "-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase", "test"],
                          env={"MRANKED_REHEARSAL_INSTALL_URL": url,
                               "MRANKED_MIGRATION_TEST_USER": "migration_owner",
@@ -146,7 +146,7 @@ def run(output: Path, *, python: str, maven: str, jar: Path | None = None):
             report = reverse["cutoverPhases"]["httpUpstreamTransition"]
             assert report["status"] == "pass" and report["requests"] > 0 and report["failures"] == 0
             report["reverseEvidenceSha256"] = hashlib.sha256(report_path.read_bytes()).hexdigest()
-            report["flyway"] = reverse["flyway"]
+            report["schemaContract"] = reverse["schemaContract"]
             report["reverseSync"] = reverse["reverseSync"]
             report["preservation"] = reverse["preservation"]
             report["sFinal"] = require_s_final_evidence(reverse)

@@ -224,6 +224,7 @@ class CanonicalAccountObservation:
     subscriber_display: str | None
     quality: ObservationQuality
     source_fingerprint: str
+    semantic_fingerprint: bytes
     sanitized_source: Mapping[str, Any]
     username: str | None = None
     title: str | None = None
@@ -248,6 +249,7 @@ class CanonicalMetricSnapshot:
     synthetic: bool
     reaction_breakdown: Mapping[str, int]
     source_fingerprint: str
+    semantic_fingerprint: bytes
     sanitized_source: Mapping[str, Any]
 
 

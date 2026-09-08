@@ -112,6 +112,16 @@ def source_fingerprint(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
+def semantic_fingerprint(value: Any) -> bytes:
+    """Fingerprint historical state, excluding poll/run bookkeeping.
+
+    The caller supplies an explicit semantic projection so a successful poll
+    is not mistaken for a new metric state.  Raw evidence still keeps its full
+    source fingerprint for replay/correction validation.
+    """
+    return hashlib.sha256(canonical_json(value).encode("utf-8")).digest()
+
+
 def sanitize_error_code(error: BaseException) -> str:
     """Return a bounded, non-secret classification; never include exception text."""
     name = error.__class__.__name__[:80] or "Error"
@@ -277,9 +287,16 @@ class CanonicalNormalizer:
             "url": raw.url,
             "native_external_id": raw.native_external_id,
         })
+        semantic_state = {
+            "version": 1,
+            "subscriber_count": subscribers,
+            "subscriber_display": raw.subscriber_display,
+            "quality": quality,
+        }
         return CanonicalAccountObservation(
             observed, collected, subscribers, raw.subscriber_display,
-            quality, source_fingerprint(evidence), evidence,
+            quality, source_fingerprint(evidence),
+            semantic_fingerprint(semantic_state), evidence,
             _optional_text(raw.username),
             _optional_text(raw.title),
             _https(raw.url),
@@ -378,6 +395,17 @@ class CanonicalNormalizer:
             "quality_flags": flags,
             "source": raw.source,
         })
+        semantic_state = {
+            "version": 1,
+            "metrics": values,
+            "quality": quality,
+            "metric_quality": metric_quality,
+            "reaction_breakdown": reactions,
+            "history_completeness": raw.history_completeness,
+            "synthetic": raw.synthetic,
+            "interval_uncertain": raw.interval_uncertain,
+            "quality_flags": flags,
+        }
         snapshot = CanonicalMetricSnapshot(
             observed_at=observed,
             collected_at=collected,
@@ -394,6 +422,7 @@ class CanonicalNormalizer:
             synthetic=raw.synthetic,
             reaction_breakdown=reactions,
             source_fingerprint=source_fingerprint(evidence),
+            semantic_fingerprint=semantic_fingerprint(semantic_state),
             sanitized_source=evidence,
         )
         return CanonicalPublication(

@@ -9,14 +9,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class ProjectionSchemaContractTest {
-    private static String migration;
+    private static String schema;
 
     @BeforeAll
-    static void readMigration() throws IOException {
+    static void readFinalSchema() throws IOException {
         Path backend = Path.of(System.getProperty("basedir")).toAbsolutePath().normalize();
-        migration = Files.readString(
-                backend.resolve("src/main/resources/db/migration/V1__target_baseline.sql")
-        );
+        schema = Files.readString(backend.resolve("src/main/resources/db/final-schema.sql"))
+                .replace("timestamp with time zone", "timestamptz");
     }
 
     @Test
@@ -82,17 +81,13 @@ class ProjectionSchemaContractTest {
 
     @Test
     void publicLegacyUuidMappingKeepsTheMigrationSchemaOutOfApiRead() {
-        String apiReadGrants = section(
-                "GRANT SELECT ON\n", "\nTO api_read;"
-        );
-        assertThat(migration)
-                .contains("REVOKE ALL ON SCHEMA migration FROM api_read")
-                .doesNotContain("GRANT USAGE ON SCHEMA migration TO api_read");
-        assertThat(apiReadGrants).contains(
-                "catalog.legacy_entity_alias,",
-                "catalog.platform_account,",
-                "analytics.publication_hourly,",
-                "analytics.comparison_cohort_member,"
+        assertThat(schema)
+                .doesNotContain("migration.")
+                .contains(
+                        "GRANT SELECT ON TABLE catalog.legacy_entity_alias TO api_read;",
+                        "GRANT SELECT ON TABLE catalog.platform_account TO api_read;",
+                        "GRANT SELECT ON TABLE analytics.publication_hourly TO api_read;",
+                        "GRANT SELECT ON TABLE analytics.comparison_cohort_member TO api_read;"
         );
         assertThat(JdbcProjectionQueryRepository.INSTITUTION_COMPARISON_SQL)
                 .contains("catalog.legacy_entity_alias")
@@ -106,18 +101,10 @@ class ProjectionSchemaContractTest {
 
     private static String table(String qualifiedName) {
         String marker = "CREATE TABLE " + qualifiedName + " (";
-        int start = migration.indexOf(marker);
+        int start = schema.indexOf(marker);
         assertThat(start).as("table %s exists", qualifiedName).isGreaterThanOrEqualTo(0);
-        int end = migration.indexOf("\n);", start);
+        int end = schema.indexOf("\n);", start);
         assertThat(end).as("table %s has a closing delimiter", qualifiedName).isGreaterThan(start);
-        return migration.substring(start, end);
-    }
-
-    private static String section(String openingMarker, String closingMarker) {
-        int start = migration.indexOf(openingMarker);
-        assertThat(start).as("section %s exists", openingMarker).isGreaterThanOrEqualTo(0);
-        int end = migration.indexOf(closingMarker, start);
-        assertThat(end).as("section %s closes", openingMarker).isGreaterThan(start);
-        return migration.substring(start, end);
+        return schema.substring(start, end);
     }
 }

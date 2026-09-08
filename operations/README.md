@@ -9,15 +9,15 @@ Reference-based checks use the [external legacy reference](../migration/legacy-r
 The operational order is:
 
 1. prepare independent Unix users, database roles and credential files;
-2. stage and activate API/Web plus the continuous projection publisher in
-   shadow mode;
+2. stage and activate API/Web/cache-outbox in shadow mode; Publisher remains an
+   explicit bounded maintenance action;
 3. verify encrypted base backup, continuous WAL and an isolated restore;
 4. move only explicitly accepted read routes through the Nginx strangler;
 5. perform S-final and writer cutover only when both Writer Gate W reports pass,
    including a fresh checksummed strict-v4 production-like reverse-sync report
    bound to the active release, namespace, operator and dedicated approval
    ticket and a fresh strict collector-parity v1 report bound to protected raw
-   captures, the same active deploy/Flyway identity and its own external
+   captures, the same active deploy/schema-contract identity and its own external
    approval; after S-final, adapter preflight must verify the live state-v3
    journal and its exact S-final binding before target writers start;
 6. run the shipped PostgreSQL-to-legacy projection throughout the bounded
@@ -37,7 +37,7 @@ Runbooks:
 - [`COLLECTOR_PARITY.md`](runbooks/COLLECTOR_PARITY.md) — bounded historical
   refresh/deletion rehearsal and Writer Gate W evidence contract.
 - [`pg-to-legacy-sync.md`](interfaces/pg-to-legacy-sync.md) — reverse projection
-  commands, state v3, identity/alias rules and strict v4 rehearsal
+  commands, state v3, identity/alias rules and strict v5 rehearsal
   evidence/release-binding schema.
 
 `operations/cold_archive/` has a separate owner. These files neither edit nor
@@ -113,9 +113,9 @@ nested siblings must resolve from the canonical active release. Previously
 installed entrypoints that predate this guard cannot join the lock
 retroactively and must be prohibited during rollout.
 
-The reverse worker currently uses `migration_bridge` because frozen Flyway
-V1-V29 has no dedicated reverse-sync role. That role is broader than the required
+The legacy reverse worker currently uses `migration_bridge` because the observed
+production schema has no dedicated reverse-sync role. That role is broader than the required
 read set plus alias insert, so least privilege remains a recorded residual risk.
 Do not silently substitute `api_read` (it cannot reserve aliases) or expand the
-frozen migration files; use the hardened unit/private credential for the bounded
-window and address a narrow role in a separately reviewed future migration.
+retired schema sources; use the hardened unit/private credential for the bounded
+window and address a narrow role only through a future final-schema revision.
