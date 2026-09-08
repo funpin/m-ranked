@@ -467,11 +467,12 @@ final class SourceReadSql {
                    AND (institution.id IS NULL OR EXISTS(SELECT 1 FROM catalog.visible_platform_account account
                      WHERE account.institution_id=institution.id AND account.platform::text=:platform AND account.enabled))
             ), publications AS (
-                SELECT selection.*,publication.id AS publication_id,publication.history_completeness
+                SELECT selection.*,publication.id AS publication_id,publication.history_completeness,
+                       publication.published_at
                   FROM selections selection
                  CROSS JOIN params
                   JOIN LATERAL (
-                      SELECT candidate.id,candidate.history_completeness
+                      SELECT candidate.id,candidate.history_completeness,candidate.published_at
                         FROM catalog.visible_platform_account account
                         JOIN ingest.visible_publication candidate ON candidate.primary_account_id=account.id
                        WHERE account.enabled
@@ -501,6 +502,7 @@ final class SourceReadSql {
                   JOIN LATERAL (
                       SELECT candidate.* FROM analytics.usable_publication_snapshot candidate
                        WHERE candidate.publication_id=publication.publication_id
+                         AND candidate.published_month=date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date
                          AND candidate.age_seconds>=0 AND candidate.age_seconds<=:horizonSeconds
                          AND candidate.observed_at<=params.as_of AND candidate.collected_at<=params.as_of
                          AND NOT candidate.synthetic AND candidate.quality<>'invalid'

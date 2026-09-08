@@ -98,6 +98,7 @@ final class SourceOverviewSql {
                              snapshot.comments_count,snapshot.shares_count
                         FROM analytics.usable_publication_snapshot snapshot
                        WHERE snapshot.publication_id=publication.id
+                         AND snapshot.published_month=date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date
                          AND snapshot.observed_at<=params.as_of AND snapshot.collected_at<=params.as_of
                          AND NOT snapshot.synthetic AND snapshot.quality<>'invalid'
                        ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC LIMIT 1
