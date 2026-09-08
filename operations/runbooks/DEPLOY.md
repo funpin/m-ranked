@@ -7,14 +7,15 @@ change ticket. This procedure does not modify DNS, HAProxy or public routing.
 ## One-time host preparation
 
 Create independent, non-login Unix users: `m-ranked-api`, `m-ranked-web`,
-`m-ranked-outbox`, `m-ranked-maintenance`, `m-ranked-backup`,
+`m-ranked-outbox`, `m-ranked-maintenance`, `m-ranked-anomaly`, `m-ranked-backup`,
 `m-ranked-backup-read`, `m-ranked-restore` and
 `m-ranked-collector-{telegram,vk,max,rutube}`. Give collector users the shared
 primary group `m-ranked-collector`. On DR only, use
 `m-ranked-backup-readers` as the backup service's primary group and as a
 supplementary group of the read-only repository account. Do not put any
 application runtime user in the `postgres`, `redis`, `sudo` or deployment
-group.
+group. Add only `m-ranked-anomaly` to the `node-exporter` supplementary group so
+it can atomically replace its bounded analyzer textfile.
 
 Create the separate `m-ranked-identity-readers` group on each host that stores
 original identity receipts. The reverse, backup and restore units receive it
@@ -89,6 +90,10 @@ rtk sudo install -d -o m-ranked-web -g m-ranked-web -m 0750 \
   /var/lib/m-ranked/web-cache
 rtk sudo install -d -o m-ranked-maintenance -g m-ranked-maintenance -m 0700 \
   /var/lib/m-ranked/maintenance
+rtk sudo install -d -o m-ranked-anomaly -g m-ranked-anomaly -m 0750 \
+  /var/lib/m-ranked/anomaly
+rtk sudo install -d -o root -g node-exporter -m 0770 \
+  /var/lib/node_exporter/textfile_collector
 rtk sudo install -d -o root -g m-ranked-collector -m 0750 \
   /var/lib/m-ranked/collectors
 rtk sudo install -d -o m-ranked-collector-telegram -g m-ranked-collector -m 0700 \
@@ -148,6 +153,7 @@ of the corresponding service. Examples intentionally contain no passwords.
 | Spring public API | `m-ranked-api` | `api_read` | systemd config-tree credentials |
 | platform collector | one user/platform | `collector_ingest` | `PGPASSFILE` credential |
 | projection publisher | `m-ranked-maintenance` | `maintenance` | `PGPASSFILE` credential |
+| anomaly analyzer | `m-ranked-anomaly` | `analytics_worker` | `PGPASSFILE` credential |
 | cache outbox | `m-ranked-outbox` | `api_write_admin` | `PGPASSFILE` + Redis credential |
 | bounded maintenance | `m-ranked-maintenance` | `maintenance` | `PGPASSFILE` credential |
 | one-time database transition | database operator | `migration_owner` | libpq credential used only in the approved schema cutover |
@@ -224,7 +230,7 @@ systemd service must never wait for a console password or OTP.
 
 ## Database schema contract
 
-There is one supported database shape: `storage-publisher-final-2026-09-08-r2`.
+There is one supported database shape: `storage-publisher-final-2026-09-08-r3`.
 A clean PostgreSQL volume applies
 `backend/src/main/resources/db/final-schema.sql` directly after role creation.
 It does not create a Flyway schema or replay historical SQL files.
@@ -245,7 +251,7 @@ The database operator applies the reviewed release copy with `psql
 SELECT contract_id FROM ops_and_admin.schema_contract;
 ```
 
-Only the exact value `storage-publisher-final-2026-09-08-r2` permits the new API,
+Only the exact value `storage-publisher-final-2026-09-08-r3` permits the new API,
 collectors, Publisher and outbox worker to start. Start the application release
 after the transition; never keep a compatibility mode that accepts both old
 and final schemas. The existing production Flyway history table may remain as
@@ -258,7 +264,7 @@ CI prepares one immutable directory containing:
 - `backend/m-ranked-backend.jar` built on Java 21;
 - `frontend/server.js`, `.next/static` and `public` copied from the Next.js
   standalone build;
-- `.venv` and `collector_target` with the four-platform CLI;
+- `.venv`, `collector_target` and `anomaly_analysis` with the four-platform collector CLI and independent analyzer;
 - the hardened projection-publisher unit, worker and non-secret env example;
 - the declarative `backend/src/main/resources/db/final-schema.sql`, the guarded
   `operations/sql/transition-production-to-final.sql`, and this `operations/` tree;
@@ -324,7 +330,7 @@ rtk sudo nginx -t -c /etc/nginx/nginx.conf
 
 Activate only the shadow services. The script validates the immutable release
 manifest and both schema artifacts, then requires the database's exact
-`storage-publisher-final-2026-09-08-r2` contract before it atomically moves the `current` symlink.
+`storage-publisher-final-2026-09-08-r3` contract before it atomically moves the `current` symlink.
 It checks API/Web readiness against the newest already-published serving
 generation and restarts the outbox worker. It never
 starts target collectors, stops legacy units or reloads Nginx.
@@ -366,6 +372,10 @@ constant query counts and performance budgets. A failed activation returns the
 - `m-ranked-target-maintenance.timer`: creates upcoming partitions and reports
   capacity/outbox/default-partition state. Raw payload purge is disabled unless
   explicitly set to `true` after retention acceptance.
+- `m-ranked-target-anomaly-analysis.service`: evaluates bounded publication
+  histories through the least-privilege `analytics_worker` role. It is a
+  non-core `Wants=` dependency: failure never changes the seven-projection
+  readiness barrier or prevents API/core activation.
 - backup/restore timers are installed on their documented primary/DR hosts.
 
 The Web unit bind-mounts its private `/var/lib/m-ranked/web-cache` over

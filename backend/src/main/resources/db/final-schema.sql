@@ -1,4 +1,4 @@
--- FINAL DATABASE SCHEMA — storage-publisher-final-2026-09-08-r2
+-- FINAL DATABASE SCHEMA — storage-publisher-final-2026-09-08-r3
 --
 -- This is the only bootstrap schema for a new database. It is a declarative
 -- snapshot, not a sequence of upgrade steps. Provision roles first with
@@ -11,7 +11,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dGccD1DkSddar6I7RSi6voYcgTTwt7FmPAXSjI4kPi0nIOTGoGSdDxBi9VUaIHn
+\restrict v5Z1z2ENfAArs4WQGyYOSTx9DRegEznk04WG8g4I2kcIFGNLEZpRBGXshbf0HOo
 
 -- Dumped from database version 18.6 (Debian 18.6-1.pgdg13+2)
 -- Dumped by pg_dump version 18.6 (Debian 18.6-1.pgdg13+2)
@@ -362,6 +362,89 @@ CREATE TYPE rating.formula_status AS ENUM (
 ALTER TYPE rating.formula_status OWNER TO migration_owner;
 
 --
+-- Name: anomaly_input_is_unchanged(uuid, text, text); Type: FUNCTION; Schema: analytics; Owner: migration_owner
+--
+
+CREATE FUNCTION analytics.anomaly_input_is_unchanged(p_publication_id uuid, p_input_hash text, p_manifest_hash text) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics'
+    AS $$
+SELECT EXISTS(
+    SELECT 1 FROM analytics.publication_analysis_state state
+     WHERE state.publication_id=p_publication_id
+       AND state.current_success_attempt_id IS NOT NULL
+       AND state.status IN ('ready','partial')
+       AND state.input_hash=p_input_hash
+       AND state.detector_manifest_hash=p_manifest_hash
+)
+$$;
+
+
+ALTER FUNCTION analytics.anomaly_input_is_unchanged(p_publication_id uuid, p_input_hash text, p_manifest_hash text) OWNER TO migration_owner;
+
+--
+-- Name: anomaly_operational_metrics(); Type: FUNCTION; Schema: analytics; Owner: migration_owner
+--
+
+CREATE FUNCTION analytics.anomaly_operational_metrics() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics', 'ops_and_admin'
+    AS $$
+SELECT jsonb_build_object(
+  'candidate_backlog',(SELECT count(*) FROM ops_and_admin.anomaly_analysis_candidate),
+  'eligible_backlog',(SELECT count(*) FROM ops_and_admin.anomaly_analysis_candidate WHERE eligible_at<=transaction_timestamp()),
+  'oldest_candidate_age_seconds',(SELECT coalesce(greatest(0,extract(epoch FROM transaction_timestamp()-min(eligible_at))),0) FROM ops_and_admin.anomaly_analysis_candidate),
+  'expired_leases',(SELECT count(*) FROM ops_and_admin.anomaly_analysis_candidate WHERE claim_token IS NOT NULL AND leased_until<transaction_timestamp()),
+  'retry_candidates',(SELECT count(*) FROM ops_and_admin.anomaly_analysis_candidate WHERE retry_count>0),
+  'failures_last_hour',(SELECT count(*) FROM analytics.publication_analysis_attempt WHERE status='failed' AND completed_at>=transaction_timestamp()-interval '1 hour'),
+  'latest_analysis_revision',(SELECT coalesce(max(id),0) FROM analytics.anomaly_analysis_revision),
+  'latest_source_dataset_revision',(SELECT coalesce(max(source_dataset_revision_id),0) FROM analytics.publication_analysis_state),
+  'source_revision_lag',greatest(0,
+      coalesce((SELECT id FROM analytics.latest_fully_published_dataset_revision()),0)
+      -(SELECT coalesce(max(source_dataset_revision_id),0) FROM analytics.publication_analysis_state)),
+  'last_success_unixtime',(SELECT coalesce(extract(epoch FROM max(completed_at)),0) FROM analytics.publication_analysis_attempt WHERE status='succeeded')
+)
+$$;
+
+
+ALTER FUNCTION analytics.anomaly_operational_metrics() OWNER TO migration_owner;
+
+--
+-- Name: append_anomaly_review(uuid, text, text, text, uuid, uuid, text); Type: FUNCTION; Schema: analytics; Owner: migration_owner
+--
+
+CREATE FUNCTION analytics.append_anomaly_review(p_finding_id uuid, p_decision text, p_private_comment text, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics', 'ops_and_admin'
+    AS $$
+DECLARE existing ops_and_admin.anomaly_command_receipt%ROWTYPE; publication uuid; key uuid; review uuid; revision bigint; result jsonb;
+BEGIN
+ SELECT * INTO existing FROM ops_and_admin.anomaly_command_receipt WHERE subject=p_subject AND command_type='review' AND idempotency_key=p_idempotency_key;
+ IF FOUND THEN
+   IF existing.request_digest<>p_request_digest THEN RAISE EXCEPTION 'idempotency digest conflict' USING ERRCODE='23505'; END IF;
+   RETURN existing.result;
+ END IF;
+ IF p_decision NOT IN ('explained','unresolved','data_error','dismissed') OR length(coalesce(p_private_comment,''))>2000 THEN
+   RAISE EXCEPTION 'invalid anomaly review'; END IF;
+ SELECT publication_id,finding_key INTO publication,key FROM analytics.publication_anomaly_finding WHERE id=p_finding_id;
+ IF publication IS NULL THEN RAISE EXCEPTION 'anomaly finding not found' USING ERRCODE='P0002'; END IF;
+ review:=gen_random_uuid();
+ INSERT INTO analytics.anomaly_analysis_revision(publication_id,reason) VALUES(publication,'review') RETURNING id INTO revision;
+ INSERT INTO analytics.publication_anomaly_review(id,publication_id,finding_key,finding_id,analysis_revision_id,reviewer_subject,decision,private_comment)
+ VALUES(review,publication,key,p_finding_id,revision,p_subject,p_decision::analytics.review_decision,p_private_comment);
+ UPDATE analytics.publication_analysis_state SET analysis_revision_id=revision WHERE publication_id=publication;
+ result:=jsonb_build_object('reviewId',review,'findingId',p_finding_id,'analysisRevision',revision,'decision',p_decision);
+ INSERT INTO ops_and_admin.anomaly_command_receipt VALUES(p_subject,'review',p_idempotency_key,p_request_digest,result,transaction_timestamp());
+ INSERT INTO ops_and_admin.audit_log(subject,action,target_type,target_id,correlation_id,after_state,outcome)
+ VALUES(p_subject,'anomaly.review.append','publication_anomaly_finding',p_finding_id,p_correlation_id,
+        jsonb_build_object('decision',p_decision),'succeeded');
+ RETURN result;
+END $$;
+
+
+ALTER FUNCTION analytics.append_anomaly_review(p_finding_id uuid, p_decision text, p_private_comment text, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text) OWNER TO migration_owner;
+
+--
 -- Name: begin_legacy_csv_restore(); Type: FUNCTION; Schema: analytics; Owner: migration_owner
 --
 
@@ -404,6 +487,101 @@ END $$;
 ALTER FUNCTION analytics.capture_legacy_csv_facts(p_month date) OWNER TO migration_owner;
 
 --
+-- Name: create_manual_anomaly_signal(uuid, text, text, text, timestamp with time zone, timestamp with time zone, jsonb, text, uuid, uuid, text); Type: FUNCTION; Schema: analytics; Owner: migration_owner
+--
+
+CREATE FUNCTION analytics.create_manual_anomaly_signal(p_publication_id uuid, p_metric text, p_severity text, p_explanation_code text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_evidence jsonb, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics', 'ops_and_admin'
+    AS $_$
+DECLARE existing ops_and_admin.anomaly_command_receipt%ROWTYPE; finding uuid; revision bigint; result jsonb;
+BEGIN
+ SELECT * INTO existing FROM ops_and_admin.anomaly_command_receipt WHERE subject=p_subject AND command_type='manual_signal' AND idempotency_key=p_idempotency_key;
+ IF FOUND THEN
+   IF existing.request_digest<>p_request_digest THEN RAISE EXCEPTION 'idempotency digest conflict' USING ERRCODE='23505'; END IF;
+   RETURN existing.result;
+ END IF;
+ IF p_metric NOT IN ('views','reactions','comments','shares') OR p_severity NOT IN ('low','medium','high')
+    OR p_explanation_code !~ '^[a-z0-9_]{1,80}$' OR p_end_at<=p_start_at OR pg_column_size(p_evidence)>8192 THEN
+   RAISE EXCEPTION 'invalid manual anomaly signal'; END IF;
+ finding:=gen_random_uuid();
+ INSERT INTO analytics.anomaly_analysis_revision(publication_id,reason) VALUES(p_publication_id,'manual_signal') RETURNING id INTO revision;
+ INSERT INTO analytics.publication_anomaly_finding(id,finding_key,publication_id,created_analysis_revision_id,origin,metric,severity,
+   explanation_code,suspicious_start_at,suspicious_end_at,evidence)
+ VALUES(finding,finding,p_publication_id,revision,'manual',p_metric::analytics.metric_key,p_severity,p_explanation_code,p_start_at,p_end_at,p_evidence);
+ INSERT INTO analytics.publication_analysis_state(publication_id,analysis_revision_id,status)
+ VALUES(p_publication_id,revision,'pending') ON CONFLICT(publication_id) DO UPDATE SET analysis_revision_id=excluded.analysis_revision_id;
+ result:=jsonb_build_object('findingId',finding,'analysisRevision',revision);
+ INSERT INTO ops_and_admin.anomaly_command_receipt VALUES(p_subject,'manual_signal',p_idempotency_key,p_request_digest,result,transaction_timestamp());
+ INSERT INTO ops_and_admin.audit_log(subject,action,target_type,target_id,correlation_id,after_state,outcome)
+ VALUES(p_subject,'anomaly.manual_signal.create','publication_anomaly_finding',finding,p_correlation_id,
+        jsonb_build_object('publicationId',p_publication_id,'metric',p_metric,'severity',p_severity),'succeeded');
+ RETURN result;
+END $_$;
+
+
+ALTER FUNCTION analytics.create_manual_anomaly_signal(p_publication_id uuid, p_metric text, p_severity text, p_explanation_code text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_evidence jsonb, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text) OWNER TO migration_owner;
+
+--
+-- Name: extract_publication_history_as_of(uuid[], bigint, integer); Type: FUNCTION; Schema: analytics; Owner: migration_owner
+--
+
+CREATE FUNCTION analytics.extract_publication_history_as_of(p_publication_ids uuid[], p_source_dataset_revision bigint, p_max_points integer) RETURNS TABLE(publication_id uuid, institution_id uuid, account_id uuid, platform text, published_at timestamp with time zone, deleted_at timestamp with time zone, history_completeness text, source_revision_at timestamp with time zone, snapshot_id text, observed_at timestamp with time zone, age_seconds integer, views_count bigint, reactions_count bigint, comments_count bigint, shares_count bigint, views_quality text, reactions_quality text, comments_quality text, shares_quality text, synthetic boolean, interval_uncertain boolean, correction_sequence bigint, supersedes_snapshot_id text, metric_semantics_version integer, capability_version integer, supported_metrics text[], point_ordinal bigint, total_points bigint)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'catalog', 'ingest', 'analytics'
+    SET statement_timeout TO '15s'
+    AS $$
+DECLARE anchor timestamptz;
+BEGIN
+    IF cardinality(p_publication_ids)<1 OR cardinality(p_publication_ids)>100 OR p_max_points<1 OR p_max_points>10000 THEN
+        RAISE EXCEPTION 'invalid anomaly extraction bounds';
+    END IF;
+    SELECT pinned.committed_at INTO anchor
+      FROM analytics.anomaly_source_revision pinned
+     WHERE pinned.dataset_revision_id=p_source_dataset_revision;
+    IF anchor IS NULL THEN RAISE EXCEPTION 'source dataset revision is not fully published'; END IF;
+    RETURN QUERY
+    WITH ranked_corrections AS (
+        SELECT snapshot.*,
+               row_number() OVER(PARTITION BY snapshot.published_month,snapshot.publication_id,snapshot.sampling_bucket
+                                 ORDER BY snapshot.correction_sequence DESC,snapshot.id DESC) AS correction_rank
+          FROM ingest.publication_metric_snapshot snapshot
+         WHERE snapshot.publication_id=ANY(p_publication_ids) AND snapshot.created_at<=anchor
+    ), effective AS (
+        SELECT snapshot.*,
+               row_number() OVER(PARTITION BY snapshot.publication_id ORDER BY snapshot.observed_at,snapshot.id) AS ordinal,
+               count(*) OVER(PARTITION BY snapshot.publication_id) AS points
+          FROM ranked_corrections snapshot WHERE snapshot.correction_rank=1
+    )
+    SELECT publication.id,account.institution_id,account.id,account.platform::text,publication.published_at,
+           publication.deleted_at,publication.history_completeness::text,anchor,
+           effective.id::text,effective.observed_at,effective.age_seconds,
+           CASE WHEN effective.views_quality IN ('invalid','suspected_reset') THEN NULL ELSE effective.views_count END,
+           CASE WHEN effective.reactions_quality IN ('invalid','suspected_reset') THEN NULL ELSE effective.reactions_count END,
+           CASE WHEN effective.comments_quality IN ('invalid','suspected_reset') THEN NULL ELSE effective.comments_count END,
+           CASE WHEN effective.shares_quality IN ('invalid','suspected_reset') THEN NULL ELSE effective.shares_count END,
+           effective.views_quality::text,effective.reactions_quality::text,effective.comments_quality::text,effective.shares_quality::text,
+           effective.synthetic,effective.interval_uncertain,effective.correction_sequence,effective.supersedes_snapshot_id::text,
+           effective.metric_semantics_version,effective.capability_version,
+           ARRAY(SELECT capability.metric_key::text
+                   FROM (SELECT DISTINCT ON (c.metric_key) c.metric_key,c.supported
+                           FROM analytics.platform_metric_capability c
+                          WHERE c.platform=account.platform AND c.effective_from<=anchor
+                            AND (c.retired_at IS NULL OR c.retired_at>anchor)
+                          ORDER BY c.metric_key,c.capability_version DESC) capability
+                  WHERE capability.supported ORDER BY 1),
+           effective.ordinal,effective.points
+      FROM effective
+      JOIN ingest.publication publication ON publication.id=effective.publication_id
+      JOIN catalog.platform_account account ON account.id=publication.primary_account_id
+     WHERE effective.ordinal<=p_max_points+1
+     ORDER BY publication.id,effective.ordinal;
+END $$;
+
+
+ALTER FUNCTION analytics.extract_publication_history_as_of(p_publication_ids uuid[], p_source_dataset_revision bigint, p_max_points integer) OWNER TO migration_owner;
+
+--
 -- Name: guard_legacy_period_policy(); Type: FUNCTION; Schema: analytics; Owner: migration_owner
 --
 
@@ -423,6 +601,33 @@ END $$;
 
 
 ALTER FUNCTION analytics.guard_legacy_period_policy() OWNER TO migration_owner;
+
+--
+-- Name: latest_fully_published_dataset_revision(); Type: FUNCTION; Schema: analytics; Owner: migration_owner
+--
+
+CREATE FUNCTION analytics.latest_fully_published_dataset_revision() RETURNS TABLE(id bigint, committed_at timestamp with time zone)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics'
+    AS $$
+-- Mirrors the core barrier of JdbcDatasetRevisionProvider.CURRENT_REVISION_SQL.
+WITH required(name) AS (VALUES
+ ('publication_latest'),('publication_hourly'),('institution_daily_metrics'),
+ ('institution_monthly_metrics'),('institution_period_metrics'),('comparison'),
+ ('publication_history')
+)
+SELECT revision.id,revision.committed_at
+  FROM analytics.dataset_revision revision
+ CROSS JOIN required
+  LEFT JOIN analytics.projection_state state
+    ON state.projection_name=required.name AND state.dataset_revision_id=revision.id AND state.status='ready'
+ GROUP BY revision.id,revision.committed_at
+HAVING count(state.projection_name)=7
+ ORDER BY revision.id DESC LIMIT 1
+$$;
+
+
+ALTER FUNCTION analytics.latest_fully_published_dataset_revision() OWNER TO migration_owner;
 
 --
 -- Name: legacy_csv_fact_digest(date, boolean); Type: FUNCTION; Schema: analytics; Owner: migration_owner
@@ -566,6 +771,140 @@ END $_$;
 
 
 ALTER FUNCTION analytics.ordered_history_reactions(p_text text, p_signed boolean) OWNER TO migration_owner;
+
+--
+-- Name: publish_anomaly_failure(uuid, uuid, bigint, uuid, bigint, text, text, text, integer, integer, timestamp with time zone, text, integer); Type: FUNCTION; Schema: analytics; Owner: migration_owner
+--
+
+CREATE FUNCTION analytics.publish_anomaly_failure(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_error_code text, p_retry_seconds integer) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics', 'ops_and_admin'
+    SET statement_timeout TO '15s'
+    AS $_$
+DECLARE attempt uuid; revision bigint; source_at timestamptz; previous_failure uuid; has_success boolean;
+BEGIN
+    IF p_error_code !~ '^[a-z0-9_]{1,64}$' OR p_retry_seconds<1 OR p_retry_seconds>86400 THEN
+       RAISE EXCEPTION 'invalid anomaly failure envelope'; END IF;
+    SELECT id INTO attempt FROM analytics.publication_analysis_attempt
+     WHERE publication_id=p_publication_id AND attempt_key=p_attempt_key;
+    IF FOUND THEN SELECT analysis_revision_id INTO revision FROM analytics.publication_analysis_attempt WHERE id=attempt; RETURN revision; END IF;
+    PERFORM 1 FROM ops_and_admin.anomaly_analysis_candidate
+     WHERE publication_id=p_publication_id AND claim_token=p_claim_token AND claimed_generation=p_generation FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'anomaly claim lost' USING ERRCODE='55000'; END IF;
+    SELECT committed_at INTO source_at FROM analytics.anomaly_source_revision WHERE dataset_revision_id=p_source_revision;
+    IF source_at IS NULL THEN RAISE EXCEPTION 'source revision was not pinned as fully published'; END IF;
+    SELECT latest_failure_attempt_id,current_success_attempt_id IS NOT NULL INTO previous_failure,has_success
+      FROM analytics.publication_analysis_state WHERE publication_id=p_publication_id FOR UPDATE;
+    INSERT INTO analytics.anomaly_analysis_revision(publication_id,reason)
+      VALUES(p_publication_id,'automatic_failure') RETURNING id INTO revision;
+    INSERT INTO analytics.publication_analysis_attempt(
+      publication_id,attempt_key,status,claimed_generation,source_dataset_revision_id,source_revision_at,
+      detector_manifest_hash,preprocessing_version,aggregator_version,metric_semantics_version,capability_version,
+      started_at,error_code,analysis_revision_id
+    ) VALUES(p_publication_id,p_attempt_key,'failed',p_generation,p_source_revision,source_at,p_manifest_hash,
+      p_preprocessor,p_aggregator,p_semantic_version,p_capability_version,p_started_at,p_error_code,revision)
+      RETURNING id INTO attempt;
+    INSERT INTO analytics.publication_analysis_state(publication_id,analysis_revision_id,latest_failure_attempt_id,status)
+      VALUES(p_publication_id,revision,attempt,CASE WHEN has_success THEN 'stale' ELSE 'failed' END)
+    ON CONFLICT(publication_id) DO UPDATE SET analysis_revision_id=excluded.analysis_revision_id,
+      latest_failure_attempt_id=excluded.latest_failure_attempt_id,status=excluded.status;
+    IF previous_failure IS NOT NULL AND previous_failure<>attempt THEN
+      PERFORM ops_and_admin.record_anomaly_attempt_tombstone(previous_failure,attempt,'superseded_by_failure');
+      DELETE FROM analytics.publication_analysis_attempt WHERE id=previous_failure;
+    END IF;
+    UPDATE ops_and_admin.anomaly_analysis_candidate SET claim_token=NULL,claimed_generation=NULL,leased_until=NULL,
+      retry_count=least(retry_count+1,20),last_error_code=p_error_code,
+      eligible_at=transaction_timestamp()+make_interval(secs=>p_retry_seconds),updated_at=transaction_timestamp()
+     WHERE publication_id=p_publication_id AND claim_token=p_claim_token AND claimed_generation=p_generation;
+    RETURN revision;
+END $_$;
+
+
+ALTER FUNCTION analytics.publish_anomaly_failure(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_error_code text, p_retry_seconds integer) OWNER TO migration_owner;
+
+--
+-- Name: publish_anomaly_success(uuid, uuid, bigint, uuid, bigint, text, text, text, text, integer, integer, timestamp with time zone, text, numeric, text, jsonb); Type: FUNCTION; Schema: analytics; Owner: migration_owner
+--
+
+CREATE FUNCTION analytics.publish_anomaly_success(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_input_hash text, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_status text, p_score numeric, p_severity text, p_findings jsonb) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics', 'ops_and_admin'
+    SET statement_timeout TO '15s'
+    AS $$
+DECLARE attempt uuid; revision bigint; source_at timestamptz; previous_success uuid;
+BEGIN
+    IF p_status NOT IN ('ready','partial') OR (p_score IS NOT NULL AND (p_score<0 OR p_score>1))
+       OR jsonb_typeof(p_findings)<>'array' OR jsonb_array_length(p_findings)>200 THEN
+        RAISE EXCEPTION 'invalid anomaly success envelope';
+    END IF;
+    SELECT id INTO attempt FROM analytics.publication_analysis_attempt
+     WHERE publication_id=p_publication_id AND attempt_key=p_attempt_key;
+    IF FOUND THEN
+        SELECT analysis_revision_id INTO revision FROM analytics.publication_analysis_attempt WHERE id=attempt;
+        RETURN revision;
+    END IF;
+    PERFORM 1 FROM ops_and_admin.anomaly_analysis_candidate
+     WHERE publication_id=p_publication_id AND claim_token=p_claim_token AND claimed_generation=p_generation FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'anomaly claim lost' USING ERRCODE='55000'; END IF;
+    SELECT committed_at INTO source_at FROM analytics.anomaly_source_revision WHERE dataset_revision_id=p_source_revision;
+    IF source_at IS NULL THEN RAISE EXCEPTION 'source revision was not pinned as fully published'; END IF;
+    INSERT INTO analytics.anomaly_analysis_revision(publication_id,reason)
+      VALUES(p_publication_id,'automatic_success') RETURNING id INTO revision;
+    INSERT INTO analytics.publication_analysis_attempt(
+      publication_id,attempt_key,status,claimed_generation,source_dataset_revision_id,source_revision_at,input_hash,
+      detector_manifest_hash,preprocessing_version,aggregator_version,metric_semantics_version,capability_version,
+      started_at,analysis_revision_id
+    ) VALUES(p_publication_id,p_attempt_key,'succeeded',p_generation,p_source_revision,source_at,p_input_hash,
+      p_manifest_hash,p_preprocessor,p_aggregator,p_semantic_version,p_capability_version,p_started_at,revision)
+      RETURNING id INTO attempt;
+    INSERT INTO analytics.publication_anomaly_finding(
+      id,finding_key,publication_id,attempt_id,created_analysis_revision_id,origin,metric,detector_id,detector_version,
+      suspicion_score,severity,explanation_code,suspicious_start_at,suspicious_end_at,start_snapshot_id,end_snapshot_id,
+      evidence,quality_codes,alternative_explanation_codes
+    ) SELECT md5(attempt::text||':'||keyed.finding_key::text)::uuid,keyed.finding_key,p_publication_id,attempt,revision,
+      'automatic',keyed.metric::analytics.metric_key,
+      keyed.detector_id,keyed.detector_version,keyed.score,keyed.severity,keyed.explanation_code,
+      keyed.start_at,keyed.end_at,keyed.start_snapshot_id,keyed.end_snapshot_id,
+      keyed.evidence,coalesce(keyed.quality_codes,ARRAY[]::text[]),coalesce(keyed.alternative_codes,ARRAY[]::text[])
+      FROM (
+        SELECT finding.*,
+               md5(p_publication_id::text||':automatic:'||finding.metric||':'||finding.detector_id||':'
+                   ||finding.detector_version||':'||coalesce(finding.start_snapshot_id,'')||':'
+                   ||coalesce(finding.end_snapshot_id,''))::uuid AS finding_key
+          FROM jsonb_to_recordset(p_findings) AS finding(
+            metric text,detector_id text,detector_version text,score numeric,severity text,explanation_code text,
+            start_at timestamptz,end_at timestamptz,start_snapshot_id text,end_snapshot_id text,evidence jsonb,
+            quality_codes text[],alternative_codes text[])
+      ) keyed;
+    SELECT current_success_attempt_id INTO previous_success
+      FROM analytics.publication_analysis_state WHERE publication_id=p_publication_id FOR UPDATE;
+    INSERT INTO analytics.publication_analysis_state(
+      publication_id,analysis_revision_id,current_success_attempt_id,status,suspicion_score,automatic_severity,
+      affected_metrics,active_automatic_finding_count,source_dataset_revision_id,source_revision_at,analyzed_at,
+      input_hash,detector_manifest_hash,preprocessing_version,aggregator_version
+    ) SELECT p_publication_id,revision,attempt,p_status,p_score,p_severity,
+      coalesce(array_agg(DISTINCT (item->>'metric')::analytics.metric_key) FILTER(WHERE item ? 'metric'),ARRAY[]::analytics.metric_key[]),
+      jsonb_array_length(p_findings),p_source_revision,source_at,transaction_timestamp(),p_input_hash,p_manifest_hash,p_preprocessor,p_aggregator
+      FROM jsonb_array_elements(p_findings) item
+    ON CONFLICT(publication_id) DO UPDATE SET
+      analysis_revision_id=excluded.analysis_revision_id,current_success_attempt_id=excluded.current_success_attempt_id,
+      status=excluded.status,suspicion_score=excluded.suspicion_score,automatic_severity=excluded.automatic_severity,
+      affected_metrics=excluded.affected_metrics,active_automatic_finding_count=excluded.active_automatic_finding_count,
+      source_dataset_revision_id=excluded.source_dataset_revision_id,source_revision_at=excluded.source_revision_at,
+      analyzed_at=excluded.analyzed_at,input_hash=excluded.input_hash,detector_manifest_hash=excluded.detector_manifest_hash,
+      preprocessing_version=excluded.preprocessing_version,aggregator_version=excluded.aggregator_version;
+    IF previous_success IS NOT NULL AND previous_success<>attempt THEN
+        -- Two-slot retention: the superseded generated payload is removed after the
+        -- pointer switch; the audit log keeps only safe attempt metadata.
+        PERFORM ops_and_admin.record_anomaly_attempt_tombstone(previous_success,attempt,'superseded_by_success');
+        DELETE FROM analytics.publication_analysis_attempt WHERE id=previous_success;
+    END IF;
+    PERFORM ops_and_admin.complete_anomaly_noop(p_publication_id,p_claim_token,p_generation);
+    RETURN revision;
+END $$;
+
+
+ALTER FUNCTION analytics.publish_anomaly_success(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_input_hash text, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_status text, p_score numeric, p_severity text, p_findings jsonb) OWNER TO migration_owner;
 
 --
 -- Name: rebuild_core_projections(bigint); Type: FUNCTION; Schema: analytics; Owner: migration_owner
@@ -3484,6 +3823,66 @@ END $_$;
 ALTER FUNCTION ops_and_admin.catalog_command(p_action text, p_target uuid, p_expected bigint, p_body jsonb, p_actor text, p_correlation uuid) OWNER TO migration_owner;
 
 --
+-- Name: claim_anomaly_candidates(integer, integer, uuid); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE FUNCTION ops_and_admin.claim_anomaly_candidates(p_limit integer, p_lease_seconds integer, p_claim_token uuid) RETURNS TABLE(publication_id uuid, dirty_generation bigint, retry_count integer, config_backfill boolean)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'ops_and_admin'
+    SET statement_timeout TO '10s'
+    AS $$
+BEGIN
+    IF p_limit<1 OR p_limit>100 OR p_lease_seconds<10 OR p_lease_seconds>900 OR p_claim_token IS NULL THEN
+        RAISE EXCEPTION 'invalid anomaly claim bounds';
+    END IF;
+    UPDATE ops_and_admin.anomaly_analysis_candidate candidate
+       SET claim_token=NULL,claimed_generation=NULL,leased_until=NULL,updated_at=transaction_timestamp()
+     WHERE candidate.claim_token IS NOT NULL AND candidate.leased_until<transaction_timestamp();
+    RETURN QUERY
+    WITH selected AS (
+        SELECT candidate.publication_id
+          FROM ops_and_admin.anomaly_analysis_candidate candidate
+         WHERE candidate.eligible_at<=transaction_timestamp()
+           AND candidate.claim_token IS NULL
+         ORDER BY candidate.priority DESC,candidate.eligible_at,candidate.publication_id
+         FOR UPDATE SKIP LOCKED LIMIT p_limit
+    ), claimed AS (
+        UPDATE ops_and_admin.anomaly_analysis_candidate candidate
+           SET claim_token=p_claim_token,claimed_generation=candidate.dirty_generation,
+               leased_until=transaction_timestamp()+make_interval(secs=>p_lease_seconds),
+               updated_at=transaction_timestamp()
+          FROM selected WHERE candidate.publication_id=selected.publication_id
+        RETURNING candidate.publication_id,candidate.dirty_generation,candidate.retry_count,candidate.config_backfill
+    ) SELECT * FROM claimed;
+END $$;
+
+
+ALTER FUNCTION ops_and_admin.claim_anomaly_candidates(p_limit integer, p_lease_seconds integer, p_claim_token uuid) OWNER TO migration_owner;
+
+--
+-- Name: complete_anomaly_noop(uuid, uuid, bigint); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE FUNCTION ops_and_admin.complete_anomaly_noop(p_publication_id uuid, p_claim_token uuid, p_generation bigint) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'ops_and_admin'
+    AS $$
+BEGIN
+    DELETE FROM ops_and_admin.anomaly_analysis_candidate
+     WHERE publication_id=p_publication_id AND claim_token=p_claim_token
+       AND claimed_generation=p_generation AND dirty_generation=p_generation;
+    IF FOUND THEN RETURN true; END IF;
+    UPDATE ops_and_admin.anomaly_analysis_candidate SET
+        claim_token=NULL,claimed_generation=NULL,leased_until=NULL,eligible_at=transaction_timestamp(),
+        retry_count=0,last_error_code=NULL,updated_at=transaction_timestamp()
+     WHERE publication_id=p_publication_id AND claim_token=p_claim_token AND claimed_generation=p_generation;
+    RETURN FOUND;
+END $$;
+
+
+ALTER FUNCTION ops_and_admin.complete_anomaly_noop(p_publication_id uuid, p_claim_token uuid, p_generation bigint) OWNER TO migration_owner;
+
+--
 -- Name: drop_publication_metric_partition(date, uuid); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
 --
 
@@ -3754,6 +4153,61 @@ $$;
 ALTER FUNCTION ops_and_admin.legacy_account_presentation(p_account uuid) OWNER TO migration_owner;
 
 --
+-- Name: mark_anomaly_candidate(); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE FUNCTION ops_and_admin.mark_anomaly_candidate() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'ingest', 'ops_and_admin'
+    AS $$
+BEGIN
+    INSERT INTO ops_and_admin.anomaly_analysis_candidate(
+        publication_id,dirty_generation,eligible_at,priority,config_backfill,updated_at
+    )
+    SELECT NEW.publication_id,1,greatest(
+        published_at+interval '15 minutes',
+        transaction_timestamp()+CASE
+          WHEN transaction_timestamp()-published_at<interval '6 hours' THEN interval '2 minutes'
+          WHEN transaction_timestamp()-published_at<interval '1 day' THEN interval '5 minutes'
+          WHEN transaction_timestamp()-published_at<interval '7 days' THEN interval '15 minutes'
+          ELSE interval '1 hour' END
+      ),100,false,transaction_timestamp()
+      FROM ingest.publication WHERE id=NEW.publication_id
+    ON CONFLICT(publication_id) DO UPDATE SET
+        dirty_generation=ops_and_admin.anomaly_analysis_candidate.dirty_generation+1,
+        eligible_at=least(ops_and_admin.anomaly_analysis_candidate.eligible_at,excluded.eligible_at),
+        priority=greatest(ops_and_admin.anomaly_analysis_candidate.priority,100),
+        config_backfill=false,updated_at=transaction_timestamp();
+    RETURN NULL;
+END $$;
+
+
+ALTER FUNCTION ops_and_admin.mark_anomaly_candidate() OWNER TO migration_owner;
+
+--
+-- Name: pin_latest_anomaly_source_revision(); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE FUNCTION ops_and_admin.pin_latest_anomaly_source_revision() RETURNS TABLE(id bigint, committed_at timestamp with time zone)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics'
+    AS $$
+WITH latest AS MATERIALIZED (
+  SELECT source.id,source.committed_at
+    FROM analytics.latest_fully_published_dataset_revision() source
+), pinned AS (
+  INSERT INTO analytics.anomaly_source_revision(dataset_revision_id,committed_at)
+  SELECT latest.id,latest.committed_at FROM latest
+  ON CONFLICT(dataset_revision_id) DO NOTHING
+  RETURNING dataset_revision_id,anomaly_source_revision.committed_at
+)
+SELECT latest.id,latest.committed_at FROM latest
+$$;
+
+
+ALTER FUNCTION ops_and_admin.pin_latest_anomaly_source_revision() OWNER TO migration_owner;
+
+--
 -- Name: previous_official_rating(text, uuid); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
 --
 
@@ -4021,6 +4475,28 @@ END $$;
 ALTER FUNCTION ops_and_admin.purge_raw_evidence_reference(p_uri text, p_now timestamp with time zone) OWNER TO migration_owner;
 
 --
+-- Name: record_anomaly_attempt_tombstone(uuid, uuid, text); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE FUNCTION ops_and_admin.record_anomaly_attempt_tombstone(p_attempt_id uuid, p_superseded_by uuid, p_reason text) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'analytics', 'ops_and_admin'
+    AS $$
+INSERT INTO ops_and_admin.audit_log(subject,action,target_type,target_id,correlation_id,before_state,outcome)
+SELECT 'analytics_worker','anomaly.attempt.prune','publication_analysis_attempt',attempt.id,p_superseded_by,
+       jsonb_build_object('attemptKey',attempt.attempt_key,'publicationId',attempt.publication_id,
+         'status',attempt.status,'sourceDatasetRevision',attempt.source_dataset_revision_id,
+         'inputHash',attempt.input_hash,'detectorManifestHash',attempt.detector_manifest_hash,
+         'preprocessingVersion',attempt.preprocessing_version,'aggregatorVersion',attempt.aggregator_version,
+         'errorCode',attempt.error_code,'completedAt',attempt.completed_at,'reason',p_reason),
+       'pruned'
+  FROM analytics.publication_analysis_attempt attempt WHERE attempt.id=p_attempt_id
+$$;
+
+
+ALTER FUNCTION ops_and_admin.record_anomaly_attempt_tombstone(p_attempt_id uuid, p_superseded_by uuid, p_reason text) OWNER TO migration_owner;
+
+--
 -- Name: refresh_storage_observation(); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
 --
 
@@ -4117,6 +4593,53 @@ $$;
 ALTER FUNCTION ops_and_admin.reject_audit_mutation() OWNER TO migration_owner;
 
 --
+-- Name: seed_anomaly_backfill(integer, text); Type: FUNCTION; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE FUNCTION ops_and_admin.seed_anomaly_backfill(p_limit integer, p_manifest_hash text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'catalog', 'ingest', 'analytics', 'ops_and_admin'
+    SET statement_timeout TO '15s'
+    AS $_$
+DECLARE inserted_count integer;
+BEGIN
+    IF p_limit<1 OR p_limit>1000 OR p_manifest_hash !~ '^[0-9a-f]{64}$' THEN
+        RAISE EXCEPTION 'invalid bounded anomaly backfill request';
+    END IF;
+    WITH eligible AS (
+        SELECT publication.id
+          FROM ingest.publication publication
+         WHERE publication.published_at>=transaction_timestamp()-interval '70 days'
+           AND publication.published_at<=transaction_timestamp()-interval '15 minutes'
+           AND NOT EXISTS (
+               SELECT 1 FROM analytics.publication_analysis_state state
+                WHERE state.publication_id=publication.id
+                  AND state.detector_manifest_hash=p_manifest_hash
+           )
+           AND NOT EXISTS (
+               SELECT 1 FROM ops_and_admin.anomaly_analysis_candidate candidate
+                WHERE candidate.publication_id=publication.id
+           )
+           AND EXISTS (
+               SELECT 1 FROM ingest.publication_metric_snapshot snapshot
+                WHERE snapshot.publication_id=publication.id
+           )
+         ORDER BY publication.published_at DESC,publication.id
+         LIMIT p_limit
+    ), inserted AS (
+        INSERT INTO ops_and_admin.anomaly_analysis_candidate(
+            publication_id,dirty_generation,eligible_at,priority,config_backfill
+        ) SELECT id,1,transaction_timestamp(),10,true FROM eligible
+        ON CONFLICT(publication_id) DO NOTHING
+        RETURNING 1
+    ) SELECT count(*) INTO inserted_count FROM inserted;
+    RETURN inserted_count;
+END $_$;
+
+
+ALTER FUNCTION ops_and_admin.seed_anomaly_backfill(p_limit integer, p_manifest_hash text) OWNER TO migration_owner;
+
+--
 -- Name: reject_published_component_mutation(); Type: FUNCTION; Schema: rating; Owner: migration_owner
 --
 
@@ -4207,6 +4730,35 @@ CREATE TABLE analytics.account_latest (
 ALTER TABLE analytics.account_latest OWNER TO migration_owner;
 
 --
+-- Name: anomaly_analysis_revision; Type: TABLE; Schema: analytics; Owner: migration_owner
+--
+
+CREATE TABLE analytics.anomaly_analysis_revision (
+    id bigint NOT NULL,
+    publication_id uuid NOT NULL,
+    reason text NOT NULL,
+    created_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
+    CONSTRAINT anomaly_analysis_revision_reason_check CHECK ((reason = ANY (ARRAY['automatic_success'::text, 'automatic_failure'::text, 'manual_signal'::text, 'review'::text])))
+);
+
+
+ALTER TABLE analytics.anomaly_analysis_revision OWNER TO migration_owner;
+
+--
+-- Name: anomaly_analysis_revision_id_seq; Type: SEQUENCE; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE analytics.anomaly_analysis_revision ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME analytics.anomaly_analysis_revision_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: anomaly_event; Type: TABLE; Schema: analytics; Owner: migration_owner
 --
 
@@ -4246,6 +4798,19 @@ CREATE TABLE analytics.anomaly_review (
 
 
 ALTER TABLE analytics.anomaly_review OWNER TO migration_owner;
+
+--
+-- Name: anomaly_source_revision; Type: TABLE; Schema: analytics; Owner: migration_owner
+--
+
+CREATE TABLE analytics.anomaly_source_revision (
+    dataset_revision_id bigint NOT NULL,
+    committed_at timestamp with time zone NOT NULL,
+    pinned_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL
+);
+
+
+ALTER TABLE analytics.anomaly_source_revision OWNER TO migration_owner;
 
 --
 -- Name: comparison_cohort; Type: TABLE; Schema: analytics; Owner: migration_owner
@@ -4851,6 +5416,16 @@ CREATE TABLE analytics.metric_semantic_definition (
 
 ALTER TABLE analytics.metric_semantic_definition OWNER TO migration_owner;
 
+-- Publication metric semantics activated for anomaly analysis (version 1).
+-- NULL is unavailable, negative deltas break a segment, suspected resets are masked.
+INSERT INTO analytics.metric_semantic_definition (
+    metric_key, version, unit, metric_kind, aggregation_policy, reset_policy, missing_policy, effective_from, source_hash
+) VALUES
+    ('views', 1, 'count', 'cumulative', '{"derivative":"time_normalized"}', '{"negative":"break_segment","suspected_reset":"mask"}', '{"null":"unavailable","zero":"measured"}', '2026-09-08T00:00:00Z', '2cd498c42d6538a8d2e6a3ad5f477b604ad5c48ffa7a0fc31aa497e5e3ccbff7'),
+    ('reactions', 1, 'count', 'cumulative', '{"derivative":"time_normalized"}', '{"negative":"break_segment","suspected_reset":"mask"}', '{"null":"unavailable","zero":"measured"}', '2026-09-08T00:00:00Z', 'b531bfc56188283edfa9fd28f464727ebad8bd5024317a8a7df718001db3c515'),
+    ('comments', 1, 'count', 'cumulative', '{"derivative":"time_normalized"}', '{"negative":"break_segment","suspected_reset":"mask"}', '{"null":"unavailable","zero":"measured"}', '2026-09-08T00:00:00Z', '2b3badea72204712fe3c7e7b5534e81dd92f3b473331f813b9e597833c04dc1a'),
+    ('shares', 1, 'count', 'cumulative', '{"derivative":"time_normalized"}', '{"negative":"break_segment","suspected_reset":"mask"}', '{"null":"unavailable","zero":"measured"}', '2026-09-08T00:00:00Z', '4d6830cfffae526fe3f53b73ebaefd9b598dad62a9137931d2a43ae2feb467bd');
+
 --
 -- Name: platform_metric_capability; Type: TABLE; Schema: analytics; Owner: migration_owner
 --
@@ -4872,6 +5447,28 @@ CREATE TABLE analytics.platform_metric_capability (
 
 ALTER TABLE analytics.platform_metric_capability OWNER TO migration_owner;
 
+-- Provider capability matrix (version 1): unsupported metrics are never
+-- analyzed and never treated as zero.
+INSERT INTO analytics.platform_metric_capability (
+    platform, metric_key, capability_version, semantic_version, supported, notes, effective_from
+) VALUES
+    ('telegram', 'views', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('telegram', 'reactions', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('telegram', 'comments', 1, 1, true, 'available when discussion access exposes the counter', '2026-09-08T00:00:00Z'),
+    ('telegram', 'shares', 1, 1, false, 'provider does not expose publication shares', '2026-09-08T00:00:00Z'),
+    ('vk', 'views', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('vk', 'reactions', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('vk', 'comments', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('vk', 'shares', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('max', 'views', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('max', 'reactions', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('max', 'comments', 1, 1, true, 'nullable when discussion counter is unavailable', '2026-09-08T00:00:00Z'),
+    ('max', 'shares', 1, 1, true, 'nullable when provider omits repost count', '2026-09-08T00:00:00Z'),
+    ('rutube', 'views', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('rutube', 'reactions', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('rutube', 'comments', 1, 1, true, NULL, '2026-09-08T00:00:00Z'),
+    ('rutube', 'shares', 1, 1, false, 'public API does not expose publication shares', '2026-09-08T00:00:00Z');
+
 --
 -- Name: projection_state; Type: TABLE; Schema: analytics; Owner: migration_owner
 --
@@ -4890,6 +5487,237 @@ CREATE TABLE analytics.projection_state (
 
 
 ALTER TABLE analytics.projection_state OWNER TO migration_owner;
+
+--
+-- Name: publication_analysis_attempt; Type: TABLE; Schema: analytics; Owner: migration_owner
+--
+
+CREATE TABLE analytics.publication_analysis_attempt (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    publication_id uuid NOT NULL,
+    attempt_key uuid NOT NULL,
+    status text NOT NULL,
+    claimed_generation bigint NOT NULL,
+    source_dataset_revision_id bigint CONSTRAINT publication_analysis_attemp_source_dataset_revision_id_not_null NOT NULL,
+    source_revision_at timestamp with time zone NOT NULL,
+    input_hash text,
+    detector_manifest_hash text NOT NULL,
+    preprocessing_version text NOT NULL,
+    aggregator_version text NOT NULL,
+    metric_semantics_version integer NOT NULL,
+    capability_version integer NOT NULL,
+    started_at timestamp with time zone NOT NULL,
+    completed_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
+    error_code text,
+    analysis_revision_id bigint,
+    CONSTRAINT publication_analysis_attempt_aggregator_version_check CHECK ((btrim(aggregator_version) <> ''::text)),
+    CONSTRAINT publication_analysis_attempt_capability_version_check CHECK ((capability_version > 0)),
+    CONSTRAINT publication_analysis_attempt_check CHECK ((completed_at >= started_at)),
+    CONSTRAINT publication_analysis_attempt_check1 CHECK ((((status = 'succeeded'::text) AND (input_hash IS NOT NULL) AND (error_code IS NULL)) OR ((status = 'failed'::text) AND (error_code ~ '^[a-z0-9_]{1,64}$'::text)))),
+    CONSTRAINT publication_analysis_attempt_claimed_generation_check CHECK ((claimed_generation > 0)),
+    CONSTRAINT publication_analysis_attempt_detector_manifest_hash_check CHECK ((detector_manifest_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT publication_analysis_attempt_input_hash_check CHECK (((input_hash IS NULL) OR (input_hash ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT publication_analysis_attempt_metric_semantics_version_check CHECK ((metric_semantics_version > 0)),
+    CONSTRAINT publication_analysis_attempt_preprocessing_version_check CHECK ((btrim(preprocessing_version) <> ''::text)),
+    CONSTRAINT publication_analysis_attempt_status_check CHECK ((status = ANY (ARRAY['succeeded'::text, 'failed'::text])))
+);
+
+
+ALTER TABLE analytics.publication_analysis_attempt OWNER TO migration_owner;
+
+--
+-- Name: publication_analysis_state; Type: TABLE; Schema: analytics; Owner: migration_owner
+--
+
+CREATE TABLE analytics.publication_analysis_state (
+    publication_id uuid NOT NULL,
+    analysis_revision_id bigint,
+    current_success_attempt_id uuid,
+    latest_failure_attempt_id uuid,
+    status text DEFAULT 'pending'::text NOT NULL,
+    suspicion_score numeric,
+    automatic_severity text,
+    affected_metrics analytics.metric_key[] DEFAULT ARRAY[]::analytics.metric_key[] NOT NULL,
+    active_automatic_finding_count integer DEFAULT 0 CONSTRAINT publication_analysis_state_active_automatic_finding_co_not_null NOT NULL,
+    source_dataset_revision_id bigint,
+    source_revision_at timestamp with time zone,
+    analyzed_at timestamp with time zone,
+    input_hash text,
+    detector_manifest_hash text,
+    preprocessing_version text,
+    aggregator_version text,
+    CONSTRAINT publication_analysis_state_active_automatic_finding_count_check CHECK ((active_automatic_finding_count >= 0)),
+    CONSTRAINT publication_analysis_state_automatic_severity_check CHECK (((automatic_severity IS NULL) OR (automatic_severity = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])))),
+    CONSTRAINT publication_analysis_state_check CHECK (((current_success_attempt_id IS NULL) = (analyzed_at IS NULL))),
+    CONSTRAINT publication_analysis_state_check1 CHECK (((status <> 'ready'::text) OR (current_success_attempt_id IS NOT NULL))),
+    CONSTRAINT publication_analysis_state_detector_manifest_hash_check CHECK (((detector_manifest_hash IS NULL) OR (detector_manifest_hash ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT publication_analysis_state_input_hash_check CHECK (((input_hash IS NULL) OR (input_hash ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT publication_analysis_state_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'partial'::text, 'stale'::text, 'failed'::text]))),
+    CONSTRAINT publication_analysis_state_suspicion_score_check CHECK (((suspicion_score IS NULL) OR ((suspicion_score >= (0)::numeric) AND (suspicion_score <= (1)::numeric))))
+);
+
+
+ALTER TABLE analytics.publication_analysis_state OWNER TO migration_owner;
+
+--
+-- Name: publication_analysis_state_public; Type: VIEW; Schema: analytics; Owner: migration_owner
+--
+
+CREATE VIEW analytics.publication_analysis_state_public AS
+ SELECT publication_id,
+    analysis_revision_id,
+    status,
+    suspicion_score,
+    automatic_severity,
+    affected_metrics,
+    active_automatic_finding_count,
+    source_dataset_revision_id,
+    source_revision_at,
+    analyzed_at
+   FROM analytics.publication_analysis_state;
+
+
+ALTER VIEW analytics.publication_analysis_state_public OWNER TO migration_owner;
+
+--
+-- Name: publication_anomaly_finding; Type: TABLE; Schema: analytics; Owner: migration_owner
+--
+
+CREATE TABLE analytics.publication_anomaly_finding (
+    id uuid NOT NULL,
+    finding_key uuid NOT NULL,
+    publication_id uuid NOT NULL,
+    attempt_id uuid,
+    created_analysis_revision_id bigint CONSTRAINT publication_anomaly_finding_created_analysis_revision__not_null NOT NULL,
+    origin text NOT NULL,
+    metric analytics.metric_key NOT NULL,
+    detector_id text,
+    detector_version text,
+    suspicion_score numeric,
+    severity text NOT NULL,
+    explanation_code text NOT NULL,
+    suspicious_start_at timestamp with time zone NOT NULL,
+    suspicious_end_at timestamp with time zone NOT NULL,
+    start_snapshot_id text,
+    end_snapshot_id text,
+    evidence jsonb DEFAULT '{}'::jsonb NOT NULL,
+    quality_codes text[] DEFAULT ARRAY[]::text[] NOT NULL,
+    alternative_explanation_codes text[] DEFAULT ARRAY[]::text[] CONSTRAINT publication_anomaly_finding_alternative_explanation_co_not_null NOT NULL,
+    created_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
+    CONSTRAINT publication_anomaly_finding_check CHECK ((suspicious_end_at > suspicious_start_at)),
+    CONSTRAINT publication_anomaly_finding_check1 CHECK (((cardinality(quality_codes) <= 16) AND (cardinality(alternative_explanation_codes) <= 16))),
+    CONSTRAINT publication_anomaly_finding_check2 CHECK ((((origin = 'automatic'::text) AND (attempt_id IS NOT NULL) AND (detector_id IS NOT NULL) AND (detector_version IS NOT NULL) AND ((suspicion_score >= (0)::numeric) AND (suspicion_score <= (1)::numeric))) OR ((origin = 'manual'::text) AND (attempt_id IS NULL) AND (detector_id IS NULL) AND (detector_version IS NULL) AND (suspicion_score IS NULL)))),
+    CONSTRAINT publication_anomaly_finding_evidence_check CHECK (((jsonb_typeof(evidence) = 'object'::text) AND (pg_column_size(evidence) <= 8192))),
+    CONSTRAINT publication_anomaly_finding_explanation_code_check CHECK ((explanation_code ~ '^[a-z0-9_]{1,80}$'::text)),
+    CONSTRAINT publication_anomaly_finding_metric_check CHECK ((metric = ANY (ARRAY['views'::analytics.metric_key, 'reactions'::analytics.metric_key, 'comments'::analytics.metric_key, 'shares'::analytics.metric_key]))),
+    CONSTRAINT publication_anomaly_finding_origin_check CHECK ((origin = ANY (ARRAY['automatic'::text, 'manual'::text]))),
+    CONSTRAINT publication_anomaly_finding_severity_check CHECK ((severity = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])))
+);
+
+
+ALTER TABLE analytics.publication_anomaly_finding OWNER TO migration_owner;
+
+--
+-- Name: publication_anomaly_review; Type: TABLE; Schema: analytics; Owner: migration_owner
+--
+
+CREATE TABLE analytics.publication_anomaly_review (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    publication_id uuid NOT NULL,
+    finding_key uuid NOT NULL,
+    finding_id uuid NOT NULL,
+    analysis_revision_id bigint NOT NULL,
+    reviewer_subject text NOT NULL,
+    decision analytics.review_decision NOT NULL,
+    private_comment text,
+    reviewed_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
+    CONSTRAINT publication_anomaly_review_private_comment_check CHECK (((private_comment IS NULL) OR (length(private_comment) <= 2000))),
+    CONSTRAINT publication_anomaly_review_reviewer_subject_check CHECK (((btrim(reviewer_subject) <> ''::text) AND (length(reviewer_subject) <= 200)))
+);
+
+
+ALTER TABLE analytics.publication_anomaly_review OWNER TO migration_owner;
+
+--
+-- Name: publication_anomaly_finding_public; Type: VIEW; Schema: analytics; Owner: migration_owner
+--
+
+CREATE VIEW analytics.publication_anomaly_finding_public AS
+ WITH effective AS (
+         SELECT finding.id,
+            finding.finding_key,
+            finding.publication_id,
+            finding.attempt_id,
+            finding.created_analysis_revision_id,
+            finding.origin,
+            finding.metric,
+            finding.detector_id,
+            finding.detector_version,
+            finding.suspicion_score,
+            finding.severity,
+            finding.explanation_code,
+            finding.suspicious_start_at,
+            finding.suspicious_end_at,
+            finding.start_snapshot_id,
+            finding.end_snapshot_id,
+            finding.evidence,
+            finding.quality_codes,
+            finding.alternative_explanation_codes,
+            finding.created_at,
+            ( SELECT review.decision
+                   FROM analytics.publication_anomaly_review review
+                  WHERE ((review.publication_id = finding.publication_id) AND (review.finding_key = finding.finding_key))
+                  ORDER BY review.reviewed_at DESC, review.id DESC
+                 LIMIT 1) AS review_state
+           FROM analytics.publication_anomaly_finding finding
+        ), current_findings AS (
+         SELECT effective.id,
+            effective.finding_key,
+            effective.publication_id,
+            effective.attempt_id,
+            effective.created_analysis_revision_id,
+            effective.origin,
+            effective.metric,
+            effective.detector_id,
+            effective.detector_version,
+            effective.suspicion_score,
+            effective.severity,
+            effective.explanation_code,
+            effective.suspicious_start_at,
+            effective.suspicious_end_at,
+            effective.start_snapshot_id,
+            effective.end_snapshot_id,
+            effective.evidence,
+            effective.quality_codes,
+            effective.alternative_explanation_codes,
+            effective.created_at,
+            effective.review_state
+           FROM (effective
+             LEFT JOIN analytics.publication_analysis_state state ON ((state.publication_id = effective.publication_id)))
+          WHERE (((effective.origin = 'automatic'::text) AND (effective.attempt_id = state.current_success_attempt_id)) OR (effective.origin = 'manual'::text))
+        )
+ SELECT id,
+    publication_id,
+    origin,
+    metric,
+    detector_id,
+    detector_version,
+    suspicion_score,
+    severity,
+    explanation_code,
+    suspicious_start_at,
+    suspicious_end_at,
+    start_snapshot_id,
+    end_snapshot_id,
+    evidence,
+    quality_codes,
+    alternative_explanation_codes,
+    COALESCE((review_state)::text, 'unreviewed'::text) AS review_state,
+    ((review_state IS DISTINCT FROM 'dismissed'::analytics.review_decision) AND (review_state IS DISTINCT FROM 'data_error'::analytics.review_decision)) AS active
+   FROM current_findings;
+
+
+ALTER VIEW analytics.publication_anomaly_finding_public OWNER TO migration_owner;
 
 --
 -- Name: publication_content; Type: TABLE; Schema: analytics; Owner: migration_owner
@@ -10347,6 +11175,50 @@ CREATE TABLE ingest.reaction_breakdown_default (
 ALTER TABLE ingest.reaction_breakdown_default OWNER TO migration_owner;
 
 --
+-- Name: anomaly_analysis_candidate; Type: TABLE; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE TABLE ops_and_admin.anomaly_analysis_candidate (
+    publication_id uuid NOT NULL,
+    dirty_generation bigint DEFAULT 1 NOT NULL,
+    eligible_at timestamp with time zone NOT NULL,
+    priority smallint DEFAULT 100 NOT NULL,
+    config_backfill boolean DEFAULT false NOT NULL,
+    claim_token uuid,
+    claimed_generation bigint,
+    leased_until timestamp with time zone,
+    retry_count integer DEFAULT 0 NOT NULL,
+    last_error_code text,
+    updated_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
+    CONSTRAINT anomaly_analysis_candidate_check CHECK ((((claim_token IS NULL) AND (claimed_generation IS NULL) AND (leased_until IS NULL)) OR ((claim_token IS NOT NULL) AND (claimed_generation IS NOT NULL) AND (leased_until IS NOT NULL)))),
+    CONSTRAINT anomaly_analysis_candidate_dirty_generation_check CHECK ((dirty_generation > 0)),
+    CONSTRAINT anomaly_analysis_candidate_last_error_code_check CHECK (((last_error_code IS NULL) OR (last_error_code ~ '^[a-z0-9_]{1,64}$'::text))),
+    CONSTRAINT anomaly_analysis_candidate_retry_count_check CHECK (((retry_count >= 0) AND (retry_count <= 20)))
+);
+
+
+ALTER TABLE ops_and_admin.anomaly_analysis_candidate OWNER TO migration_owner;
+
+--
+-- Name: anomaly_command_receipt; Type: TABLE; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE TABLE ops_and_admin.anomaly_command_receipt (
+    subject text NOT NULL,
+    command_type text NOT NULL,
+    idempotency_key uuid NOT NULL,
+    request_digest text NOT NULL,
+    result jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
+    CONSTRAINT anomaly_command_receipt_command_type_check CHECK ((command_type = ANY (ARRAY['manual_signal'::text, 'review'::text]))),
+    CONSTRAINT anomaly_command_receipt_request_digest_check CHECK ((request_digest ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT anomaly_command_receipt_result_check CHECK (((jsonb_typeof(result) = 'object'::text) AND (pg_column_size(result) <= 4096)))
+);
+
+
+ALTER TABLE ops_and_admin.anomaly_command_receipt OWNER TO migration_owner;
+
+--
 -- Name: archive_manifest; Type: TABLE; Schema: ops_and_admin; Owner: migration_owner
 --
 
@@ -10602,7 +11474,7 @@ INSERT INTO ops_and_admin.retention_policy (
 --
 
 CREATE VIEW ops_and_admin.schema_contract AS
- SELECT 'storage-publisher-final-2026-09-08-r2'::text AS contract_id;
+ SELECT 'storage-publisher-final-2026-09-08-r3'::text AS contract_id;
 
 
 ALTER VIEW ops_and_admin.schema_contract OWNER TO migration_owner;
@@ -11759,6 +12631,14 @@ ALTER TABLE ONLY analytics.account_latest
 
 
 --
+-- Name: anomaly_analysis_revision anomaly_analysis_revision_pkey; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.anomaly_analysis_revision
+    ADD CONSTRAINT anomaly_analysis_revision_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: anomaly_event anomaly_event_pkey; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
 --
 
@@ -11772,6 +12652,14 @@ ALTER TABLE ONLY analytics.anomaly_event
 
 ALTER TABLE ONLY analytics.anomaly_review
     ADD CONSTRAINT anomaly_review_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: anomaly_source_revision anomaly_source_revision_pkey; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.anomaly_source_revision
+    ADD CONSTRAINT anomaly_source_revision_pkey PRIMARY KEY (dataset_revision_id);
 
 
 --
@@ -11988,6 +12876,70 @@ ALTER TABLE ONLY analytics.platform_metric_capability
 
 ALTER TABLE ONLY analytics.projection_state
     ADD CONSTRAINT projection_state_pkey PRIMARY KEY (projection_name);
+
+
+--
+-- Name: publication_analysis_attempt publication_analysis_attempt_analysis_revision_id_key; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_attempt
+    ADD CONSTRAINT publication_analysis_attempt_analysis_revision_id_key UNIQUE (analysis_revision_id);
+
+
+--
+-- Name: publication_analysis_attempt publication_analysis_attempt_pkey; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_attempt
+    ADD CONSTRAINT publication_analysis_attempt_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: publication_analysis_attempt publication_analysis_attempt_publication_id_attempt_key_key; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_attempt
+    ADD CONSTRAINT publication_analysis_attempt_publication_id_attempt_key_key UNIQUE (publication_id, attempt_key);
+
+
+--
+-- Name: publication_analysis_state publication_analysis_state_current_success_attempt_id_key; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_state
+    ADD CONSTRAINT publication_analysis_state_current_success_attempt_id_key UNIQUE (current_success_attempt_id);
+
+
+--
+-- Name: publication_analysis_state publication_analysis_state_latest_failure_attempt_id_key; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_state
+    ADD CONSTRAINT publication_analysis_state_latest_failure_attempt_id_key UNIQUE (latest_failure_attempt_id);
+
+
+--
+-- Name: publication_analysis_state publication_analysis_state_pkey; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_state
+    ADD CONSTRAINT publication_analysis_state_pkey PRIMARY KEY (publication_id);
+
+
+--
+-- Name: publication_anomaly_finding publication_anomaly_finding_pkey; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_anomaly_finding
+    ADD CONSTRAINT publication_anomaly_finding_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: publication_anomaly_review publication_anomaly_review_pkey; Type: CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_anomaly_review
+    ADD CONSTRAINT publication_anomaly_review_pkey PRIMARY KEY (id);
 
 
 --
@@ -14295,6 +15247,22 @@ ALTER TABLE ONLY ingest.reaction_breakdown_default
 
 
 --
+-- Name: anomaly_analysis_candidate anomaly_analysis_candidate_pkey; Type: CONSTRAINT; Schema: ops_and_admin; Owner: migration_owner
+--
+
+ALTER TABLE ONLY ops_and_admin.anomaly_analysis_candidate
+    ADD CONSTRAINT anomaly_analysis_candidate_pkey PRIMARY KEY (publication_id);
+
+
+--
+-- Name: anomaly_command_receipt anomaly_command_receipt_pkey; Type: CONSTRAINT; Schema: ops_and_admin; Owner: migration_owner
+--
+
+ALTER TABLE ONLY ops_and_admin.anomaly_command_receipt
+    ADD CONSTRAINT anomaly_command_receipt_pkey PRIMARY KEY (subject, command_type, idempotency_key);
+
+
+--
 -- Name: archive_manifest archive_manifest_dataset_type_partition_start_partition_end_key; Type: CONSTRAINT; Schema: ops_and_admin; Owner: migration_owner
 --
 
@@ -14550,6 +15518,13 @@ CREATE INDEX account_latest_revision_idx ON analytics.account_latest USING btree
 
 
 --
+-- Name: anomaly_analysis_revision_publication_idx; Type: INDEX; Schema: analytics; Owner: migration_owner
+--
+
+CREATE INDEX anomaly_analysis_revision_publication_idx ON analytics.anomaly_analysis_revision USING btree (publication_id, id DESC);
+
+
+--
 -- Name: anomaly_event_institution_time_idx; Type: INDEX; Schema: analytics; Owner: migration_owner
 --
 
@@ -14680,6 +15655,41 @@ CREATE INDEX legacy_overview_card_revision_scope_name_idx ON analytics.legacy_ov
 --
 
 CREATE INDEX legacy_overview_card_revision_scope_rating_idx ON analytics.legacy_overview_card USING btree (dataset_revision_id, platform, period_key, rating_rank, entity_id);
+
+
+--
+-- Name: publication_analysis_attempt_retention_idx; Type: INDEX; Schema: analytics; Owner: migration_owner
+--
+
+CREATE INDEX publication_analysis_attempt_retention_idx ON analytics.publication_analysis_attempt USING btree (publication_id, status, completed_at DESC);
+
+
+--
+-- Name: publication_analysis_state_public_idx; Type: INDEX; Schema: analytics; Owner: migration_owner
+--
+
+CREATE INDEX publication_analysis_state_public_idx ON analytics.publication_analysis_state USING btree (analysis_revision_id DESC, publication_id);
+
+
+--
+-- Name: publication_anomaly_finding_attempt_key_idx; Type: INDEX; Schema: analytics; Owner: migration_owner
+--
+
+CREATE UNIQUE INDEX publication_anomaly_finding_attempt_key_idx ON analytics.publication_anomaly_finding USING btree (attempt_id, finding_key) WHERE (attempt_id IS NOT NULL);
+
+
+--
+-- Name: publication_anomaly_finding_public_idx; Type: INDEX; Schema: analytics; Owner: migration_owner
+--
+
+CREATE INDEX publication_anomaly_finding_public_idx ON analytics.publication_anomaly_finding USING btree (publication_id, created_analysis_revision_id DESC, id);
+
+
+--
+-- Name: publication_anomaly_review_effective_idx; Type: INDEX; Schema: analytics; Owner: migration_owner
+--
+
+CREATE INDEX publication_anomaly_review_effective_idx ON analytics.publication_anomaly_review USING btree (publication_id, finding_key, reviewed_at DESC, id DESC);
 
 
 --
@@ -16675,6 +17685,20 @@ CREATE INDEX publication_metric_snapshot_default_observed_at_idx ON ingest.publi
 --
 
 CREATE INDEX raw_payload_purge_idx ON ingest.raw_payload USING btree (purge_after, id);
+
+
+--
+-- Name: anomaly_analysis_candidate_claim_idx; Type: INDEX; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE INDEX anomaly_analysis_candidate_claim_idx ON ops_and_admin.anomaly_analysis_candidate USING btree (priority DESC, eligible_at, publication_id) WHERE (claim_token IS NULL);
+
+
+--
+-- Name: anomaly_analysis_candidate_lease_idx; Type: INDEX; Schema: ops_and_admin; Owner: migration_owner
+--
+
+CREATE INDEX anomaly_analysis_candidate_lease_idx ON ops_and_admin.anomaly_analysis_candidate USING btree (leased_until) WHERE (claim_token IS NOT NULL);
 
 
 --
@@ -20367,6 +21391,13 @@ CREATE TRIGGER platform_account_canonical_identity_immutable BEFORE UPDATE ON ca
 
 
 --
+-- Name: publication_metric_snapshot anomaly_candidate_after_effective_snapshot; Type: TRIGGER; Schema: ingest; Owner: migration_owner
+--
+
+CREATE TRIGGER anomaly_candidate_after_effective_snapshot AFTER INSERT ON ingest.publication_metric_snapshot FOR EACH ROW EXECUTE FUNCTION ops_and_admin.mark_anomaly_candidate();
+
+
+--
 -- Name: publication_availability_event availability_event_immutable; Type: TRIGGER; Schema: ingest; Owner: migration_owner
 --
 
@@ -20502,6 +21533,14 @@ ALTER TABLE ONLY analytics.account_latest
 
 
 --
+-- Name: anomaly_analysis_revision anomaly_analysis_revision_publication_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.anomaly_analysis_revision
+    ADD CONSTRAINT anomaly_analysis_revision_publication_id_fkey FOREIGN KEY (publication_id) REFERENCES ingest.publication(id);
+
+
+--
 -- Name: anomaly_event anomaly_event_dataset_revision_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
 --
 
@@ -20539,6 +21578,14 @@ ALTER TABLE ONLY analytics.anomaly_event
 
 ALTER TABLE ONLY analytics.anomaly_review
     ADD CONSTRAINT anomaly_review_anomaly_event_id_fkey FOREIGN KEY (anomaly_event_id) REFERENCES analytics.anomaly_event(id);
+
+
+--
+-- Name: anomaly_source_revision anomaly_source_revision_dataset_revision_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.anomaly_source_revision
+    ADD CONSTRAINT anomaly_source_revision_dataset_revision_id_fkey FOREIGN KEY (dataset_revision_id) REFERENCES analytics.dataset_revision(id);
 
 
 --
@@ -20763,6 +21810,110 @@ ALTER TABLE ONLY analytics.platform_metric_capability
 
 ALTER TABLE ONLY analytics.projection_state
     ADD CONSTRAINT projection_state_dataset_revision_id_fkey FOREIGN KEY (dataset_revision_id) REFERENCES analytics.dataset_revision(id);
+
+
+--
+-- Name: publication_analysis_attempt publication_analysis_attempt_analysis_revision_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_attempt
+    ADD CONSTRAINT publication_analysis_attempt_analysis_revision_id_fkey FOREIGN KEY (analysis_revision_id) REFERENCES analytics.anomaly_analysis_revision(id);
+
+
+--
+-- Name: publication_analysis_attempt publication_analysis_attempt_publication_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_attempt
+    ADD CONSTRAINT publication_analysis_attempt_publication_id_fkey FOREIGN KEY (publication_id) REFERENCES ingest.publication(id);
+
+
+--
+-- Name: publication_analysis_attempt publication_analysis_attempt_source_dataset_revision_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_attempt
+    ADD CONSTRAINT publication_analysis_attempt_source_dataset_revision_id_fkey FOREIGN KEY (source_dataset_revision_id) REFERENCES analytics.dataset_revision(id);
+
+
+--
+-- Name: publication_analysis_state publication_analysis_state_analysis_revision_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_state
+    ADD CONSTRAINT publication_analysis_state_analysis_revision_id_fkey FOREIGN KEY (analysis_revision_id) REFERENCES analytics.anomaly_analysis_revision(id);
+
+
+--
+-- Name: publication_analysis_state publication_analysis_state_current_success_attempt_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_state
+    ADD CONSTRAINT publication_analysis_state_current_success_attempt_id_fkey FOREIGN KEY (current_success_attempt_id) REFERENCES analytics.publication_analysis_attempt(id);
+
+
+--
+-- Name: publication_analysis_state publication_analysis_state_latest_failure_attempt_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_state
+    ADD CONSTRAINT publication_analysis_state_latest_failure_attempt_id_fkey FOREIGN KEY (latest_failure_attempt_id) REFERENCES analytics.publication_analysis_attempt(id);
+
+
+--
+-- Name: publication_analysis_state publication_analysis_state_publication_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_state
+    ADD CONSTRAINT publication_analysis_state_publication_id_fkey FOREIGN KEY (publication_id) REFERENCES ingest.publication(id);
+
+
+--
+-- Name: publication_analysis_state publication_analysis_state_source_dataset_revision_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_analysis_state
+    ADD CONSTRAINT publication_analysis_state_source_dataset_revision_id_fkey FOREIGN KEY (source_dataset_revision_id) REFERENCES analytics.dataset_revision(id);
+
+
+--
+-- Name: publication_anomaly_finding publication_anomaly_finding_attempt_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_anomaly_finding
+    ADD CONSTRAINT publication_anomaly_finding_attempt_id_fkey FOREIGN KEY (attempt_id) REFERENCES analytics.publication_analysis_attempt(id) ON DELETE CASCADE;
+
+
+--
+-- Name: publication_anomaly_finding publication_anomaly_finding_created_analysis_revision_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_anomaly_finding
+    ADD CONSTRAINT publication_anomaly_finding_created_analysis_revision_id_fkey FOREIGN KEY (created_analysis_revision_id) REFERENCES analytics.anomaly_analysis_revision(id);
+
+
+--
+-- Name: publication_anomaly_finding publication_anomaly_finding_publication_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_anomaly_finding
+    ADD CONSTRAINT publication_anomaly_finding_publication_id_fkey FOREIGN KEY (publication_id) REFERENCES ingest.publication(id);
+
+
+--
+-- Name: publication_anomaly_review publication_anomaly_review_analysis_revision_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_anomaly_review
+    ADD CONSTRAINT publication_anomaly_review_analysis_revision_id_fkey FOREIGN KEY (analysis_revision_id) REFERENCES analytics.anomaly_analysis_revision(id);
+
+
+--
+-- Name: publication_anomaly_review publication_anomaly_review_publication_id_fkey; Type: FK CONSTRAINT; Schema: analytics; Owner: migration_owner
+--
+
+ALTER TABLE ONLY analytics.publication_anomaly_review
+    ADD CONSTRAINT publication_anomaly_review_publication_id_fkey FOREIGN KEY (publication_id) REFERENCES ingest.publication(id);
 
 
 --
@@ -21070,6 +22221,14 @@ ALTER TABLE ingest.reaction_breakdown
 
 
 --
+-- Name: anomaly_analysis_candidate anomaly_analysis_candidate_publication_id_fkey; Type: FK CONSTRAINT; Schema: ops_and_admin; Owner: migration_owner
+--
+
+ALTER TABLE ONLY ops_and_admin.anomaly_analysis_candidate
+    ADD CONSTRAINT anomaly_analysis_candidate_publication_id_fkey FOREIGN KEY (publication_id) REFERENCES ingest.publication(id);
+
+
+--
 -- Name: archive_object_attestation archive_object_attestation_manifest_id_fkey; Type: FK CONSTRAINT; Schema: ops_and_admin; Owner: migration_owner
 --
 
@@ -21182,6 +22341,7 @@ GRANT USAGE ON SCHEMA analytics TO api_write_admin;
 GRANT USAGE ON SCHEMA analytics TO collector_ingest;
 GRANT USAGE ON SCHEMA analytics TO migration_bridge;
 GRANT USAGE ON SCHEMA analytics TO maintenance;
+GRANT USAGE ON SCHEMA analytics TO analytics_worker;
 
 
 --
@@ -21193,6 +22353,7 @@ GRANT USAGE ON SCHEMA catalog TO api_write_admin;
 GRANT USAGE ON SCHEMA catalog TO collector_ingest;
 GRANT USAGE ON SCHEMA catalog TO migration_bridge;
 GRANT USAGE ON SCHEMA catalog TO maintenance;
+GRANT USAGE ON SCHEMA catalog TO analytics_worker;
 
 
 --
@@ -21204,6 +22365,7 @@ GRANT USAGE ON SCHEMA ingest TO collector_ingest;
 GRANT USAGE ON SCHEMA ingest TO migration_bridge;
 GRANT USAGE ON SCHEMA ingest TO maintenance;
 GRANT USAGE ON SCHEMA ingest TO api_write_admin;
+GRANT USAGE ON SCHEMA ingest TO analytics_worker;
 
 
 --
@@ -21215,6 +22377,7 @@ GRANT USAGE ON SCHEMA ops_and_admin TO api_write_admin;
 GRANT USAGE ON SCHEMA ops_and_admin TO collector_ingest;
 GRANT USAGE ON SCHEMA ops_and_admin TO migration_bridge;
 GRANT USAGE ON SCHEMA ops_and_admin TO maintenance;
+GRANT USAGE ON SCHEMA ops_and_admin TO analytics_worker;
 
 
 --
@@ -21225,6 +22388,31 @@ GRANT USAGE ON SCHEMA rating TO api_read;
 GRANT USAGE ON SCHEMA rating TO api_write_admin;
 GRANT USAGE ON SCHEMA rating TO migration_bridge;
 GRANT USAGE ON SCHEMA rating TO maintenance;
+
+
+--
+-- Name: FUNCTION anomaly_input_is_unchanged(p_publication_id uuid, p_input_hash text, p_manifest_hash text); Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION analytics.anomaly_input_is_unchanged(p_publication_id uuid, p_input_hash text, p_manifest_hash text) FROM PUBLIC;
+GRANT ALL ON FUNCTION analytics.anomaly_input_is_unchanged(p_publication_id uuid, p_input_hash text, p_manifest_hash text) TO analytics_worker;
+
+
+--
+-- Name: FUNCTION anomaly_operational_metrics(); Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION analytics.anomaly_operational_metrics() FROM PUBLIC;
+GRANT ALL ON FUNCTION analytics.anomaly_operational_metrics() TO analytics_worker;
+GRANT ALL ON FUNCTION analytics.anomaly_operational_metrics() TO maintenance;
+
+
+--
+-- Name: FUNCTION append_anomaly_review(p_finding_id uuid, p_decision text, p_private_comment text, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text); Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION analytics.append_anomaly_review(p_finding_id uuid, p_decision text, p_private_comment text, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text) FROM PUBLIC;
+GRANT ALL ON FUNCTION analytics.append_anomaly_review(p_finding_id uuid, p_decision text, p_private_comment text, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text) TO api_write_admin;
 
 
 --
@@ -21243,10 +22431,34 @@ REVOKE ALL ON FUNCTION analytics.capture_legacy_csv_facts(p_month date) FROM PUB
 
 
 --
+-- Name: FUNCTION create_manual_anomaly_signal(p_publication_id uuid, p_metric text, p_severity text, p_explanation_code text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_evidence jsonb, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text); Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION analytics.create_manual_anomaly_signal(p_publication_id uuid, p_metric text, p_severity text, p_explanation_code text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_evidence jsonb, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text) FROM PUBLIC;
+GRANT ALL ON FUNCTION analytics.create_manual_anomaly_signal(p_publication_id uuid, p_metric text, p_severity text, p_explanation_code text, p_start_at timestamp with time zone, p_end_at timestamp with time zone, p_evidence jsonb, p_subject text, p_correlation_id uuid, p_idempotency_key uuid, p_request_digest text) TO api_write_admin;
+
+
+--
+-- Name: FUNCTION extract_publication_history_as_of(p_publication_ids uuid[], p_source_dataset_revision bigint, p_max_points integer); Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION analytics.extract_publication_history_as_of(p_publication_ids uuid[], p_source_dataset_revision bigint, p_max_points integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION analytics.extract_publication_history_as_of(p_publication_ids uuid[], p_source_dataset_revision bigint, p_max_points integer) TO analytics_worker;
+
+
+--
 -- Name: FUNCTION guard_legacy_period_policy(); Type: ACL; Schema: analytics; Owner: migration_owner
 --
 
 REVOKE ALL ON FUNCTION analytics.guard_legacy_period_policy() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION latest_fully_published_dataset_revision(); Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION analytics.latest_fully_published_dataset_revision() FROM PUBLIC;
+GRANT ALL ON FUNCTION analytics.latest_fully_published_dataset_revision() TO analytics_worker;
 
 
 --
@@ -21291,6 +22503,22 @@ GRANT EXECUTE ON FUNCTION analytics.observation_quality_rank(p_quality ingest.ob
 --
 
 REVOKE ALL ON FUNCTION analytics.ordered_history_reactions(p_text text, p_signed boolean) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION publish_anomaly_failure(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_error_code text, p_retry_seconds integer); Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION analytics.publish_anomaly_failure(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_error_code text, p_retry_seconds integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION analytics.publish_anomaly_failure(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_error_code text, p_retry_seconds integer) TO analytics_worker;
+
+
+--
+-- Name: FUNCTION publish_anomaly_success(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_input_hash text, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_status text, p_score numeric, p_severity text, p_findings jsonb); Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION analytics.publish_anomaly_success(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_input_hash text, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_status text, p_score numeric, p_severity text, p_findings jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION analytics.publish_anomaly_success(p_publication_id uuid, p_claim_token uuid, p_generation bigint, p_attempt_key uuid, p_source_revision bigint, p_input_hash text, p_manifest_hash text, p_preprocessor text, p_aggregator text, p_semantic_version integer, p_capability_version integer, p_started_at timestamp with time zone, p_status text, p_score numeric, p_severity text, p_findings jsonb) TO analytics_worker;
 
 
 --
@@ -21470,6 +22698,22 @@ GRANT ALL ON FUNCTION ops_and_admin.catalog_command(p_action text, p_target uuid
 
 
 --
+-- Name: FUNCTION claim_anomaly_candidates(p_limit integer, p_lease_seconds integer, p_claim_token uuid); Type: ACL; Schema: ops_and_admin; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION ops_and_admin.claim_anomaly_candidates(p_limit integer, p_lease_seconds integer, p_claim_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION ops_and_admin.claim_anomaly_candidates(p_limit integer, p_lease_seconds integer, p_claim_token uuid) TO analytics_worker;
+
+
+--
+-- Name: FUNCTION complete_anomaly_noop(p_publication_id uuid, p_claim_token uuid, p_generation bigint); Type: ACL; Schema: ops_and_admin; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION ops_and_admin.complete_anomaly_noop(p_publication_id uuid, p_claim_token uuid, p_generation bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION ops_and_admin.complete_anomaly_noop(p_publication_id uuid, p_claim_token uuid, p_generation bigint) TO analytics_worker;
+
+
+--
 -- Name: FUNCTION drop_publication_metric_partition(p_month date, p_manifest_id uuid); Type: ACL; Schema: ops_and_admin; Owner: migration_owner
 --
 
@@ -21517,6 +22761,21 @@ GRANT ALL ON FUNCTION ops_and_admin.import_official_rating(p_payload jsonb, p_ac
 
 REVOKE ALL ON FUNCTION ops_and_admin.legacy_account_presentation(p_account uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION ops_and_admin.legacy_account_presentation(p_account uuid) TO api_write_admin;
+
+
+--
+-- Name: FUNCTION mark_anomaly_candidate(); Type: ACL; Schema: ops_and_admin; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION ops_and_admin.mark_anomaly_candidate() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION pin_latest_anomaly_source_revision(); Type: ACL; Schema: ops_and_admin; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION ops_and_admin.pin_latest_anomaly_source_revision() FROM PUBLIC;
+GRANT ALL ON FUNCTION ops_and_admin.pin_latest_anomaly_source_revision() TO analytics_worker;
 
 
 --
@@ -21569,11 +22828,26 @@ GRANT ALL ON FUNCTION ops_and_admin.purge_raw_evidence_reference(p_uri text, p_n
 
 
 --
+-- Name: FUNCTION record_anomaly_attempt_tombstone(p_attempt_id uuid, p_superseded_by uuid, p_reason text); Type: ACL; Schema: ops_and_admin; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION ops_and_admin.record_anomaly_attempt_tombstone(p_attempt_id uuid, p_superseded_by uuid, p_reason text) FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION refresh_storage_observation(); Type: ACL; Schema: ops_and_admin; Owner: migration_owner
 --
 
 REVOKE ALL ON FUNCTION ops_and_admin.refresh_storage_observation() FROM PUBLIC;
 GRANT ALL ON FUNCTION ops_and_admin.refresh_storage_observation() TO maintenance;
+
+
+--
+-- Name: FUNCTION seed_anomaly_backfill(p_limit integer, p_manifest_hash text); Type: ACL; Schema: ops_and_admin; Owner: migration_owner
+--
+
+REVOKE ALL ON FUNCTION ops_and_admin.seed_anomaly_backfill(p_limit integer, p_manifest_hash text) FROM PUBLIC;
+GRANT ALL ON FUNCTION ops_and_admin.seed_anomaly_backfill(p_limit integer, p_manifest_hash text) TO analytics_worker;
 
 
 --
@@ -21815,6 +23089,20 @@ GRANT SELECT ON TABLE analytics.usable_publication_snapshot TO api_read;
 GRANT SELECT ON TABLE analytics.projection_state TO api_read;
 GRANT SELECT,INSERT,UPDATE ON TABLE analytics.projection_state TO migration_bridge;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE analytics.projection_state TO maintenance;
+
+
+--
+-- Name: TABLE publication_analysis_state_public; Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+GRANT SELECT ON TABLE analytics.publication_analysis_state_public TO api_read;
+
+
+--
+-- Name: TABLE publication_anomaly_finding_public; Type: ACL; Schema: analytics; Owner: migration_owner
+--
+
+GRANT SELECT ON TABLE analytics.publication_anomaly_finding_public TO api_read;
 
 
 --
@@ -23469,4 +24757,4 @@ GRANT SELECT ON TABLE rating.rating_run TO maintenance;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dGccD1DkSddar6I7RSi6voYcgTTwt7FmPAXSjI4kPi0nIOTGoGSdDxBi9VUaIHn
+\unrestrict v5Z1z2ENfAArs4WQGyYOSTx9DRegEznk04WG8g4I2kcIFGNLEZpRBGXshbf0HOo

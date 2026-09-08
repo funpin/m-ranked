@@ -7,6 +7,7 @@ Wants=m-ranked-target-collector@vk.service
 Wants=m-ranked-target-collector@max.service
 Wants=m-ranked-target-collector@rutube.service
 Wants=m-ranked-target-maintenance.timer
+Wants=m-ranked-target-anomaly-analysis.service
 After=m-ranked-shadow.target network-online.target
 
 [Install]

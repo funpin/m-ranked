@@ -318,7 +318,7 @@ check_reverse_sync_rehearsal_gate() {
       and (.release.sha256SumsSha256 | type == "string" and length > 0)
       and ($protocolOnly == true or .release.sha256SumsSha256 == $manifestSha256)
       and (.schemaContract | type == "object" and keys == ["finalSchemaSha256", "id", "productionTransitionSha256"])
-      and .schemaContract.id == "storage-publisher-final-2026-09-08-r2"
+      and .schemaContract.id == "storage-publisher-final-2026-09-08-r3"
       and (.schemaContract.finalSchemaSha256 | sha256)
       and (.schemaContract.productionTransitionSha256 | sha256)
       and ($protocolOnly == true or .schemaContract.finalSchemaSha256 == $finalSchemaSha256)
@@ -837,7 +837,7 @@ check_active_release_gate() {
       and .releaseManifestSha256 == $manifestSha256
       and (.releaseManifestSha256 | test("^[0-9a-f]{64}$"))
       and (.schemaContract | type == "object")
-      and .schemaContract.id == "storage-publisher-final-2026-09-08-r2"
+      and .schemaContract.id == "storage-publisher-final-2026-09-08-r3"
       and (.schemaContract.finalSchemaSha256 | test("^[0-9a-f]{64}$"))
       and (.schemaContract.productionTransitionSha256 | test("^[0-9a-f]{64}$"))
       and .schemaContract.validatedByServiceReadiness == true
@@ -984,7 +984,7 @@ if require_readable "$RESTORE_VERIFICATION_REPORT" "restore verification report"
       and (.database.datasetRevision as $revision
           | all(.database.projectionStates[];
               .status == "ready" and .datasetRevision == $revision))
-      and .database.schemaContract == "storage-publisher-final-2026-09-08-r2"
+      and .database.schemaContract == "storage-publisher-final-2026-09-08-r3"
   ' \
       "$RESTORE_VERIFICATION_REPORT" >/dev/null; then
     pass "latest backup matches the final schema contract"

@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 
 /** Installs the one declarative database contract in a disposable test database. */
 public final class FinalSchemaInstaller {
-    public static final String CONTRACT = "storage-publisher-final-2026-09-08-r2";
+    public static final String CONTRACT = "storage-publisher-final-2026-09-08-r3";
 
     private FinalSchemaInstaller() {}
 

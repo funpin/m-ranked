@@ -81,6 +81,27 @@ public class AdminDatabaseConfiguration {
                 : new UnavailableAdminCommandRepository();
     }
 
+    @Bean
+    org.mranked.analysis.application.AnalysisAdminCommandPort analysisAdminCommandPort(AdminJdbcContext context) {
+        if (context.enabled()) {
+            return new org.mranked.analysis.infrastructure.JdbcAnalysisAdminCommandRepository(
+                    context.jdbcClient(), context.transactions());
+        }
+        return new org.mranked.analysis.application.AnalysisAdminCommandPort() {
+            public org.mranked.analysis.application.AnalysisCommandResult createManual(
+                    java.util.UUID publicationId,String metric,String severity,String explanationCode,
+                    java.time.Instant startAt,java.time.Instant endAt,java.util.Map<String,Object> evidence,
+                    String actor,java.util.UUID correlationId,java.util.UUID idempotencyKey,String requestDigest) {
+                throw new org.mranked.admin.application.AdminDatabaseUnavailableException();
+            }
+            public org.mranked.analysis.application.AnalysisCommandResult review(
+                    java.util.UUID findingId,String decision,String privateComment,String actor,
+                    java.util.UUID correlationId,java.util.UUID idempotencyKey,String requestDigest) {
+                throw new org.mranked.admin.application.AdminDatabaseUnavailableException();
+            }
+        };
+    }
+
     record AdminJdbcContext(JdbcClient jdbcClient, TransactionTemplate transactions) {
         boolean enabled() {
             return jdbcClient != null;

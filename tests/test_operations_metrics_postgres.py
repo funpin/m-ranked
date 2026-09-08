@@ -21,5 +21,12 @@ def test_real_operational_sources_are_healthy_bounded_and_secret_free(tmp_path: 
     content,success=sample(environment)
     assert success, [line for line in content.splitlines() if line.startswith('mranked_ops_source_up')]
     assert all('source="'+source+'"} 1' in content for source in ('postgres','application','redis','spool','disk'))
-    assert len([line for line in content.splitlines() if not line.startswith('#')])<=50
+    samples=[line for line in content.splitlines() if not line.startswith('#')]
+    assert len(samples)<=64
+    for metric in (
+        'candidate_backlog','eligible_backlog','oldest_candidate_age_seconds','expired_leases',
+        'retry_candidates','failures_last_hour','latest_analysis_revision',
+        'latest_source_dataset_revision','source_revision_lag','last_success_unixtime',
+    ):
+        assert any(line.startswith('mranked_ops_anomaly_'+metric+' ') for line in samples)
     assert all(value not in content for value in environment.values())

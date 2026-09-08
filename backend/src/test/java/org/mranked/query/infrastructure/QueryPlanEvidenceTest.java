@@ -53,7 +53,9 @@ class QueryPlanEvidenceTest {
             Files.writeString(output.resolve(item.getKey()+".sql"),item.getValue());
             Files.writeString(output.resolve(item.getKey()+".json"),mapper.writerWithDefaultPrettyPrinter().writeValueAsString(plan));
         }
-        for(String relation:Set.of("ingest.publication_metric_snapshot","ingest.account_metric_snapshot","ingest.reaction_breakdown")) {
+        // ingest.reaction_breakdown is readable by api_read since c29a8ad (bounded source-read API);
+        // the plan assertions above still prove the projection-backed public plans never touch it.
+        for(String relation:Set.of("ingest.publication_metric_snapshot","ingest.account_metric_snapshot")) {
             Boolean allowed=jdbc.queryForObject("SELECT has_table_privilege(current_user,:relation,'SELECT')",Map.of("relation",relation),Boolean.class);
             assertThat(allowed).as("public role must not read %s",relation).isFalse();
         }

@@ -21,7 +21,7 @@ def test_schema_drop_is_an_explicit_fail_closed_disposable_rehearsal():
     sql = DROP_REHEARSAL.read_text()
     assert "mranked.allow_disposable_migration_drop" in sql
     assert "(_restore|_rehearsal|_disposable)" in sql
-    assert "storage-publisher-final-2026-09-08-r2" in sql
+    assert "storage-publisher-final-2026-09-08-r3" in sql
     assert "to_regclass('flyway.flyway_schema_history')" in sql
     assert "to_regclass('catalog.legacy_entity_alias')" in sql
     assert "DROP SCHEMA migration RESTRICT" in sql

@@ -1679,7 +1679,7 @@ def test_postgres_reverse_sync_round_trip_preserves_target_identity(
             "sourceNamespace": namespace,
             "database": database_name,
             "schemaContract": {
-                "id": "storage-publisher-final-2026-09-08-r2",
+                "id": "storage-publisher-final-2026-09-08-r3",
                 "finalSchemaSha256": hashlib.sha256(
                     (MIGRATION_DIR / "final-schema.sql").read_bytes()
                 ).hexdigest(),

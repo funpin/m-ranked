@@ -34,7 +34,7 @@ _SHARD = re.compile(r"^(\d+)/(\d+)$")
 _SAFE_ERROR_CODE = re.compile(
     r"^[A-Za-z][A-Za-z0-9_.-]{0,79}(?::[A-Za-z0-9_.-]{1,80})?$"
 )
-_EXPECTED_SCHEMA_CONTRACT = "storage-publisher-final-2026-09-08-r2"
+_EXPECTED_SCHEMA_CONTRACT = "storage-publisher-final-2026-09-08-r3"
 
 
 def _row_value(row: Any, key: str, index: int) -> Any:

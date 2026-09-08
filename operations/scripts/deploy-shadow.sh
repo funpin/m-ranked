@@ -332,10 +332,14 @@ required_files=(
   collector_target/__main__.py
   collector_target/auth.py
   collector_target/evidence.py
+  anomaly_analysis/__main__.py
+  anomaly_analysis/coordinator.py
+  anomaly_analysis/postgres.py
   migration/release_manifest.py
   migration/bridge/reconciliation.py
   migration/bridge/preservation.py
   operations/env/projection-publisher.env.example
+  operations/env/anomaly-analysis.env.example
   operations/bin/pg-to-legacy-sync
   operations/scripts/backup.sh
   operations/scripts/cache-outbox-worker.sh
@@ -351,6 +355,7 @@ required_files=(
   operations/scripts/writer-cutover.sh
   operations/scripts/rollback.sh
   operations/systemd/m-ranked-target-projection-publisher.service
+  operations/systemd/m-ranked-target-anomaly-analysis.service
   operations/tmpfiles.d/m-ranked-transition.conf
 )
 executable_files=(
@@ -817,6 +822,10 @@ if [[ "$activation_failed" == false ]]; then
     m-ranked-target-cache-outbox.service || activation_failed=true
 fi
 if [[ "$activation_failed" == false ]]; then
+  # Anomaly analysis is deliberately outside the activation/readiness barrier.
+  systemctl restart m-ranked-target-anomaly-analysis.service || true
+fi
+if [[ "$activation_failed" == false ]]; then
   activation_deadline=$(( $(date -u +%s) + TARGET_ACTIVATION_GATE_SECONDS ))
   activation_healthy=false
   while (( $(date -u +%s) < activation_deadline )); do
@@ -864,6 +873,7 @@ if [[ "$activation_failed" == false ]]; then
 fi
 
 if [[ "$activation_failed" == true ]]; then
+  systemctl stop m-ranked-target-anomaly-analysis.service || true
   if [[ -n "$previous_release" && -d "$previous_release" ]]; then
     rollback_link="$MRANKED_CURRENT_LINK.rollback.$BASHPID"
     ln -s -- "$previous_release" "$rollback_link"
@@ -895,7 +905,7 @@ jq -n \
   --arg releaseManifestSha256 "$release_manifest_sha256" \
   --arg previousRelease "$previous_release" --arg operator "$operator" \
   --arg ticket "$ticket" --arg finishedAt "$finished_at" \
-  --arg schemaContract "storage-publisher-final-2026-09-08-r2" \
+  --arg schemaContract "storage-publisher-final-2026-09-08-r3" \
   --arg finalSchemaSha256 "$schema_hash" \
   --arg productionTransitionSha256 "$transition_hash" \
   '{status:$status,releaseId:$releaseId,

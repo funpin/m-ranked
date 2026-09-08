@@ -71,6 +71,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
       return revalidate(url);
     },
   });
+  // Analysis has an independent revision axis and stays outside the existing
+  // dataset-revision-only Next cache.
+  const analysisClient = createClient<paths>({
+    baseUrl: base.origin,
+    fetch: async (request) => revalidate(new URL(request.url)),
+  });
 
   function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
     if (result.error || !result.response.ok) {
@@ -104,6 +110,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
     },
     publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, limit = 100, cursor?: string) {
       return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(3000, Math.max(1, limit)), cursor } } }).then(unwrap);
+    },
+    publicationAnomalyAnalysis(legacyId: number | string, legacyType?: LegacyPublicationType, cursor?: string) {
+      return analysisClient.GET("/api/v1/publications/{legacyId}/anomaly-analysis", {
+        params: { path: { legacyId }, query: { legacyType, limit: 100, cursor } },
+      }).then(unwrap);
     },
     comparisonCandidates(platform: Exclude<Platform, "all">, limit = 200, cursor?: string) {
       return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);

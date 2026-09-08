@@ -100,7 +100,7 @@ newer and must be reported separately;
 duplicate counts must all be integer zero. The sealer rejects extra keys,
 floats masquerading as integers, local/test namespaces or databases,
 placeholder approvals, stale/future timestamps and any schema/deploy binding
-other than the exact `storage-publisher-final-2026-09-08-r2` contract.
+other than the exact `storage-publisher-final-2026-09-08-r3` contract.
 
 After an independent reviewer has checked that the raw captures really came
 from the controlled live-provider shadow run and recorded approval in the

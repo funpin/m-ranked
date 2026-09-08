@@ -168,37 +168,30 @@ class DetailPostgresIntegrationTest {
             } finally {connection.rollback();}
         }
     }
-    @Test void archivedTextProjectionUsesCurrentRowHashAndOnlyPublicStringFields() throws Exception {
+    @Test void contentProjectionIsCanonicalOnlyAndRetainedEvidenceStaysPrivate() throws Exception {
+        // Final contract: analytics.publication_content is derived from canonical
+        // publications only; bridge/legacy evidence reads were removed together
+        // with the retired migration schema.
         try(var connection=DriverManager.getConnection(System.getenv("MRANKED_ADMIN_TEST_POSTGRES_URL"),
                 System.getenv("MRANKED_ADMIN_TEST_OWNER_USERNAME"),System.getenv("MRANKED_ADMIN_TEST_OWNER_PASSWORD"))) {
             connection.setAutoCommit(false);
             try {
                 var jdbc=JdbcClient.create(new SingleConnectionDataSource(connection,true));
-                UUID institution=UUID.randomUUID(),account=UUID.randomUUID(),publication=UUID.randomUUID(),batch=UUID.randomUUID();
+                UUID institution=UUID.randomUUID(),account=UUID.randomUUID(),publication=UUID.randomUUID();
                 jdbc.sql("INSERT INTO catalog.institution(id,canonical_name) VALUES(:id,'Content fixture')").param("id",institution).update();
                 jdbc.sql("INSERT INTO catalog.platform_account(id,institution_id,platform,canonical_external_id,access_mode) VALUES(:id,:institution,'vk',:external,'public_web')")
                         .param("id",account).param("institution",institution).param("external",account.toString()).update();
                 jdbc.sql("INSERT INTO ingest.publication(id,primary_account_id,published_at,discovered_at,publication_type,history_completeness) VALUES(:id,:account,now()-interval '1 day',now(),'post','complete')")
                         .param("id",publication).param("account",account).update();
-                jdbc.sql("INSERT INTO migration.import_batch(id,source_name,source_file_name,source_size_bytes,source_sha256,source_schema_version,snapshot_kind,tool_version,status) VALUES(:id,:name,'fixture.db',0,repeat('a',64),1,'fixture','integration','succeeded')")
-                        .param("id",batch).param("name",batch.toString()).update();
-                jdbc.sql("INSERT INTO migration.legacy_identity_map(source_namespace,source_table,source_pk,target_type,target_uuid,natural_key,source_row_hash,first_batch_id,last_seen_batch_id) VALUES(:namespace,'platform_posts','1','publication',:id,'{}',repeat('a',64),:batch,:batch)")
-                        .param("namespace",UUID.randomUUID()).param("id",publication).param("batch",batch).update();
-                var json=new tools.jackson.databind.json.JsonMapper();
-                for(String hash:java.util.List.of("a","b")) {
-                    String body=json.writeValueAsString(java.util.Map.of("present",true,"payload",java.util.Map.of(
-                            "text",hash.equals("a")?" \nPublic archived text\n ":"Stale text", "message","Wrong priority", "token","must-not-be-public")));
-                    jdbc.sql("INSERT INTO migration.legacy_evidence(batch_id,source_table,source_pk,source_row_hash,evidence_kind,evidence) VALUES(:batch,'platform_posts','1',repeat(:hash,64),'raw_json',CAST(:body AS jsonb))")
-                            .param("batch",batch).param("hash",hash).param("body",body).update();
-                }
-                long revision=jdbc.sql("INSERT INTO analytics.dataset_revision(cause,correlation_id,committed_at) VALUES('migration',:id,now()) RETURNING id")
+                long revision=jdbc.sql("INSERT INTO analytics.dataset_revision(cause,correlation_id,committed_at) VALUES('ingestion',:id,now()) RETURNING id")
                         .param("id",UUID.randomUUID()).query(Long.class).single();
                 jdbc.sql("SELECT analytics.refresh_publication_content(:id)").param("id",revision).query(Long.class).single();
-                assertThat(new JdbcProjectionQueryRepository(jdbc).findPublicationArchivedText(publication,revision)).isEqualTo("Public archived text");
-                assertThat(jdbc.sql("SELECT to_jsonb(content)::text FROM analytics.publication_content content WHERE publication_id=:id").param("id",publication).query(String.class).single())
-                        .doesNotContain("token","must-not-be-public","Stale text","Wrong priority");
+                assertThat(new JdbcProjectionQueryRepository(jdbc).findPublicationArchivedText(publication,revision)).isNull();
+                assertThat(jdbc.sql("SELECT dataset_revision_id FROM analytics.publication_content WHERE publication_id=:id").param("id",publication).query(Long.class).single())
+                        .isEqualTo(revision);
+                assertThat(jdbc.sql("SELECT to_regnamespace('migration') IS NULL AND to_regnamespace('flyway') IS NULL").query(Boolean.class).single()).isTrue();
                 assertThat(jdbc.sql("SELECT has_table_privilege('api_read','analytics.publication_content','SELECT')").query(Boolean.class).single()).isTrue();
-                assertThat(jdbc.sql("SELECT has_table_privilege('api_read','migration.legacy_evidence','SELECT')").query(Boolean.class).single()).isFalse();
+                assertThat(jdbc.sql("SELECT has_table_privilege('api_read','ingest.raw_payload','SELECT')").query(Boolean.class).single()).isFalse();
             } finally {connection.rollback();}
         }
     }

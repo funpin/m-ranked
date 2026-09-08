@@ -29,7 +29,7 @@ BEGIN
     SELECT contract_id
       INTO installed_contract
       FROM ops_and_admin.schema_contract;
-    IF installed_contract IS DISTINCT FROM 'storage-publisher-final-2026-09-08-r2' THEN
+    IF installed_contract IS DISTINCT FROM 'storage-publisher-final-2026-09-08-r3' THEN
         RAISE EXCEPTION 'final runtime schema contract is not installed';
     END IF;
     IF to_regclass('catalog.legacy_entity_alias') IS NULL THEN

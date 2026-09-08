@@ -1,7 +1,7 @@
 # Final database schema verification
 
 The repository supports one database contract:
-`storage-publisher-final-2026-09-08-r2`.
+`storage-publisher-final-2026-09-08-r3`.
 
 For a new database, provision roles with
 `infra/postgres/init/001-create-roles.sh` and apply
@@ -22,7 +22,7 @@ SELECT contract_id
 FROM ops_and_admin.schema_contract;
 ```
 
-The only accepted value is `storage-publisher-final-2026-09-08-r2`. The API checks
+The only accepted value is `storage-publisher-final-2026-09-08-r3`. The API checks
 it as part of readiness; collectors, the explicit Publisher and the outbox
 worker fail closed before processing.
 

@@ -67,6 +67,9 @@ public class ApiSecurityConfiguration {
                                 "/api/v1/admin/platform-accounts/*/enabled")
                         .hasAnyRole(WRITE_ROLES)
                         .requestMatchers(HttpMethod.POST, "/api/v1/admin/exports").hasAnyRole(WRITE_ROLES)
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/admin/publications/*/anomaly-signals",
+                                "/api/v1/admin/anomaly-signals/*/reviews").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/exports/*", "/api/v1/admin/exports/*/download")
                         .hasAnyRole(WRITE_ROLES)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/admin/exports/*").hasAnyRole(WRITE_ROLES)
