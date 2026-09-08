@@ -5,6 +5,8 @@ import org.mranked.cache.application.DatasetRevisionProvider;
 import org.mranked.cache.domain.DatasetRevision;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 @Repository
 public class JdbcDatasetRevisionProvider implements DatasetRevisionProvider {
@@ -30,21 +32,48 @@ public class JdbcDatasetRevisionProvider implements DatasetRevisionProvider {
              ORDER BY revision.id DESC
              LIMIT 1
             """;
+    static final String SOURCE_WATERMARK_SQL = """
+            SELECT completed_at
+              FROM ingest.collection_run
+             WHERE completed_at IS NOT NULL
+               AND status IN ('succeeded', 'partial')
+               AND collector_version NOT LIKE 'sqlite-bridge/%'
+             ORDER BY completed_at DESC, id DESC
+             LIMIT 1
+            """;
 
     private final JdbcClient jdbcClient;
+    private final boolean sourceReadEnabled;
 
     public JdbcDatasetRevisionProvider(JdbcClient jdbcClient) {
+        this(jdbcClient, false);
+    }
+
+    @Autowired
+    public JdbcDatasetRevisionProvider(
+            JdbcClient jdbcClient,
+            @Value("${mranked.source-read.enabled:false}") boolean sourceReadEnabled
+    ) {
         this.jdbcClient = jdbcClient;
+        this.sourceReadEnabled = sourceReadEnabled;
     }
 
     @Override
     public DatasetRevision current() {
-        return jdbcClient.sql(CURRENT_REVISION_SQL)
+        if (sourceReadEnabled) {
+            return jdbcClient.sql(SOURCE_WATERMARK_SQL)
+                    .query((resultSet, rowNumber) -> DatasetRevision.source(
+                            resultSet.getObject("completed_at", java.time.OffsetDateTime.class).toInstant()
+                    ))
+                    .optional()
+                    .orElseGet(() -> new DatasetRevision(0, Instant.EPOCH));
+        }
+        var published = jdbcClient.sql(CURRENT_REVISION_SQL)
                 .query((resultSet, rowNumber) -> new DatasetRevision(
                         resultSet.getLong("id"),
                         resultSet.getObject("committed_at", java.time.OffsetDateTime.class).toInstant()
                 ))
-                .optional()
-                .orElseGet(() -> new DatasetRevision(0, Instant.EPOCH));
+                .optional();
+        return published.orElseGet(() -> new DatasetRevision(0, Instant.EPOCH));
     }
 }

@@ -21275,6 +21275,7 @@ REVOKE ALL ON FUNCTION analytics.legacy_period_first_age_limit(p_revision bigint
 --
 
 REVOKE ALL ON FUNCTION analytics.observation_quality_from_rank(p_rank integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION analytics.observation_quality_from_rank(p_rank integer) TO api_read;
 
 
 --
@@ -21282,6 +21283,7 @@ REVOKE ALL ON FUNCTION analytics.observation_quality_from_rank(p_rank integer) F
 --
 
 REVOKE ALL ON FUNCTION analytics.observation_quality_rank(p_quality ingest.observation_quality) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION analytics.observation_quality_rank(p_quality ingest.observation_quality) TO api_read;
 
 
 --
@@ -21803,6 +21805,8 @@ GRANT SELECT ON TABLE analytics.metric_semantic_definition TO maintenance;
 GRANT SELECT ON TABLE analytics.platform_metric_capability TO api_read;
 GRANT SELECT ON TABLE analytics.platform_metric_capability TO maintenance;
 
+GRANT SELECT ON TABLE analytics.usable_publication_snapshot TO api_read;
+
 
 --
 -- Name: TABLE projection_state; Type: ACL; Schema: analytics; Owner: migration_owner
@@ -22058,6 +22062,7 @@ GRANT SELECT ON TABLE ingest.account_metric_snapshot TO maintenance;
 GRANT SELECT ON TABLE ingest.account_metric_snapshot_active TO collector_ingest;
 GRANT SELECT ON TABLE ingest.account_metric_snapshot_active TO migration_bridge;
 GRANT SELECT ON TABLE ingest.account_metric_snapshot_active TO maintenance;
+GRANT SELECT ON TABLE ingest.account_metric_snapshot_active TO api_read;
 
 
 --
@@ -22076,6 +22081,7 @@ GRANT SELECT,INSERT,UPDATE ON TABLE ingest.collection_account_result TO collecto
 GRANT SELECT,INSERT,UPDATE ON TABLE ingest.collection_account_result TO migration_bridge;
 GRANT SELECT ON TABLE ingest.collection_account_result TO maintenance;
 GRANT SELECT ON TABLE ingest.collection_account_result TO api_write_admin;
+GRANT SELECT ON TABLE ingest.collection_account_result TO api_read;
 
 
 --
@@ -22094,6 +22100,7 @@ GRANT SELECT,INSERT,UPDATE ON TABLE ingest.collection_run TO collector_ingest;
 GRANT SELECT,INSERT,UPDATE ON TABLE ingest.collection_run TO migration_bridge;
 GRANT SELECT ON TABLE ingest.collection_run TO maintenance;
 GRANT SELECT ON TABLE ingest.collection_run TO api_write_admin;
+GRANT SELECT ON TABLE ingest.collection_run TO api_read;
 
 
 --
@@ -22727,6 +22734,7 @@ GRANT SELECT ON TABLE ingest.raw_payload TO maintenance;
 GRANT SELECT,INSERT ON TABLE ingest.reaction_breakdown TO collector_ingest;
 GRANT SELECT,INSERT ON TABLE ingest.reaction_breakdown TO migration_bridge;
 GRANT SELECT ON TABLE ingest.reaction_breakdown TO maintenance;
+GRANT SELECT ON TABLE ingest.reaction_breakdown TO api_read;
 
 
 --
