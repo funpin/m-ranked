@@ -3,7 +3,7 @@ import { PlatformPending } from "@/components/platform-pending";
 import { RatingFilterForm } from "@/components/rating-filter-form";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import Link from "next/link";
+import Link from "@/components/native-link";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { PERIOD_LABELS, PLATFORM_LONG_LABELS, publicationLabel } from "@/lib/format";
@@ -43,7 +43,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
   try {
     page = await api.rating({ ...query, platform, entityLimit: 200, entityCursor });
   } catch (error) {
-    if (entityCursor && error instanceof ApiError && error.status === 400) return <section className="panel empty-state"><h1>Рейтинг обновился</h1><p>Откройте первую страницу, чтобы продолжить в актуальном срезе данных.</p><Link href={queryHref("/rating", ratingHrefQuery(query))}>Начать с первой страницы</Link></section>;
+    if (entityCursor && error instanceof ApiError && error.status === 400) return <section className="panel empty-state"><h1>Рейтинг обновился</h1><p>Откройте первую страницу, чтобы продолжить в актуальном срезе данных.</p><Link href={queryHref("/rating", ratingHrefQuery(query))} prefetch={false}>Начать с первой страницы</Link></section>;
     return (
       <>
         <PageHeader title="Рейтинг каналов и публикаций" description="Сравнение активности по последнему замеру каждой публикации." />
@@ -69,7 +69,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
         : <VkEntityTable query={query} rows={page.entities} offset={page.entityOffset} />}
 
       {page.nextEntityCursor ? <nav className="pagination" aria-label="Страницы рейтинга">
-        <Link className="button-link secondary-button" href={queryHref("/rating", { ...ratingHrefQuery(query), entityCursor: page.nextEntityCursor })}>Следующая страница рейтинга</Link>
+        <Link className="button-link secondary-button" href={queryHref("/rating", { ...ratingHrefQuery(query), entityCursor: page.nextEntityCursor })} prefetch={false}>Следующая страница рейтинга</Link>
       </nav> : page.entitiesTruncated ? <section className="notice notice-amber" role="alert">API ограничил список без ссылки продолжения. Полный рейтинг доступен на действующем сайте; этот маршрут ещё не готов к переключению.</section> : null}
 
       {platform === "telegram"
@@ -97,7 +97,7 @@ function TelegramEntityTable({ query, rows, offset }: {
         </tr></thead>
         <tbody>{rows.map((row, index) => <tr key={row.entityId}>
           <td className="rank rank-cell">{offset + index + 1}</td>
-          <td className="entity-cell"><Link className="entity-link" href={accountHref(row.entityId)}>{row.title || `@${row.username}`}</Link><div className="muted">@{row.username} · {row.publicationCount} публикаций</div></td>
+          <td className="entity-cell"><Link className="entity-link" href={accountHref(row.entityId)} prefetch={false}>{row.title || `@${row.username}`}</Link><div className="muted">@{row.username} · {row.publicationCount} публикаций</div></td>
           <td><strong>{formatMetric(row.averageReactions, true)}</strong></td>
           <td>{formatMetric(row.totalReactions)}</td>
           <td><strong>{formatPercentage(row.engagementRate, 3)}</strong></td>
@@ -126,7 +126,7 @@ function VkEntityTable({ query, rows, offset }: {
         </tr></thead>
         <tbody>{rows.map((row, index) => <tr key={row.entityId}>
           <td className="rank rank-cell">{offset + index + 1}</td>
-          <td className="entity-cell"><Link className="entity-link" href={queryHref(row.legacyRoute, { platform: query.platform })}>{row.shortName || row.canonicalName}</Link><div className="muted">{row.publicationCount} публикаций · {formatMetric(row.totalComments)} комментариев{query.platform === "vk" ? ` · ${formatMetric(row.totalShares)} репостов` : ""}</div></td>
+          <td className="entity-cell"><Link className="entity-link" href={queryHref(row.legacyRoute, { platform: query.platform })} prefetch={false}>{row.shortName || row.canonicalName}</Link><div className="muted">{row.publicationCount} публикаций · {formatMetric(row.totalComments)} комментариев{query.platform === "vk" ? ` · ${formatMetric(row.totalShares)} репостов` : ""}</div></td>
           <td><strong>{formatMetric(row.averageReactions, true)}</strong></td>
           <td>{formatMetric(row.totalReactions)}</td><td>{formatMetric(row.totalViews)}</td>
           <td><strong>{formatPercentage(row.engagementRate)}</strong></td>
@@ -156,7 +156,7 @@ function TelegramPublicationTable({ query, rows }: {
           const label = `${row.accountTitle || `@${row.accountUsername}`} · №${row.externalId ?? "—"}`;
           return <tr key={row.publicationId}>
             <td className="rank rank-cell">{index + 1}</td>
-            <td className="entity-cell">{row.publicationId ? <Link className="entity-link" href={publicationHref(row.publicationId)}>{label}</Link> : <strong>{label}</strong>}
+            <td className="entity-cell">{row.publicationId ? <Link className="entity-link" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
               {external ? <a href={external} target="_blank" rel="noopener noreferrer">{row.deletedAt ? "Открыть сохранённую публикацию в TGStat" : "Открыть пост в Telegram"} ↗</a> : null}
               {row.deletedAt ? <span>удалена из Telegram</span> : null}
             </td>
@@ -199,7 +199,7 @@ function PlatformPublicationRow({ row, index, showInteractions, showShares=false
   const label = `${row.institutionShortName || row.institutionCanonicalName} · ${publicationLabel(row.externalId ?? "",showShares ? "vk" : "rutube")}`;
   return <tr>
     <td className="rank rank-cell">{index + 1}</td>
-    <td className="entity-cell">{row.publicationId ? <Link className="entity-link" href={publicationHref(row.publicationId)}>{label}</Link> : <strong>{label}</strong>}
+    <td className="entity-cell">{row.publicationId ? <Link className="entity-link" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
       {row.deletedAt ? <span className="pill deleted">удалена</span> : null}
       {row.joint ? <span className="pill coauthor">+{row.additionalAuthorCount} авт.</span> : null}
       {row.repost ? <span className="pill repost">репост</span> : null}
@@ -238,7 +238,7 @@ function EntitySortLink({ query, sort, children }: {
   children: ReactNode;
 }) {
   const direction = query.channelSort === sort && query.channelDirection === "desc" ? "asc" : "desc";
-  return <Link className="sort-link has-tooltip" scroll={false} href={queryHref("/rating", {
+  return <Link className="sort-link has-tooltip" scroll={false} prefetch={false} href={queryHref("/rating", {
     ...ratingHrefQuery(query), channel_sort: sort, channel_direction: direction,
   })}>{children} <span className="info-mark" aria-hidden="true">ⓘ</span>{query.channelSort === sort ? <span className="sort-direction">{query.channelDirection === "desc" ? "↓" : "↑"}</span> : null}</Link>;
 }
@@ -249,7 +249,7 @@ function PostSortLink({ query, sort, children }: {
   children: ReactNode;
 }) {
   const direction = query.postSort === sort && query.postDirection === "desc" ? "asc" : "desc";
-  return <Link className="sort-link has-tooltip" scroll={false} href={queryHref("/rating", {
+  return <Link className="sort-link has-tooltip" scroll={false} prefetch={false} href={queryHref("/rating", {
     ...ratingHrefQuery(query), post_sort: sort, post_direction: direction,
   })}>{children} <span className="info-mark" aria-hidden="true">ⓘ</span>{query.postSort === sort ? <span className="sort-direction">{query.postDirection === "desc" ? "↓" : "↑"}</span> : null}</Link>;
 }
