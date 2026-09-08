@@ -16,7 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 FINAL_SCHEMA = ROOT / "backend/src/main/resources/db/final-schema.sql"
 TRANSITION = ROOT / "operations/sql/transition-production-to-final.sql"
-CONTRACT = "storage-publisher-final-2026-09-08-r2"
+CONTRACT = "storage-publisher-final-2026-09-08-r3"
 
 
 def test_only_one_final_schema_is_active() -> None:
@@ -665,7 +665,7 @@ test "$failures" -eq 1
 def test_restore_verifier_requires_the_final_schema_contract() -> None:
     restore = (ROOT / "operations/scripts/restore-verify.sh").read_text(encoding="utf-8")
 
-    assert "storage-publisher-final-2026-09-08-r2" in restore
+    assert "storage-publisher-final-2026-09-08-r3" in restore
     assert "SELECT contract_id FROM ops_and_admin.schema_contract" in restore
     assert "flyway_schema_history" not in restore
     assert "'schemaContract'" in restore

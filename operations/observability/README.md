@@ -41,6 +41,13 @@ capacity scenarios based on measured current database size. Time-to-full is
 derived from observed size growth in Prometheus; the multiplier gauges do not
 predict a growth rate.
 
+The application query also reads the bounded SECURITY DEFINER anomaly summary:
+candidate/eligible backlog, oldest candidate age, expired leases, retries,
+recent failures, independent analysis/source revisions, revision lag and last
+successful completion. The worker publishes detector/outcome and
+detector/metric/severity counters from packaged bounded enums in its own
+`mranked-anomaly.prom` textfile; neither stream uses publication identifiers.
+
 `collector-alerts.yml` and `operations-alerts.yml` contain deployable rule
 definitions. Thresholds for spool age and replication reflect the 15-minute
 recovery objective and must be accepted against the deployed archive schedule.

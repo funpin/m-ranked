@@ -11,12 +11,16 @@ export function signedDuration(seconds:number|null):string {
   return sign+parts.join(" ");
 }
 /** Preserve endpoints and the chosen observation within the 144 visible point limit. */
-export function sampleHistory<T extends {snapshotId:string}>(rows: readonly T[], start: number, end: number, selectedId?: string): T[] {
+export function sampleHistory<T extends {snapshotId:string}>(rows: readonly T[], start: number, end: number, selectedId?: string, preserveIds: readonly string[] = []): T[] {
   const slice = rows.slice(start,end+1);
   if (slice.length <= 144) return slice;
   const indexes = new Set(Array.from({length:143},(_,index) => Math.round(index*(slice.length-1)/142)));
   const selected = selectedId ? slice.findIndex((row) => row.snapshotId === selectedId) : -1;
   if(selected >= 0) indexes.add(selected);
+  for (const id of preserveIds) {
+    const evidence = slice.findIndex((row) => row.snapshotId === id);
+    if (evidence >= 0) indexes.add(evidence);
+  }
   return [...indexes].sort((a,b) => a-b).map((index) => slice[index]!);
 }
 export function historyReactionEntries(current: Pick<HistorySnapshot,"reactionsBreakdown"|"reactionsBreakdownEntries"|"deltaReactionsBreakdown"|"deltaReactionsBreakdownEntries">, delta=false) {

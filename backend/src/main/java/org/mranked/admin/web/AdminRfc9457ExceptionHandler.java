@@ -22,7 +22,8 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = {AdminController.class,CatalogController.class})
+@RestControllerAdvice(assignableTypes = {AdminController.class,CatalogController.class,
+        org.mranked.analysis.web.AnalysisAdminController.class})
 public class AdminRfc9457ExceptionHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(AdminRfc9457ExceptionHandler.class);
 

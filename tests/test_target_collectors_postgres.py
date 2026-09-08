@@ -90,14 +90,14 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible(re
 
     admin = connect(admin_dsn)
     try:
+        # The final schema contract carries the activity-period projection that
+        # Flyway V5 used to add; there is no migration history to inspect.
         v5_installed = admin.execute(
-            """SELECT EXISTS (
-                       SELECT 1 FROM flyway.flyway_schema_history
-                        WHERE version='5' AND success
-                   ) AS installed""",
+            """SELECT to_regprocedure('analytics.rebuild_core_projections(bigint)') IS NOT NULL
+                      AND to_regclass('ops_and_admin.schema_contract') IS NOT NULL AS installed""",
         ).fetchone()["installed"]
         if not v5_installed:
-            pytest.skip("Flyway V5 is required for target-public activity coverage")
+            pytest.skip("final schema activity coverage is required for target-public activity coverage")
 
         admin.execute(
             """INSERT INTO catalog.institution(id, canonical_name)
@@ -330,12 +330,21 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible(re
             "history_completeness": "forced_incomplete",
             "synthetic_baseline_allowed": retained_legacy_baseline,
         }
+        # The compact availability state records every processed probe; an
+        # event row is appended only when the status, outcome or reason changes,
+        # and a still-present publication produces none for this run.
+        assert admin.execute(
+            """SELECT status::text AS status, last_collection_run_id
+                 FROM ingest.publication_availability_state
+                WHERE publication_id=%s""",
+            (forced_id,),
+        ).fetchone() == {"status": "present", "last_collection_run_id": contradictory_context.run_id}
         assert admin.execute(
             """SELECT count(*) AS count
                  FROM ingest.publication_availability_event
                 WHERE collection_run_id=%s AND publication_id=%s""",
             (contradictory_context.run_id, forced_id),
-        ).fetchone()["count"] == 1
+        ).fetchone()["count"] == 0
     finally:
         run_ids = [item.run_id for item in contexts]
         try:

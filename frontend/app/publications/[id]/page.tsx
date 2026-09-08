@@ -30,11 +30,24 @@ export default async function PublicationPage({ params, searchParams }: Props) {
   if (!UUID_PATTERN.test(id)) notFound();
   const historyLimit = normalizeHistoryLimit(query.history_limit);
   let history;
+  let analysis = null;
+  let analysisLoadFailed = false;
   try {
-    history = await loadPublicationHistory(id, undefined, historyLimit);
+    const loaded = await Promise.all([
+      loadPublicationHistory(id, undefined, historyLimit),
+      api.publicationAnomalyAnalysis(id)
+        .then(value => ({ value, failed: false }))
+        .catch(() => ({ value: null, failed: true })),
+    ]);
+    history = loaded[0];
+    analysis = loaded[1].value;
+    analysisLoadFailed = loaded[1].failed;
+    if (analysis?.sourceDatasetRevision && analysis.sourceDatasetRevision > history.datasetRevision) {
+      history = await loadPublicationHistory(id, undefined, historyLimit);
+    }
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     return <ApiFailureState retryHref={queryHref(publicationHref(id), { history_limit: historyLimit })} />;
   }
-  return <PublicationDetail history={history} historyLimit={historyLimit} />;
+  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={analysis} analysisLoadFailed={analysisLoadFailed} />;
 }

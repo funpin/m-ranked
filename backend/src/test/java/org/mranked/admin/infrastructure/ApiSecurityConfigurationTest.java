@@ -131,6 +131,19 @@ class ApiSecurityConfigurationTest {
                         .with(httpBasic("admin", "admin-pass"))
                         .with(csrf()))
                 .andExpect(status().isOk());
+
+        for (String user : new String[]{"viewer", "editor"}) {
+            mvc.perform(post("/api/v1/admin/publications/00000000-0000-4000-8000-000000000001/anomaly-signals")
+                            .with(httpBasic(user, user + "-pass")).with(csrf()))
+                    .andExpect(status().isForbidden())
+                    .andExpect(header().string("Cache-Control", "no-store"));
+        }
+        mvc.perform(post("/api/v1/admin/publications/00000000-0000-4000-8000-000000000001/anomaly-signals")
+                        .with(httpBasic("admin", "admin-pass")))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/admin/publications/00000000-0000-4000-8000-000000000001/anomaly-signals")
+                        .with(httpBasic("admin", "admin-pass")).with(csrf()))
+                .andExpect(status().isOk()).andExpect(content().string("signal"));
     }
 
     @Test
@@ -206,6 +219,11 @@ class ApiSecurityConfigurationTest {
         @PutMapping("/api/v1/admin/platform-accounts/{id}/enabled")
         String adminPut() {
             return "changed";
+        }
+
+        @PostMapping("/api/v1/admin/publications/{id}/anomaly-signals")
+        String anomalySignal() {
+            return "signal";
         }
 
         @GetMapping("/api/v1/async-test")

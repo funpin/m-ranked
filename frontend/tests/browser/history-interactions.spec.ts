@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 for(const [path,reaction,hasComments,hasShares] of [
@@ -55,6 +56,59 @@ test("clicking an old chart point expands history and scrolls to the exact row",
   await total.focus();await page.keyboard.press("Home");await page.keyboard.press("Enter");
   await expect(page.locator("#snapshot-1")).toBeInViewport();
   await expect(page.locator("#snapshot-1 button")).toBeFocused();
+});
+
+test("publication presents neutral anomaly evidence and preserves boundary rows",async({page})=>{
+  await page.goto("/posts/1");
+  const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
+  await expect(panel).toContainText("Эвристическая сила сигнала: 0.82");
+  await expect(panel).toContainText("не доказывает искусственное происхождение");
+  await expect(panel).not.toContainText(/вероятность накрутки|мошенничество|накрутка обнаружена/i);
+  await page.getByRole("link",{name:"загрузить всю историю"}).click();
+  await expect(page).toHaveURL(/history_limit=3000$/);
+  await expect(page.locator("#snapshot-40.anomaly-boundary")).toContainText("граница сигнала аномальной динамики");
+  await expect(page.locator("#snapshot-41.anomaly-boundary")).toContainText("граница сигнала аномальной динамики");
+});
+
+for(const [id,expected,hasPreviousScore] of [[2,"ожидает анализа",false],[3,"частичное покрытие",false],[4,"устарел после ошибки",true],[5,"ошибка анализа",false]] as const) {
+  test(`publication anomaly status ${id} is distinct and never rendered as clean zero`,async({page})=>{
+    await page.goto(`/posts/${id}`);
+    const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
+    await expect(panel).toContainText(expected);
+    if(hasPreviousScore) await expect(panel).toContainText("Эвристическая сила сигнала: 0.52");
+    else {
+      await expect(panel).toContainText("недостаточно применимых данных");
+      await expect(panel).not.toContainText("Эвристическая сила сигнала: 0.00");
+    }
+  });
+}
+
+for(const [path,metric,absent] of [
+  ["/platform-posts/21","репосты","комментарии"],["/platform-posts/41","просмотры","репосты"],["/platform-posts/1","комментарии","репосты"],
+] as const) {
+  test(`${path} anomaly panel names only the provider-supported metric`,async({page})=>{
+    await page.goto(path);
+    const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
+    await expect(panel).toContainText(`Затронутые показатели: ${metric}.`);
+    await expect(panel).not.toContainText(`Затронутые показатели: ${absent}`);
+  });
+}
+
+test("publication page with anomaly evidence meets axe AA and exposes non-color boundary text",async({page})=>{
+  await page.goto("/posts/1");
+  await page.getByRole("link",{name:"загрузить всю историю"}).click();
+  await expect(page).toHaveURL(/history_limit=3000$/);
+  await page.getByRole("region",{name:"Сигнал аномальной динамики"}).getByRole("group").first().locator("summary").click();
+  await expect(page.locator(".anomaly-boundary .sr-only").first()).toHaveText(", граница сигнала аномальной динамики");
+  expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
+});
+
+test("manual unresolved signal stays separate from automatic clean score",async({page})=>{
+  await page.goto("/posts/6");
+  const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
+  await expect(panel).toContainText("Эвристическая сила сигнала: 0.00");
+  await expect(panel).toContainText("Присутствует отдельная ручная оценка");
+  await expect(panel).toContainText("требует проверки");
 });
 
 

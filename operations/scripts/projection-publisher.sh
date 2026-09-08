@@ -61,7 +61,7 @@ schema_contract="$(
     --quiet --tuples-only --no-align \
     --command 'SELECT contract_id FROM ops_and_admin.schema_contract'
 )"
-if [[ "$schema_contract" != storage-publisher-final-2026-09-08-r2 ]]; then
+if [[ "$schema_contract" != storage-publisher-final-2026-09-08-r3 ]]; then
   echo "database schema contract mismatch" >&2
   exit 65
 fi

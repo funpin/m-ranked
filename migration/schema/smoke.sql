@@ -58,13 +58,13 @@ BEGIN
     END IF;
 
     IF (SELECT contract_id FROM ops_and_admin.schema_contract)
-       IS DISTINCT FROM 'storage-publisher-final-2026-09-08-r2' THEN
+       IS DISTINCT FROM 'storage-publisher-final-2026-09-08-r3' THEN
         RAISE EXCEPTION 'final schema contract mismatch';
     END IF;
 
     FOREACH role_name IN ARRAY ARRAY[
         'migration_owner', 'api_read', 'api_write_admin', 'collector_ingest',
-        'backup', 'migration_bridge', 'maintenance'
+        'backup', 'migration_bridge', 'maintenance', 'analytics_worker'
     ] LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
             RAISE EXCEPTION 'missing database role: %', role_name;
@@ -75,7 +75,7 @@ BEGIN
         SELECT 1 FROM pg_roles
          WHERE rolname IN (
              'migration_owner', 'api_read', 'api_write_admin', 'collector_ingest',
-             'migration_bridge', 'maintenance'
+             'migration_bridge', 'maintenance', 'analytics_worker'
          )
            AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication)
     ) THEN

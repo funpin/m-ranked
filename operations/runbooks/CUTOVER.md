@@ -16,7 +16,7 @@ so it can take the mode-`0600` transition lock, and fails closed. Required evide
 
 - legacy, target API and target Web are healthy;
 - the checksummed shadow deploy report proves schema contract
-  `storage-publisher-final-2026-09-08-r2` and records SHA-256 for the final schema
+  `storage-publisher-final-2026-09-08-r3` and records SHA-256 for the final schema
   plus the one-time production transition,
   `releaseId` and `releaseManifestSha256=SHA256(SHA256SUMS)`, and its
   `releasePath`/ID/hash equal the resolved `MRANKED_CURRENT_LINK` tree after two

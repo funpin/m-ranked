@@ -11,6 +11,6 @@ class JdbcReadinessProbeTest {
         assertThat(JdbcReadinessProbe.SCHEMA_CONTRACT_SQL)
                 .isEqualTo("SELECT contract_id FROM ops_and_admin.schema_contract");
         assertThat(JdbcReadinessProbe.EXPECTED_SCHEMA_CONTRACT)
-                .isEqualTo("storage-publisher-final-2026-09-08-r2");
+                .isEqualTo("storage-publisher-final-2026-09-08-r3");
     }
 }
