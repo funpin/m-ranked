@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import uuid
 from dataclasses import dataclass
 
@@ -99,3 +100,51 @@ def encode_cursor(value: str | None) -> str | None:
     if value is None:
         return None
     return base64.urlsafe_b64encode(value.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def entity_id(value: str) -> tuple[str | None, int | None]:
+    """Разбирает совместимый идентификатор: UUID либо положительный legacy id."""
+    if value.isascii() and value.isdigit() and not value.startswith("0"):
+        legacy = int(value)
+        if 0 < legacy <= (1 << 63) - 1:
+            return None, legacy
+        raise BadRequest("legacy id не помещается в int64")
+    try:
+        parsed = uuid.UUID(value)
+    except ValueError as error:
+        raise BadRequest("идентификатор должен быть UUID или положительным целым") from error
+    if str(parsed) != value.lower():
+        raise BadRequest("UUID должен быть записан в каноническом виде")
+    return str(parsed), None
+
+
+def _fingerprint(dimensions: str) -> str:
+    return hashlib.sha256(dimensions.encode("utf-8")).hexdigest()
+
+
+def scoped_cursor(value: str | None, revision: int, dimensions: str) -> str | None:
+    """Курсор списка привязан к ревизии и нормализованным параметрам запроса."""
+    if value is None or value == "":
+        return None
+    if len(value) > 512:
+        raise BadRequest("курсор длиннее 512 символов")
+    try:
+        decoded_bytes = base64.b64decode(
+            (value + "=" * (-len(value) % 4)).encode("ascii"), altchars=b"-_", validate=True)
+        decoded = decoded_bytes.decode("ascii")
+        if base64.urlsafe_b64encode(decoded_bytes).decode("ascii").rstrip("=") != value:
+            raise ValueError("неканонический base64url")
+        cursor_revision, fingerprint, identifier = decoded.split(":", 2)
+        if int(cursor_revision) != revision or fingerprint != _fingerprint(dimensions):
+            raise ValueError("курсор относится к другому набору данных")
+        uuid.UUID(identifier)
+    except (binascii.Error, UnicodeDecodeError, UnicodeEncodeError, ValueError) as error:
+        raise BadRequest("курсор повреждён или устарел") from error
+    return identifier
+
+
+def encode_scoped_cursor(identifier: str | None, revision: int, dimensions: str) -> str | None:
+    if identifier is None:
+        return None
+    value = f"{revision}:{_fingerprint(dimensions)}:{identifier}"
+    return base64.urlsafe_b64encode(value.encode("ascii")).decode("ascii").rstrip("=")

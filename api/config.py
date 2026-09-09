@@ -43,6 +43,7 @@ class Settings:
 
     cache_entries: int = field(default_factory=lambda: _int("API_CACHE_ENTRIES", 512, 0, 65536))
     cache_ttl_seconds: int = field(default_factory=lambda: _int("API_CACHE_TTL_SECONDS", 600, 1, 86_400))
+    retention_days: int = field(default_factory=lambda: _int("PUBLICATION_RETENTION_DAYS", 70, 1, 3650))
 
     health_mode: str = field(default_factory=lambda: os.environ.get("HEALTH_DATA_SOURCE", "public_web"))
     poll_interval_minutes: int = field(default_factory=lambda: _int("HEALTH_POLL_INTERVAL_MINUTES", 60, 1, 1440))

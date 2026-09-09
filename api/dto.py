@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlparse
 
 
 def iso(value: Any) -> Any:
@@ -117,4 +118,197 @@ def overview_row(card: dict[str, Any], accounts: list[dict[str, Any]], revision:
         "shares": metric(card["total_shares"], card["median_shares"], as_of, revision,
                          card["shares_samples"], denominator),
         "asOf": iso(as_of),
+    }
+
+
+def counter(row: dict[str, Any], name: str, *, common_time: bool = False) -> dict[str, Any]:
+    quality = row.get(f"{name}_quality")
+    value = row.get(f"{name}_count")
+    if quality in ("invalid", "suspected_reset"):
+        value = None
+    observed = row.get("observed_at") if common_time else row.get(f"{name}_observed_at")
+    return {"value": value, "observedAt": iso(observed), "quality": quality}
+
+
+def _presentation(row: dict[str, Any]) -> dict[str, Any]:
+    flags = row.get("presentation_flags", row.get("quality_flags")) or {}
+    if not isinstance(flags, dict):
+        flags = {}
+    authors = max(
+        int(row.get("joint_authors") or 0),
+        int(flags.get("additional_author_count") or 0),
+        int(flags.get("legacy_additional_author_count") or 0),
+    )
+    external_id = row.get("external_id")
+    display = external_id
+    if row.get("platform") == "telegram":
+        display = None
+        public_url = row.get("public_url")
+        if public_url:
+            tail = urlparse(public_url).path.rsplit("/", 1)[-1]
+            if tail.isdigit():
+                display = tail
+        if display is None and external_id and external_id.startswith("m:"):
+            display = external_id[2:]
+    return {
+        "displayExternalId": display,
+        "repost": bool(row.get("is_repost")),
+        "joint": bool(authors or flags.get("joint_post") or flags.get("legacy_is_joint")),
+        "additionalAuthorCount": authors,
+        "ambiguousAlbumReactions": bool(
+            flags.get("ambiguous_album_reactions") or flags.get("ambiguous_reactions")),
+    }
+
+
+def institution(row: dict[str, Any], platform: str, period: str, revision: int) -> dict[str, Any]:
+    return {
+        "institutionId": str(row["institution_id"]),
+        "legacyId": row["legacy_id"],
+        "canonicalName": row["canonical_name"],
+        "shortName": row["short_name"],
+        "platform": platform,
+        "period": period,
+        "metrics": {
+            "totalReactions": number(row["total_reactions"]),
+            "totalViews": number(row["total_views"]),
+            "medianReactions": number(row["median_reactions"]),
+            "medianViews": number(row["median_views"]),
+            "sampleSize": row["sample_size"],
+            "coverage": number(row["coverage"]),
+            "quality": row["quality"],
+            "aggregates": row["aggregate_metadata"],
+        },
+        "datasetRevision": revision,
+        "asOf": iso(row["as_of"]),
+    }
+
+
+def account_stats(row: dict[str, Any], revision: int, as_of: Any) -> dict[str, Any]:
+    medians = row["medians"] or {}
+
+    def median(name: str) -> dict[str, Any]:
+        data = medians.get(name, {})
+        return {
+            "value": number(data.get("value")),
+            "asOf": iso(as_of),
+            "datasetRevision": revision,
+            "sampleSize": int(data.get("sampleSize", 0)),
+            "coverage": number(data.get("coverage", 0)),
+            "quality": data.get("quality", "unknown"),
+        }
+
+    return {
+        "retentionDays": row["retention_days"],
+        "postCount": row["post_count"],
+        "monitored": row["monitored"],
+        "medianReactions": median("reactions"),
+        "medianViews": median("views"),
+        "medianComments": median("comments"),
+        "ratingRank": row["rating_rank"],
+        "ratingPeriod": row["rating_period"],
+        "subscriberCount": row["subscriber_count"],
+        "lastError": row["last_error"],
+        "lastCheckedAt": iso(row["last_checked_at"]),
+    }
+
+
+def account(row: dict[str, Any], revision: int, stats: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "accountId": str(row["account_id"] if "account_id" in row else row["id"]),
+        "legacyId": row["legacy_id"],
+        "legacyType": row["entity_type"],
+        "channelLegacyId": row["channel_legacy_id"],
+        "platformAccountLegacyId": row["platform_account_legacy_id"],
+        "institutionId": str(row["institution_id"]),
+        "institutionLegacyId": row["institution_legacy_id"],
+        "institutionName": row["canonical_name"],
+        "institutionShortName": row["short_name"],
+        "platform": row["platform"],
+        "canonicalExternalId": row["canonical_external_id"],
+        "username": row["current_username"],
+        "title": row["current_title"],
+        "url": row["current_url"],
+        "accessMode": row["access_mode"],
+        "enabled": row["enabled"],
+        "publicationCount": row["publication_count"],
+        "latestObservedAt": iso(row.get("latest_observed_at", row.get("observed_at"))),
+        "datasetRevision": revision,
+        "asOf": iso(row["as_of"]),
+        "stats": stats,
+    }
+
+
+def publication(row: dict[str, Any], revision: int) -> dict[str, Any]:
+    return {
+        "publicationId": str(row["publication_id"]),
+        "legacyId": row["legacy_id"],
+        "legacyType": row["entity_type"],
+        "institutionId": str(row["institution_id"]),
+        "platform": row["platform"],
+        "publishedAt": iso(row["published_at"]),
+        "publicationType": row["publication_type"],
+        "deletedAt": iso(row["deleted_at"]),
+        "views": counter(row, "views"),
+        "reactions": counter(row, "reactions"),
+        "comments": counter(row, "comments"),
+        "shares": counter(row, "shares"),
+        "quality": row["quality"],
+        "intervalUncertain": row["interval_uncertain"],
+        "synthetic": row["synthetic"],
+        "historyCompleteness": row["history_completeness"],
+        "datasetRevision": revision,
+        "asOf": iso(row["observed_at"]),
+        "accountLegacyId": row["account_legacy_id"],
+        "accountLegacyType": row["account_legacy_type"],
+        "accountName": row["account_name"],
+        "accountUsername": row["account_username"],
+        "externalId": row["external_id"],
+        "publicUrl": row["public_url"],
+        **_presentation(row),
+    }
+
+
+def publication_list_item(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "publicationId": str(row["publication_id"]),
+        "legacyId": row["legacy_id"],
+        "legacyType": row["entity_type"],
+        "legacyRoute": row["legacy_route"],
+        "externalId": row["external_id"],
+        "publishedAt": iso(row["published_at"]),
+        "publicUrl": row["public_url"],
+        "publicationType": row["publication_type"],
+        "deletedAt": iso(row["deleted_at"]),
+        "historyCompleteness": row["history_completeness"],
+        "views": counter(row, "views"),
+        "reactions": counter(row, "reactions"),
+        "comments": counter(row, "comments"),
+        "shares": counter(row, "shares"),
+        "title": None,
+        "archivedText": None,
+        **_presentation(row),
+    }
+
+
+def history_snapshot(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "snapshotId": str(row["snapshot_id"]),
+        "observedAt": iso(row["observed_at"]),
+        "ageHours": number((Decimal(row["age_seconds"]) / Decimal(3600)).quantize(Decimal("0.00000001"))),
+        "views": counter(row, "views", common_time=True),
+        "reactions": counter(row, "reactions", common_time=True),
+        "comments": counter(row, "comments", common_time=True),
+        "shares": counter(row, "shares", common_time=True),
+        "deltaViews": row["delta_views"],
+        "deltaReactions": row["delta_reactions"],
+        "deltaComments": row["delta_comments"],
+        "deltaShares": row["delta_shares"],
+        "reactionsBreakdown": row["reaction_breakdown"],
+        "deltaReactionsBreakdown": row["delta_reaction_breakdown"],
+        "reactionsBreakdownEntries": row["reaction_entries"],
+        "deltaReactionsBreakdownEntries": row["delta_reaction_entries"],
+        "synthetic": row["synthetic"],
+        "intervalUncertain": row["interval_uncertain"],
+        "quality": row["quality"],
+        "rawEvidence": row["lineage"],
     }

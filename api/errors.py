@@ -28,14 +28,18 @@ class BadRequest(ApiProblem):
         super().__init__(400, "Bad Request", detail)
 
 
-def problem_response(problem: ApiProblem) -> JSONResponse:
-    body: dict[str, object] = {"type": problem.type, "title": problem.title, "status": problem.status}
+def problem_response(problem: ApiProblem, instance: str = "/") -> JSONResponse:
+    body: dict[str, object] = {
+        "type": problem.type, "title": problem.title, "status": problem.status,
+        "instance": instance,
+    }
     if problem.detail is not None:
         body["detail"] = problem.detail
     body.update(problem.extra)
-    return JSONResponse(body, status_code=problem.status, media_type=PROBLEM)
+    return JSONResponse(body, status_code=problem.status, media_type=PROBLEM,
+                        headers={"Cache-Control": "no-store"})
 
 
-async def handle(_: Request, exc: Exception) -> JSONResponse:
+async def handle(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, ApiProblem)
-    return problem_response(exc)
+    return problem_response(exc, request.url.path)
