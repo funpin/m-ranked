@@ -22,6 +22,17 @@ SORTS_ALL = frozenset({"name", "m_rating", "coverage", "accounts"})
 SORTS_PLATFORM = frozenset({"name", "subscribers", "posts", "views", "reactions",
                             "median_reactions", "m_rating"})
 
+RATING_CHANNEL_SORTS = {
+    "telegram": frozenset({"average", "total", "engagement", "subscribers"}),
+    "vk": frozenset({"average", "total", "engagement", "views", "subscribers"}),
+    "rutube": frozenset({"average", "total", "engagement", "views", "subscribers"}),
+}
+RATING_POST_SORTS = {
+    "telegram": frozenset({"reactions", "subscriber_share", "view_share", "views"}),
+    "vk": frozenset({"reactions", "views", "comments", "shares", "interactions", "view_share"}),
+    "rutube": frozenset({"reactions", "views", "comments", "interactions", "view_share"}),
+}
+
 
 def platform(value: str | None) -> str:
     resolved = value or "all"
@@ -48,6 +59,46 @@ class OverviewQuery:
     @property
     def all_platforms(self) -> bool:
         return self.platform == "all"
+
+
+@dataclass(frozen=True, slots=True)
+class RatingQuery:
+    platform: str
+    period: str
+    channel_sort: str
+    channel_direction: str
+    post_sort: str
+    post_direction: str
+
+    @property
+    def dimensions(self) -> str:
+        return ":".join((self.platform, self.period, self.channel_sort,
+                         self.channel_direction, self.post_sort, self.post_direction))
+
+
+def rating_query(platform_value: str | None, period_value: str | None,
+                 channel_sort: str | None, channel_direction: str | None,
+                 post_sort: str | None, post_direction: str | None) -> RatingQuery:
+    normalized_platform = (platform_value or "telegram").strip().lower()
+    if normalized_platform == "tg":
+        normalized_platform = "telegram"
+    if normalized_platform in ("all", "max"):
+        raise BadRequest("рейтинг активности для этой платформы ещё не доступен")
+    if normalized_platform not in RATING_CHANNEL_SORTS:
+        normalized_platform = "telegram"
+
+    normalized_period = (period_value or "30d").strip().lower()
+    if normalized_period not in PERIODS:
+        normalized_period = "1d"
+    resolved_channel_sort = (channel_sort if channel_sort in RATING_CHANNEL_SORTS[normalized_platform]
+                             else "engagement")
+    post_fallback = "reactions" if normalized_platform == "telegram" else "view_share"
+    resolved_post_sort = (post_sort if post_sort in RATING_POST_SORTS[normalized_platform]
+                          else post_fallback)
+    resolved_channel_direction = channel_direction if channel_direction in ("asc", "desc") else "desc"
+    resolved_post_direction = post_direction if post_direction in ("asc", "desc") else "desc"
+    return RatingQuery(normalized_platform, normalized_period, resolved_channel_sort,
+                       resolved_channel_direction, resolved_post_sort, resolved_post_direction)
 
 
 def overview_query(platform_value: str | None, period_value: str | None,

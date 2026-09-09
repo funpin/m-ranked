@@ -312,3 +312,59 @@ def history_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "quality": row["quality"],
         "rawEvidence": row["lineage"],
     }
+
+
+def rating_entity(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "entityId": str(row["entity_id"]),
+        "entityType": row["entity_type"],
+        "legacyId": row["legacy_id"],
+        "legacyRoute": row["legacy_route"],
+        "institutionId": str(row["institution_id"]),
+        "institutionLegacyId": row["institution_legacy_id"],
+        "canonicalName": row["canonical_name"],
+        "shortName": row["short_name"],
+        "username": row["username"],
+        "title": row["title"],
+        "publicationCount": row["publication_count"],
+        "averageReactions": number(row["average_reactions"]),
+        "averageViews": number(row["average_views"]),
+        "totalReactions": row["total_reactions"],
+        "totalViews": row["total_views"],
+        "totalComments": row["total_comments"],
+        "totalShares": row["total_shares"],
+        "totalInteractions": row["total_interactions"],
+        "engagementRate": number(row["engagement_rate"]),
+        "subscriberCount": row["subscriber_count"],
+    }
+
+
+def rating_publication(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "publicationId": str(row["publication_id"]),
+        "legacyId": row["legacy_id"],
+        "legacyType": row["legacy_type"],
+        "legacyRoute": row["legacy_route"],
+        "institutionId": str(row["institution_id"]),
+        "institutionLegacyId": row["institution_legacy_id"],
+        "institutionCanonicalName": row["institution_canonical_name"],
+        "institutionShortName": row["institution_short_name"],
+        "accountId": str(row["account_id"]),
+        "accountLegacyId": row["account_legacy_id"],
+        "accountUsername": row["account_username"],
+        "accountTitle": row["account_title"],
+        "externalId": row["external_id"],
+        "publicUrl": row["public_url"],
+        "publishedAt": iso(row["published_at"]),
+        "deletedAt": iso(row["deleted_at"]),
+        "joint": row["joint"],
+        "additionalAuthorCount": row["additional_author_count"],
+        "repost": row["repost"],
+        "views": row["views"],
+        "reactions": row["reactions"],
+        "comments": row["comments"],
+        "shares": row["shares"],
+        "interactions": row["interactions"],
+        "subscriberShare": number(row["subscriber_share"]),
+        "viewShare": number(row["view_share"]),
+    }
