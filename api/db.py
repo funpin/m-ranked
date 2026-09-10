@@ -75,3 +75,16 @@ class Database:
         if row is None:
             return None
         return next(iter(row.values()))
+
+    async def stream(self, sql: str, params: Sequence[Any] | dict[str, Any] | None = None,
+                     batch_size: int = 500) -> AsyncIterator[dict[str, Any]]:
+        """Читает большой результат серверным курсором в одном repeatable-read снимке."""
+        async with self.read() as connection:
+            async with connection.transaction():
+                await connection.execute(
+                    "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+                async with connection.cursor(name="mranked_export") as cursor:
+                    await cursor.execute(sql, params)
+                    while rows := await cursor.fetchmany(batch_size):
+                        for row in rows:
+                            yield row

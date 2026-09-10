@@ -9,12 +9,14 @@ PROBLEM = "application/problem+json"
 
 class ApiProblem(Exception):
     def __init__(self, status: int, title: str, detail: str | None = None,
-                 type_: str = "about:blank", **extra: object) -> None:
+                 type_: str = "about:blank", headers: dict[str, str] | None = None,
+                 **extra: object) -> None:
         super().__init__(title)
         self.status = status
         self.title = title
         self.detail = detail
         self.type = type_
+        self.headers = headers or {}
         self.extra = extra
 
 
@@ -37,7 +39,7 @@ def problem_response(problem: ApiProblem, instance: str = "/") -> JSONResponse:
         body["detail"] = problem.detail
     body.update(problem.extra)
     return JSONResponse(body, status_code=problem.status, media_type=PROBLEM,
-                        headers={"Cache-Control": "no-store"})
+                        headers={"Cache-Control": "no-store", **problem.headers})
 
 
 async def handle(request: Request, exc: Exception) -> JSONResponse:
