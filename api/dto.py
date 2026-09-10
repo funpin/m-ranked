@@ -368,3 +368,44 @@ def rating_publication(row: dict[str, Any]) -> dict[str, Any]:
         "subscriberShare": number(row["subscriber_share"]),
         "viewShare": number(row["view_share"]),
     }
+
+
+def comparison_candidate(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "selectionId": str(row["entity_id"]),
+        "selectionType": row["entity_type"],
+        "selectionLegacyId": row["legacy_id"],
+        "selectionLabel": row["label"],
+        "institutionId": str(row["institution_id"]),
+        "canonicalName": row["canonical_name"],
+        "selectionDescription": row["description"],
+    }
+
+
+def comparison_point(row: dict[str, Any], engagement: bool = False) -> dict[str, Any]:
+    prefix = "engagement_" if engagement else ""
+    return {
+        "hourOffset": row["hour_offset"],
+        "value": number(row[f"{prefix}value"]),
+        "sampleSize": row[f"{prefix}sample_size"],
+        "coverage": number(row[f"{prefix}coverage"]),
+        "quality": row[f"{prefix}quality"],
+    }
+
+
+def comparison_series(row: dict[str, Any], points: list[dict[str, Any]],
+                      engagement_points: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "selectionId": str(row["selection_id"]),
+        "selectionType": row["selection_type"],
+        "selectionLegacyId": row["selection_legacy_id"],
+        "selectionLabel": row["selection_label"],
+        "institutionId": str(row["institution_id"]),
+        "legacyId": row["legacy_id"],
+        "canonicalName": row["canonical_name"],
+        "shortName": row["short_name"],
+        "primaryCohortSize": row["primary_cohort_size"],
+        "engagementCohortSize": row["engagement_cohort_size"],
+        "points": points,
+        "engagementPoints": engagement_points,
+    }
