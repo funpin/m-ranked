@@ -40,15 +40,21 @@ class AuthConfig:
             raw_value: Any = spring.get("mranked.admin.auth.users", [])
         else:
             raw_value = json.loads(raw)
+        if not isinstance(raw_value, list):
+            raise ValueError("ADMIN_AUTH_USERS должен быть JSON-массивом")
         users: dict[str, tuple[bytes, frozenset[str]]] = {}
         for item in raw_value:
+            if not isinstance(item, dict):
+                raise ValueError("некорректная конфигурация ADMIN_AUTH_USERS")
             username = str(item.get("username", "")).strip()
             encoded = str(item.get("passwordHash", item.get("password-hash", "")))
             if encoded.startswith("{bcrypt}"):
                 encoded = encoded.removeprefix("{bcrypt}")
             roles = frozenset(str(role).upper() for role in item.get("roles", []))
-            if (not username or username in users or not encoded.startswith("$2")
-                    or not roles or any(ord(character) < 32 for character in username)):
+            if (not username or len(username) > 200 or username in users
+                    or not encoded.startswith("$2") or not roles
+                    or not roles <= {"VIEWER", "EDITOR", "ADMIN"}
+                    or any(ord(character) < 32 for character in username)):
                 raise ValueError("некорректная конфигурация ADMIN_AUTH_USERS")
             users[username] = (encoded.encode("ascii"), roles)
         configured_secret = os.environ.get("ADMIN_CSRF_SECRET")
