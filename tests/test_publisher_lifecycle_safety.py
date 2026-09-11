@@ -67,6 +67,8 @@ def test_two_gib_runtime_has_a_coherent_hard_memory_budget() -> None:
 
 def test_heavy_publication_has_lock_capacity_guard_and_no_retry_loop() -> None:
     publisher = _read("operations/scripts/projection-publisher.sh")
+    schema = _read("backend/src/main/resources/db/final-schema.sql")
+    transition = _read("operations/sql/transition-production-to-final.sql")
 
     assert 'usage: $0 --once' in publisher
     assert "flock -n 9" in publisher
@@ -74,6 +76,8 @@ def test_heavy_publication_has_lock_capacity_guard_and_no_retry_loop() -> None:
     assert "pg_indexes_size" in publisher
     assert "temp_bytes" in publisher
     assert "wal_bytes" in publisher
+    assert schema.count("SET statement_timeout TO '2h'") == 1
+    assert transition.count("SET statement_timeout = '2h'") == 1
     assert "PROJECTION_CAPACITY_MULTIPLIER" in publisher
     assert "PROJECTION_MIN_FREE_BYTES" in publisher
     assert "::numeric" in publisher

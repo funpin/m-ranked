@@ -594,7 +594,7 @@ CREATE FUNCTION analytics.rebuild_serving_projections(
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, analytics
 SET lock_timeout = '10s'
-SET statement_timeout = '15min'
+SET statement_timeout = '2h'
 AS $function$
 DECLARE
     result jsonb;

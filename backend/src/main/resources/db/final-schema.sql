@@ -2736,7 +2736,7 @@ CREATE FUNCTION analytics.rebuild_serving_projections(p_dataset_revision_id bigi
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'analytics'
     SET lock_timeout TO '10s'
-    SET statement_timeout TO '15min'
+    SET statement_timeout TO '2h'
     AS $$
 DECLARE
     result jsonb;
