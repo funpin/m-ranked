@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: org.mranked.query.infrastructure.DetailPostgresIntegrationTest
--------------------------------------------------------------------------------
-Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.726 s -- in org.mranked.query.infrastructure.DetailPostgresIntegrationTest

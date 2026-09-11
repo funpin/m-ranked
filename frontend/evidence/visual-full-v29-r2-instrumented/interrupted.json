@@ -1,7 +1,0 @@
-{
-  "gate": "NO-GO",
-  "completed": 176,
-  "passed": 139,
-  "reason": "Stopped after legacy long-period mobile readiness timeouts. Frozen Date left the legacy Chart.js animation active before the runner reached its post-readiness animation stop. Existing pixel/axe/clock/CLS observations remain recorded; incomplete matrix is not acceptance.",
-  "fixRequired": "Install an explicit static-capture animation hook before the first legacy Chart construction; retain original library bytes/data/formatters."
-}

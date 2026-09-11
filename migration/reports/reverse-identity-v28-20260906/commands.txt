@@ -1,3 +1,0 @@
-rtk proxy .venv/bin/python /private/tmp/run-reverse-targeted-v28.py
-# Harness creates a UUID-named loopback *_it database, performs real Flyway MigrationInstallationTest, runs tests/test_reverse_sync_postgres.py, and drops only that database in finally.
-# Credentials are loaded in memory from the private env; logs were redacted before retention.

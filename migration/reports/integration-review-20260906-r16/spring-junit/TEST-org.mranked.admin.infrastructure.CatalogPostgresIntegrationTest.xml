@@ -1,9 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest" time="4.455" tests="6" errors="0" skipped="0" failures="0" flakes="0">
-  <testcase name="nativeIdHistoryDeletionReenrollmentAndIdempotentReplayPreserveImmutableFacts" classname="org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest" time="1.013" />
-  <testcase name="modernAccountRequiresObservedVersionAndRetainsLegacyHttpDisplayUrl" classname="org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest" time="0.395" />
-  <testcase name="legacyFormsKeepRedirectsAndMatrixConflictRollsBackEveryEarlierAccount" classname="org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest" time="1.818" />
-  <testcase name="simultaneousIdenticalCommandsPublishOnlyOneAuditAndRevision" classname="org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest" time="0.132" />
-  <testcase name="officialImportKeepsPerChannelRanksNullCategoriesAuditAndIdempotentHttpCommand" classname="org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest" time="0.689" />
-  <testcase name="optimisticConflictAndFailedProjectionCannotPublishPartialCommand" classname="org.mranked.admin.infrastructure.CatalogPostgresIntegrationTest" time="0.395" />
-</testsuite>
