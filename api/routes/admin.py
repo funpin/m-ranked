@@ -624,7 +624,9 @@ async def set_platform_account_enabled(
                     revision_row = await (await connection.execute(
                         sql.INSERT_REVISION, {"correlation": correlation})).fetchone()
                     revision = revision_row["id"]
-                    await connection.execute(sql.QUEUE_PROJECTION, {"revision": revision})
+                    await connection.execute(
+                        sql.QUEUE_CACHE_INVALIDATION, {"revision": revision}
+                    )
                     await connection.execute(sql.QUEUE_ENABLED, {
                         "revision": revision, "account": accountId,
                         "tag": f"platform-account:{accountId}", "enabled": account["enabled"],

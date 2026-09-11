@@ -22,10 +22,7 @@ CATEGORIES = {"social": "social", "telegram": "tg", "vk": "vk", "max": "ok",
 
 
 def _resource() -> Path:
-    local = Path(__file__).with_name("data") / "official-m-rating-channel-codes.json"
-    if local.exists():
-        return local
-    return Path(__file__).parents[1] / "backend/src/main/resources/admin/official-m-rating-channel-codes.json"
+    return Path(__file__).with_name("data") / "official-m-rating-channel-codes.json"
 
 
 def _allow(url: str) -> bool:

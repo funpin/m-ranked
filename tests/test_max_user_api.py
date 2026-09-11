@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.max_user_api import (
+from collector_runtime.max_user_api import (
     MaxUserClient,
     _comment_count,
     _install_pymax_decode_compatibility,

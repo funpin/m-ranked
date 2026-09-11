@@ -67,3 +67,110 @@ def test_every_contract_operation_is_implemented(contract: dict, app) -> None:
     missing = sorted(wanted - have)
     assert not missing, f"не реализовано операций: {len(missing)}\n" + "\n".join(
         f"  {method} {path}" for path, method in missing)
+
+
+DETAIL_GROUP = {
+    ("/api/v1/institutions/{legacyId}", "GET"),
+    ("/api/v1/institutions/{legacyId}/accounts", "GET"),
+    ("/api/v1/accounts/{legacyId}", "GET"),
+    ("/api/v1/accounts/{legacyId}/publications", "GET"),
+    ("/api/v1/publications/{legacyId}", "GET"),
+    ("/api/v1/publications/{legacyId}/history", "GET"),
+}
+
+RATING_GROUP = {("/api/v1/rating", "GET")}
+
+COMPARE_GROUP = {
+    ("/api/v1/compare/candidates", "GET"),
+    ("/api/v1/compare", "GET"),
+}
+
+EXPORT_MEDIA_GROUP = {
+    ("/api/v1/exports/publications.csv", "GET"),
+    ("/api/v1/legacy-exports/{kind}.csv", "GET"),
+    ("/api/v1/emoji/{emojiId}", "GET"),
+}
+
+ANALYSIS_GROUP = {
+    ("/api/v1/publications/{legacyId}/anomaly-analysis", "GET"),
+    ("/api/v1/admin/publications/{publicationId}/anomaly-signals", "POST"),
+    ("/api/v1/admin/anomaly-signals/{findingId}/reviews", "POST"),
+}
+
+ADMIN_GROUP = {
+    ("/api/v1/admin/csrf", "GET"),
+    ("/api/v1/admin/catalog/session", "GET"),
+    ("/api/v1/admin/catalog/status", "GET"),
+    ("/api/v1/admin/catalog/institutions", "GET"),
+    ("/api/v1/admin/catalog/institutions", "POST"),
+    ("/api/v1/admin/catalog/institutions/{id}", "PUT"),
+    ("/api/v1/admin/catalog/institutions/{id}", "DELETE"),
+    ("/api/v1/admin/catalog/institutions/{id}/accounts", "GET"),
+    ("/api/v1/admin/catalog/accounts", "POST"),
+    ("/api/v1/admin/catalog/accounts/{id}", "DELETE"),
+    ("/api/v1/admin/catalog/accounts/{id}/enable", "POST"),
+    ("/api/v1/admin/catalog/accounts/{id}/disable", "POST"),
+    ("/api/v1/admin/catalog/accounts/{id}/native-id", "POST"),
+    ("/api/v1/admin/catalog/legacy-command", "POST"),
+    ("/api/v1/admin/jobs", "GET"),
+    ("/api/v1/admin/jobs/{jobId}", "GET"),
+    ("/api/v1/admin/platform-accounts/{accountId}", "GET"),
+    ("/api/v1/admin/platform-accounts/{accountId}/enabled", "PUT"),
+    ("/api/v1/admin/exports", "POST"),
+    ("/api/v1/admin/exports/{id}", "GET"),
+    ("/api/v1/admin/exports/{id}", "DELETE"),
+    ("/api/v1/admin/exports/{id}/download", "GET"),
+}
+
+
+def test_entity_and_list_group_is_implemented(contract: dict, app) -> None:
+    """Промежуточный зелёный гейт, пока полный порт 43 операций ещё не закончен."""
+    from fastapi.routing import APIRoute
+    contract_operations = {
+        (path, method.upper())
+        for path, operations in contract["paths"].items()
+        for method in operations
+        if method in ("get", "post", "put", "delete", "patch")
+    }
+    implemented = {
+        (route.path, method)
+        for route in app.routes if isinstance(route, APIRoute)
+        for method in route.methods if method != "HEAD"
+    }
+    assert DETAIL_GROUP <= contract_operations
+    assert DETAIL_GROUP <= implemented
+
+
+def test_rating_group_is_implemented(contract: dict, app) -> None:
+    from fastapi.routing import APIRoute
+    implemented = {(route.path, method) for route in app.routes if isinstance(route, APIRoute)
+                   for method in route.methods if method != "HEAD"}
+    assert RATING_GROUP <= implemented
+
+
+def test_compare_group_is_implemented(contract: dict, app) -> None:
+    from fastapi.routing import APIRoute
+    implemented = {(route.path, method) for route in app.routes if isinstance(route, APIRoute)
+                   for method in route.methods if method != "HEAD"}
+    assert COMPARE_GROUP <= implemented
+
+
+def test_export_and_media_group_is_implemented(contract: dict, app) -> None:
+    from fastapi.routing import APIRoute
+    implemented = {(route.path, method) for route in app.routes if isinstance(route, APIRoute)
+                   for method in route.methods if method != "HEAD"}
+    assert EXPORT_MEDIA_GROUP <= implemented
+
+
+def test_analysis_group_is_implemented(contract: dict, app) -> None:
+    from fastapi.routing import APIRoute
+    implemented = {(route.path, method) for route in app.routes if isinstance(route, APIRoute)
+                   for method in route.methods if method != "HEAD"}
+    assert ANALYSIS_GROUP <= implemented
+
+
+def test_admin_group_is_implemented(contract: dict, app) -> None:
+    from fastapi.routing import APIRoute
+    implemented = {(route.path, method) for route in app.routes if isinstance(route, APIRoute)
+                   for method in route.methods if method != "HEAD"}
+    assert ADMIN_GROUP <= implemented

@@ -1,0 +1,15 @@
+[Unit]
+Description=Quarterly M-Ranked PITR rehearsal
+
+[Timer]
+OnCalendar=*-01-01 06:15:00 UTC
+OnCalendar=*-04-01 06:15:00 UTC
+OnCalendar=*-07-01 06:15:00 UTC
+OnCalendar=*-10-01 06:15:00 UTC
+Persistent=true
+RandomizedDelaySec=30min
+AccuracySec=1min
+Unit=m-ranked-target-pitr-drill.service
+
+[Install]
+WantedBy=timers.target

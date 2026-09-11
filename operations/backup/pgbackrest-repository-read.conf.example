@@ -1,0 +1,21 @@
+[global]
+log-level-console=info
+log-level-file=off
+process-max=2
+
+# Install on the DR repository host for the forced-command
+# m-ranked-backup-read account. The account has group-read and no write access
+# to these repositories, so a compromised verifier cannot delete backups.
+repo1-path=/srv/m-ranked/pgbackrest/daily
+repo1-cipher-type=aes-256-cbc
+repo1-cipher-pass=REPLACE_WITH_RANDOM_SECRET
+
+repo2-path=/srv/m-ranked/pgbackrest/weekly
+repo2-cipher-type=aes-256-cbc
+repo2-cipher-pass=REPLACE_WITH_DIFFERENT_RANDOM_SECRET
+
+repo3-path=/srv/m-ranked/pgbackrest/monthly
+repo3-cipher-type=aes-256-cbc
+repo3-cipher-pass=REPLACE_WITH_THIRD_RANDOM_SECRET
+
+[m-ranked]

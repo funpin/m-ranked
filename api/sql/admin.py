@@ -170,10 +170,10 @@ INSERT INTO analytics.dataset_revision(cause,correlation_id)
 VALUES('configuration',%(correlation)s) RETURNING id
 """
 
-QUEUE_PROJECTION = """
+QUEUE_CACHE_INVALIDATION = """
 INSERT INTO ops_and_admin.outbox_event(dataset_revision_id,event_type,aggregate_type,
   aggregate_id,affected_tags,payload)
-VALUES(%(revision)s,'projection.rebuild.requested','projection','core',
+VALUES(%(revision)s,'cache.invalidated','cache','public',
   ARRAY['publications','overview','comparison'],
   jsonb_build_object('revision',%(revision)s::bigint,'cause','configuration'))
 ON CONFLICT(dataset_revision_id,event_type,aggregate_type,aggregate_id) DO NOTHING

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.reactions import (
+from collector_runtime.reactions import (
     choose_album_reactions,
     custom_emoji_asset,
     parse_message_reactions,

@@ -1,0 +1,62 @@
+# Local Python/FastAPI stand. Run alongside compose.yaml with --env-file local/compose.env.
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: ${LOCAL_DATABASE_NAME:-mranked}
+
+  api:
+    mem_limit: 768m
+    build:
+      context: ..
+      dockerfile: infra/local/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: 8080
+      API_READ_DB_HOST: postgres
+      API_READ_DB_NAME: ${LOCAL_DATABASE_NAME:-mranked}
+      API_READ_DB_USER: api_read
+      API_READ_DB_PASSWORD: ${API_READ_DB_PASSWORD}
+      API_WRITE_ADMIN_DB_HOST: postgres
+      API_WRITE_ADMIN_DB_NAME: ${LOCAL_DATABASE_NAME:-mranked}
+      API_WRITE_ADMIN_DB_USER: api_write_admin
+      API_WRITE_ADMIN_DB_PASSWORD: ${API_WRITE_ADMIN_DB_PASSWORD}
+      OUTBOX_WORKER_DB_HOST: postgres
+      OUTBOX_WORKER_DB_NAME: ${LOCAL_DATABASE_NAME:-mranked}
+      OUTBOX_WORKER_DB_USER: outbox_worker
+      OUTBOX_WORKER_DB_PASSWORD: ${OUTBOX_WORKER_DB_PASSWORD}
+      ADMIN_AUTH_USERS: >-
+        [{"username":"admin","passwordHash":"$$2a$$10$$3P6XJBtkor5EEWC7uK9i4.xQC3ZLjEnCGjdhxOeUCkf860gh9fZja","roles":["ADMIN"]}]
+      ADMIN_CSRF_SECRET: local-demo-csrf-secret-change-in-production
+      MRANKED_IDENTITY_RECEIPT_DIR: /state/identity-receipts
+      MRANKED_EXPORTS_SPOOL_DIRECTORY: /state/exports
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - api_state:/state
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/local/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://api:8080
+      NEXT_PUBLIC_DATA_CACHE: disabled
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  api_state:

@@ -1,0 +1,142 @@
+"""Produce a private Prometheus textfile using explicit environment DSNs.
+
+Only aggregate counters are returned. No query text, relation names, object
+URIs, account identifiers, error messages or credential values are exposed.
+"""
+from __future__ import annotations
+
+import argparse
+import math
+import os
+from pathlib import Path
+import shutil
+import tempfile
+import time
+
+import psycopg
+
+PG_SQL = """SELECT jsonb_build_object(
+ 'wal_bytes_total',(SELECT wal_bytes FROM pg_stat_wal),
+ 'wal_archive_failures_total',(SELECT failed_count FROM pg_stat_archiver),
+ 'wal_last_archived_unixtime',(SELECT coalesce(extract(epoch FROM last_archived_time),0) FROM pg_stat_archiver),
+ 'replication_connected',(SELECT count(*) FROM pg_stat_replication),
+ 'replication_lag_bytes',(SELECT coalesce(max(pg_wal_lsn_diff(CASE WHEN pg_is_in_recovery() THEN pg_last_wal_receive_lsn() ELSE pg_current_wal_lsn() END,replay_lsn)),0) FROM pg_stat_replication),
+ 'replication_replay_lag_seconds',(SELECT coalesce(max(extract(epoch FROM replay_lag)),0) FROM pg_stat_replication),
+ 'lock_waits',(SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'),
+ 'database_bytes',pg_database_size(current_database()),
+ 'table_bytes',(SELECT coalesce(sum(pg_table_size(c.oid)),0) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('catalog','ingest','analytics','rating','ops_and_admin') AND c.relkind IN ('r','m')),
+ 'index_bytes',(SELECT coalesce(sum(pg_indexes_size(c.oid)),0) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('catalog','ingest','analytics','rating','ops_and_admin') AND c.relkind IN ('r','m')),
+ 'partition_bytes',(SELECT coalesce(sum(pg_total_relation_size(c.oid)),0) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='ingest' AND c.relispartition AND c.relkind='r'),
+ 'inserted_rows_total',(SELECT coalesce(sum(n_tup_ins),0) FROM pg_stat_user_tables WHERE schemaname IN ('catalog','ingest','analytics','rating','ops_and_admin')))
+"""
+APP_SQL = """WITH anomaly AS MATERIALIZED (SELECT analytics.anomaly_operational_metrics() AS value)
+SELECT jsonb_build_object(
+ 'latest_dataset_revision',(SELECT coalesce(max(id),0) FROM analytics.dataset_revision),
+ 'pending_outbox',(SELECT count(*) FROM ops_and_admin.outbox_event WHERE published_at IS NULL),
+ 'archive_staging',(SELECT count(*) FROM ops_and_admin.archive_manifest WHERE status='staging'),
+ 'archive_verified',(SELECT count(*) FROM ops_and_admin.archive_manifest WHERE status='verified'),
+ 'archive_fenced',(SELECT count(*) FROM ops_and_admin.publication_partition_fence WHERE state='archiving'),
+ 'collection_rows_24h',(SELECT coalesce(sum(result.snapshot_count),0) FROM ingest.collection_run run JOIN ingest.collection_account_result result ON result.collection_run_id=run.id WHERE run.platform IN ('telegram','vk','max','rutube') AND run.started_at>=now()-interval '1 day'),
+ 'collection_last_success_unixtime',(SELECT coalesce(extract(epoch FROM max(completed_at)),0) FROM ingest.collection_run WHERE status='succeeded'),
+ 'anomaly_candidate_backlog',(SELECT (value->>'candidate_backlog')::numeric FROM anomaly),
+ 'anomaly_eligible_backlog',(SELECT (value->>'eligible_backlog')::numeric FROM anomaly),
+ 'anomaly_oldest_candidate_age_seconds',(SELECT (value->>'oldest_candidate_age_seconds')::numeric FROM anomaly),
+ 'anomaly_expired_leases',(SELECT (value->>'expired_leases')::numeric FROM anomaly),
+ 'anomaly_retry_candidates',(SELECT (value->>'retry_candidates')::numeric FROM anomaly),
+ 'anomaly_failures_last_hour',(SELECT (value->>'failures_last_hour')::numeric FROM anomaly),
+ 'anomaly_latest_analysis_revision',(SELECT (value->>'latest_analysis_revision')::numeric FROM anomaly),
+ 'anomaly_latest_source_dataset_revision',(SELECT (value->>'latest_source_dataset_revision')::numeric FROM anomaly),
+ 'anomaly_source_revision_lag',(SELECT (value->>'source_revision_lag')::numeric FROM anomaly),
+ 'anomaly_last_success_unixtime',(SELECT (value->>'last_success_unixtime')::numeric FROM anomaly))
+"""
+SOURCES=('postgres','application','spool','disk')
+NAMES={
+    'postgres':('wal_bytes_total','wal_archive_failures_total','wal_last_archived_unixtime','replication_connected','replication_lag_bytes','replication_replay_lag_seconds','lock_waits','database_bytes','table_bytes','index_bytes','partition_bytes','inserted_rows_total'),
+    'application':('latest_dataset_revision','pending_outbox','archive_staging','archive_verified','archive_fenced','collection_rows_24h','collection_last_success_unixtime',
+                   'anomaly_candidate_backlog','anomaly_eligible_backlog','anomaly_oldest_candidate_age_seconds','anomaly_expired_leases','anomaly_retry_candidates',
+                   'anomaly_failures_last_hour','anomaly_latest_analysis_revision','anomaly_latest_source_dataset_revision','anomaly_source_revision_lag','anomaly_last_success_unixtime'),
+    'disk':('free_bytes','total_bytes','required_5x_bytes','required_10x_bytes'),
+}
+
+
+def database_metrics(dsn: str, query: str) -> dict:
+    with psycopg.connect(dsn,connect_timeout=3,options='-c statement_timeout=5000 -c default_transaction_read_only=on') as connection:
+        return connection.execute(query).fetchone()[0]
+
+
+def spool_metrics(root: Path, *, max_entries=10000) -> dict:
+    if not root.is_absolute() or root.is_symlink() or not root.is_dir(): raise ValueError('spool directory unavailable')
+    size=0; count=0; oldest=time.time(); pending=[root]; visited=0
+    while pending:
+        with os.scandir(pending.pop()) as entries:
+            for entry in entries:
+                visited+=1
+                if visited>max_entries: raise ValueError('spool monitoring entry budget exceeded')
+                if entry.is_symlink(): continue
+                if entry.is_dir(follow_symlinks=False): pending.append(Path(entry.path))
+                elif entry.is_file(follow_symlinks=False):
+                    stat=entry.stat(follow_symlinks=False); count+=1; size+=stat.st_size; oldest=min(oldest,stat.st_mtime)
+    return {'bytes':size,'files':count,'oldest_age_seconds':max(0,time.time()-oldest) if count else 0}
+
+
+def sample(environment: dict[str,str]) -> tuple[str,bool]:
+    metrics=[]; success=True; database_bytes=None
+
+    def add(name: str, value, *, labels: str=''):
+        numeric=float(value)
+        if not math.isfinite(numeric) or numeric<0: raise ValueError('invalid numeric monitoring value')
+        metrics.append((name,labels,numeric))
+
+    for source in SOURCES:
+        began=time.monotonic(); start=len(metrics)
+        try:
+            if source=='postgres':
+                values=database_metrics(environment['OPS_MONITOR_DATABASE_URL'],PG_SQL)
+                database_bytes=float(values['database_bytes'])
+            elif source=='application': values=database_metrics(environment['OPS_APPLICATION_DATABASE_URL'],APP_SQL)
+            elif source=='disk':
+                disk=shutil.disk_usage(environment['OPS_DISK_PATH'])
+                if database_bytes is None: raise ValueError('database size unavailable for capacity scenarios')
+                values={'free_bytes':disk.free,'total_bytes':disk.total,'required_5x_bytes':database_bytes*5,'required_10x_bytes':database_bytes*10}
+            else:
+                for kind in ('wal','evidence','cold'):
+                    values=spool_metrics(Path(environment['OPS_'+kind.upper()+'_SPOOL']))
+                    for key,value in values.items(): add('mranked_ops_spool_'+key,value,labels='kind="'+kind+'"')
+                values={}
+            for key in NAMES.get(source,()): add('mranked_ops_'+key,values[key])
+            add('mranked_ops_source_up',1,labels='source="'+source+'"')
+        except Exception:
+            # Discard partial source values. Error details can include DSNs;
+            # only the bounded source enum becomes visible in monitoring.
+            del metrics[start:]; success=False
+            add('mranked_ops_source_up',0,labels='source="'+source+'"')
+        add('mranked_ops_source_duration_seconds',time.monotonic()-began,labels='source="'+source+'"')
+    add('mranked_ops_sample_unixtime',time.time())
+    lines=[]; seen=set()
+    for name,labels,value in metrics:
+        if name not in seen:
+            lines.append('# TYPE '+name+(' counter' if name.endswith('_total') else ' gauge'))
+            seen.add(name)
+        lines.append(name+('{'+labels+'}' if labels else '')+' '+format(value,'.12g'))
+    return '\n'.join(lines)+'\n',success
+
+
+def publish(path: Path, content: str):
+    if not path.is_absolute() or not path.parent.is_dir() or path.is_symlink(): raise ValueError('provision an absolute regular textfile destination')
+    descriptor,name=tempfile.mkstemp(prefix='.'+path.name,dir=path.parent)
+    try:
+        with os.fdopen(descriptor,'w') as stream:
+            os.fchmod(stream.fileno(),0o640); stream.write(content); stream.flush(); os.fsync(stream.fileno())
+        os.replace(name,path)
+    finally: Path(name).unlink(missing_ok=True)
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output',type=Path,required=True)
+    args=parser.parse_args()
+    content,success=sample(dict(os.environ)); publish(args.output,content)
+    raise SystemExit(0 if success else 1)
+
+
+if __name__=='__main__': main()

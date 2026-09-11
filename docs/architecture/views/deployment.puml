@@ -1,0 +1,35 @@
+@startuml MRanked_Deployment
+title M-Ranked — deployment
+skinparam componentStyle rectangle
+left to right direction
+
+cloud "Internet" as internet
+cloud "Provider APIs" as external
+node "Primary Linux host" as primary {
+  artifact "Nginx" as nginx
+  artifact "Next.js" as web
+  artifact "FastAPI" as api
+  artifact "4 Python collectors" as collectors
+  artifact "Anomaly + maintenance" as workers
+  database "PostgreSQL 18" as pg
+  folder "Export/WAL spool" as spool
+}
+node "DR host" as dr {
+  database "PostgreSQL standby" as standby
+  folder "Encrypted pgBackRest repository" as backups
+  artifact "Restore verification" as verify
+}
+
+internet --> nginx : HTTPS
+nginx --> web : HTTP localhost
+nginx --> api : /api
+web --> api : HTTP localhost
+api --> pg : read/admin/outbox roles
+collectors --> pg : ingest role
+workers --> pg : analytics/maintenance roles
+collectors --> external : outbound only
+pg --> standby : async replication
+pg --> spool : WAL archive
+spool --> backups
+backups --> verify
+@enduml

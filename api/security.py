@@ -9,6 +9,7 @@ import os
 import secrets
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Any
 
 import bcrypt
@@ -19,6 +20,16 @@ from .errors import ApiProblem
 
 _basic = HTTPBasic(auto_error=False)
 _dummy_hash = bcrypt.hashpw(b"m-ranked-dummy-password", bcrypt.gensalt(rounds=4))
+
+
+def _environment_or_file(name: str, default: str = "") -> str:
+    direct = os.environ.get(name)
+    if direct is not None:
+        return direct
+    path = os.environ.get(f"{name}_FILE")
+    if not path:
+        return default
+    return Path(path).read_text(encoding="utf-8").strip()
 
 
 @dataclass(frozen=True)
@@ -34,12 +45,7 @@ class AuthConfig:
 
     @classmethod
     def from_environment(cls) -> "AuthConfig":
-        raw = os.environ.get("ADMIN_AUTH_USERS")
-        if raw is None:
-            spring = json.loads(os.environ.get("SPRING_APPLICATION_JSON", "{}"))
-            raw_value: Any = spring.get("mranked.admin.auth.users", [])
-        else:
-            raw_value = json.loads(raw)
+        raw_value: Any = json.loads(_environment_or_file("ADMIN_AUTH_USERS", "[]"))
         if not isinstance(raw_value, list):
             raise ValueError("ADMIN_AUTH_USERS должен быть JSON-массивом")
         users: dict[str, tuple[bytes, frozenset[str]]] = {}
@@ -57,7 +63,7 @@ class AuthConfig:
                     or any(ord(character) < 32 for character in username)):
                 raise ValueError("некорректная конфигурация ADMIN_AUTH_USERS")
             users[username] = (encoded.encode("ascii"), roles)
-        configured_secret = os.environ.get("ADMIN_CSRF_SECRET")
+        configured_secret = _environment_or_file("ADMIN_CSRF_SECRET")
         secret = configured_secret.encode() if configured_secret else secrets.token_bytes(32)
         return cls(users, secret)
 

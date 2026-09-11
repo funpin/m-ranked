@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly M-Ranked encrypted base backup (8 restore points)
+
+[Timer]
+OnCalendar=Sun *-*-* 03:15:00 UTC
+Persistent=true
+RandomizedDelaySec=10min
+AccuracySec=1min
+Unit=m-ranked-target-backup@weekly.service
+
+[Install]
+WantedBy=timers.target

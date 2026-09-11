@@ -1,0 +1,31 @@
+groups:
+  - name: mranked-collectors
+    rules:
+      - alert: MRankedCollectorFailures
+        expr: sum by (platform) (rate(mranked_collector_account_duration_seconds_count{outcome="failed"}[15m])) / clamp_min(sum by (platform) (rate(mranked_collector_account_duration_seconds_count[15m])), 0.001) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector account failures exceed ten percent.
+      - alert: MRankedCollectorStale
+        expr: time() - mranked_collector_last_success_unixtime > 900
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: No successful account collection for over fifteen minutes.
+      - alert: MRankedCollectorMetricsMissing
+        expr: node_textfile_scrape_error > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A collector textfile cannot be scraped.
+      - alert: MRankedCollectorLatency
+        expr: histogram_quantile(0.95, sum by (platform, le) (rate(mranked_collector_account_duration_seconds_bucket[15m]))) > 60
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector account p95 latency exceeds sixty seconds.

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 def _int(name: str, default: int, low: int, high: int) -> int:
@@ -16,11 +17,17 @@ def _dsn(prefix: str) -> str | None:
     host = os.environ.get(f"{prefix}_DB_HOST")
     if not host:
         return None
+    password = os.environ.get(f"{prefix}_DB_PASSWORD")
+    password_file = os.environ.get(f"{prefix}_DB_PASSWORD_FILE")
+    if password is None and password_file:
+        password = Path(password_file).read_text(encoding="utf-8").strip()
+    if not password:
+        raise ValueError(f"{prefix}_DB_PASSWORD или {prefix}_DB_PASSWORD_FILE обязателен")
     return (
         f"host={host} port={os.environ.get(f'{prefix}_DB_PORT', '5432')} "
         f"dbname={os.environ.get(f'{prefix}_DB_NAME', 'mranked')} "
         f"user={os.environ[f'{prefix}_DB_USER']} "
-        f"password={os.environ[f'{prefix}_DB_PASSWORD']} "
+        f"password={password} "
         f"application_name={os.environ.get('APP_NAME', 'm-ranked-api')}"
     )
 

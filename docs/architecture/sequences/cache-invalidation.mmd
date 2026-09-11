@@ -1,0 +1,33 @@
+---
+title: M-Ranked — cache invalidation
+---
+sequenceDiagram
+    autonumber
+    participant W as Collector / admin writer
+    participant PG as PostgreSQL
+    participant A as FastAPI
+    participant L as bounded in-process LRU
+    participant C as Browser / Next.js
+
+    W->>PG: BEGIN; write canonical rows
+    W->>PG: INSERT dataset_revision and outbox_event
+    W->>PG: COMMIT
+    PG-->>A: NOTIFY cache_invalidated(revision)
+    A->>L: clear affected local entries
+    A->>PG: mark outbox delivered with outbox_worker role
+
+    C->>A: GET bounded resource
+    A->>PG: read latest dataset revision
+    A->>L: GET revision + canonical query key
+    alt cache hit
+        L-->>A: response
+    else cache miss
+        A->>PG: live bounded SELECT
+        PG-->>A: rows
+        A->>L: PUT with TTL
+    end
+    A-->>C: JSON + ETag + Cache-Control
+
+    opt NOTIFY lost
+        Note over A,L: revision changes the key and TTL bounds stale data.
+    end

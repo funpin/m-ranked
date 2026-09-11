@@ -360,10 +360,3 @@ ALTER TABLE rating.rating_run
 -- rating.rating_run rating_run_formula_definition_id_fkey
 ALTER TABLE rating.rating_run
     ADD CONSTRAINT rating_run_formula_definition_id_fkey FOREIGN KEY (formula_definition_id) REFERENCES rating.formula_definition(id);
-
-
---
--- PostgreSQL database dump complete
---
-
-\unrestrict aoA8GdE9f5RRsATBbAM9hHqjou7RSl2dDXbuIoqNCIffoEdzFVThzxSq74F1HK9

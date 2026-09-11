@@ -1116,11 +1116,11 @@ BEGIN
         );
     END IF;
     EXECUTE format(
-        'GRANT SELECT ON TABLE ingest.%I TO migration_bridge, maintenance',
+        'GRANT SELECT ON TABLE ingest.%I TO maintenance',
         partition_name
     );
     EXECUTE format(
-        'GRANT SELECT ON TABLE ingest.%I TO migration_bridge, maintenance',
+        'GRANT SELECT ON TABLE ingest.%I TO maintenance',
         reaction_partition_name
     );
     RETURN result;

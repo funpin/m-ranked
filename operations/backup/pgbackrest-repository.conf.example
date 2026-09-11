@@ -1,0 +1,43 @@
+[global]
+archive-timeout=900
+backup-standby=y
+log-level-console=info
+log-level-file=off
+neutral-umask=y
+process-max=2
+spool-path=/var/spool/m-ranked/pgbackrest
+start-fast=y
+
+# This is the authoritative config for backup/expire on the isolated DR
+# repository host. Repository paths are local here, so backup commands are not
+# incorrectly launched from a remote-repository client.
+repo1-path=/srv/m-ranked/pgbackrest/daily
+repo1-retention-full=14
+repo1-cipher-type=aes-256-cbc
+repo1-cipher-pass=REPLACE_WITH_RANDOM_SECRET
+
+repo2-path=/srv/m-ranked/pgbackrest/weekly
+repo2-retention-full=8
+repo2-cipher-type=aes-256-cbc
+repo2-cipher-pass=REPLACE_WITH_DIFFERENT_RANDOM_SECRET
+
+repo3-path=/srv/m-ranked/pgbackrest/monthly
+repo3-retention-full=12
+repo3-cipher-type=aes-256-cbc
+repo3-cipher-pass=REPLACE_WITH_THIRD_RANDOM_SECRET
+
+[m-ranked]
+# The repository service connects to both database hosts through forced-command
+# SSH. Even when repository and standby share a machine, use the standby's
+# private hostname so m-ranked-backup never needs direct PGDATA access.
+pg1-host=m-ranked-primary.internal
+pg1-host-user=postgres
+pg1-host-config=/etc/m-ranked/pgbackrest.conf
+pg1-path=/var/lib/postgresql/18/main
+pg1-port=5432
+
+pg2-host=m-ranked-standby.internal
+pg2-host-user=postgres
+pg2-host-config=/etc/m-ranked/pgbackrest.conf
+pg2-path=/var/lib/postgresql/18/main
+pg2-port=5432

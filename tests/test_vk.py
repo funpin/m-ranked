@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import httpx
 import pytest
 
-from app.vk import VkApiError, VkClient, normalize_vk_community_ref, parse_vk_post
+from collector_runtime.vk import VkApiError, VkClient, normalize_vk_community_ref, parse_vk_post
 
 
 def test_normalize_vk_community_ref():

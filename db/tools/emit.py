@@ -158,7 +158,12 @@ LAYOUT=[
 ]
 
 OUT.mkdir(parents=True, exist_ok=True)
-for f in OUT.glob('*.sql'): f.unlink()
+# Стираем только те файлы, которые порождает этот скрипт: каталог делят
+# grants.py и написанные вручную миграции, и снести их было бы потерей.
+OWNED = {name for name, _title, _pred in LAYOUT}
+for f in OUT.glob('*.sql'):
+    if f.name in OWNED:
+        f.unlink()
 seen=set(); total=0
 for fname,title,pred in LAYOUT:
     part=[s for s in live if pred(s) and id(s) not in seen]

@@ -1,10 +1,29 @@
 .env
+*.env
+!*.env.example
 *.session
 *.session-journal
+*.session.db
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.sql.gz
 data/
 logs/
 __pycache__/
-.venv/
+.venv
 .pytest_cache/
+.pnpm-store/
 *.pyc
 .DS_Store
+
+# Historical run artifacts are not part of the active frontend gate.
+evidence/
+# Keep only completed frontend calibration reports, never partial samples.
+frontend/reports/redesign/calibration-progress.json
+test-results/
+
+# Локальные учётные данные стенда
+.env.test

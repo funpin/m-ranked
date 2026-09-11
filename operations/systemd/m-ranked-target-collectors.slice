@@ -1,0 +1,8 @@
+[Unit]
+Description=M-Ranked aggregate memory envelope for all four collectors
+
+[Slice]
+MemoryHigh=650M
+MemoryMax=700M
+MemorySwapMax=0
+TasksMax=1024

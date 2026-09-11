@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Runs only while the official PostgreSQL image initializes a new data volume.
+# Passwords are passed as psql variables so they are quoted as SQL literals and
+# never interpolated into executable SQL text.
+
+required_variables=(
+  MIGRATION_DB_PASSWORD
+  API_READ_DB_PASSWORD
+  API_WRITE_ADMIN_DB_PASSWORD
+  COLLECTOR_INGEST_DB_PASSWORD
+  BACKUP_DB_PASSWORD
+  MAINTENANCE_DB_PASSWORD
+  ANALYTICS_WORKER_DB_PASSWORD
+  OUTBOX_WORKER_DB_PASSWORD
+)
+
+for variable_name in "${required_variables[@]}"; do
+  if [[ -z "${!variable_name:-}" ]]; then
+    echo "required database role secret is missing: ${variable_name}" >&2
+    exit 1
+  fi
+done
+
+psql \
+  --username "${POSTGRES_USER}" \
+  --dbname "${POSTGRES_DB}" \
+  --set ON_ERROR_STOP=1 \
+  --set migration_password="${MIGRATION_DB_PASSWORD}" \
+  --set api_read_password="${API_READ_DB_PASSWORD}" \
+  --set api_write_admin_password="${API_WRITE_ADMIN_DB_PASSWORD}" \
+  --set collector_ingest_password="${COLLECTOR_INGEST_DB_PASSWORD}" \
+  --set backup_password="${BACKUP_DB_PASSWORD}" \
+  --set maintenance_password="${MAINTENANCE_DB_PASSWORD}" \
+  --set analytics_worker_password="${ANALYTICS_WORKER_DB_PASSWORD}" \
+  --set outbox_worker_password="${OUTBOX_WORKER_DB_PASSWORD}" <<'SQL'
+SELECT format('CREATE ROLE migration_owner LOGIN PASSWORD %L', :'migration_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'migration_owner') \gexec
+ALTER ROLE migration_owner WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'migration_password';
+
+SELECT format('CREATE ROLE api_read LOGIN PASSWORD %L', :'api_read_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'api_read') \gexec
+ALTER ROLE api_read WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD :'api_read_password';
+
+SELECT format('CREATE ROLE api_write_admin LOGIN PASSWORD %L', :'api_write_admin_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'api_write_admin') \gexec
+ALTER ROLE api_write_admin WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT PASSWORD :'api_write_admin_password';
+
+SELECT format('CREATE ROLE collector_ingest LOGIN PASSWORD %L', :'collector_ingest_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'collector_ingest') \gexec
+ALTER ROLE collector_ingest WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'collector_ingest_password';
+
+SELECT format('CREATE ROLE backup LOGIN REPLICATION PASSWORD %L', :'backup_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'backup') \gexec
+ALTER ROLE backup WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE REPLICATION NOINHERIT PASSWORD :'backup_password';
+
+SELECT format('CREATE ROLE maintenance LOGIN PASSWORD %L', :'maintenance_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'maintenance') \gexec
+ALTER ROLE maintenance WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'maintenance_password';
+
+SELECT format('CREATE ROLE analytics_worker LOGIN PASSWORD %L', :'analytics_worker_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'analytics_worker') \gexec
+ALTER ROLE analytics_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'analytics_worker_password';
+
+SELECT format('CREATE ROLE outbox_worker LOGIN PASSWORD %L', :'outbox_worker_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'outbox_worker') \gexec
+ALTER ROLE outbox_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'outbox_worker_password';
+
+SELECT 'CREATE ROLE storage_observer NOLOGIN'
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'storage_observer') \gexec
+
+GRANT api_read TO api_write_admin;
+GRANT pg_monitor TO backup;
+
+-- Every read path crosses the month partitions of ingest.publication_metric_snapshot
+-- and ingest.reaction_breakdown. The planner prices those appends above
+-- jit_above_cost even when run-time pruning leaves one partition, so each request
+-- pays a few hundred milliseconds of JIT emission for nothing. Measured on a
+-- production copy: one publication history goes from 407 ms to 30 ms.
+ALTER ROLE api_read SET jit = off;
+ALTER ROLE api_write_admin SET jit = off;
+ALTER ROLE analytics_worker SET jit = off;
+
+SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', current_database()) \gexec
+SELECT format(
+  'GRANT CONNECT ON DATABASE %I TO migration_owner, api_read, api_write_admin, collector_ingest, backup, maintenance, analytics_worker, outbox_worker',
+  current_database()
+) \gexec
+SELECT format('GRANT CREATE, TEMPORARY ON DATABASE %I TO migration_owner', current_database()) \gexec
+SELECT format('ALTER DATABASE %I SET timezone TO %L', current_database(), 'UTC') \gexec
+
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+SQL

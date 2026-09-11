@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from app.analytics import (
+from collector_runtime.analytics import (
     age_seconds,
     delta_by_reaction,
     history_is_complete,
