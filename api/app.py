@@ -6,11 +6,13 @@ import logging
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from .cache import InvalidationListener, ResponseCache
 from .config import Settings
 from .db import Database
-from .errors import ApiProblem, handle
+from .errors import ApiProblem, handle, handle_validation
+from .security import AuthConfig
 from .routes import admin, analysis, compare, emoji, exports, health, query, rating
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.db = database
     app.state.cache = cache
+    app.state.auth = AuthConfig.from_environment()
     app.add_exception_handler(ApiProblem, handle)
+    app.add_exception_handler(RequestValidationError, handle_validation)
 
     for module in (health, query, rating, compare, emoji, exports, analysis, admin):
         app.include_router(module.router)

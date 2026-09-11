@@ -45,3 +45,8 @@ def problem_response(problem: ApiProblem, instance: str = "/") -> JSONResponse:
 async def handle(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, ApiProblem)
     return problem_response(exc, request.url.path)
+
+
+async def handle_validation(request: Request, exc: Exception) -> JSONResponse:
+    return problem_response(BadRequest("Параметры или тело запроса не прошли проверку"),
+                            request.url.path)

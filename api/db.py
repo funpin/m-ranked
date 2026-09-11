@@ -76,6 +76,13 @@ class Database:
             return None
         return next(iter(row.values()))
 
+    async def admin_fetch_one(self, sql: str,
+                              params: Sequence[Any] | dict[str, Any] | None = None
+                              ) -> dict[str, Any] | None:
+        async with self.admin() as connection:
+            cursor = await connection.execute(sql, params)
+            return await cursor.fetchone()
+
     async def stream(self, sql: str, params: Sequence[Any] | dict[str, Any] | None = None,
                      batch_size: int = 500) -> AsyncIterator[dict[str, Any]]:
         """Читает большой результат серверным курсором в одном repeatable-read снимке."""
