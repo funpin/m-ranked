@@ -76,7 +76,7 @@ def test_heavy_publication_has_lock_capacity_guard_and_no_retry_loop() -> None:
     assert "pg_indexes_size" in publisher
     assert "temp_bytes" in publisher
     assert "wal_bytes" in publisher
-    assert schema.count("SET statement_timeout TO '2h'") == 1
+    assert schema.count("SET statement_timeout TO '2h'") == 6
     assert transition.count("SET statement_timeout = '2h'") == 1
     assert "PROJECTION_CAPACITY_MULTIPLIER" in publisher
     assert "PROJECTION_MIN_FREE_BYTES" in publisher

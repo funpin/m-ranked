@@ -575,7 +575,7 @@ CREATE FUNCTION analytics.rebuild_core_projections(p_dataset_revision_id bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'analytics'
     SET lock_timeout TO '10s'
-    SET statement_timeout TO '15min'
+    SET statement_timeout TO '2h'
     AS $$
 DECLARE result jsonb;
 BEGIN
@@ -683,7 +683,7 @@ CREATE FUNCTION analytics.rebuild_core_projections_v2(p_dataset_revision_id bigi
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'catalog', 'ingest', 'analytics'
     SET lock_timeout TO '10s'
-    SET statement_timeout TO '15min'
+    SET statement_timeout TO '2h'
     AS $$
 DECLARE
     revision_as_of timestamptz;
@@ -1386,7 +1386,7 @@ CREATE FUNCTION analytics.rebuild_core_projections_v5(p_dataset_revision_id bigi
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'catalog', 'ingest', 'analytics'
     SET lock_timeout TO '10s'
-    SET statement_timeout TO '15min'
+    SET statement_timeout TO '2h'
     AS $$
 DECLARE
     base_result jsonb;
@@ -1713,7 +1713,7 @@ CREATE FUNCTION analytics.rebuild_core_projections_v6(p_dataset_revision_id bigi
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'catalog', 'ingest', 'analytics'
     SET lock_timeout TO '10s'
-    SET statement_timeout TO '15min'
+    SET statement_timeout TO '2h'
     AS $$
 DECLARE
     base_result jsonb;
@@ -1911,7 +1911,7 @@ CREATE FUNCTION analytics.rebuild_core_projections_v9(p_dataset_revision_id bigi
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'catalog', 'ingest', 'analytics', 'rating', 'ops_and_admin', 'migration'
     SET lock_timeout TO '10s'
-    SET statement_timeout TO '15min'
+    SET statement_timeout TO '2h'
     AS $$
 DECLARE
     base_result jsonb;
