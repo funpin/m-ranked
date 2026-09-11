@@ -13,6 +13,17 @@ export function availableHistoryMetrics(rows: readonly HistorySnapshot[]) {
   return historyMetrics.filter(metric => rows.some(row => row[metric.key].value !== null || row[metric.delta] !== null));
 }
 
+/** Views and reactions are observed on every supported platform, so the history
+ *  table keeps their columns even while a publication has no values yet: an
+ *  empty column reads as "not collected", a missing one reads as "not a metric
+ *  here". The other metrics stay data-driven. */
+const ALWAYS_TABULATED = ["reactions", "views"] as const;
+export function tabulatedHistoryMetrics(rows: readonly HistorySnapshot[]) {
+  const available = new Set(availableHistoryMetrics(rows).map(metric => metric.key));
+  return historyMetrics.filter(metric => available.has(metric.key)
+    || (ALWAYS_TABULATED as readonly string[]).includes(metric.key));
+}
+
 export function metricLabel(metric: HistoryMetric, platform: string) {
   return metric.key === "reactions" && (platform === "vk" || platform === "rutube") ? "Лайки" : metric.label;
 }

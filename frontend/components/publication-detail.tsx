@@ -16,6 +16,6 @@ export function PublicationDetail({history,historyLimit=100,analysis=null,analys
     {p.deletedAt && history.archivedText ? <section className="panel archived-publication"><h2>Сохранённый текст публикации</h2><p className="panel-note">Последняя копия, полученная до удаления из {PLATFORM_LONG_LABELS[p.platform]}.</p><div className="archived-publication-text">{history.archivedText}</div></section> : null}
     <AnomalyAnalysis analysis={analysis} loadFailed={analysisLoadFailed} historyRevision={history.datasetRevision} />
     <PublicationMeasurements key={p.publicationId} rows={history.items} platform={p.platform} historyLimit={historyLimit} analysis={analysis}
-      fullHistoryHref={history.nextCursor ? queryHref(publicationHref(p.publicationId),{history_limit:FULL_PUBLICATION_HISTORY_LIMIT}) : undefined} />
+      fullHistoryHref={historyLimit < FULL_PUBLICATION_HISTORY_LIMIT ? queryHref(publicationHref(p.publicationId),{history_limit:FULL_PUBLICATION_HISTORY_LIMIT}) : undefined} />
   </>;
 }

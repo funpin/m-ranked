@@ -5,10 +5,11 @@ type Kind="line"|"bar";
 type PointStyle="circle"|"rectRot";
 type XY={x:number;y:number|null};
 type Dataset={label?:string;data:(XY|number|null)[];hidden?:boolean;borderColor?:string;backgroundColor?:string|string[];borderWidth?:number;pointBorderWidth?:number|number[];pointRadius?:number|number[];pointStyle?:PointStyle|PointStyle[];pointHoverRadius?:number;tension?:number;fill?:boolean;yAxisID?:string};
-type Axis={type?:string;display?:boolean;position?:string;min?:number;max?:number;beginAtZero?:boolean;title?:{display?:boolean;text?:string};ticks?:{precision?:number;maxTicksLimit?:number;callback?:(value:number)=>string|number};grid?:{color?:string;drawOnChartArea?:boolean}};
+type Axis={type?:string;display?:boolean;position?:string;min?:number;max?:number;beginAtZero?:boolean;title?:{display?:boolean;text?:string};ticks?:{precision?:number;maxTicksLimit?:number;callback?:(value:number)=>string|number|string[]};grid?:{color?:string;drawOnChartArea?:boolean}};
 type TooltipPoint={dataset:Dataset;datasetIndex:number;dataIndex:number;parsed:{x:number;y:number|null};formattedValue:string};
 type Callbacks={title?:(items:TooltipPoint[])=>string|string[];label?:(item:TooltipPoint)=>string|string[];afterLabel?:(item:TooltipPoint)=>string|string[];afterTitle?:(items:TooltipPoint[])=>string|string[];afterBody?:(items:TooltipPoint[])=>string|string[]};
-type Options={color?:string;scales?:Record<string,Axis>;plugins?:{tooltip?:{callbacks?:Callbacks}};onClick?:(event:Event,elements:{datasetIndex:number;index:number}[])=>void};
+type Band={from:number;to:number;label?:string};
+type Options={color?:string;scales?:Record<string,Axis>;xBands?:Band[];plugins?:{tooltip?:{callbacks?:Callbacks}};onClick?:(event:Event,elements:{datasetIndex:number;index:number}[])=>void};
 type Bounds={left:number;right:number;top:number;bottom:number};
 type Scale={min:number;max:number;ticks:number[];labels:string[];position:string;width:number;left:number;getPixelForValue:(value:number)=>number;options:Axis};
 const FONT='12px "Helvetica Neue", "Helvetica", "Arial", sans-serif';
@@ -67,6 +68,9 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
   // changing the page theme updates tooltip colors but keeps these scale colors.
   private scaleColor=CompactChart.defaults.color;
   private gridColor=CompactChart.defaults.borderColor;
+  // The gap shading follows the grid colour so it reads in both themes.
+  private get gapFill(){return this.gridColor;}
+  private get gapEdge(){return this.scaleColor;}
 
   constructor(canvas:HTMLCanvasElement,configuration:ChartConfiguration<T,D>){
     this.canvas=canvas;this.kind=configuration.type;this.data=configuration.data;this.options=(configuration.options??{}) as ChartOptions<T>;
@@ -130,7 +134,8 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
     const pointOverflow=this.kind==="line"?Math.max(0,...this.datasets.filter((dataset)=>dataset.data.length>0).map((dataset)=>Math.max(widest(dataset.pointRadius,3),dataset.pointHoverRadius??4)+widest(dataset.pointBorderWidth??dataset.borderWidth,1))):0;
     left=Math.max(left,firstWidth/2+3-firstExtra,pointOverflow);right=Math.max(right,lastWidth/2+3-lastExtra,pointOverflow);
     this.area={left,top:10.2,right:this.width-right,bottom:this.height-bottom};
-    if(!categorical){numeric=numericTicks(minX,maxX,Math.min(11,Math.max(2,Math.ceil((this.area.right-left)/40))),x.ticks?.precision??12,minX,maxX);this.xTicks=numeric.ticks;this.xLabels=numeric.ticks.map((value)=>[numberFormat.format(value)]);}
+    if(!categorical){numeric=numericTicks(minX,maxX,Math.min(11,Math.max(2,Math.ceil((this.area.right-left)/40))),x.ticks?.precision??12,minX,maxX);this.xTicks=numeric.ticks;
+      this.xLabels=numeric.ticks.map((value)=>labelLines(x.ticks?.callback?x.ticks.callback(value):numberFormat.format(value)));}
     else{
       const maxWidth=Math.max(...originalLabels.map(labelsWidth),1)+6;
       const count=Math.min(x.ticks?.maxTicksLimit??Infinity,Math.max(1,Math.floor((this.area.right-left)/maxWidth)+1));
@@ -162,6 +167,53 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
     }
   }
   private releaseGroups(){for(const group of this.dataGroups)if(group){group.canvas.width=0;group.canvas.height=0;}this.dataGroups=[];this.groupGeometry="";}
+  /** Category slots are even; on a linear axis the closest pair sets the width. */
+  private slotWidth(count:number){
+    const span=this.area.right-this.area.left;
+    if((this.rawOptions.scales?.x?.type)!=="linear")return span/Math.max(1,count);
+    const scale=this.scales.x;if(!scale)return span/Math.max(1,count);
+    let closest=Infinity;
+    for(const dataset of this.datasets){
+      let previous=NaN;
+      for(let index=0;index<dataset.data.length;index++){
+        const current=scale.getPixelForValue(this.point(dataset,index).x);
+        if(finite(previous)&&current!==previous)closest=Math.min(closest,Math.abs(current-previous));
+        previous=current;
+      }
+    }
+    return finite(closest)&&closest>0?Math.min(closest,span):span/Math.max(1,count);
+  }
+
+  /** A band shades a stretch of the axis that carries no observation. */
+  private drawBands(){
+    const bands=this.rawOptions.xBands;const scale=this.scales.x;
+    if(!bands?.length||!scale)return;
+    const context=this.context,{top,bottom,left,right}=this.area;
+    let labelledUntil=-Infinity;
+    for(const band of bands){
+      const from=Math.max(left,scale.getPixelForValue(band.from)),to=Math.min(right,scale.getPixelForValue(band.to));
+      if(!(to>from))continue;
+      context.save();
+      context.fillStyle=this.gapFill;context.fillRect(from,top,to-from,bottom-top);
+      context.strokeStyle=this.gapEdge;context.setLineDash([4,3]);context.lineWidth=1;
+      context.beginPath();context.moveTo(crisp(from,this.ratio),top);context.lineTo(crisp(from,this.ratio),bottom);
+      context.moveTo(crisp(to,this.ratio),top);context.lineTo(crisp(to,this.ratio),bottom);context.stroke();
+      context.restore();
+      // A label is written only when the band is wide enough to hold it and the
+      // previous one has ended, so neighbouring gaps never overprint.
+      if(band.label){
+        context.save();context.font=FONT;
+        const width=context.measureText(band.label).width,centre=(from+to)/2;
+        if(to-from>=width+6&&centre-width/2>labelledUntil){
+          context.fillStyle=this.scaleColor;context.textAlign="center";
+          context.fillText(band.label,centre,top+8);
+          labelledUntil=centre+width/2+6;
+        }
+        context.restore();
+      }
+    }
+  }
+
   private drawGroup(plane:HTMLCanvasElement,start:number,end:number){
     const context=plane.getContext("2d")!;context.setTransform(this.ratio,0,0,this.ratio,0,0);
     const area=this.area;
@@ -174,7 +226,7 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
       context.lineWidth=dataset.borderWidth??3;context.strokeStyle=dataset.borderColor??"#666";
       if(this.kind==="bar"){
         const peers=this.datasets.map((value,index)=>({value,index})).filter(({index})=>this.shown(index));
-        const group=peers.findIndex(({index})=>index===datasetIndex),slot=(area.right-area.left)/Math.max(1,values.length),barWidth=slot*.8/peers.length*.9;
+        const group=peers.findIndex(({index})=>index===datasetIndex),slot=this.slotWidth(values.length),barWidth=slot*.8/peers.length*.9;
         for(const point of values){if(!finite(point.py))continue;const origin=scale.getPixelForValue(0),zero=origin+Math.sign(point.py-origin)*.5,x=point.px-slot*.4+(group+.5)*slot*.8/peers.length;
           const y=Math.min(zero,point.py),height=Math.abs(point.py-zero),color=Array.isArray(dataset.backgroundColor)?dataset.backgroundColor[point.index]:dataset.backgroundColor;
           const hovered=this.active?.datasetIndex===datasetIndex&&this.active.index===point.index;
@@ -185,9 +237,20 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
           context.fillStyle=hovered?new Color(color??"#666").saturate(.5).darken(.1).hexString():color??"#666";context.fillRect(inner.x,inner.y,inner.width,inner.height);context.restore();
         }
       }else{
+        // A band marks a stretch without observations, so the line breaks across
+        // it instead of implying a measurement that was never taken.
+        const bands=this.rawOptions.xBands??[];
+        const spansBand=(from:XY,to:XY)=>bands.some((band)=>band.from>=from.x&&band.to<=to.x);
         const segments:typeof values[]=[];let segment:typeof values=[];
-        for(const point of values){if(!finite(point.py)){if(segment.length)segments.push(segment);segment=[];}else segment.push(point);}if(segment.length)segments.push(segment);
+        for(const point of values){
+          if(!finite(point.py)){if(segment.length)segments.push(segment);segment=[];continue;}
+          const previous=segment.at(-1);
+          if(previous&&spansBand(previous,point)){segments.push(segment);segment=[];}
+          segment.push(point);
+        }
+        if(segment.length)segments.push(segment);
         for(const points of segments){
+          if(points.length<2)continue;
           const path=new Path2D();path.moveTo(points[0]!.px,points[0]!.py);
           for(let index=1;index<points.length;index++){
             const previous=points[index-1]!,current=points[index]!,before=points[index-2]??previous,after=points[index+1]??current,tension=dataset.tension??0;
@@ -219,6 +282,7 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
     if(this.kind==="bar")this.drawData();
     const context=this.context,{left,right,top,bottom}=this.area;
     context.clearRect(0,0,this.width,this.height);context.font=FONT;context.textBaseline="middle";
+    this.drawBands();
     const color=this.rawOptions.color??this.scaleColor,grid=this.gridColor;
     const line=(x1:number,y1:number,x2:number,y2:number,stroke:string)=>{context.strokeStyle=stroke;context.lineWidth=1;context.beginPath();context.moveTo(crisp(x1,this.ratio),crisp(y1,this.ratio));context.lineTo(crisp(x2,this.ratio),crisp(y2,this.ratio));context.stroke();};
     for(const scale of this.yScales){if(!scale.width)continue;const position=scale.position==="right"?scale.left:scale.left+scale.width;
@@ -282,7 +346,7 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
     bodies.forEach((line)=>{context.fillText(line,left+20,lineY+LINE_HEIGHT/2);lineY+=LINE_HEIGHT+2;});afters.forEach((line)=>{context.fillText(line,left+6,lineY+LINE_HEIGHT/2);lineY+=LINE_HEIGHT+2;});
   }
   private position(dataset:Dataset,datasetIndex:number,index:number,tooltip=false){const point=this.point(dataset,index),scale=this.scales[dataset.yAxisID??"y"]!;let x=this.scales.x!.getPixelForValue(point.x),y=scale.getPixelForValue(point.y??0);
-    if(this.kind==="bar"){const peers=this.datasets.map((_,index)=>index).filter((index)=>this.shown(index)),group=peers.indexOf(datasetIndex),slot=(this.area.right-this.area.left)/Math.max(1,dataset.data.length);x+=-slot*.4+(group+.5)*slot*.8/peers.length;if(!tooltip)y=(y+scale.getPixelForValue(0))/2;}return {x,y};}
+    if(this.kind==="bar"){const peers=this.datasets.map((_,index)=>index).filter((index)=>this.shown(index)),group=peers.indexOf(datasetIndex),slot=this.slotWidth(dataset.data.length);x+=-slot*.4+(group+.5)*slot*.8/peers.length;if(!tooltip)y=(y+scale.getPixelForValue(0))/2;}return {x,y};}
   private mouse=(event:MouseEvent)=>{
     // Native offset coordinates retain the browser's subpixel scroll conversion;
     // clientY minus DOMRect loses that precision when MouseEvent.clientY truncates.

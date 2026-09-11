@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { availableHistoryMetrics, historyMetrics, historyMetricValue, historyMetricTooltip, historyRatioTooltip } from "../lib/history-metrics";
+import { availableHistoryMetrics, tabulatedHistoryMetrics, historyMetrics, historyMetricValue, historyMetricTooltip, historyRatioTooltip } from "../lib/history-metrics";
 import { sampleHistory } from "../lib/history-data";
 import type { HistorySnapshot } from "../lib/types";
 
@@ -36,4 +36,13 @@ test("same-observation reaction ratios work for every platform and never divide 
   assert.equal(historyRatioTooltip({...point,views:counter(0)},"telegram"),"");
   assert.equal(historyRatioTooltip({...point,reactions:counter(null)},"vk"),"");
   assert.equal(historyRatioTooltip({...point,reactions:counter(0)},"max"),"Реакции / просмотры: 0.00%");
+});
+
+test("the history table keeps the reaction columns when no reaction was ever collected",()=>{
+  const blank:HistorySnapshot[]=[0,1,2].map(index=>({...row(index),
+    reactions:counter(null),deltaReactions:null,comments:counter(null),deltaComments:null}));
+  assert.deepEqual(availableHistoryMetrics(blank).map(metric=>metric.key),["views"]);
+  // Reactions are observed on every platform, so an empty column still reports
+  // "not collected" instead of disappearing and implying "not a metric here".
+  assert.deepEqual(tabulatedHistoryMetrics(blank).map(metric=>metric.key),["reactions","views"]);
 });

@@ -112,6 +112,37 @@ test("cumulative and delta charts both draw when anomaly boundaries size points 
   for(const opaque of painted) expect(opaque).toBeGreaterThan(2000);
 });
 
+test("a break in the observation is spaced by time and marked on the chart",async({page})=>{
+  await page.goto("/posts/7");
+  const note=page.locator(".observation-gaps");
+  await expect(note).toHaveAttribute("data-observation-gaps","1");
+  await expect(note).toContainText("Пропуски в наблюдении: 1");
+  await expect(note).toContainText("2 д 13 ч");
+  // Neighbouring samples across the break are drawn far apart, not side by side:
+  // the reaction series leaves a wide column range unpainted inside the plot.
+  const spacing=await page.evaluate(async()=>{
+    await new Promise(resolve=>setTimeout(resolve,600));
+    const canvas=document.querySelector("canvas")!;
+    const context=canvas.getContext("2d")!;
+    const data=context.getImageData(0,0,canvas.width,canvas.height).data;
+    const series:boolean[]=[];
+    for(let x=0;x<canvas.width;x++){
+      let found=false;
+      for(let y=0;y<canvas.height&&!found;y++){
+        const at=(y*canvas.width+x)*4;
+        found=Math.abs(data[at]!-22)<40&&Math.abs(data[at+1]!-160)<40&&Math.abs(data[at+2]!-133)<40&&data[at+3]!>200;
+      }
+      series.push(found);
+    }
+    const first=series.indexOf(true), last=series.lastIndexOf(true);
+    let widest=0,current=0;
+    for(let x=first;x<=last;x++){ if(series[x]) current=0; else {current++;widest=Math.max(widest,current);} }
+    return {widest,span:last-first};
+  });
+  expect(spacing.span).toBeGreaterThan(100);
+  expect(spacing.widest).toBeGreaterThan(spacing.span/8);
+});
+
 test("publication page with anomaly evidence meets axe AA and exposes non-color boundary text",async({page})=>{
   await page.goto("/posts/1");
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
@@ -141,7 +172,10 @@ test("a point older than the 1000-row boundary remains reachable and the next pu
   await expect(page.locator("tbody tr")).toHaveCount(1205);
   await expect(page.locator("#snapshot-1")).toBeInViewport();
   await page.locator('a[rel="next"]').click();
+  // The table still pages at a hundred rows, while the chart covers every sample
+  // the database holds for the publication.
   await expect(page.locator("tbody tr")).toHaveCount(100);
   await expect(page.getByRole("img",{name:"Накопление показателей",exact:true})).toHaveAttribute("data-chart-ready","true");
-  await expect(page.locator(".chart-range-head")).toContainText("100 замеров");
+  await expect(page.locator(".chart-range-head")).toContainText("160 замеров");
+  await expect(page.getByRole("link",{name:"загрузить всю историю"})).toBeVisible();
 });

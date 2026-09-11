@@ -6,9 +6,10 @@ import Link from "@/components/native-link";
 import { duration, legacyDate, legacyNumber } from "@/lib/format";
 import { useHistoryPreferences } from "@/lib/history-preferences";
 import { historyReactionEntries, sampleHistory, signedDuration } from "@/lib/history-data";
+import type { ChartOptions } from "chart.js";
 import type { HistorySnapshot, Platform, PublicationAnomalyAnalysis } from "@/lib/types";
 
-import { availableHistoryMetrics, historyMetricValue, historyMetricTooltip, historyRatioTooltip,
+import { availableHistoryMetrics, tabulatedHistoryMetrics, historyMetricValue, historyMetricTooltip, historyRatioTooltip,
   metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
@@ -28,12 +29,32 @@ function Breakdown({ value, delta = false }: { value: ReturnType<typeof historyR
   return <span className="reaction-list">{entries.length ? entries.map(({reaction:name,count}) => <span className="reaction-item" key={name}><Reaction name={name} /> <b>{delta && count >= 0 ? "+" : ""}{count}</b></span>) : delta || value === null ? "—" : null}</span>;
 }
 
+/** A stretch between two neighbouring samples far longer than the usual polling
+ *  interval means the collectors were down. The chart marks it instead of drawing
+ *  the two samples side by side as if nothing had been missed. */
+const GAP_MIN_MS = 30 * 60_000;
+function observationGaps(rows: HistorySnapshot[]) {
+  const gaps: {from:number;to:number;label?:string}[] = [];
+  if (rows.length < 3) return gaps;
+  const times = rows.map(row => Date.parse(row.observedAt));
+  const steps = times.slice(1).map((value,index) => value-times[index]!).filter(step => step>0).sort((a,b)=>a-b);
+  if (!steps.length) return gaps;
+  const median = steps[Math.floor(steps.length/2)]!;
+  const threshold = Math.max(GAP_MIN_MS, median*4);
+  for (let index=1; index<times.length; index++) {
+    const from=times[index-1]!, to=times[index]!;
+    if (to-from >= threshold) gaps.push({from,to,label:`нет данных ${duration((to-from)/1000)}`});
+  }
+  return gaps;
+}
+
 function MetricChart({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, evidenceIds }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const instance = useRef<Chart<"line"|"bar", (number|null)[]> | null>(null);
+  type ChartPoint = {x:number;y:number|null};
+  const instance = useRef<Chart<"line"|"bar", ChartPoint[]> | null>(null);
   const keys = useMemo(() => metrics.map((metric) => metric.key),[metrics]);
   const {hidden,setHidden,scale,setScale} = useHistoryPreferences(platform,delta,keys);
   const [ready, setReady] = useState(0);
@@ -55,25 +76,38 @@ function MetricChart({ rows, metrics, delta, selectedId, onSelect, onActivate, p
       };
       applyTheme();
       const value=(metric:Metric,index:number) => historyMetricValue(rows[index]!,metric,delta);
+      const at=(index:number) => Date.parse(rows[index]!.observedAt);
+      const gaps=observationGaps(rows);
+      const firstAt=rows.length?at(0):0,lastAt=rows.length?at(rows.length-1):1;
       const commonTitle=metrics.map((metric)=>metricLabel(metric,platform)).join(" и ");
       const axisTitle=metrics.length>2 ? delta ? "Прирост метрик" : "Метрики" : delta ? `Прирост: ${commonTitle.toLowerCase()}` : commonTitle;
-      const chart = new ChartJS<"line"|"bar", (number|null)[]>(canvas.current, {
+      const chart = new ChartJS<"line"|"bar", ChartPoint[]>(canvas.current, {
         type:delta ? "bar" : "line", data:{ labels:rows.map((row) => [shortDate(row.observedAt),row.synthetic ? "момент публикации" : `через ${duration(row.ageHours*3600)}`]), datasets:metrics.map((metric) => ({ label:`${delta ? "Прирост" : "Всего"} ${noun(metric,platform)}`,
-          data:rows.map((_row,index) => value(metric,index)), borderColor:metric.color, borderWidth:delta ? 1 : 3, backgroundColor:delta ? rows.map((_row,index) => (value(metric,index) ?? 0) < 0 ? "#c13b4f" : `${metric.color}${metric.key === "views" ? "bb" : "cc"}`) : `${metric.color}${metric.key === "views" ? "1f" : "22"}`,fill:!delta,
+          data:rows.map((_row,index) => ({x:at(index),y:value(metric,index)})), borderColor:metric.color, borderWidth:delta ? 1 : 3, backgroundColor:delta ? rows.map((_row,index) => (value(metric,index) ?? 0) < 0 ? "#c13b4f" : `${metric.color}${metric.key === "views" ? "bb" : "cc"}`) : `${metric.color}${metric.key === "views" ? "1f" : "22"}`,fill:!delta,
           hidden:hidden.has(metric.key), yAxisID:scale === "auto" ? metric.key : "y", tension:.15,
           pointRadius:rows.map(row=>evidenceIds.has(row.snapshotId)?7:3),
           pointStyle:rows.map(row=>evidenceIds.has(row.snapshotId)?"rectRot":"circle"),
           pointBorderWidth:rows.map(row=>evidenceIds.has(row.snapshotId)?3:1),pointHoverRadius:7, spanGaps:false,
         })) }, options:{ responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:"nearest",intersect:false},
           plugins:{legend:{display:false},tooltip:{callbacks:{
-            label:(item)=>historyMetricTooltip(rows[item.dataIndex]!,metrics[item.datasetIndex]!,platform,delta),
-            afterTitle:(items)=>rows[items[0]?.dataIndex ?? -1]?.synthetic ? "Момент публикации · синтетическая точка" : "",
-            afterBody:(items)=>{const row=rows[items[0]?.dataIndex ?? -1];return !delta&&row ? historyRatioTooltip(row,platform) : "";},
+            label:(item:{dataIndex:number;datasetIndex:number})=>historyMetricTooltip(rows[item.dataIndex]!,metrics[item.datasetIndex]!,platform,delta),
+            afterTitle:(items:{dataIndex:number}[])=>rows[items[0]?.dataIndex ?? -1]?.synthetic ? "Момент публикации · синтетическая точка" : "",
+            afterBody:(items:{dataIndex:number}[])=>{const row=rows[items[0]?.dataIndex ?? -1];return !delta&&row ? historyRatioTooltip(row,platform) : "";},
           }}},
-          scales:{ x:{title:{display:true,text:"Время замера и возраст публикации"},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:rows.length <= 16 ? rows.length : Math.min(12,Math.max(6,Math.round(120/Math.sqrt(rows.length))))}},
+          scales:{ x:{type:"linear",min:firstAt,max:lastAt===firstAt?firstAt+1:lastAt,
+            title:{display:true,text:"Время замера и возраст публикации"},
+            ticks:{maxRotation:0,autoSkip:true,precision:0,
+              maxTicksLimit:rows.length <= 16 ? rows.length : Math.min(12,Math.max(6,Math.round(120/Math.sqrt(rows.length)))),
+              callback:(value:number)=>{
+                const nearest=rows.reduce((best,row)=>Math.abs(Date.parse(row.observedAt)-value)<Math.abs(Date.parse(best.observedAt)-value)?row:best,rows[0]!);
+                return nearest ? [shortDate(new Date(value).toISOString()),nearest.synthetic ? "момент публикации" : `через ${duration(nearest.ageHours*3600)}`] : [shortDate(new Date(value).toISOString())];
+              }}},
             ...(scale === "shared" ? { y:{beginAtZero:true,title:{display:true,text:axisTitle},ticks:{precision:0},grid:{drawOnChartArea:true}} } : Object.fromEntries(metrics.map((metric,index) => [metric.key,{position:index % 2 ? "right" : "left",display:!hidden.has(metric.key),beginAtZero:true,title:{display:true,text:metricLabel(metric,platform)},ticks:{precision:0},grid:{drawOnChartArea:index === 0}}]))),
           },
-        },
+          // The renderer shades these stretches of the axis; chart.js has no
+          // matching option, so the configuration is cast at the boundary.
+          xBands:gaps,
+        } as unknown as ChartOptions<"line"|"bar">,
       });
       instance.current = chart;
       handleClick = (event) => {
@@ -84,9 +118,14 @@ function MetricChart({ rows, metrics, delta, selectedId, onSelect, onActivate, p
         const left=0, right=bounds.width;
         if(right===left) return;
         const offsetX=event.clientX-bounds.left;
-        const index=Math.max(0,Math.min(rows.length-1,Math.round(
-          xScale.min+(offsetX-left)*(xScale.max-xScale.min)/(right-left),
-        )));
+        // The axis carries observation time, so the click resolves to the
+        // sample nearest that instant rather than to a slot index.
+        const instant=xScale.min+(offsetX-left)*(xScale.max-xScale.min)/(right-left);
+        let index=0,best=Infinity;
+        rows.forEach((row,candidate)=>{
+          const distance=Math.abs(Date.parse(row.observedAt)-instant);
+          if(distance<best){best=distance;index=candidate;}
+        });
         const row=rows[index];
         if(row) onActivate(row.snapshotId);
       };
@@ -172,8 +211,10 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
   const tableRows = rows.slice(-Math.max(1,tableLimit));
   const nouns=metrics.map((metric)=>noun(metric,platform));
   const phrase=nouns.length<=1 ? nouns[0] ?? "метрик" : `${nouns.slice(0,-1).join(", ")} и ${nouns.at(-1)}`;
-  const tableMetrics = metrics;
+  const tableMetrics = useMemo(() => tabulatedHistoryMetrics(rows),[rows]);
   const showBreakdown = rows.some(row => (historyReactionEntries(row)?.length ?? 0)>0);
+  const gaps = useMemo(() => observationGaps(rows),[rows]);
+  const gapSeconds = gaps.reduce((total,gap) => total+(gap.to-gap.from)/1000,0);
   function jump(id: string) {
     const index = rows.findIndex((row) => row.snapshotId === id);
     if(index<0) return;
@@ -181,11 +222,11 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
     setSelectedId(id);
   }
   return <>
-    <div className="grid"><div className="panel"><h2>Накопление {phrase}</h2><p className="panel-note">Линии построены по одним и тем же замерам. Ромбами с усиленной обводкой отмечены границы опубликованных сигналов. В режиме 1:1 используется общая шкала; «Авто» накладывает кривые с независимыми шкалами для сравнения их формы.</p><MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} /></div>
+    <div className="grid"><div className="panel"><h2>Накопление {phrase}</h2><p className="panel-note">Линии построены по одним и тем же замерам. Точки расставлены по времени замера, поэтому паузы в наблюдении видны как пустые промежутки. Ромбами с усиленной обводкой отмечены границы опубликованных сигналов. В режиме 1:1 используется общая шкала; «Авто» накладывает кривые с независимыми шкалами для сравнения их формы.</p><MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} /></div>
       <div className="panel"><h2>Прирост между замерами</h2><p className="panel-note">Сколько новых {phrase} появилось после предыдущего опроса. Ромбами с усиленной обводкой отмечены границы сигналов. В режиме 1:1 используется общая шкала; «Авто» показывает показатели на независимых шкалах.</p><MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} /></div></div>
-    <div className="panel chart-range"><div className="chart-range-head"><b>Масштаб по времени</b><span>{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} замеров` : "Нет замеров"}</span></div><div className="dual-range"><input type="range" disabled={rows.length < 2} aria-label="Начало диапазона" min={0} max={Math.max(0,rows.length-1)} value={start} onChange={(event) => setStart(Math.min(end,Number(event.target.value)))} /><input type="range" disabled={rows.length < 2} aria-label="Конец диапазона" min={0} max={Math.max(0,rows.length-1)} value={end} onChange={(event) => setEnd(Math.max(start,Number(event.target.value)))} /></div><div className="range-notes"><p className="panel-note">Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается.</p><span className="pill hidden-points" hidden={end-start+1 <= displayed.length}>{end-start+1 > displayed.length ? `Не отображено точек: ${end-start+1-displayed.length}` : ""}</span></div></div>
+    <div className="panel chart-range"><div className="chart-range-head"><b>Масштаб по времени</b><span>{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} замеров` : "Нет замеров"}</span></div><div className="dual-range"><input type="range" disabled={rows.length < 2} aria-label="Начало диапазона" min={0} max={Math.max(0,rows.length-1)} value={start} onChange={(event) => setStart(Math.min(end,Number(event.target.value)))} /><input type="range" disabled={rows.length < 2} aria-label="Конец диапазона" min={0} max={Math.max(0,rows.length-1)} value={end} onChange={(event) => setEnd(Math.max(start,Number(event.target.value)))} /></div><div className="range-notes">{gaps.length ? <p className="panel-note observation-gaps" data-observation-gaps={gaps.length}>Пропуски в наблюдении: {gaps.length}, суммарно {duration(gapSeconds)}. На графиках они показаны заштрихованными промежутками.</p> : null}<p className="panel-note">Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается.</p><span className="pill hidden-points" hidden={end-start+1 <= displayed.length}>{end-start+1 > displayed.length ? `Не отображено точек: ${end-start+1-displayed.length}` : ""}</span></div></div>
     <div className="panel mt measurement-history"><h2>История замеров</h2>
-      {fullHistoryHref ? <p className="panel-note">Показаны последние {tableRows.length} замеров · <Link className="history-toggle" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="panel-note">Показаны последние {tableRows.length} из {rows.length} замеров · <button type="button" className="history-toggle" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="panel-note">Показаны все {rows.length} замеров · <button type="button" className="history-toggle" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
+      {fullHistoryHref && rows.length > tableRows.length ? <p className="panel-note">Показаны последние {tableRows.length} из {rows.length} замеров · <Link className="history-toggle" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="panel-note">Показаны последние {tableRows.length} из {rows.length} замеров · <button type="button" className="history-toggle" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="panel-note">Показаны все {rows.length} замеров · <button type="button" className="history-toggle" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       {rows.length ? <div className="measurement-history-scroll"><table className="snapshot-history-table"><thead><tr>{[
         ["🕒","Время замера, МСК"],["⏱","От прошлого замера"],["⌛","После публикации"],
         ...tableMetrics.flatMap((metric) => [[metric.icon,metricLabel(metric,platform)],[`Δ${metric.icon}`,`Дельта ${noun(metric,platform)}`],...(telegram && metric.key === "reactions" ? [["👥","Минимум людей"]] : [])]),

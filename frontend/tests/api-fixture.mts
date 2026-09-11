@@ -97,7 +97,11 @@ const server = createServer((request, response) => {
     const sourceRows=p.legacyId===99 ? Array.from({length:1205},(_,index)=>({...historyRows[index%historyRows.length]!,
       snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,
       reactions:counter(index),views:counter(index*10),deltaReactions:index?1:null,deltaViews:index?10:null,synthetic:index===0,
-    })) : historyRows;
+    })) : p.legacyId===7
+      // Publication 7 stands for a stretch where the collectors were down: the
+      // samples between the fortieth and the hundredth hour never arrived.
+      ? historyRows.filter((_row,index)=>index<40||index>=100)
+      : historyRows;
     const limit=Math.max(1,Number(url.searchParams.get("limit") ?? 200));
     const items=sourceRows.slice(-limit).map((row,index)=>({...row,
       comments:p.platform === "rutube" ? counter(null) : row.comments,
