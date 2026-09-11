@@ -70,6 +70,15 @@ ALTER ROLE analytics_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREP
 GRANT api_read TO api_write_admin;
 GRANT pg_monitor TO backup;
 
+-- Every read path crosses the month partitions of ingest.publication_metric_snapshot
+-- and ingest.reaction_breakdown. The planner prices those appends above
+-- jit_above_cost even when run-time pruning leaves one partition, so each request
+-- pays a few hundred milliseconds of JIT emission for nothing. Measured on a
+-- production copy: one publication history goes from 407 ms to 30 ms.
+ALTER ROLE api_read SET jit = off;
+ALTER ROLE api_write_admin SET jit = off;
+ALTER ROLE analytics_worker SET jit = off;
+
 SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', current_database()) \gexec
 SELECT format(
   'GRANT CONNECT ON DATABASE %I TO migration_owner, api_read, api_write_admin, collector_ingest, backup, migration_bridge, maintenance, analytics_worker',

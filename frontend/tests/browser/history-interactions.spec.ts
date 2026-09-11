@@ -94,6 +94,24 @@ for(const [path,metric,absent] of [
   });
 }
 
+test("cumulative and delta charts both draw when anomaly boundaries size points per sample",async({page})=>{
+  await page.goto("/posts/1");
+  const painted=await page.evaluate(async()=>{
+    await new Promise(resolve=>setTimeout(resolve,600));
+    return [...document.querySelectorAll("canvas")].map(canvas=>{
+      const context=canvas.getContext("2d")!;
+      const data=context.getImageData(0,0,canvas.width,canvas.height).data;
+      let opaque=0;
+      for(let index=3;index<data.length;index+=4) if(data[index]>0) opaque++;
+      return opaque;
+    });
+  });
+  expect(painted.length).toBe(2);
+  // A per-sample pointRadius once collapsed the whole line geometry to NaN and
+  // left the cumulative canvas blank while the bar canvas still drew.
+  for(const opaque of painted) expect(opaque).toBeGreaterThan(2000);
+});
+
 test("publication page with anomaly evidence meets axe AA and exposes non-color boundary text",async({page})=>{
   await page.goto("/posts/1");
   await page.getByRole("link",{name:"загрузить всю историю"}).click();

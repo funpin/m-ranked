@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.mranked.query.domain.ReactionBreakdownEntry;
+import org.mranked.cache.domain.DatasetRevision;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
@@ -98,6 +99,43 @@ class HistoryReactionDetailsPostgresIntegrationTest {
                 var refreshed=repository.findPublicationHistory(publication,1,null,revision).getFirst();
                 assertThat(refreshed.deltaReactionsBreakdown()).isEqualTo(head.deltaReactionsBreakdown());
                 assertThat(JSON.writeValueAsString(refreshed)).doesNotContain("password=secret","delta_by_reaction_json","source_namespace");
+            } finally { connection.rollback(); }
+        }
+    }
+
+    @Test void sourceBackedHistoryDerivesTheSameOrderedReactionsAndDeltasWithoutTheProjection() throws Exception {
+        // The bounded source-read API answers from ingest partitions instead of
+        // analytics.publication_history, and must decorate reactions identically.
+        try(var connection=owner()) {
+            connection.setAutoCommit(false);
+            try {
+                var jdbc=JdbcClient.create(new SingleConnectionDataSource(connection,true));
+                UUID institution=UUID.randomUUID(),account=UUID.randomUUID(),publication=UUID.randomUUID(),run=UUID.randomUUID();
+                long first=7_300_000_000_000_000L+Math.floorMod(publication.getLeastSignificantBits(),90_000_000L);
+                jdbc.sql("INSERT INTO catalog.institution(id,canonical_name) VALUES(:id,'Source reaction fixture')").param("id",institution).update();
+                jdbc.sql("INSERT INTO catalog.platform_account(id,institution_id,platform,canonical_external_id,access_mode) VALUES(:id,:institution,'telegram',:external,'public_web')")
+                    .param("id",account).param("institution",institution).param("external",account.toString()).update();
+                jdbc.sql("INSERT INTO ingest.publication(id,primary_account_id,published_at,discovered_at,publication_type,history_completeness) VALUES(:id,:account,now()-interval '5 hours',now()-interval '5 hours','post','complete')")
+                    .param("id",publication).param("account",account).update();
+                jdbc.sql("INSERT INTO ingest.collection_run(id,platform,partition_key,collector_version,started_at,status,correlation_id) VALUES(:id,'telegram','source-details','integration',now()-interval '5 hours','succeeded',:correlation)")
+                    .param("id",run).param("correlation",UUID.randomUUID()).update();
+                String[] current={"{}","{\"custom:5368324170671202286\": 8, \"\\u2764\": 4}","{\"❤\": 3, \"👍\": 7}"};
+                for(int point=0;point<3;point++)
+                    seed(jdbc,publication,run,first+point,point,current[point],point==0?0:point==1?12:10);
+                long sourceRevision=System.currentTimeMillis();
+                assertThat(sourceRevision).isGreaterThanOrEqualTo(DatasetRevision.SOURCE_ID_FLOOR);
+                var repository=new JdbcProjectionQueryRepository(jdbc);
+                var head=repository.findPublicationHistory(publication,1,null,sourceRevision).getFirst();
+                assertThat(head.reactionsBreakdownEntries()).containsExactly(new ReactionBreakdownEntry("❤",3),new ReactionBreakdownEntry("👍",7));
+                assertThat(head.deltaReactionsBreakdown()).containsExactlyInAnyOrderEntriesOf(Map.of("custom:5368324170671202286",-8L,"❤",-1L,"👍",7L));
+                assertThat(head.deltaReactionsBreakdownEntries()).containsExactly(new ReactionBreakdownEntry("custom:5368324170671202286",-8),new ReactionBreakdownEntry("❤",-1),new ReactionBreakdownEntry("👍",7));
+                assertThat(head.rawEvidence()).containsEntry("reactionDetailsSource","canonical");
+                var previous=repository.findPublicationHistory(publication,1,Long.parseLong(head.snapshotId()),sourceRevision).getFirst();
+                assertThat(previous.reactionsBreakdownEntries()).containsExactly(new ReactionBreakdownEntry("❤",4),new ReactionBreakdownEntry("custom:5368324170671202286",8));
+                var initial=repository.findPublicationHistory(publication,1,Long.parseLong(previous.snapshotId()),sourceRevision).getFirst();
+                assertThat(initial.deltaReactionsBreakdown()).isNull();
+                assertThat(initial.deltaReactionsBreakdownEntries()).isNull();
+                assertThat(jdbc.sql("SELECT count(*) FROM analytics.publication_history").query(Long.class).single()).isZero();
             } finally { connection.rollback(); }
         }
     }

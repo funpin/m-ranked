@@ -447,3 +447,63 @@ history maximum alongside the anomaly endpoint.
 | `backend ./mvnw verify` | PASS — 233 tests, 0 failures, 49 skipped (env-gated), jar built |
 | `frontend pnpm check` | PASS — 84 Playwright tests, lint/typecheck/`check:api`/unit/build/bundle budget |
 | `python -m migration.integration.run` | PASS — all 21 stages `exit=0` on a fresh compose stack (final-schema clean install on four databases, redis, collectors, archive fixture, observation-integrity, operations-metrics, `anomaly-postgres` 11/11, Spring stage 213 tests with the documented upstream exclusions, `query-plans`, full `pytest` 555/178, cleanup); output retained locally under `migration/reports/integration-20260911T201049Z/` |
+
+## 16. Local review on a production copy, and the read-path fixes it exposed
+
+Running the current sources against a restored production database
+(`infra/compose.prodcopy.yaml`, `infra/local/prodcopy.sh`) surfaced four defects
+that the seeded local stand could not show. All four are fixed in the fix commit.
+
+**The stand must read from the canonical sources.** A production snapshot is not
+a complete read model: `analytics.publication_history` is empty there, and
+`analytics.projection_state` records `row_count 0` for it, because the production
+database carries a hand-edited `analytics.rebuild_core_projections_v13` that
+drops the projection and serves detail history from the ingest partitions on
+demand. That edit is not in this repository, so the declarative
+`final-schema.sql` would rebuild a 6.8 million row projection that production
+deliberately retired. The overlay therefore runs the API with
+`MRANKED_SOURCE_READ_ENABLED=true`, exactly as
+`operations/systemd/m-ranked-target-api-source.service` does. The divergence
+between the repository schema and the production function is left for the
+`alpha` author; nothing in this branch depends on it.
+
+**The cumulative chart rendered nothing.** This feature marks the boundaries of a
+published signal with per-sample `pointRadius`, `pointBorderWidth` and
+`pointStyle` arrays. The local renderer in `frontend/packages/legacy-chart`
+folded `pointRadius` into `Math.max`, which yields `NaN` for an array, so the
+whole line geometry became `NaN` and only the bar chart drew. The renderer now
+resolves those properties per sample and draws the `rectRot` diamond the panel
+text promises. A browser test asserts that both canvases paint.
+
+**Reaction detail columns never appeared under source-read.** `sourceHistory` in
+`JdbcDetailQueries` returned literal `NULL` for the ordered reaction entries, the
+delta entries and the delta breakdown, so the two emoji columns were always
+hidden in that mode. The query now derives all three from
+`ingest.reaction_breakdown` through `analytics.ordered_history_reactions`,
+matching what `analytics.refresh_history_reaction_details` produces for the
+projection path, and marks the lineage `reactionDetailsSource: canonical`.
+`HistoryReactionDetailsPostgresIntegrationTest` gained a source-backed case;
+before this change the source-read path had no backend test at all.
+
+**One publication page took twelve seconds.** Two independent causes, both
+measured on the production copy with one publication and a hundred samples.
+
+| Stage | History query | Page document |
+|---|---|---|
+| Before | 15 287 ms | 12 110 ms |
+| Window functions instead of the per-row lateral | 407 ms | — |
+| Plus `jit = off` for the read roles | 30 ms | 182 ms |
+
+The per-row `previous` lateral re-entered every month partition of
+`analytics.usable_publication_snapshot` once per returned row. The page now
+fetches one extra older sample and derives every delta with `lag`, so each
+partition is visited once. What remained was PostgreSQL JIT: the planner prices
+the sixty-three partition appends above `jit_above_cost` even though run-time
+pruning leaves a single partition, and paid about 370 ms of emission per request
+for nothing. `jit = off` is now a role default for `api_read`,
+`api_write_admin` and `analytics_worker`, set in
+`infra/postgres/init/001-create-roles.sh` for new databases and in the r3 delta
+of the transition for existing ones, where it is skipped with a notice if the
+cutover session may not alter roles. Role settings do not appear in a
+`pg_dump --schema-only`, so the schema equivalence recorded in section 13 is
+unaffected.
