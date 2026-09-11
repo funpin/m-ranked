@@ -55,7 +55,6 @@ the local bootstrap user:
 PGPASSWORD="$POSTGRES_SUPERUSER_PASSWORD" rtk psql \
   --host 127.0.0.1 --port "${POSTGRES_PORT:-5432}" \
   --username mranked_bootstrap --dbname mranked \
-  --file migration/schema/smoke.sql
 ```
 
 Run the rollback-only activity and comparison fixtures against the same schema:
