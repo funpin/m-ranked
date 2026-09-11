@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CompactChart as Chart } from "@mranked/legacy-chart";
-import Link from "@/components/bounded-link";
+import Link from "@/components/native-link";
 import { duration, legacyDate, legacyNumber } from "@/lib/format";
 import { useHistoryPreferences } from "@/lib/history-preferences";
 import { historyReactionEntries, sampleHistory, signedDuration } from "@/lib/history-data";
