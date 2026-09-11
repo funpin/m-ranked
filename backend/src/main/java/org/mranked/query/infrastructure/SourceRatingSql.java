@@ -59,7 +59,7 @@ final class SourceRatingSql {
                        latest.views_count,latest.reactions_count,latest.comments_count,latest.shares_count
                   FROM dimensions dimension CROSS JOIN params
                   JOIN LATERAL (
-                      SELECT candidate.id
+                      SELECT candidate.id,date_trunc('month',candidate.published_at AT TIME ZONE 'UTC')::date AS published_month
                         FROM account_base account
                         JOIN ingest.visible_publication candidate ON candidate.primary_account_id=account.id
                        WHERE ((:platform='telegram' AND account.id=dimension.entity_id)
@@ -71,6 +71,7 @@ final class SourceRatingSql {
                       SELECT snapshot.views_count,snapshot.reactions_count,snapshot.comments_count,snapshot.shares_count
                         FROM analytics.usable_publication_snapshot snapshot
                        WHERE snapshot.publication_id=publication.id AND snapshot.observed_at<=params.as_of
+                         AND snapshot.published_month=publication.published_month
                          AND snapshot.collected_at<=params.as_of AND NOT snapshot.synthetic AND snapshot.quality<>'invalid'
                        ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC LIMIT 1
                   ) latest ON true
@@ -116,7 +117,8 @@ final class SourceRatingSql {
                            ELSE interval '30 days' END AS cutoff
             ), candidates AS (
                 SELECT publication.id AS publication_id,publication.primary_account_id AS account_id,
-                       publication.published_at,publication.deleted_at,publication.is_repost,
+                       publication.published_at,date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date AS published_month,
+                       publication.deleted_at,publication.is_repost,
                        account.institution_id,account.current_username,account.current_title,
                        account.platform::text AS platform
                   FROM ingest.visible_publication publication
@@ -162,6 +164,7 @@ final class SourceRatingSql {
                       SELECT snapshot.views_count,snapshot.reactions_count,snapshot.comments_count,snapshot.shares_count
                         FROM analytics.usable_publication_snapshot snapshot
                        WHERE snapshot.publication_id=candidate.publication_id AND snapshot.observed_at<=params.as_of
+                         AND snapshot.published_month=candidate.published_month
                          AND snapshot.collected_at<=params.as_of AND NOT snapshot.synthetic AND snapshot.quality<>'invalid'
                        ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC LIMIT 1
                   ) latest ON true

@@ -36,6 +36,7 @@ final class ActivityRatingSql {
                   JOIN catalog.visible_platform_account account ON account.id=publication.primary_account_id
                   LEFT JOIN LATERAL(SELECT candidate.* FROM analytics.usable_publication_snapshot candidate
                     WHERE candidate.publication_id=publication.id AND candidate.observed_at<=revision.as_of
+                      AND candidate.published_month=date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date
                       AND candidate.collected_at<=revision.as_of AND candidate.quality<>'invalid' AND NOT candidate.synthetic
                     ORDER BY candidate.observed_at DESC,candidate.published_month DESC,candidate.id DESC LIMIT 1) snapshot ON true
             ),
