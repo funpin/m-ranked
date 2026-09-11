@@ -125,6 +125,7 @@ test("legacy detail IDs and Telegram history limits are bounded", () => {
   assert.equal(normalizeHistoryLimit(undefined), 100);
   assert.equal(normalizeHistoryLimit("50"), 50);
   assert.equal(normalizeHistoryLimit("1000"), 1000);
+  assert.equal(normalizeHistoryLimit("3000"), 3000);
   assert.throws(() => normalizeHistoryLimit("49"), /history_limit/);
 });
 

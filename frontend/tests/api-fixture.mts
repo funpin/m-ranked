@@ -75,7 +75,8 @@ const server = createServer((request, response) => {
       snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,
       reactions:counter(index),views:counter(index*10),deltaReactions:index?1:null,deltaViews:index?10:null,synthetic:index===0,
     })) : historyRows;
-    const items=sourceRows.map((row,index)=>({...row,
+    const limit=Math.max(1,Number(url.searchParams.get("limit") ?? 200));
+    const items=sourceRows.slice(-limit).map((row,index)=>({...row,
       comments:p.platform === "rutube" ? counter(null) : row.comments,
       deltaComments:p.platform === "rutube" ? null : row.deltaComments,
       shares:p.platform === "vk" ? counter(index*2) : row.shares,
@@ -85,7 +86,7 @@ const server = createServer((request, response) => {
       deltaReactionsBreakdown:p.platform === "vk" || p.platform === "rutube" ? null : row.deltaReactionsBreakdown,
       deltaReactionsBreakdownEntries:p.platform === "vk" || p.platform === "rutube" ? null : row.deltaReactionsBreakdownEntries,
     }));
-    return json({publication:p,items,nextCursor:null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
+    return json({publication:p,items,nextCursor:sourceRows.length>limit?"older":null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
   }
   const institutionId=/^\/api\/v1\/institutions\/(\d+)$/.exec(url.pathname);
   if(institutionId) return json({institutionId:`institution-${institutionId[1]}`,legacyId:Number(institutionId[1]),canonicalName:names[0]!,shortName:null,platform,period:"30d",metrics:{totalReactions:10,totalViews:100,medianReactions:5,medianViews:50,quality:"exact",sampleSize:2,coverage:1,aggregates:{totalReactions:aggregate(10),totalViews:aggregate(100),medianReactions:aggregate(5),medianViews:aggregate(50)}},datasetRevision:revision,asOf} satisfies Schema["Institution"]);

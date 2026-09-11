@@ -30,6 +30,11 @@ RestartSec=15s
 TimeoutStartSec=60s
 TimeoutStopSec=60s
 KillSignal=SIGINT
+Slice=m-ranked-target-collectors.slice
+MemoryHigh=420M
+MemoryMax=450M
+MemorySwapMax=0
+OOMPolicy=stop
 NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
@@ -57,9 +62,6 @@ RuntimeDirectoryMode=0700
 UMask=0077
 LimitNOFILE=32768
 TasksMax=256
-MemoryHigh=112M
-MemoryMax=128M
-MemorySwapMax=0
 
 [Install]
 WantedBy=m-ranked-target.target

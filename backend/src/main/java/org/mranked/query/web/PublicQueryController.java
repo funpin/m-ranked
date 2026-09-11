@@ -86,7 +86,7 @@ public class PublicQueryController {
     @GetMapping("/publications/{legacyId}/history")
     public ResponseEntity<?> publicationHistory(@PathVariable String legacyId,
             @RequestParam(defaultValue="posts") @Pattern(regexp="posts|platform_posts") String legacyType,
-            @RequestParam(defaultValue="200") @Min(1) @Max(2000) int limit,
+            @RequestParam(defaultValue="200") @Min(1) @Max(3000) int limit,
             @RequestParam(required=false) @Size(max=512) String cursor,
             @RequestHeader(value=HttpHeaders.IF_NONE_MATCH,required=false) String validator) {
         var type=LegacyEntityType.fromApiValue(legacyType);

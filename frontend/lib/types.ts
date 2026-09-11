@@ -40,6 +40,9 @@ export type ComparisonAggregation = "sum" | "median";
 export type ComparisonSelectionType = "channels" | "institutions";
 export const MAX_COMPARISON_INSTITUTIONS = 20;
 export const COMPARISON_PAGE_SIZE = 20;
+export const ACCOUNT_PUBLICATION_LIMIT = 100;
+export const INSTITUTION_ACCOUNT_LIMIT = 50;
+export const FULL_PUBLICATION_HISTORY_LIMIT = 3_000;
 
 export interface ComparisonRequest {
   platform: Exclude<Platform, "all">;

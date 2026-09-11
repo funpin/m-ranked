@@ -103,7 +103,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
     publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, limit = 100, cursor?: string) {
-      return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(1000, Math.max(1, limit)), cursor } } }).then(unwrap);
+      return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(3000, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
     comparisonCandidates(platform: Exclude<Platform, "all">, limit = 200, cursor?: string) {
       return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);

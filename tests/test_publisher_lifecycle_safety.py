@@ -44,15 +44,21 @@ def test_two_gib_runtime_has_a_coherent_hard_memory_budget() -> None:
     api = _read("operations/systemd/m-ranked-target-api.service")
     web = _read("operations/systemd/m-ranked-target-web.service")
     collector = _read("operations/systemd/m-ranked-target-collector@.service")
+    collector_slice = _read("operations/systemd/m-ranked-target-collectors.slice")
     compose = _read("infra/compose.yaml")
     small = _read("infra/compose.production-small.yaml")
 
     assert "-Xmx256m" in api and "MemoryMax=384M" in api
     assert "--max-old-space-size=128" in web and "MemoryMax=192M" in web
-    assert "MemoryMax=128M" in collector
+    assert "MemoryHigh=420M" in collector
+    assert "MemoryMax=450M" in collector
+    assert "Slice=m-ranked-target-collectors.slice" in collector
+    assert "MemoryHigh=650M" in collector_slice
+    assert "MemoryMax=700M" in collector_slice
     assert "MemorySwapMax=0" in api
     assert "MemorySwapMax=0" in web
     assert "MemorySwapMax=0" in collector
+    assert "MemorySwapMax=0" in collector_slice
     assert "--maxmemory 48mb" in compose
     assert "--maxmemory-policy allkeys-lru" in compose
     assert "mem_limit: 512m" in small
