@@ -88,7 +88,7 @@ explicit deployment configuration and does not infer credential values.
 Run the self-provisioning required gate from the repository root:
 
 ```sh
-python -m migration.integration.run --output migration/reports/admin-latest
+python -m migration.integration.run
 ```
 
 It provisions its own PostgreSQL/Redis project, installs the final schema directly,
@@ -99,6 +99,5 @@ Python interpreter, including CI without a local `.venv`.
 Relevant test classes include `CatalogPostgresIntegrationTest`,
 `CatalogHttpPostgresIntegrationTest`, `LegacyFormPostgresIntegrationTest`,
 `OfficialRatingContextPostgresIntegrationTest`, `OfficialRatingParserTest`,
-`HttpOfficialRatingSourceTest` and the V25 presentation tests. Evidence under
-`migration/reports` and `backend/admin-evidence` is versioned; historical green
-runs are not acceptance for a later schema or source change.
+`HttpOfficialRatingSourceTest` and the V25 presentation tests. Evidence from a run is local and is not committed; a historical green run is
+not acceptance for a later schema or source change.

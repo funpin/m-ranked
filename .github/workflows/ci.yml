@@ -1,4 +1,4 @@
-name: Required database contract gates
+name: Build and contract gates
 on:
   pull_request:
   push:
@@ -97,4 +97,3 @@ jobs:
           name: current-browser-evidence
           path: |
             frontend/test-results
-            !migration/reports/ci-legacy-pixel-audit/mranked-integration-*/**

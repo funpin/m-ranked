@@ -223,7 +223,7 @@ class Gate:
                 # fixtures (bridge import batches, legacy evidence, legacy CSV oracles,
                 # identity-command ledger) or the pre-final quality derivation cannot
                 # run on the final contract; they are excluded here and listed in
-                # docs/ai/manipulation-detection-final-report.md for the alpha owner.
+                # docs/features/anomaly-analysis.md for the alpha owner.
                 self.command('spring',mvn+['-Dtest='+','.join((
                     '!QueryPlanEvidenceTest',
                     '!LegacyAccountPresentationPostgresIntegrationTest','!CatalogPostgresIntegrationTest',
