@@ -222,7 +222,12 @@ class PostgresCollectorRepository:
                     WHERE platform=%s
                       AND partition_key=%s
                       AND collector_version=%s
-                      AND status IN ('running','partial','failed')
+                      -- Only a genuinely unfinished process-owned run is
+                      -- resumable. Completed partial/failed runs must not pin
+                      -- the scheduler to one old slot forever when an account
+                      -- has a persistent provider error; the next cycle polls
+                      -- every healthy account again under a new run id.
+                      AND status = 'running'
                     ORDER BY scheduled_at, started_at
                     LIMIT 1""",
                 (platform.value, partition_key, collector_version),

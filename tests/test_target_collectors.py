@@ -1419,6 +1419,20 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     assert "UPDATE ingest.collection_account_result" in sql
 
 
+def test_resumable_schedule_excludes_completed_partial_and_failed_runs() -> None:
+    connection = _ScriptedConnection()
+    repository = PostgresCollectorRepository(connection_factory=lambda: connection)
+
+    assert repository.resumable_scheduled_at(
+        Platform.RUTUBE, "default", "target-v1",
+    ) is None
+
+    sql = "\n".join(statement for statement, _ in connection.calls)
+    assert "status = 'running'" in sql
+    assert "'partial'" not in sql
+    assert "'failed'" not in sql
+
+
 def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
