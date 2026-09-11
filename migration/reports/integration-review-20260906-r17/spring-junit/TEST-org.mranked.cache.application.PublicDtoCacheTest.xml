@@ -1,8 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.cache.application.PublicDtoCacheTest" time="0.236" tests="5" errors="0" skipped="0" failures="0" flakes="0">
-  <testcase name="unavailableRedisFailsOpenToTheLoader" classname="org.mranked.cache.application.PublicDtoCacheTest" time="0.171" />
-  <testcase name="missCachesUnderTheRevisionReadByTheTransactionalLoader" classname="org.mranked.cache.application.PublicDtoCacheTest" time="0.01" />
-  <testcase name="checksAuthoritativeRevisionOnEveryRequestEvenForAnL1Hit" classname="org.mranked.cache.application.PublicDtoCacheTest" time="0.032" />
-  <testcase name="coldL2AndDisabledRedisProduceTheSamePublicDto" classname="org.mranked.cache.application.PublicDtoCacheTest" time="0.013" />
-  <testcase name="revisionAdvanceCannotServeOldDataWhenPubSubEventIsLost" classname="org.mranked.cache.application.PublicDtoCacheTest" time="0.006" />
-</testsuite>

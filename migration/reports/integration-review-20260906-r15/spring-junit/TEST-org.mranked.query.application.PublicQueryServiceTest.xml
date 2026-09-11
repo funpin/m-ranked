@@ -1,8 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.query.application.PublicQueryServiceTest" time="0.013" tests="5" errors="0" skipped="0" failures="0" flakes="0">
-  <testcase name="emptyDetailMetricsUseTheSelectedRevisionCommitAsResponseAsOf" classname="org.mranked.query.application.PublicQueryServiceTest" time="0.002" />
-  <testcase name="parityQueriesUseOneRevisionAndOneRepositoryCallPerRequest" classname="org.mranked.query.application.PublicQueryServiceTest" time="0.004" />
-  <testcase name="usesOneRevisionAndLimitPlusOneForAKeysetPage" classname="org.mranked.query.application.PublicQueryServiceTest" time="0.003" />
-  <testcase name="rejectsPlatformMismatchedComparisonSelectionBeforeCallingTheRepository" classname="org.mranked.query.application.PublicQueryServiceTest" time="0.0" />
-  <testcase name="resolvesDetailAgainstTheSelectedRevisionAndReportsMissingAlias" classname="org.mranked.query.application.PublicQueryServiceTest" time="0.003" />
-</testsuite>

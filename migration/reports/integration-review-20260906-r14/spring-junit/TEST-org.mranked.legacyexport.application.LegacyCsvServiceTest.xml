@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.legacyexport.application.LegacyCsvServiceTest" time="2.778" tests="4" errors="0" skipped="0" failures="0" flakes="0">
-  <testcase name="frozenPythonDialectRetainsFormulaNegativeNullUnicodeAndCrlfWithoutBom" classname="org.mranked.legacyexport.application.LegacyCsvServiceTest" time="0.001" />
-  <testcase name="sixHundredThousandRowsStreamWithSixtyFourMiBHeap" classname="org.mranked.legacyexport.application.LegacyCsvServiceTest" time="2.02" />
-  <testcase name="rowOverflowRejectsInsteadOfSilentlyTruncating" classname="org.mranked.legacyexport.application.LegacyCsvServiceTest" time="0.732" />
-  <testcase name="classifiedFailureNeverCommitsAnArtifactAndDisconnectRemovesTheCompletedSpool" classname="org.mranked.legacyexport.application.LegacyCsvServiceTest" time="0.022" />
-</testsuite>

@@ -1,9 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.admin.application.AdminServiceTest" time="0.01" tests="6" errors="0" skipped="0" failures="0" flakes="0">
-  <testcase name="missingJobGetsAStableNotFoundFailure" classname="org.mranked.admin.application.AdminServiceTest" time="0.001" />
-  <testcase name="normalizesAndBoundsCollectionJobFilters" classname="org.mranked.admin.application.AdminServiceTest" time="0.001" />
-  <testcase name="conflictAndMissingOutcomesBecomeTypedFailuresAfterTheRepositoryAuditsThem" classname="org.mranked.admin.application.AdminServiceTest" time="0.001" />
-  <testcase name="rejectsUnsafeActorAndNegativeVersionBeforeCallingTheWritePort" classname="org.mranked.admin.application.AdminServiceTest" time="0.001" />
-  <testcase name="accountReadReturnsOnlyTheCurrentAdministrativeState" classname="org.mranked.admin.application.AdminServiceTest" time="0.004" />
-  <testcase name="commandUsesSanitizedActorAndReturnsUpdatedState" classname="org.mranked.admin.application.AdminServiceTest" time="0.001" />
-</testsuite>

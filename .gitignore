@@ -8,13 +8,15 @@ __pycache__/
 .pytest_cache/
 .pnpm-store/
 backend/target/
-migration/reports/**/backend-build/
-migration/reports/integration-20*/
-migration/reports/integration-anomaly-*/
-migration/reports/**/mranked-integration-*/
-operations/**/evidence/**/backend-build/
-operations/**/evidence/**/test-runtime/
-operations/performance/evidence/anomaly-*/
 *.pyc
 .DS_Store
 .legacy-reference/
+
+# Run artefacts never enter the repository. The only tracked evidence file is
+# frontend/evidence/bundle-budget.json, the budget pnpm check:bundle compares against.
+evidence/
+!frontend/evidence/
+frontend/evidence/*
+!frontend/evidence/bundle-budget.json
+migration/reports/
+test-results/

@@ -1,5 +1,0 @@
-{
-  "acceptanceEligible": false,
-  "reason": "Parent reported concurrent mandatory PostgreSQL suite and representative import on the same host after this diagnostic run had already started. Repeat on a quiet host before performance acceptance.",
-  "scope": "Interim V15 diagnostic measurements only; thresholds and original producer report are retained unchanged."
-}
