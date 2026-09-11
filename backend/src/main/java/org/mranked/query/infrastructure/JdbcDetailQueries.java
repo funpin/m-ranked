@@ -346,33 +346,62 @@ final class JdbcDetailQueries {
                      SELECT cursor.observed_at,cursor.published_month,cursor.id
                        FROM analytics.usable_publication_snapshot cursor
                       WHERE cursor.publication_id=:publication AND cursor.id=CAST(:after AS bigint)))
-                 ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC LIMIT :limit
+                 ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC
+                 -- One extra older sample carries the deltas of the oldest returned
+                 -- row, so no per-row lookup has to revisit every month partition.
+                 LIMIT :limit+1
+            ), decorated AS (
+                SELECT page.*,
+                       coalesce((SELECT jsonb_object_agg(reaction.reaction_key,reaction.reaction_count)
+                         FROM ingest.reaction_breakdown reaction
+                        WHERE reaction.snapshot_published_month=page.published_month
+                          AND reaction.snapshot_id=page.id),'{}'::jsonb) AS reaction_breakdown
+                  FROM page
+            ), windowed AS (
+                SELECT decorated.*,
+                       lag(decorated.views_count) OVER chronology AS previous_views,
+                       lag(decorated.reactions_count) OVER chronology AS previous_reactions,
+                       lag(decorated.comments_count) OVER chronology AS previous_comments,
+                       lag(decorated.shares_count) OVER chronology AS previous_shares,
+                       lag(decorated.reaction_breakdown) OVER chronology AS previous_breakdown,
+                       row_number() OVER (ORDER BY decorated.observed_at DESC,decorated.published_month DESC,decorated.id DESC) AS position
+                  FROM decorated
+                WINDOW chronology AS (ORDER BY decorated.observed_at,decorated.published_month,decorated.id)
             )
-            SELECT page.id AS snapshot_id,page.*,
-                   page.views_count-previous.views_count AS delta_views,
-                   page.reactions_count-previous.reactions_count AS delta_reactions,
-                   page.comments_count-previous.comments_count AS delta_comments,
-                   page.shares_count-previous.shares_count AS delta_shares,
-                   coalesce((SELECT jsonb_object_agg(reaction.reaction_key,reaction.reaction_count)
-                     FROM ingest.reaction_breakdown reaction WHERE reaction.snapshot_published_month=page.published_month
-                       AND reaction.snapshot_id=page.id),'{}'::jsonb) AS reaction_breakdown,
-                   jsonb_build_object('sourceFingerprint',page.source_fingerprint,
-                     'supersedesSnapshotId',page.supersedes_snapshot_id::text,
-                     'correctionSequence',page.correction_sequence,'correctionReason',page.correction_reason) AS lineage,
-                   NULL::jsonb AS delta_reaction_breakdown,NULL::jsonb AS reaction_entries,
-                   NULL::jsonb AS delta_reaction_entries
-              FROM page
-              LEFT JOIN LATERAL (
-                  SELECT candidate.views_count,candidate.reactions_count,
-                         candidate.comments_count,candidate.shares_count
-                    FROM analytics.usable_publication_snapshot candidate
-                   WHERE candidate.publication_id=page.publication_id
-                     AND (candidate.observed_at,candidate.published_month,candidate.id)<
-                         (page.observed_at,page.published_month,page.id)
-                     AND candidate.observed_at<=:asOf AND candidate.collected_at<=:asOf
-                   ORDER BY candidate.observed_at DESC,candidate.published_month DESC,candidate.id DESC LIMIT 1
-              ) previous ON true
-             ORDER BY page.observed_at DESC,page.published_month DESC,page.id DESC
+            SELECT windowed.id AS snapshot_id,windowed.*,
+                   windowed.views_count-windowed.previous_views AS delta_views,
+                   windowed.reactions_count-windowed.previous_reactions AS delta_reactions,
+                   windowed.comments_count-windowed.previous_comments AS delta_comments,
+                   windowed.shares_count-windowed.previous_shares AS delta_shares,
+                   jsonb_build_object('sourceFingerprint',windowed.source_fingerprint,
+                     'supersedesSnapshotId',windowed.supersedes_snapshot_id::text,
+                     'correctionSequence',windowed.correction_sequence,'correctionReason',windowed.correction_reason,
+                     'reactionDetailsSource','canonical') AS lineage,
+                   delta_reactions.breakdown AS delta_reaction_breakdown,
+                   coalesce(analytics.ordered_history_reactions(windowed.reaction_breakdown::text,false),'[]'::jsonb) AS reaction_entries,
+                   delta_reactions.entries AS delta_reaction_entries
+              FROM windowed
+              CROSS JOIN LATERAL (
+                  SELECT computed.entries,
+                         CASE WHEN computed.entries IS NULL THEN NULL
+                              ELSE (SELECT coalesce(jsonb_object_agg(item->>'reaction',item->'count'),'{}'::jsonb)
+                                      FROM jsonb_array_elements(computed.entries) item) END AS breakdown
+                    FROM (
+                      SELECT CASE WHEN windowed.reactions_count IS NULL OR windowed.previous_reactions IS NULL THEN NULL
+                                  ELSE (SELECT coalesce(jsonb_agg(jsonb_build_object('reaction',changed.key,'count',changed.difference)
+                                                 ORDER BY changed.key COLLATE "C"),'[]'::jsonb)
+                                          FROM (SELECT keys.key,
+                                                       coalesce((windowed.reaction_breakdown->>keys.key)::bigint,0)
+                                                       -coalesce((windowed.previous_breakdown->>keys.key)::bigint,0) AS difference
+                                                  FROM (SELECT jsonb_object_keys(windowed.reaction_breakdown) AS key
+                                                        UNION
+                                                        SELECT jsonb_object_keys(coalesce(windowed.previous_breakdown,'{}'::jsonb)) AS key) keys) changed
+                                         WHERE changed.difference<>0)
+                             END AS entries
+                    ) computed
+              ) delta_reactions
+             WHERE windowed.position<=:limit
+             ORDER BY windowed.observed_at DESC,windowed.published_month DESC,windowed.id DESC
             """).param("publication",publication).param("after",after,Types.BIGINT).param("limit",limit)
                 .param("asOf",sourceAsOf(revision)).query((row,index)->new HistorySnapshot(row.getString("snapshot_id"),instant(row,"observed_at"),
                         BigDecimal.valueOf(row.getLong("age_seconds")).divide(BigDecimal.valueOf(3600),8,RoundingMode.HALF_UP),
@@ -380,7 +409,10 @@ final class JdbcDetailQueries {
                         row.getObject("delta_views",Long.class),row.getObject("delta_reactions",Long.class),
                         row.getObject("delta_comments",Long.class),row.getObject("delta_shares",Long.class),
                         reactions(row.getString("reaction_breakdown")),row.getBoolean("synthetic"),row.getBoolean("interval_uncertain"),
-                        row.getString("quality"),evidence(row.getString("lineage")),null,null,null)).list();
+                        row.getString("quality"),evidence(row.getString("lineage")),
+                        row.getString("delta_reaction_breakdown")==null?null:reactions(row.getString("delta_reaction_breakdown")),
+                        reactionEntries(row.getString("reaction_entries")),
+                        reactionEntries(row.getString("delta_reaction_entries")))).list();
     }
 
     List<Long> neighbours(UUID publication,LegacyEntityType type) {

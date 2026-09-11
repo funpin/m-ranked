@@ -82,3 +82,30 @@ rtk proxy bash infra/local/stack.sh up -d
 в именованных Docker volumes проекта `mranked-local`.
 Остановленный первоначальный полный импорт остаётся в отдельной базе `mranked`
 и не используется стендом с выборкой.
+
+## Стенд на копии production-базы
+
+`infra/compose.prodcopy.yaml` запускает те же образы поверх восстановленной
+копии production вместо выборки из SQLite. Одной командой:
+
+```bash
+infra/local/prodcopy.sh /path/to/m-ranked-pgcopy /path/to/credentials.env
+```
+
+Копия — это каталог `pg_basebackup` (`pgdata/`) и `meta/container-inspect.json`.
+Скрипт копирует её в отдельный Docker volume, исходный каталог не меняется,
+поднимает стенд, заводит роль `analytics_worker` и, если восстановленный
+кластер ещё на базовом финальном контракте, доигрывает r3-дельту из
+`operations/sql/transition-production-to-final.sql` (участок между маркерами
+`r3-delta`). Файл с паролями копии держите вне репозитория: в восстановленном
+кластере уже лежат её собственные роли, и подходят только её пароли.
+
+Оверлей включает `MRANKED_SOURCE_READ_ENABLED=true`, как это сделано в
+`operations/systemd/m-ranked-target-api-source.service` на сервере. Это
+обязательно: в production-копии проекция `analytics.publication_history`
+пустая (`projection_state` фиксирует для неё `row_count 0`), поэтому чтение
+через проекции отдаёт пустые страницы публикаций и прочерки вместо медиан.
+В этом режиме API читает историю напрямую из партиций `ingest`.
+
+Оверлей также поднимает воркер анализа аномалий
+(`infra/local/anomaly.Dockerfile`), которого в стенде с выборкой нет.

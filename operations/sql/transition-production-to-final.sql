@@ -928,6 +928,12 @@ GRANT EXECUTE ON FUNCTION analytics.rebuild_core_projections(bigint)
 
 RESET ROLE;
 
+-- r3-delta:begin
+-- Everything between the r3-delta markers is the difference between the base
+-- final contract and storage-publisher-final-2026-09-08-r3. It is replayable on
+-- a database that already carries the base final contract, which is how the
+-- local review stand upgrades a restored production copy
+-- (infra/local/prodcopy.sh). Keep the markers around this section.
 -- ---------------------------------------------------------------------------
 -- Independent publication-level anomaly analysis (analytics_worker, candidate
 -- queue, attempts/state/findings/reviews, safe public views, ADMIN commands).
@@ -946,6 +952,26 @@ BEGIN
     END IF;
 END
 $anomaly_role_guard$;
+
+-- Partition-crossing read plans are priced above jit_above_cost while run-time
+-- pruning leaves a single partition, so JIT emission dominates every request.
+-- Role defaults keep this out of the schema dump and out of every client.
+-- Altering a role needs more than migration_owner holds, so the statement is
+-- skipped with a notice when the cutover session cannot issue it; in that case
+-- run the three ALTER ROLE statements separately as the superuser.
+RESET ROLE;
+DO $anomaly_jit_defaults$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolcreaterole)) THEN
+        ALTER ROLE api_read SET jit = off;
+        ALTER ROLE api_write_admin SET jit = off;
+        ALTER ROLE analytics_worker SET jit = off;
+    ELSE
+        RAISE NOTICE 'jit defaults not applied: run ALTER ROLE api_read/api_write_admin/analytics_worker SET jit = off as the superuser';
+    END IF;
+END
+$anomaly_jit_defaults$;
+SET ROLE migration_owner;
 
 
 CREATE TABLE analytics.anomaly_analysis_revision (
@@ -1630,7 +1656,7 @@ RESET ROLE;
 
 SET ROLE migration_owner;
 
-CREATE VIEW ops_and_admin.schema_contract AS
+CREATE OR REPLACE VIEW ops_and_admin.schema_contract AS
 SELECT 'storage-publisher-final-2026-09-08-r3'::text AS contract_id;
 
 COMMENT ON VIEW ops_and_admin.schema_contract IS
@@ -1641,5 +1667,6 @@ GRANT SELECT ON ops_and_admin.schema_contract
     TO api_read, api_write_admin, collector_ingest, maintenance;
 
 RESET ROLE;
+-- r3-delta:end
 
 COMMIT;

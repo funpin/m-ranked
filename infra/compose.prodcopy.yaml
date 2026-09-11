@@ -1,0 +1,62 @@
+# Run the current sources against a restored production database copy.
+#
+#   docker compose --env-file <credentials>.env \
+#     -f infra/compose.yaml -f infra/compose.local.yaml -f infra/compose.prodcopy.yaml \
+#     -p mranked-local up -d
+#
+# The restored cluster already carries its own roles, so the credentials file
+# must hold that copy's passwords. Keep that file outside the repository.
+# The SQLite seeding step is replaced by a no-op: the data is already there.
+services:
+  postgres:
+    environment:
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes: !override
+      - prodcopy_pgdata:/var/lib/postgresql/18/docker
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=50
+      - -c
+      - max_parallel_workers_per_gather=2
+
+  api:
+    environment:
+      # Production serves this copy from the canonical sources
+      # (m-ranked-target-api-source.service). The published projections in a
+      # production snapshot are not a complete read model: publication_history
+      # is empty there, so projection-backed reads render empty detail pages.
+      MRANKED_SOURCE_READ_ENABLED: "true"
+
+  seed:
+    build: !reset null
+    image: alpine:3
+    command: ["true"]
+    environment: !reset null
+    volumes: !override []
+
+  anomaly:
+    build:
+      context: ..
+      dockerfile: infra/local/anomaly.Dockerfile
+    restart: unless-stopped
+    environment:
+      ANOMALY_DATABASE_URL: postgresql://analytics_worker:${ANALYTICS_WORKER_DB_PASSWORD}@postgres:5432/${LOCAL_DATABASE_NAME:-mranked}?sslmode=disable
+      ANOMALY_BATCH_SIZE: "20"
+      ANOMALY_BACKFILL_BATCH_SIZE: "200"
+      ANOMALY_BACKFILL_INTERVAL_SECONDS: "60"
+      ANOMALY_POLL_SECONDS: "5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  prodcopy_pgdata:
+    name: mranked-local-pgdata
+    external: true

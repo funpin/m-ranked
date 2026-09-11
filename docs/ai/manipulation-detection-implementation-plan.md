@@ -354,3 +354,24 @@ not verified locally, N/A = not applicable.
   two functions upstream keeps at fifteen minutes, the transition script).
 - [x] **Gates re-run on the new base**: `pytest tests anomaly_analysis`,
   `mvnw verify` (jar built), `pnpm check`, full integration runner.
+
+## 17. Fixes found by the production-copy review (2026-09-12)
+
+- [x] **Local stand on a restored production copy**: `infra/compose.prodcopy.yaml`,
+  `infra/local/prodcopy.sh` and `infra/local/anomaly.Dockerfile`; the API runs in
+  the source-read mode production uses, and the worker finally has a container in
+  the local stand.
+- [x] **Cumulative chart restored**: the local renderer folded a per-sample
+  `pointRadius` array into `Math.max` and produced `NaN` geometry, so the line
+  chart drew nothing. Per-sample radius, border width and the `rectRot` boundary
+  diamond are now supported, with a browser test that fails without the fix.
+- [x] **Reaction detail columns under source-read**: the ordered entries, delta
+  entries and delta breakdown are derived from `ingest.reaction_breakdown`
+  instead of being returned as `NULL`; covered by a new source-backed case in
+  `HistoryReactionDetailsPostgresIntegrationTest`.
+- [x] **Publication page 12 110 ms to 182 ms**: deltas come from `lag` over one
+  extra fetched sample instead of a per-row lateral that re-entered every month
+  partition, and `jit = off` is a role default for the read roles.
+- [x] **Documented, not fixed**: production runs a hand-edited
+  `analytics.rebuild_core_projections_v13` that empties
+  `analytics.publication_history`; the repository schema still rebuilds it.
