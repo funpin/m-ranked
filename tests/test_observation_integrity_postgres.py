@@ -1,8 +1,8 @@
 """Real PostgreSQL regressions, isolated in a self-created disposable database.
 
 The CI integration runner provides a local bootstrap connection; no existing
-application database is mutated. Every run installs V1 through latest from the
-published SQL files and destroys only its randomly named fixture database.
+application database is mutated. Every run installs the one final schema and
+destroys only its randomly named fixture database.
 """
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -26,21 +26,20 @@ pytestmark = pytest.mark.skipif(not DSN, reason='integration runner must provide
 UTC = timezone.utc
 
 
-@pytest.fixture(scope='module', params=['clean', 'v8-upgrade'])
-def database(request, tmp_path_factory):
+@pytest.fixture(scope='module')
+def database(tmp_path_factory):
     options = conninfo_to_dict(str(DSN))
     if options.get('host') not in ('127.0.0.1', 'localhost', '::1'):
         pytest.fail('integrity fixture only permits loopback PostgreSQL')
     name = 'mranked_observations_it_' + uuid4().hex[:12] + '_it'
-    build = tmp_path_factory.mktemp('observation-flyway')
-    def migrate(target):
+    build = tmp_path_factory.mktemp('observation-final-schema')
+    def install_schema():
         command = [str(Path('backend/mvnw').resolve()), '-Dmranked.build.directory='+str(build),
-                   '-Pmigration-integration', '-Dtest=MigrationInstallationTest#migrateDisposableIntegrityDatabase', 'test']
+                   '-Pschema-integration', '-Dtest=MigrationInstallationTest#migrateDisposableIntegrityDatabase', 'test']
         if os.getenv('MRANKED_MAVEN_REPOSITORY'):
             command.insert(1, '-Dmaven.repo.local='+os.environ['MRANKED_MAVEN_REPOSITORY'])
         environment = os.environ | {
             'MRANKED_INTEGRITY_INSTALL_URL': f'jdbc:postgresql://127.0.0.1:{options["port"]}/{name}',
-            'MRANKED_INTEGRITY_INSTALL_TARGET': target,
             'MRANKED_MIGRATION_TEST_USER': options['user'],
             'MRANKED_MIGRATION_TEST_PASSWORD': options['password'],
         }
@@ -50,17 +49,7 @@ def database(request, tmp_path_factory):
         admin.execute(sql.SQL('CREATE DATABASE {} OWNER migration_owner').format(sql.Identifier(name)))
         dsn = make_conninfo(str(DSN), dbname=name)
         try:
-            if request.param == 'v8-upgrade':
-                migrate('8')
-                with psycopg.connect(dsn) as connection:
-                    f = seed(connection, '2024-06-01')
-                    connection.execute("""INSERT INTO ingest.publication_metric_snapshot
-                              (published_month,publication_id,collection_run_id,observed_at,collected_at,age_seconds,sampling_bucket,views_count,reactions_count,comments_count,quality,source_fingerprint)
-                              VALUES(%(month)s,%(publication)s,%(run)s,%(observed)s,%(observed)s,7200,1,0,NULL,1,'rounded','v8-upgrade-fixture')""", f)
-                    connection.execute("""INSERT INTO ingest.raw_payload(collection_run_id,owner_type,owner_id,collected_at,sha256,content_encoding,external_ref,purge_after)
-                              VALUES(%s,'publication',%s,%s,%s,'identity',%s,%s)""",
-                              (f['run'],f['publication'],f['observed'],'a'*64,'sha256:'+'a'*64,f['observed']+timedelta(days=7)))
-            migrate('latest')
+            install_schema()
             yield dsn
         finally:
             admin.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))

@@ -1,0 +1,64 @@
+2026/09/06 14:02:11 [notice] 258#258: using the "epoll" event method
+2026/09/06 14:02:11 [notice] 258#258: nginx/1.28.3 (Ubuntu)
+2026/09/06 14:02:11 [notice] 258#258: OS: Linux 6.12.72-linuxkit
+2026/09/06 14:02:11 [notice] 258#258: getrlimit(RLIMIT_NOFILE): 1048576:1048576
+2026/09/06 14:02:11 [notice] 259#259: start worker processes
+2026/09/06 14:02:11 [notice] 259#259: start worker process 260
+2026/09/06 14:02:11 [notice] 259#259: signal 1 (SIGHUP) received from 305, reconfiguring
+2026/09/06 14:02:11 [notice] 259#259: reconfiguring
+2026/09/06 14:02:11 [notice] 259#259: using the "epoll" event method
+2026/09/06 14:02:11 [notice] 259#259: start worker processes
+2026/09/06 14:02:11 [notice] 259#259: start worker process 306
+2026/09/06 14:02:12 [notice] 260#260: gracefully shutting down
+2026/09/06 14:02:12 [notice] 260#260: exiting
+2026/09/06 14:02:12 [notice] 260#260: exit
+2026/09/06 14:02:12 [notice] 259#259: signal 17 (SIGCHLD) received from 260
+2026/09/06 14:02:12 [notice] 259#259: worker process 260 exited with code 0
+2026/09/06 14:02:12 [notice] 259#259: signal 29 (SIGIO) received
+2026/09/06 14:02:12 [error] 306#306: *359 access forbidden by rule, client: 127.0.0.1, server: , request: "POST /manage HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *360 access forbidden by rule, client: 127.0.0.1, server: , request: "PUT /manage HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *361 access forbidden by rule, client: 127.0.0.1, server: , request: "PATCH /manage HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *362 access forbidden by rule, client: 127.0.0.1, server: , request: "DELETE /manage HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *363 access forbidden by rule, client: 127.0.0.1, server: , request: "OPTIONS /manage HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *364 access forbidden by rule, client: 127.0.0.1, server: , request: "POST /manage/accounts HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *365 access forbidden by rule, client: 127.0.0.1, server: , request: "PUT /manage/accounts HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *366 access forbidden by rule, client: 127.0.0.1, server: , request: "PATCH /manage/accounts HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *367 access forbidden by rule, client: 127.0.0.1, server: , request: "DELETE /manage/accounts HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *368 access forbidden by rule, client: 127.0.0.1, server: , request: "OPTIONS /manage/accounts HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *369 access forbidden by rule, client: 127.0.0.1, server: , request: "POST /manage/accounts/native-id HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *370 access forbidden by rule, client: 127.0.0.1, server: , request: "PUT /manage/accounts/native-id HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *371 access forbidden by rule, client: 127.0.0.1, server: , request: "PATCH /manage/accounts/native-id HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *374 access forbidden by rule, client: 127.0.0.1, server: , request: "DELETE /manage/accounts/native-id HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *377 access forbidden by rule, client: 127.0.0.1, server: , request: "OPTIONS /manage/accounts/native-id HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *378 access forbidden by rule, client: 127.0.0.1, server: , request: "POST /manage/mrating/import HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *381 access forbidden by rule, client: 127.0.0.1, server: , request: "PUT /manage/mrating/import HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *382 access forbidden by rule, client: 127.0.0.1, server: , request: "PATCH /manage/mrating/import HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *383 access forbidden by rule, client: 127.0.0.1, server: , request: "DELETE /manage/mrating/import HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *384 access forbidden by rule, client: 127.0.0.1, server: , request: "OPTIONS /manage/mrating/import HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *385 access forbidden by rule, client: 127.0.0.1, server: , request: "POST / HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *386 access forbidden by rule, client: 127.0.0.1, server: , request: "PUT / HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *387 access forbidden by rule, client: 127.0.0.1, server: , request: "PATCH / HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *388 access forbidden by rule, client: 127.0.0.1, server: , request: "DELETE / HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *389 access forbidden by rule, client: 127.0.0.1, server: , request: "OPTIONS / HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *390 access forbidden by rule, client: 127.0.0.1, server: , request: "POST /health HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *391 access forbidden by rule, client: 127.0.0.1, server: , request: "PUT /health HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *392 access forbidden by rule, client: 127.0.0.1, server: , request: "PATCH /health HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *393 access forbidden by rule, client: 127.0.0.1, server: , request: "DELETE /health HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [error] 306#306: *394 access forbidden by rule, client: 127.0.0.1, server: , request: "OPTIONS /health HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [notice] 259#259: signal 1 (SIGHUP) received from 480, reconfiguring
+2026/09/06 14:02:12 [notice] 259#259: reconfiguring
+2026/09/06 14:02:12 [notice] 259#259: using the "epoll" event method
+2026/09/06 14:02:12 [notice] 259#259: start worker processes
+2026/09/06 14:02:12 [notice] 259#259: start worker process 481
+2026/09/06 14:02:12 [error] 306#306: *483 access forbidden by rule, client: 127.0.0.1, server: , request: "POST /manage/accounts HTTP/1.1", host: "127.0.0.1:18080"
+2026/09/06 14:02:12 [notice] 259#259: signal 3 (SIGQUIT) received from 519, shutting down
+2026/09/06 14:02:12 [notice] 306#306: gracefully shutting down
+2026/09/06 14:02:12 [notice] 306#306: exiting
+2026/09/06 14:02:12 [notice] 306#306: exit
+2026/09/06 14:02:12 [notice] 481#481: gracefully shutting down
+2026/09/06 14:02:12 [notice] 481#481: exiting
+2026/09/06 14:02:12 [notice] 481#481: exit
+2026/09/06 14:02:12 [notice] 259#259: signal 17 (SIGCHLD) received from 481
+2026/09/06 14:02:12 [notice] 259#259: worker process 306 exited with code 0
+2026/09/06 14:02:12 [notice] 259#259: worker process 481 exited with code 0
+2026/09/06 14:02:12 [notice] 259#259: exit

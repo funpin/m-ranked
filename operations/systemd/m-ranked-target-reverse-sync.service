@@ -3,6 +3,7 @@ Description=M-Ranked bounded PostgreSQL-to-legacy rollback projection
 Documentation=file:/opt/m-ranked/current/operations/runbooks/ROLLBACK.md
 After=network-online.target
 Wants=network-online.target
+Conflicts=m-ranked-collector.service
 
 [Service]
 Type=simple

@@ -3,12 +3,11 @@ from contextlib import nullcontext
 from copy import deepcopy
 import io
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from operations.migration_status import live_status, publish
+from operations.migration_status import publish
 
 
 @pytest.fixture
@@ -24,24 +23,13 @@ def progress(monkeypatch):
     }
     state = SimpleNamespace(
         batch=(control["sourceNamespace"], inventory["sha256"], False, "running"),
-        baseline=None, baseline_checkpoints=[], delta=[],
         checkpoints=[("posts", "posts", 100), ("reaction_snapshots", "reaction_snapshots", 25)],
         queries=[],
-        database_rows=12_345,
-        database_bytes=7_340_032,
     )
 
     def execute(sql, params=()):
         state.queries.append((sql, params))
-        if sql.startswith("SELECT COALESCE(SUM(n_live_tup)"):
-            return SimpleNamespace(fetchone=lambda: (state.database_rows,))
-        if sql.startswith("SELECT pg_database_size(current_database())"):
-            return SimpleNamespace(fetchone=lambda: (state.database_bytes,))
-        if "final_delta_progress_20260907" in sql:
-            return SimpleNamespace(fetchall=lambda: state.delta)
-        baseline = params == ("baseline-batch",)
-        return SimpleNamespace(fetchone=lambda: state.baseline if baseline else state.batch,
-                               fetchall=lambda: state.baseline_checkpoints if baseline else state.checkpoints)
+        return SimpleNamespace(fetchone=lambda: state.batch, fetchall=lambda: state.checkpoints)
 
     import psycopg
     monkeypatch.setenv("MRANKED_PROGRESS_DATABASE_URL", "postgresql://private-credential")
@@ -54,20 +42,10 @@ def test_progress_counts_only_committed_checkpoints_and_keeps_private_binding_ou
     control, inventory, state = progress
     status = publish.build_status(control, inventory)
     assert (status["total"], status["transferred"]) == (1000, 125)
-    assert status["databaseRows"] == state.database_rows
-    assert status["diskUsageGiB"] == round(state.database_bytes / (1024 ** 3), 2)
     assert status["progressAvailable"] is True
     assert "Сбор данных продолжается" in status["collectionMessage"]
     assert state.queries[0] == ("SET TRANSACTION READ ONLY", ())
-    assert any(
-        "COALESCE(SUM(n_live_tup)" in query for query, _ in state.queries
-    )
-    assert any(
-        "pg_database_size(current_database())" in query for query, _ in state.queries
-    )
-    assert all(
-        not params or params == (control["batchId"],) for _, params in state.queries[1:]
-    )
+    assert all(params == (control["batchId"],) for _, params in state.queries[1:])
     assert "private" not in json.dumps(status)
 
 
@@ -174,81 +152,3 @@ def test_publisher_failure_retains_last_confirmed_counts_and_timestamp(tmp_path,
     assert json.loads(output.read_text()) == dict(previous, progressAvailable=False,
                                                  estimatedRemainingSeconds=None, rowsPerSecond=None)
     assert capsys.readouterr().out == "Progress unavailable: KeyError\n"
-
-
-def test_final_pass_keeps_prior_committed_volume_separate_and_disables_eta(progress):
-    control, inventory, state = progress
-    control.update(baselineBatchId="baseline-batch", baselineSha256="b" * 64,
-                   collectionMessage="Сбор приостановлен")
-    # Transfer checkpoints remain valid even if subsequent reconciliation failed.
-    state.baseline = (control["sourceNamespace"], "b" * 64, False, "failed")
-    state.baseline_checkpoints = [(name, name, 90, True) for name in publish.STREAMS]
-    estimate = publish.TransferEstimate()
-    estimate.update(control["batchId"], 0, 1000, 0)
-    status = publish.build_status(control, inventory, estimate)
-    assert status["previouslyTransferred"] == 900
-    assert status["transferred"] == 125
-    assert status["counterKind"] == "final_pass"
-    assert status["collectionMessage"] == "Сбор приостановлен"
-    assert status["estimatedRemainingSeconds"] is None
-    assert estimate.batch_id is None
-    state.baseline_checkpoints.pop()
-    with pytest.raises(ValueError, match="Incomplete baseline"):
-        publish.build_status(control, inventory)
-
-
-def test_delta_counter_counts_unique_new_rows_not_replayed_checkpoints(progress):
-    control, inventory, state = progress
-    control.update(baselineBatchId="baseline-batch", baselineSha256="b"*64, deltaCounter=True)
-    state.baseline = (control["sourceNamespace"], "b"*64, False, "failed")
-    state.baseline_checkpoints = [(name, name, 90, True) for name in publish.STREAMS]
-    state.delta = [("posts", 5)]
-    status = publish.build_status(control, inventory)
-    assert status["counterKind"] == "delta"
-    assert status["transferred"] == 905
-    assert status["deltaTransferred"] == 5
-    assert status["passProcessed"] == 125
-    assert status["total"] == 1000
-    state.delta = [("posts", 11)]
-    with pytest.raises(ValueError, match="Invalid delta"):
-        publish.build_status(control, inventory)
-
-
-def test_live_status_uses_exact_measurement_count_database_size_and_disk(monkeypatch):
-    queries = []
-
-    class Connection:
-        def execute(self, sql):
-            queries.append(sql)
-            return SimpleNamespace(fetchone=lambda: (5_123_456, 5 * 1024 ** 3))
-
-    monkeypatch.setattr(
-        live_status.shutil,
-        "disk_usage",
-        lambda _path: SimpleNamespace(total=30 * 1024 ** 3, free=18 * 1024 ** 3),
-    )
-    status = live_status.build_status(Connection(), SimpleNamespace())
-
-    assert status["databaseRows"] == 5_123_456
-    assert status["databaseSizeGiB"] == 5.0
-    assert status["diskUsedPercent"] == 40.0
-    assert "count(*)" in queries[0]
-    assert "publication_metric_snapshot" in queries[0]
-
-
-def test_temporary_homepage_contains_only_live_database_and_disk_counters():
-    page = (Path(__file__).parents[1] / "operations/migration_status/index.html").read_text(
-        encoding="utf-8"
-    )
-
-    assert "Уже сохранено в PostgreSQL" in page
-    assert "Размер БД" in page
-    assert "Заполнение диска" in page
-    for removed in (
-        "Догружаем только",
-        "Догрузка новых записей",
-        "Счётчик показывает",
-        "Осталось добавить",
-        "Всего в снимке",
-    ):
-        assert removed not in page

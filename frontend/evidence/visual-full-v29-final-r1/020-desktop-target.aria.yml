@@ -1,0 +1,108 @@
+- link "Перейти к содержимому":
+  - /url: "#main-content"
+- navigation "Основная навигация":
+  - link "m-ranked — обзор":
+    - /url: /?platform=vk
+    - strong: m-ranked
+  - link "Обзор":
+    - /url: /?platform=vk
+  - link "Рейтинг":
+    - /url: /rating?platform=vk
+  - link "Сравнение":
+    - /url: /compare?platform=vk
+  - link "Экспорт CSV":
+    - /url: /export/snapshots.csv?platform=vk
+  - link "Управление":
+    - /url: /manage?platform=vk
+  - button "Включить светлую тему": Тёмная
+- main:
+  - heading "Рейтинг · ВКонтакте" [level=1]
+  - paragraph: Только публикации и замеры ВКонтакте. Данные других площадок в расчёт не входят.
+  - form "Настройка рейтинга":
+    - text: Период ⓘ
+    - combobox "Период ⓘ":
+      - option "3 часа"
+      - option "Сутки"
+      - option "Неделя" [selected]
+      - option "Последний месяц"
+    - button "Применить"
+  - region "Рейтинг активности ВК":
+    - heading "Вузы" [level=2]
+    - paragraph: Если у вуза несколько аккаунтов ВКонтакте, их публикации объединяются.
+    - text: "Период: 7 дней Вовлечённость: (лайки + комментарии + репосты) / просмотры. Это отношение событий, а не уникальных пользователей."
+    - table "Вузы по активности ВКонтакте":
+      - caption: Вузы по активности ВКонтакте
+      - rowgroup:
+        - row "# Вуз Среднее лайков Лайков всего Просмотры Вовлечённость ↓ Подписчики":
+          - columnheader "#"
+          - columnheader "Вуз"
+          - columnheader "Среднее лайков":
+            - link "Среднее лайков":
+              - /url: /rating?platform=vk&period=7d&channel_sort=average&channel_direction=desc&post_sort=view_share&post_direction=desc
+          - columnheader "Лайков всего":
+            - link "Лайков всего":
+              - /url: /rating?platform=vk&period=7d&channel_sort=total&channel_direction=desc&post_sort=view_share&post_direction=desc
+          - columnheader "Просмотры":
+            - link "Просмотры":
+              - /url: /rating?platform=vk&period=7d&channel_sort=views&channel_direction=desc&post_sort=view_share&post_direction=desc
+          - columnheader "Вовлечённость ↓":
+            - link "Вовлечённость ↓":
+              - /url: /rating?platform=vk&period=7d&channel_sort=engagement&channel_direction=asc&post_sort=view_share&post_direction=desc
+          - columnheader "Подписчики":
+            - link "Подписчики":
+              - /url: /rating?platform=vk&period=7d&channel_sort=subscribers&channel_direction=desc&post_sort=view_share&post_direction=desc
+      - rowgroup:
+        - row "1 Альфа 1 публикаций · 0 комментариев · 0 репостов 50.0 50 1000 5.00% 20000":
+          - cell "1"
+          - cell "Альфа 1 публикаций · 0 комментариев · 0 репостов":
+            - link "Альфа":
+              - /url: /institutions/1?platform=vk
+            - text: 1 публикаций · 0 комментариев · 0 репостов
+          - cell "50.0":
+            - strong: "50.0"
+          - cell "50"
+          - cell "1000"
+          - cell "5.00%":
+            - strong: 5.00%
+          - cell "20000"
+  - region "Публикации ВК":
+    - heading "Публикации ВКонтакте" [level=2]
+    - paragraph: Последний известный замер каждой публикации, вышедшей за период.
+    - text: "Период: 7 дней"
+    - table "Публикации ВКонтакте по активности":
+      - caption: Публикации ВКонтакте по активности
+      - rowgroup:
+        - row "# Публикация Лайки Просмотры Комментарии Репосты Вовлечённость ↓":
+          - columnheader "#"
+          - columnheader "Публикация"
+          - columnheader "Лайки":
+            - link "Лайки":
+              - /url: /rating?platform=vk&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=reactions&post_direction=desc
+          - columnheader "Просмотры":
+            - link "Просмотры":
+              - /url: /rating?platform=vk&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=views&post_direction=desc
+          - columnheader "Комментарии":
+            - link "Комментарии":
+              - /url: /rating?platform=vk&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=comments&post_direction=desc
+          - columnheader "Репосты":
+            - link "Репосты":
+              - /url: /rating?platform=vk&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=shares&post_direction=desc
+          - columnheader "Вовлечённость ↓":
+            - link "Вовлечённость ↓":
+              - /url: /rating?platform=vk&period=7d&channel_sort=engagement&channel_direction=desc&post_sort=view_share&post_direction=asc
+      - rowgroup:
+        - row "1 Альфа · №55 +2 авт. Открыть публикацию VK ↗ 50 1000 0 0 5.00%":
+          - cell "1"
+          - cell "Альфа · №55 +2 авт. Открыть публикацию VK ↗":
+            - link "Альфа · №55":
+              - /url: /platform-posts/1
+            - text: +2 авт.
+            - link "Открыть публикацию VK ↗":
+              - /url: https://vk.ru/wall-100_55
+          - cell "50":
+            - strong: "50"
+          - cell "1000"
+          - cell "0"
+          - cell "0"
+          - cell "5.00%"
+- alert

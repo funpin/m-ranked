@@ -1,0 +1,50 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest" time="14.735" tests="1" errors="0" skipped="0" failures="0" flakes="0">
+  <testcase name="independentEndpointOracleDetectsDerivedValuesAndMembershipTampering" classname="org.mranked.query.infrastructure.ProjectionReconciliationPostgresIntegrationTest" time="14.734">
+    <system-out>16:07:31.422 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:60006/mranked_projection_772f795651e3458fbce4485109d4ecea_it (PostgreSQL 18.6)
+16:07:31.444 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+16:07:31.453 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+16:07:31.494 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+16:07:31.516 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+16:07:31.805 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+16:07:31.867 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+16:07:31.892 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+16:07:31.935 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+16:07:31.951 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+16:07:31.973 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+16:07:32.000 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+16:07:32.017 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+16:07:32.071 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+16:07:32.179 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+16:07:32.216 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+16:07:32.251 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+16:07:32.272 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+16:07:32.302 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+16:07:32.340 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+16:07:32.367 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+16:07:32.414 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+16:07:32.464 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+16:07:32.512 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+16:07:32.547 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+16:07:32.570 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+16:07:32.606 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+16:07:32.671 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+16:07:32.699 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+16:07:32.724 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+16:07:32.749 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+16:07:32.761 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "27 - retained disabled platform period metrics"
+16:07:32.780 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "28 - identity command receipt verifier acl"
+16:07:32.793 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 28 migrations to schema "flyway", now at version v28 (execution time 00:00.918s)
+</system-out>
+  </testcase>
+</testsuite>

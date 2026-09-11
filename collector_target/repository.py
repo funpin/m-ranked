@@ -34,6 +34,7 @@ _SHARD = re.compile(r"^(\d+)/(\d+)$")
 _SAFE_ERROR_CODE = re.compile(
     r"^[A-Za-z][A-Za-z0-9_.-]{0,79}(?::[A-Za-z0-9_.-]{1,80})?$"
 )
+_EXPECTED_SCHEMA_CONTRACT = "storage-publisher-final-2026-09-08-r2"
 
 
 def _row_value(row: Any, key: str, index: int) -> Any:
@@ -51,18 +52,6 @@ def _error_code(value: str) -> str:
     return value if _SAFE_ERROR_CODE.fullmatch(value) else "CollectorError"
 
 
-def _env_enabled(name: str, default: bool) -> bool:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    value = raw.strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
-    raise ValueError(f"{name} must be a boolean")
-
-
 class PostgresCollectorRepository:
     """Collector-facing PostgreSQL repository.
 
@@ -78,9 +67,8 @@ class PostgresCollectorRepository:
         connection_factory: Callable[[], Any] | None = None,
         raw_retention_days: int = 7,
         statement_timeout_seconds: int = 60,
+        snapshot_heartbeat_hours: int = 24,
         evidence_store: ImmutableEvidenceStore | None = None,
-        persist_raw_evidence: bool | None = None,
-        persist_legacy_csv: bool | None = None,
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
@@ -88,22 +76,12 @@ class PostgresCollectorRepository:
             raise ValueError("raw_retention_days must be positive")
         if statement_timeout_seconds < 1:
             raise ValueError("statement_timeout_seconds must be positive")
+        if snapshot_heartbeat_hours < 1:
+            raise ValueError("snapshot_heartbeat_hours must be positive")
         self._factory = connection_factory or self._psycopg_factory(str(dsn))
         self.raw_retention = timedelta(days=raw_retention_days)
         self.statement_timeout_seconds = statement_timeout_seconds
-        self.persist_raw_evidence = (
-            persist_raw_evidence
-            if persist_raw_evidence is not None
-            else _env_enabled(
-                "COLLECTOR_PERSIST_RAW_EVIDENCE",
-                evidence_store is not None,
-            )
-        )
-        self.persist_legacy_csv = (
-            persist_legacy_csv
-            if persist_legacy_csv is not None
-            else _env_enabled("COLLECTOR_PERSIST_LEGACY_CSV", False)
-        )
+        self.snapshot_heartbeat = timedelta(hours=snapshot_heartbeat_hours)
         self.evidence_store = evidence_store or ImmutableEvidenceStore(
             Path(os.environ.get("COLLECTOR_RAW_EVIDENCE_DIR", "data/target-raw-evidence"))
         )
@@ -132,6 +110,19 @@ class PostgresCollectorRepository:
             yield connection
         finally:
             connection.close()
+
+    def assert_schema_contract(self) -> None:
+        """Fail closed before a collector writes against an incompatible DB."""
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT contract_id FROM ops_and_admin.schema_contract"
+            ).fetchone()
+        contract = None if row is None else _row_value(row, "contract_id", 0)
+        if contract != _EXPECTED_SCHEMA_CONTRACT:
+            raise RuntimeError(
+                "database schema contract mismatch: "
+                f"expected {_EXPECTED_SCHEMA_CONTRACT!r}, found {contract!r}"
+            )
 
     def start_run(self, context: CollectionContext) -> None:
         with self._connection() as connection, connection.transaction():
@@ -231,7 +222,12 @@ class PostgresCollectorRepository:
                     WHERE platform=%s
                       AND partition_key=%s
                       AND collector_version=%s
-                      AND status IN ('running','partial','failed')
+                      -- Only a genuinely unfinished process-owned run is
+                      -- resumable. Completed partial/failed runs must not pin
+                      -- the scheduler to one old slot forever when an account
+                      -- has a persistent provider error; the next cycle polls
+                      -- every healthy account again under a new run id.
+                      AND status = 'running'
                     ORDER BY scheduled_at, started_at
                     LIMIT 1""",
                 (platform.value, partition_key, collector_version),
@@ -491,15 +487,7 @@ class PostgresCollectorRepository:
         deletion_probe_count = 0
         changed = False
         identity_receipt = None
-        # Partition DDL can lock both snapshot parents. Commit provisioning
-        # before taking any canonical write locks, otherwise concurrent
-        # platforms can deadlock INSERT against CREATE TABLE PARTITION OF.
-        # Only empty infrastructure may survive a failed account transaction.
         with self._connection() as connection, connection.transaction():
-            connection.execute(
-                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-                ("collector:partition-provisioning",),
-            )
             for published_month in sorted({
                 publication.snapshot.published_month
                 for publication in batch.publications
@@ -508,7 +496,6 @@ class PostgresCollectorRepository:
                     "SELECT ops_and_admin.ensure_publication_metric_partition(%s::date)",
                     (published_month,),
                 )
-        with self._connection() as connection, connection.transaction():
             if batch.account_observation is not None:
                 identity_changed = self._persist_account_identity(
                     connection, batch, batch.account_observation,
@@ -517,7 +504,7 @@ class PostgresCollectorRepository:
                     connection, batch, batch.account_observation,
                 )
                 changed = changed or identity_changed or account_changed
-                if batch.account_observation is not None:
+                if identity_changed:
                     from .identity_evidence import IdentityEvidenceStore, configured_root
                     # Source fields come from the already sanitized original
                     # observation, before any database state is read as output.
@@ -626,12 +613,35 @@ class PostgresCollectorRepository:
         batch: CanonicalAccountBatch,
         observation: CanonicalAccountObservation,
     ) -> bool:
+        latest_state = connection.execute(
+            """SELECT semantic_fingerprint, observed_at
+                 FROM ingest.account_metric_snapshot_active
+                WHERE platform_account_id=%s
+                ORDER BY observed_at DESC, id DESC
+                LIMIT 1""",
+            (batch.account.id,),
+        ).fetchone()
+        unchanged = (
+            latest_state is not None
+            and _row_value(latest_state, "semantic_fingerprint", 0) is not None
+            and bytes(_row_value(latest_state, "semantic_fingerprint", 0))
+                == observation.semantic_fingerprint
+        )
+        heartbeat_due = (
+            latest_state is None
+            or observation.observed_at - utc(
+                _row_value(latest_state, "observed_at", 1),
+                "account_snapshot.observed_at",
+            ) >= self.snapshot_heartbeat
+        )
+        if unchanged and not heartbeat_due:
+            return False
         row = connection.execute(
             """INSERT INTO ingest.account_metric_snapshot(
                    platform_account_id, collection_run_id, observed_at,
                    collected_at, subscriber_count, subscriber_display, quality,
-                   source_fingerprint
-               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                   source_fingerprint, semantic_fingerprint
+               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                ON CONFLICT (platform_account_id, observed_at, source_fingerprint)
                DO NOTHING
                RETURNING id""",
@@ -644,6 +654,7 @@ class PostgresCollectorRepository:
                 observation.subscriber_display,
                 observation.quality.value,
                 observation.source_fingerprint,
+                observation.semantic_fingerprint,
             ),
         ).fetchone()
         if row is None:
@@ -998,37 +1009,44 @@ class PostgresCollectorRepository:
                 identity_changed = True
 
         snapshot = publication.snapshot
-        observation_lock = (
-            f"observation:{snapshot.published_month}:"
-            f"{publication_id}:{snapshot.sampling_bucket}"
-        )
-        connection.execute(
-            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-            (observation_lock,),
-        )
-        prior_run_slot = connection.execute(
-            """SELECT id
-                 FROM ingest.publication_metric_snapshot
-                WHERE published_month=%s
-                  AND publication_id=%s
-                  AND sampling_bucket=%s
-                  AND collection_run_id<>%s
+        latest_state = connection.execute(
+            """SELECT semantic_fingerprint, observed_at
+                FROM ingest.publication_metric_snapshot_active
+                WHERE publication_id=%s
+                  AND published_month=%s
+                  AND synthetic=%s
+                ORDER BY observed_at DESC, id DESC
                 LIMIT 1""",
-            (
-                snapshot.published_month,
-                publication_id,
-                snapshot.sampling_bucket,
-                batch.context.run_id,
-            ),
+            (publication_id, snapshot.published_month, snapshot.synthetic),
         ).fetchone()
-        snapshot_row = None if prior_run_slot is not None else connection.execute(
+        unchanged = (
+            latest_state is not None
+            and _row_value(latest_state, "semantic_fingerprint", 0) is not None
+            and bytes(_row_value(latest_state, "semantic_fingerprint", 0))
+                == snapshot.semantic_fingerprint
+        )
+        heartbeat_due = (
+            latest_state is None
+            or snapshot.observed_at - utc(
+                _row_value(latest_state, "observed_at", 1),
+                "snapshot.observed_at",
+            ) >= self.snapshot_heartbeat
+        )
+        if unchanged and not heartbeat_due:
+            return (
+                publication_id,
+                not known,
+                False,
+                publication_changed or identity_changed,
+            )
+        snapshot_row = connection.execute(
             """INSERT INTO ingest.publication_metric_snapshot(
                    published_month, publication_id, collection_run_id, observed_at,
                    collected_at, age_seconds, sampling_bucket, views_count, reactions_count,
                    comments_count, shares_count, quality, interval_uncertain,
                    synthetic, metric_semantics_version, capability_version,
-                   source_fingerprint, views_quality, reactions_quality, comments_quality, shares_quality, metric_evidence
-               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,1,%s,%s,%s,%s,%s,%s::jsonb)
+                   source_fingerprint, semantic_fingerprint, views_quality, reactions_quality, comments_quality, shares_quality, metric_evidence
+               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,1,%s,%s,%s,%s,%s,%s,%s::jsonb)
 
                RETURNING id""",
             (
@@ -1047,6 +1065,7 @@ class PostgresCollectorRepository:
                 snapshot.interval_uncertain,
                 snapshot.synthetic,
                 snapshot.source_fingerprint,
+                snapshot.semantic_fingerprint,
                 *(snapshot.metric_quality[metric].value for metric in ("views", "reactions", "comments", "shares")),
                 _json({
                     metric: {
@@ -1089,7 +1108,7 @@ class PostgresCollectorRepository:
                 snapshot.source_fingerprint,
                 snapshot.sanitized_source,
             )
-        if snapshot_inserted and self.persist_legacy_csv:
+        if snapshot_inserted:
             from .legacy_csv import persist_native_csv
             persist_native_csv(connection,publication_id,snapshot.published_month,snapshot_id,snapshot.sanitized_source)
         return (
@@ -1105,69 +1124,154 @@ class PostgresCollectorRepository:
         batch: CanonicalAccountBatch,
         probe: CanonicalDeletionProbe,
     ) -> bool:
-        # Only deleted_at changes here. Serialize deletion probes without
-        # blocking foreign-key checks from concurrent snapshot inserts.
         publication = connection.execute(
             """SELECT id, deleted_at
                  FROM ingest.publication
                 WHERE id=%s AND primary_account_id=%s
-                FOR NO KEY UPDATE""",
+                FOR UPDATE""",
             (probe.publication_id, batch.account.id),
         ).fetchone()
         if publication is None:
             raise RuntimeError("deletion probe publication is not owned by account")
-        existing = connection.execute(
-            """SELECT id
-                 FROM ingest.deletion_observation
-                WHERE publication_id=%s
-                  AND collection_run_id=%s
-                  AND observed_at=%s""",
-            (probe.publication_id, batch.context.run_id, probe.observed_at),
-        ).fetchone()
-        if existing is not None:
-            return False
         prior = connection.execute(
-            """SELECT outcome::text AS outcome, consecutive_missing
-                 FROM ingest.deletion_observation
+            """SELECT status::text AS status,
+                      last_probe_outcome::text AS last_probe_outcome,
+                      last_checked_at, last_present_at, first_missing_at,
+                      consecutive_missing, reason_code, last_collection_run_id
+                 FROM ingest.publication_availability_state
                 WHERE publication_id=%s
-                ORDER BY observed_at DESC, id DESC
-                LIMIT 1""",
+                FOR UPDATE""",
             (probe.publication_id,),
         ).fetchone()
-        previous_count = (
-            int(_row_value(prior, "consecutive_missing", 1))
-            if prior is not None else 0
-        )
+        if prior is not None:
+            last_checked_at = utc(
+                _row_value(prior, "last_checked_at", 2),
+                "availability.last_checked_at",
+            )
+            if (
+                _row_value(prior, "last_collection_run_id", 7)
+                    == batch.context.run_id
+                and last_checked_at == probe.observed_at
+            ):
+                return False
+            # A resumed older run, or a second run for the same observation
+            # instant, must never regress current availability.
+            if probe.observed_at <= last_checked_at:
+                return False
+            old_status = DeletionProbeOutcome(_row_value(prior, "status", 0))
+            previous_probe_outcome = DeletionProbeOutcome(
+                _row_value(prior, "last_probe_outcome", 1)
+            )
+            previous_count = int(_row_value(prior, "consecutive_missing", 5))
+            last_present_at = _row_value(prior, "last_present_at", 3)
+            first_missing_at = _row_value(prior, "first_missing_at", 4)
+            previous_reason = str(_row_value(prior, "reason_code", 6))
+        else:
+            old_status = (
+                DeletionProbeOutcome.CONFIRMED_DELETED
+                if _row_value(publication, "deleted_at", 1) is not None
+                else DeletionProbeOutcome.PRESENT
+            )
+            previous_probe_outcome = None
+            previous_count = 1 if old_status == DeletionProbeOutcome.CONFIRMED_DELETED else 0
+            last_present_at = None
+            first_missing_at = _row_value(publication, "deleted_at", 1)
+            previous_reason = None
         outcome = probe.outcome
         if outcome == DeletionProbeOutcome.PRESENT:
             consecutive_missing = 0
+            status = DeletionProbeOutcome.PRESENT
+            last_present_at = probe.observed_at
+            first_missing_at = None
         elif outcome == DeletionProbeOutcome.MISSING:
             consecutive_missing = previous_count + 1
+            if old_status == DeletionProbeOutcome.PRESENT:
+                first_missing_at = probe.observed_at
             if consecutive_missing >= probe.confirmation_threshold:
-                outcome = DeletionProbeOutcome.CONFIRMED_DELETED
+                status = DeletionProbeOutcome.CONFIRMED_DELETED
+            else:
+                status = DeletionProbeOutcome.MISSING
+        elif outcome == DeletionProbeOutcome.CONFIRMED_DELETED:
+            consecutive_missing = max(previous_count, probe.confirmation_threshold)
+            status = DeletionProbeOutcome.CONFIRMED_DELETED
+            first_missing_at = first_missing_at or probe.observed_at
         else:
             # Transient/auth/rate/ambiguous and unsupported results neither
             # increment nor clear a pending authoritative-missing sequence.
             consecutive_missing = previous_count
-        inserted = connection.execute(
-            """INSERT INTO ingest.deletion_observation(
-                   publication_id, collection_run_id, observed_at,
-                   outcome, reason_code, consecutive_missing
-               ) VALUES (%s,%s,%s,%s,%s,%s)
-               ON CONFLICT (publication_id, collection_run_id, observed_at)
-               DO NOTHING
-               RETURNING id""",
-            (
-                probe.publication_id,
-                batch.context.run_id,
-                probe.observed_at,
-                outcome.value,
-                probe.reason_code,
-                consecutive_missing,
-            ),
-        ).fetchone()
-        if inserted is None:
-            return False
+            status = old_status
+        if prior is None:
+            connection.execute(
+                """INSERT INTO ingest.publication_availability_state(
+                       publication_id, status, last_probe_outcome, last_checked_at,
+                       last_present_at, first_missing_at, consecutive_missing,
+                       reason_code, last_collection_run_id
+                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (
+                    probe.publication_id,
+                    status.value,
+                    outcome.value,
+                    probe.observed_at,
+                    last_present_at,
+                    first_missing_at,
+                    consecutive_missing,
+                    probe.reason_code,
+                    batch.context.run_id,
+                ),
+            )
+        else:
+            connection.execute(
+                """UPDATE ingest.publication_availability_state
+                      SET status=%s, last_probe_outcome=%s, last_checked_at=%s,
+                          last_present_at=%s, first_missing_at=%s,
+                          consecutive_missing=%s, reason_code=%s,
+                          last_collection_run_id=%s,
+                          updated_at=transaction_timestamp()
+                    WHERE publication_id=%s""",
+                (
+                    status.value,
+                    outcome.value,
+                    probe.observed_at,
+                    last_present_at,
+                    first_missing_at,
+                    consecutive_missing,
+                    probe.reason_code,
+                    batch.context.run_id,
+                    probe.publication_id,
+                ),
+            )
+        meaningful_event = (
+            prior is None
+            or status != old_status
+            or outcome != previous_probe_outcome
+            or probe.reason_code != previous_reason
+            or (
+                outcome == DeletionProbeOutcome.MISSING
+                and consecutive_missing != previous_count
+            )
+        )
+        inserted = None
+        if meaningful_event:
+            inserted = connection.execute(
+                """INSERT INTO ingest.publication_availability_event(
+                       publication_id, collection_run_id, observed_at,
+                       old_status, new_status, probe_outcome, reason_code,
+                       consecutive_missing
+                   ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT (publication_id, collection_run_id, observed_at)
+                   DO NOTHING
+                   RETURNING publication_id""",
+                (
+                    probe.publication_id,
+                    batch.context.run_id,
+                    probe.observed_at,
+                    old_status.value if prior is not None else None,
+                    status.value,
+                    outcome.value,
+                    probe.reason_code,
+                    consecutive_missing,
+                ),
+            ).fetchone()
         if outcome == DeletionProbeOutcome.PRESENT:
             connection.execute(
                 """UPDATE ingest.publication
@@ -1175,14 +1279,14 @@ class PostgresCollectorRepository:
                     WHERE id=%s AND deleted_at IS NOT NULL""",
                 (probe.publication_id,),
             )
-        elif outcome == DeletionProbeOutcome.CONFIRMED_DELETED:
+        elif status == DeletionProbeOutcome.CONFIRMED_DELETED:
             connection.execute(
                 """UPDATE ingest.publication
                       SET deleted_at=%s
                     WHERE id=%s AND deleted_at IS NULL""",
                 (probe.observed_at, probe.publication_id),
             )
-        return True
+        return inserted is not None
 
     def _persist_lineage(
         self,
@@ -1194,8 +1298,6 @@ class PostgresCollectorRepository:
         fingerprint: str,
         evidence: Mapping[str, Any],
     ) -> None:
-        if not self.persist_raw_evidence:
-            return
         collected = utc(collected_at, "lineage.collected_at")
         connection.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",

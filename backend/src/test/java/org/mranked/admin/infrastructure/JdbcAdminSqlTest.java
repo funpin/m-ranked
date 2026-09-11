@@ -45,8 +45,9 @@ class JdbcAdminSqlTest {
         assertThat(JdbcAdminCommandRepository.INSERT_REVISION_SQL)
                 .contains("'configuration'")
                 .contains(":correlationId");
-        assertThat(JdbcAdminCommandRepository.REBUILD_PROJECTIONS_SQL)
-                .contains("analytics.rebuild_core_projections(:datasetRevision)");
+        assertThat(JdbcAdminCommandRepository.QUEUE_PROJECTION_SQL)
+                .contains("projection.rebuild.requested")
+                .doesNotContain("rebuild_core_projections(");
         assertThat(JdbcAdminCommandRepository.INSERT_OUTBOX_SQL)
                 .contains("platform_account.enabled_changed")
                 .contains("jsonb_build_object")

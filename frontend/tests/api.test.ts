@@ -137,7 +137,7 @@ test("comparison client sends the fixed-cohort contract without camel-case drift
     aggregation: "sum",
     horizonHours: "168",
     includePartial: "true",
-    institutionLimit: "50",
+    institutionLimit: "20",
     institutions: "34",
     metric: "shares",
     platform: "vk",
@@ -235,9 +235,9 @@ test("comparison client rejects invalid or excess relevant IDs without substitut
       includePartial: false,
       metric: "reactions",
       aggregation: "median",
-      channels: Array.from({ length: 2001 }, (_, index) => index + 1),
+      channels: Array.from({ length: 21 }, (_, index) => index + 1),
     }),
-    /between 1 and 2000/,
+    /between 1 and 20/,
   );
   assert.throws(
     () => client.comparison({
@@ -248,7 +248,7 @@ test("comparison client rejects invalid or excess relevant IDs without substitut
       aggregation: "median",
       channels: [],
     }),
-    /between 1 and 2000/,
+    /between 1 and 20/,
   );
   assert.equal(calls, 0);
 });

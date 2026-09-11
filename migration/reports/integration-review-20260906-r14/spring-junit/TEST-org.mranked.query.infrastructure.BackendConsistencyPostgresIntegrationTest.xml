@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest" time="12.338" tests="7" errors="0" skipped="0" failures="0" flakes="0">
+  <testcase name="concurrentPublicationSerializesWithComponentInsertion" classname="org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest" time="0.04" />
+  <testcase name="ratingContinuationMakesAll205EntitiesAvailableWithRawSelectRevoked" classname="org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest" time="2.849" />
+  <testcase name="rebuiltOverviewKeepsTenViewsCandidatesAndOneRoundedReactionCandidate" classname="org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest" time="3.255" />
+  <testcase name="formulaComponentsCheckBothParentsAndAuditIsImmutableAsAdmin" classname="org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest" time="0.064" />
+  <testcase name="aggregateMetadataDoesNotBorrowSampleSizeFromAnotherMetric" classname="org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest" time="0.043" />
+  <testcase name="auditRejectsOwnerUpdateDeleteAndTruncate" classname="org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest" time="0.019" />
+  <testcase name="repeatableReadPreservesOverviewInstitutionAndPublicationDuringCommittedRebuild" classname="org.mranked.query.infrastructure.BackendConsistencyPostgresIntegrationTest" time="6.062" />
+</testsuite>

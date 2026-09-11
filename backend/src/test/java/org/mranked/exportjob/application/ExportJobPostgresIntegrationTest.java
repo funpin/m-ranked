@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
-import org.flywaydb.core.Flyway;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
@@ -54,8 +54,7 @@ class ExportJobPostgresIntegrationTest {
         try (var control = DriverManager.getConnection(initial, owner, password)) {
             control.createStatement().execute("CREATE DATABASE " + name + " OWNER migration_owner");
             try {
-                Flyway.configure().dataSource(url, owner, password).initSql("SET ROLE migration_owner")
-                        .defaultSchema("flyway").locations("classpath:db/migration").cleanDisabled(true).load().migrate();
+                FinalSchemaInstaller.install(url, owner, password);
                 try (var seed = DriverManager.getConnection(url, owner, password); var statement = seed.createStatement()) {
                     statement.execute("""
                         INSERT INTO catalog.institution(id,canonical_name) VALUES ('00000000-0000-0000-0000-000000000017',repeat('I',200));

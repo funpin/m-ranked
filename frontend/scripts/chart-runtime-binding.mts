@@ -32,7 +32,7 @@ const client=createApiClient({baseUrl:runtime.apiBaseUrl,cacheEntries:0,timeoutM
 }});
 const scenarios:string[]=[];
 for(const platform of ["telegram","vk","rutube"] as const){
-  await collectPages((cursor)=>client.comparisonCandidates(platform,cursor),(page)=>page.nextCursor);
+  await collectPages((cursor)=>client.comparisonCandidates(platform,200,cursor),(page)=>page.nextCursor);
   await collectPages((selectionCursor)=>client.comparison({platform,horizonHours:72,includePartial:false,metric:"reactions",aggregation:"median",institutionLimit:50,selectionCursor}),(page)=>page.nextSelectionCursor);
   scenarios.push(`/compare?platform=${platform}`);
 }
@@ -42,7 +42,7 @@ for(const [institutions,horizonHours] of [[[1,2],72],[[1,3],168]] as const){
 }
 for(const type of ["posts","platform_posts"] as const){
   await client.publication(1,type);
-  const pages=await collectPages((cursor)=>client.publicationHistory(1,type,cursor),(page)=>page.nextCursor),first=pages[0]!,publication=first.publication;
+  const pages=await collectPages((cursor)=>client.publicationHistory(1,type,100,cursor),(page)=>page.nextCursor),first=pages[0]!,publication=first.publication;
   if(publication.accountLegacyId&&publication.accountLegacyType)await client.account(publication.accountLegacyId,publication.accountLegacyType);
   for(const id of [first.previousLegacyId,first.nextLegacyId])if(id)await client.publication(id,type);
   scenarios.push(type==="posts"?"/posts/1":"/platform-posts/1");

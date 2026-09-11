@@ -228,6 +228,8 @@ check_reverse_sync_rehearsal_gate() {
   local approval_ticket="$5"
   local operator="$6"
   local max_age_seconds="$7"
+  local final_schema_sha256="$8"
+  local transition_sha256="$9"
   if ! require_readable "$path" "reverse-sync rehearsal report"; then
     return
   fi
@@ -291,13 +293,13 @@ check_reverse_sync_rehearsal_gate() {
         and $final.projectionVerification.horizons == [24,48,72,168,336];
       type == "object"
       and keys == [
-        "accountIdentityTransitions", "changeTicket", "cutoverPhases", "database", "duplicates", "environment", "flyway",
+        "accountIdentityTransitions", "changeTicket", "cutoverPhases", "database", "duplicates", "environment",
         "forwardReconciliation", "generatedAt", "operator", "platforms",
         "preservation", "release", "replay", "reportType", "reportVersion",
-        "reverseSync", "sFinal", "secondSFinal", "sourceNamespace", "status"
+        "reverseSync", "sFinal", "schemaContract", "secondSFinal", "sourceNamespace", "status"
       ]
       and .reportType == "reverse-sync-rehearsal"
-      and .reportVersion == 4
+      and .reportVersion == 5
       and .status == "pass"
       and (.environment == "production-like" or ($protocolOnly == true and .environment == "disposable-postgresql-integration"))
       and (.generatedAt | type) == "string"
@@ -315,45 +317,12 @@ check_reverse_sync_rehearsal_gate() {
       and (.release.sha256SumsSha256 | sha256)
       and (.release.sha256SumsSha256 | type == "string" and length > 0)
       and ($protocolOnly == true or .release.sha256SumsSha256 == $manifestSha256)
-      and (.flyway | type == "object" and keys == [
-        "databaseMigrations", "fileSha256", "migrationCount", "schemaVersion"
-      ])
-      and .flyway.schemaVersion == 30
-      and .flyway.migrationCount == 30
-      and (.flyway.fileSha256 | type == "object" and keys == ["V10__consistent_public_queries_and_formula_guards.sql", "V11__bridge_identity_lineage_and_reconciliation.sql", "V12__detail_history_projection.sql", "V13__immutable_account_identity_history.sql", "V14__public_archived_publication_text.sql", "V15__verified_source_preservation.sql", "V16__audited_catalog_commands.sql", "V17__legacy_csv_compatibility_projection.sql", "V18__official_rating_commands.sql", "V19__safe_health_operational_snapshot.sql", "V1__target_baseline.sql", "V20__catalog_url_and_version_compatibility.sql", "V21__legacy_period_first_observation_policy.sql", "V22__durable_legacy_csv_archive_facts.sql", "V23__official_rating_entity_context.sql", "V24__ordered_history_reaction_details.sql", "V25__safe_legacy_account_presentation.sql", "V26__independent_projection_verifier_reads.sql", "V27__retained_disabled_platform_period_metrics.sql", "V28__identity_command_receipt_verifier_acl.sql", "V29__monotonic_native_identity_transitions.sql", "V2__rebuild_core_projections.sql", "V30__preserve_legacy_forced_history_baseline.sql", "V3__collector_observation_times_and_identity_grants.sql", "V4__admin_collection_run_status_grants.sql", "V5__legacy_activity_period_projection.sql", "V6__comparison_valid_observation_hourly_projection.sql", "V7__activity_rating_read_grants.sql", "V8__legacy_overview_projection.sql", "V9__immutable_observations_quality_archive_fence.sql"])
-      and .flyway.fileSha256 == {"V10__consistent_public_queries_and_formula_guards.sql": "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b", "V11__bridge_identity_lineage_and_reconciliation.sql": "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff", "V12__detail_history_projection.sql": "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100", "V13__immutable_account_identity_history.sql": "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0", "V14__public_archived_publication_text.sql": "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6", "V15__verified_source_preservation.sql": "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941", "V16__audited_catalog_commands.sql": "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad", "V17__legacy_csv_compatibility_projection.sql": "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83", "V18__official_rating_commands.sql": "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9", "V19__safe_health_operational_snapshot.sql": "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503", "V1__target_baseline.sql": "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1", "V20__catalog_url_and_version_compatibility.sql": "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2", "V21__legacy_period_first_observation_policy.sql": "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8", "V22__durable_legacy_csv_archive_facts.sql": "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f", "V23__official_rating_entity_context.sql": "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c", "V24__ordered_history_reaction_details.sql": "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db", "V25__safe_legacy_account_presentation.sql": "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1", "V26__independent_projection_verifier_reads.sql": "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8", "V27__retained_disabled_platform_period_metrics.sql": "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97", "V28__identity_command_receipt_verifier_acl.sql": "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020", "V29__monotonic_native_identity_transitions.sql": "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de", "V2__rebuild_core_projections.sql": "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd", "V30__preserve_legacy_forced_history_baseline.sql": "79b4fa544c534f5c6794f99addd33827452300c55435721658799c1a8ae9ce46", "V3__collector_observation_times_and_identity_grants.sql": "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1", "V4__admin_collection_run_status_grants.sql": "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82", "V5__legacy_activity_period_projection.sql": "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41", "V6__comparison_valid_observation_hourly_projection.sql": "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64", "V7__activity_rating_read_grants.sql": "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb", "V8__legacy_overview_projection.sql": "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c", "V9__immutable_observations_quality_archive_fence.sql": "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"}
-      and .flyway.databaseMigrations == [
-        {version:"1",script:"V1__target_baseline.sql",checksum:-1636077697,success:true},
-        {version:"2",script:"V2__rebuild_core_projections.sql",checksum:839607018,success:true},
-        {version:"3",script:"V3__collector_observation_times_and_identity_grants.sql",checksum:-1456658399,success:true},
-        {version:"4",script:"V4__admin_collection_run_status_grants.sql",checksum:1318350062,success:true},
-        {version:"5",script:"V5__legacy_activity_period_projection.sql",checksum:-1313754193,success:true},
-        {version:"6",script:"V6__comparison_valid_observation_hourly_projection.sql",checksum:-290358219,success:true},
-        {version:"7",script:"V7__activity_rating_read_grants.sql",checksum:-1228913579,success:true},
-        {version:"8",script:"V8__legacy_overview_projection.sql",checksum:-574188650,success:true},
-        {version:"9",script:"V9__immutable_observations_quality_archive_fence.sql",checksum:1058556652,success:true},
-        {version:"10",script:"V10__consistent_public_queries_and_formula_guards.sql",checksum:-1148603410,success:true},
-        {version:"11",script:"V11__bridge_identity_lineage_and_reconciliation.sql",checksum:1679789143,success:true},
-        {version:"12",script:"V12__detail_history_projection.sql",checksum:1453326243,success:true},
-        {version:"13",script:"V13__immutable_account_identity_history.sql",checksum:-185639607,success:true},
-        {version:"14",script:"V14__public_archived_publication_text.sql",checksum:-956321170,success:true},
-        {version:"15",script:"V15__verified_source_preservation.sql",checksum:-1953543117,success:true},
-        {version:"16",script:"V16__audited_catalog_commands.sql",checksum:-888916335,success:true},
-        {version:"17",script:"V17__legacy_csv_compatibility_projection.sql",checksum:2060863494,success:true},
-        {version:"18",script:"V18__official_rating_commands.sql",checksum:875583974,success:true},
-        {version:"19",script:"V19__safe_health_operational_snapshot.sql",checksum:-1653532549,success:true},
-        {version:"20",script:"V20__catalog_url_and_version_compatibility.sql",checksum:925593865,success:true},
-        {version:"21",script:"V21__legacy_period_first_observation_policy.sql",checksum:-900669350,success:true},
-        {version:"22",script:"V22__durable_legacy_csv_archive_facts.sql",checksum:2064364640,success:true},
-        {version:"23",script:"V23__official_rating_entity_context.sql",checksum:890722389,success:true},
-        {version:"24",script:"V24__ordered_history_reaction_details.sql",checksum:1889276383,success:true},
-        {version:"25",script:"V25__safe_legacy_account_presentation.sql",checksum:381330844,success:true},
-        {version:"26",script:"V26__independent_projection_verifier_reads.sql",checksum:-1482835665,success:true},
-        {version:"27",script:"V27__retained_disabled_platform_period_metrics.sql",checksum:-1466195806,success:true},
-        {version:"28",script:"V28__identity_command_receipt_verifier_acl.sql",checksum:1374125493,success:true},
-        {version:"29",script:"V29__monotonic_native_identity_transitions.sql",checksum:-1547328464,success:true},
-        {version:"30",script:"V30__preserve_legacy_forced_history_baseline.sql",checksum:178291902,success:true}
-      ]
+      and (.schemaContract | type == "object" and keys == ["finalSchemaSha256", "id", "productionTransitionSha256"])
+      and .schemaContract.id == "storage-publisher-final-2026-09-08-r2"
+      and (.schemaContract.finalSchemaSha256 | sha256)
+      and (.schemaContract.productionTransitionSha256 | sha256)
+      and ($protocolOnly == true or .schemaContract.finalSchemaSha256 == $finalSchemaSha256)
+      and ($protocolOnly == true or .schemaContract.productionTransitionSha256 == $transitionSha256)
       and (.platforms | type) == "array"
       and (.platforms | length) == 4
       and all(.platforms[]; type == "string")
@@ -449,10 +418,12 @@ check_reverse_sync_rehearsal_gate() {
       --arg sourceNamespace "$source_namespace" \
       --arg approvalTicket "$approval_ticket" \
       --arg operator "$operator" \
+      --arg finalSchemaSha256 "$final_schema_sha256" \
+      --arg transitionSha256 "$transition_sha256" \
       "$contract_filter" "$path" >/dev/null; then
-    pass "reverse-sync rehearsal v4 is fresh and bound to release, namespace and approval"
+    pass "reverse-sync rehearsal v5 is fresh and bound to release, namespace and approval"
   else
-    fail "reverse-sync rehearsal v4 evidence is incomplete, malformed or unbound"
+    fail "reverse-sync rehearsal v5 evidence is incomplete, malformed or unbound"
   fi
 }
 check_collector_parity_gate() {
@@ -865,42 +836,14 @@ check_active_release_gate() {
       and .releaseId == $releaseId
       and .releaseManifestSha256 == $manifestSha256
       and (.releaseManifestSha256 | test("^[0-9a-f]{64}$"))
-      and .flyway.validated == true
-      and .flyway.schemaVersion == "30"
-      and .flyway.migrationCount == 30
-      and .flyway.v1Sha256 == "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1"
-      and .flyway.v2Sha256 == "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd"
-      and .flyway.v3Sha256 == "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1"
-      and .flyway.v4Sha256 == "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82"
-      and .flyway.v5Sha256 == "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41"
-      and .flyway.v6Sha256 == "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64"
-      and .flyway.v7Sha256 == "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb"
-      and .flyway.v8Sha256 == "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c"
-      and .flyway.v9Sha256 == "2e165a561c9f839ec36af5bcc4c88b967778a9f11fb69e28dc71bbe5e053db50"
-      and .flyway.v10Sha256 == "126bc5263ecc56eb6a09342bc92f62bf74ef32d1bf1ca285e54454d7e9cf3b0b"
-      and .flyway.v11Sha256 == "1e804126491b16f77be5af6db60ac45947d7ba782f5829de39f42d62f5240cff"
-      and .flyway.v12Sha256 == "60dc3c9fd9d4997959f5b168e12f63a9553b93146023e826a0b57b607a43b100"
-      and .flyway.v13Sha256 == "ab306bda84d76d4239e67d33232247c1d318d306ebd183962eda5d2b2a4b2cd0"
-      and .flyway.v14Sha256 == "261c257e7816c93ea84cb7d1318b711cbb0e6c518b30df57877cef92afb5f9e6"
-      and .flyway.v15Sha256 == "07891ccbeb0cfcf881b090f91c6efd2da5c0fc9fd45b49e4dc1bd9a90e15d941"
-      and .flyway.v16Sha256 == "a350e3564567c4fd9e99ff69f0b541cc5de2d8c661dbb505c9efe4abfc2b35ad"
-      and .flyway.v17Sha256 == "44696090aabda6ba3c971aa27b933b7f31a4d9392d2266d8294e158015a52b83"
-      and .flyway.v18Sha256 == "481fde448839a5a164cf7aea16d9c109126f0005fb227d97ab8e2b521b4e60c9"
-      and .flyway.v19Sha256 == "85cb7579c6c1c91f47a250014f4d522a4a2e9a3d785afbe490516d5b5f86a503"
-      and .flyway.v20Sha256 == "e8e96cf550e31311a0d0b96a915c09bf4f93cec69ff3cce84b932dbd29cb4aa2"
-      and .flyway.v21Sha256 == "6270ec9827ec901728b309eb537f06ab4f2487d541bd4b8e32f92c26cc840ba8"
-      and .flyway.v22Sha256 == "a645b247e1fd6055e17e05636f7f0ec05ed240ac95106178fc7fdfe9d5c0921f"
-      and .flyway.v23Sha256 == "dcea6278b2c218803984d27e4828fcb8f7d42af34cf357e619b7ae93768b652c"
-      and .flyway.v24Sha256 == "0f0886c8804b7bc4329c7f7461322ad9eb62924412cac02b24caca06942863db"
-      and .flyway.v25Sha256 == "c6497ad2f0bd4ceeb39efff48ad62cbbf625d64969cd68b15dd36e30031d7fa1"
-      and .flyway.v26Sha256 == "1ff9ed8a785641972a290b7f9fcc48dff6e1130fdf7e83d0adf9e572b9b96ea8"
-      and .flyway.v27Sha256 == "95736d8f4d4f7be9c5904f7118b85532e508f93b6fc94130e5395fb31e92ed97"
-      and .flyway.v28Sha256 == "215a382daced28ca93dd6580f68c768ee050964fc57ab9591d76b63da5c83020"
-      and .flyway.v29Sha256 == "b608a4ccfa204348033203bdd9b6dd3eea2b0d79ff72f2af8fbb776687b095de"
-      and .flyway.v30Sha256 == "79b4fa544c534f5c6794f99addd33827452300c55435721658799c1a8ae9ce46"
-      and .projectionPublisherActive == true
+      and (.schemaContract | type == "object")
+      and .schemaContract.id == "storage-publisher-final-2026-09-08-r2"
+      and (.schemaContract.finalSchemaSha256 | test("^[0-9a-f]{64}$"))
+      and (.schemaContract.productionTransitionSha256 | test("^[0-9a-f]{64}$"))
+      and .schemaContract.validatedByServiceReadiness == true
+      and .projectionPublisherStarted == false
     ' "$report_path" >/dev/null; then
-    fail "shadow deployment, active release or Flyway checksum evidence is invalid"
+    fail "shadow deployment, active release or final schema evidence is invalid"
   fi
 
   if [[ "$(readlink -- "$current_link" 2>/dev/null || true)" \
@@ -928,7 +871,7 @@ check_active_release_gate() {
     deploy_release_id="$release_id"
     deploy_manifest_sha256="$manifest_sha256"
     deploy_release_path="$current_release_path"
-    pass "shadow deployment is bound to the active immutable release and frozen V1-V30"
+    pass "shadow deployment is bound to the active immutable release and final schema contract"
     return 0
   fi
   return 1
@@ -1032,52 +975,19 @@ if require_readable "$RESTORE_VERIFICATION_REPORT" "restore verification report"
       and .checks.databaseAssertions == true
       and .checks.pgAmcheck == true
       and (.database.datasetRevision | type == "number" and . > 0 and . == floor)
-      and .database.coreReadyProjections == 9
+      and .database.coreReadyProjections == 7
       and ([.database.projectionStates[].name] | sort) == [
           "comparison", "institution_daily_metrics", "institution_monthly_metrics",
-          "institution_period_metrics", "legacy_exports", "publication_content",
-          "publication_history", "publication_hourly", "publication_latest"
+          "institution_period_metrics", "publication_history", "publication_hourly",
+          "publication_latest"
       ]
       and (.database.datasetRevision as $revision
           | all(.database.projectionStates[];
               .status == "ready" and .datasetRevision == $revision))
-      and .database.flywaySchemaVersion == 30
-      and .database.flywayMigrationCount == 30
-      and .database.flywayMigrations == [
-          {version:"1",script:"V1__target_baseline.sql",checksum:-1636077697},
-          {version:"2",script:"V2__rebuild_core_projections.sql",checksum:839607018},
-          {version:"3",script:"V3__collector_observation_times_and_identity_grants.sql",checksum:-1456658399},
-          {version:"4",script:"V4__admin_collection_run_status_grants.sql",checksum:1318350062},
-          {version:"5",script:"V5__legacy_activity_period_projection.sql",checksum:-1313754193},
-          {version:"6",script:"V6__comparison_valid_observation_hourly_projection.sql",checksum:-290358219},
-          {version:"7",script:"V7__activity_rating_read_grants.sql",checksum:-1228913579},
-          {version:"8",script:"V8__legacy_overview_projection.sql",checksum:-574188650},
-          {version:"9",script:"V9__immutable_observations_quality_archive_fence.sql",checksum:1058556652},
-          {version:"10",script:"V10__consistent_public_queries_and_formula_guards.sql",checksum:-1148603410},
-          {version:"11",script:"V11__bridge_identity_lineage_and_reconciliation.sql",checksum:1679789143},
-          {version:"12",script:"V12__detail_history_projection.sql",checksum:1453326243},
-          {version:"13",script:"V13__immutable_account_identity_history.sql",checksum:-185639607},
-          {version:"14",script:"V14__public_archived_publication_text.sql",checksum:-956321170},
-          {version:"15",script:"V15__verified_source_preservation.sql",checksum:-1953543117},
-          {version:"16",script:"V16__audited_catalog_commands.sql",checksum:-888916335},
-          {version:"17",script:"V17__legacy_csv_compatibility_projection.sql",checksum:2060863494},
-          {version:"18",script:"V18__official_rating_commands.sql",checksum:875583974},
-          {version:"19",script:"V19__safe_health_operational_snapshot.sql",checksum:-1653532549},
-          {version:"20",script:"V20__catalog_url_and_version_compatibility.sql",checksum:925593865},
-          {version:"21",script:"V21__legacy_period_first_observation_policy.sql",checksum:-900669350},
-          {version:"22",script:"V22__durable_legacy_csv_archive_facts.sql",checksum:2064364640},
-          {version:"23",script:"V23__official_rating_entity_context.sql",checksum:890722389},
-          {version:"24",script:"V24__ordered_history_reaction_details.sql",checksum:1889276383},
-          {version:"25",script:"V25__safe_legacy_account_presentation.sql",checksum:381330844},
-          {version:"26",script:"V26__independent_projection_verifier_reads.sql",checksum:-1482835665},
-          {version:"27",script:"V27__retained_disabled_platform_period_metrics.sql",checksum:-1466195806},
-          {version:"28",script:"V28__identity_command_receipt_verifier_acl.sql",checksum:1374125493},
-          {version:"29",script:"V29__monotonic_native_identity_transitions.sql",checksum:-1547328464},
-          {version:"30",script:"V30__preserve_legacy_forced_history_baseline.sql",checksum:178291902}
-      ]
+      and .database.schemaContract == "storage-publisher-final-2026-09-08-r2"
   ' \
       "$RESTORE_VERIFICATION_REPORT" >/dev/null; then
-    pass "latest backup has a successful V1-V30 restore verification"
+    pass "latest backup matches the final schema contract"
   else
     fail "latest backup restore verification is incomplete or failed"
   fi
@@ -1094,35 +1004,31 @@ if require_readable "$TARGET_PGPASSFILE" "target read pgpass"; then
     PGPASSFILE="$TARGET_PGPASSFILE" psql "$TARGET_DATABASE_URL" \
       --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align \
       --field-separator='|' <<'SQL'
-WITH latest AS (
-    SELECT max(id) AS id FROM analytics.dataset_revision
-), core(name) AS (VALUES
+WITH core(name) AS (VALUES
     ('publication_latest'), ('publication_hourly'),
     ('institution_daily_metrics'), ('institution_monthly_metrics'),
-    ('institution_period_metrics'), ('comparison'),
-    ('publication_history'), ('publication_content'), ('legacy_exports')
+    ('institution_period_metrics'), ('comparison'), ('publication_history')
+), published AS (
+    SELECT revision.id
+      FROM analytics.dataset_revision AS revision
+     CROSS JOIN core
+      LEFT JOIN analytics.projection_state AS state
+        ON state.projection_name = core.name
+       AND state.dataset_revision_id = revision.id
+       AND state.status = 'ready'
+     GROUP BY revision.id
+    HAVING count(state.projection_name) = 7
+     ORDER BY revision.id DESC
+     LIMIT 1
 )
-SELECT latest.id,
-       count(*) FILTER (
-           WHERE state.status = 'ready'
-             AND state.dataset_revision_id = latest.id
-       ),
-       count(*) FILTER (
-           WHERE state.status IS DISTINCT FROM 'ready'
-              OR state.dataset_revision_id IS DISTINCT FROM latest.id
-       ),
-       (SELECT count(*) FROM analytics.projection_state)
-  FROM latest
- CROSS JOIN core
-  LEFT JOIN analytics.projection_state AS state
-    ON state.projection_name = core.name
- GROUP BY latest.id;
+SELECT published.id, 7, 0, 7
+  FROM published;
 SQL
   )" || projection_state=""
   IFS='|' read -r revision ready_count stale_count state_count extra <<<"$projection_state"
-  if [[ "$revision" =~ ^[1-9][0-9]*$ && "$ready_count" == 9 \
-        && "$stale_count" == 0 && "$state_count" == 9 && -z "${extra:-}" ]]; then
-    pass "all nine projections are ready at dataset revision $revision"
+  if [[ "$revision" =~ ^[1-9][0-9]*$ && "$ready_count" == 7 \
+        && "$stale_count" == 0 && "$state_count" == 7 && -z "${extra:-}" ]]; then
+    pass "seven serving projections are ready at published revision $revision"
   else
     fail "projection state set is unexpected, missing, stale or rebuilding"
   fi
@@ -1202,11 +1108,6 @@ if [[ "$mode" == writer-cutover ]]; then
   reject_placeholder_value MIGRATION_SOURCE_NAMESPACE || true
   reject_placeholder_value REVERSE_SYNC_APPROVAL_TICKET || true
   reject_placeholder_value COLLECTOR_PARITY_APPROVAL_TICKET || true
-  if systemctl is-active --quiet m-ranked-target-projection-publisher.service; then
-    pass "continuous projection publisher is active"
-  else
-    fail "continuous projection publisher is not active"
-  fi
   if [[ -n "${COLLECTOR_PARITY_REPORT:-}" \
         && -n "${COLLECTOR_PARITY_EVIDENCE_ROOT:-}" \
         && -n "${COLLECTOR_PARITY_APPROVAL_TICKET:-}" ]]; then
@@ -1246,7 +1147,9 @@ if [[ "$mode" == writer-cutover ]]; then
       "${MIGRATION_SOURCE_NAMESPACE:-}" \
       "${REVERSE_SYNC_APPROVAL_TICKET:-}" \
       "$OPERATOR_ID" \
-      "$REVERSE_SYNC_REHEARSAL_MAX_AGE_SECONDS"
+      "$REVERSE_SYNC_REHEARSAL_MAX_AGE_SECONDS" \
+      "$(jq -er '.schemaContract.finalSchemaSha256' "$DEPLOY_REPORT")" \
+      "$(jq -er '.schemaContract.productionTransitionSha256' "$DEPLOY_REPORT")"
   fi
   if (( ROLLBACK_WINDOW_HOURS < 24 )); then
     fail "rollback window must be at least 24 hours"

@@ -1660,7 +1660,7 @@ paths:
           type: integer
           default: 200
           minimum: 1
-          maximum: 2000
+          maximum: 3000
       - name: cursor
         in: query
         schema:

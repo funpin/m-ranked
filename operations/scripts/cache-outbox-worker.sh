@@ -22,8 +22,9 @@ REDIS_REVISION_CHANNEL="${REDIS_REVISION_CHANNEL:-mranked:revision.changed}"
 OUTBOX_POLL_SECONDS="${OUTBOX_POLL_SECONDS:-2}"
 OUTBOX_CLAIM_SECONDS="${OUTBOX_CLAIM_SECONDS:-30}"
 OUTBOX_MAX_BACKOFF_SECONDS="${OUTBOX_MAX_BACKOFF_SECONDS:-900}"
+OUTBOX_MAX_ATTEMPTS="${OUTBOX_MAX_ATTEMPTS:-12}"
 
-for value_name in OUTBOX_POLL_SECONDS OUTBOX_CLAIM_SECONDS OUTBOX_MAX_BACKOFF_SECONDS; do
+for value_name in OUTBOX_POLL_SECONDS OUTBOX_CLAIM_SECONDS OUTBOX_MAX_BACKOFF_SECONDS OUTBOX_MAX_ATTEMPTS; do
   value="${!value_name}"
   if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
     echo "$value_name must be a positive integer" >&2
@@ -43,6 +44,16 @@ if [[ ! -r "$PGPASSFILE" || ! -r "$REDIS_PASSWORD_FILE" ]]; then
   exit 77
 fi
 
+schema_contract="$(
+  psql "$OUTBOX_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+    --quiet --tuples-only --no-align \
+    --command 'SELECT contract_id FROM ops_and_admin.schema_contract'
+)"
+if [[ "$schema_contract" != storage-publisher-final-2026-09-08-r2 ]]; then
+  echo "database schema contract mismatch" >&2
+  exit 65
+fi
+
 redis_password="$(<"$REDIS_PASSWORD_FILE")"
 if [[ -z "$redis_password" ]]; then
   echo "Redis credential is empty" >&2
@@ -60,8 +71,10 @@ WITH candidate AS (
     SELECT id
       FROM ops_and_admin.outbox_event
      WHERE published_at IS NULL
+       AND terminal_at IS NULL
        AND available_at <= transaction_timestamp()
        AND event_type <> 'projection.rebuild.requested'
+       AND event_type <> 'projection.published'
      ORDER BY available_at, id
      FOR UPDATE SKIP LOCKED
      LIMIT 1
@@ -121,9 +134,24 @@ mark_failure() {
   local event_id="$1"
   psql "$OUTBOX_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
     --set event_id="$event_id" --set max_backoff="$OUTBOX_MAX_BACKOFF_SECONDS" \
+    --set max_attempts="$OUTBOX_MAX_ATTEMPTS" \
     --quiet <<'SQL'
 UPDATE ops_and_admin.outbox_event
-   SET last_error_code = 'redis_unavailable',
+   SET last_error_code = CASE
+           WHEN publish_attempts >= CAST(:'max_attempts' AS integer)
+           THEN 'redis_delivery_exhausted'
+           ELSE 'redis_unavailable'
+       END,
+       terminal_at = CASE
+           WHEN publish_attempts >= CAST(:'max_attempts' AS integer)
+           THEN transaction_timestamp()
+           ELSE NULL
+       END,
+       terminal_reason = CASE
+           WHEN publish_attempts >= CAST(:'max_attempts' AS integer)
+           THEN 'redis_delivery_exhausted'
+           ELSE NULL
+       END,
        available_at = transaction_timestamp() + make_interval(
            secs => least(
                CAST(:'max_backoff' AS integer),
@@ -143,13 +171,13 @@ publish_event() {
 
   # Never let a delayed event move the shared revision backwards.
   REDISCLI_AUTH="$redis_password" redis-cli \
-    -h "$REDIS_HOST" -p "$REDIS_PORT" --no-auth-warning \
+    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning \
     EVAL \
     "local c=tonumber(redis.call('GET',KEYS[1])); if c==nil then c=-1 end; local n=tonumber(ARGV[1]); if n>c then redis.call('SET',KEYS[1],ARGV[1]); end; return n" \
     1 "$REDIS_REVISION_KEY" "$revision" >/dev/null
 
   printf '%s' "$payload" | REDISCLI_AUTH="$redis_password" redis-cli \
-    -h "$REDIS_HOST" -p "$REDIS_PORT" --no-auth-warning \
+    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning \
     -x PUBLISH "$REDIS_REVISION_CHANNEL" >/dev/null
 }
 
@@ -172,10 +200,7 @@ while [[ "$stopping" == false ]]; do
     exit 70
   fi
 
-  if [[ "$event_type" == projection.published ]]; then
-    mark_success "$event_id"
-    echo "recorded projection publication event id=$event_id revision=$revision"
-  elif publish_event "$revision" "$encoded_payload"; then
+  if publish_event "$revision" "$encoded_payload"; then
     mark_success "$event_id"
     echo "published cache revision event id=$event_id revision=$revision"
   else

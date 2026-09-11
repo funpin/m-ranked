@@ -58,7 +58,7 @@ analytics, administration и SQL сосредоточены в крупных ф
 Java-модули следуют ports-and-adapters: domain не зависит от Spring, SQL, Redis
 или HTTP. Python collectors отделяют platform gateway от canonical pipeline.
 
-Flyway является единственным владельцем DDL. Коллекторы получают минимальные
+Единая декларативная схема является владельцем DDL. Коллекторы получают минимальные
 права только на ingestion-owned tables/functions. Redis Pub/Sub используется
 для ускорения cache invalidation, но корректность обеспечивается сохраненной в
 PostgreSQL dataset revision; событие можно потерять без потери данных.
@@ -125,4 +125,3 @@ PostgreSQL dataset revision; событие можно потерять без �
 - требования безопасности или регулирования требуют отдельной data boundary;
 - общий PostgreSQL исчерпал измеренный capacity после оптимизации/реплики;
 - failure одного модуля нельзя изолировать process boundary и resource limits.
-

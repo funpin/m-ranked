@@ -7,7 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,7 +27,7 @@ import org.springframework.transaction.interceptor.TransactionInterceptor;
 @EnabledIfEnvironmentVariable(named="MRANKED_EXPORT_TEST_ADMIN_URL",matches=".+")
 class LegacyCsvArchivePostgresIntegrationTest {
     @TempDir Path output;
-    @ParameterizedTest @ValueSource(strings={"source","native","old_cold"})
+    @ParameterizedTest @ValueSource(strings={"source","native"})
     void wholeHistoryCsvSurvivesActualPartitionRemoval(String mode) throws Exception {
         String initial=System.getenv("MRANKED_EXPORT_TEST_ADMIN_URL");URI uri=URI.create(initial.substring(5));
         assertThat(uri.getHost()).isIn("127.0.0.1","localhost","[::1]");assertThat(uri.getPath()).endsWith("_it");
@@ -38,9 +38,7 @@ class LegacyCsvArchivePostgresIntegrationTest {
         try(var control=DriverManager.getConnection(initial,owner,password)) {
             control.createStatement().execute("CREATE DATABASE "+name+" OWNER migration_owner");
             try {
-                var config=Flyway.configure().dataSource(url,owner,password).initSql("SET ROLE migration_owner")
-                    .defaultSchema("flyway").locations("filesystem:"+root.resolve("backend/src/main/resources/db/migration")).cleanDisabled(true);
-                if(mode.equals("old_cold"))config.target("21");config.load().migrate();
+                FinalSchemaInstaller.install(url, owner, password);
                 var process=new ProcessBuilder(org.mranked.testing.IntegrationRuntime.python(root),"-m","migration.integration.legacy_csv_fixture",
                     "--output",output.toString()).directory(root.toFile()).redirectErrorStream(true).redirectOutput(output.resolve("producer.log").toFile());
                 process.environment().put("MRANKED_LEGACY_CSV_OLD_FIXTURE","1");
@@ -51,18 +49,6 @@ class LegacyCsvArchivePostgresIntegrationTest {
                 String manifest=mode.equals("native")?"native-manifest.json":"manifest.json";
                 verifyBytes(source,manifest);
                 process.command().set(2,"migration.integration.legacy_csv_archive_fixture");run(process);
-                if(mode.equals("old_cold")) {
-                    Flyway.configure().dataSource(url,owner,password).initSql("SET ROLE migration_owner")
-                        .defaultSchema("flyway").locations("filesystem:"+root.resolve("backend/src/main/resources/db/migration"))
-                        .cleanDisabled(true).load().migrate();
-                    var blocked=new LegacyCsvService(new JdbcLegacyCsvRows(source),new JdbcDatasetRevisionProvider(JdbcClient.create(source)));
-                    try {
-                        var response=MockMvcBuilders.standaloneSetup(new LegacyCsvController(proxy(blocked,source))).build()
-                            .perform(get("/api/v1/legacy-exports/snapshots.csv")).andReturn().getResponse();
-                        assertThat(response.getStatus()).isEqualTo(409);assertThat(response.getContentAsString()).contains("COLD_ARCHIVE_RESTORE_REQUIRED");
-                    } finally {blocked.close();}
-                    process.command().add("--restore");run(process);
-                }
                 verifyBytes(source,manifest);
                 assertThat(JdbcClient.create(source).sql("SELECT has_table_privilege(current_user,'analytics.legacy_csv_snapshot_fact','SELECT')").query(Boolean.class).single()).isFalse();
                 var proof=new tools.jackson.databind.json.JsonMapper().readTree(Files.readString(output.resolve("archive-fixture.json")));
@@ -70,7 +56,6 @@ class LegacyCsvArchivePostgresIntegrationTest {
                 Path evidence=Path.of(System.getProperty("mranked.build.directory","target"),"legacy-csv-archive-"+mode+".json");
                 var report=new java.util.LinkedHashMap<String,Object>();report.put("status","pass");report.put("mode",mode);report.put("archive",proof);
                 report.put("byteCases",mode.equals("native")?10:14);report.put("readerFactsSelect",false);
-                if(mode.equals("old_cold"))report.put("restore",new tools.jackson.databind.json.JsonMapper().readTree(Files.readString(output.resolve("archive-restore.json"))));
                 Files.writeString(evidence,new tools.jackson.databind.json.JsonMapper().writeValueAsString(report));
             } finally {control.createStatement().execute("DROP DATABASE "+name+" WITH (FORCE)");}
         }

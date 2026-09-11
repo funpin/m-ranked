@@ -1,0 +1,14 @@
+- link "Перейти к содержимому":
+  - /url: "#main-content"
+- navigation "Основная навигация":
+  - link "m-ranked — обзор":
+    - /url: /?platform=telegram
+  - button "Включить светлую тему"
+  - button "Открыть меню"
+- main:
+  - text: "404"
+  - heading "Данные не найдены" [level=1]
+  - paragraph: Объект отсутствует в текущей ревизии данных или его legacy-ID больше не сопоставлен.
+  - link "Вернуться к обзору":
+    - /url: /
+- alert

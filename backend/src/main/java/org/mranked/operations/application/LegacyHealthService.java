@@ -65,10 +65,14 @@ public final class LegacyHealthService {
         }
         long raw=((Number)snapshot.get("rawRevision")).longValue();
         long published=((Number)snapshot.get("publishedRevision")).longValue();
-        healthy=healthy && raw>0 && raw==published;
+        healthy=healthy && published>0;
         return nullableMap("status",healthy?"UP":"DOWN","asOf",snapshot.get("asOf"),
-                "datasetRevision",published,"revisionLag",Math.max(0,raw-published),
-                "freshnessThresholdSeconds",freshnessSeconds,"platforms",platforms);
+                "datasetRevision",published,"rawRevision",raw,
+                "publishedRevision",published,
+                "revisionLag",Math.max(0,raw-published),
+                "publishedGenerationAgeSeconds",snapshot.get("publishedGenerationAgeSeconds"),
+                "freshnessThresholdSeconds",freshnessSeconds,"platforms",platforms,
+                "outbox",snapshot.get("outbox"),"storage",snapshot.get("storage"));
     }
 
     private Map<String,Map<String,Object>> cycles(Map<String,Object> snapshot,Map<String,Object> checkpoints) {

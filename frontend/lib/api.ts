@@ -96,17 +96,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
     account(legacyId: number | string, legacyType?: LegacyAccountType) {
       return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
     },
-    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, cursor?: string) {
-      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: 200, cursor } } }).then(unwrap);
+    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, limit = 100, cursor?: string) {
+      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
-    institutionAccounts(legacyId: number, platform: Platform, cursor?: string) {
-      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: 200, cursor } } }).then(unwrap);
+    institutionAccounts(legacyId: number, platform: Platform, limit = 100, cursor?: string) {
+      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
-    publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, cursor?: string) {
-      return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: 2000, cursor } } }).then(unwrap);
+    publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, limit = 100, cursor?: string) {
+      return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(3000, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
-    comparisonCandidates(platform: Exclude<Platform, "all">, cursor?: string) {
-      return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: 200, cursor } } }).then(unwrap);
+    comparisonCandidates(platform: Exclude<Platform, "all">, limit = 200, cursor?: string) {
+      return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
     comparison(input: ComparisonRequest) {
       const channels = input.platform === "telegram" ? normalizeComparisonIds("channels", input.channels) : undefined;

@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: org.mranked.query.infrastructure.LegacyPeriodOraclePostgresIntegrationTest
+-------------------------------------------------------------------------------
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 8.991 s -- in org.mranked.query.infrastructure.LegacyPeriodOraclePostgresIntegrationTest

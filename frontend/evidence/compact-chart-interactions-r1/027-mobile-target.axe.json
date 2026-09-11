@@ -1,0 +1,159 @@
+[
+  {
+    "id": "color-contrast",
+    "impact": "serious",
+    "tags": [
+      "cat.color",
+      "wcag2aa",
+      "wcag143",
+      "TTv5",
+      "TT13.c",
+      "EN-301-549",
+      "EN-9.1.4.3",
+      "ACT",
+      "RGAAv4",
+      "RGAA-3.2.1"
+    ],
+    "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=playwright",
+    "nodes": [
+      {
+        "any": [
+          {
+            "id": "color-contrast",
+            "data": {
+              "fgColor": "#98a2b3",
+              "bgColor": "#f6f8fb",
+              "contrastRatio": 2.42,
+              "fontSize": "10.5pt (14px)",
+              "fontWeight": "bold",
+              "messageKey": null,
+              "expectedContrastRatio": "4.5:1"
+            },
+            "relatedNodes": [
+              {
+                "html": "<span class=\"post-nav-link disabled\"><span>← Назад</span><small>Нет более раннего</small></span>",
+                "target": [
+                  ".post-nav-link.disabled:nth-child(1)"
+                ]
+              }
+            ],
+            "impact": "serious",
+            "message": "Element has insufficient color contrast of 2.42 (foreground color: #98a2b3, background color: #f6f8fb, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<span>← Назад</span>",
+        "target": [
+          ".post-nav-link.disabled:nth-child(1) > span"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 2.42 (foreground color: #98a2b3, background color: #f6f8fb, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+      },
+      {
+        "any": [
+          {
+            "id": "color-contrast",
+            "data": {
+              "fgColor": "#98a2b3",
+              "bgColor": "#f6f8fb",
+              "contrastRatio": 2.42,
+              "fontSize": "10.5pt (14px)",
+              "fontWeight": "bold",
+              "messageKey": null,
+              "expectedContrastRatio": "4.5:1"
+            },
+            "relatedNodes": [
+              {
+                "html": "<span class=\"post-nav-link next disabled\"><span>Вперёд →</span><small>Нет более нового</small></span>",
+                "target": [
+                  ".next"
+                ]
+              }
+            ],
+            "impact": "serious",
+            "message": "Element has insufficient color contrast of 2.42 (foreground color: #98a2b3, background color: #f6f8fb, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<span>Вперёд →</span>",
+        "target": [
+          ".next > span"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 2.42 (foreground color: #98a2b3, background color: #f6f8fb, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+      },
+      {
+        "any": [
+          {
+            "id": "color-contrast",
+            "data": {
+              "fgColor": "#667085",
+              "bgColor": "#e8edf5",
+              "contrastRatio": 4.23,
+              "fontSize": "8.3pt (11px)",
+              "fontWeight": "bold",
+              "messageKey": null,
+              "expectedContrastRatio": "4.5:1"
+            },
+            "relatedNodes": [
+              {
+                "html": "<div><button class=\"scale-mode-button active\" aria-pressed=\"true\" type=\"button\">1:1</button><button class=\"scale-mode-button\" aria-pressed=\"false\" type=\"button\">Авто</button></div>",
+                "target": [
+                  "div[aria-label=\"Режим масштаба\"] > div"
+                ]
+              }
+            ],
+            "impact": "serious",
+            "message": "Element has insufficient color contrast of 4.23 (foreground color: #667085, background color: #e8edf5, font size: 8.3pt (11px), font weight: bold). Expected contrast ratio of 4.5:1"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<button class=\"scale-mode-button\" aria-pressed=\"false\" type=\"button\">Авто</button>",
+        "target": [
+          "div[aria-label=\"Режим масштаба\"] > div > .scale-mode-button[type=\"button\"]:nth-child(2)"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.23 (foreground color: #667085, background color: #e8edf5, font size: 8.3pt (11px), font weight: bold). Expected contrast ratio of 4.5:1"
+      },
+      {
+        "any": [
+          {
+            "id": "color-contrast",
+            "data": {
+              "fgColor": "#667085",
+              "bgColor": "#e8edf5",
+              "contrastRatio": 4.23,
+              "fontSize": "8.3pt (11px)",
+              "fontWeight": "bold",
+              "messageKey": null,
+              "expectedContrastRatio": "4.5:1"
+            },
+            "relatedNodes": [
+              {
+                "html": "<div><button class=\"scale-mode-button active\" aria-pressed=\"true\" type=\"button\">1:1</button><button class=\"scale-mode-button\" aria-pressed=\"false\" type=\"button\">Авто</button></div>",
+                "target": [
+                  "div[aria-label=\"Режим масштаба прироста\"] > div"
+                ]
+              }
+            ],
+            "impact": "serious",
+            "message": "Element has insufficient color contrast of 4.23 (foreground color: #667085, background color: #e8edf5, font size: 8.3pt (11px), font weight: bold). Expected contrast ratio of 4.5:1"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<button class=\"scale-mode-button\" aria-pressed=\"false\" type=\"button\">Авто</button>",
+        "target": [
+          "div[aria-label=\"Режим масштаба прироста\"] > div > .scale-mode-button[type=\"button\"]:nth-child(2)"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.23 (foreground color: #667085, background color: #e8edf5, font size: 8.3pt (11px), font weight: bold). Expected contrast ratio of 4.5:1"
+      }
+    ]
+  }
+]

@@ -18,8 +18,8 @@ test("oversized q validates before trim and uses unicode codepoint length", () =
 });
 
 test("history_limit rejects invalid syntax and bounds rather than substituting defaults", () => {
-  for (const value of ["bad", "1e2", "0x64", "49", "1001", ""]) assert.equal(legacyQueryErrors(new URL(`https://test/posts/1?history_limit=${value}`)).length, 1, value);
-  for (const value of ["50", "100.0", "1000"]) assert.equal(legacyQueryErrors(new URL(`https://test/posts/1?history_limit=${value}`)).length, 0, value);
+  for (const value of ["bad", "1e2", "0x64", "49", "3001", ""]) assert.equal(legacyQueryErrors(new URL(`https://test/posts/1?history_limit=${value}`)).length, 1, value);
+  for (const value of ["50", "100.0", "1000", "3000"]) assert.equal(legacyQueryErrors(new URL(`https://test/posts/1?history_limit=${value}`)).length, 0, value);
 });
 
 test("metadata uses the production origin and rejects ambiguous deployment configuration", () => {

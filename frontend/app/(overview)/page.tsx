@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LegacyFilterForm } from "@/components/legacy-filter-form";
-import Link from "next/link";
+import Link from "@/components/native-link";
 import { OverviewCard } from "@/components/overview-card";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -124,7 +124,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
 
       {page.nextCursor ? (
         <nav className="pagination" aria-label="Пагинация">
-          <Link className="button-link secondary-button" href={queryHref("/", {
+          <Link className="button-link secondary-button" prefetch={false} href={queryHref("/", {
             platform, period, q, sort, direction, cursor: page.nextCursor,
           })}>Следующая страница</Link>
         </nav>

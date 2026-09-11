@@ -1,0 +1,30 @@
+..............ssss.........s............................................ [ 10%]
+..........................................................s............. [ 21%]
+......................................................................ss [ 32%]
+sssssssssssssssssss..................................................... [ 42%]
+......ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 53%]
+sssssssssss.................s........................................... [ 64%]
+........................................................................ [ 75%]
+........................................s...........F................... [ 85%]
+..................................ss.................................... [ 96%]
+......................                                                   [100%]
+=================================== FAILURES ===================================
+_ test_rollback_route_bypasses_forward_preflight_but_preserves_protected_checks _
+
+    def test_rollback_route_bypasses_forward_preflight_but_preserves_protected_checks():
+        source=(ROOT/'operations/scripts/switch-routing.sh').read_text()
+        start=source.index('if [[ "$phase" == writer-freeze ]]')
+        end=source.index('\nactive_dir=',start)
+        for phase,expected in [('rollback-freeze',''),('legacy',''),('writer-freeze','writer-cutover'),('public-read','public-read')]:
+            result=subprocess.run(['/bin/bash','-p','-c','set -Eeuo pipefail\npreflight_call() { printf "%s" "$2"; }\npreflight=preflight_call\n'+source[start:end]],
+                env=dict(os.environ,phase=phase),text=True,capture_output=True)
+>           assert result.returncode==0,result.stderr
+E           AssertionError: /bin/bash: line 12: script_dir: unbound variable
+E             
+E           assert 1 == 0
+E            +  where 1 = CompletedProcess(args=['/bin/bash', '-p', '-c', 'set -Eeuo pipefail\npreflight_call() { printf "%s" "$2"; }\npreflight...source "$barrier_helper"\nfi\n'], returncode=1, stdout='', stderr='/bin/bash: line 12: script_dir: unbound variable\n').returncode
+
+tests/test_rollback_ordering.py:96: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_rollback_ordering.py::test_rollback_route_bypasses_forward_preflight_but_preserves_protected_checks
+1 failed, 561 passed, 108 skipped in 45.79s

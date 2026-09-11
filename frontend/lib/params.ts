@@ -131,8 +131,8 @@ export function normalizeHistoryLimit(value: SearchValue): number {
   const raw = first(value);
   if (raw === undefined) return 100;
   const parsed = Number(raw);
-  if (!/^[+-]?\d+(?:\.0+)?$/.test(raw.trim()) || !Number.isInteger(parsed) || parsed < 50 || parsed > 1_000) {
-    throw new RangeError("history_limit must be an integer between 50 and 1000");
+  if (!/^[+-]?\d+(?:\.0+)?$/.test(raw.trim()) || !Number.isInteger(parsed) || parsed < 50 || parsed > 3_000) {
+    throw new RangeError("history_limit must be an integer between 50 and 3000");
   }
   return parsed;
 }

@@ -195,7 +195,7 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible(re
         }
         assert admin.execute(
             """SELECT count(*) AS count
-                 FROM ingest.deletion_observation
+                 FROM ingest.publication_availability_event
                 WHERE collection_run_id=%s AND publication_id=%s""",
             (public_context.run_id, public_id),
         ).fetchone()["count"] == 1
@@ -332,7 +332,7 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_v5_eligible(re
         }
         assert admin.execute(
             """SELECT count(*) AS count
-                 FROM ingest.deletion_observation
+                 FROM ingest.publication_availability_event
                 WHERE collection_run_id=%s AND publication_id=%s""",
             (contradictory_context.run_id, forced_id),
         ).fetchone()["count"] == 1
@@ -438,6 +438,13 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
     context = CollectionContext.create(
         Platform.TELEGRAM, partition, "integration-v1", scheduled, scheduled,
     )
+    unchanged_context = CollectionContext.create(
+        Platform.TELEGRAM,
+        partition,
+        "integration-v2",
+        scheduled + timedelta(minutes=5),
+        scheduled + timedelta(minutes=5),
+    )
     changed_context = CollectionContext.create(
         Platform.TELEGRAM,
         partition,
@@ -468,6 +475,20 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
         "integration-v1",
         scheduled + timedelta(minutes=35),
         scheduled + timedelta(minutes=35),
+    )
+    repeated_present_context = CollectionContext.create(
+        Platform.TELEGRAM,
+        partition,
+        "integration-v1",
+        scheduled + timedelta(minutes=40),
+        scheduled + timedelta(minutes=40),
+    )
+    heartbeat_context = CollectionContext.create(
+        Platform.TELEGRAM,
+        partition,
+        "integration-v2",
+        scheduled + timedelta(hours=24),
+        scheduled + timedelta(hours=24),
     )
     account = AccountRef(
         account_id,
@@ -627,6 +648,36 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
             Platform.TELEGRAM, partition, "integration-v1",
         ) is None
 
+        repository.start_run(unchanged_context)
+        assert repository.begin_account(
+            unchanged_context, account, unchanged_context.started_at,
+        )
+        unchanged_raw = replace(
+            raw,
+            account_observation=replace(
+                raw.account_observation,
+                observed_at=unchanged_context.started_at,
+                collected_at=unchanged_context.started_at,
+                source={"provider_request_at": unchanged_context.started_at.isoformat()},
+            ),
+            publications=(),
+            source_version="transport-v2",
+            cursor="unchanged-account",
+        )
+        unchanged_result = repository.persist_account_batch(
+            CanonicalNormalizer().normalize(unchanged_raw, unchanged_context),
+        )
+        assert unchanged_result.revision_id is None
+        assert repository.finish_run(
+            unchanged_context, unchanged_context.started_at,
+        ).status.value == "succeeded"
+        assert admin.execute(
+            """SELECT count(*) AS count
+                 FROM ingest.account_metric_snapshot
+                WHERE platform_account_id=%s""",
+            (account_id,),
+        ).fetchone()["count"] == 1
+
         repository.start_run(changed_context)
         assert repository.begin_account(
             changed_context, account, changed_context.started_at,
@@ -720,10 +771,9 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
             "telegram_mtproto_empty_get_messages",
         )
         first_missing = admin.execute(
-            """SELECT outcome::text AS outcome, consecutive_missing
-                 FROM ingest.deletion_observation
-                WHERE publication_id=%s
-                ORDER BY observed_at DESC, id DESC LIMIT 1""",
+            """SELECT status::text AS outcome, consecutive_missing
+                 FROM ingest.publication_availability_state
+                WHERE publication_id=%s LIMIT 1""",
             (publication_id,),
         ).fetchone()
         assert first_missing == {"outcome": "missing", "consecutive_missing": 1}
@@ -738,10 +788,9 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
             "telegram_mtproto_auth_error",
         )
         transient = admin.execute(
-            """SELECT outcome::text AS outcome, consecutive_missing
-                 FROM ingest.deletion_observation
-                WHERE publication_id=%s
-                ORDER BY observed_at DESC, id DESC LIMIT 1""",
+            """SELECT last_probe_outcome::text AS outcome, consecutive_missing
+                 FROM ingest.publication_availability_state
+                WHERE publication_id=%s LIMIT 1""",
             (publication_id,),
         ).fetchone()
         assert transient == {
@@ -759,10 +808,9 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
             "telegram_mtproto_empty_get_messages",
         )
         confirmed = admin.execute(
-            """SELECT outcome::text AS outcome, consecutive_missing
-                 FROM ingest.deletion_observation
-                WHERE publication_id=%s
-                ORDER BY observed_at DESC, id DESC LIMIT 1""",
+            """SELECT status::text AS outcome, consecutive_missing
+                 FROM ingest.publication_availability_state
+                WHERE publication_id=%s LIMIT 1""",
             (publication_id,),
         ).fetchone()
         assert confirmed == {
@@ -798,19 +846,18 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
         recovery = repository.persist_account_batch(
             CanonicalNormalizer().normalize(recovery_raw, recovery_context),
         )
-        assert recovery.snapshot_count == 1
+        assert recovery.snapshot_count == 0
         assert repository.finish_run(
             recovery_context, recovery_context.started_at,
         ).status.value == "succeeded"
         recovered = admin.execute(
-            """SELECT observation.outcome::text AS outcome,
+            """SELECT observation.status::text AS outcome,
                       observation.consecutive_missing,
                       publication.deleted_at
-                 FROM ingest.deletion_observation AS observation
+                 FROM ingest.publication_availability_state AS observation
                  JOIN ingest.publication AS publication
                    ON publication.id=observation.publication_id
-                WHERE observation.publication_id=%s
-                ORDER BY observation.observed_at DESC, observation.id DESC LIMIT 1""",
+                WHERE observation.publication_id=%s LIMIT 1""",
             (publication_id,),
         ).fetchone()
         assert recovered == {
@@ -818,6 +865,48 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
             "consecutive_missing": 0,
             "deleted_at": None,
         }
+        event_count = admin.execute(
+            """SELECT count(*) AS count
+                 FROM ingest.publication_availability_event
+                WHERE publication_id=%s""",
+            (publication_id,),
+        ).fetchone()["count"]
+        repository.start_run(repeated_present_context)
+        assert repository.begin_account(
+            repeated_present_context,
+            account,
+            repeated_present_context.started_at,
+        )
+        repeated_raw = replace(
+            recovery_raw,
+            publications=(replace(
+                recovery_raw.publications[0],
+                observed_at=repeated_present_context.started_at,
+                collected_at=repeated_present_context.started_at,
+            ),),
+        )
+        repeated = repository.persist_account_batch(
+            CanonicalNormalizer().normalize(repeated_raw, repeated_present_context),
+        )
+        assert repeated.snapshot_count == 0
+        assert repeated.revision_id is None
+        assert repository.finish_run(
+            repeated_present_context,
+            repeated_present_context.started_at,
+        ).status.value == "succeeded"
+        state = admin.execute(
+            """SELECT last_checked_at
+                 FROM ingest.publication_availability_state
+                WHERE publication_id=%s""",
+            (publication_id,),
+        ).fetchone()
+        assert state["last_checked_at"] == repeated_present_context.started_at
+        assert admin.execute(
+            """SELECT count(*) AS count
+                 FROM ingest.publication_availability_event
+                WHERE publication_id=%s""",
+            (publication_id,),
+        ).fetchone()["count"] == event_count
         # A foreign/unknown probe must still fail atomically after resolving
         # publication identities; identity reuse cannot bypass ownership.
         with pytest.raises(RuntimeError, match="not owned by account"):
@@ -906,6 +995,33 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
             (account_id,),
         ).fetchone()
         assert current_native["external_id"] == "525252"
+
+        repository.start_run(heartbeat_context)
+        assert repository.begin_account(
+            heartbeat_context, account, heartbeat_context.started_at,
+        )
+        heartbeat_raw = replace(
+            changed_raw,
+            account_observation=replace(
+                changed_raw.account_observation,
+                observed_at=heartbeat_context.started_at,
+                collected_at=heartbeat_context.started_at,
+            ),
+            cursor="account-heartbeat",
+        )
+        heartbeat = repository.persist_account_batch(
+            CanonicalNormalizer().normalize(heartbeat_raw, heartbeat_context),
+        )
+        assert heartbeat.revision_id is not None
+        assert repository.finish_run(
+            heartbeat_context, heartbeat_context.started_at,
+        ).status.value == "succeeded"
+        assert admin.execute(
+            """SELECT count(*) AS count
+                 FROM ingest.account_metric_snapshot
+                WHERE platform_account_id=%s""",
+            (account_id,),
+        ).fetchone()["count"] == 2
     finally:
         run_ids = (
             context.run_id,
@@ -913,6 +1029,8 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
             failed_context.run_id,
             *(item.run_id for item in missing_contexts),
             recovery_context.run_id,
+            repeated_present_context.run_id,
+            heartbeat_context.run_id,
         )
         try:
             admin.execute("SET session_replication_role='replica'")

@@ -348,15 +348,17 @@ class BridgeService:
         for rows in self.source.iter_rows(
             stream, after_rowid=after_rowid, batch_size=self.options.batch_size
         ):
-            source_publication_table = "platform_posts" if stream == "platform_snapshots" else "posts"
-            source_publication_key = "platform_post_id" if stream == "platform_snapshots" else "post_id"
-            # Resolve each publication once per batch, not once per measurement.
-            # Metadata streams have completed before either snapshot stream starts.
-            publication_aliases = {
-                legacy_id: self._publication_uuid(source_publication_table, legacy_id)
-                for legacy_id in {int(row[source_publication_key]) for row in rows}
-            }
-            publication_ids = [publication_aliases[int(row[source_publication_key])] for row in rows]
+            publication_ids = [
+                self._publication_uuid(
+                    "platform_posts" if stream == "platform_snapshots" else "posts",
+                    int(
+                        row["platform_post_id"]
+                        if stream == "platform_snapshots"
+                        else row["post_id"]
+                    ),
+                )
+                for row in rows
+            ]
             contexts = self.target.publication_contexts(publication_ids)
             if len(contexts) != len(set(publication_ids)):
                 missing = sorted(str(value) for value in set(publication_ids) - contexts.keys())
@@ -364,15 +366,8 @@ class BridgeService:
             writes = 0
             used_runs: set[UUID] = set()
             with self.target.transaction():
-                from .snapshot_reuse import reuse_snapshots
-                reused = (reuse_snapshots(self.target, self.source_namespace_uuid,
-                          self.batch_id, stream, rows, publication_ids, contexts)
-                          if self.snapshot_kind == "catch_up" and not self.force_full_replay else set())
                 ensured_months = set()
                 for row, publication_id in zip(rows, publication_ids, strict=True):
-                    if str(row["id"]) in reused:
-                        last_rowid = int(row["__source_rowid"])
-                        continue
                     published_at, platform = contexts[publication_id]
                     run_id = self.runs[platform]
                     used_runs.add(run_id)

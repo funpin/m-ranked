@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/native-link";
 import { headers } from "next/headers";
 import { randomUUID } from "node:crypto";
 import { AccountMatrix, DeleteCatalogForm } from "@/components/catalog-forms";
@@ -43,7 +43,7 @@ export default async function ManagePage({searchParams}:{searchParams:Promise<Se
   const csrf=incoming.get("x-mranked-csrf")??"",canEdit=["1","true"].includes(incoming.get("x-mranked-can-edit")??"")&&!!csrf,canDelete=["1","true"].includes(incoming.get("x-mranked-can-delete")??"")&&!!csrf;
   const reader=catalogReader(incoming);
   const [catalogResult,statusResult]=await Promise.allSettled([reader.institutions(),reader.status()]);
-  if(catalogResult.status==="rejected") return <><h1>Управление каналами</h1><section className="panel" role="alert"><p>{catalogResult.reason instanceof CatalogApiError?catalogResult.reason.message:"Не удалось загрузить каталог."}</p><Link href="/manage">Повторить загрузку</Link></section></>;
+  if(catalogResult.status==="rejected") return <><h1>Управление каналами</h1><section className="panel" role="alert"><p>{catalogResult.reason instanceof CatalogApiError?catalogResult.reason.message:"Не удалось загрузить каталог."}</p><Link href="/manage" prefetch={false}>Повторить загрузку</Link></section></>;
   // SQLite NOCASE folds ASCII only; preserve the legacy catalog ordering.
   const fold=(name:string)=>name.replace(/[A-Z]/g,(letter)=>letter.toLowerCase());
   const institutions=catalogResult.value.sort((a,b)=>fold(a.name)<fold(b.name)?-1:fold(a.name)>fold(b.name)?1:a.legacyId-b.legacyId);

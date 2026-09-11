@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 
 class JdbcDatasetRevisionProviderTest {
     @Test
-    void selectsTheNewestRevisionWithAllNineCoreProjectionsReady() {
+    void selectsTheNewestRevisionWithAllSevenServingProjectionsReady() {
         assertThat(JdbcDatasetRevisionProvider.CURRENT_REVISION_SQL)
                 .contains("analytics.dataset_revision")
                 .contains("analytics.projection_state")
@@ -18,8 +18,11 @@ class JdbcDatasetRevisionProviderTest {
                 .contains("('institution_monthly_metrics')")
                 .contains("('institution_period_metrics')")
                 .contains("('comparison')")
+                .contains("('publication_history')")
+                .doesNotContain("('publication_content')")
+                .doesNotContain("('legacy_exports')")
                 .contains("state.dataset_revision_id = revision.id")
                 .contains("state.status = 'ready'")
-                .contains("HAVING count(state.projection_name) = 9");
+                .contains("HAVING count(state.projection_name) = 7");
     }
 }

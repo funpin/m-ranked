@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.479" timestamp="2026-09-05T09:48:56.465219+03:00" hostname="MacBook-funpin.local"><testcase classname="tests.test_bridge_actual_target_postgres" name="test_cleared_native_identity_closes_history_and_reenrollment_appends" time="1.396"><failure message="RuntimeError: source has a non-empty SQLite WAL; create a consistent backup with the backup command before importing">tmp_path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-511/test_cleared_native_identity_c0')
+
+    @pytest.mark.skipif(not ADMIN_DSN, reason="requires disposable PostgreSQL admin DSN")
+    def test_cleared_native_identity_closes_history_and_reenrollment_appends(tmp_path: Path):
+        import json
+        from app.database import Database
+        initial = tmp_path / "native-initial.sqlite"
+        build_golden_fixture(initial, revision=2)
+        def bridge(path, target):
+            return BridgeService(BridgeOptions(source=path,source_namespace="pytest-golden-integration",batch_size=2),
+                                 LegacySource(path),target,snapshot_kind="catch_up")
+        with PostgresTarget(str(ADMIN_DSN)) as target:
+            _, baseline = bridge(initial,target).run()
+            assert baseline["gate"]["status"] == "pass", baseline["mismatches"]
+            for platform in ("telegram","vk","max","rutube"):
+                cleared = tmp_path / f"{platform}-cleared.sqlite"
+                create_online_backup(initial,cleared)
+                with Database(cleared).connect() as connection:
+                    connection.execute("UPDATE platform_accounts SET native_id=NULL WHERE platform=?",(platform,))
+                    if platform == "telegram":
+                        connection.execute("UPDATE channels SET telegram_id=NULL")
+                prior = target.fetchone("""SELECT identity.id,to_jsonb(identity)::text,account.canonical_external_id
+                    FROM catalog.account_external_identity identity JOIN catalog.platform_account account
+                        ON account.id=identity.platform_account_id
+                    WHERE account.platform=%s AND identity.identity_namespace=%s AND identity.valid_to IS NULL""",
+                    (platform,platform+":native_id"))
+                assert prior is not None
+                try:
+&gt;                   _, report = bridge(cleared,target).run()
+                                ^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_bridge_actual_target_postgres.py:134: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_bridge_actual_target_postgres.py:116: in bridge
+    LegacySource(path),target,snapshot_kind="catch_up")
+    ^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;migration.bridge.source.LegacySource object at 0x10544ed50&gt;
+path = PosixPath('/private/var/folders/rx/pcjkmw2d7tjbjll21rtr8z8h0000gn/T/pytest-of-funpin/pytest-511/test_cleared_native_identity_c0/telegram-cleared.sqlite')
+
+    def __init__(self, path: Path):
+        self.path = path.resolve()
+        if not self.path.is_file():
+            raise FileNotFoundError(self.path)
+        wal_path = self.path.with_name(f"{self.path.name}-wal")
+        if wal_path.exists() and wal_path.stat().st_size &gt; 0:
+&gt;           raise RuntimeError(
+                "source has a non-empty SQLite WAL; create a consistent backup "
+                "with the backup command before importing"
+            )
+E           RuntimeError: source has a non-empty SQLite WAL; create a consistent backup with the backup command before importing
+
+migration/bridge/source.py:116: RuntimeError</failure></testcase></testsuite></testsuites>

@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.admin.infrastructure.ApiSecurityConfigurationTest" time="2.827" tests="6" errors="0" skipped="0" failures="0" flakes="0">
+  <testcase name="deniesUnimplementedMutationsAndNonApiRoutes" classname="org.mranked.admin.infrastructure.ApiSecurityConfigurationTest" time="0.689">
+    <system-out>16:55:00.524 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+16:55:00.620 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:55:00.620 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:55:00.621 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+</system-out>
+  </testcase>
+  <testcase name="challengesAnonymousAdminWithRfc9457MediaType" classname="org.mranked.admin.infrastructure.ApiSecurityConfigurationTest" time="0.31">
+    <system-out>16:55:00.912 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+16:55:00.941 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:55:00.941 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:55:00.941 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="permitsOnlyInternalErrorDispatchToTheErrorRenderer" classname="org.mranked.admin.infrastructure.ApiSecurityConfigurationTest" time="0.316">
+    <system-out>16:55:01.229 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+16:55:01.254 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:55:01.254 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:55:01.255 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+</system-out>
+  </testcase>
+  <testcase name="appliesViewerEditorAndAdminRbacWithCsrfForWrites" classname="org.mranked.admin.infrastructure.ApiSecurityConfigurationTest" time="0.934">
+    <system-out>16:55:01.533 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+16:55:01.552 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:55:01.552 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:55:01.553 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+</system-out>
+  </testcase>
+  <testcase name="permitsImplementedPublicGetEndpoints" classname="org.mranked.admin.infrastructure.ApiSecurityConfigurationTest" time="0.287">
+    <system-out>16:55:02.467 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+16:55:02.480 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:55:02.480 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:55:02.480 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="permitsAsyncDispatchForPublicStreamingEndpoints" classname="org.mranked.admin.infrastructure.ApiSecurityConfigurationTest" time="0.289">
+    <system-out>16:55:02.752 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+16:55:02.764 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:55:02.764 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:55:02.764 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+</testsuite>

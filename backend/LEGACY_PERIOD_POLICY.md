@@ -21,18 +21,19 @@ revision, and rebuild it in one transaction. Inserts for already published or
 non-configuration revisions are rejected. A policy lookup for an earlier revision
 continues to return that revision's setting.
 
-On an existing installation V21 publishes a new revision and rebuilds using the
+On an existing installation the policy correction publishes a new revision and rebuilds using the
 previously published observation anchor. Thus the correction changes ETags while
 the source time window remains comparable. An empty installation stays empty.
 
-`LegacyPeriodOraclePostgresIntegrationTest` tests both a clean installation and
-actual populated V20-to-V21 Flyway migration. Its oracle executes the original
+`LegacyPeriodOraclePostgresIntegrationTest` tests a clean final-schema installation.
+Its oracle executes the original
 Python function: 21 scenarios across three platforms, 84 cards and 672 period
-metric comparisons. The upgrade verifies the reported VK single late snapshot
+metric comparisons. The fixture verifies the reported VK single late snapshot
 changes from 1,000 views to unavailable, with a new revision and unchanged anchor.
 It also checks policy revision pinning and rejected retroactive writes.
 
-The historical `period-activity-golden.sql` stays unchanged. Its current Java
-adapter corrects one obsolete VK expectation that assumed `history_complete`
-permitted a one-hour-old single snapshot. The remaining historical SQL assertions
-and the fixed-cohort SQL fixture continue to run.
+The `period-activity-golden.sql` values stay unchanged; its ACL assertion follows
+the final-contract maintenance/recovery-only historical-bootstrap boundary. Its current
+Java adapter corrects one obsolete VK expectation that assumed
+`history_complete` permitted a one-hour-old single snapshot. The remaining
+historical SQL assertions and the fixed-cohort SQL fixture continue to run.

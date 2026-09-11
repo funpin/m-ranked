@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.admin.infrastructure.CatalogHttpPostgresIntegrationTest" time="1.805" tests="2" errors="0" skipped="0" failures="0" flakes="0">
+  <testcase name="completeCookieCsrfRbacAndCorrelatedAuditedWriteFlow" classname="org.mranked.admin.infrastructure.CatalogHttpPostgresIntegrationTest" time="1.352">
+    <system-out>16:55:20.188 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+16:55:20.228 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:55:20.228 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:55:20.228 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="statelessBasicSessionReadPreservesCookieCsrfToken" classname="org.mranked.admin.infrastructure.CatalogHttpPostgresIntegrationTest" time="0.453">
+    <system-out>16:55:21.523 [main] INFO org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer -- Global AuthenticationManager configured with UserDetailsService bean with name adminUserDetailsService
+16:55:21.539 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:55:21.539 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:55:21.539 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+</testsuite>

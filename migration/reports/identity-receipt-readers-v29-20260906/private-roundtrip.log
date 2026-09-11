@@ -1,0 +1,94 @@
+16:40:28.096 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:[redacted]/mranked_identity_command_b57a6444d5fd4c2aa673ab082163357f_it (PostgreSQL 18.6)
+16:40:28.148 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+16:40:28.156 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+16:40:28.211 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+16:40:28.252 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+16:40:28.493 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+16:40:28.561 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+16:40:28.587 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+16:40:28.626 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+16:40:28.643 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+16:40:28.665 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+16:40:28.695 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+16:40:28.726 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+16:40:28.789 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+16:40:28.894 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+16:40:28.926 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+16:40:28.953 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+16:40:28.973 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+16:40:28.987 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+16:40:29.007 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+16:40:29.029 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+16:40:29.069 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+16:40:29.105 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+16:40:29.135 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+16:40:29.154 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+16:40:29.173 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+16:40:29.201 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+16:40:29.239 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+16:40:29.258 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+16:40:29.276 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+16:40:29.291 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+16:40:29.303 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "27 - retained disabled platform period metrics"
+16:40:29.317 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "28 - identity command receipt verifier acl"
+16:40:29.327 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "29 - monotonic native identity transitions"
+16:40:29.342 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 29 migrations to schema "flyway", now at version v29 (execution time 00:00.741s)
+16:40:36.902 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:[redacted]/mranked_identity_command_144f1b42c9da45db8979603716b4245f_it (PostgreSQL 18.6)
+16:40:36.915 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+16:40:36.918 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+16:40:36.946 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+16:40:36.963 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+16:40:37.224 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+16:40:37.279 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+16:40:37.303 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+16:40:37.335 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+16:40:37.351 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+16:40:37.370 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+16:40:37.392 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+16:40:37.411 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+16:40:37.467 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+16:40:37.547 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+16:40:37.577 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+16:40:37.600 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+16:40:37.618 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+16:40:37.633 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+16:40:37.651 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+16:40:37.672 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+16:40:37.706 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+16:40:37.741 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+16:40:37.772 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+16:40:37.787 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+16:40:37.803 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+16:40:37.832 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+16:40:37.872 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+16:40:37.890 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+16:40:37.909 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+16:40:37.924 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+16:40:37.935 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "27 - retained disabled platform period metrics"
+16:40:37.948 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "28 - identity command receipt verifier acl"
+16:40:37.957 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 28 migrations to schema "flyway", now at version v28 (execution time 00:00.698s)
+16:40:40.289 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:[redacted]/mranked_identity_command_144f1b42c9da45db8979603716b4245f_it (PostgreSQL 18.6)
+16:40:40.306 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 30 migrations (execution time 00:00.009s)
+16:40:40.324 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": 28
+16:40:40.327 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "29 - monotonic native identity transitions"
+16:40:40.343 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 1 migration to schema "flyway", now at version v29 (execution time 00:00.007s)

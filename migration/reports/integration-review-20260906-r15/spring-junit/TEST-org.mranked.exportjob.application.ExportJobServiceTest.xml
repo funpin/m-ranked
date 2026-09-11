@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.exportjob.application.ExportJobServiceTest" time="4.278" tests="7" errors="0" skipped="0" failures="0" flakes="0">
+  <testcase name="queuedJobsReserveQuotaAndCancellationDoesNotLeakWorkerOrArtifactCapacity" classname="org.mranked.exportjob.application.ExportJobServiceTest" time="0.065" />
+  <testcase name="largeGenerationCompletesWithAFixedSixtyFourMiBHeap" classname="org.mranked.exportjob.application.ExportJobServiceTest" time="3.761" />
+  <testcase name="ttlClosesUnstartedDownloadAndDeletesArtifactAndRestartRemovesOrphans" classname="org.mranked.exportjob.application.ExportJobServiceTest" time="0.067" />
+  <testcase name="durationLimitDeletesPartialArtifact" classname="org.mranked.exportjob.application.ExportJobServiceTest" time="0.254" />
+  <testcase name="staleQueuedRevisionFailsBeforeAnyRowsAndFailureTextNeverLeaks" classname="org.mranked.exportjob.application.ExportJobServiceTest" time="0.047" />
+  <testcase name="rowAndByteCapsFailClosedAndDeletePartialFiles" classname="org.mranked.exportjob.application.ExportJobServiceTest" time="0.046" />
+  <testcase name="privateArtifactPinsRevisionPreservesModernCsvAndReleasesDisconnectHandles" classname="org.mranked.exportjob.application.ExportJobServiceTest" time="0.029" />
+</testsuite>

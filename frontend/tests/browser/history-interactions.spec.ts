@@ -36,9 +36,11 @@ for(const [path,reaction,hasComments,hasShares] of [
 
 test("clicking an old chart point expands history and scrolls to the exact row",async({page}) => {
   await page.goto("/posts/1");
+  await page.getByRole("link",{name:"загрузить всю историю"}).click();
+  await expect(page).toHaveURL(/history_limit=3000$/);
   const total=page.getByRole("img",{name:"Накопление показателей",exact:true});
   await expect(total).toHaveAttribute("data-chart-ready","true");
-  await expect(page.locator("tbody tr")).toHaveCount(100);
+  await expect(page.locator("tbody tr")).toHaveCount(160);
   const box=await total.boundingBox();expect(box).not.toBeNull();
   await total.click({position:{x:60,y:box!.height-65}});
   const selected=page.locator("tr.snapshot-highlight");
@@ -48,9 +50,6 @@ test("clicking an old chart point expands history and scrolls to the exact row",
   await expect(selected).toBeInViewport();
   await expect(selected.locator("button")).toBeFocused();
   // Keyboard activation uses the same reveal-and-scroll path after collapsing.
-  const expand=page.getByRole("button",{name:"показать всю историю"});
-  if(await expand.count()) await expand.click();
-  await expect(page.locator("tbody tr")).toHaveCount(160);
   await page.getByRole("button",{name:"свернуть историю"}).click();
   await expect(page.locator("tbody tr")).toHaveCount(100);
   await total.focus();await page.keyboard.press("Home");await page.keyboard.press("Enter");
@@ -61,14 +60,16 @@ test("clicking an old chart point expands history and scrolls to the exact row",
 
 test("a point older than the 1000-row boundary remains reachable and the next publication resets its range",async({page}) => {
   await page.goto("/posts/99");
+  await page.getByRole("link",{name:"загрузить всю историю"}).click();
+  await expect(page).toHaveURL(/history_limit=3000$/);
   const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
   await expect(chart).toHaveAttribute("data-chart-ready","true");
-  await expect(page.locator("tbody tr")).toHaveCount(100);
+  await expect(page.locator("tbody tr")).toHaveCount(1205);
   await chart.focus();await page.keyboard.press("Home");await page.keyboard.press("Enter");
   await expect(page.locator("tbody tr")).toHaveCount(1205);
   await expect(page.locator("#snapshot-1")).toBeInViewport();
   await page.locator('a[rel="next"]').click();
   await expect(page.locator("tbody tr")).toHaveCount(100);
   await expect(page.getByRole("img",{name:"Накопление показателей",exact:true})).toHaveAttribute("data-chart-ready","true");
-  await expect(page.locator(".chart-range-head")).toContainText("160 замеров");
+  await expect(page.locator(".chart-range-head")).toContainText("100 замеров");
 });

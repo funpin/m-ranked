@@ -1,0 +1,56 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.operations.infrastructure.LegacyHealthPostgresIntegrationTest" time="5.49" tests="1" errors="0" skipped="0" failures="0" flakes="0">
+  <testcase name="safeHealthContractTracksRealCollectorsAllProjectionsAndFailureStates" classname="org.mranked.operations.infrastructure.LegacyHealthPostgresIntegrationTest" time="5.487">
+    <system-out>16:07:05.199 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:postgresql://127.0.0.1:60006/mranked_health_15346ed81b1344f9abb5f0cf89685758_it (PostgreSQL 18.6)
+16:07:05.226 [main] INFO org.flywaydb.core.internal.database.base.Schema -- Creating schema "flyway" ...
+16:07:05.231 [main] INFO org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory -- Creating Schema History table "flyway"."flyway_schema_history" ...
+16:07:05.272 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema "flyway": null
+16:07:05.291 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "1 - target baseline"
+16:07:05.612 [main] INFO org.flywaydb.core.internal.sqlscript.DefaultSqlScriptExecutor -- +--------------------------------------------+
+| ensure_publication_metric_partition        |
++--------------------------------------------+
+| ingest.publication_metric_snapshot_2026_06 |
+| ingest.publication_metric_snapshot_2026_07 |
+| ingest.publication_metric_snapshot_2026_08 |
+| ingest.publication_metric_snapshot_2026_09 |
+| ingest.publication_metric_snapshot_2026_10 |
+| ingest.publication_metric_snapshot_2026_11 |
++--------------------------------------------+
+
+16:07:05.688 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "2 - rebuild core projections"
+16:07:05.713 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "3 - collector observation times and identity grants"
+16:07:05.755 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "4 - admin collection run status grants"
+16:07:05.773 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "5 - legacy activity period projection"
+16:07:05.805 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "6 - comparison valid observation hourly projection"
+16:07:05.834 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "7 - activity rating read grants"
+16:07:05.862 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "8 - legacy overview projection"
+16:07:05.943 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "9 - immutable observations quality archive fence"
+16:07:06.081 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "10 - consistent public queries and formula guards"
+16:07:06.133 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "11 - bridge identity lineage and reconciliation"
+16:07:06.169 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "12 - detail history projection"
+16:07:06.205 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "13 - immutable account identity history"
+16:07:06.240 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "14 - public archived publication text"
+16:07:06.328 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "15 - verified source preservation"
+16:07:06.382 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "16 - audited catalog commands"
+16:07:06.466 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "17 - legacy csv compatibility projection"
+16:07:06.549 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "18 - official rating commands"
+16:07:06.590 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "19 - safe health operational snapshot"
+16:07:06.614 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "20 - catalog url and version compatibility"
+16:07:06.645 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "21 - legacy period first observation policy"
+16:07:06.684 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "22 - durable legacy csv archive facts"
+16:07:06.740 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "23 - official rating entity context"
+16:07:06.766 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "24 - ordered history reaction details"
+16:07:06.791 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "25 - safe legacy account presentation"
+16:07:06.808 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "26 - independent projection verifier reads"
+16:07:06.822 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "27 - retained disabled platform period metrics"
+16:07:06.840 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema "flyway" to version "28 - identity command receipt verifier acl"
+16:07:06.856 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 28 migrations to schema "flyway", now at version v28 (execution time 00:01.111s)
+16:07:06.870 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:07:06.870 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:07:06.870 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+16:07:07.432 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+16:07:07.432 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+16:07:07.433 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 1 ms
+</system-out>
+  </testcase>
+</testsuite>

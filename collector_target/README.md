@@ -41,6 +41,11 @@ were examined, but stops at the last selected row when the refresh budget fills.
 It commits with the account batch, so a failed/resumed run selects the same page
 and every eligible row is eventually revisited without starving discovery.
 
+`PUBLICATION_SNAPSHOT_HEARTBEAT_HOURS` (default `24`) keeps a sparse full
+snapshot when the versioned metric, quality, evidence, semantic and reaction
+state is unchanged. Successful polls remain traceable through the collection
+run/account result and compact availability state.
+
 For systemd `LoadCredential`, set
 `COLLECTOR_PLATFORM_AUTH_FILE=%d/platform-auth`. The file is parsed as UTF-8
 `KEY=value`, is limited to 16 KiB, must be a non-symlink regular file owned by
@@ -132,12 +137,6 @@ corrupt evidence fails closed. This raw-evidence directory is not a cold archive
 Normalization rejection records sanitized retrievable evidence in
 `ingest.evidence_quarantine` without publishing canonical facts.
 
-Raw evidence is opt-in with `COLLECTOR_PERSIST_RAW_EVIDENCE=true`. Compact
-production collectors retain the canonical `source_fingerprint` without writing
-one filesystem object per observation. Target-generated legacy CSV lexemes are
-separately opt-in with `COLLECTOR_PERSIST_LEGACY_CSV=true` and stay disabled once
-the legacy stack has been retired.
-
 ## Collector metrics
 
 Set `COLLECTOR_METRICS_FILE` to an absolute, service-writable Prometheus textfile
@@ -156,13 +155,13 @@ collection. Alert expressions are in
 `operations/observability/collector-alerts.yml`; this textfile producer does not
 claim that a production scrape endpoint has already been deployed.
 
-V9 stores each metric's quality and source/semantic evidence independently.
+The final schema stores each metric's quality and source/semantic evidence independently.
 Row-level quality is operational only: one invalid shares value cannot hide
 valid views, reactions or comments. Publication and account insert triggers
 serialize corrections by logical slot, no-op exact fingerprints, reject reused
 fingerprints with different values, and assign immutable predecessor, sequence
 and reason. Both active-tip views select the largest correction sequence.
-Published V1–V8 rows are backfilled once without changing their original values.
+Rows preceding the final contract are backfilled once without changing their original values.
 Older hash-only raw references are marked `legacy_evidence_unavailable`; their
 missing payload is an explicit acceptance gap, never evidence of retrieval.
 
@@ -186,7 +185,7 @@ in `tests/test_target_collectors_postgres.py` is mandatory in
 `python -m migration.integration.run`: that producer provisions its own services
 and rejects skipped integration cases. A standalone invocation requires
 `MRANKED_TEST_POSTGRES_DSN` set to a collector-role DSN for a database with
-the target Flyway schema. Fixture creation/cleanup uses
+the exact final schema contract. Fixture creation/cleanup uses
 `MRANKED_TEST_POSTGRES_ADMIN_DSN`; it falls back to the first DSN only for a
 privileged disposable test database. Against the exact current schema it verifies public
 baseline/actual persistence, retry idempotency, monotonic forced-incomplete

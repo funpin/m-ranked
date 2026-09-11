@@ -6,67 +6,59 @@ import org.mranked.operations.application.ReadinessProbe;
 import org.mranked.operations.domain.ReadinessResult;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 @Component
 public class JdbcReadinessProbe implements ReadinessProbe {
-    static final String LATEST_CORE_READINESS_SQL = """
-            WITH latest_revision AS (
-                SELECT revision.id
-                  FROM analytics.dataset_revision AS revision
-                 ORDER BY revision.id DESC
-                 LIMIT 1
-            ), core_projection(projection_name) AS (VALUES
-                ('publication_latest'),
-                ('publication_hourly'),
-                ('institution_daily_metrics'),
-                ('institution_monthly_metrics'),
-                ('institution_period_metrics'),
-                ('comparison'),
-                ('publication_history'),
-                ('publication_content'),
-                ('legacy_exports')
-            )
-            SELECT revision.id AS revision_id,
-                   count(state.projection_name) AS ready_count
-              FROM latest_revision AS revision
-             CROSS JOIN core_projection AS core
-              LEFT JOIN analytics.projection_state AS state
-                ON state.projection_name = core.projection_name
-               AND state.dataset_revision_id = revision.id
-               AND state.status = 'ready'
-             GROUP BY revision.id
+    static final String EXPECTED_SCHEMA_CONTRACT = "storage-publisher-final-2026-09-08-r2";
+    static final String SCHEMA_CONTRACT_SQL =
+            "SELECT contract_id FROM ops_and_admin.schema_contract";
+    static final String CONNECTIVITY_SQL = "SELECT 1";
+    static final String SOURCE_SCHEMA_SQL = """
+            SELECT to_regclass('catalog.visible_platform_account') IS NOT NULL
+               AND to_regclass('ingest.visible_publication') IS NOT NULL
+               AND to_regclass('analytics.usable_publication_snapshot') IS NOT NULL
             """;
-
     private final JdbcClient jdbcClient;
     private final DatasetRevisionProvider revisionProvider;
+    private final boolean sourceReadEnabled;
 
     public JdbcReadinessProbe(JdbcClient jdbcClient, DatasetRevisionProvider revisionProvider) {
+        this(jdbcClient, revisionProvider, false);
+    }
+
+    @Autowired
+    public JdbcReadinessProbe(
+            JdbcClient jdbcClient,
+            DatasetRevisionProvider revisionProvider,
+            @Value("${mranked.source-read.enabled:false}") boolean sourceReadEnabled
+    ) {
         this.jdbcClient = jdbcClient;
         this.revisionProvider = revisionProvider;
+        this.sourceReadEnabled = sourceReadEnabled;
     }
 
     @Override
     public ReadinessResult probe() {
-        Integer value = jdbcClient.sql("SELECT 1").query(Integer.class).single();
+        Integer value = jdbcClient.sql(CONNECTIVITY_SQL).query(Integer.class).single();
         if (value == null || value != 1) {
             return ReadinessResult.down();
         }
-        CoreReadiness core = jdbcClient.sql(LATEST_CORE_READINESS_SQL)
-                .query((resultSet, rowNumber) -> new CoreReadiness(
-                        resultSet.getLong("revision_id"),
-                        resultSet.getInt("ready_count")
-                ))
-                .optional()
-                .orElse(null);
-        if (core == null || core.readyCount() != 9) {
-            return ReadinessResult.down();
+        if (sourceReadEnabled) {
+            Boolean sourceSchema = jdbcClient.sql(SOURCE_SCHEMA_SQL).query(Boolean.class).single();
+            if (!Boolean.TRUE.equals(sourceSchema)) {
+                return ReadinessResult.down();
+            }
+        } else {
+            String contract = jdbcClient.sql(SCHEMA_CONTRACT_SQL).query(String.class).single();
+            if (!EXPECTED_SCHEMA_CONTRACT.equals(contract)) {
+                return ReadinessResult.down();
+            }
         }
         DatasetRevision revision = revisionProvider.current();
-        return revision.id() > 0 && revision.id() == core.revisionId()
+        return revision.id() > 0
                 ? ReadinessResult.up(revision.id())
                 : ReadinessResult.down();
-    }
-
-    private record CoreReadiness(long revisionId, int readyCount) {
     }
 }

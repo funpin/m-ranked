@@ -1,0 +1,46 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] --------------------< org.mranked:m-ranked-backend >--------------------
+[INFO] Building m-ranked backend 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- enforcer:3.6.2:enforce (require-java-21) @ m-ranked-backend ---
+[INFO] Rule 0: org.apache.maven.enforcer.rules.version.RequireJavaVersion passed
+[INFO] 
+[INFO] --- spring-boot:4.0.8:build-info (public-representation-build-identity) @ m-ranked-backend ---
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ m-ranked-backend ---
+[INFO] Copying 31 resources from src/main/resources to ../../../../../../private/tmp/mranked-review-v29-final-r2-build/classes
+[INFO] Copying 1 resource from ../contracts/openapi to ../../../../../../private/tmp/mranked-review-v29-final-r2-build/classes/contract
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ m-ranked-backend ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 155 source files with javac [debug parameters release 21] to ../../../../../../private/tmp/mranked-review-v29-final-r2-build/classes
+[INFO] /Users/funpin/Documents/ChatGPT/TG-monitoring/backend/src/main/java/org/mranked/admin/infrastructure/JdbcCatalogRepository.java: Some input files use or override a deprecated API.
+[INFO] /Users/funpin/Documents/ChatGPT/TG-monitoring/backend/src/main/java/org/mranked/admin/infrastructure/JdbcCatalogRepository.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ m-ranked-backend ---
+[INFO] Copying 1 resource from src/test/resources to ../../../../../../private/tmp/mranked-review-v29-final-r2-build/test-classes
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ m-ranked-backend ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 77 source files with javac [debug parameters release 21] to ../../../../../../private/tmp/mranked-review-v29-final-r2-build/test-classes
+[INFO] /Users/funpin/Documents/ChatGPT/TG-monitoring/backend/src/test/java/org/mranked/admin/infrastructure/OfficialRatingContextPostgresIntegrationTest.java: Some input files use or override a deprecated API.
+[INFO] /Users/funpin/Documents/ChatGPT/TG-monitoring/backend/src/test/java/org/mranked/admin/infrastructure/OfficialRatingContextPostgresIntegrationTest.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ m-ranked-backend ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.4.2:jar (default-jar) @ m-ranked-backend ---
+[INFO] Building jar: /private/tmp/mranked-review-v29-final-r2-build/m-ranked-backend-0.1.0-SNAPSHOT.jar
+[INFO] 
+[INFO] --- spring-boot:4.0.8:repackage (repackage) @ m-ranked-backend ---
+[INFO] Replacing main artifact /private/tmp/mranked-review-v29-final-r2-build/m-ranked-backend-0.1.0-SNAPSHOT.jar with repackaged archive, adding nested dependencies in BOOT-INF/.
+[INFO] The original artifact has been renamed to /private/tmp/mranked-review-v29-final-r2-build/m-ranked-backend-0.1.0-SNAPSHOT.jar.original
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  4.462 s
+[INFO] Finished at: 2026-09-06T16:41:04+03:00
+[INFO] ------------------------------------------------------------------------

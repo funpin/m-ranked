@@ -168,7 +168,7 @@ drain or verification cannot finish, both writer sets remain stopped.
 ## Disposable integration proof and production-like Gate W evidence
 
 Run the integration rehearsal against an otherwise empty disposable database
-with exactly successful Flyway V1-V29, a schema-v15 SQLite S-final, separate
+installed from the exact release final schema, a schema-v15 SQLite S-final, separate
 collector/migration credentials and all four platforms. It covers repeated
 application of the same plan, fixed drain, verify, stop, a SQLite Backup API
 export, restarted legacy HTTP reads, and a new `s_final` import followed by
@@ -265,13 +265,11 @@ use pgpass. The namespace and operator/ticket are passed into the actual bridge
 and reverse-sync start/drain operations; they are not report-only labels.
 
 All DSNs are password-free and use pgpass. The test refuses a database that is
-not otherwise empty or whose complete Flyway history is not the ordered V1-V29
-version/script/Flyway-checksum manifest, optionally preceded by the one exact
-Flyway 12 rank-0 schema-creation marker. This covers both a pre-created Flyway
-schema (no marker) and Flyway-created schema (marker); every other baseline,
-repeatable or non-versioned row is rejected. All 27 migration file bytes are
-verified separately. The caller-provisioned database is single-use; the test
-does not create, clean or drop it.
+not otherwise empty or whose `ops_and_admin.schema_contract` is not the exact
+contract ID bound to the release's final-schema and production-transition
+SHA-256 values. A Flyway schema or migration inventory is not part of the
+accepted runtime contract. The caller-provisioned database is single-use; the
+test does not create, clean or drop it.
 
 After every assertion passes, the reporter creates a new mode-`0600` JSON file
 and a new mode-`0600` sibling `.sha256`. Neither destination may already exist.
@@ -364,7 +362,7 @@ Use `REVERSE_SYNC_DATABASE_URL` without a password and `MIGRATION_PGPASSFILE`;
 the CLI rejects password-bearing DSNs in argv. The systemd unit loads the pgpass
 file as a credential and runs as `telegram-monitor` with a narrow writable path.
 
-The frozen V1-V29 release has no dedicated `reverse_sync` database role. The
+The final-schema contract has no dedicated `reverse_sync` database role. The
 deployed adapter therefore uses `migration_bridge`, which has broader catalog,
 migration and ingest privileges than the adapter needs. Preflight proves the
 required reads and alias insert ability but cannot prove absence of excess
@@ -372,5 +370,5 @@ grants. This is a recorded residual least-privilege risk, not a claim that the
 role is minimal. Mitigate it with a host-local DSN, private pgpass permissions,
 the hardened systemd unit, named operator/ticket evidence and a credential
 limited to the rollback window. Creating a narrower role requires a separately
-reviewed future migration; do not alter the frozen V1-V29 manifest during this
-cutover.
+reviewed future schema-contract revision; do not patch the production schema
+ad hoc during this cutover.

@@ -63,12 +63,42 @@ public class Rfc9457ExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
+        Throwable root = exception;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        String sqlState = root instanceof java.sql.SQLException sql ? sql.getSQLState() : null;
+        String serverRoutine = postgresServerRoutine(root);
+        Integer serverPosition = postgresServerPosition(root);
         LOGGER.error(
-                "Unhandled API failure for {} errorType={}",
-                request.getRequestURI(), exception.getClass().getName()
+                "Unhandled API failure for {} errorType={} rootType={} sqlState={} serverRoutine={} serverPosition={}",
+                request.getRequestURI(), exception.getClass().getName(), root.getClass().getName(),
+                sqlState, serverRoutine, serverPosition
         );
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error",
                 "The request could not be completed", "urn:m-ranked:problem:internal-error", request);
+    }
+
+    private static String postgresServerRoutine(Throwable root) {
+        if (!"org.postgresql.util.PSQLException".equals(root.getClass().getName())) return null;
+        try {
+            Object serverError = root.getClass().getMethod("getServerErrorMessage").invoke(root);
+            if (serverError == null) return null;
+            Object routine = serverError.getClass().getMethod("getRoutine").invoke(serverError);
+            return routine instanceof String value ? value : null;
+        } catch (ReflectiveOperationException ignored) {
+            return null;
+        }
+    }
+
+    private static Integer postgresServerPosition(Throwable root) {
+        if (!"org.postgresql.util.PSQLException".equals(root.getClass().getName())) return null;
+        try {
+            Object serverError = root.getClass().getMethod("getServerErrorMessage").invoke(root);
+            if (serverError == null) return null;
+            Object position = serverError.getClass().getMethod("getPosition").invoke(serverError);
+            return position instanceof Integer value ? value : null;
+        } catch (ReflectiveOperationException ignored) {
+            return null;
+        }
     }
 
     private static ResponseEntity<ProblemDetail> problem(

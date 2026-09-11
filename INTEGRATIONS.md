@@ -27,9 +27,9 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/telegram-reaction-monitor/data/ms-playwright
 ```bash
 PLAYWRIGHT_BROWSERS_PATH=/opt/telegram-reaction-monitor/data/ms-playwright \
   .venv/bin/python -m playwright install --with-deps chromium
-systemctl stop m-ranked-target-collector@telegram.service
+systemctl stop m-ranked-collector.service
 sudo -u telegram-monitor .venv/bin/python -m app auth-web
-systemctl start m-ranked-target-collector@telegram.service
+systemctl start m-ranked-collector.service
 ```
 
 Команда запросит номер с кодом страны, код Telegram и, если включён, пароль

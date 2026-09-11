@@ -48,8 +48,23 @@ public class JdbcAdminCommandRepository implements AdminCommandRepository {
             RETURNING id
             """;
 
-    static final String REBUILD_PROJECTIONS_SQL = """
-            SELECT analytics.rebuild_core_projections(:datasetRevision)
+    static final String QUEUE_PROJECTION_SQL = """
+            INSERT INTO ops_and_admin.outbox_event (
+                dataset_revision_id, event_type, aggregate_type, aggregate_id,
+                affected_tags, payload
+            ) VALUES (
+                :datasetRevision,
+                'projection.rebuild.requested',
+                'projection',
+                'core',
+                ARRAY['publications', 'overview', 'comparison'],
+                jsonb_build_object(
+                    'revision', CAST(:datasetRevision AS bigint),
+                    'cause', 'configuration'
+                )
+            )
+            ON CONFLICT (dataset_revision_id, event_type, aggregate_type, aggregate_id)
+            DO NOTHING
             """;
 
     static final String INSERT_OUTBOX_SQL = """
@@ -184,10 +199,9 @@ public class JdbcAdminCommandRepository implements AdminCommandRepository {
                 .param("correlationId", command.correlationId())
                 .query(Long.class)
                 .single();
-        jdbcClient.sql(REBUILD_PROJECTIONS_SQL)
+        jdbcClient.sql(QUEUE_PROJECTION_SQL)
                 .param("datasetRevision", revision)
-                .query((row, rowNumber) -> row.getString(1))
-                .single();
+                .update();
         jdbcClient.sql(INSERT_OUTBOX_SQL)
                 .param("datasetRevision", revision)
                 .param("accountId", command.accountId())

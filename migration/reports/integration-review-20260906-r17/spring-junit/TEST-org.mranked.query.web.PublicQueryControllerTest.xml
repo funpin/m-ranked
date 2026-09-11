@@ -1,0 +1,118 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="org.mranked.query.web.PublicQueryControllerTest" time="0.275" tests="18" errors="0" skipped="0" failures="0" flakes="0">
+  <testcase name="missingLegacyAliasIsAnRfc9457Problem" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.019">
+    <system-out>17:11:58.256 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.256 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.256 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="accountResolvesBothLegacyNamespacesWithoutRawSnapshots" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.018">
+    <system-out>17:11:58.269 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.269 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.269 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="ratingUsesLegacyFallbacksForInvalidControls" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.017">
+    <system-out>17:11:58.287 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.287 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.287 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="ratingIsBoundedRevisionedAndCacheable" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.019">
+    <system-out>17:11:58.304 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.304 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.304 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="oldValidatorCannotReturn304AfterAuthoritativeRevisionAdvances" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.022">
+    <system-out>17:11:58.325 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.326 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.326 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="rejectsLimitOutsideTheDocumentedRange" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.009">
+    <system-out>17:11:58.347 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.347 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.347 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="providerConfigurationChangesInvalidateCachedBodyEtagAndNextRepresentation" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.03">
+    <system-out>17:11:58.356 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.356 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.356 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+17:11:58.360 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.360 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.360 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+17:11:58.362 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.362 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.362 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="comparisonIgnoresTheSelectionNamespaceThatDoesNotMatchThePlatform" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.014">
+    <system-out>17:11:58.384 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.385 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.385 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="comparisonDeduplicatesRelevantIdsAndPreservesFirstSelectionOrder" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.007">
+    <system-out>17:11:58.398 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.398 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.398 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="comparisonPreservesInstitutionOrderForNonTelegramPlatforms" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.007">
+    <system-out>17:11:58.405 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.406 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.406 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="comparisonRejectsMalformedAndExcessRelevantSelectionsAsRfc9457" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.017">
+    <system-out>17:11:58.414 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.414 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.414 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="malformedCursorIsAnRfc9457Problem" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.009">
+    <system-out>17:11:58.432 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.432 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.432 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="comparisonCacheIdentityIncludesSelectionOrderAndBoundedPageSize" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.015">
+    <system-out>17:11:58.442 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.442 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.442 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="existingPublicationWithoutAcceptedLatestReturnsEmptyCounters" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.013">
+    <system-out>17:11:58.456 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.456 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.456 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="unexpectedFailuresAreSanitizedRfc9457Problems" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.011">
+    <system-out>17:11:58.468 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.469 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.469 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+17:11:58.473 [main] ERROR org.mranked.query.web.Rfc9457ExceptionHandler -- Unhandled API failure for /api/v1/overview errorType=java.lang.IllegalStateException
+</system-out>
+  </testcase>
+  <testcase name="overviewReturnsProjectionMetadataAndHonorsConditionalGet" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.02">
+    <system-out>17:11:58.480 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.480 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.480 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="comparisonReturnsOneBoundedFixedCohortPayload" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.011">
+    <system-out>17:11:58.501 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.501 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.501 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+  <testcase name="existingInstitutionWithoutPeriodMetricsReturnsAnEmptyMetricSet" classname="org.mranked.query.web.PublicQueryControllerTest" time="0.01">
+    <system-out>17:11:58.512 [main] INFO org.springframework.mock.web.MockServletContext -- Initializing Spring TestDispatcherServlet ''
+17:11:58.512 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Initializing Servlet ''
+17:11:58.512 [main] INFO org.springframework.test.web.servlet.TestDispatcherServlet -- Completed initialization in 0 ms
+</system-out>
+  </testcase>
+</testsuite>

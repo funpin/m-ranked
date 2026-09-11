@@ -1,0 +1,23 @@
+{
+  "scrollWidth": 1440,
+  "viewportWidth": 1440,
+  "styles": [
+    {
+      "selector": "BODY.",
+      "fontFamily": "Times",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "color": "rgb(0, 0, 0)",
+      "background": "rgba(0, 0, 0, 0)",
+      "padding": "0px",
+      "margin": "8px",
+      "border": "0px none rgb(0, 0, 0)",
+      "boxShadow": "none",
+      "position": "static",
+      "overflow": "visible",
+      "width": "1424px",
+      "height": "884px"
+    }
+  ],
+  "cls": 0
+}

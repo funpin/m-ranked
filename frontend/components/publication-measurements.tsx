@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CompactChart as Chart } from "@mranked/legacy-chart";
+import Link from "@/components/native-link";
 import { duration, legacyDate, legacyNumber } from "@/lib/format";
 import { useHistoryPreferences } from "@/lib/history-preferences";
 import { historyReactionEntries, sampleHistory, signedDuration } from "@/lib/history-data";
@@ -119,7 +120,7 @@ function MetricChart({ rows, metrics, delta, selectedId, onSelect, onActivate, p
   </>;
 }
 
-export function PublicationMeasurements({ rows, platform, historyLimit }: { rows: HistorySnapshot[];platform:Exclude<Platform,"all">;historyLimit:number }) {
+export function PublicationMeasurements({ rows, platform, historyLimit, fullHistoryHref }: { rows: HistorySnapshot[];platform:Exclude<Platform,"all">;historyLimit:number;fullHistoryHref?:string }) {
   const [start,setStart] = useState(0), [end,setEnd] = useState(Math.max(0,rows.length-1));
   const [selectedId,setSelectedId] = useState<string>();
   const telegram = platform === "telegram";
@@ -159,7 +160,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit }: { rows
       <div className="panel"><h2>Прирост между замерами</h2><p className="panel-note">Сколько новых {phrase} появилось после предыдущего опроса. В режиме 1:1 используется общая шкала; «Авто» показывает показатели на независимых шкалах.</p><MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} /></div></div>
     <div className="panel chart-range"><div className="chart-range-head"><b>Масштаб по времени</b><span>{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} замеров` : "Нет замеров"}</span></div><div className="dual-range"><input type="range" disabled={rows.length < 2} aria-label="Начало диапазона" min={0} max={Math.max(0,rows.length-1)} value={start} onChange={(event) => setStart(Math.min(end,Number(event.target.value)))} /><input type="range" disabled={rows.length < 2} aria-label="Конец диапазона" min={0} max={Math.max(0,rows.length-1)} value={end} onChange={(event) => setEnd(Math.max(start,Number(event.target.value)))} /></div><div className="range-notes"><p className="panel-note">Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается.</p><span className="pill hidden-points" hidden={end-start+1 <= displayed.length}>{end-start+1 > displayed.length ? `Не отображено точек: ${end-start+1-displayed.length}` : ""}</span></div></div>
     <div className="panel mt measurement-history"><h2>История замеров</h2>
-      {rows.length > tableRows.length ? <p className="panel-note">Показаны последние {tableRows.length} из {rows.length} замеров · <button type="button" className="history-toggle" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="panel-note">Показаны все {rows.length} замеров · <button type="button" className="history-toggle" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
+      {fullHistoryHref ? <p className="panel-note">Показаны последние {tableRows.length} замеров · <Link className="history-toggle" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="panel-note">Показаны последние {tableRows.length} из {rows.length} замеров · <button type="button" className="history-toggle" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="panel-note">Показаны все {rows.length} замеров · <button type="button" className="history-toggle" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       {rows.length ? <div className="measurement-history-scroll"><table className="snapshot-history-table"><thead><tr>{[
         ["🕒","Время замера, МСК"],["⏱","От прошлого замера"],["⌛","После публикации"],
         ...tableMetrics.flatMap((metric) => [[metric.icon,metricLabel(metric,platform)],[`Δ${metric.icon}`,`Дельта ${noun(metric,platform)}`],...(telegram && metric.key === "reactions" ? [["👥","Минимум людей"]] : [])]),

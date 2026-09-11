@@ -9,6 +9,7 @@ from typing import Any, Iterable
 logger = logging.getLogger(__name__)
 
 TELEGRAM_WEB_URL = "https://web.telegram.org/k/"
+CONNECT_RETRY_SECONDS = 300
 
 
 class TelegramWebSession:
@@ -28,10 +29,12 @@ class TelegramWebSession:
         self.profile_path = Path(profile_path)
         self.headless = headless
         self._semaphore = asyncio.Semaphore(max(1, concurrency))
+        self._connect_lock = asyncio.Lock()
         self._playwright: Any = None
         self._context: Any = None
         self._page: Any = None
         self._authorized = False
+        self._connect_retry_at = 0.0
 
     @property
     def connected(self) -> bool:
@@ -49,56 +52,65 @@ class TelegramWebSession:
         return async_playwright
 
     async def connect(self, *, require_authorized: bool = True) -> None:
-        if self._page is not None:
-            if require_authorized:
+        # Account collection is concurrent, but every account shares one browser
+        # profile.  Serialize the lazy start and re-check state under the lock so
+        # the first wave cannot launch one Chromium process tree per account.
+        async with self._connect_lock:
+            loop = asyncio.get_running_loop()
+            if self._page is None and loop.time() < self._connect_retry_at:
+                raise RuntimeError("Telegram Web reconnect is cooling down")
+            if self._page is not None:
+                if require_authorized:
+                    try:
+                        await self._page.wait_for_function(
+                            "() => Boolean(window.rootScope?.myId)",
+                            timeout=60_000,
+                        )
+                    except Exception as exc:
+                        raise RuntimeError(
+                            "Telegram Web session is not authorized; "
+                            "run `python -m app auth-web` "
+                            f"({exc.__class__.__name__}: {exc})"
+                        ) from exc
+                    self._authorized = True
+                else:
+                    self._authorized = await self.is_authorized()
+                return
+
+            self.profile_path.mkdir(parents=True, exist_ok=True)
+            async_playwright = self._playwright_import()
+            self._playwright = await async_playwright().start()
+            try:
+                self._context = await self._playwright.chromium.launch_persistent_context(
+                    str(self.profile_path),
+                    headless=self.headless,
+                    args=("--disable-dev-shm-usage",),
+                )
+                self._page = self._context.pages[0] if self._context.pages else await self._context.new_page()
+                await self._page.goto(TELEGRAM_WEB_URL, wait_until="domcontentloaded")
+                await self._page.wait_for_function(
+                    "() => Boolean(window.rootScope && window.rootScope.managers)",
+                    timeout=60_000,
+                )
                 try:
                     await self._page.wait_for_function(
                         "() => Boolean(window.rootScope?.myId)",
-                        timeout=60_000,
+                        timeout=60_000 if require_authorized else 10_000,
                     )
+                    self._authorized = True
                 except Exception as exc:
-                    raise RuntimeError(
-                        "Telegram Web session is not authorized; "
-                        "run `python -m app auth-web` "
-                        f"({exc.__class__.__name__}: {exc})"
-                    ) from exc
-                self._authorized = True
-            else:
-                self._authorized = await self.is_authorized()
-            return
-
-        self.profile_path.mkdir(parents=True, exist_ok=True)
-        async_playwright = self._playwright_import()
-        self._playwright = await async_playwright().start()
-        try:
-            self._context = await self._playwright.chromium.launch_persistent_context(
-                str(self.profile_path),
-                headless=self.headless,
-                args=("--disable-dev-shm-usage",),
-            )
-            self._page = self._context.pages[0] if self._context.pages else await self._context.new_page()
-            await self._page.goto(TELEGRAM_WEB_URL, wait_until="domcontentloaded")
-            await self._page.wait_for_function(
-                "() => Boolean(window.rootScope && window.rootScope.managers)",
-                timeout=60_000,
-            )
-            try:
-                await self._page.wait_for_function(
-                    "() => Boolean(window.rootScope?.myId)",
-                    timeout=60_000 if require_authorized else 10_000,
-                )
-                self._authorized = True
-            except Exception as exc:
-                self._authorized = False
-                if require_authorized:
-                    raise RuntimeError(
-                        "Telegram Web session is not authorized; "
-                        "run `python -m app auth-web` "
-                        f"({exc.__class__.__name__}: {exc})"
-                    ) from exc
-        except Exception:
-            await self.close()
-            raise
+                    self._authorized = False
+                    if require_authorized:
+                        raise RuntimeError(
+                            "Telegram Web session is not authorized; "
+                            "run `python -m app auth-web` "
+                            f"({exc.__class__.__name__}: {exc})"
+                        ) from exc
+                self._connect_retry_at = 0.0
+            except Exception:
+                await self.close()
+                self._connect_retry_at = loop.time() + CONNECT_RETRY_SECONDS
+                raise
 
     async def close(self) -> None:
         context, playwright = self._context, self._playwright
@@ -106,6 +118,7 @@ class TelegramWebSession:
         self._context = None
         self._playwright = None
         self._authorized = False
+        self._connect_retry_at = 0.0
         if context is not None:
             await context.close()
         if playwright is not None:

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="admin session constructs bounded same-origin no-store requests" time="0.032785" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/admin-api.test.ts"/>
+	<testcase name="admin credentials remain in a closable in-memory session and never touch web storage" time="0.000575" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/admin-api.test.ts"/>
+	<testcase name="account mutation sends CSRF, correlation ID and required optimistic version" time="0.001003" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/admin-api.test.ts"/>
+	<testcase name="account lookup reads the minimal state through a same-origin no-store GET" time="0.000413" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/admin-api.test.ts"/>
+	<testcase name="account lookup rejects an unsafe or mismatched optimistic version response" time="0.000441" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/admin-api.test.ts"/>
+	<testcase name="account mutation fails closed until the CSRF contract is initialized" time="0.000173" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/admin-api.test.ts"/>
+	<testcase name="conflict refresh runs once and preserves the RFC 9457 conflict" time="0.000149" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/admin-api.test.ts"/>
+	<testcase name="admin URL and numeric bounds reject identifier injection" time="0.000197" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/admin-api.test.ts"/>
+	<testcase name="API client revalidates a cached response with If-None-Match" time="0.004382" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="API client keeps cache keys distinct across query parameters" time="0.007525" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="API client exposes RFC 9457 failures without masking status" time="0.002793" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="publication compatibility routes send the correct legacyType" time="0.000713" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="account compatibility routes send the correct legacyType" time="0.000507" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="comparison client sends the fixed-cohort contract without camel-case drift" time="0.000641" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="comparison client preserves repeated Telegram channel IDs in request order" time="0.000290" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="comparison client deduplicates relevant IDs and ignores the other legacy namespace" time="0.000374" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="comparison client rejects invalid or excess relevant IDs without substitution" time="0.000313" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="rating client sends the bounded legacy-activity contract" time="0.000327" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/api.test.ts"/>
+	<testcase name="visual initializer runs without any transpiler globals and preserves Date construction" time="0.006193" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/browser-instrumentation.test.ts"/>
+	<testcase name="visual CLS is observed and uses the maximum session instead of a missing-value zero" time="0.002075" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/browser-instrumentation.test.ts"/>
+	<testcase name="unsupported or altered visual instrumentation fails closed" time="0.001519" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/browser-instrumentation.test.ts"/>
+	<testcase name="mobile observers all register without freezing time or depending on a TSX helper" time="0.001066" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/browser-instrumentation.test.ts"/>
+	<testcase name="legacy static-capture animation is disabled before the first original chart constructor" time="0.000522" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/browser-instrumentation.test.ts"/>
+	<testcase name="private catalog reader forwards only session headers and never caches" time="0.022228" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/catalog-api.test.ts"/>
+	<testcase name="catalog and nested account continuation retain all rows beyond first page" time="0.001315" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/catalog-api.test.ts"/>
+	<testcase name="stale or malformed catalog cursors fail explicitly" time="0.000508" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/catalog-api.test.ts"/>
+	<testcase name="authorization failures do not expose upstream response bodies" time="0.000349" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/catalog-api.test.ts"/>
+	<testcase name="linear scales preserve the observed legacy comparison and correction ranges" time="0.001016" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/chart-scales.test.ts"/>
+	<testcase name="zero, missing and fractional series keep finite nondegenerate axes" time="0.000191" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/chart-scales.test.ts"/>
+	<testcase name="comparison chart does not bridge null or missing hourly points" time="0.000967" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/comparison-chart-data.test.ts"/>
+	<testcase name="engagement percentages keep the legacy two-decimal presentation" time="0.000569" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/comparison-chart-data.test.ts"/>
+	<testcase name="all 207 comparison candidates and series remain reachable through bounded pages" time="0.001066" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/continuation.test.ts"/>
+	<testcase name="revision changes restart continuation without leaking the incomplete earlier result" time="0.000137" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/continuation.test.ts"/>
+	<testcase name="broken continuation loops and repeated identities fail closed instead of silently dropping entities" time="0.000318" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/continuation.test.ts"/>
+	<testcase name="emoji facade preserves bytes, MIME, cache header, and target URL" time="0.015668" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/emoji-route.test.ts"/>
+	<testcase name="emoji facade rejects invalid IDs without contacting Spring" time="0.002135" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/emoji-route.test.ts"/>
+	<testcase name="emoji facade maps Spring 404 to the exact legacy response" time="0.000418" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/emoji-route.test.ts"/>
+	<testcase name="emoji catch-all preserves framework 404 for missing, slash, and encoded-slash paths" time="0.001078" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/emoji-route.test.ts"/>
+	<testcase name="emoji facade fails closed on upstream errors and normalizes unknown MIME" time="0.000531" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/emoji-route.test.ts"/>
+	<testcase name="history sampling keeps endpoints, selected observation and 144 point budget" time="0.000631" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/history-data.test.ts"/>
+	<testcase name="history uses retained signed deltas and reaction order without normalizing keys" time="0.000131" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/history-data.test.ts"/>
+	<testcase name="legacy CSV facade forwards byte chunks and the original query without buffering" time="0.014360" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/legacy-csv.test.ts"/>
+	<testcase name="classified compatibility failures stay failures and never become partial CSV" time="0.002575" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/legacy-csv.test.ts"/>
+	<testcase name="legacy missing detail retains status/text and semantic HTML without styles" time="0.016159" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/legacy-detail-error.test.ts"/>
+	<testcase name="generic missing detail preserves legacy JSON and unavailable API stays with page" time="0.000862" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/legacy-detail-error.test.ts"/>
+	<testcase name="scalar query values select last occurrence just like Starlette" time="0.002103" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/legacy-validation.test.ts"/>
+	<testcase name="oversized q validates before trim and uses unicode codepoint length" time="0.000341" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/legacy-validation.test.ts"/>
+	<testcase name="history_limit rejects invalid syntax and bounds rather than substituting defaults" time="0.000263" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/legacy-validation.test.ts"/>
+	<testcase name="metadata uses the production origin and rejects ambiguous deployment configuration" time="0.000212" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/legacy-validation.test.ts"/>
+	<testcase name="anonymous and invalid credentials precede missing forms and CSRF without reading the body" time="0.007078" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="all legacy actions preserve missing-field order, locations and null input" time="0.006853" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="path validation precedes body validation and accepts Python integral spellings" time="0.005993" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="integer form validation runs before CSRF and retains legacy input" time="0.005011" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="empty strings are present fields, then CSRF is checked without echoing tokens" time="0.001966" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="last duplicated scalar including CSRF and correlation wins; only form fields and trusted headers cross the boundary" time="0.000564" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="last empty duplicate CSRF and invalid correlation cannot execute a command" time="0.000427" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="zero/negative IDs are missing resources after CSRF; unsupported routes remain framework 404" time="0.001208" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="viewer and non-admin delete cannot bypass RBAC using trusted-looking request headers" time="0.000438" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="same-origin, exact content type and announced size safeguards execute no command" time="0.000519" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="same-origin forms retain the browser Host across NextURL loopback normalization" time="0.001461" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="Host validation rejects cross-origin forms and ignores forged forwarded authorities" time="0.002175" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="unannounced oversized stream is cancelled and read errors are sanitized" time="0.001027" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="upstream errors are fixed allowlisted values and never reveal exception details" time="0.001547" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="malformed/oversized session, fetch failure and open redirects fail closed" time="0.000962" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/manage-facade.test.ts"/>
+	<testcase name="per-metric evidence preserves distinct candidates and measured zero without borrowing metadata" time="0.000792" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/metric-evidence.test.ts"/>
+	<testsuite name="mobile producer rejects unrelated runtime evidence before starting a browser or reading an artifact" time="1.612863" disabled="0" errors="0" tests="4" failures="0" skipped="0" timestamp="2026-09-06T14:13:47.291Z" hostname="MacBook-funpin.local">
+		<testcase name="different source" time="0.434999" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/mobile-preflight.test.ts"/>
+		<testcase name="different API origin" time="0.383611" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/mobile-preflight.test.ts"/>
+		<testcase name="stale dataset" time="0.387337" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/mobile-preflight.test.ts"/>
+		<testcase name="stale representation" time="0.388912" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/mobile-preflight.test.ts"/>
+	</testsuite>
+	<testcase name="semantic gate rejects a one-card provider warning hidden below the screenshot pixel threshold" time="0.001067" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/overview-semantics.test.ts"/>
+	<testcase name="missing provider warnings cannot be hidden by a previous successful poll" time="0.000799" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/overview-status.test.ts"/>
+	<testcase name="legacy account-state precedence and exact error/empty text are retained" time="0.000668" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/overview-status.test.ts"/>
+	<testcase name="legacy platform and period aliases normalize to the public API vocabulary" time="0.000607" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="overview sort keys normalize per platform before the API request" time="0.000091" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="comparison horizons map explicitly to bounded API periods" time="0.000429" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="comparison selection preserves order and reports invalid bounded input" time="0.000393" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="legacy comparison selection is applied only when submitted is true" time="0.000122" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="legacy comparison leaves MAX and all-platform requests on the pending branch" time="0.000071" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="comparison parameters use only the legacy namespace for the selected platform" time="0.000119" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="queryHref preserves repeated values and omits empty fields" time="0.000117" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="legacy detail IDs and Telegram history limits are bounded" time="0.000298" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="legacy platform query either redirects canonically or rejects mismatches" time="0.000129" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/params.test.ts"/>
+	<testcase name="rating distinguishes the omitted 30d default from the invalid 1d fallback" time="0.000509" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/rating.test.ts"/>
+	<testcase name="rating uses Telegram-specific sort fallbacks and preserves directions" time="0.000614" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/rating.test.ts"/>
+	<testcase name="rating keeps VK shares but applies the RUTUBE post fallback" time="0.000094" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/rating.test.ts"/>
+	<testcase name="rating retains MAX/all for the page's explicit pending branch" time="0.000074" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/rating.test.ts"/>
+	<testcase name="public cache keys include full canonical query, origin, domain and revision; private routes excluded" time="0.001464" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/revision-cache.test.ts"/>
+	<testcase name="lost invalidation event cannot serve an earlier PG revision; cold, hot and disabled responses agree" time="0.002721" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/revision-cache.test.ts"/>
+	<testcase name="revision changes during fetch do not poison an earlier key" time="0.000431" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/revision-cache.test.ts"/>
+	<testcase name="real generated transport uses authoritative no-store revision with Next cache adapter" time="0.001771" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/revision-cache.test.ts"/>
+	<testcase name="a representation deployment at unchanged PG revision cannot reuse an earlier DTO" time="0.000355" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/revision-cache.test.ts"/>
+	<testcase name="storage masks cover only paired dynamic values and never swallow a layout shift" time="0.000844" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/visual-dynamic-values.test.ts"/>
+	<testcase name="visual evidence removes raw, HTML and RSC-escaped secret values" time="0.000675" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/visual-privacy.test.ts"/>
+	<testcase name="authenticated visual configuration cannot silently use only half a credential pair" time="0.000674" classname="test" file="/Users/funpin/Documents/ChatGPT/TG-monitoring/frontend/tests/visual-privacy.test.ts"/>
+	<!-- tests 95 -->
+	<!-- suites 0 -->
+	<!-- pass 95 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 1943.348625 -->
+</testsuites>

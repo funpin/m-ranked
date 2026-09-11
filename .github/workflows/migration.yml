@@ -1,33 +1,31 @@
-name: Required migration gates
+name: Required database contract gates
 on:
   pull_request:
   push:
     branches: [alpha, main]
   workflow_dispatch:
-    inputs:
-      legacy_pixel_audit:
-        description: Compare pixels with the historical Python UI (intentional changes may fail)
-        type: boolean
-        default: false
 
 permissions:
   contents: read
-
-env:
-  MRANKED_LEGACY_REFERENCE_ROOT: ${{ github.workspace }}/.legacy-reference
 
 jobs:
   canonical-integrity:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      POSTGRES_SUPERUSER_PASSWORD: ci-superuser-password
+      MIGRATION_DB_PASSWORD: ci-schema-owner-password
+      API_READ_DB_PASSWORD: ci-api-read-password
+      API_WRITE_ADMIN_DB_PASSWORD: ci-api-admin-password
+      COLLECTOR_INGEST_DB_PASSWORD: ci-collector-password
+      BACKUP_DB_PASSWORD: ci-backup-password
+      MIGRATION_BRIDGE_DB_PASSWORD: ci-retired-bridge-password
+      MAINTENANCE_DB_PASSWORD: ci-maintenance-password
+      REDIS_PASSWORD: ci-redis-password
+      POSTGRES_PORT: 55439
     steps:
       - uses: actions/checkout@v6
       - run: sudo apt-get update && sudo apt-get install -y gawk jq
-      - uses: actions/checkout@v6
-        with:
-          ref: 8475074f4a41cd9d8e13b623f1c51adf30426c00
-          path: .legacy-reference
-          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -39,26 +37,33 @@ jobs:
       - run: |
           python -m venv .venv
           .venv/bin/python -m pip install -r requirements.txt -r operations/requirements.txt
-      - run: .venv/bin/python -m migration.integration.run --output migration/reports/ci-integrity
+      - run: docker compose -f infra/compose.yaml up -d --wait postgres
+      - name: Verify one final database contract
+        run: |
+          docker compose -f infra/compose.yaml exec -T postgres \
+            psql --username mranked_bootstrap --dbname mranked --no-psqlrc \
+            --set ON_ERROR_STOP=1 --command "SELECT contract_id FROM ops_and_admin.schema_contract"
+          test "$(docker compose -f infra/compose.yaml exec -T postgres \
+            psql --username mranked_bootstrap --dbname mranked --no-psqlrc \
+            --tuples-only --no-align --command \
+            "SELECT to_regnamespace('flyway') IS NULL AND to_regnamespace('migration') IS NULL")" = t
+      - run: .venv/bin/pytest -q
+      - run: ./mvnw test -q
+        working-directory: backend
+      - if: always()
+        run: docker compose -f infra/compose.yaml down --volumes --remove-orphans
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: canonical-integrity-evidence
           path: |
-            migration/reports/ci-integrity
-            !migration/reports/ci-integrity/backend-build
-            !migration/reports/ci-integrity/mranked-integration-*/**
+            backend/target/surefire-reports
   browser-parity:
     # Keep the job ID stable for existing required-check settings.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/checkout@v6
-        with:
-          ref: 8475074f4a41cd9d8e13b623f1c51adf30426c00
-          path: .legacy-reference
-          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -84,20 +89,12 @@ jobs:
         working-directory: frontend
       - run: pnpm lint && pnpm typecheck && pnpm check:api && pnpm test && pnpm test:e2e
         working-directory: frontend
-      - run: .venv/bin/python -m migration.integration.run --semantic-only --output migration/reports/ci-browser-semantics
       - run: pnpm build && pnpm check:bundle
         working-directory: frontend
-      - if: github.event_name == 'workflow_dispatch' && inputs.legacy_pixel_audit
-        run: .venv/bin/python -m migration.integration.run --visual-only --output migration/reports/ci-legacy-pixel-audit
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: current-browser-evidence
           path: |
             frontend/test-results
-            migration/reports/ci-browser-semantics
-            migration/reports/ci-legacy-pixel-audit
-            !migration/reports/ci-browser-semantics/backend-build
-            !migration/reports/ci-legacy-pixel-audit/backend-build
-            !migration/reports/ci-browser-semantics/mranked-integration-*/**
             !migration/reports/ci-legacy-pixel-audit/mranked-integration-*/**

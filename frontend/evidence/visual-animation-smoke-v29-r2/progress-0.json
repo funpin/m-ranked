@@ -1,0 +1,244 @@
+{
+  "worker": 0,
+  "scope": "worker",
+  "fixture": {
+    "path": "/private/tmp/mranked-frontend-review-20260905-v3.sqlite",
+    "sha256": "22ec8c52a2e0484bc752221010798d20a66856ff19f4762b09c96749e887b41c",
+    "clock": "2026-08-01T12:00:00+00:00",
+    "counts": {
+      "institutions": 207,
+      "channels": 206,
+      "platform_accounts": 824,
+      "posts": 206,
+      "platform_posts": 618,
+      "reaction_snapshots": 2258,
+      "platform_snapshots": 6768
+    },
+    "coverage": [
+      "telegram",
+      "vk",
+      "max",
+      "rutube",
+      "null",
+      "zero",
+      "negative",
+      "reactions",
+      "comments",
+      "shares",
+      "subscribers",
+      "deleted",
+      "recovered",
+      "album",
+      "joint",
+      "repost",
+      "custom_emoji",
+      "incomplete",
+      "uncertain",
+      "synthetic",
+      "official_rating",
+      "rating_over_200"
+    ]
+  },
+  "results": [
+    {
+      "worker": 0,
+      "path": "/compare?platform=telegram&period=168",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "abe969c7d2c76f8fbca9d988412b8b347cb42c533dcf5142cf1ea99ad36c5a71",
+      "targetSha256": "cf2a50ce9ee7a04280833c4501de9e8b07f1c5607035b4950a225890c56f100f",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.0000046296296296296296,
+      "rawPixelDiffRatio": 0.0000046296296296296296,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=vk&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "a48d3e0ab601ec603c077b9daeca4aa3e644a814f4f41c1ea413fc551c05a8de",
+      "targetSha256": "f262ce033e3093155d52a4eced74e1237af5eff13ca730fcb2b299c03d82dc72",
+      "changedPixels": 36,
+      "pixelDiffRatio": 0.00002777777777777778,
+      "rawPixelDiffRatio": 0.00002777777777777778,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0.00023301504629629627,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0.00023301504629629627,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 1440,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=telegram&period=168",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "5aae084c775b4836bf157a4cc4293de63dd9c90711800c05c3a1cae37f4f69ea",
+      "targetSha256": "4ad0c9733ae5f581175823be588140c1a45db27175345f26bf0df9abd92a2a34",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.00001822821728034998,
+      "rawPixelDiffRatio": 0.00001822821728034998,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    },
+    {
+      "worker": 0,
+      "path": "/compare?platform=vk&period=336",
+      "state": "page",
+      "authenticated": false,
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "legacyStatus": 200,
+      "targetStatus": 200,
+      "legacySha256": "751326b89ddb7ffd922d8cf7999cae2baf871f4920de7f92a9ddf194428377a6",
+      "targetSha256": "f2cc4a038e46edd247686b0f499a8988d7ab2734d0e30cd0fd1b2cd77efce32a",
+      "changedPixels": 6,
+      "pixelDiffRatio": 0.00001822821728034998,
+      "rawPixelDiffRatio": 0.00001822821728034998,
+      "threshold": 0.005,
+      "masks": [],
+      "maskSkipped": [],
+      "targetAxeViolations": 0,
+      "applicableAxeViolations": 0,
+      "a11yScope": "HTML document",
+      "protocolParity": true,
+      "overviewStatusParity": {
+        "passed": true,
+        "expectedCount": 0,
+        "actualCount": 0,
+        "mismatches": []
+      },
+      "targetCls": 0,
+      "legacyCls": 0,
+      "legacyInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "targetInstrumentation": {
+        "initialized": true,
+        "clock": 1785585600000,
+        "supported": true,
+        "cls": 0,
+        "now": 1785585600000
+      },
+      "settledLegacyCharts": 2,
+      "targetScrollWidth": 390,
+      "passed": true
+    }
+  ]
+}

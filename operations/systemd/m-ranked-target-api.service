@@ -14,7 +14,7 @@ LoadCredential=spring.datasource.password:/etc/m-ranked/credentials/api-read-db-
 LoadCredential=spring.data.redis.password:/etc/m-ranked/credentials/redis-password
 Environment=SPRING_CONFIG_IMPORT=configtree:%d/
 Environment=TZ=UTC
-ExecStart=/usr/bin/java -XX:MaxRAMPercentage=70 -Duser.timezone=UTC -jar /opt/m-ranked/current/backend/m-ranked-backend.jar
+ExecStart=/usr/bin/java -Xms128m -Xmx256m -Duser.timezone=UTC -jar /opt/m-ranked/current/backend/m-ranked-backend.jar
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=90s
@@ -47,6 +47,9 @@ RuntimeDirectoryMode=0750
 UMask=0077
 LimitNOFILE=65536
 TasksMax=512
+MemoryHigh=320M
+MemoryMax=384M
+MemorySwapMax=0
 
 [Install]
 WantedBy=m-ranked-shadow.target

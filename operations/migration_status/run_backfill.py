@@ -14,21 +14,6 @@ def stop(signum, frame):
 
 
 original_transaction = PostgresTarget.transaction
-original_enter = PostgresTarget.__enter__
-
-
-def configured_enter(self):
-    timeout = int(os.environ.get('MRANKED_MIGRATION_STATEMENT_TIMEOUT_SECONDS', '300'))
-    if not 300 <= timeout <= 1800:
-        raise ValueError('Migration statement timeout must be between 300 and 1800 seconds')
-    result = original_enter(self)
-    try:
-        self.connection.execute("SELECT set_config('statement_timeout', %s, false)", (f'{timeout}s',))
-    except Exception:
-        self.connection.close()
-        self.connection = None
-        raise
-    return result
 
 
 @contextmanager
@@ -45,5 +30,4 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     PostgresTarget.transaction = guarded_transaction
-    PostgresTarget.__enter__ = configured_enter
     raise SystemExit(main())

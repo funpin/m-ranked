@@ -9,7 +9,7 @@ import java.sql.DriverManager;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.mranked.cache.infrastructure.JdbcDatasetRevisionProvider;
@@ -34,8 +34,7 @@ class LegacyHealthPostgresIntegrationTest {
         try(var control=DriverManager.getConnection(initial,owner,password)) {
             control.createStatement().execute("CREATE DATABASE "+database+" OWNER migration_owner");
             try {
-                Flyway.configure().dataSource(url,owner,password).initSql("SET ROLE migration_owner").defaultSchema("flyway")
-                        .locations("classpath:db/migration").cleanDisabled(true).load().migrate();
+                FinalSchemaInstaller.install(url, owner, password);
                 var reader=new DriverManagerDataSource(url,"api_read",System.getenv("MRANKED_QUERY_TEST_PASSWORD"));
                 var jdbc=JdbcClient.create(reader);var json=new JsonMapper();
                 var source=new JdbcHealthSnapshotSource(reader,json);
@@ -72,17 +71,27 @@ class LegacyHealthPostgresIntegrationTest {
                     assertThat(safe).contains("upstream_error").doesNotContain("never-public","/private/secret","secret-unknown-value","unknown_session_key");
                     statement.execute("UPDATE ops_and_admin.operational_checkpoint SET value='{\"present\":false,\"length\":0,\"sha256\":null}'::jsonb WHERE checkpoint_key='telegram_web_last_error'");
                     mvc.perform(get("/api/v1/health/legacy")).andExpect(jsonPath("$.integrations.telegram.comments_last_error").isEmpty());
-                    mvc.perform(get("/api/v1/health/freshness")).andExpect(status().isOk()).andExpect(jsonPath("$.datasetRevision").value(19));
+                    mvc.perform(get("/api/v1/health/freshness")).andExpect(status().isOk())
+                            .andExpect(jsonPath("$.datasetRevision").value(19))
+                            .andExpect(jsonPath("$.rawRevision").value(19))
+                            .andExpect(jsonPath("$.publishedRevision").value(19))
+                            .andExpect(jsonPath("$.publishedGenerationAgeSeconds").isNumber())
+                            .andExpect(jsonPath("$.outbox.classes").isMap())
+                            .andExpect(jsonPath("$.storage").isMap());
                     mvc.perform(get("/api/v1/health/legacy")).andExpect(status().isOk()).andExpect(jsonPath("$.collector_fresh").value(true))
                             .andExpect(jsonPath("$.poll_cycle.duration_seconds").value("0"));
                     assertThat(readiness.status().status().name()).isEqualTo("UP");
                     statement.execute("UPDATE analytics.projection_state SET status='failed' WHERE projection_name='publication_history'");
+                    assertThat(readiness.status().status().name()).isEqualTo("UP");
+                    assertThat(new JdbcDatasetRevisionProvider(jdbc).current().id()).isEqualTo(19);
+                    mvc.perform(get("/api/v1/health/freshness")).andExpect(status().isOk());
+                    statement.execute("UPDATE analytics.projection_state SET status='failed' WHERE projection_name='comparison'");
                     assertThat(readiness.status().status().name()).isEqualTo("DOWN");
                     assertThat(new JdbcDatasetRevisionProvider(jdbc).current().id()).isZero();
                     mvc.perform(get("/api/v1/health/freshness")).andExpect(status().isServiceUnavailable());
                     statement.execute("UPDATE analytics.projection_state SET status='ready'");
                     statement.execute("INSERT INTO analytics.dataset_revision(id,cause,correlation_id) VALUES(20,'migration',gen_random_uuid())");
-                    mvc.perform(get("/api/v1/health/freshness")).andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.revisionLag").value(1));
+                    mvc.perform(get("/api/v1/health/freshness")).andExpect(status().isOk()).andExpect(jsonPath("$.revisionLag").value(1));
                     statement.execute("UPDATE analytics.projection_state SET dataset_revision_id=20");
                     statement.execute("""
                         INSERT INTO ingest.collection_run(platform,partition_key,collector_version,started_at,completed_at,status,correlation_id)
@@ -116,7 +125,7 @@ class LegacyHealthPostgresIntegrationTest {
         if(output!=null)Files.writeString(Path.of(output),new JsonMapper().writerWithDefaultPrettyPrinter().writeValueAsString(Map.of(
                 "status","pass","database",database,"ownedDatabaseRemoved",true,"productionAcceptance",false,
                 "checks",java.util.List.of("restricted-api-role","sanitized-allowlist","migration-runs-not-freshness","legacy-null-zero-types",
-                        "all-nine-projection-states","revision-lag","failed-collector","future-clock","stale-collector","secret-free-503","real-lock-jdbc-timeout"),
+                        "six-serving-projection-states","independent-historical-state","revision-lag","failed-collector","future-clock","stale-collector","secret-free-503","real-lock-jdbc-timeout"),
                 "durationSeconds",(System.nanoTime()-started)/1e9))+"\n");
     }
 }

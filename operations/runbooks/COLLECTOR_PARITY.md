@@ -7,7 +7,7 @@ publication, or fabricating a passing report.
 ## Static and disposable-database proof
 
 Run the deterministic suite against the release candidate and a disposable
-database migrated from V1 through the release's latest version:
+database installed from the release's immutable final schema:
 
 ```bash
 rtk .venv/bin/python -m pytest -q tests/test_target_collectors.py
@@ -54,9 +54,10 @@ For Telegram MTProto/public (as deployed), VK, MAX, and RUTUBE:
    and a later actual rediscovery records `present` and clears `deleted_at`.
 7. Replay a committed run/account batch and prove no duplicate snapshots,
    deletion observations, revisions, or outbox events.
-8. Keep `m-ranked-target-projection-publisher.service` active, wait for all nine
-   named projection states to equal the newest collector revision, and record
-   that exact revision in the evidence. An older ready revision is a failure.
+8. Prove the API remains `UP` on the newest complete seven-projection serving
+   generation while collectors advance the raw dataset revision. Publisher
+   execution is a separate, explicit maintenance action and is not a collector
+   prerequisite. Record both raw and serving watermarks in the evidence.
 
 Useful read-only checks (bind IDs as parameters; do not paste credentials):
 
@@ -78,26 +79,28 @@ WHERE id = :publication_id;
 ## Evidence and go/no-go
 
 Store sanitized commands and query output as five distinct raw files below one
-protected evidence root: one database/Flyway capture and one platform capture
+protected evidence root: one database/schema-contract capture and one platform capture
 for Telegram, VK, MAX and RUTUBE. Raw files must be regular non-symlinks with a
 single hard link, no write bits, a SHA-256/byte count in the source document and
 an mtime inside the declared shadow-run window. Do not include credentials,
 session material or third-party personal data.
 
 The source document is an exact versioned object. Its top-level fields are
-`evidenceType=collector-parity-shadow-observations`, `evidenceVersion=1`,
+`evidenceType=collector-parity-shadow-observations`, `evidenceVersion=2`,
 `environment=production-like`, `status=pass`, `startedAt`, `finishedAt`,
 `operator`, dedicated `approvalTicket`, `sourceNamespace`, `attestation`,
-`database`, `flywayDatabaseMigrations`, `policy`, exactly four `platforms`,
+`database`, `policy`, exactly four `platforms`,
 `projection` and `duplicates`. Each platform record binds account/run UUIDs,
 provider mode and authoritative-missing reason, cursor-wrap/off-page exact
 refresh counts, the first/second/confirmed/rediscovered run sequence, transient
 failure counters, replay zeros, latest revision and its raw file. Projection
-state must put all nine named projections at the newest collector revision;
+state uses `rawDatasetRevision`, `publishedServingRevision` and the seven named
+states at one coherent published revision; the raw collector revision may be
+newer and must be reported separately;
 duplicate counts must all be integer zero. The sealer rejects extra keys,
 floats masquerading as integers, local/test namespaces or databases,
-placeholder approvals, stale/future timestamps and any Flyway history other
-than the frozen successful V1-V29 set.
+placeholder approvals, stale/future timestamps and any schema/deploy binding
+other than the exact `storage-publisher-final-2026-09-08-r2` contract.
 
 After an independent reviewer has checked that the raw captures really came
 from the controlled live-provider shadow run and recorded approval in the
@@ -124,9 +127,9 @@ rtk sudo /bin/bash -p \
 ```
 
 Replace `RELEASE`, `APPROVAL` and `UTC`; every output path must be new. The
-command writes mode-`0600` report v1 plus a mode-`0600` sibling `.sha256` and
+command writes mode-`0600` report v2 plus a mode-`0600` sibling `.sha256` and
 never overwrites either. It derives release ID, deploy-report digest,
-`SHA256(SHA256SUMS)`, deploy time/ticket and exact symlink/Flyway identity from
+`SHA256(SHA256SUMS)`, deploy time/ticket and exact final-schema/transition identity from
 the active tree. `cutover-preflight.sh` invokes `verify` from that same canonical
 release and checks freshness, raw evidence, active link and deploy binding
 again. The old unversioned four-boolean JSON is rejected.

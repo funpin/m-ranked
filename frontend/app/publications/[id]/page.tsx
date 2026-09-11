@@ -31,7 +31,7 @@ export default async function PublicationPage({ params, searchParams }: Props) {
   const historyLimit = normalizeHistoryLimit(query.history_limit);
   let history;
   try {
-    history = await loadPublicationHistory(id);
+    history = await loadPublicationHistory(id, undefined, historyLimit);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     return <ApiFailureState retryHref={queryHref(publicationHref(id), { history_limit: historyLimit })} />;
