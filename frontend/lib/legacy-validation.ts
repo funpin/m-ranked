@@ -14,7 +14,7 @@ export function legacyQueryErrors(url: URL): object[] {
       const parsed = /^[+-]?\d+(?:\.0+)?$/.test(raw.trim()) && Number.isSafeInteger(value);
       if (!parsed) errors.push({ type: "int_parsing", loc: ["query", "history_limit"], msg: "Input should be a valid integer, unable to parse string as an integer", input: raw });
       else if (value < 50) errors.push({ type: "greater_than_equal", loc: ["query", "history_limit"], msg: "Input should be greater than or equal to 50", input: raw, ctx: { ge: 50 } });
-      else errors.push({ type: "less_than_equal", loc: ["query", "history_limit"], msg: "Input should be less than or equal to 1000", input: raw, ctx: { le: 1000 } });
+      else if (value > 3000) errors.push({ type: "less_than_equal", loc: ["query", "history_limit"], msg: "Input should be less than or equal to 3000", input: raw, ctx: { le: 3000 } });
     }
   }
   if (url.pathname === "/compare") {

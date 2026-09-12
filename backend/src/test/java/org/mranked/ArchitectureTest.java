@@ -49,4 +49,16 @@ class ArchitectureTest {
                     "org.springframework.jdbc..",
                     "java.sql.."
             );
+
+    @ArchTest
+    static final ArchRule analysis_domain_and_detectors_do_not_depend_on_web_or_jdbc = noClasses()
+            .that().resideInAnyPackage("..analysis.domain..", "..analysis.application..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "..analysis.web..", "..analysis.infrastructure..", "org.springframework.jdbc..", "java.sql.."
+            );
+
+    @ArchTest
+    static final ArchRule analysis_web_does_not_compute_or_read_sql = noClasses()
+            .that().resideInAPackage("..analysis.web..")
+            .should().dependOnClassesThat().resideInAnyPackage("..analysis.infrastructure..", "org.springframework.jdbc..", "java.sql..");
 }

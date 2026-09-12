@@ -169,6 +169,7 @@ package "ingest" {
     quality : observation_quality
     interval_uncertain : boolean
     source_fingerprint : text
+    semantic_fingerprint : bytea?
     --
     UQ(published_month, publication_id, sampling_bucket)
   }
@@ -181,13 +182,38 @@ package "ingest" {
     reaction_count : bigint
   }
 
-  entity deletion_observation {
+  entity deletion_observation <<legacy append-only history>> {
     * id : bigint <<PK>>
     --
     publication_id : uuid <<FK>>
     collection_run_id : uuid <<FK>>
     observed_at : timestamptz
     outcome : deletion_probe_outcome
+    reason_code : text
+    consecutive_missing : integer
+  }
+
+  entity publication_availability_state <<one hot row per publication>> {
+    * publication_id : uuid <<PK, FK>>
+    --
+    status : deletion_probe_outcome
+    last_probe_outcome : deletion_probe_outcome
+    last_checked_at : timestamptz
+    last_present_at : timestamptz?
+    first_missing_at : timestamptz?
+    consecutive_missing : integer
+    reason_code : text
+    last_collection_run_id : uuid <<FK>>
+  }
+
+  entity publication_availability_event <<meaningful transitions only>> {
+    * publication_id : uuid <<PK, FK>>
+    * collection_run_id : uuid <<PK, FK>>
+    * observed_at : timestamptz <<PK>>
+    --
+    old_status : deletion_probe_outcome?
+    new_status : deletion_probe_outcome
+    probe_outcome : deletion_probe_outcome
     reason_code : text
     consecutive_missing : integer
   }
@@ -402,6 +428,10 @@ collection_run ||--o{ publication_metric_snapshot
 publication_metric_snapshot ||--o{ reaction_breakdown
 publication ||--o{ deletion_observation
 collection_run ||--o{ deletion_observation
+publication ||--o| publication_availability_state
+collection_run ||--o{ publication_availability_state
+publication ||--o{ publication_availability_event
+collection_run ||--o{ publication_availability_event
 collection_run ||--o{ raw_payload
 
 institution ||--o{ institution_metric_aggregate

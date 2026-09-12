@@ -7,7 +7,7 @@
 | --- | --- |
 | `frontend/tests/*.test.ts` | API-контракты, кеш, данные графиков, ошибки, формы и правила маршрутов |
 | `frontend/tests/browser/` | Текущий Next.js: UUID-страницы, старые ссылки → 308, графики, клавиатура, история свыше 1000 замеров, роли и desktop/mobile |
-| `backend/src/test/` | Spring API, PostgreSQL, Redis, CSV, транзакции, права, проекции и установка Flyway |
+| `backend/src/test/` | Spring API, PostgreSQL, Redis, CSV, транзакции, права, проекции и установка финальной схемы |
 | `test_target_collectors*.py` | Сборщики PostgreSQL, сохранение импортированных UUID и исторического baseline |
 | `test_migration_bridge*.py`, `test_migration_partition_postgres.py` | SQLite → PostgreSQL, точные рейтинги, возобновление после сбоя, ограничение подготовки партиций одной операцией на месяц в транзакции |
 | `test_migration_status.py` | Серверная страница прогресса: подтверждённые checkpoint, привязка к снимку, паузы/перезапуски и прогноз времени |
@@ -27,10 +27,10 @@ Linux-прогон CI. Для Linux задайте `--basetemp` внутри д�
 также может запрещать локальные порты или сбрасывать setgid при `chmod` — это
 ограничение окружения, а не основание ослаблять проверки прав.
 
-Полный обязательный прогон: следуйте
-[migration/integration/README.md](../migration/integration/README.md). Runner
-создаёт собственные пустые Docker-базы, применяет актуальную схему и требует
-отсутствия пропусков в интеграционных этапах. Не подставляйте production DSN.
+Обязательный CI создаёт пустую Docker-БД напрямую из `final-schema.sql`,
+проверяет единый schema contract и запускает Python/Java suites. Не подставляйте
+production DSN. Старый SQLite cutover runner архивирован; см.
+[migration/integration/README.md](../migration/integration/README.md).
 
 Frontend: в каталоге `frontend/` выполните `rtk pnpm check` с Node 24 и
 установленным Chromium (`rtk pnpm exec playwright install chromium`).

@@ -1,5 +1,4 @@
-/test-results/*
-!/test-results/routes-production-v28-r1.json
+/test-results/
 /playwright-report/
 /.next/
 /node_modules/

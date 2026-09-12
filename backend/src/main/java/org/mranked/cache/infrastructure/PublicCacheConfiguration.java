@@ -51,6 +51,11 @@ public class PublicCacheConfiguration {
             havingValue = "true",
             matchIfMissing = true
     )
+    @ConditionalOnProperty(
+            name = "mranked.source-read.enabled",
+            havingValue = "false",
+            matchIfMissing = true
+    )
     RedisMessageListenerContainer publicCacheInvalidationListenerContainer(
             RedisConnectionFactory connectionFactory,
             RedisRevisionInvalidationSubscriber subscriber,

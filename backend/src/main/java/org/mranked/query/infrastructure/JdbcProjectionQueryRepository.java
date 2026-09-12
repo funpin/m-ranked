@@ -19,6 +19,7 @@ import org.mranked.analytics.domain.PeriodKey;
 import org.mranked.analytics.domain.Platform;
 import org.mranked.catalog.domain.InstitutionIdentity;
 import org.mranked.catalog.domain.LegacyEntityType;
+import org.mranked.cache.domain.DatasetRevision;
 import org.mranked.ingestion.domain.PublicationIdentity;
 import org.mranked.query.application.PublicQueryRepository;
 import org.mranked.query.domain.AccountView;
@@ -669,16 +670,19 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
 
     private final JdbcClient jdbcClient;
     private final int retentionDays;
+    private final boolean sourceReadEnabled;
 
     public JdbcProjectionQueryRepository(JdbcClient jdbcClient) {
-        this(jdbcClient,70);
+        this(jdbcClient,70,false);
     }
     @org.springframework.beans.factory.annotation.Autowired
     public JdbcProjectionQueryRepository(JdbcClient jdbcClient,
-            @org.springframework.beans.factory.annotation.Value("${mranked.retention-days:70}") int retentionDays) {
+            @org.springframework.beans.factory.annotation.Value("${mranked.retention-days:70}") int retentionDays,
+            @org.springframework.beans.factory.annotation.Value("${mranked.source-read.enabled:false}") boolean sourceReadEnabled) {
         this.jdbcClient=jdbcClient;
         if(retentionDays<1)throw new IllegalArgumentException("retention-days must be positive");
         this.retentionDays=retentionDays;
+        this.sourceReadEnabled=sourceReadEnabled;
     }
 
     @Override
@@ -688,7 +692,8 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             UUID afterEntityId,
             long datasetRevision
     ) {
-        List<OverviewSqlRow> rows = jdbcClient.sql(OVERVIEW_SQL)
+        boolean sourceBacked = sourceReadEnabled && datasetRevision >= DatasetRevision.SOURCE_ID_FLOOR;
+        var statement = jdbcClient.sql(sourceBacked ? SourceOverviewSql.SQL : OVERVIEW_SQL)
                 .param("revision", datasetRevision)
                 .param("period", query.period().databaseValue())
                 .param("platform", query.platform().databaseValue())
@@ -696,7 +701,14 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 .param("sort", query.sort())
                 .param("direction", query.direction())
                 .param("afterId", afterEntityId, Types.OTHER)
-                .param("fetchLimit", fetchLimit)
+                .param("fetchLimit", fetchLimit);
+        if (sourceBacked) {
+            statement = statement
+                    .param("asOf", OffsetDateTime.ofInstant(
+                            Instant.ofEpochMilli(datasetRevision), java.time.ZoneOffset.UTC))
+                    .param("hotDays", retentionDays);
+        }
+        List<OverviewSqlRow> rows = statement
                 .query((resultSet, rowNumber) -> overviewRow(resultSet))
                 .list();
         Map<UUID, OverviewAccumulator> grouped = new LinkedHashMap<>();
@@ -718,11 +730,14 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             PeriodKey period,
             long datasetRevision
     ) {
-        return jdbcClient.sql(INSTITUTION_SQL)
+        boolean sourceBacked = sourceBacked(datasetRevision);
+        var statement = jdbcClient.sql(sourceBacked ? SourceReadSql.INSTITUTION : INSTITUTION_SQL)
                 .param("revision", datasetRevision)
                 .param("period", period.databaseValue())
                 .param("platform", platform.databaseValue())
-                .param("legacyId", legacyId)
+                .param("legacyId", legacyId);
+        if (sourceBacked) statement=statement.param("asOf",sourceAsOf(datasetRevision));
+        return statement
                 .query((resultSet, rowNumber) -> new InstitutionView(
                         institution(resultSet), platform, period, metrics(resultSet, datasetRevision)
                 ))
@@ -735,21 +750,33 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             LegacyEntityType legacyEntityType,
             long datasetRevision
     ) {
-        return jdbcClient.sql(PUBLICATION_SQL)
+        boolean sourceBacked = sourceBacked(datasetRevision);
+        var statement = jdbcClient.sql(sourceBacked ? SourceReadSql.PUBLICATION : PUBLICATION_SQL)
                 .param("legacyType", legacyEntityType.databaseValue())
                 .param("legacyId", legacyId)
-                .param("revision", datasetRevision)
+                .param("revision", datasetRevision);
+        if(sourceBacked)statement=statement.param("asOf",sourceAsOf(datasetRevision));
+        return statement
                 .query((resultSet, rowNumber) -> publication(resultSet, legacyEntityType))
                 .optional();
     }
 
     @Override
     public Optional<PublicationView> findPublication(UUID id, long revision) {
-        String sql = PUBLICATION_SQL.replace(
-                "alias.entity_type = :legacyType",
-                "alias.entity_type = CASE WHEN account.platform = 'telegram' THEN 'posts' ELSE 'platform_posts' END")
-                .replace("alias.legacy_id = :legacyId", "alias.target_uuid = :id");
-        return jdbcClient.sql(sql).param("id", id).param("revision", revision)
+        boolean sourceBacked=sourceBacked(revision);
+        String sql = sourceBacked
+                ? SourceReadSql.PUBLICATION.replace(
+                    "alias.entity_type=:legacyType AND alias.legacy_id=:legacyId",
+                    "alias.entity_type=CASE WHEN account.platform='telegram' THEN 'posts' "
+                        + "ELSE 'platform_posts' END AND alias.target_uuid=:id")
+                : PUBLICATION_SQL.replace(
+                    "alias.entity_type = :legacyType",
+                    "alias.entity_type = CASE WHEN account.platform = 'telegram' "
+                        + "THEN 'posts' ELSE 'platform_posts' END")
+                    .replace("alias.legacy_id = :legacyId", "alias.target_uuid = :id");
+        var statement=jdbcClient.sql(sql).param("id", id).param("revision", revision);
+        if(sourceBacked)statement=statement.param("asOf",sourceAsOf(revision));
+        return statement
                 .query((rs, row) -> publication(rs, LegacyEntityType.fromApiValue(rs.getString("entity_type"))))
                 .optional();
     }
@@ -767,21 +794,25 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
     public ActivityRatingResult findActivityRatingPage(
             ActivityRatingQuery query, int entityLimit, long datasetRevision, UUID afterEntityId
     ) {
+        boolean source=sourceBacked(datasetRevision);
         String entitySql = query.platform() == Platform.TELEGRAM
                 ? ActivityRatingSql.TELEGRAM_ENTITIES
                 : ActivityRatingSql.PLATFORM_ENTITIES;
         String publicationSql = query.platform() == Platform.TELEGRAM
                 ? ActivityRatingSql.TELEGRAM_PUBLICATIONS
                 : ActivityRatingSql.PLATFORM_PUBLICATIONS;
+        if(source){entitySql=SourceRatingSql.ENTITIES;publicationSql=SourceRatingSql.PUBLICATIONS;}
         int[] entityOffset = {0};
-        List<ActivityRatingEntity> fetchedEntities = jdbcClient.sql(ActivityRatingSql.entityPageSql(entitySql))
+        var entityStatement=jdbcClient.sql(source ? entitySql : ActivityRatingSql.entityPageSql(entitySql))
                 .param("afterEntityId", afterEntityId, Types.OTHER)
                 .param("revision", datasetRevision)
                 .param("period", query.period().databaseValue())
                 .param("platform", query.platform().databaseValue())
                 .param("channelSort", query.channelSort())
                 .param("channelDirection", query.channelDirection())
-                .param("entityFetchLimit", entityLimit + 1)
+                .param("entityFetchLimit", entityLimit + 1);
+        if(source)entityStatement=entityStatement.param("asOf",sourceAsOf(datasetRevision));
+        List<ActivityRatingEntity> fetchedEntities = entityStatement
                 .query((resultSet, rowNumber) -> {
                     if (rowNumber == 0) entityOffset[0] = resultSet.getInt("page_position") - 1;
                     return activityRatingEntity(resultSet);
@@ -791,12 +822,14 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
         List<ActivityRatingEntity> entities = List.copyOf(fetchedEntities.subList(
                 0, Math.min(entityLimit, fetchedEntities.size())
         ));
-        List<ActivityRatingPublication> publications = jdbcClient.sql(publicationSql)
+        var publicationStatement=jdbcClient.sql(publicationSql)
                 .param("revision", datasetRevision)
                 .param("period", query.period().databaseValue())
                 .param("platform", query.platform().databaseValue())
                 .param("postSort", query.postSort())
-                .param("postDirection", query.postDirection())
+                .param("postDirection", query.postDirection());
+        if(source)publicationStatement=publicationStatement.param("asOf",sourceAsOf(datasetRevision));
+        List<ActivityRatingPublication> publications = publicationStatement
                 .query((resultSet, rowNumber) -> activityRatingPublication(resultSet))
                 .list();
         return new ActivityRatingResult(entities, publications, truncated, entityOffset[0]);
@@ -805,7 +838,39 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
     @Override
     public List<org.mranked.query.domain.ComparisonCandidate> findComparisonCandidates(
             Platform platform, int limit, UUID afterId, long revision) {
-        return jdbcClient.sql("""
+        boolean source=sourceBacked(revision);
+        String sql=source?"""
+            WITH candidates AS (
+                SELECT account.id AS entity_id,'channels'::text AS entity_type,channel.legacy_id,
+                       account.institution_id,institution.canonical_name,
+                       coalesce(nullif(account.current_title,''),CASE WHEN account.current_username IS NOT NULL
+                         THEN '@'||account.current_username END,institution.short_name,institution.canonical_name) AS label,
+                       concat(CASE WHEN nullif(account.current_username,'') IS NOT NULL THEN '@'||account.current_username||' · ' ELSE '' END,
+                         coalesce(metric.subscriber_display,metric.subscriber_count::text,'—'),' подписчиков') AS description
+                  FROM catalog.visible_platform_account account
+                  JOIN catalog.visible_institution institution ON institution.id=account.institution_id
+                  JOIN catalog.legacy_entity_alias channel ON channel.target_uuid=account.id AND channel.entity_type='channels'
+                  LEFT JOIN LATERAL(SELECT snapshot.subscriber_count,snapshot.subscriber_display
+                    FROM ingest.account_metric_snapshot_active snapshot WHERE snapshot.platform_account_id=account.id
+                      AND snapshot.observed_at<=:asOf ORDER BY snapshot.observed_at DESC,snapshot.id DESC LIMIT 1) metric ON true
+                 WHERE :platform='telegram' AND account.platform='telegram' AND account.enabled
+                UNION ALL
+                SELECT institution.id,'institutions',alias.legacy_id,institution.id,institution.canonical_name,
+                       coalesce(institution.short_name,institution.canonical_name),
+                       string_agg(coalesce(nullif(account.current_title,''),CASE WHEN account.current_username IS NOT NULL
+                         THEN '@'||account.current_username END,account.canonical_external_id),' · ' ORDER BY account.id)
+                  FROM catalog.visible_institution institution
+                  JOIN catalog.legacy_entity_alias alias ON alias.target_uuid=institution.id AND alias.entity_type='institutions'
+                  JOIN catalog.visible_platform_account account ON account.institution_id=institution.id
+                   AND account.platform::text=:platform AND account.enabled
+                 WHERE :platform<>'telegram'
+                 GROUP BY institution.id,alias.legacy_id,institution.canonical_name,institution.short_name
+            ), positioned AS (
+                SELECT candidates.*,row_number() OVER(ORDER BY lower(label),entity_id) AS position FROM candidates
+            )
+            SELECT * FROM positioned WHERE CAST(:afterId AS uuid) IS NULL OR position>(
+              SELECT position FROM positioned WHERE entity_id=CAST(:afterId AS uuid)) ORDER BY position LIMIT :limit
+            """:"""
             WITH candidates AS (
                 SELECT card.entity_id, card.entity_type, card.legacy_id, card.institution_id,
                        card.canonical_name,
@@ -835,8 +900,11 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             SELECT * FROM candidates WHERE CAST(:afterId AS uuid) IS NULL OR position>
                 (SELECT position FROM candidates WHERE entity_id=CAST(:afterId AS uuid))
             ORDER BY position LIMIT :limit
-            """).param("platform",platform.databaseValue()).param("revision",revision)
-                .param("afterId",afterId,Types.OTHER).param("limit",limit)
+            """;
+        var statement=jdbcClient.sql(sql).param("platform",platform.databaseValue()).param("revision",revision)
+                .param("afterId",afterId,Types.OTHER).param("limit",limit);
+        if(source)statement=statement.param("asOf",sourceAsOf(revision));
+        return statement
                 .query((row,index)->new org.mranked.query.domain.ComparisonCandidate(
                         row.getObject("entity_id",UUID.class),row.getString("entity_type"),row.getLong("legacy_id"),
                         row.getString("label"),row.getObject("institution_id",UUID.class),row.getString("canonical_name"),row.getString("description")))
@@ -854,10 +922,11 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             ComparisonSelection selection,
             long datasetRevision
     ) {
-        String sql = selection.type() == ComparisonSelectionType.CHANNELS
+        boolean source=sourceBacked(datasetRevision);
+        String sql = source ? SourceReadSql.COMPARISON : selection.type() == ComparisonSelectionType.CHANNELS
                 ? CHANNEL_COMPARISON_SQL
                 : INSTITUTION_COMPARISON_SQL;
-        List<ComparisonRow> rows = jdbcClient.sql(sql)
+        var statement=jdbcClient.sql(sql)
                 .param("revision", datasetRevision)
                 .param("platform", platform.databaseValue())
                 .param("horizonSeconds", Math.multiplyExact(horizonHours, 3600))
@@ -865,7 +934,9 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 .param("metric", metric)
                 .param("aggregation", aggregation)
                 .param("institutionLimit", institutionLimit)
-                .param("selectionLegacyIdsJson", legacyIdsJson(selection.legacyIds()))
+                .param("selectionLegacyIdsJson", legacyIdsJson(selection.legacyIds()));
+        if(source)statement=statement.param("asOf",sourceAsOf(datasetRevision)).param("hotDays",retentionDays);
+        List<ComparisonRow> rows = statement
                 .query((resultSet, rowNumber) -> comparisonRow(resultSet))
                 .list();
         if (rows.isEmpty()) {
@@ -930,6 +1001,7 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
     }
 
     @Override public String findPublicationArchivedText(UUID publicationId,long revision) {
+        if(sourceBacked(revision))return null;
         return jdbcClient.sql("SELECT archived_text FROM analytics.publication_content WHERE publication_id=:id AND dataset_revision_id=:revision")
                 .param("id",publicationId).param("revision",revision).query(String.class).optional().orElse(null);
     }
@@ -940,19 +1012,31 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
             LegacyEntityType legacyEntityType,
             long datasetRevision
     ) {
-        return accountQuery(jdbcClient.sql(ACCOUNT_SQL)
+        boolean sourceBacked=sourceBacked(datasetRevision);
+        var statement=jdbcClient.sql(sourceBacked?SourceReadSql.ACCOUNT:ACCOUNT_SQL)
                 .param("revision", datasetRevision)
                 .param("legacyType", legacyEntityType.databaseValue())
-                .param("legacyId", legacyId), datasetRevision);
+                .param("legacyId", legacyId);
+        if(sourceBacked)statement=statement.param("asOf",sourceAsOf(datasetRevision));
+        return accountQuery(statement, datasetRevision);
     }
 
     @Override
     public Optional<AccountView> findAccount(UUID id, long revision) {
-        String sql = ACCOUNT_SQL.replace(
-                "account_alias.entity_type = :legacyType",
-                "account_alias.entity_type = CASE WHEN account.platform = 'telegram' THEN 'channels' ELSE 'platform_accounts' END")
-                .replace("account_alias.legacy_id = :legacyId", "account.id = :id");
-        return accountQuery(jdbcClient.sql(sql).param("id", id).param("revision", revision), revision);
+        boolean sourceBacked=sourceBacked(revision);
+        String sql = sourceBacked
+                ? SourceReadSql.ACCOUNT.replace(
+                    "account_alias.entity_type=:legacyType AND account_alias.legacy_id=:legacyId",
+                    "account_alias.entity_type=CASE WHEN account.platform='telegram' THEN 'channels' "
+                        + "ELSE 'platform_accounts' END AND account.id=:id")
+                : ACCOUNT_SQL.replace(
+                    "account_alias.entity_type = :legacyType",
+                    "account_alias.entity_type = CASE WHEN account.platform = 'telegram' "
+                        + "THEN 'channels' ELSE 'platform_accounts' END")
+                    .replace("account_alias.legacy_id = :legacyId", "account.id = :id");
+        var statement=jdbcClient.sql(sql).param("id", id).param("revision", revision);
+        if(sourceBacked)statement=statement.param("asOf",sourceAsOf(revision));
+        return accountQuery(statement, revision);
     }
 
     private Optional<AccountView> accountQuery(JdbcClient.StatementSpec query, long datasetRevision) {
@@ -983,6 +1067,14 @@ public class JdbcProjectionQueryRepository implements PublicQueryRepository {
                 ))
                 .optional().map(account -> account.withStats(new JdbcDetailQueries(jdbcClient)
                         .stats(account.id(),account.platform(),retentionDays,datasetRevision)));
+    }
+
+    private boolean sourceBacked(long revision) {
+        return sourceReadEnabled && revision >= DatasetRevision.SOURCE_ID_FLOOR;
+    }
+
+    private static OffsetDateTime sourceAsOf(long revision) {
+        return OffsetDateTime.ofInstant(Instant.ofEpochMilli(revision),java.time.ZoneOffset.UTC);
     }
 
     private static OverviewSqlRow overviewRow(ResultSet resultSet) throws SQLException {

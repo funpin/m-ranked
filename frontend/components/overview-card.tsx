@@ -1,5 +1,5 @@
 import { accountHref } from "@/lib/entity-routes";
-import Link from "next/link";
+import Link from "@/components/native-link";
 import type { ReactNode } from "react";
 import { legacyDate, legacyNumber, PERIOD_SHORT, PLATFORM_LABELS } from "@/lib/format";
 import { metricNumber, queryHref } from "@/lib/params";
@@ -127,5 +127,5 @@ export function OverviewCard({ item, integrationWarning }: { item: OverviewItem;
   if (item.platform === "all") {
     return <article className="card overview-card platform-overview-card">{body}</article>;
   }
-  return <Link className="card overview-card" href={activityHref(item)}>{body}</Link>;
+  return <Link className="card overview-card" href={activityHref(item)} prefetch={false}>{body}</Link>;
 }

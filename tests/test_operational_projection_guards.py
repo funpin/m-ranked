@@ -16,11 +16,15 @@ from migration.release_manifest import flyway_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / 'operations/scripts'
-NAMES = sorted([
+SERVING_NAMES = sorted([
     'publication_latest', 'publication_hourly', 'institution_daily_metrics',
     'institution_monthly_metrics', 'institution_period_metrics', 'comparison',
-    'publication_history', 'publication_content', 'legacy_exports',
+    'publication_history',
 ])
+HISTORICAL_NAMES = sorted([
+    'publication_content', 'legacy_exports',
+])
+NAMES = sorted(SERVING_NAMES + HISTORICAL_NAMES)
 DSN = os.getenv('MRANKED_TEST_POSTGRES_ADMIN_DSN')
 
 
@@ -32,7 +36,7 @@ def _guard_sql(kind):
     if kind == 'inspect':
         statement = _blocks('projection-publisher.sh')[0]
     elif kind == 'publish':
-        statement = re.search(r'WITH latest_revision AS .*?\\gset',
+        statement = re.search(r'WITH core_projection\(projection_name\) AS .*?\\gset',
                               _blocks('projection-publisher.sh')[1], re.S)[0]
         statement = statement.removesuffix('\\gset').replace(":'revision'", '42')
     elif kind in ('preflight', 'writer'):
@@ -73,13 +77,14 @@ def guard_db():
 @pytest.mark.parametrize('fault', [
     'none', 'missing_history', 'missing_content', 'missing_exports', 'six_only',
     'extra', 'wrong_name', 'stale', 'future', 'null_status', 'null_revision',
-    'rebuilding', 'failed', 'no_revision', 'advanced_revision',
+    'rebuilding', 'failed', 'missing_serving', 'stale_serving', 'failed_serving',
+    'no_revision', 'advanced_revision',
 ])
-def test_exact_nine_state_and_revision_guards_execute_in_postgres(guard_db, kind, fault):
+def test_serving_generation_guards_execute_in_postgres(guard_db, kind, fault):
     connection = guard_db
     if fault.startswith('missing_'):
         name = {'missing_history': 'publication_history', 'missing_content': 'publication_content',
-                'missing_exports': 'legacy_exports'}[fault]
+                'missing_exports': 'legacy_exports', 'missing_serving': 'comparison'}[fault]
         connection.execute('DELETE FROM projection_state WHERE projection_name=%s', (name,))
     elif fault == 'six_only':
         connection.execute("DELETE FROM projection_state WHERE projection_name IN ('publication_history','publication_content','legacy_exports')")
@@ -93,6 +98,10 @@ def test_exact_nine_state_and_revision_guards_execute_in_postgres(guard_db, kind
     elif fault in ('null_status', 'rebuilding', 'failed'):
         connection.execute("UPDATE projection_state SET status=%s WHERE projection_name='publication_content'",
                            (None if fault == 'null_status' else fault,))
+    elif fault == 'stale_serving':
+        connection.execute("UPDATE projection_state SET dataset_revision_id=41 WHERE projection_name='comparison'")
+    elif fault == 'failed_serving':
+        connection.execute("UPDATE projection_state SET status='failed' WHERE projection_name='comparison'")
     elif fault == 'no_revision':
         connection.execute('DELETE FROM dataset_revision')
     elif fault == 'advanced_revision':
@@ -101,7 +110,11 @@ def test_exact_nine_state_and_revision_guards_execute_in_postgres(guard_db, kind
     statement = _guard_sql(kind)
     if kind == 'restore':
         import psycopg
-        if fault == 'none':
+        expected = fault not in {
+            'missing_history', 'six_only', 'missing_serving', 'stale_serving',
+            'failed_serving', 'no_revision'
+        }
+        if expected:
             connection.execute(statement)
         else:
             with pytest.raises(psycopg.errors.RaiseException):
@@ -113,17 +126,26 @@ def test_exact_nine_state_and_revision_guards_execute_in_postgres(guard_db, kind
     elif kind == 'publish':
         accepted = row[0] is True
     elif kind == 'preflight':
-        accepted = row[0] == 42 and row[1:] == (9, 0, 9)
+        accepted = row == (42, 7, 0, 7)
+    elif kind == 'writer':
+        accepted = row is not None and row[0] >= 42 and row[1:] == (42, 7)
     else:
-        accepted = row == (42, 9, 9)
-    assert accepted == (fault == 'none'), (kind, fault, row)
+        accepted = False
+    expected = fault not in {
+        'missing_history', 'six_only', 'missing_serving', 'stale_serving', 'failed_serving',
+        *(() if kind == 'publish' else ('no_revision',)),
+        *(('advanced_revision',) if kind == 'inspect' else ()),
+    }
+    assert accepted == expected, (kind, fault, row)
 
 
 def test_publisher_finalizes_only_complete_revision_with_pending_requests(guard_db):
     guard_db.execute("INSERT INTO outbox_event VALUES ('projection.rebuild.requested',NULL,42)")
-    assert guard_db.execute(_guard_sql('inspect')).fetchone() == ('finalize', 42, 9, 1)
+    assert guard_db.execute(_guard_sql('inspect')).fetchone() == ('finalize', 42, 7, 1)
     guard_db.execute("UPDATE projection_state SET status='rebuilding' WHERE projection_name='legacy_exports'")
-    assert guard_db.execute(_guard_sql('inspect')).fetchone() == ('publish', 42, 8, 1)
+    assert guard_db.execute(_guard_sql('inspect')).fetchone() == ('finalize', 42, 7, 1)
+    guard_db.execute("UPDATE projection_state SET status='rebuilding' WHERE projection_name='comparison'")
+    assert guard_db.execute(_guard_sql('inspect')).fetchone() == ('publish', 42, 6, 1)
 
 
 def test_writer_accepts_immutable_correction_but_rejects_exact_replay_duplicates(guard_db):
@@ -142,14 +164,11 @@ def _restore_filter():
 
 
 def _restore_report():
-    manifest = flyway_manifest()
     return {'status': 'pass', 'rtoMet': True,
             'checks': {'pageChecksums': True, 'databaseAssertions': True, 'pgAmcheck': True},
-            'database': {'datasetRevision': 42, 'coreReadyProjections': 9,
-                         'projectionStates': [{'name': name, 'status': 'ready', 'datasetRevision': 42} for name in NAMES],
-                         'flywaySchemaVersion': int(manifest[-1]['version']), 'flywayMigrationCount': len(manifest),
-                         'flywayMigrations': [{key: row[key] for key in ('version', 'script', 'checksum')}
-                                              for row in manifest]}}
+            'database': {'rawDatasetRevision': 42, 'datasetRevision': 42, 'coreReadyProjections': 7,
+                         'projectionStates': [{'name': name, 'status': 'ready', 'datasetRevision': 42} for name in SERVING_NAMES],
+                         'schemaContract': 'storage-publisher-final-2026-09-08-r3'}}
 
 
 @pytest.mark.parametrize('fault', ['none', 'absent', 'six', 'duplicate', 'extra', 'stale', 'failed', 'false_count', 'fractional_revision'])
@@ -158,26 +177,36 @@ def test_restore_report_gate_requires_exact_names_and_coherent_revision(fault):
     database = report['database']
     states = database['projectionStates']
     if fault == 'absent': del database['projectionStates']
-    elif fault == 'six': database['projectionStates'] = states[:6]
+    elif fault == 'six': database['projectionStates'] = states[:3]
     elif fault == 'duplicate': states[-1] = states[0]
     elif fault == 'extra': states.append({'name': 'unexpected', 'status': 'ready', 'datasetRevision': 42})
     elif fault == 'stale': states[0]['datasetRevision'] = 41
     elif fault == 'failed': states[0]['status'] = 'failed'
-    elif fault == 'false_count': database['coreReadyProjections'] = 6
+    elif fault == 'false_count': database['coreReadyProjections'] = 9
     elif fault == 'fractional_revision': database['datasetRevision'] = 42.5
     result = subprocess.run(['jq', '-e', _restore_filter()], input=json.dumps(report), text=True, capture_output=True)
     assert (result.returncode == 0) == (fault == 'none'), result.stderr
 
 
-@pytest.mark.parametrize('envelope,expected', [('ready|42|9|0', 0), ('ready|42|6|0', 70), ('finalize|42|6|1', 70), ('ready|42|10|0', 70)])
+@pytest.mark.parametrize('envelope,expected', [('ready|42|7|0', 0), ('ready|42|6|0', 70), ('finalize|42|6|1', 70), ('ready|42|9|0', 70)])
 def test_publisher_shell_rejects_incomplete_ready_envelopes(tmp_path, envelope, expected):
     fake = tmp_path / 'psql'
-    fake.write_text('#!/bin/sh\ncat >/dev/null\nprintf "%s\\n" "$TEST_ENVELOPE"\n')
+    fake.write_text(
+        '#!/bin/sh\n'
+        'case "$*" in\n'
+        '  *schema_contract*) printf "%s\\n" "storage-publisher-final-2026-09-08-r3" ;;\n'
+        '  *) cat >/dev/null; printf "%s\\n" "$TEST_ENVELOPE" ;;\n'
+        'esac\n'
+    )
     fake.chmod(0o700)
+    fake_flock = tmp_path / 'flock'
+    fake_flock.write_text('#!/bin/sh\nexit 0\n')
+    fake_flock.chmod(0o700)
     password = tmp_path / 'pgpass'
     password.write_text('fixture-only\n')
     env = dict(os.environ, PATH=str(tmp_path) + os.pathsep + os.environ['PATH'],
-               PROJECTION_DATABASE_URL='unused', PGPASSFILE=str(password), TEST_ENVELOPE=envelope)
+               PROJECTION_DATABASE_URL='unused', PGPASSFILE=str(password), TEST_ENVELOPE=envelope,
+               PROJECTION_CAPACITY_PATH=str(tmp_path), PROJECTION_LOCK_FILE=str(tmp_path / 'publisher.lock'))
     result = subprocess.run(['bash', str(SCRIPTS / 'projection-publisher.sh'), '--once'],
                             env=env, text=True, capture_output=True, timeout=5)
     assert result.returncode == expected, result.stderr

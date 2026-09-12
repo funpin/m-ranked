@@ -1,0 +1,66 @@
+[Unit]
+Description=M-Ranked direct-source Spring API container
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStartPre=-/usr/bin/docker rm -f m-ranked-target-api
+ExecStart=/usr/bin/docker run --rm --name m-ranked-target-api \
+    --network host \
+    --user 989:989 \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges:true \
+    --memory 576m \
+    --memory-swap 576m \
+    --tmpfs /tmp:rw,noexec,nosuid,size=32m,uid=989,gid=989 \
+    --env-file /etc/m-ranked/api.env \
+    -e SERVER_PORT=18080 \
+    -e MANAGEMENT_SERVER_PORT=18081 \
+    -e SERVER_TOMCAT_THREADS_MAX=8 \
+    -e MRANKED_SOURCE_READ_ENABLED=true \
+    -e MRANKED_CACHE_REDIS_TTL=PT2M \
+    -e MRANKED_EXPORTS_SPOOL_DIRECTORY=/var/lib/m-ranked/api/exports \
+    -e SPRING_CONFIG_IMPORT=configtree:/run/secrets/ \
+    -v /opt/m-ranked/current/backend:/app:ro \
+    -v /etc/m-ranked/api-runtime-secrets:/run/secrets:ro \
+    -v /var/lib/m-ranked/api:/var/lib/m-ranked/api \
+    -v /var/lib/m-ranked/identity-receipts/admin:/var/lib/m-ranked/identity-receipts/admin \
+    eclipse-temurin:21-jre-jammy \
+    java -XX:+ExitOnOutOfMemoryError -Xms96m -Xmx240m -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=48m \
+    -Duser.timezone=UTC -jar /app/m-ranked-backend-source-read.jar
+ExecStop=/usr/bin/docker stop --time 25 m-ranked-target-api
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=90s
+TimeoutStopSec=35s
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+LimitNOFILE=65536
+TasksMax=512
+MemoryHigh=576M
+MemoryMax=640M
+MemorySwapMax=0
+
+[Install]
+WantedBy=m-ranked-shadow.target

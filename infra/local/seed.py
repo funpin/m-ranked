@@ -30,20 +30,22 @@ if os.environ.get("LOCAL_IMPORT_ENABLED", "false").lower() != "true":
 for attempt in range(120):
     try:
         with psycopg.connect(os.environ["LOCAL_BOOTSTRAP_DSN"]) as connection:
-            count = connection.execute('SELECT count(*) FROM flyway.flyway_schema_history WHERE success AND version = \'29\'').fetchone()[0]
-            if count == 1:
+            contract = connection.execute(
+                "SELECT contract_id FROM ops_and_admin.schema_contract"
+            ).fetchone()[0]
+            if contract == "storage-publisher-final-2026-09-08-r3":
                 break
     except psycopg.Error:
         pass
     time.sleep(2)
 else:
-    raise RuntimeError("Flyway V29 did not become ready")
+    raise RuntimeError("Final database schema contract did not become ready")
 
 # Legacy period analytics intentionally uses baseline_from_publication even
-# after history is forced incomplete. V29 projections implement this too, but
-# V1's table constraint rejects the state present in real production data.
+# after history is forced incomplete. The final projections preserve this too,
+# but the canonical table constraint rejects the state present in the local source data.
 # Keep both source facts. This explicit local-only compatibility adjustment is
-# not a Flyway migration and does not claim an unmodified release schema.
+# not part of the final schema and does not claim an unmodified release contract.
 with sqlite3.connect(source.as_uri() + "?mode=ro&immutable=1", uri=True) as legacy:
     affected = legacy.execute("SELECT count(*) FROM posts WHERE baseline_from_publication=1 AND history_forced_incomplete=1").fetchone()[0]
 if affected:

@@ -5,7 +5,6 @@ import { ComparisonVisibility } from "@/components/comparison-visibility";
 import { ComparisonChart } from "@/components/comparison-chart";
 import { ApiFailureState, EmptyState, PageHeader } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { collectPages, uniqueRows } from "@/lib/continuation";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import {
   comparePeriod,
@@ -68,9 +67,9 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
   let candidates;
   let candidateRevision: number;
   try {
-    const pages = await collectPages((cursor) => api.comparisonCandidates(platform, cursor), (page) => page.nextCursor);
-    candidateRevision = pages[0]!.datasetRevision;
-    candidates = uniqueRows(pages.flatMap((page) => page.items), (item) => item.selectionId).map((item) => ({
+    const page = await api.comparisonCandidates(platform, 200);
+    candidateRevision = page.datasetRevision;
+    candidates = page.items.map((item) => ({
       id: item.selectionLegacyId, label: item.selectionLabel, description: item.selectionDescription ?? item.canonicalName,
     }));
   } catch {
@@ -79,15 +78,15 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
   let comparison: ComparisonView | null = null;
   let comparisonFailed = false;
   let comparisonRejected: string | null = null;
-  const intendedIds = explicitSelection ? requestedSelection.ids : candidates.map((item) => item.id);
+  const intendedIds = explicitSelection ? requestedSelection.ids : candidates.slice(0, MAX_COMPARISON_INSTITUTIONS).map((item) => item.id);
   if (!selectionIssue && intendedIds.length) {
     try {
-      const pages = await collectPages((selectionCursor) => api.comparison({ platform,
+      const page = await api.comparison({ platform,
         horizonHours: hours, includePartial, metric, aggregation, institutionLimit: COMPARISON_PAGE_SIZE,
-        selectionCursor, ...(explicitSelection ? requestedSelection.type === "channels"
+        ...(explicitSelection ? requestedSelection.type === "channels"
           ? { channels: requestedSelection.ids } : { institutions: requestedSelection.ids } : {}),
-      }), (page) => page.nextSelectionCursor);
-      comparison = { ...pages[0]!, series: uniqueRows(pages.flatMap((page) => page.series), (item) => item.selectionId), nextSelectionCursor: null };
+      });
+      comparison = page;
       if (comparison.datasetRevision !== candidateRevision) {
         comparison = null;
         comparisonRejected = "Данные обновились во время загрузки. Повторите запрос";

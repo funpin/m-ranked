@@ -13,200 +13,69 @@ import zlib
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION_DIR = ROOT / "backend/src/main/resources/db/migration"
-
-FROZEN_V8_MIGRATIONS = (
-    (
-        "1",
-        "V1__target_baseline.sql",
-        "dc0ded29c5b7b42860dbabd04988c1803900685dc074c25adf5969e8be8d9fb1",
-        -1636077697,
-    ),
-    (
-        "2",
-        "V2__rebuild_core_projections.sql",
-        "113e94524c6617bf59ab7dc2760615bf9c6d10538c12290400e15f85df16c7dd",
-        839607018,
-    ),
-    (
-        "3",
-        "V3__collector_observation_times_and_identity_grants.sql",
-        "5233f98d3b39db74a449b1e9852f252def1606c5982e87d40ec366275d388ad1",
-        -1456658399,
-    ),
-    (
-        "4",
-        "V4__admin_collection_run_status_grants.sql",
-        "d5af14bfc692e9e3b57ed257b3632fbc616cb65ba47babb2aebb1d7dea5b7e82",
-        1318350062,
-    ),
-    (
-        "5",
-        "V5__legacy_activity_period_projection.sql",
-        "d56c124e2d68eb9897d3fe9d10bde0adf730ea02b84e0d7ec09660775438ea41",
-        -1313754193,
-    ),
-    (
-        "6",
-        "V6__comparison_valid_observation_hourly_projection.sql",
-        "4ac99091046d40345c7024d3fab96ceb779fafb836c18c6a750f748f7bd29c64",
-        -290358219,
-    ),
-    (
-        "7",
-        "V7__activity_rating_read_grants.sql",
-        "95244a71a992fb8d9de387622224ddb52365120ac47c4d0cf4cbb20f4e36f0eb",
-        -1228913579,
-    ),
-    (
-        "8",
-        "V8__legacy_overview_projection.sql",
-        "dc855dde66a705808e1565e3f56c4555995d370805cee68ee9293ae7fa0aec9c",
-        -574188650,
-    ),
-)
+FINAL_SCHEMA = ROOT / "backend/src/main/resources/db/final-schema.sql"
+TRANSITION = ROOT / "operations/sql/transition-production-to-final.sql"
+CONTRACT = "storage-publisher-final-2026-09-08-r3"
 
 
-from operations.collector_parity_evidence import EXPECTED_MIGRATIONS
-assert EXPECTED_MIGRATIONS[:8] == FROZEN_V8_MIGRATIONS
-
-def _flyway_crc32(path: Path) -> int:
-    checksum = 0
-    with path.open("rb") as stream:
-        for line in stream:
-            checksum = zlib.crc32(line.rstrip(b"\r\n"), checksum)
-    return checksum if checksum < 2**31 else checksum - 2**32
-
-
-def test_frozen_v1_v8_migration_bytes_match_operational_manifest() -> None:
-    files = sorted(MIGRATION_DIR.glob("V*.sql"), key=lambda path: int(path.name[1:].split("__", 1)[0]))
-    assert [path.name for path in files] == [entry[1] for entry in EXPECTED_MIGRATIONS]
-
-    for _version, filename, expected_sha256, expected_flyway_checksum in EXPECTED_MIGRATIONS:
-        path = MIGRATION_DIR / filename
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected_sha256
-        assert _flyway_crc32(path) == expected_flyway_checksum
+def test_only_one_final_schema_is_active() -> None:
+    migration_dir = ROOT / "backend/src/main/resources/db/migration"
+    roles_init = (ROOT / "infra/postgres/init/001-create-roles.sh").read_text(
+        encoding="utf-8"
+    )
+    assert not list(migration_dir.glob("V*.sql"))
+    schema = FINAL_SCHEMA.read_text(encoding="utf-8")
+    transition = TRANSITION.read_text(encoding="utf-8")
+    assert CONTRACT in schema
+    assert CONTRACT in transition
+    assert "flyway.flyway_schema_history" not in schema
+    assert "migration." not in schema
+    assert "CREATE SCHEMA IF NOT EXISTS flyway" not in roles_init
+    assert transition.startswith("-- One-time atomic transition")
+    assert "BEGIN;" in transition
+    assert transition.rstrip().endswith("COMMIT;")
+    assert "$production_contract_guard$" in transition
 
 
-def test_cache_outbox_uses_supported_redis_cli_connection_flags() -> None:
-    script = (ROOT / "operations/scripts/cache-outbox-worker.sh").read_text(
+def test_standard_deploy_validates_artifacts_without_running_migrations() -> None:
+    deploy = (ROOT / "operations/scripts/deploy-shadow.sh").read_text(encoding="utf-8")
+    assert "backend/src/main/resources/db/final-schema.sql" in deploy
+    assert "operations/sql/transition-production-to-final.sql" in deploy
+    assert "FLYWAY_BIN" not in deploy
+    assert " flyway" not in deploy.lower()
+    assert "migration_location" not in deploy
+    assert CONTRACT in deploy
+    assert "schemaContract" in deploy
+    assert "SYMLINKS.sha256" in deploy
+    assert deploy.count("validate_release_symlinks \"$release_path\"") == 3
+    source_capture = deploy.index("capture_frozen_release_provenance \"$release_source\"")
+    copy = deploy.index("cp -a --no-preserve=ownership -- \"$release_source/.\" \"$staging_path/\"")
+    staging_capture = deploy.index("capture_frozen_release_provenance \"$staging_path\"")
+    move = deploy.index("mv -T -- \"$staging_path\" \"$release_path\"")
+    report = deploy.index("--arg releaseManifestSha256 \"$release_manifest_sha256\"")
+    assert source_capture < copy < staging_capture < move < report
+    assert "projectionPublisherStarted:false" in deploy
+
+
+def test_final_cutover_evidence_uses_only_the_final_schema_contract() -> None:
+    preflight = (ROOT / "operations/scripts/cutover-preflight.sh").read_text(
+        encoding="utf-8"
+    )
+    collector = (ROOT / "operations/collector_parity_evidence.py").read_text(
         encoding="utf-8"
     )
 
-    assert "--host" not in script
-    assert "--port" not in script
-    assert script.count('-h "$REDIS_HOST" -p "$REDIS_PORT"') == 2
-
-
-def test_deploy_and_cutover_require_the_complete_frozen_manifest() -> None:
-    deploy = (ROOT / "operations/scripts/deploy-shadow.sh").read_text(encoding="utf-8")
-    preflight = (ROOT / "operations/scripts/cutover-preflight.sh").read_text(encoding="utf-8")
-
-    assert f'.schemaVersion == "{len(EXPECTED_MIGRATIONS)}"' in deploy
-    assert "actual_migration_files" in deploy
-    assert f'(.migrations | length) == {len(EXPECTED_MIGRATIONS)}' in deploy
-    assert 'all(.migrations[]; .category == "Versioned" and .state == "Success")' in deploy
-    assert f'schemaVersion:"{len(EXPECTED_MIGRATIONS)}",migrationCount:{len(EXPECTED_MIGRATIONS)}' in deploy
-    assert "SYMLINKS.sha256" in deploy
-    assert deploy.count('validate_release_symlinks "$release_path"') == 3
-    assert 'validate_release_symlinks "$release_source"' in deploy
-    assert 'validate_release_symlinks "$staging_path"' in deploy
-    source_capture = deploy.index('capture_frozen_release_provenance "$release_source"')
-    copy = deploy.index(
-        'cp -a --no-preserve=ownership -- "$release_source/." "$staging_path/"'
-    )
-    staging_capture = deploy.index('capture_frozen_release_provenance "$staging_path"')
-    move = deploy.index('mv -T -- "$staging_path" "$release_path"')
-    installed_capture = deploy.index(
-        'capture_frozen_release_provenance "$release_path"', move
-    )
-    report = deploy.index('--arg releaseManifestSha256 "$release_manifest_sha256"')
-    assert source_capture < copy < staging_capture < move < installed_capture < report
-    assert deploy.count('capture_frozen_release_provenance "$release_path"') == 3
-    assert deploy.rindex('capture_frozen_release_provenance "$release_path"') < report
-    assert '"$captured_manifest_sha256" != "$source_manifest_sha256"' in deploy
-    assert '"$captured_manifest_sha256" != "$staged_manifest_sha256"' in deploy
-    assert 'release_manifest_sha256="$captured_manifest_sha256"' in deploy
-    assert 'releaseManifestSha256:$releaseManifestSha256' in deploy
-    assert "operator and change ticket must not contain replace-with placeholders" in deploy
-    assert "bind_release_source_to_entrypoint" in deploy
-    assert '"${artifact_root##*/}" != "$release_id"' in deploy
-    assert 'assert_release_source_stable' in deploy
-    assert deploy.count('validate_release_tree_trust "$release_source"') >= 1
-    assert 'validate_release_tree_trust "$staging_path"' in deploy
-    assert 'validate_release_tree_trust "$release_path"' in deploy
-    assert 'validate_executable_cohort "$staging_path" installed' in deploy
-    assert 'validate_executable_cohort "$release_path" installed' in deploy
-    assert deploy.count("assert_installed_release_stable") >= 10
-    for required_runtime in (
-        "operations/bin/collector-parity-evidence",
-        "operations/bin/pg-to-legacy-sync",
-        "operations/scripts/switch-routing.sh",
-        "operations/scripts/writer-cutover.sh",
-        "operations/scripts/rollback.sh",
-    ):
-        assert required_runtime in deploy
-    executable_block = re.search(
-        r"^executable_files=\(\n(?P<body>.*?)^\)\n",
-        deploy,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    assert executable_block is not None
-    assert set(executable_block.group("body").split()) == {
-        "operations/bin/collector-parity-evidence",
-        "operations/bin/pg-to-legacy-sync",
-        "operations/scripts/backup.sh",
-        "operations/scripts/cache-outbox-worker.sh",
-        "operations/scripts/collector-preflight.sh",
-        "operations/scripts/cutover-preflight.sh",
-        "operations/scripts/deploy-shadow.sh",
-        "operations/scripts/projection-publisher.sh",
-        "operations/scripts/restore-verify.sh",
-        "operations/scripts/rollback.sh",
-        "operations/scripts/run-maintenance.sh",
-        "operations/scripts/switch-routing.sh",
-        "operations/scripts/wal-archive.sh",
-        "operations/scripts/writer-cutover.sh",
-    }
-    assert 'find "$staging_path" -type f -exec chmod 0644 {} +' in deploy
-    assert 'chmod 0755 "$staging_path/$relative_path"' in deploy
-    assert "assert_active_release_ready_for_report" in deploy
-    final_gate = deploy.rindex("assert_active_release_ready_for_report")
-    report_tmp = deploy.index('report_tmp="$(mktemp', final_gate)
-    report_write = deploy.index('>"$report_tmp"', report_tmp)
-    assert final_gate < report_tmp < report_write
-    assert '>"$report"' not in deploy
-    assert '>"$report.sha256"' not in deploy
-    assert '|| -e "$report_sidecar" || -L "$report_sidecar"' in deploy
-    assert 'mv -T -- "$report_tmp" "$report"' in deploy
-    assert 'mv -T -- "$report_sidecar_tmp" "$report_sidecar"' in deploy
-    assert (
-        'mv -Tf -- "$current_report_tmp" "$DEPLOY_REPORT_DIR/current.json"'
-        in deploy
-    )
-    assert (
-        'mv -Tf -- "$current_sidecar_tmp" "$DEPLOY_REPORT_DIR/current.json.sha256"'
-        in deploy
-    )
-    assert f'.flyway.schemaVersion == "{len(EXPECTED_MIGRATIONS)}"' in preflight
-    assert '.releaseManifestSha256 | test("^[0-9a-f]{64}$")' in preflight
-    assert f".flyway.migrationCount == {len(EXPECTED_MIGRATIONS)}" in preflight
-    assert f".database.flywaySchemaVersion == {len(EXPECTED_MIGRATIONS)}" in preflight
-    assert f".database.flywayMigrationCount == {len(EXPECTED_MIGRATIONS)}" in preflight
-    assert preflight.count('verify_exact_release_manifest "$current_release_path"') == 2
-    assert 'validate_release_symlinks "$tree"' in preflight
-
-    for version, filename, sha256, _flyway_checksum in EXPECTED_MIGRATIONS:
-        assert f"backend/src/main/resources/db/migration/{filename}" in deploy
-        assert sha256 in deploy
-        assert f".flyway.v{version}Sha256 == \"{sha256}\"" in preflight
-        assert f"v{version}Sha256" in deploy
-        assert (
-            f'{{version:"{version}",script:"{filename}",checksum:{_flyway_checksum}}}'
-            in preflight
-        )
+    for source in (preflight, collector):
+        assert "V31__" not in source
+        assert "EXPECTED_MIGRATIONS" not in source
+        assert "schemaVersion" not in source
+        assert "migrationCount" not in source
+        assert CONTRACT in source
+    assert "finalSchemaSha256" in preflight
+    assert "productionTransitionSha256" in preflight
+    assert "FINAL_SCHEMA_PATH" in collector
+    assert "TRANSITION_PATH" in collector
 
 
 def _shell_function(source: str, name: str) -> str:
@@ -219,49 +88,34 @@ def _shell_function(source: str, name: str) -> str:
     return match.group(0)
 
 
-def test_deploy_provenance_capture_rejects_changed_staging_migration(
-    tmp_path: Path,
-) -> None:
+def test_deploy_provenance_captures_both_final_schema_artifacts(tmp_path: Path) -> None:
     release_root = tmp_path / "release"
-    migration_root = release_root / "backend/src/main/resources/db/migration"
-    migration_root.mkdir(parents=True)
+    schema = release_root / "backend/src/main/resources/db/final-schema.sql"
+    transition = release_root / "operations/sql/transition-production-to-final.sql"
+    schema.parent.mkdir(parents=True)
+    transition.parent.mkdir(parents=True)
+    schema.write_bytes(FINAL_SCHEMA.read_bytes())
+    transition.write_bytes(TRANSITION.read_bytes())
     (release_root / "SHA256SUMS").write_text("manifest bytes\n", encoding="ascii")
-    for _version, filename, _sha256, _checksum in EXPECTED_MIGRATIONS:
-        (migration_root / filename).write_bytes((MIGRATION_DIR / filename).read_bytes())
-
-    deploy = (ROOT / "operations/scripts/deploy-shadow.sh").read_text(
-        encoding="utf-8"
-    )
+    deploy = (ROOT / "operations/scripts/deploy-shadow.sh").read_text(encoding="utf-8")
     function = _shell_function(deploy, "capture_frozen_release_provenance")
     command = f"""
 set -Eeuo pipefail
 {function}
 capture_frozen_release_provenance "$1"
-printf '%s\n' "$captured_manifest_sha256"
+printf "%s|%s\n" "$captured_schema_sha256" "$captured_transition_sha256"
 """
-    valid = subprocess.run(
-        ["bash", "-c", command, "deploy-provenance-test", str(release_root)],
+    result = subprocess.run(
+        ["bash", "-c", command, "schema-provenance-test", str(release_root)],
         text=True,
         capture_output=True,
         check=False,
     )
-    assert valid.returncode == 0, valid.stderr
-    assert valid.stdout.strip() == hashlib.sha256(
-        (release_root / "SHA256SUMS").read_bytes()
-    ).hexdigest()
-
-    (migration_root / "V8__legacy_overview_projection.sql").write_text(
-        "changed during staging\n",
-        encoding="utf-8",
-    )
-    changed = subprocess.run(
-        ["bash", "-c", command, "deploy-provenance-test", str(release_root)],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert changed.returncode != 0
-    assert "checksum mismatch" in changed.stderr
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "|".join((
+        hashlib.sha256(schema.read_bytes()).hexdigest(),
+        hashlib.sha256(transition.read_bytes()).hexdigest(),
+    ))
 
 
 def _write_symlink_manifest(release_root: Path) -> None:
@@ -327,14 +181,11 @@ def _active_release_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
     current_link = tmp_path / "m-ranked" / "current"
     current_link.symlink_to(release_root, target_is_directory=True)
 
-    flyway = {
-        "validated": True,
-        "schemaVersion": str(len(EXPECTED_MIGRATIONS)),
-        "migrationCount": len(EXPECTED_MIGRATIONS),
-        **{
-            f"v{version}Sha256": sha256
-            for version, _filename, sha256, _checksum in EXPECTED_MIGRATIONS
-        },
+    schema_contract = {
+        "id": CONTRACT,
+        "finalSchemaSha256": hashlib.sha256(FINAL_SCHEMA.read_bytes()).hexdigest(),
+        "productionTransitionSha256": hashlib.sha256(TRANSITION.read_bytes()).hexdigest(),
+        "validatedByServiceReadiness": True,
     }
     report = tmp_path / "deploy.json"
     report.write_text(
@@ -346,8 +197,8 @@ def _active_release_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "releaseManifestSha256": hashlib.sha256(
                     manifest.read_bytes()
                 ).hexdigest(),
-                "flyway": flyway,
-                "projectionPublisherActive": True,
+                "schemaContract": schema_contract,
+                "projectionPublisherStarted": False,
             }
         ),
         encoding="utf-8",
@@ -772,8 +623,8 @@ def test_writer_gate_replaces_legacy_collector_booleans_with_strict_verifier() -
 
     assert ".checks.fourPlatforms" not in preflight
     assert 'exec /bin/bash -p "$verifier" verify' in preflight
-    assert "operations/collector_parity_evidence.py" in deploy
-    assert "operations/bin/collector-parity-evidence" in deploy
+    assert "operations/collector_parity_evidence.py" not in deploy
+    assert "operations/bin/collector-parity-evidence" not in deploy
     assert "COLLECTOR_PARITY_REPORT=" in env_example
     assert "COLLECTOR_PARITY_EVIDENCE_ROOT=" in env_example
     assert "COLLECTOR_PARITY_MAX_AGE_SECONDS=86400" in env_example
@@ -811,16 +662,13 @@ test "$failures" -eq 1
         assert result.returncode == 0, (name, result.stderr)
 
 
-def test_restore_verifier_requires_exact_v1_v8_history() -> None:
+def test_restore_verifier_requires_the_final_schema_contract() -> None:
     restore = (ROOT / "operations/scripts/restore-verify.sh").read_text(encoding="utf-8")
 
-    assert f"migration_count <> {len(EXPECTED_MIGRATIONS)} OR latest_migration <> {len(EXPECTED_MIGRATIONS)}" in restore
-    versions = ", ".join("'"+item[0]+"'" for item in EXPECTED_MIGRATIONS)
-    assert "ARRAY["+versions+"]::text[]" in restore
-    assert "WHERE version IS NULL" in restore
-    assert "'flywayMigrations'" in restore
-    for version, filename, _sha256, flyway_checksum in EXPECTED_MIGRATIONS:
-        assert f"('{version}', '{filename}', {flyway_checksum})" in restore
+    assert "storage-publisher-final-2026-09-08-r3" in restore
+    assert "SELECT contract_id FROM ops_and_admin.schema_contract" in restore
+    assert "flyway_schema_history" not in restore
+    assert "'schemaContract'" in restore
 
 
 def test_writer_cutover_binds_reverse_preflight_to_the_new_s_final() -> None:
@@ -975,7 +823,7 @@ def _reverse_rehearsal_jq_filter() -> str:
 def _reverse_rehearsal_evidence() -> dict[str, object]:
     evidence = {
         "reportType": "reverse-sync-rehearsal",
-        "reportVersion": 4,
+        "reportVersion": 5,
         "status": "pass",
         "environment": "production-like",
         "generatedAt": "2026-09-05T12:00:00+00:00",
@@ -987,22 +835,10 @@ def _reverse_rehearsal_evidence() -> dict[str, object]:
         "changeTicket": "GATE-W-APPROVAL",
         "sourceNamespace": "m-ranked-production",
         "database": "mranked_rehearsal_20260905",
-        "flyway": {
-            "schemaVersion": len(EXPECTED_MIGRATIONS),
-            "migrationCount": len(EXPECTED_MIGRATIONS),
-            "fileSha256": {
-                filename: sha256
-                for _version, filename, sha256, _checksum in EXPECTED_MIGRATIONS
-            },
-            "databaseMigrations": [
-                {
-                    "version": version,
-                    "script": filename,
-                    "checksum": checksum,
-                    "success": True,
-                }
-                for version, filename, _sha256, checksum in EXPECTED_MIGRATIONS
-            ],
+        "schemaContract": {
+            "id": CONTRACT,
+            "finalSchemaSha256": "1" * 64,
+            "productionTransitionSha256": "2" * 64,
         },
         "platforms": ["telegram", "vk", "max", "rutube"],
         "replay": {"runCount": 2, "idempotent": True},
@@ -1077,6 +913,8 @@ def _jq_accepts_rehearsal(payload: dict[str, object]) -> bool:
         "--arg", "sourceNamespace", "m-ranked-production",
         "--arg", "approvalTicket", "GATE-W-APPROVAL",
         "--arg", "operator", "gate-w-operator",
+        "--arg", "finalSchemaSha256", "1" * 64,
+        "--arg", "transitionSha256", "2" * 64,
     )
 
 
@@ -1108,10 +946,9 @@ def test_reverse_sync_rehearsal_gate_fails_when_any_evidence_is_absent() -> None
         ("changeTicket",),
         ("sourceNamespace",),
         ("database",),
-        ("flyway", "schemaVersion"),
-        ("flyway", "migrationCount"),
-        ("flyway", "fileSha256"),
-        ("flyway", "databaseMigrations"),
+        ("schemaContract", "id"),
+        ("schemaContract", "finalSchemaSha256"),
+        ("schemaContract", "productionTransitionSha256"),
         ("platforms",),
         ("replay", "runCount"),
         ("replay", "idempotent"),
@@ -1151,8 +988,8 @@ def test_reverse_sync_rehearsal_gate_fails_when_any_evidence_is_absent() -> None
 def test_reverse_sync_rehearsal_gate_rejects_incomplete_or_false_proofs() -> None:
     invalid_changes = (
         (("reportType",), "other"),
-        (("reportVersion",), 2),
-        (("reportVersion",), "3"),
+        (("reportVersion",), 4),
+        (("reportVersion",), "5"),
         (("environment",), "disposable-postgresql-integration"),
         (("release", "id"), "other-release"),
         (("release", "sha256SumsSha256"), "f" * 64),
@@ -1161,11 +998,9 @@ def test_reverse_sync_rehearsal_gate_rejects_incomplete_or_false_proofs() -> Non
         (("sourceNamespace",), "other-namespace"),
         (("database",), ""),
         (("database",), "postgresql://user:pass@host/db"),
-        (("flyway", "schemaVersion"), 7),
-        (("flyway", "schemaVersion"), "8"),
-        (("flyway", "migrationCount"), 7),
-        (("flyway", "fileSha256", "V8__legacy_overview_projection.sql"), "f" * 64),
-        (("flyway", "databaseMigrations", 7, "checksum"), -1),
+        (("schemaContract", "id"), "old-contract"),
+        (("schemaContract", "finalSchemaSha256"), "f" * 64),
+        (("schemaContract", "productionTransitionSha256"), "short"),
         (("platforms",), ["telegram", "vk", "max", "max"]),
         (("platforms",), ["telegram", "vk", "max", "rutube", "other"]),
         (("replay", "runCount"), 1),
@@ -1207,7 +1042,7 @@ def test_reverse_sync_rehearsal_gate_rejects_incomplete_or_false_proofs() -> Non
 
 
 def test_reverse_sync_rehearsal_gate_rejects_additional_keys() -> None:
-    for path in ((), ("release",), ("flyway",), ("duplicates",), ("sFinal",)):
+    for path in ((), ("release",), ("schemaContract",), ("duplicates",), ("sFinal",)):
         evidence = deepcopy(_reverse_rehearsal_evidence())
         parent = evidence
         for key in path:

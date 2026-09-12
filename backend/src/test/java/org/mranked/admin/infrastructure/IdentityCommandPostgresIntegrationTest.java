@@ -6,9 +6,8 @@ import java.net.URI;
 import java.sql.DriverManager;
 import java.util.Map;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.mranked.admin.application.CatalogService;
@@ -22,8 +21,8 @@ import tools.jackson.databind.json.JsonMapper;
 @EnabledIfEnvironmentVariable(named="MRANKED_EXPORT_TEST_ADMIN_URL",matches=".+")
 class IdentityCommandPostgresIntegrationTest {
     @TempDir Path output;
-    @ParameterizedTest @ValueSource(booleans={false,true})
-    void originalJavaCommandsSurviveReverseSecondSFinalAndNoOpReplay(boolean upgrade) throws Exception {
+    @Test
+    void originalJavaCommandsSurviveReverseSecondSFinalAndNoOpReplay() throws Exception {
         output=output.toRealPath();
         String initial=System.getenv("MRANKED_EXPORT_TEST_ADMIN_URL");var base=URI.create(initial.substring(5));
         assertThat(base.getHost()).isIn("127.0.0.1","localhost");assertThat(base.getPath()).endsWith("_it");
@@ -35,10 +34,7 @@ class IdentityCommandPostgresIntegrationTest {
         try(var control=DriverManager.getConnection(initial,ownerName,ownerPassword)) {
             control.createStatement().execute("CREATE DATABASE "+name+" OWNER migration_owner");
             try {
-                var migrations=Flyway.configure().dataSource(url,ownerName,ownerPassword).initSql("SET ROLE migration_owner").defaultSchema("flyway")
-                    .locations("filesystem:"+root.resolve("backend/src/main/resources/db/migration"));
-                if(upgrade) migrations.target("28");
-                migrations.load().migrate();
+                FinalSchemaInstaller.install(url, ownerName, ownerPassword);
                 runPython(root,base,name,receipts,"prepare");
                 var ids=new JsonMapper().readTree(Files.readString(output.resolve("controls.json")));
                 UUID account=UUID.fromString(ids.path("accountId").asString()),institution=UUID.fromString(ids.path("institutionId").asString());
@@ -69,16 +65,6 @@ class IdentityCommandPostgresIntegrationTest {
                 var changed=service.accountCommand(account,nativeId.rowVersion(),"native_id","-20002",actor,UUID.randomUUID());
                 var cleared=service.accountCommand(account,changed.rowVersion(),"native_id",null,actor,UUID.randomUUID());
                 assertThat(owner.sql("SELECT count(*) FROM catalog.account_external_identity WHERE platform_account_id=:id AND valid_to IS NULL").param("id",account).query(Integer.class).single()).isZero();
-                String closed=owner.sql("SELECT jsonb_agg(to_jsonb(h) ORDER BY valid_from,id)::text FROM catalog.account_external_identity h WHERE platform_account_id=:id").param("id",account).query(String.class).single();
-                if(upgrade) {
-                    transaction.execute(status->{
-                        service.accountCommand(account,cleared.rowVersion(),"native_id","-20003",actor,UUID.randomUUID());
-                        assertThat(jdbc.sql("SELECT (SELECT valid_from FROM catalog.account_external_identity WHERE platform_account_id=:id AND valid_to IS NULL) < (SELECT max(valid_to) FROM catalog.account_external_identity WHERE platform_account_id=:id)").param("id",account).query(Boolean.class).single()).isTrue();
-                        status.setRollbackOnly();return null;
-                    });
-                    migrations.target("latest").load().migrate();
-                    assertThat(owner.sql("SELECT jsonb_agg(to_jsonb(h) ORDER BY valid_from,id)::text FROM catalog.account_external_identity h WHERE platform_account_id=:id").param("id",account).query(String.class).single()).isEqualTo(closed);
-                }
                 var reenrolled=service.accountCommand(account,cleared.rowVersion(),"native_id","-20003",actor,UUID.randomUUID());
                 assertThat(owner.sql("SELECT (SELECT valid_from FROM catalog.account_external_identity WHERE platform_account_id=:id AND valid_to IS NULL) > (SELECT max(valid_to) FROM catalog.account_external_identity WHERE platform_account_id=:id)").param("id",account).query(Boolean.class).single()).isTrue();
                 service.accountCommand(account,reenrolled.rowVersion(),"native_id",null,actor,UUID.randomUUID());
@@ -92,7 +78,6 @@ class IdentityCommandPostgresIntegrationTest {
                 assertThat(proof.path("history").path("checks").get(1).path("expected").path("rows").asInt()).isEqualTo(5);
                 if(System.getenv("MRANKED_IDENTITY_COMMAND_PROOF")!=null) {
                     Path destination=Path.of(System.getenv("MRANKED_IDENTITY_COMMAND_PROOF"));
-                    if(upgrade) destination=destination.resolveSibling(destination.getFileName().toString().replace(".json","-upgrade-v28.json"));
                     Files.copy(output.resolve("proof.json"),destination);
                 }
             } finally { control.createStatement().execute("DROP DATABASE "+name+" WITH (FORCE)"); }

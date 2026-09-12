@@ -8,7 +8,7 @@ Docker network receives a generated `mranked-dr-<run-id>` name and ownership
 label. Cleanup addresses only resources created by that invocation.
 
 Run after the mandatory integration producer has published a representative
-fixture with the final Flyway migrations and ready projections:
+fixture with the final schema contract and ready projections:
 
 ```sh
 rtk proxy .venv/bin/python -m operations.disaster_recovery.rehearse \
@@ -27,7 +27,7 @@ volume with mode `0600`. Passwords are absent from command arguments and reports
 The producer checks all of the following:
 
 - Frozen source before/after dump and exact canonical partition SHA-256 chains,
-  row counts, dataset revision and Flyway versions/checksums after each restore.
+  row counts, dataset revision and schema contract after each restore.
 - `pg_basebackup` under the existing `backup` role, which has replication and
   monitoring privileges but no superuser, database creation or role creation.
 - Physical manifest/WAL verification with `pg_verifybackup`.
@@ -47,17 +47,15 @@ The producer checks all of the following:
   durability and does not permit dropping a hot partition.
 
 JSON and Markdown reports include command descriptions/durations, dataset size,
-exact Flyway manifest, checksums, controlled RPO/RTO measurements and remaining
+exact schema contract, checksums, controlled RPO/RTO measurements and remaining
 external gates. The Parquet artifact remains beside the report for independent
 sample queries. All generated Docker resources are removed, including on a
 failed run. Reports are still written on failure; `status=fail` is not acceptance.
 
-The final V1–V27 local run is recorded in
+The historical pre-final-contract local run is recorded in
 [`local-v27-final-r1/dr-fc5064bf7d2c.json`](evidence/local-v27-final-r1/dr-fc5064bf7d2c.json).
-Its schema binding checks every versioned database history row against the
-repository Flyway checksum and every SQL file SHA-256 against the frozen
-operational pins; the extra unversioned Flyway schema-creation row is recorded
-separately in
+Its historical schema binding records the then-current database history and
+SQL checksums; it is evidence only and is not an installation source. Details are recorded in
 [`schema-binding.json`](evidence/local-v27-final-r1/schema-binding.json).
 The run restored 9,026 snapshots and 824 accounts at revision 30 from an actual
 3,952,473,791-byte source database. Local RTO was 5.5501 seconds for standby

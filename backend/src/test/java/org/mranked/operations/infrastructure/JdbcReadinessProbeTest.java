@@ -6,21 +6,11 @@ import org.junit.jupiter.api.Test;
 
 class JdbcReadinessProbeTest {
     @Test
-    void requiresAllNineCoreStatesAtTheLatestCommittedRevision() {
-        assertThat(JdbcReadinessProbe.LATEST_CORE_READINESS_SQL)
-                .contains("ORDER BY revision.id DESC")
-                .contains("LIMIT 1")
-                .contains("('publication_latest')")
-                .contains("('publication_hourly')")
-                .contains("('institution_daily_metrics')")
-                .contains("('institution_monthly_metrics')")
-                .contains("('institution_period_metrics')")
-                .contains("('comparison')")
-                .contains("('publication_history')")
-                .contains("('publication_content')")
-                .contains("('legacy_exports')")
-                .contains("state.dataset_revision_id = revision.id")
-                .contains("state.status = 'ready'")
-                .contains("count(state.projection_name) AS ready_count");
+    void readinessPinsTheSingleFinalSchemaContract() {
+        assertThat(JdbcReadinessProbe.CONNECTIVITY_SQL).isEqualTo("SELECT 1");
+        assertThat(JdbcReadinessProbe.SCHEMA_CONTRACT_SQL)
+                .isEqualTo("SELECT contract_id FROM ops_and_admin.schema_contract");
+        assertThat(JdbcReadinessProbe.EXPECTED_SCHEMA_CONTRACT)
+                .isEqualTo("storage-publisher-final-2026-09-08-r3");
     }
 }

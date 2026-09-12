@@ -5,6 +5,55 @@ package org.mranked.query.infrastructure;
  * the rebuilt latest projection and never rescan raw publication snapshots.
  */
 final class ActivityRatingSql {
+    private static final String SOURCE_PREFIX = """
+            WITH selected_revision AS (
+                SELECT :revision::bigint AS id,CAST(:asOf AS timestamptz) AS as_of,
+                       CAST(:asOf AS timestamptz)-CASE :period
+                           WHEN '3h' THEN interval '3 hours' WHEN '1d' THEN interval '1 day'
+                           WHEN '7d' THEN interval '7 days' ELSE interval '30 days' END AS cutoff
+            ), source_account_latest AS (
+                SELECT DISTINCT ON(snapshot.platform_account_id) snapshot.platform_account_id,
+                       'subscribers'::text AS metric_key,snapshot.subscriber_count AS value,
+                       :revision::bigint AS dataset_revision_id
+                  FROM ingest.account_metric_snapshot_active snapshot CROSS JOIN selected_revision revision
+                 WHERE snapshot.observed_at<=revision.as_of AND snapshot.collected_at<=revision.as_of
+                   AND snapshot.quality<>'invalid'
+                 ORDER BY snapshot.platform_account_id,snapshot.observed_at DESC,snapshot.id DESC
+            ), source_publication_latest AS (
+                SELECT publication.id AS publication_id,publication.primary_account_id AS platform_account_id,
+                       account.institution_id,account.platform,snapshot.observed_at,
+                       snapshot.views_count,snapshot.reactions_count,snapshot.comments_count,snapshot.shares_count,
+                       snapshot.views_quality,snapshot.reactions_quality,snapshot.comments_quality,snapshot.shares_quality,
+                       jsonb_build_object('latest',snapshot.id::text,
+                         'views',CASE WHEN snapshot.views_count IS NOT NULL THEN snapshot.id::text END,
+                         'reactions',CASE WHEN snapshot.reactions_count IS NOT NULL THEN snapshot.id::text END,
+                         'comments',CASE WHEN snapshot.comments_count IS NOT NULL THEN snapshot.id::text END,
+                         'shares',CASE WHEN snapshot.shares_count IS NOT NULL THEN snapshot.id::text END) AS source_snapshot_refs,
+                       :revision::bigint AS dataset_revision_id
+                  FROM selected_revision revision
+                  JOIN ingest.visible_publication publication ON publication.published_at>=revision.cutoff
+                   AND publication.published_at<=revision.as_of
+                  JOIN catalog.visible_platform_account account ON account.id=publication.primary_account_id
+                  LEFT JOIN LATERAL(SELECT candidate.* FROM analytics.usable_publication_snapshot candidate
+                    WHERE candidate.publication_id=publication.id AND candidate.observed_at<=revision.as_of
+                      AND candidate.published_month=date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date
+                      AND candidate.collected_at<=revision.as_of AND candidate.quality<>'invalid' AND NOT candidate.synthetic
+                    ORDER BY candidate.observed_at DESC,candidate.published_month DESC,candidate.id DESC LIMIT 1) snapshot ON true
+            ),
+            """;
+
+    static String source(String projectionSql) {
+        String sql = projectionSql.stripLeading();
+        var boundary = java.util.regex.Pattern.compile("\\n\\s*\\),\\n\\s*").matcher(sql);
+        if (!boundary.find() || !sql.startsWith("WITH selected_revision AS (")) {
+            throw new IllegalArgumentException("rating SQL does not start with selected_revision");
+        }
+        String tail = sql.substring(boundary.end());
+        return SOURCE_PREFIX + tail
+                .replace("analytics.account_latest", "source_account_latest")
+                .replace("analytics.publication_latest", "source_publication_latest");
+    }
+
     static String entityPageSql(String sql) {
         int selection = sql.lastIndexOf("\nSELECT entity_id");
         int ordering = sql.lastIndexOf("ORDER BY");

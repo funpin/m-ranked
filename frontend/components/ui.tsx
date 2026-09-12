@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/native-link";
 import type { ReactNode } from "react";
 import { formatCoverage, formatDate, formatMetric, qualityLabel } from "@/lib/format";
 import type { Metrics, MetricValue } from "@/lib/types";
@@ -108,7 +108,7 @@ export function EmptyState({
       <span className="empty-icon" aria-hidden="true">—</span>
       <h2>{title}</h2>
       <p>{description}</p>
-      {action ? <Link className="button-link secondary-button" href={action.href}>{action.label}</Link> : null}
+      {action ? <Link className="button-link secondary-button" href={action.href} prefetch={false}>{action.label}</Link> : null}
     </section>
   );
 }
@@ -119,7 +119,7 @@ export function ApiFailureState({ retryHref = "/" }: { retryHref?: string }) {
       <StatusPill tone="red">Сервис временно недоступен</StatusPill>
       <h2>Не удалось загрузить данные</h2>
       <p>Повторите попытку через некоторое время.</p>
-      <Link className="button-link" href={retryHref}>Повторить</Link>
+      <Link className="button-link" href={retryHref} prefetch={false}>Повторить</Link>
     </section>
   );
 }

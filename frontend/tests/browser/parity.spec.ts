@@ -61,7 +61,7 @@ test("form sort direction, platform autosubmit and browser history preserve fiel
 
 test("legacy validation returns 422 and repeated scalar chooses last", async ({ request, page }) => {
   expect((await request.get(`/?q=${"a".repeat(201)}`)).status()).toBe(422);
-  for (const value of ["49", "bad", "1001"]) expect((await request.get(`/posts/1?history_limit=${value}`)).status()).toBe(422);
+  for (const value of ["49", "bad", "3001"]) expect((await request.get(`/posts/1?history_limit=${value}`)).status()).toBe(422);
   await page.goto("/?platform=telegram&platform=vk");
   await expect(page.locator('input[name="platform"][value="vk"]')).toBeChecked();
   await page.goto("/?platform=invalid");
@@ -123,7 +123,7 @@ for(const path of ["/posts/1","/platform-posts/1"]) {
     await page.keyboard.press("Escape");
     const auto=page.getByRole("button",{name:"Авто",exact:true}).first();await auto.click();await expect(auto).toHaveAttribute("aria-pressed","true");await page.reload();await expect(page.getByRole("button",{name:"Авто",exact:true}).first()).toHaveAttribute("aria-pressed","true");
     await page.locator(".snapshot-jump").last().click();await expect(page.locator(".snapshot-highlight")).toHaveCount(1);
-    if(path === "/posts/1") {await expect(page.locator("tbody tr")).toHaveCount(100);await page.getByRole("button",{name:"показать всю историю"}).click();await expect(page.locator("tbody tr")).toHaveCount(160);}
+    if(path === "/posts/1") {await expect(page.locator("tbody tr")).toHaveCount(100);await page.getByRole("link",{name:"загрузить всю историю"}).click();await expect(page).toHaveURL(/history_limit=3000$/);await expect(page.locator("tbody tr")).toHaveCount(160);}
     expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
   });
 }

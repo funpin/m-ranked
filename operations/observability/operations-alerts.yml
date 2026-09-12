@@ -57,5 +57,40 @@ groups:
           severity: warning
         annotations:
           summary: Measured disk growth or the 5x capacity scenario exceeds available storage.
+      - alert: MRankedAnomalyWorkerMetricsStale
+        expr: mranked_anomaly_candidate_backlog > 0 and time() - mranked_anomaly_last_completion_unixtime > 900
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Anomaly analysis has pending work but its worker textfile is stale.
+      - alert: MRankedAnomalyEligibleBacklog
+        expr: mranked_ops_anomaly_eligible_backlog > 500 or mranked_ops_anomaly_oldest_candidate_age_seconds > 3600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Eligible anomaly-analysis work is accumulating.
+      - alert: MRankedAnomalyWorkerFailures
+        expr: mranked_ops_anomaly_failures_last_hour > 20 or mranked_ops_anomaly_retry_candidates > 100
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Anomaly analysis is repeatedly failing and retrying.
+      - alert: MRankedAnomalyLeaseStuck
+        expr: mranked_ops_anomaly_expired_leases > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: An anomaly-analysis claim lease expired and needs recovery.
+      - alert: MRankedAnomalyRevisionLag
+        expr: mranked_ops_anomaly_candidate_backlog > 0 and mranked_ops_anomaly_source_revision_lag > 10
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Anomaly analysis is lagging behind fully published core revisions.
       - record: mranked_ops_inserted_rows_per_day
         expr: sum(rate(mranked_ops_inserted_rows_total[1h])) * 86400

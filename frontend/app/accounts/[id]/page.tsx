@@ -38,5 +38,5 @@ export default async function AccountPage({ params }: Props) {
     if (error instanceof ApiError && error.status === 404) notFound();
     return <ApiFailureState retryHref={accountHref(id)} />;
   }
-  return <AccountDetail account={account} posts={posts.items} />;
+  return <AccountDetail account={account} posts={posts.items} truncated={Boolean(posts.nextCursor)} />;
 }

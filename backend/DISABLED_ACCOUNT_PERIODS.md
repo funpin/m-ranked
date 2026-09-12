@@ -16,10 +16,10 @@ the period publisher. Telegram's enabled-channel policy, active platform coverag
 `visible_platform_account` and `visible_publication` filtering remain in place.
 An existing published database receives a new configuration revision with the
 same accepted source clock and a full coherent projection rebuild, so old ETags
-cannot describe corrected results. V1–V26 files remain unchanged.
+cannot describe corrected results. The final schema is the only supported shape.
 
-`DisabledPeriodPostgresIntegrationTest` installs a clean database and separately
-upgrades a populated V26 database with real Flyway. Each case compares 288 cells
+`DisabledPeriodPostgresIntegrationTest` installs a clean final-schema database.
+Each case compares 288 cells
 from original Python formulas with actual period rows, then 144 values returned
 by the actual institution MVC endpoint using `api_read`. The fixture covers all
 four windows and all three platforms, accounts that are disabled, mixed enabled

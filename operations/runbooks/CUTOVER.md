@@ -15,8 +15,9 @@ semantics, retention change or target-only feature enters this window.
 so it can take the mode-`0600` transition lock, and fails closed. Required evidence:
 
 - legacy, target API and target Web are healthy;
-- the checksummed shadow deploy report proves schema version 29, exactly 29
-  successful migrations, the frozen V1–V29 SHA-256 set,
+- the checksummed shadow deploy report proves schema contract
+  `storage-publisher-final-2026-09-08-r3` and records SHA-256 for the final schema
+  plus the one-time production transition,
   `releaseId` and `releaseManifestSha256=SHA256(SHA256SUMS)`, and its
   `releasePath`/ID/hash equal the resolved `MRANKED_CURRENT_LINK` tree after two
   exact-coverage manifest checks. Each check also recomputes the canonical
@@ -43,24 +44,24 @@ so it can take the mode-`0600` transition lock, and fails closed. Required evide
   [IDENTITY_RECEIPTS.md](IDENTITY_RECEIPTS.md). API, collectors, bridge and reverse
   must use the same explicit `MRANKED_IDENTITY_RECEIPT_DIR`; writers must not
   belong to `m-ranked-identity-readers`;
-- exactly these nine projections are ready at the latest dataset revision:
+- exactly these seven serving projections are ready at one coherent published revision:
   `publication_latest`, `publication_hourly`, `institution_daily_metrics`,
-  `institution_monthly_metrics`, `institution_period_metrics`, `comparison`,
-  `publication_history`, `publication_content` and `legacy_exports`;
-- the continuous projection publisher is active;
+  `institution_monthly_metrics`, `institution_period_metrics`, `comparison` and
+  `publication_history`; raw revision may be newer and is reported as lag,
+  while content/legacy-export watermarks are non-serving diagnostics;
 - oldest pending outbox event is at most 60 seconds old;
 - WAL archive and streaming-standby replay are at most 15 minutes behind;
 - a successful isolated restore report is no older than 24 hours, met RTO and
-  proves the exact V1-V29 version/script/Flyway-checksum manifest;
+  proves the exact final schema contract;
 - database filesystem is below 70%;
 - writer cutover additionally has the shipped PG-to-legacy adapter, a passing
-  production-like reverse-sync rehearsal report in the strict v4 Gate W
+  production-like reverse-sync rehearsal report in the strict v5 Gate W
   schema and its valid sibling `.sha256`. The JSON mtime, sidecar mtime and
   `generatedAt` age must each be within
   `0..REVERSE_SYNC_REHEARSAL_MAX_AGE_SECONDS`; neither evidence file may be
   group/world writable;
-- writer cutover has a fresh checksummed collector-parity v1 report sealed and
-  reverified from the active release. It binds the exact deploy/Flyway/symlink
+- writer cutover has a fresh checksummed collector-parity report sealed and
+  reverified from the active release. It binds the exact deploy/schema/symlink
   identity, dedicated external approval, protected raw captures and all four
   platforms' historical refresh, confirmed-deletion, transient-failure,
   projection and idempotent-resume invariants;
@@ -157,7 +158,7 @@ self-assert parity, reuse an old journal/report, or set
 four-boolean collector JSON is explicitly rejected. The current report is
 sealed and verified by the active release's
 `operations/bin/collector-parity-evidence`; it has exact object shapes,
-freshness/sidecar/raw-file checks and active release, deploy, V1-V29, namespace,
+freshness/sidecar/raw-file checks and active release, deploy/schema contract, namespace,
 operator and dedicated `COLLECTOR_PARITY_APPROVAL_TICKET` bindings.
 
 The collector verifier validates integrity and declared invariants; it does not
@@ -171,8 +172,8 @@ The reverse rehearsal report contract is documented in
 `operations/interfaces/pg-to-legacy-sync.md`. Contract v4 has exact object
 shapes and machine-enforces the production-like environment, active release ID,
 SHA-256 of that release's `SHA256SUMS`, operator, dedicated
-`REVERSE_SYNC_APPROVAL_TICKET`, source namespace, exact V1-V29 file and database
-manifests, all duplicate/preservation zeros, both S-final source/revision-bound
+`REVERSE_SYNC_APPROVAL_TICKET`, source namespace, the exact final schema contract,
+all duplicate/preservation zeros, both S-final source/revision-bound
 independent proofs, the second batch's zero-write repeat, original-input fault
 probes, real HTTP/admin/collector writer ownership, and state-v3 baseline/fixed
 counts and hashes plus the canonical plan hash.
@@ -217,7 +218,7 @@ this runbook, never `operations/scripts/...` from a checkout.
 
 Only after every required gate above has passed—including
 strict collector evidence and a production-like v4 reverse report for the
-active V1-V29 release—the rehearsed command is:
+active final-schema release—the rehearsed command is:
 
 ```bash
 rtk sudo /bin/bash -p -c '
@@ -244,14 +245,15 @@ import/reconciliation. Reverse-sync preflight must echo that new S-final batch
 ID and SHA-256. `start` then binds the state-v3 journal to that S-final, the
 complete baseline revision set and the inode of the live legacy SQLite file
 before the systemd worker or any target collector starts. The script starts the
-publisher and four target collector units only after reverse sync is active.
+four target collector units only after reverse sync is active; it does not start
+or require Publisher.
 
-The post-start gate requires dataset revision advancement, an in-window
-successful run from every platform, the publisher still active, all nine named
-projections `ready` at that exact new revision, the API readiness response `UP`
-at that same revision, zero duplicate idempotency keys and reverse-sync lag
-zero. The equality is recorded in the cutover state JSON. Collector units
-require and are ordered after the publisher. The process preserves the legacy
+The post-start gate requires raw dataset revision advancement, an in-window
+successful run from every platform, a complete seven-projection serving
+generation, the API readiness response `UP` at that published revision, zero
+duplicate idempotency keys and reverse-sync lag zero. Both raw and published
+watermarks are recorded in the cutover state JSON. Publisher may run later as
+an explicit bounded maintenance action while collectors continue. The process preserves the legacy
 web, SQLite file, v3 journal, reports and all PostgreSQL data.
 
 If backup/import/reconciliation fails before reverse-sync start is attempted,

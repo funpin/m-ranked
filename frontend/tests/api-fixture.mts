@@ -38,9 +38,32 @@ function postItem(id:number,type:"posts"|"platform_posts"):Schema["PublicationLi
   return {publicationId:p.publicationId,legacyId:id,legacyType:type,legacyRoute:`/${type === "posts" ? "posts" : "platform-posts"}/${id}`,externalId:p.externalId,publishedAt:p.publishedAt,publicUrl:p.publicUrl,publicationType:p.publicationType,deletedAt:p.deletedAt,historyCompleteness:"complete",views:p.views,reactions:p.reactions,comments:p.comments,shares:p.shares,title:null,archivedText:null,displayExternalId:p.displayExternalId,repost:p.repost,joint:p.joint,additionalAuthorCount:p.additionalAuthorCount,ambiguousAlbumReactions:p.ambiguousAlbumReactions};
 }
 const historyRows:Schema["HistorySnapshot"][] = Array.from({length:160},(_,index) => ({snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,views:counter(index*10),reactions:counter(index === 159 ? 155 : index),comments:counter(0),shares:counter(null),deltaViews:index ? 10 : null,deltaReactions:index ? index === 159 ? -3 : 1 : null,deltaComments:index ? 0 : null,deltaShares:null,reactionsBreakdown:{"👍":index,"custom:123456":1},reactionsBreakdownEntries:[{reaction:"👍",count:index},{reaction:"custom:123456",count:1}],deltaReactionsBreakdown:index?{"👍":1}:null,deltaReactionsBreakdownEntries:index?[{reaction:"👍",count:1}]:null,synthetic:index === 0,intervalUncertain:index === 40,quality:"exact",rawEvidence:{fingerprint:`fixture-${index}`}}));
+function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["PublicationAnomalyAnalysis"] {
+  const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,analysisRevision:3,sourceDatasetRevision:16,
+    analyzedAt:asOf,status:"ready",sourceRevisionAt:asOf,suspicionScore:0.82,overallSeverity:"high",
+    manualAssessmentPresent:false,affectedMetrics:["views"],activeFindingCount:1,nextCursor:null,
+    methodologyVersion:"anomaly-dynamics-v1",disclaimer:"Сигнал сам по себе не доказывает искусственное происхождение активности или действия университета.",
+    findings:[{id:uuid(8,id),origin:"automatic",metric:"views",detectorId:"delayed_spike_after_plateau",detectorVersion:"1.0.0",
+      suspicionScore:0.82,severity:"high",explanationCode:"large_rate_jump_after_plateau",
+      suspiciousStartAt:historyRows[39]!.observedAt,suspiciousEndAt:historyRows[40]!.observedAt,
+      startSnapshotId:"40",endSnapshotId:"41",evidence:{delta:500,rateRatio:12},qualityCodes:[],
+      alternativeExplanationCodes:["external_referral"],reviewState:"unreviewed"}]};
+  if(type!=="posts") {
+    // Provider capability differences: VK exposes reposts, Rutube and MAX do not
+    // get an unsupported metric invented for them.
+    const metric:Schema["AnomalyFinding"]["metric"]=id===21 ? "shares" : id===41 ? "views" : "comments";
+    return {...base,affectedMetrics:[metric],findings:base.findings.map(item=>({...item,metric}))};
+  }
+  if(id===2) return {...base,status:"pending",sourceDatasetRevision:null,analyzedAt:null,sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
+  if(id===3) return {...base,status:"partial",suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
+  if(id===4) return {...base,status:"stale",suspicionScore:0.52,overallSeverity:"medium",findings:base.findings.map(item=>({...item,suspicionScore:0.52,severity:"medium",reviewState:"explained"}))};
+  if(id===5) return {...base,status:"failed",sourceDatasetRevision:null,analyzedAt:null,sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
+  if(id===6) return {...base,suspicionScore:0,overallSeverity:"medium",manualAssessmentPresent:true,affectedMetrics:["comments"],findings:[{...base.findings[0]!,id:uuid(8,6),origin:"manual",metric:"comments",detectorId:null,detectorVersion:null,suspicionScore:null,severity:"medium",explanationCode:"operator_context",reviewState:"unresolved"}]};
+  return base;
+}
 const server = createServer((request, response) => {
   const url = new URL(request.url!, "http://127.0.0.1");
-  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history))?$/.exec(url.pathname);
+  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis))?$/.exec(url.pathname);
   if (canonical) {
     const id = Number(canonical[2]!.slice(-12));
     const kind = Number(canonical[2]!.slice(0,8));
@@ -75,7 +98,8 @@ const server = createServer((request, response) => {
       snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,
       reactions:counter(index),views:counter(index*10),deltaReactions:index?1:null,deltaViews:index?10:null,synthetic:index===0,
     })) : historyRows;
-    const items=sourceRows.map((row,index)=>({...row,
+    const limit=Math.max(1,Number(url.searchParams.get("limit") ?? 200));
+    const items=sourceRows.slice(-limit).map((row,index)=>({...row,
       comments:p.platform === "rutube" ? counter(null) : row.comments,
       deltaComments:p.platform === "rutube" ? null : row.deltaComments,
       shares:p.platform === "vk" ? counter(index*2) : row.shares,
@@ -85,8 +109,10 @@ const server = createServer((request, response) => {
       deltaReactionsBreakdown:p.platform === "vk" || p.platform === "rutube" ? null : row.deltaReactionsBreakdown,
       deltaReactionsBreakdownEntries:p.platform === "vk" || p.platform === "rutube" ? null : row.deltaReactionsBreakdownEntries,
     }));
-    return json({publication:p,items,nextCursor:null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
+    return json({publication:p,items,nextCursor:sourceRows.length>limit?"older":null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
   }
+  const anomalyId=/^\/api\/v1\/publications\/(\d+)\/anomaly-analysis$/.exec(url.pathname);
+  if(anomalyId) return json(anomaly(Number(anomalyId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts"));
   const institutionId=/^\/api\/v1\/institutions\/(\d+)$/.exec(url.pathname);
   if(institutionId) return json({institutionId:`institution-${institutionId[1]}`,legacyId:Number(institutionId[1]),canonicalName:names[0]!,shortName:null,platform,period:"30d",metrics:{totalReactions:10,totalViews:100,medianReactions:5,medianViews:50,quality:"exact",sampleSize:2,coverage:1,aggregates:{totalReactions:aggregate(10),totalViews:aggregate(100),medianReactions:aggregate(5),medianViews:aggregate(50)}},datasetRevision:revision,asOf} satisfies Schema["Institution"]);
   const accountsId=/^\/api\/v1\/institutions\/(\d+)\/accounts$/.exec(url.pathname);

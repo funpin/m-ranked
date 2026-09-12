@@ -2,8 +2,9 @@ import type {ChartConfiguration,ChartOptions,ChartData} from "chart.js";
 import {Color} from "@kurkle/color";
 
 type Kind="line"|"bar";
+type PointStyle="circle"|"rectRot";
 type XY={x:number;y:number|null};
-type Dataset={label?:string;data:(XY|number|null)[];hidden?:boolean;borderColor?:string;backgroundColor?:string|string[];borderWidth?:number;pointBorderWidth?:number;pointRadius?:number;pointHoverRadius?:number;tension?:number;fill?:boolean;yAxisID?:string};
+type Dataset={label?:string;data:(XY|number|null)[];hidden?:boolean;borderColor?:string;backgroundColor?:string|string[];borderWidth?:number;pointBorderWidth?:number|number[];pointRadius?:number|number[];pointStyle?:PointStyle|PointStyle[];pointHoverRadius?:number;tension?:number;fill?:boolean;yAxisID?:string};
 type Axis={type?:string;display?:boolean;position?:string;min?:number;max?:number;beginAtZero?:boolean;title?:{display?:boolean;text?:string};ticks?:{precision?:number;maxTicksLimit?:number;callback?:(value:number)=>string|number};grid?:{color?:string;drawOnChartArea?:boolean}};
 type TooltipPoint={dataset:Dataset;datasetIndex:number;dataIndex:number;parsed:{x:number;y:number|null};formattedValue:string};
 type Callbacks={title?:(items:TooltipPoint[])=>string|string[];label?:(item:TooltipPoint)=>string|string[];afterLabel?:(item:TooltipPoint)=>string|string[];afterTitle?:(items:TooltipPoint[])=>string|string[];afterBody?:(items:TooltipPoint[])=>string|string[]};
@@ -16,6 +17,10 @@ const numberFormat=new Intl.NumberFormat("en-US",{maximumFractionDigits:12});
 const labelLines=(label:unknown):string[]=>Array.isArray(label)?label.map(String):[String(label??"")];
 const crisp=(value:number,ratio:number)=>Math.round((value-.5)*ratio)/ratio+.5;
 const finite=(value:number)=>Number.isFinite(value);
+/** Per-point styling arrives either as one value for the series or one value per sample. */
+const atPoint=<T,>(value:T|T[]|undefined,index:number,fallback:T):T=>Array.isArray(value)?value[index]??fallback:value??fallback;
+const widest=(value:number|number[]|undefined,fallback:number):number=>
+  Array.isArray(value)?(value.length?Math.max(...value):fallback):value??fallback;
 
 function nice(value:number){const power=10**Math.floor(Math.log10(value||1));const fraction=value/power;return (fraction<=1?1:fraction<=2?2:fraction<=5?5:10)*power;}
 export function numericTicks(low:number,high:number,limit:number,precision=12,explicitMin?:number,explicitMax?:number){
@@ -122,7 +127,7 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
     const firstWidth=labelsWidth(this.xLabels[0]??[]),lastWidth=this.xLabels.length>1?labelsWidth(this.xLabels.at(-1)??[]):0;
     const firstExtra=categorical&&this.kind==="bar"?(this.width-left-right)/Math.max(1,originalLabels.length)/2:0;
     const lastExtra=firstExtra;
-    const pointOverflow=this.kind==="line"?Math.max(0,...this.datasets.filter((dataset)=>dataset.data.length>0).map((dataset)=>Math.max(dataset.pointRadius??3,dataset.pointHoverRadius??4)+(dataset.pointBorderWidth??dataset.borderWidth??1))):0;
+    const pointOverflow=this.kind==="line"?Math.max(0,...this.datasets.filter((dataset)=>dataset.data.length>0).map((dataset)=>Math.max(widest(dataset.pointRadius,3),dataset.pointHoverRadius??4)+widest(dataset.pointBorderWidth??dataset.borderWidth,1))):0;
     left=Math.max(left,firstWidth/2+3-firstExtra,pointOverflow);right=Math.max(right,lastWidth/2+3-lastExtra,pointOverflow);
     this.area={left,top:10.2,right:this.width-right,bottom:this.height-bottom};
     if(!categorical){numeric=numericTicks(minX,maxX,Math.min(11,Math.max(2,Math.ceil((this.area.right-left)/40))),x.ticks?.precision??12,minX,maxX);this.xTicks=numeric.ticks;this.xLabels=numeric.ticks.map((value)=>[numberFormat.format(value)]);}
@@ -195,8 +200,16 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
           if(dataset.fill){const fill=new Path2D(path),zero=scale.getPixelForValue(Math.max(scale.min,Math.min(scale.max,0)));fill.lineTo(points.at(-1)!.px,zero);fill.lineTo(points[0]!.px,zero);fill.closePath();context.fillStyle=typeof dataset.backgroundColor==="string"?dataset.backgroundColor:"transparent";context.fill(fill);}
           context.stroke(path);
         }
-        context.fillStyle=typeof dataset.backgroundColor==="string"?dataset.backgroundColor:"transparent";context.lineWidth=dataset.pointBorderWidth??dataset.borderWidth??1;
-        for(const point of values){if(!finite(point.py))continue;context.beginPath();context.arc(point.px,point.py,dataset.pointRadius??3,0,Math.PI*2);context.closePath();context.fill();context.stroke();}
+        context.fillStyle=typeof dataset.backgroundColor==="string"?dataset.backgroundColor:"transparent";
+        for(const point of values){if(!finite(point.py))continue;
+          const radius=atPoint(dataset.pointRadius,point.index,3);
+          context.lineWidth=atPoint(dataset.pointBorderWidth,point.index,dataset.borderWidth??1);
+          context.beginPath();
+          if(atPoint(dataset.pointStyle,point.index,"circle")==="rectRot"){
+            context.moveTo(point.px,point.py-radius);context.lineTo(point.px+radius,point.py);
+            context.lineTo(point.px,point.py+radius);context.lineTo(point.px-radius,point.py);
+          } else context.arc(point.px,point.py,radius,0,Math.PI*2);
+          context.closePath();context.fill();context.stroke();}
       }
       context.restore();
     }
@@ -250,7 +263,7 @@ export class CompactChart<T extends Kind=Kind,D=(number|null)[]> {
     if(vertical==="center")left+=horizontal==="left"?7:horizontal==="right"?-7:0;else left+=horizontal==="left"?-11:horizontal==="right"?11:0;
     left=Math.max(0,Math.min(this.width-width,left));
     const top=Math.max(0,Math.min(this.height-height,y+(vertical==="top"?7:vertical==="bottom"?-height-7:-height/2)));
-    if(this.kind==="line"){context.beginPath();context.arc(x,y,dataset.pointHoverRadius??4,0,Math.PI*2);context.fillStyle=typeof dataset.backgroundColor==="string"?dataset.backgroundColor:"transparent";context.strokeStyle=dataset.borderColor??"#666";context.lineWidth=dataset.pointBorderWidth??dataset.borderWidth??1;context.fill();context.stroke();}
+    if(this.kind==="line"){context.beginPath();context.arc(x,y,dataset.pointHoverRadius??4,0,Math.PI*2);context.fillStyle=typeof dataset.backgroundColor==="string"?dataset.backgroundColor:"transparent";context.strokeStyle=dataset.borderColor??"#666";context.lineWidth=atPoint(dataset.pointBorderWidth,active.index,dataset.borderWidth??1);context.fill();context.stroke();}
     const settings=CompactChart.defaults.plugins.tooltip;
     context.fillStyle=settings.backgroundColor;context.beginPath();context.roundRect(left,top,width,height,6);context.fill();
     // Tooltip spacing/alignment follows the legacy Chart.js 4.4.7 visual contract.

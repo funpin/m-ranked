@@ -15,7 +15,7 @@ Environment=NODE_ENV=production
 Environment=TZ=UTC
 Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3000
-ExecStart=/usr/bin/node /opt/m-ranked/current/frontend/server.js
+ExecStart=/usr/bin/node --max-old-space-size=128 /opt/m-ranked/current/frontend/server.js
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=60s
@@ -48,6 +48,9 @@ RuntimeDirectoryMode=0750
 UMask=0077
 LimitNOFILE=32768
 TasksMax=256
+MemoryHigh=160M
+MemoryMax=192M
+MemorySwapMax=0
 
 [Install]
 WantedBy=m-ranked-shadow.target

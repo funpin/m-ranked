@@ -5,6 +5,8 @@ const rows=Array.from({length:2000},(_,index) => ({snapshotId:String(index),reac
 test("history sampling keeps endpoints, selected observation and 144 point budget",() => {
   const sampled=sampleHistory(rows,10,1990,"753");
   assert.ok(sampled.length <= 144);assert.equal(sampled[0]?.snapshotId,"10");assert.equal(sampled.at(-1)?.snapshotId,"1990");assert.ok(sampled.some((row) => row.snapshotId === "753"));
+  const evidence=sampleHistory(rows,10,1990,undefined,["611","1201"]);
+  assert.ok(evidence.some((row)=>row.snapshotId==="611"));assert.ok(evidence.some((row)=>row.snapshotId==="1201"));
   assert.equal(sampleHistory(rows,10,20).length,11);
 });
 test("history uses retained signed deltas and reaction order without normalizing keys",() => {

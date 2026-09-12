@@ -6,16 +6,19 @@ and platform poll-cycle data report collector state explicitly; stale data does 
 liveness response into an unexplained transport failure. A failed operational read returns
 only `{"status":"DOWN"}` with 503. Every response is `Cache-Control: no-store`.
 
-`GET /api/v1/health/live` remains process liveness. `/api/v1/health/ready` requires all nine
-published projection states at the latest committed revision: six original core states,
-`publication_history`, `publication_content` and `legacy_exports`. The revision provider uses
-the identical set. `account_latest` updates atomically in that publication transaction and
-has no independent projection-state row.
+`GET /api/v1/health/live` remains process liveness. `/api/v1/health/ready`
+requires database connectivity and at least one complete seven-projection serving
+generation. It does not require equality with the newest raw revision.
+`publication_content` and `legacy_exports` have independent non-serving
+watermarks. The revision provider selects the newest
+complete serving generation. `account_latest` updates in that publication
+transaction and has no independent projection-state row.
 
 `GET /api/v1/health/freshness` exposes only safe per-platform configured/fresh booleans,
 completion times, as-of time, published revision and revision lag. It returns 503 for a
 configured collector with absent, stale, failed or future completion, for unpublished raw
-revisions, or for unavailable state. An in-progress cycle can retain its previous completed
+serving state, or for unavailable state. Revision lag is diagnostic and does
+not by itself return 503. An in-progress cycle can retain its previous completed
 cycle's freshness. Imported `sqlite-bridge/*` runs never count as live collection success.
 
 V19 provides one SECURITY DEFINER read function with a fixed allowlist and owner-fixed search
@@ -54,7 +57,7 @@ rtk proxy .venv/bin/python -m operations.http_transition.rehearse \
 
 The HTTP producer compares the actual legacy and target JSON after S-final and then keeps
 legacy-compatible `/health` responses flowing throughout both directions of cutover. Its
-recorded content hash, comparison result and exact Flyway manifest are reproducible evidence.
+recorded content hash, comparison result and exact schema contract are reproducible evidence.
 `operations/nginx/routes/candidate-health.conf` is an inactive candidate adapter for `/health`.
 Production route ownership stays on legacy until the release gate and an explicit authorized
 route decision. No production network configuration is changed by these tests.

@@ -17,11 +17,13 @@ services:
       BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD:?set BACKUP_DB_PASSWORD}
       MIGRATION_BRIDGE_DB_PASSWORD: ${MIGRATION_BRIDGE_DB_PASSWORD:?set MIGRATION_BRIDGE_DB_PASSWORD}
       MAINTENANCE_DB_PASSWORD: ${MAINTENANCE_DB_PASSWORD:?set MAINTENANCE_DB_PASSWORD}
+      ANALYTICS_WORKER_DB_PASSWORD: ${ANALYTICS_WORKER_DB_PASSWORD:?set ANALYTICS_WORKER_DB_PASSWORD}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./postgres/init/001-create-roles.sh:/docker-entrypoint-initdb.d/001-create-roles.sh:ro
+      - ../backend/src/main/resources/db/final-schema.sql:/docker-entrypoint-initdb.d/002-final-schema.sql:ro
     healthcheck:
       test:
         - CMD-SHELL
@@ -52,6 +54,8 @@ services:
         --appendfsync everysec
         --save 900 1
         --save 300 10
+        --maxmemory 48mb
+        --maxmemory-policy allkeys-lru
         --requirepass "$${REDIS_PASSWORD}"
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"

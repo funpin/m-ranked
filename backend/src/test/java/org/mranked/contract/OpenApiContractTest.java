@@ -45,6 +45,7 @@ class OpenApiContractTest {
                 "/api/v1/accounts/{legacyId}/publications",
                 "/api/v1/institutions/{legacyId}/accounts",
                 "/api/v1/publications/{legacyId}/history",
+                "/api/v1/publications/{legacyId}/anomaly-analysis",
                 "/api/v1/exports/publications.csv",
                 "/api/v1/legacy-exports/{kind}.csv",
                 "/api/v1/admin/catalog/session",
@@ -65,7 +66,9 @@ class OpenApiContractTest {
                 "/api/v1/admin/jobs",
                 "/api/v1/admin/jobs/{jobId}",
                 "/api/v1/admin/platform-accounts/{accountId}",
-                "/api/v1/admin/platform-accounts/{accountId}/enabled"
+                "/api/v1/admin/platform-accounts/{accountId}/enabled",
+                "/api/v1/admin/publications/{publicationId}/anomaly-signals",
+                "/api/v1/admin/anomaly-signals/{findingId}/reviews"
         );
 
         @SuppressWarnings("unchecked")
@@ -192,6 +195,21 @@ class OpenApiContractTest {
                 .contains("per-publication percentages")
                 .contains("does not interpolate")
                 .contains("future values backward");
+
+        assertThat(paths.get("/api/v1/publications/{legacyId}/anomaly-analysis").toString())
+                .contains("PublicationAnomalyAnalysis")
+                .contains("#/components/headers/PublicCache")
+                .contains("not a probability or proof of artificial activity");
+        assertThat(schemas.get("PublicationAnomalyAnalysis").toString())
+                .contains("suspicionScore={type=[number, null], minimum=0, maximum=1}")
+                .contains("methodologyVersion={type=string, const=anomaly-dynamics-v1}");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> headers = (Map<String, Object>) components.get("headers");
+        assertThat(headers.get("PublicCache").toString())
+                .contains("max-age=30")
+                .contains("must-revalidate");
+        assertThat(paths.get("/api/v1/admin/publications/{publicationId}/anomaly-signals").toString())
+                .contains("basicAuth", "Idempotency-Key", "X-XSRF-TOKEN");
     }
 
     @Test

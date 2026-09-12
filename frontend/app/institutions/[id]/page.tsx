@@ -1,7 +1,5 @@
 import { accountHref } from "@/lib/entity-routes";
 import type { Metadata } from "next";
-import { collectPages, uniqueRows } from "@/lib/continuation";
-import { loadAccountPublications } from "@/lib/detail-data";
 import { notFound, redirect } from "next/navigation";
 import { InstitutionDetail } from "@/components/institution-detail";
 import { ApiFailureState, PageHeader } from "@/components/ui";
@@ -57,32 +55,24 @@ export default async function InstitutionPage({ params, searchParams }: Institut
     );
   }
   let accounts;
+  let accountsTruncated = false;
   try {
-    const pages = await collectPages((cursor) => api.institutionAccounts(legacyId,platform,cursor),(page) => page.nextCursor);
-    accounts = uniqueRows(pages.flatMap((page) => page.items),(account) => account.accountId);
+    const accountPage = await api.institutionAccounts(legacyId,platform,100);
+    accounts = accountPage.items;
+    accountsTruncated = Boolean(accountPage.nextCursor);
     // Legacy platform cards use SQLite's binary ORDER BY platform, title, username.
     if(platform !== "telegram") {
       const textOrder=(a:string|null,b:string|null)=>a===b?0:a===null?-1:b===null?1:a<b?-1:1;
       accounts.sort((a,b)=>textOrder(a.platform,b.platform)||textOrder(a.title,b.title)||textOrder(a.username,b.username));
     }
-    if (pages[0]!.datasetRevision !== institution.datasetRevision) throw new Error("Revision changed");
+    if (accountPage.datasetRevision !== institution.datasetRevision) throw new Error("Revision changed");
   } catch { return <ApiFailureState retryHref={queryHref(`/institutions/${legacyId}`,{platform})} />; }
   if(platform !== "all" && accounts.length === 1) {
     const account=accounts[0]!;
     redirect(accountHref(account.accountId));
   }
-  const posts = [];
-  try {
-    for(const [index,account] of accounts.entries()) {
-      const id=account.accountId;
-      const enriched=await api.account(id);
-      if(enriched.datasetRevision!==institution.datasetRevision) throw new Error("Revision changed");
-      accounts[index]={...account,stats:enriched.stats};
-      const page=await loadAccountPublications(id);
-      if(page.datasetRevision !== institution.datasetRevision) throw new Error("Revision changed");
-      posts.push(...page.items.map((post) => ({...post,account})));
-    }
-    posts.sort((a,b) => Date.parse(b.publishedAt)-Date.parse(a.publishedAt) || (b.legacyId ?? 0)-(a.legacyId ?? 0));
-  } catch { return <ApiFailureState retryHref={queryHref(`/institutions/${legacyId}`,{platform})} />; }
-  return <InstitutionDetail institution={institution} accounts={accounts} posts={[...new Map(posts.map((post) => [post.publicationId,post])).values()].slice(0,500)} />;
+  // The institution endpoint intentionally performs a fixed two-request read.
+  // Per-account details and publications stay on the account pages instead of
+  // creating a production-size 2N fan-out from one web request.
+  return <InstitutionDetail institution={institution} accounts={accounts} posts={[]} accountsTruncated={accountsTruncated} />;
 }

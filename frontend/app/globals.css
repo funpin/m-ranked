@@ -62,3 +62,15 @@ td>a:not(.entity-link):not(.telegram-link),.overview-footer p>a { text-decoratio
 
 .measurement-history .history-toggle { background:none;border:0;padding:0;color:var(--blue);font:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer; }
 .snapshot-highlight .snapshot-jump { color:var(--ink); }
+.anomaly-panel { margin:18px 0; }
+.anomaly-panel:hover { transform:none; }
+.anomaly-panel .section-heading { display:flex;align-items:center;justify-content:space-between;gap:16px; }
+.anomaly-panel .section-heading h2 { margin-bottom:8px; }
+.anomaly-panel .warning { padding:10px 12px;border-left:3px solid var(--amber);background:var(--amber-soft); }
+.anomaly-findings { display:grid;gap:8px;margin:14px 0; }
+.anomaly-findings details { padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-soft); }
+.anomaly-findings summary { cursor:pointer; }
+.anomaly-findings dl { display:grid;grid-template-columns:max-content 1fr;gap:5px 12px;margin:12px 0; }
+.anomaly-findings dd { margin:0; }
+.snapshot-row.anomaly-boundary { box-shadow:inset 4px 0 var(--purple); }
+.snapshot-row.anomaly-boundary .snapshot-jump { font-weight:900;text-decoration:underline;text-decoration-style:double; }

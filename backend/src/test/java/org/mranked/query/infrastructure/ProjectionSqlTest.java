@@ -6,6 +6,41 @@ import org.junit.jupiter.api.Test;
 
 class ProjectionSqlTest {
     @Test
+    void sourceInstitutionAccountsKeepsDynamicSqlTokensSeparated() {
+        assertThat(JdbcDetailQueries.institutionAccountsSql(true))
+                .contains("AS as_of\nFROM page")
+                .doesNotContain("as_ofFROM");
+    }
+
+    @Test
+    void sourceAccountUuidVariantCanReplaceBothLegacyParameters() {
+        String sql = SourceReadSql.ACCOUNT.replace(
+                "account_alias.entity_type=:legacyType AND account_alias.legacy_id=:legacyId",
+                "account_alias.entity_type=CASE WHEN account.platform='telegram' THEN 'channels' "
+                        + "ELSE 'platform_accounts' END AND account.id=:id");
+        assertThat(sql).contains("account.id=:id").doesNotContain(":legacyType", ":legacyId");
+    }
+
+    @Test
+    void sourcePublicationUuidVariantCanReplaceBothLegacyParameters() {
+        String sql = SourceReadSql.PUBLICATION.replace(
+                "alias.entity_type=:legacyType AND alias.legacy_id=:legacyId",
+                "alias.entity_type=CASE WHEN account.platform='telegram' THEN 'posts' "
+                        + "ELSE 'platform_posts' END AND alias.target_uuid=:id");
+        assertThat(sql).contains("alias.target_uuid=:id").doesNotContain(":legacyType", ":legacyId");
+    }
+
+    @Test
+    void sourceRatingSqlCanBeComposedForEveryPublicRatingQuery() {
+        assertThat(SourceRatingSql.ENTITIES)
+                .contains("LIMIT 100").contains("LIMIT 20").contains("LIMIT :entityFetchLimit")
+                .doesNotContain("analytics.account_latest", "analytics.publication_latest");
+        assertThat(SourceRatingSql.PUBLICATIONS)
+                .contains("LIMIT 200").contains("LIMIT 50")
+                .doesNotContain("analytics.account_latest", "analytics.publication_latest");
+    }
+
+    @Test
     void overviewIsRevisionPinnedAndKeysetReady() {
         assertThat(JdbcProjectionQueryRepository.OVERVIEW_SQL)
                 .contains("analytics.legacy_overview_card")

@@ -184,10 +184,9 @@ BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
 DO $assertions$
 DECLARE
     latest_revision bigint;
+    published_revision bigint;
     ready_count integer;
-    migration_count integer;
-    latest_migration integer;
-    migration_versions text[];
+    installed_contract text;
 BEGIN
     IF current_setting('server_version_num')::integer <> 180006 THEN
         RAISE EXCEPTION 'restore verifier requires PostgreSQL 18.6, found %',
@@ -196,86 +195,34 @@ BEGIN
     IF pg_is_in_recovery() THEN
         RAISE EXCEPTION 'restored database is still in recovery';
     END IF;
-    SELECT count(*), max(version::integer), array_agg(version ORDER BY version::integer)
-      INTO migration_count, latest_migration, migration_versions
-      FROM flyway.flyway_schema_history
-     WHERE version IS NOT NULL
-       AND success;
-    IF migration_count <> 30 OR latest_migration <> 30
-       OR migration_versions IS DISTINCT FROM
-          ARRAY['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30']::text[]
-       OR EXISTS (
-           SELECT 1 FROM flyway.flyway_schema_history
-            WHERE version IS NOT NULL AND NOT success
-       ) OR EXISTS (
-           SELECT 1 FROM flyway.flyway_schema_history
-            WHERE version IS NULL
-              AND ROW(installed_rank,description,type,script,checksum,success)
-                  IS DISTINCT FROM ROW(0,'<< Flyway Schema Creation >>','SCHEMA','"flyway"',NULL::integer,true)
-       ) OR EXISTS (
-           SELECT 1
-             FROM (VALUES
-                 ('1', 'V1__target_baseline.sql', -1636077697),
-                 ('2', 'V2__rebuild_core_projections.sql', 839607018),
-                 ('3', 'V3__collector_observation_times_and_identity_grants.sql', -1456658399),
-                 ('4', 'V4__admin_collection_run_status_grants.sql', 1318350062),
-                 ('5', 'V5__legacy_activity_period_projection.sql', -1313754193),
-                 ('6', 'V6__comparison_valid_observation_hourly_projection.sql', -290358219),
-                 ('7', 'V7__activity_rating_read_grants.sql', -1228913579),
-                 ('8', 'V8__legacy_overview_projection.sql', -574188650),
-                 ('9', 'V9__immutable_observations_quality_archive_fence.sql', 1058556652),
-                 ('10', 'V10__consistent_public_queries_and_formula_guards.sql', -1148603410),
-                 ('11', 'V11__bridge_identity_lineage_and_reconciliation.sql', 1679789143),
-                 ('12', 'V12__detail_history_projection.sql', 1453326243),
-                 ('13', 'V13__immutable_account_identity_history.sql', -185639607),
-                 ('14', 'V14__public_archived_publication_text.sql', -956321170),
-                 ('15', 'V15__verified_source_preservation.sql', -1953543117),
-                 ('16', 'V16__audited_catalog_commands.sql', -888916335),
-                 ('17', 'V17__legacy_csv_compatibility_projection.sql', 2060863494),
-                 ('18', 'V18__official_rating_commands.sql', 875583974),
-                 ('19', 'V19__safe_health_operational_snapshot.sql', -1653532549),
-                 ('20', 'V20__catalog_url_and_version_compatibility.sql', 925593865),
-                 ('21', 'V21__legacy_period_first_observation_policy.sql', -900669350),
-                 ('22', 'V22__durable_legacy_csv_archive_facts.sql', 2064364640),
-                 ('23', 'V23__official_rating_entity_context.sql', 890722389),
-                 ('24', 'V24__ordered_history_reaction_details.sql', 1889276383),
-                 ('25', 'V25__safe_legacy_account_presentation.sql', 381330844),
-                 ('26', 'V26__independent_projection_verifier_reads.sql', -1482835665),
-                 ('27', 'V27__retained_disabled_platform_period_metrics.sql', -1466195806),
-                 ('28', 'V28__identity_command_receipt_verifier_acl.sql', 1374125493),
-                 ('29', 'V29__monotonic_native_identity_transitions.sql', -1547328464),
-                 ('30', 'V30__preserve_legacy_forced_history_baseline.sql', 178291902)
-             ) AS expected(version, script, checksum)
-             FULL JOIN (
-                 SELECT version, script, checksum
-                   FROM flyway.flyway_schema_history
-                  WHERE version IS NOT NULL
-                    AND success
-             ) AS actual USING (version)
-            WHERE expected.version IS NULL
-               OR actual.version IS NULL
-               OR actual.script IS DISTINCT FROM expected.script
-               OR actual.checksum IS DISTINCT FROM expected.checksum
-       ) THEN
-        RAISE EXCEPTION 'restored Flyway history does not match frozen V1-V30';
+    SELECT contract_id INTO installed_contract
+      FROM ops_and_admin.schema_contract;
+    IF installed_contract IS DISTINCT FROM 'storage-publisher-final-2026-09-08-r3' THEN
+        RAISE EXCEPTION 'restored database does not match the final schema contract';
     END IF;
     SELECT max(id) INTO latest_revision FROM analytics.dataset_revision;
     IF latest_revision IS NULL THEN
         RAISE EXCEPTION 'restored database has no dataset revision';
     END IF;
-    SELECT count(*) INTO ready_count
-      FROM analytics.projection_state
-     WHERE dataset_revision_id = latest_revision
-       AND status = 'ready'
-       AND projection_name IN (
-           'publication_latest', 'publication_hourly',
-           'institution_daily_metrics', 'institution_monthly_metrics',
-           'institution_period_metrics', 'comparison',
-           'publication_history', 'publication_content', 'legacy_exports'
-       );
-    IF ready_count <> 9 OR (SELECT count(*) FROM analytics.projection_state) <> 9 THEN
-        RAISE EXCEPTION 'restored latest revision % does not have the exact nine ready projections (% ready)',
-            latest_revision, ready_count;
+    WITH core(projection_name) AS (VALUES
+        ('publication_latest'), ('publication_hourly'),
+        ('institution_daily_metrics'), ('institution_monthly_metrics'),
+        ('institution_period_metrics'), ('comparison'), ('publication_history')
+    )
+    SELECT revision.id, count(state.projection_name)
+      INTO published_revision, ready_count
+      FROM analytics.dataset_revision AS revision
+     CROSS JOIN core
+      LEFT JOIN analytics.projection_state AS state
+        ON state.projection_name = core.projection_name
+       AND state.dataset_revision_id = revision.id
+       AND state.status = 'ready'
+     GROUP BY revision.id
+    HAVING count(state.projection_name) = 7
+     ORDER BY revision.id DESC
+     LIMIT 1;
+    IF published_revision IS NULL OR ready_count <> 7 THEN
+        RAISE EXCEPTION 'restored database has no complete seven-projection serving generation';
     END IF;
 END
 $assertions$;
@@ -284,41 +231,92 @@ SELECT jsonb_build_object(
     'database', current_database(),
     'serverVersionNum', current_setting('server_version_num')::integer,
     'inRecovery', pg_is_in_recovery(),
-    'flywaySchemaVersion', (
-        SELECT max(version::integer) FROM flyway.flyway_schema_history
-         WHERE version IS NOT NULL AND success
-    ),
-    'flywayMigrationCount', (
-        SELECT count(*) FROM flyway.flyway_schema_history
-         WHERE version IS NOT NULL AND success
-    ),
-    'flywayMigrations', (
-        SELECT jsonb_agg(
-                   jsonb_build_object(
-                       'version', version,
-                       'script', script,
-                       'checksum', checksum
-                   )
-                   ORDER BY version::integer
-               )
-          FROM flyway.flyway_schema_history
-         WHERE version IS NOT NULL AND success
+    'schemaContract', (
+        SELECT contract_id FROM ops_and_admin.schema_contract
     ),
     'lastWalReplayLsn', pg_last_wal_replay_lsn(),
     'lastXactReplayAt', pg_last_xact_replay_timestamp(),
-    'datasetRevision', (SELECT max(id) FROM analytics.dataset_revision),
-    'datasetCommittedAt', (SELECT max(committed_at) FROM analytics.dataset_revision),
+    'rawDatasetRevision', (SELECT max(id) FROM analytics.dataset_revision),
+    'datasetRevision', (
+        WITH core(projection_name) AS (VALUES
+            ('publication_latest'), ('publication_hourly'),
+            ('institution_daily_metrics'), ('institution_monthly_metrics'),
+            ('institution_period_metrics'), ('comparison'), ('publication_history')
+        )
+        SELECT revision.id
+          FROM analytics.dataset_revision AS revision
+         CROSS JOIN core
+          LEFT JOIN analytics.projection_state AS state
+            ON state.projection_name = core.projection_name
+           AND state.dataset_revision_id = revision.id
+           AND state.status = 'ready'
+         GROUP BY revision.id
+        HAVING count(state.projection_name) = 7
+         ORDER BY revision.id DESC
+         LIMIT 1
+    ),
+    'datasetCommittedAt', (
+        WITH core(projection_name) AS (VALUES
+            ('publication_latest'), ('publication_hourly'),
+            ('institution_daily_metrics'), ('institution_monthly_metrics'),
+            ('institution_period_metrics'), ('comparison'), ('publication_history')
+        )
+        SELECT revision.committed_at
+          FROM analytics.dataset_revision AS revision
+         CROSS JOIN core
+          LEFT JOIN analytics.projection_state AS state
+            ON state.projection_name = core.projection_name
+           AND state.dataset_revision_id = revision.id
+           AND state.status = 'ready'
+         GROUP BY revision.id, revision.committed_at
+        HAVING count(state.projection_name) = 7
+         ORDER BY revision.id DESC
+         LIMIT 1
+    ),
     'projectionStates', (
         SELECT jsonb_agg(jsonb_build_object(
             'name', projection_name, 'status', status,
             'datasetRevision', dataset_revision_id
         ) ORDER BY projection_name)
         FROM analytics.projection_state
+        WHERE projection_name IN (
+            'publication_latest', 'publication_hourly',
+            'institution_daily_metrics', 'institution_monthly_metrics',
+            'institution_period_metrics', 'comparison', 'publication_history'
+        )
+    ),
+    'historicalProjectionStates', (
+        SELECT jsonb_agg(jsonb_build_object(
+            'name', projection_name, 'status', status,
+            'datasetRevision', dataset_revision_id
+        ) ORDER BY projection_name)
+        FROM analytics.projection_state
+        WHERE projection_name IN (
+            'publication_content', 'legacy_exports'
+        )
     ),
     'coreReadyProjections', (
-        SELECT count(*) FROM analytics.projection_state
-         WHERE dataset_revision_id = (SELECT max(id) FROM analytics.dataset_revision)
-           AND status = 'ready'
+        WITH core(projection_name) AS (VALUES
+            ('publication_latest'), ('publication_hourly'),
+            ('institution_daily_metrics'), ('institution_monthly_metrics'),
+            ('institution_period_metrics'), ('comparison'), ('publication_history')
+        ), published AS (
+            SELECT revision.id
+              FROM analytics.dataset_revision AS revision
+             CROSS JOIN core
+              LEFT JOIN analytics.projection_state AS state
+                ON state.projection_name = core.projection_name
+               AND state.dataset_revision_id = revision.id
+               AND state.status = 'ready'
+             GROUP BY revision.id
+            HAVING count(state.projection_name) = 7
+             ORDER BY revision.id DESC
+             LIMIT 1
+        )
+        SELECT count(*) FROM analytics.projection_state AS state
+         WHERE state.dataset_revision_id = (SELECT id FROM published)
+           AND state.status = 'ready'
+           AND state.projection_name IN (SELECT projection_name FROM core)
     )
 );
 COMMIT;

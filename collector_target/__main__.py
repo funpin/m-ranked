@@ -119,7 +119,11 @@ async def _run(args: argparse.Namespace) -> int:
             or "target-v1"
         )
         clock = SystemUtcClock()
-        repository = PostgresCollectorRepository(dsn)
+        repository = PostgresCollectorRepository(
+            dsn,
+            snapshot_heartbeat_hours=settings.publication_snapshot_heartbeat_hours,
+        )
+        repository.assert_schema_contract()
         lease_provider = PostgresAdvisoryLeaseProvider(dsn)
         adapter = build_runtime_adapter(platform, settings, clock, repository)
         coordinator = PollCycleCoordinator(

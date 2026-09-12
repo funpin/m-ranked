@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
-import org.flywaydb.core.Flyway;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -13,12 +13,11 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 @EnabledIfEnvironmentVariable(named="MRANKED_GOLDEN_TEST_POSTGRES_URL",matches=".+")
 class LegacyGoldenProjectionIntegrationTest {
     private static final Path ROOT=Path.of(System.getProperty("basedir")).toAbsolutePath().getParent();
-    @BeforeAll static void installRealMigrations() {
-        Flyway.configure().dataSource(System.getenv("MRANKED_GOLDEN_TEST_POSTGRES_URL"),
-                System.getenv("MRANKED_ADMIN_TEST_OWNER_USERNAME"),System.getenv("MRANKED_ADMIN_TEST_OWNER_PASSWORD"))
-                .defaultSchema("flyway").createSchemas(true).cleanDisabled(true)
-                .locations("filesystem:"+ROOT.resolve("backend/src/main/resources/db/migration"))
-                .load().migrate();
+    @BeforeAll static void installFinalSchema() throws Exception {
+        FinalSchemaInstaller.install(
+                System.getenv("MRANKED_GOLDEN_TEST_POSTGRES_URL"),
+                System.getenv("MRANKED_ADMIN_TEST_OWNER_USERNAME"),
+                System.getenv("MRANKED_ADMIN_TEST_OWNER_PASSWORD"));
     }
     @Test void legacyActivityWindowAndOverviewGoldenValuesSurviveLatestMigration() throws Exception {run("period-activity-golden.sql");}
     @Test void fixedCohortMembershipMissingPointsAndSameSnapshotEngagementMatchLegacy() throws Exception {run("comparison-golden.sql");}

@@ -7,11 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
+import org.mranked.testing.FinalSchemaInstaller;
 import org.mranked.cache.application.*;
 import org.mranked.cache.infrastructure.*;
 import org.mranked.query.application.PublicQueryService;
@@ -25,8 +24,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @EnabledIfEnvironmentVariable(named="MRANKED_EXPORT_TEST_ADMIN_URL",matches=".+")
 class DisabledPeriodPostgresIntegrationTest {
     @TempDir Path output;
-    @ParameterizedTest @ValueSource(booleans={false,true})
-    void retainedDisabledPlatformHistorySurvivesCleanAndPopulatedUpgrade(boolean upgrade) throws Exception {
+    @Test
+    void retainedDisabledPlatformHistorySurvivesFinalSchema() throws Exception {
         String initial=System.getenv("MRANKED_EXPORT_TEST_ADMIN_URL");URI uri=URI.create(initial.substring(5));
         assertThat(uri.getHost()).isIn("127.0.0.1","localhost","[::1]");assertThat(uri.getPath()).endsWith("_it");
         String name="mranked_disabled_"+UUID.randomUUID().toString().replace("-","")+"_it";
@@ -36,23 +35,13 @@ class DisabledPeriodPostgresIntegrationTest {
         try(var control=DriverManager.getConnection(initial,owner,password)) {
             control.createStatement().execute("CREATE DATABASE "+name+" OWNER migration_owner");
             try {
-                var installation=Flyway.configure().dataSource(url,owner,password).initSql("SET ROLE migration_owner")
-                    .defaultSchema("flyway").locations("filesystem:"+root.resolve("backend/src/main/resources/db/migration")).cleanDisabled(true);
-                if(upgrade)installation.target("26");installation.load().migrate();
+                FinalSchemaInstaller.install(url, owner, password);
                 var process=new ProcessBuilder(org.mranked.testing.IntegrationRuntime.python(root),"-m","migration.integration.disabled_period_oracle",
                     "--output",output.toString()).directory(root.toFile()).redirectErrorStream(true).redirectOutput(output.resolve("oracle.log").toFile());
                 process.environment().put("MRANKED_LEGACY_CSV_DSN",new URI("postgresql",owner+":"+password,
                     uri.getHost(),uri.getPort(),"/"+name,null,null).toString());
                 run(process);
                 var admin=JdbcClient.create(new DriverManagerDataSource(url,owner,password));
-                long previous=admin.sql("SELECT max(dataset_revision_id) FROM analytics.projection_state").query(Long.class).single();
-                if(upgrade) {
-                    assertThat(admin.sql("SELECT count(*) FROM analytics.institution_period_metrics m JOIN catalog.legacy_entity_alias a ON a.target_uuid=m.institution_id AND a.entity_type='institutions' WHERE a.legacy_id=1 AND m.platform='vk'").query(Long.class).single()).isZero();
-                    Flyway.configure().dataSource(url,owner,password).initSql("SET ROLE migration_owner")
-                        .defaultSchema("flyway").locations("filesystem:"+root.resolve("backend/src/main/resources/db/migration"))
-                        .cleanDisabled(true).load().migrate();
-                    assertThat(admin.sql("SELECT max(dataset_revision_id) FROM analytics.projection_state").query(Long.class).single()).isGreaterThan(previous);
-                }
                 process.command().add("--verify");run(process);
                 var json=new tools.jackson.databind.json.JsonMapper();
                 var proof=json.readTree(Files.readString(output.resolve("disabled-period-oracle.json")));
@@ -79,7 +68,7 @@ class DisabledPeriodPostgresIntegrationTest {
                 }
                 assertThat(httpValues).isEqualTo(144);
                 Files.copy(output.resolve("disabled-period-oracle.json"),Path.of(System.getProperty("mranked.build.directory","target"),
-                    upgrade?"disabled-period-upgrade.json":"disabled-period-clean.json"),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    "disabled-period-final.json"),java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             } finally {control.createStatement().execute("DROP DATABASE "+name+" WITH (FORCE)");}
         }
     }

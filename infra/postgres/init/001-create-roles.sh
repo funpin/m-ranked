@@ -13,6 +13,7 @@ required_variables=(
   BACKUP_DB_PASSWORD
   MIGRATION_BRIDGE_DB_PASSWORD
   MAINTENANCE_DB_PASSWORD
+  ANALYTICS_WORKER_DB_PASSWORD
 )
 
 for variable_name in "${required_variables[@]}"; do
@@ -32,7 +33,8 @@ psql \
   --set collector_ingest_password="${COLLECTOR_INGEST_DB_PASSWORD}" \
   --set backup_password="${BACKUP_DB_PASSWORD}" \
   --set migration_bridge_password="${MIGRATION_BRIDGE_DB_PASSWORD}" \
-  --set maintenance_password="${MAINTENANCE_DB_PASSWORD}" <<'SQL'
+  --set maintenance_password="${MAINTENANCE_DB_PASSWORD}" \
+  --set analytics_worker_password="${ANALYTICS_WORKER_DB_PASSWORD}" <<'SQL'
 SELECT format('CREATE ROLE migration_owner LOGIN PASSWORD %L', :'migration_password')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'migration_owner') \gexec
 ALTER ROLE migration_owner WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'migration_password';
@@ -61,12 +63,25 @@ SELECT format('CREATE ROLE maintenance LOGIN PASSWORD %L', :'maintenance_passwor
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'maintenance') \gexec
 ALTER ROLE maintenance WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'maintenance_password';
 
+SELECT format('CREATE ROLE analytics_worker LOGIN PASSWORD %L', :'analytics_worker_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'analytics_worker') \gexec
+ALTER ROLE analytics_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD :'analytics_worker_password';
+
 GRANT api_read TO api_write_admin;
 GRANT pg_monitor TO backup;
 
+-- Every read path crosses the month partitions of ingest.publication_metric_snapshot
+-- and ingest.reaction_breakdown. The planner prices those appends above
+-- jit_above_cost even when run-time pruning leaves one partition, so each request
+-- pays a few hundred milliseconds of JIT emission for nothing. Measured on a
+-- production copy: one publication history goes from 407 ms to 30 ms.
+ALTER ROLE api_read SET jit = off;
+ALTER ROLE api_write_admin SET jit = off;
+ALTER ROLE analytics_worker SET jit = off;
+
 SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', current_database()) \gexec
 SELECT format(
-  'GRANT CONNECT ON DATABASE %I TO migration_owner, api_read, api_write_admin, collector_ingest, backup, migration_bridge, maintenance',
+  'GRANT CONNECT ON DATABASE %I TO migration_owner, api_read, api_write_admin, collector_ingest, backup, migration_bridge, maintenance, analytics_worker',
   current_database()
 ) \gexec
 SELECT format('GRANT CREATE, TEMPORARY ON DATABASE %I TO migration_owner', current_database()) \gexec
@@ -74,7 +89,4 @@ SELECT format('ALTER DATABASE %I SET timezone TO %L', current_database(), 'UTC')
 
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-CREATE SCHEMA IF NOT EXISTS flyway AUTHORIZATION migration_owner;
-REVOKE ALL ON SCHEMA flyway FROM PUBLIC;
-GRANT USAGE, CREATE ON SCHEMA flyway TO migration_owner;
 SQL

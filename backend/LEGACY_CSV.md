@@ -36,7 +36,7 @@ shutdown. Neither Spring, Next nor Redis holds the complete CSV in memory.
 ## Evidence and remaining gates
 
 `LegacyCsvPostgresIntegrationTest` provisions and drops its own local database
-using explicit disposable bootstrap authority, installs actual Flyway migrations,
+using explicit disposable bootstrap authority, installs the actual final schema,
 and compares original FastAPI bytes through the real Spring MVC adapter. It covers
 14 source cases, 10 native round-trip cases, duplicate parameters, empty data,
 target tampering, concurrent revision replacement and API raw-table denial.

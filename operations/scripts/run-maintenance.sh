@@ -44,6 +44,7 @@ fi
 psql "$MAINTENANCE_DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
   --set partitions_ahead="$MAINTENANCE_PARTITIONS_AHEAD" <<'SQL'
 SET statement_timeout = '5min';
+SELECT ops_and_admin.refresh_storage_observation() AS storage_observation;
 SELECT ops_and_admin.ensure_publication_metric_partition(
            (date_trunc('month', current_date)
               + make_interval(months => offset_month))::date

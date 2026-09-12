@@ -26,7 +26,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
   const base = new URL(options.baseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:8080");
   if (!["https:", "http:"].includes(base.protocol) || base.username || base.password) throw new Error("API_BASE_URL must be an HTTP(S) origin without credentials");
   const fetcher: Fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
-  const timeoutMs = options.timeoutMs ?? 8_000;
+  const timeoutMs = options.timeoutMs ?? 15_000;
   const limit = Math.max(0, options.cacheEntries ?? 128);
   const cache = new Map<string, CacheEntry>();
 
@@ -71,6 +71,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
       return revalidate(url);
     },
   });
+  // Analysis has an independent revision axis and stays outside the existing
+  // dataset-revision-only Next cache.
+  const analysisClient = createClient<paths>({
+    baseUrl: base.origin,
+    fetch: async (request) => revalidate(new URL(request.url)),
+  });
 
   function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
     if (result.error || !result.response.ok) {
@@ -96,17 +102,22 @@ export function createApiClient(options: ApiClientOptions = {}) {
     account(legacyId: number | string, legacyType?: LegacyAccountType) {
       return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
     },
-    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, cursor?: string) {
-      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: 200, cursor } } }).then(unwrap);
+    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, limit = 100, cursor?: string) {
+      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
-    institutionAccounts(legacyId: number, platform: Platform, cursor?: string) {
-      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: 200, cursor } } }).then(unwrap);
+    institutionAccounts(legacyId: number, platform: Platform, limit = 100, cursor?: string) {
+      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
-    publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, cursor?: string) {
-      return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: 2000, cursor } } }).then(unwrap);
+    publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, limit = 100, cursor?: string) {
+      return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(3000, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
-    comparisonCandidates(platform: Exclude<Platform, "all">, cursor?: string) {
-      return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: 200, cursor } } }).then(unwrap);
+    publicationAnomalyAnalysis(legacyId: number | string, legacyType?: LegacyPublicationType, cursor?: string) {
+      return analysisClient.GET("/api/v1/publications/{legacyId}/anomaly-analysis", {
+        params: { path: { legacyId }, query: { legacyType, limit: 100, cursor } },
+      }).then(unwrap);
+    },
+    comparisonCandidates(platform: Exclude<Platform, "all">, limit = 200, cursor?: string) {
+      return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
     comparison(input: ComparisonRequest) {
       const channels = input.platform === "telegram" ? normalizeComparisonIds("channels", input.channels) : undefined;

@@ -660,10 +660,10 @@ BEGIN
         'migration_bridge', 'analytics.rebuild_core_projections(bigint)', 'EXECUTE'
     ) OR NOT has_function_privilege(
         'maintenance', 'analytics.rebuild_core_projections(bigint)', 'EXECUTE'
-    ) OR NOT has_function_privilege(
+    ) OR has_function_privilege(
         'api_write_admin', 'analytics.rebuild_core_projections(bigint)', 'EXECUTE'
     ) THEN
-        RAISE EXCEPTION 'corrected V5 wrapper is unavailable to an intended caller';
+        RAISE EXCEPTION 'historical projection bootstrap privilege boundary is invalid';
     END IF;
 END
 $assertions$;

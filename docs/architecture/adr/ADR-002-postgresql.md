@@ -25,7 +25,8 @@ authoritative transactional store.
 Основные правила:
 
 - один cluster/database, логические schemas по модулям;
-- Flyway — единственный механизм DDL и schema history;
+- `final-schema.sql` — единственный bootstrap DDL; существующий production
+  переводится одним fail-closed transition-скриптом;
 - `timestamptz` в UTC для моментов времени, `date` только для календарных дат;
 - UUID для business identities, `bigint` для высокообъемных snapshot rows;
 - `numeric` и явное округление для rating score; счетчики — `bigint`;
