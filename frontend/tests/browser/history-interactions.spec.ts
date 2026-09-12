@@ -141,11 +141,14 @@ test("manual unresolved signal stays separate from automatic clean score",async(
 
 
 test("a point older than the 1000-row boundary remains reachable and the next publication resets its range",async({page}) => {
+  test.setTimeout(60_000);
   await page.goto("/posts/99");
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
   const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
-  await expect(chart).toHaveAttribute("data-chart-ready","true");
+  // Hydrating 1205 native table rows precedes the lazy renderer on CI's shared
+  // CPU. This is a reachability test; measured latency has a separate gate.
+  await expect(chart).toHaveAttribute("data-chart-ready","true",{timeout:30_000});
   await expect(page.locator("tbody tr")).toHaveCount(1205);
   await chart.focus();await page.keyboard.press("Home");await page.keyboard.press("Enter");
   await expect(page.locator("tbody tr")).toHaveCount(1205);

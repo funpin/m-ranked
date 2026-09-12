@@ -48,7 +48,12 @@ jobs:
             psql --username mranked_bootstrap --dbname mranked --no-psqlrc \
             --tuples-only --no-align --command \
             "SELECT to_regnamespace('flyway') IS NULL AND to_regnamespace('migration') IS NULL")" = t
-      - run: .venv/bin/pytest -q
+      - name: Python gates with a protected release-fixture directory
+        run: |
+          # Provenance tests validate every ancestor's permissions; /tmp is
+          # world-writable and cannot represent a protected release root.
+          sudo install -d -m 0755 -o "$(id -u)" -g "$(id -g)" /opt/m-ranked-ci-tests
+          .venv/bin/pytest -q --basetemp=/opt/m-ranked-ci-tests/pytest
       - run: ./mvnw test -q
         working-directory: backend
       - if: always()
