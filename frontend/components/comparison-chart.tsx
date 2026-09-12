@@ -48,7 +48,7 @@ export function ComparisonChart({ series, horizonHours, maximumHour:providedMaxi
           spanGaps: false, tension: 0.15, pointRadius: 4, pointHoverRadius: 7, borderWidth: 3,
         })) },
         options: { responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
-          color: css.getPropertyValue("--muted"), interaction: { mode: "nearest", intersect: false },
+          color: css.getPropertyValue("--legacy-muted"), interaction: { mode: "nearest", intersect: false },
           plugins: { legend: { display: false }, tooltip: { callbacks: {
             title: (items) => items.length ? `Через ${items[0]!.parsed.x} ч после публикации` : "",
             label: (item) => `${item.dataset.label}: ${valueFormat === "percentage" ? `${item.parsed.y?.toFixed(2)}%` : `${Math.round(item.parsed.y ?? 0)} ${metricWord}`}`,

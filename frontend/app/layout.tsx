@@ -7,6 +7,13 @@ import favicon from "../assets/favicon.png";
 import { SiteHeader } from "@/components/site-header";
 import { publicOrigin } from "@/lib/deployment";
 import "./globals.css";
+import { Geologica, Montserrat } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+// Self-hosted by next/font: no request to fonts.gstatic.com, and the fallback
+// metrics it emits keep the layout from shifting while a face loads.
+const heading = Geologica({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-heading" });
+const sans = Montserrat({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-sans" });
 
 export const metadata: Metadata = {
   metadataBase: publicOrigin(),
@@ -43,12 +50,13 @@ export const viewport: Viewport = {
 };
 
 const themeScript = `(() => {
-  let theme = "dark";
-  try {
-    const saved = localStorage.getItem("m-ranked-theme");
-    if (saved === "light" || saved === "dark") theme = saved;
-  } catch (_) {}
-  document.documentElement.dataset.theme = theme;
+  let stored = null;
+  try { stored = localStorage.getItem("m-ranked-theme"); } catch (_) {}
+  // "system" is opt-in; anyone who never chose keeps the dark default.
+  document.documentElement.dataset.theme =
+    stored === "light" || stored === "dark" ? stored
+    : stored === "system" && matchMedia("(prefers-color-scheme: light)").matches ? "light"
+    : "dark";
 })();`;
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -62,7 +70,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     } catch { /* The page owns unavailable/404 handling; header remains usable. */ }
   }
   return (
-    <html lang="ru" data-theme="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html lang="ru" data-theme="dark" data-scroll-behavior="smooth" suppressHydrationWarning className={cn(sans.variable, heading.variable)}>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         <a className="skip-link" href="#main-content">Перейти к содержимому</a>
