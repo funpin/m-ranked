@@ -21,6 +21,7 @@ jobs:
       BACKUP_DB_PASSWORD: ci-backup-password
       MIGRATION_BRIDGE_DB_PASSWORD: ci-retired-bridge-password
       MAINTENANCE_DB_PASSWORD: ci-maintenance-password
+      ANALYTICS_WORKER_DB_PASSWORD: ci-analytics-worker-password
       REDIS_PASSWORD: ci-redis-password
       POSTGRES_PORT: 55439
     steps:

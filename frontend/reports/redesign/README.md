@@ -32,3 +32,20 @@ retain ordinary-route ceilings and give chart routes approximately 15% measured
 headroom. The real-API mobile gate still requires its original corpus, revision,
 artifact and quiet-host evidence; this synthetic calibration is not production
 acceptance or a PostgreSQL integration run.
+
+The final Docker stand was also checked against the existing restored PostgreSQL
+volume: schema contract r4, 29,006 publications, 7,492,177 observations, 261 accounts
+and 66 institutions. API readiness returned UP. Ten desktop/mobile browser visits
+covered overview, account, publication, institution, rating, comparison and
+authenticated management; all returned HTTP 200 without page errors or viewport
+overflow, and both plots rendered on chart pages. This was a functional smoke
+check after service startup, without CPU/network throttling, not a performance gate.
+
+The local launcher now tolerates production copies that have retired the bridge
+role: missing `migration_bridge` is created with NOLOGIN before applying deltas.
+Both the actual r3-to-r4 upgrade and a repeat run on r4 succeeded. Credentials and
+database contents remain outside Git. The copy's anomaly source is pinned to an
+older published revision; newer publications can correctly display
+`source_history_unavailable` even while their source-backed history is visible.
+The UI preserves that distinction instead of presenting an analysis error as a
+clean result.

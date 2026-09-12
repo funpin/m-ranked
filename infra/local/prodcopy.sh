@@ -5,7 +5,7 @@
 #
 # The copy is a pg_basebackup directory ("pgdata") plus meta/container-inspect.json.
 # The script copies it into a Docker volume, leaving the source untouched, starts
-# the stand, provisions the analytics_worker role and replays the r3 delta of
+# the stand, provisions the analytics_worker role and replays missing deltas of
 # operations/sql/transition-production-to-final.sql when the restored cluster
 # still carries the base final contract.
 set -euo pipefail
@@ -48,6 +48,14 @@ psql_super() {
 
 echo "waiting for postgres"
 until psql_super -At -c 'SELECT 1' >/dev/null 2>&1; do sleep 2; done
+
+# Production can retire the bridge login after migration. The schema deltas
+# still name it in grants, so a restored copy needs the role to exist. Keep it
+# unable to log in: this stand never runs the migration bridge or SQLite import.
+psql_super -At <<'SQL' >/dev/null
+SELECT 'CREATE ROLE migration_bridge NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT'
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'migration_bridge') \gexec
+SQL
 
 if [ "$(psql_super -At -c "SELECT count(*) FROM pg_roles WHERE rolname='analytics_worker'")" = "0" ]; then
   echo "provisioning analytics_worker"
