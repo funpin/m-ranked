@@ -1,0 +1,62 @@
+.scopeNotice strong { display: block; margin-bottom: 4px; }
+
+.loginPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.loginForm { display: grid; gap: 12px; }
+.help { max-width: 780px; margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.success, .error { margin: 0 0 18px; border-left: 4px solid var(--green); border-radius: 9px; background: var(--green-soft); padding: 13px 16px; }
+.error { border-left-color: var(--red); background: var(--red-soft); }
+.sessionActions { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.sessionActions p { margin: 0; }
+.jobsPanel { margin-top: 0; }
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr)) minmax(100px, .5fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.empty { display: grid; gap: 5px; border: 1px dashed var(--line-strong); border-radius: 11px; color: var(--muted); padding: 20px; }
+.empty strong { color: var(--ink); }
+.jobFacts, .result { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; }
+.jobFacts div, .result div { min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); padding: 11px; }
+.jobFacts dt, .result dt { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.jobFacts dd, .result dd { margin: 4px 0 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.uuidCell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.mutationPanel { display: grid; gap: 18px; }
+.lookupForm { display: grid; grid-template-columns: minmax(270px, 1fr) auto; gap: 12px; align-items: end; }
+.commandForm { display: grid; grid-template-columns: minmax(220px, 360px) auto; gap: 12px; align-items: end; }
+.accountField { min-width: 0; }
+.accountState { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.accountState div { min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); padding: 11px; }
+.accountState dt { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.accountState dd { margin: 4px 0 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.confirmation { border: 1px solid var(--amber); border-radius: 12px; background: var(--amber-soft); padding: 16px; }
+.confirmation p { margin: 8px 0 0; }
+.confirmation code { overflow-wrap: anywhere; }
+.confirmationActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.result { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+
+@media (max-width: 980px) {
+  .accountState { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .loginPanel { grid-template-columns: 1fr; }
+  .filters, .lookupForm, .commandForm { grid-template-columns: 1fr; }
+  .filters button, .lookupForm button, .commandForm button { width: 100%; }
+  .sessionActions { align-items: stretch; flex-direction: column; }
+  .jobFacts { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 430px) {
+  .accountState, .result { grid-template-columns: 1fr; }
+}
