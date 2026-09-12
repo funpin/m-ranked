@@ -48,7 +48,7 @@ SELECT
     snapshot.comments_quality::text, snapshot.shares_quality::text,
     snapshot.metric_evidence AS metric_evidence_json,
     ops_and_admin.publication_archive_record(snapshot.published_month,snapshot.id) AS canonical_record
-FROM ingest.publication_metric_snapshot AS snapshot
+FROM ingest.publication_metric_snapshot_resolved AS snapshot
 JOIN ingest.publication AS publication ON publication.id = snapshot.publication_id
 JOIN catalog.platform_account AS account ON account.id = publication.primary_account_id
 LEFT JOIN LATERAL (

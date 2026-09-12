@@ -15,7 +15,7 @@ ENV_FILE=${2:?usage: prodcopy.sh <copy directory> <credentials env file>}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 VOLUME=${PRODCOPY_VOLUME:-mranked-local-pgdata}
 PROJECT=${PRODCOPY_PROJECT:-mranked-local}
-CONTRACT=storage-publisher-final-2026-09-08-r3
+CONTRACT=storage-publisher-final-2026-09-08-r4
 
 [ -d "$COPY_DIR/pgdata" ] || { echo "no $COPY_DIR/pgdata" >&2; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "no $ENV_FILE" >&2; exit 1; }
@@ -57,20 +57,36 @@ psql_super -At \
   -c "ALTER ROLE analytics_worker WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD '${ANALYTICS_WORKER_DB_PASSWORD}'" \
   -c "GRANT CONNECT ON DATABASE ${LOCAL_DATABASE_NAME:-mranked} TO analytics_worker" >/dev/null
 
-current=$(psql_super -At -c 'SELECT contract_id FROM ops_and_admin.schema_contract')
-if [ "$current" != "$CONTRACT" ]; then
-  echo "upgrading schema contract $current -> $CONTRACT"
+apply_delta() {
   delta=$(mktemp)
   { echo 'BEGIN;'
-    awk '/^-- r3-delta:begin$/{on=1;next} /^-- r3-delta:end$/{on=0} on' \
+    awk -v from="-- $1-delta:begin" -v upto="-- $1-delta:end" \
+      '$0==from{on=1;next} $0==upto{on=0} on' \
       "$ROOT/operations/sql/transition-production-to-final.sql"
     echo 'COMMIT;'; } > "$delta"
   psql_super -f - < "$delta" >/dev/null
   rm -f "$delta"
-  echo "contract is now $(psql_super -At -c 'SELECT contract_id FROM ops_and_admin.schema_contract')"
-else
-  echo "schema contract already $CONTRACT"
-fi
+}
+
+# The deltas form a chain. Replay only the ones the restored copy is missing,
+# in order, so a copy taken at any released contract reaches the current one.
+current=$(psql_super -At -c 'SELECT contract_id FROM ops_and_admin.schema_contract')
+case "$current" in
+  "$CONTRACT")
+    echo "schema contract already $CONTRACT" ;;
+  storage-publisher-final-2026-09-08)
+    echo "upgrading schema contract $current -> $CONTRACT"
+    apply_delta r3
+    apply_delta r4
+    echo "contract is now $(psql_super -At -c 'SELECT contract_id FROM ops_and_admin.schema_contract')" ;;
+  storage-publisher-final-2026-09-08-r3)
+    echo "upgrading schema contract $current -> $CONTRACT"
+    apply_delta r4
+    echo "contract is now $(psql_super -At -c 'SELECT contract_id FROM ops_and_admin.schema_contract')" ;;
+  *)
+    echo "restored copy carries an unsupported schema contract: $current" >&2
+    exit 1 ;;
+esac
 
 compose restart api >/dev/null
 echo

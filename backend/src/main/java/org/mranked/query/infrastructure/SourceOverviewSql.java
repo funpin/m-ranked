@@ -96,7 +96,8 @@ final class SourceOverviewSql {
                   LEFT JOIN LATERAL (
                       SELECT snapshot.views_count,snapshot.reactions_count,
                              snapshot.comments_count,snapshot.shares_count
-                        FROM analytics.usable_publication_snapshot snapshot
+                        FROM analytics.publication_snapshot_slice(publication.id,
+                          date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date) snapshot
                        WHERE snapshot.publication_id=publication.id
                          AND snapshot.published_month=date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date
                          AND snapshot.observed_at<=params.as_of AND snapshot.collected_at<=params.as_of

@@ -49,7 +49,7 @@ schema_contract="$(
     --quiet --tuples-only --no-align \
     --command 'SELECT contract_id FROM ops_and_admin.schema_contract'
 )"
-if [[ "$schema_contract" != storage-publisher-final-2026-09-08-r3 ]]; then
+if [[ "$schema_contract" != storage-publisher-final-2026-09-08-r4 ]]; then
   echo "database schema contract mismatch" >&2
   exit 65
 fi
@@ -103,6 +103,16 @@ SELECT id::text,
                        'aggregateType', aggregate_type,
                        'aggregateId', aggregate_id,
                        'affectedTags', affected_tags,
+                       'publicationCacheKeys', coalesce((
+                           SELECT jsonb_agg(DISTINCT 'mranked:source:publication:'||alias.entity_type||':'||alias.legacy_id::text)
+                             FROM catalog.legacy_entity_alias alias
+                             JOIN ingest.publication publication ON publication.id=alias.target_uuid
+                             JOIN catalog.platform_account account ON account.id=publication.primary_account_id
+                            WHERE alias.entity_type IN ('posts','platform_posts')
+                              AND ((claimed.aggregate_type IN ('publication','post') AND publication.id::text=claimed.aggregate_id)
+                                OR (claimed.aggregate_type IN ('platform_account','account','channel') AND account.id::text=claimed.aggregate_id)
+                                OR (claimed.aggregate_type='institution' AND account.institution_id::text=claimed.aggregate_id))
+                       ),'[]'::jsonb),
                        'payload', payload,
                        'occurredAt', occurred_at
                    )::text,
@@ -169,15 +179,22 @@ publish_event() {
   local payload
   payload="$(printf '%s' "$encoded_payload" | base64 --decode)"
 
+  # An exact entity hash, independent of build and dataset revision. Changing
+  # the generation prevents an in-flight old read from refilling after DEL.
+  # Redis errors must fail delivery, including errors returned by Lua.
+  printf '%s' "$payload" | REDISCLI_AUTH="$redis_password" redis-cli \
+    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning -e \
+    -x EVAL "local event=cjson.decode(ARGV[1]); local t=redis.call('TIME'); local generation=t[1]..':'..t[2]..':'..tostring(event.id); for _,key in ipairs(event.publicationCacheKeys or {}) do redis.call('DEL',key); redis.call('HSET',key,'generation',generation); redis.call('EXPIRE',key,600); end; return 1" 0 >/dev/null || return 1
+
   # Never let a delayed event move the shared revision backwards.
   REDISCLI_AUTH="$redis_password" redis-cli \
-    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning \
+    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning -e \
     EVAL \
     "local c=tonumber(redis.call('GET',KEYS[1])); if c==nil then c=-1 end; local n=tonumber(ARGV[1]); if n>c then redis.call('SET',KEYS[1],ARGV[1]); end; return n" \
-    1 "$REDIS_REVISION_KEY" "$revision" >/dev/null
+    1 "$REDIS_REVISION_KEY" "$revision" >/dev/null || return 1
 
   printf '%s' "$payload" | REDISCLI_AUTH="$redis_password" redis-cli \
-    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning \
+    --host "$REDIS_HOST" --port "$REDIS_PORT" --no-auth-warning -e \
     -x PUBLISH "$REDIS_REVISION_CHANNEL" >/dev/null
 }
 

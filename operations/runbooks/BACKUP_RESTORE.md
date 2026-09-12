@@ -107,7 +107,7 @@ never be the production PGDATA. The restored PostgreSQL listens on no network
 interface; its `trust` rule applies only to a mode-0700 temporary Unix socket.
 
 The script verifies page checksums, starts recovery, requires exact PostgreSQL
-18.6, requires schema contract `storage-publisher-final-2026-09-08-r3`,
+18.6, requires schema contract `storage-publisher-final-2026-09-08-r4`,
 promotion out of recovery and a complete seven-projection serving generation,
 records raw and published watermarks plus independent historical states and the last
 replayed WAL LSN/transaction time, runs `pg_amcheck --all`, stops the ephemeral

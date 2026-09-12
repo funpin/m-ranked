@@ -11,7 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 
 @Component
 public class JdbcReadinessProbe implements ReadinessProbe {
-    static final String EXPECTED_SCHEMA_CONTRACT = "storage-publisher-final-2026-09-08-r3";
+    static final String EXPECTED_SCHEMA_CONTRACT = "storage-publisher-final-2026-09-08-r4";
     static final String SCHEMA_CONTRACT_SQL =
             "SELECT contract_id FROM ops_and_admin.schema_contract";
     static final String CONNECTIVITY_SQL = "SELECT 1";

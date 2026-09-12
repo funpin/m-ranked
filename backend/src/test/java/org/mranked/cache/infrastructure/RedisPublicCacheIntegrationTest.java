@@ -84,4 +84,47 @@ class RedisPublicCacheIntegrationTest {
             }
         } finally { redis.delete(keys); connection.destroy(); }
     }
+
+    @Test void sourcePublicationSurvivesUnrelatedWatermarksAndFencesLateFills() {
+        var connection=connect(Integer.parseInt(System.getenv("MRANKED_TEST_REDIS_PORT")),
+                System.getenv("MRANKED_TEST_REDIS_PASSWORD"));
+        var redis=new StringRedisTemplate(connection);
+        var store=new RedisPublicCacheStore(redis);
+        var current=new AtomicReference<>(DatasetRevision.source(Instant.parse("2026-09-12T12:00:00Z")));
+        String legacyId=Long.toString(1+Math.floorMod(UUID.randomUUID().getLeastSignificantBits(),Long.MAX_VALUE-1));
+        var dimensions=Map.of("legacyId",legacyId,"legacyType","posts");
+        var first=cache(current,store);
+        var request=first.prepare("publication",dimensions);
+        String key=request.key().redisKey();
+        try {
+            var initial=new RevisionedValue<>(current.get(),new Dto("telegram",current.get().id(),5L,null));
+            first.getOrLoadSnapshot(request,Dto.class,()->initial);
+            current.set(DatasetRevision.source(current.get().committedAt().plusSeconds(10)));
+            var second=cache(current,store);
+            var next=second.prepare("publication",dimensions);
+            assertThat(next.key().redisKey()).isEqualTo(key);
+            var hit=second.getOrLoadSnapshot(next,Dto.class,()->{throw new AssertionError("unrelated revision invalidated publication");});
+            assertThat(hit).isEqualTo(initial);
+            assertThat(new ETagFactory().create(next.key().atRevision(hit.revision())))
+                    .isEqualTo(new ETagFactory().create(request.key()));
+            assertThat(second.estimatedLocalSize()).isZero();
+            assertThat(redis.getExpire(key)).isBetween(1L,60L);
+
+            var inFlight=store.readScoped(key,Duration.ofMinutes(1));
+            // Exact hash invalidation as performed by the transactional outbox.
+            redis.delete(key);
+            redis.opsForHash().put(key,"generation",UUID.randomUUID().toString());
+            redis.expire(key,Duration.ofMinutes(1));
+            store.putScoped(key,inFlight.generation(),"old-body",Duration.ofMinutes(1));
+            assertThat(store.readScoped(key,Duration.ofMinutes(1)).payload()).isEmpty();
+            var fresh=new RevisionedValue<>(current.get(),new Dto("telegram",current.get().id(),6L,null));
+            assertThat(second.getOrLoadSnapshot(next,Dto.class,()->fresh)).isEqualTo(fresh);
+            // Expiration must also fence the old writer; a missing generation is
+            // never treated as the same generation as a previous cache miss.
+            var expired=store.readScoped(key,Duration.ofMinutes(1));
+            redis.delete(key);
+            store.putScoped(key,expired.generation(),"old-body",Duration.ofMinutes(1));
+            assertThat(redis.hasKey(key)).isFalse();
+        } finally { redis.delete(key); connection.destroy(); }
+    }
 }

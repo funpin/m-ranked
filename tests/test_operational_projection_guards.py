@@ -168,7 +168,7 @@ def _restore_report():
             'checks': {'pageChecksums': True, 'databaseAssertions': True, 'pgAmcheck': True},
             'database': {'rawDatasetRevision': 42, 'datasetRevision': 42, 'coreReadyProjections': 7,
                          'projectionStates': [{'name': name, 'status': 'ready', 'datasetRevision': 42} for name in SERVING_NAMES],
-                         'schemaContract': 'storage-publisher-final-2026-09-08-r3'}}
+                         'schemaContract': 'storage-publisher-final-2026-09-08-r4'}}
 
 
 @pytest.mark.parametrize('fault', ['none', 'absent', 'six', 'duplicate', 'extra', 'stale', 'failed', 'false_count', 'fractional_revision'])
@@ -194,7 +194,7 @@ def test_publisher_shell_rejects_incomplete_ready_envelopes(tmp_path, envelope, 
     fake.write_text(
         '#!/bin/sh\n'
         'case "$*" in\n'
-        '  *schema_contract*) printf "%s\\n" "storage-publisher-final-2026-09-08-r3" ;;\n'
+        '  *schema_contract*) printf "%s\\n" "storage-publisher-final-2026-09-08-r4" ;;\n'
         '  *) cat >/dev/null; printf "%s\\n" "$TEST_ENVELOPE" ;;\n'
         'esac\n'
     )

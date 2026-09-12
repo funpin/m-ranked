@@ -22,7 +22,7 @@ def schema_manifest(path: Path = FINAL_SCHEMA) -> dict:
     if not data:
         raise ValueError("final schema is empty")
     return {
-        "contract": "storage-publisher-final-2026-09-08-r3",
+        "contract": "storage-publisher-final-2026-09-08-r4",
         "script": path.name,
         "sha256": hashlib.sha256(data).hexdigest(),
     }

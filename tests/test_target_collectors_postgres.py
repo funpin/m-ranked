@@ -599,6 +599,9 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
                 WHERE source_run_id=%s""",
             (context.run_id,),
         ).fetchone()["count"] == 1
+        # One ingestion emits both feeds and emits them once: the publisher
+        # rebuilds projections hourly, while source-backed detail caches are
+        # invalidated at commit. The replayed batch above adds neither.
         assert admin.execute(
             """SELECT array_agg(event.event_type ORDER BY event.id) AS event_types
                  FROM ops_and_admin.outbox_event AS event
@@ -606,7 +609,10 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
                    ON revision.id=event.dataset_revision_id
                 WHERE revision.source_run_id=%s""",
             (context.run_id,),
-        ).fetchone()["event_types"] == ["projection.rebuild.requested"]
+        ).fetchone()["event_types"] == [
+            "projection.rebuild.requested",
+            "source.account.updated",
+        ]
         lineage = admin.execute(
             """SELECT external_ref, payload
                  FROM ingest.raw_payload

@@ -197,7 +197,7 @@ BEGIN
     END IF;
     SELECT contract_id INTO installed_contract
       FROM ops_and_admin.schema_contract;
-    IF installed_contract IS DISTINCT FROM 'storage-publisher-final-2026-09-08-r3' THEN
+    IF installed_contract IS DISTINCT FROM 'storage-publisher-final-2026-09-08-r4' THEN
         RAISE EXCEPTION 'restored database does not match the final schema contract';
     END IF;
     SELECT max(id) INTO latest_revision FROM analytics.dataset_revision;
