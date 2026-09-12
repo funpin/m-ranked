@@ -1,11 +1,14 @@
 import { legacyNumber } from "./format";
 import type { HistorySnapshot } from "./types";
 
+/** Colours are theme tokens, so both themes stay legible from one definition.
+ *  The meanings are the ones the product has always used: reactions green,
+ *  views blue, comments amber, shares violet. */
 export const historyMetrics = [
-  { key: "reactions", delta: "deltaReactions", label: "Реакции", icon: "♥", color: "#16a085" },
-  { key: "views", delta: "deltaViews", label: "Просмотры", icon: "👁", color: "#0868df" },
-  { key: "comments", delta: "deltaComments", label: "Комментарии", icon: "💬", color: "#a86200" },
-  { key: "shares", delta: "deltaShares", label: "Репосты", icon: "↗", color: "#7857c7" },
+  { key: "reactions", delta: "deltaReactions", label: "Реакции", icon: "♥", color: "var(--chart-1)" },
+  { key: "views", delta: "deltaViews", label: "Просмотры", icon: "👁", color: "var(--chart-2)" },
+  { key: "comments", delta: "deltaComments", label: "Комментарии", icon: "💬", color: "var(--chart-3)" },
+  { key: "shares", delta: "deltaShares", label: "Репосты", icon: "↗", color: "var(--chart-4)" },
 ] as const;
 export type HistoryMetric = typeof historyMetrics[number];
 

@@ -10,12 +10,12 @@ for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR
   await page.setExtraHTTPHeaders({authorization:credentials(role)});
   const response=await page.goto("/manage");expect(response?.status()).toBe(200);expect(response?.headers()["cache-control"]).toContain("no-store");
   await expect(page.getByRole("heading",{name:"Управление каналами"})).toBeVisible();
-  await expect(page.locator(".platform-table tbody tr")).toHaveCount(8);
-  await expect(page.locator('.institution-create input[name="name"]')).toBeEnabled({enabled:role!=="viewer"});
+  await expect(page.getByTestId('platform-table').locator('tbody tr')).toHaveCount(8);
+  await expect(page.locator('[data-testid="institution-create"] input[name="name"]')).toBeEnabled({enabled:role!=="viewer"});
   await expect(page.getByRole("button",{name:"Удалить",exact:true}).first()).toBeEnabled({enabled:role==="admin"});
   const html=await page.content();expect(html).not.toContain(credentials(role));expect(html).not.toContain("fixture-password");
   await expect(page.locator('#accountMatrix input[name="telegram"]')).toHaveValue("https://example.test/telegram/1");
-  const nativeId=page.locator(".native-id-editor").first();
+  const nativeId=page.getByTestId("native-id-editor").first();
   await nativeId.locator("summary").click();
   await expect(nativeId.locator('input[name="native_id"]')).toBeVisible();
   await expect(nativeId.locator('input[name="native_id"]')).toBeEnabled({enabled:role!=="viewer"});
@@ -34,4 +34,52 @@ for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR
     await page.goto("/manage");
   }
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
+});
+
+test("catalog deletion requires dialog confirmation and preserves the native payload", async ({ page }) => {
+  await page.setExtraHTTPHeaders({ authorization: credentials("admin") });
+  await page.goto("/manage");
+  const form = page.locator('form[action$="/delete"]').first();
+  const trigger = form.getByRole("button", { name: "Удалить", exact: true });
+  const action = await form.getAttribute("action");
+  let posted: URLSearchParams | undefined;
+  await page.route(`**${action}`, async (route) => {
+    posted = new URLSearchParams(route.request().postData() ?? "");
+    await route.fulfill({ status: 200, contentType: "text/html", body: "<h1>Fixture received deletion</h1>" });
+  });
+  await trigger.click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("Восстановить их будет нельзя.");
+  await dialog.getByRole("button", { name: "Отмена" }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  expect(posted).toBeUndefined();
+  await trigger.click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  expect(posted).toBeUndefined();
+  await trigger.click();
+  await dialog.getByRole("button", { name: "Удалить", exact: true }).click();
+  await expect.poll(() => posted?.get("csrf_token")).toBe("fixture-csrf-token");
+  expect(posted?.get("expected_row_version")).toBe("7");
+  expect(posted?.get("correlation_id")).toMatch(/^[0-9a-f-]{36}$/);
+});
+
+test("catalog forms submit with JavaScript disabled", async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, extraHTTPHeaders: { authorization: credentials("editor") } });
+  try {
+    const page = await context.newPage();
+    await page.goto("/manage");
+    const form = page.getByTestId("institution-create");
+    await form.getByRole("textbox", { name: "Полное название" }).fill("Тестовый университет");
+    let posted: URLSearchParams | undefined;
+    await page.route("**/manage/institutions", async (route) => {
+      posted = new URLSearchParams(route.request().postData() ?? "");
+      await route.fulfill({ status: 200, contentType: "text/html", body: "<h1>Fixture received institution</h1>" });
+    });
+    await form.getByRole("button", { name: "Добавить вуз" }).click();
+    await expect.poll(() => posted?.get("name")).toBe("Тестовый университет");
+    expect(posted?.get("csrf_token")).toBe("fixture-csrf-token");
+    expect(posted?.get("expected_row_version")).toBe("0");
+  } finally { await context.close(); }
 });

@@ -1,34 +1,53 @@
 import { metricNumber } from "./params";
-import type { ComparisonPoint } from "./types";
+import type { ComparisonPoint, ComparisonSeries } from "./types";
 
-export interface NumericComparisonPoint extends ComparisonPoint {
-  numericValue: number;
+/** One row per hour on the axis; one column per selected series. */
+export type ComparisonRow = Record<string, number | null> & { hour: number };
+
+/** Column key for a series. Recharts addresses data by key, not by index. */
+export const seriesKey = (selectionId: string) => `s${selectionId}`;
+
+/**
+ * Builds the plot rows. An hour a series has no usable value for stays null,
+ * so the line breaks there rather than being drawn across an unavailable
+ * numerator or denominator. Hours missing from the response break the line for
+ * the same reason: the series simply has no column value at that row.
+ */
+export function comparisonRows(
+  series: readonly ComparisonSeries[],
+  maximumHour: number,
+): ComparisonRow[] {
+  const byHour = new Map<number, ComparisonRow>();
+  for (let hour = 0; hour <= maximumHour; hour++) {
+    byHour.set(hour, { hour } as ComparisonRow);
+  }
+  for (const item of series) {
+    const key = seriesKey(item.selectionId);
+    for (const point of item.points) {
+      const row = byHour.get(point.hourOffset);
+      if (!row) continue;
+      row[key] = metricNumber(point.value);
+    }
+  }
+  for (const row of byHour.values()) {
+    for (const item of series) {
+      const key = seriesKey(item.selectionId);
+      if (row[key] === undefined) row[key] = null;
+    }
+  }
+  return [...byHour.values()];
 }
 
 /**
- * Keeps missing hourly values as visible gaps instead of drawing a line across
- * unavailable denominator/numerator observations.
+ * Sample size and coverage per series per hour, which the tooltip and the
+ * keyboard reading report alongside the value.
  */
-export function comparisonPointSegments(
-  points: readonly ComparisonPoint[],
-): NumericComparisonPoint[][] {
-  const segments: NumericComparisonPoint[][] = [];
-  let current: NumericComparisonPoint[] | null = null;
-  let previousHour: number | null = null;
-
-  for (const point of points) {
-    const numericValue = metricNumber(point.value);
-    if (numericValue === null) {
-      current = null;
-      previousHour = null;
-      continue;
-    }
-    if (current === null || previousHour === null || point.hourOffset !== previousHour + 1) {
-      current = [];
-      segments.push(current);
-    }
-    current.push({ ...point, numericValue });
-    previousHour = point.hourOffset;
+export function comparisonEvidence(series: readonly ComparisonSeries[]) {
+  const evidence = new Map<string, Map<number, ComparisonPoint>>();
+  for (const item of series) {
+    const hours = new Map<number, ComparisonPoint>();
+    for (const point of item.points) hours.set(point.hourOffset, point);
+    evidence.set(item.selectionId, hours);
   }
-  return segments;
+  return evidence;
 }

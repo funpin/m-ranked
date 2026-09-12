@@ -1,4 +1,8 @@
 "use client";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { NativeButton } from "@/components/native-field";
+import { NativeSelect } from "@/components/native-field";
+import { NativeInput as Input } from "@/components/native-field";
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { PageHeader, StatusPill } from "@/components/ui";
@@ -16,7 +20,7 @@ import {
   type SetEnabledResponse,
   withConflictRefresh,
 } from "@/lib/admin-api";
-import styles from "./manage.module.css";
+
 
 const PLATFORM_LABELS: Record<AdminPlatform, string> = {
   "": "Все площадки",
@@ -329,103 +333,103 @@ export function AdminConsole() {
         meta={authenticated ? <StatusPill tone="green">сессия активна</StatusPill> : <StatusPill tone="neutral">нужен вход</StatusPill>}
       />
 
-      <aside className={`notice notice-amber ${styles.scopeNotice}`}>
+      <aside className="my-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-warning [&>strong]:block [&>strong]:mb-1">
         <strong>Ограниченный административный срез.</strong> Здесь пока нет добавления и удаления вузов или аккаунтов,
         редактирования реквизитов, ручного запуска сбора, обновления M‑Рейтинга, диагностики интеграций и хранилища.
       </aside>
 
-      {notice ? <p className={styles.success} role="status">{notice}</p> : null}
-      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+      {notice ? <p className="mb-4 rounded-lg border border-success/30 bg-success/10 p-4 text-success" role="status">{notice}</p> : null}
+      {error ? <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive" role="alert">{error}</p> : null}
 
       {!authenticated ? (
-        <section className={`panel ${styles.loginPanel}`} aria-busy={busy}>
+        <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm grid gap-7 lg:grid-cols-2" aria-busy={busy}>
           <div>
-            <p className="eyebrow">HTTP Basic + CSRF</p>
-            <h2>Вход оператора</h2>
-            <p className={styles.help}>Логин, пароль и CSRF-токен остаются только в памяти вкладки и удаляются при выходе или закрытии страницы.</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">HTTP Basic + CSRF</p>
+            <h2 className="font-heading text-lg font-semibold">Вход оператора</h2>
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">Логин, пароль и CSRF-токен остаются только в памяти вкладки и удаляются при выходе или закрытии страницы.</p>
           </div>
-          <form className={styles.loginForm} onSubmit={authenticate} autoComplete="off">
-            <label className="field"><span>Имя пользователя</span><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="off" maxLength={200} required /></label>
-            <label className="field"><span>Пароль</span><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="off" maxLength={4096} required /></label>
-            <button type="submit" disabled={busy}>{busy ? "Проверяем…" : "Войти"}</button>
+          <form className="grid gap-3" onSubmit={authenticate} autoComplete="off">
+            <label className="grid gap-1.5 text-sm"><span>Имя пользователя</span><Input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="off" maxLength={200} required /></label>
+            <label className="grid gap-1.5 text-sm"><span>Пароль</span><Input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="off" maxLength={4096} required /></label>
+            <NativeButton type="submit" disabled={busy}>{busy ? "Проверяем…" : "Войти"}</NativeButton>
           </form>
         </section>
       ) : (
         <>
-          <div className={styles.sessionActions}>
-            <p className="muted">Обновление страницы завершит сессию: учётные данные намеренно не сохраняются.</p>
-            <button type="button" className="secondary-button" onClick={() => clearPrivateState("Административная сессия завершена.")}>Выйти</button>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+            <p className="text-muted-foreground">Обновление страницы завершит сессию: учётные данные намеренно не сохраняются.</p>
+            <NativeButton type="button" onClick={() => clearPrivateState("Административная сессия завершена.")}>Выйти</NativeButton>
           </div>
 
-          <section className={`panel ${styles.jobsPanel}`} aria-busy={busy}>
-            <div className="section-head"><div><p className="eyebrow">Только чтение</p><h2>Запуски сбора</h2></div><StatusPill tone="neutral">до 100 строк</StatusPill></div>
-            <form className={styles.filters} onSubmit={applyFilters}>
-              <label className="field"><span>Площадка</span><select value={platform} onChange={(event) => setPlatform(event.target.value as AdminPlatform)}>
+          <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-0" aria-busy={busy}>
+            <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Только чтение</p><h2 className="font-heading text-lg font-semibold">Запуски сбора</h2></div><StatusPill tone="neutral">до 100 строк</StatusPill></div>
+            <form className="mb-5 grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-4" onSubmit={applyFilters}>
+              <label className="grid gap-1.5 text-sm"><span>Площадка</span><NativeSelect value={platform} onChange={(event) => setPlatform(event.target.value as AdminPlatform)}>
                 {ADMIN_PLATFORMS.map((value) => <option key={value || "all"} value={value}>{PLATFORM_LABELS[value]}</option>)}
-              </select></label>
-              <label className="field"><span>Статус</span><select value={status} onChange={(event) => setStatus(event.target.value as AdminJobStatus)}>
+              </NativeSelect></label>
+              <label className="grid gap-1.5 text-sm"><span>Статус</span><NativeSelect value={status} onChange={(event) => setStatus(event.target.value as AdminJobStatus)}>
                 {ADMIN_JOB_STATUSES.map((value) => <option key={value || "all"} value={value}>{STATUS_LABELS[value]}</option>)}
-              </select></label>
-              <label className="field"><span>Лимит</span><input type="number" min={1} max={100} value={limit} onChange={(event) => setLimit(Math.min(100, Math.max(1, Number(event.target.value) || 1)))} /></label>
-              <button type="submit" disabled={busy}>{busy ? "Обновляем…" : "Обновить"}</button>
+              </NativeSelect></label>
+              <label className="grid gap-1.5 text-sm"><span>Лимит</span><Input type="number" min={1} max={100} value={limit} onChange={(event) => setLimit(Math.min(100, Math.max(1, Number(event.target.value) || 1)))} /></label>
+              <NativeButton type="submit" disabled={busy}>{busy ? "Обновляем…" : "Обновить"}</NativeButton>
             </form>
 
             {jobs.length ? (
-              <div className="table-wrap">
-                <table>
+              <div className="min-w-0 overflow-x-auto">
+                <Table>
                   <caption className="sr-only">Последние запуски сбора</caption>
-                  <thead><tr><th>Старт</th><th>Площадка</th><th>Статус</th><th>Аккаунты</th><th>Ошибки</th><th>Действие</th></tr></thead>
-                  <tbody>{jobs.map((job) => (
-                    <tr key={job.jobId}>
-                      <td>{dateTime(job.startedAt)}</td><td>{PLATFORM_LABELS[job.platform]}</td>
-                      <td><StatusPill tone={statusTone(job.status)}>{STATUS_LABELS[job.status]}</StatusPill></td>
-                      <td>{job.accountCount}</td><td>{job.errorCount}</td>
-                      <td><button type="button" className="secondary-button" onClick={() => inspectJob(job.jobId)} aria-pressed={selectedJobId === job.jobId}>Подробнее</button></td>
-                    </tr>
-                  ))}</tbody>
-                </table>
+                  <TableHeader><TableRow><TableHead>Старт</TableHead><TableHead>Площадка</TableHead><TableHead>Статус</TableHead><TableHead>Аккаунты</TableHead><TableHead>Ошибки</TableHead><TableHead>Действие</TableHead></TableRow></TableHeader>
+                  <TableBody>{jobs.map((job) => (
+                    <TableRow key={job.jobId}>
+                      <TableCell>{dateTime(job.startedAt)}</TableCell><TableCell>{PLATFORM_LABELS[job.platform]}</TableCell>
+                      <TableCell><StatusPill tone={statusTone(job.status)}>{STATUS_LABELS[job.status]}</StatusPill></TableCell>
+                      <TableCell>{job.accountCount}</TableCell><TableCell>{job.errorCount}</TableCell>
+                      <TableCell><NativeButton type="button" onClick={() => inspectJob(job.jobId)} aria-pressed={selectedJobId === job.jobId}>Подробнее</NativeButton></TableCell>
+                    </TableRow>
+                  ))}</TableBody>
+                </Table>
               </div>
-            ) : <div className={styles.empty} role="status"><strong>Запусков не найдено</strong><span>Измените фильтры или дождитесь следующего запуска сборщика.</span></div>}
+            ) : <div className="grid gap-2 rounded-lg border border-dashed p-5 text-muted-foreground" role="status"><strong>Запусков не найдено</strong><span>Измените фильтры или дождитесь следующего запуска сборщика.</span></div>}
           </section>
 
-          {detailBusy ? <section className={`panel section ${styles.empty}`} role="status">Загружаем детали запуска…</section> : null}
+          {detailBusy ? <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-5 grid gap-2 rounded-lg border border-dashed p-5 text-muted-foreground" role="status">Загружаем детали запуска…</section> : null}
           {!detailBusy && jobDetail ? (
-            <section className="panel section">
-              <div className="section-head"><div><p className="eyebrow">Запуск {jobDetail.job.jobId}</p><h2>Результаты по аккаунтам</h2></div><StatusPill tone={statusTone(jobDetail.job.status)}>{STATUS_LABELS[jobDetail.job.status]}</StatusPill></div>
-              <dl className={styles.jobFacts}>
+            <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-5">
+              <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Запуск {jobDetail.job.jobId}</p><h2 className="font-heading text-lg font-semibold">Результаты по аккаунтам</h2></div><StatusPill tone={statusTone(jobDetail.job.status)}>{STATUS_LABELS[jobDetail.job.status]}</StatusPill></div>
+              <dl className="mb-5 grid gap-3 sm:grid-cols-3 [&>div]:min-w-0 [&>div]:rounded-lg [&>div]:border [&>div]:p-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-all">
                 <div><dt>Запланирован</dt><dd>{dateTime(jobDetail.job.scheduledAt)}</dd></div>
                 <div><dt>Завершён</dt><dd>{dateTime(jobDetail.job.completedAt)}</dd></div>
                 <div><dt>Correlation ID</dt><dd>{jobDetail.job.correlationId}</dd></div>
               </dl>
               {jobDetail.accountResults.length ? (
-                <div className="table-wrap">
-                  <table>
+                <div className="min-w-0 overflow-x-auto">
+                  <Table>
                     <caption className="sr-only">Результаты запуска по платформенным аккаунтам</caption>
-                    <thead><tr><th>Аккаунт</th><th>Статус</th><th>Найдено</th><th>Снимки</th><th>Код ошибки</th><th>Действие</th></tr></thead>
-                    <tbody>{jobDetail.accountResults.map((result) => (
-                      <tr key={result.resultId}>
-                        <td className={styles.uuidCell}>{result.platformAccountId}</td>
-                        <td><StatusPill tone={statusTone(result.status)}>{result.status}</StatusPill></td>
-                        <td>{result.discoveredCount}</td><td>{result.snapshotCount}</td><td>{result.sanitizedErrorCode ?? "—"}</td>
-                        <td><button type="button" className="secondary-button" onClick={() => void selectAccount(result.platformAccountId)}>Выбрать аккаунт</button></td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
+                    <TableHeader><TableRow><TableHead>Аккаунт</TableHead><TableHead>Статус</TableHead><TableHead>Найдено</TableHead><TableHead>Снимки</TableHead><TableHead>Код ошибки</TableHead><TableHead>Действие</TableHead></TableRow></TableHeader>
+                    <TableBody>{jobDetail.accountResults.map((result) => (
+                      <TableRow key={result.resultId}>
+                        <TableCell className="font-mono text-xs">{result.platformAccountId}</TableCell>
+                        <TableCell><StatusPill tone={statusTone(result.status)}>{result.status}</StatusPill></TableCell>
+                        <TableCell>{result.discoveredCount}</TableCell><TableCell>{result.snapshotCount}</TableCell><TableCell>{result.sanitizedErrorCode ?? "—"}</TableCell>
+                        <TableCell><NativeButton type="button" onClick={() => void selectAccount(result.platformAccountId)}>Выбрать аккаунт</NativeButton></TableCell>
+                      </TableRow>
+                    ))}</TableBody>
+                  </Table>
                 </div>
-              ) : <div className={styles.empty}><strong>Результатов по аккаунтам нет</strong><span>Запуск мог ещё не начать обработку аккаунтов.</span></div>}
-              {jobDetail.accountResultsTruncated ? <p className={styles.help}>Показаны первые 100 результатов; ответ API помечен как усечённый.</p> : null}
+              ) : <div className="grid gap-2 rounded-lg border border-dashed p-5 text-muted-foreground"><strong>Результатов по аккаунтам нет</strong><span>Запуск мог ещё не начать обработку аккаунтов.</span></div>}
+              {jobDetail.accountResultsTruncated ? <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">Показаны первые 100 результатов; ответ API помечен как усечённый.</p> : null}
             </section>
           ) : null}
 
-          <section className={`panel section ${styles.mutationPanel}`}>
-            <div><p className="eyebrow">Чтение: viewer · изменение: editor/admin</p><h2>Состояние платформенного аккаунта</h2><p className={styles.help}>Введите UUID или выберите аккаунт в результатах запуска. Перед подтверждением интерфейс получает актуальные enabled и rowVersion из защищённого API; вручную версия не принимается.</p></div>
-            <form className={styles.lookupForm} onSubmit={lookupAccount}>
-              <label className={`field ${styles.accountField}`}><span>UUID аккаунта</span><input ref={mutationAccountRef} value={accountId} onChange={(event) => clearLoadedAccount(event.target.value)} placeholder="00000000-0000-4000-8000-000000000000" maxLength={36} spellCheck={false} autoComplete="off" required /></label>
-              <button type="submit" className="secondary-button" disabled={accountBusy}>{accountBusy ? "Загружаем…" : "Загрузить состояние"}</button>
+          <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-5 space-y-4">
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Чтение: viewer · изменение: editor/admin</p><h2 className="font-heading text-lg font-semibold">Состояние платформенного аккаунта</h2><p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">Введите UUID или выберите аккаунт в результатах запуска. Перед подтверждением интерфейс получает актуальные enabled и rowVersion из защищённого API; вручную версия не принимается.</p></div>
+            <form className="grid items-end gap-3 sm:grid-cols-[1fr_auto]" onSubmit={lookupAccount}>
+              <label className="grid min-w-0 gap-1.5 text-sm"><span>UUID аккаунта</span><Input ref={mutationAccountRef} value={accountId} onChange={(event) => clearLoadedAccount(event.target.value)} placeholder="00000000-0000-4000-8000-000000000000" maxLength={36} spellCheck={false} autoComplete="off" required /></label>
+              <NativeButton type="submit" disabled={accountBusy}>{accountBusy ? "Загружаем…" : "Загрузить состояние"}</NativeButton>
             </form>
 
             {accountState ? (
-              <dl className={styles.accountState} aria-live="polite">
+              <dl className="grid gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-4 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-all" aria-live="polite">
                 <div><dt>Площадка</dt><dd>{PLATFORM_LABELS[accountState.platform]}</dd></div>
                 <div><dt>Текущее состояние</dt><dd>{accountState.enabled ? "сбор включён" : "сбор отключён"}</dd></div>
                 <div><dt>rowVersion</dt><dd>{accountState.rowVersion}</dd></div>
@@ -433,21 +437,21 @@ export function AdminConsole() {
               </dl>
             ) : null}
 
-            <form className={styles.commandForm} onSubmit={prepareMutation}>
-              <label className="field"><span>Новое состояние</span><select value={desiredEnabled ? "enabled" : "disabled"} onChange={(event) => setDesiredEnabled(event.target.value === "enabled")}><option value="enabled">Сбор включён</option><option value="disabled">Сбор отключён</option></select></label>
-              <button type="submit" disabled={busy || accountBusy || !accountState}>Проверить изменение</button>
+            <form className="grid gap-3 sm:grid-cols-2" onSubmit={prepareMutation}>
+              <label className="grid gap-1.5 text-sm"><span>Новое состояние</span><NativeSelect value={desiredEnabled ? "enabled" : "disabled"} onChange={(event) => setDesiredEnabled(event.target.value === "enabled")}><option value="enabled">Сбор включён</option><option value="disabled">Сбор отключён</option></NativeSelect></label>
+              <NativeButton type="submit" disabled={busy || accountBusy || !accountState}>Проверить изменение</NativeButton>
             </form>
 
             {pendingMutation ? (
-              <div className={styles.confirmation} role="alert" aria-labelledby="mutation-confirm-title" aria-describedby="mutation-confirm-description">
+              <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 space-y-3" role="alert" aria-labelledby="mutation-confirm-title" aria-describedby="mutation-confirm-description">
                 <h3 id="mutation-confirm-title">Подтвердите изменение</h3>
                 <p id="mutation-confirm-description">Аккаунт <code>{pendingMutation.accountId}</code>: {pendingMutation.enabled ? "включить" : "отключить"} сбор при rowVersion {pendingMutation.expectedRowVersion}. Операция попадёт в аудит.</p>
-                <div className={styles.confirmationActions}><button type="button" onClick={confirmMutation} disabled={busy}>{busy ? "Изменяем…" : "Подтвердить"}</button><button type="button" className="secondary-button" onClick={() => setPendingMutation(null)} disabled={busy}>Отмена</button></div>
+                <div className="flex flex-wrap gap-2"><NativeButton type="button" onClick={confirmMutation} disabled={busy}>{busy ? "Изменяем…" : "Подтвердить"}</NativeButton><NativeButton type="button" onClick={() => setPendingMutation(null)} disabled={busy}>Отмена</NativeButton></div>
               </div>
             ) : null}
 
             {mutationResult ? (
-              <dl className={styles.result} aria-live="polite">
+              <dl className="mt-4 grid gap-3 sm:grid-cols-3 [&>div]:rounded-lg [&>div]:border [&>div]:p-3 [&_dt]:text-muted-foreground [&_dd]:break-all" aria-live="polite">
                 <div><dt>Состояние</dt><dd>{mutationResult.account.enabled ? "включён" : "отключён"}</dd></div>
                 <div><dt>rowVersion</dt><dd>{mutationResult.account.rowVersion}</dd></div>
                 <div><dt>Ревизия данных</dt><dd>{mutationResult.datasetRevision ?? "без изменения"}</dd></div>
