@@ -1,3 +1,6 @@
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { NativeButton } from "@/components/native-field";
+import { NativeSelect } from "@/components/native-field";
 import { accountHref, publicationHref } from "@/lib/entity-routes";
 import { PlatformPending } from "@/components/platform-pending";
 import { RatingFilterForm } from "@/components/rating-filter-form";
@@ -43,7 +46,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
   try {
     page = await api.rating({ ...query, platform, entityLimit: 200, entityCursor });
   } catch (error) {
-    if (entityCursor && error instanceof ApiError && error.status === 400) return <section className="panel empty-state"><h1>Рейтинг обновился</h1><p>Откройте первую страницу, чтобы продолжить в актуальном срезе данных.</p><Link href={queryHref("/rating", ratingHrefQuery(query))} prefetch={false}>Начать с первой страницы</Link></section>;
+    if (entityCursor && error instanceof ApiError && error.status === 400) return <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm space-y-3 py-10 text-center text-muted-foreground"><h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">Рейтинг обновился</h1><p>Откройте первую страницу, чтобы продолжить в актуальном срезе данных.</p><Link href={queryHref("/rating", ratingHrefQuery(query))} prefetch={false}>Начать с первой страницы</Link></section>;
     return (
       <>
         <PageHeader title="Рейтинг каналов и публикаций" description="Сравнение активности по последнему замеру каждой публикации." />
@@ -57,20 +60,20 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
     : `Рейтинг · ${PLATFORM_LONG_LABELS[platform]}`;
   return (
     <>
-      <div className="section-head"><div><h1>{title}</h1><p className="lead">{platform === "telegram" ? "Для каждой публикации берётся её последний замер за выбранный период." : `Только публикации и замеры ${PLATFORM_LONG_LABELS[platform]}. Данные других площадок в расчёт не входят.`}</p></div></div>
-      <RatingFilterForm key={`${period}:${page.channelSort}:${page.channelDirection}:${page.postSort}:${page.postDirection}`} className="controls panel compact rating-controls" action="/rating" method="get" aria-label="Настройка рейтинга">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1><p className="mt-2 mb-5 text-sm text-muted-foreground">{platform === "telegram" ? "Для каждой публикации берётся её последний замер за выбранный период." : `Только публикации и замеры ${PLATFORM_LONG_LABELS[platform]}. Данные других площадок в расчёт не входят.`}</p></div></div>
+      <RatingFilterForm key={`${period}:${page.channelSort}:${page.channelDirection}:${page.postSort}:${page.postDirection}`} className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mb-5 flex flex-wrap items-end gap-3" action="/rating" method="get" aria-label="Настройка рейтинга">
         <input type="hidden" name="platform" value={platform} />
-        <label><span>Период ⓘ</span><br /><select name="period" defaultValue={period}>{Object.entries(PERIOD_LABELS).map(([value,label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-        <input type="hidden" name="channel_sort" value={page.channelSort} /><input type="hidden" name="channel_direction" value={page.channelDirection} /><input type="hidden" name="post_sort" value={page.postSort} /><input type="hidden" name="post_direction" value={page.postDirection} /><button type="submit">Применить</button>
+        <label><span>Период ⓘ</span><br /><NativeSelect name="period" defaultValue={period}>{Object.entries(PERIOD_LABELS).map(([value,label]) => <option value={value} key={value}>{label}</option>)}</NativeSelect></label>
+        <input type="hidden" name="channel_sort" value={page.channelSort} /><input type="hidden" name="channel_direction" value={page.channelDirection} /><input type="hidden" name="post_sort" value={page.postSort} /><input type="hidden" name="post_direction" value={page.postDirection} /><NativeButton type="submit">Применить</NativeButton>
       </RatingFilterForm>
 
       {platform === "telegram"
         ? <TelegramEntityTable query={query} rows={page.entities} offset={page.entityOffset} />
         : <VkEntityTable query={query} rows={page.entities} offset={page.entityOffset} />}
 
-      {page.nextEntityCursor ? <nav className="pagination" aria-label="Страницы рейтинга">
-        <Link className="button-link secondary-button" href={queryHref("/rating", { ...ratingHrefQuery(query), entityCursor: page.nextEntityCursor })} prefetch={false}>Следующая страница рейтинга</Link>
-      </nav> : page.entitiesTruncated ? <section className="notice notice-amber" role="alert">API ограничил список без ссылки продолжения. Полный рейтинг доступен на действующем сайте; этот маршрут ещё не готов к переключению.</section> : null}
+      {page.nextEntityCursor ? <nav className="my-5 flex flex-wrap justify-end gap-2" aria-label="Страницы рейтинга">
+        <Link className="inline-flex min-h-9 items-center justify-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent" href={queryHref("/rating", { ...ratingHrefQuery(query), entityCursor: page.nextEntityCursor })} prefetch={false}>Следующая страница рейтинга</Link>
+      </nav> : page.entitiesTruncated ? <section className="my-4 rounded-lg border p-4 text-sm border-warning/30 bg-warning/10 text-warning" role="alert">API ограничил список без ссылки продолжения. Полный рейтинг доступен на действующем сайте; этот маршрут ещё не готов к переключению.</section> : null}
 
       {platform === "telegram"
         ? <TelegramPublicationTable query={query} rows={page.publications} />
@@ -87,23 +90,23 @@ function TelegramEntityTable({ query, rows, offset }: {
 }) {
   return (
     <RatingSection query={query} eyebrow="Каналы" title="Рейтинг активности" empty={rows.length === 0}>
-      <table className="rating-table">
+      <Table data-testid="rating-table" className="tabular">
         <caption className="sr-only">Каналы по активности за выбранный период</caption>
-        <thead><tr><th>#</th><th>Канал</th>
-          <th><EntitySortLink query={query} sort="average">Среднее реакций</EntitySortLink></th>
-          <th><EntitySortLink query={query} sort="total">Реакций всего</EntitySortLink></th>
-          <th><EntitySortLink query={query} sort="engagement">Реакции / подписчики</EntitySortLink></th>
-          <th><EntitySortLink query={query} sort="subscribers">Подписчики</EntitySortLink></th>
-        </tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={row.entityId}>
-          <td className="rank rank-cell">{offset + index + 1}</td>
-          <td className="entity-cell"><Link className="entity-link" href={accountHref(row.entityId)} prefetch={false}>{row.title || `@${row.username}`}</Link><div className="muted">@{row.username} · {row.publicationCount} публикаций</div></td>
-          <td><strong>{formatMetric(row.averageReactions, true)}</strong></td>
-          <td>{formatMetric(row.totalReactions)}</td>
-          <td><strong>{formatPercentage(row.engagementRate, 3)}</strong></td>
-          <td>{formatMetric(row.subscriberCount)}</td>
-        </tr>)}{!rows.length ? <EmptyRatingRow query={query} publications={false} columns={6} /> : null}</tbody>
-      </table>
+        <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Канал</TableHead>
+          <TableHead><EntitySortLink query={query} sort="average">Среднее реакций</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="total">Реакций всего</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="engagement">Реакции / подписчики</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="subscribers">Подписчики</EntitySortLink></TableHead>
+        </TableRow></TableHeader>
+        <TableBody>{rows.map((row, index) => <TableRow key={row.entityId}>
+          <TableCell className="text-muted-foreground w-10">{offset + index + 1}</TableCell>
+          <TableCell className="min-w-52 whitespace-normal"><Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 hover:underline" href={accountHref(row.entityId)} prefetch={false}>{row.title || `@${row.username}`}</Link><div className="text-muted-foreground">@{row.username} · {row.publicationCount} публикаций</div></TableCell>
+          <TableCell><strong>{formatMetric(row.averageReactions, true)}</strong></TableCell>
+          <TableCell>{formatMetric(row.totalReactions)}</TableCell>
+          <TableCell><strong>{formatPercentage(row.engagementRate, 3)}</strong></TableCell>
+          <TableCell>{formatMetric(row.subscriberCount)}</TableCell>
+        </TableRow>)}{!rows.length ? <EmptyRatingRow query={query} publications={false} columns={6} /> : null}</TableBody>
+      </Table>
     </RatingSection>
   );
 }
@@ -115,24 +118,24 @@ function VkEntityTable({ query, rows, offset }: {
 }) {
   return (
     <RatingSection query={query} eyebrow="Вузы" title="Рейтинг активности ВК" empty={rows.length === 0}>
-      <table className="rating-table">
+      <Table data-testid="rating-table" className="tabular">
         <caption className="sr-only">Вузы по активности ВКонтакте</caption>
-        <thead><tr><th>#</th><th>Вуз</th>
-          <th><EntitySortLink query={query} sort="average">Среднее лайков</EntitySortLink></th>
-          <th><EntitySortLink query={query} sort="total">Лайков всего</EntitySortLink></th>
-          <th><EntitySortLink query={query} sort="views">Просмотры</EntitySortLink></th>
-          <th><EntitySortLink query={query} sort="engagement">Вовлечённость</EntitySortLink></th>
-          <th><EntitySortLink query={query} sort="subscribers">Подписчики</EntitySortLink></th>
-        </tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={row.entityId}>
-          <td className="rank rank-cell">{offset + index + 1}</td>
-          <td className="entity-cell"><Link className="entity-link" href={queryHref(row.legacyRoute, { platform: query.platform })} prefetch={false}>{row.shortName || row.canonicalName}</Link><div className="muted">{row.publicationCount} публикаций · {formatMetric(row.totalComments)} комментариев{query.platform === "vk" ? ` · ${formatMetric(row.totalShares)} репостов` : ""}</div></td>
-          <td><strong>{formatMetric(row.averageReactions, true)}</strong></td>
-          <td>{formatMetric(row.totalReactions)}</td><td>{formatMetric(row.totalViews)}</td>
-          <td><strong>{formatPercentage(row.engagementRate)}</strong></td>
-          <td>{formatMetric(row.subscriberCount)}</td>
-        </tr>)}{!rows.length ? <EmptyRatingRow query={query} publications={false} columns={7} /> : null}</tbody>
-      </table>
+        <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Вуз</TableHead>
+          <TableHead><EntitySortLink query={query} sort="average">Среднее лайков</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="total">Лайков всего</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="views">Просмотры</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="engagement">Вовлечённость</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="subscribers">Подписчики</EntitySortLink></TableHead>
+        </TableRow></TableHeader>
+        <TableBody>{rows.map((row, index) => <TableRow key={row.entityId}>
+          <TableCell className="text-muted-foreground w-10">{offset + index + 1}</TableCell>
+          <TableCell className="min-w-52 whitespace-normal"><Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 hover:underline" href={queryHref(row.legacyRoute, { platform: query.platform })} prefetch={false}>{row.shortName || row.canonicalName}</Link><div className="text-muted-foreground">{row.publicationCount} публикаций · {formatMetric(row.totalComments)} комментариев{query.platform === "vk" ? ` · ${formatMetric(row.totalShares)} репостов` : ""}</div></TableCell>
+          <TableCell><strong>{formatMetric(row.averageReactions, true)}</strong></TableCell>
+          <TableCell>{formatMetric(row.totalReactions)}</TableCell><TableCell>{formatMetric(row.totalViews)}</TableCell>
+          <TableCell><strong>{formatPercentage(row.engagementRate)}</strong></TableCell>
+          <TableCell>{formatMetric(row.subscriberCount)}</TableCell>
+        </TableRow>)}{!rows.length ? <EmptyRatingRow query={query} publications={false} columns={7} /> : null}</TableBody>
+      </Table>
     </RatingSection>
   );
 }
@@ -143,28 +146,28 @@ function TelegramPublicationTable({ query, rows }: {
 }) {
   return (
     <RatingSection query={query} eyebrow="Публикации" title="Рейтинг публикаций" empty={rows.length === 0}>
-      <table className="rating-table">
+      <Table data-testid="rating-table" className="tabular">
         <caption className="sr-only">Публикации Telegram по активности</caption>
-        <thead><tr><th>#</th><th>Публикация</th>
-          <th><PostSortLink query={query} sort="reactions">Реакции</PostSortLink></th>
-          <th><PostSortLink query={query} sort="views">Просмотры</PostSortLink></th>
-          <th><PostSortLink query={query} sort="subscriber_share">Реакции / подписчики</PostSortLink></th>
-          <th><PostSortLink query={query} sort="view_share">Реакции / просмотры</PostSortLink></th>
-        </tr></thead>
-        <tbody>{rows.map((row, index) => {
+        <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Публикация</TableHead>
+          <TableHead><PostSortLink query={query} sort="reactions">Реакции</PostSortLink></TableHead>
+          <TableHead><PostSortLink query={query} sort="views">Просмотры</PostSortLink></TableHead>
+          <TableHead><PostSortLink query={query} sort="subscriber_share">Реакции / подписчики</PostSortLink></TableHead>
+          <TableHead><PostSortLink query={query} sort="view_share">Реакции / просмотры</PostSortLink></TableHead>
+        </TableRow></TableHeader>
+        <TableBody>{rows.map((row, index) => {
           const external = telegramExternalLink(row);
           const label = `${row.accountTitle || `@${row.accountUsername}`} · №${row.externalId ?? "—"}`;
-          return <tr key={row.publicationId}>
-            <td className="rank rank-cell">{index + 1}</td>
-            <td className="entity-cell">{row.publicationId ? <Link className="entity-link" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
+          return <TableRow key={row.publicationId}>
+            <TableCell className="text-muted-foreground w-10">{index + 1}</TableCell>
+            <TableCell className="min-w-52 whitespace-normal">{row.publicationId ? <Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
               {external ? <a href={external} target="_blank" rel="noopener noreferrer">{row.deletedAt ? "Открыть сохранённую публикацию в TGStat" : "Открыть пост в Telegram"} ↗</a> : null}
               {row.deletedAt ? <span>удалена из Telegram</span> : null}
-            </td>
-            <td><strong>{formatMetric(row.reactions)}</strong></td><td>{formatMetric(row.views)}</td>
-            <td>{formatPercentage(row.subscriberShare, 3)}</td><td>{formatPercentage(row.viewShare)}</td>
-          </tr>;
-        })}{!rows.length ? <EmptyRatingRow query={query} publications columns={6} /> : null}</tbody>
-      </table>
+            </TableCell>
+            <TableCell><strong>{formatMetric(row.reactions)}</strong></TableCell><TableCell>{formatMetric(row.views)}</TableCell>
+            <TableCell>{formatPercentage(row.subscriberShare, 3)}</TableCell><TableCell>{formatPercentage(row.viewShare)}</TableCell>
+          </TableRow>;
+        })}{!rows.length ? <EmptyRatingRow query={query} publications columns={6} /> : null}</TableBody>
+      </Table>
     </RatingSection>
   );
 }
@@ -175,17 +178,17 @@ function VkPublicationTable({ query, rows }: {
 }) {
   return (
     <RatingSection query={query} eyebrow="Публикации" title="Публикации ВК" empty={rows.length === 0}>
-      <table className="rating-table">
+      <Table data-testid="rating-table" className="tabular">
         <caption className="sr-only">Публикации ВКонтакте по активности</caption>
-        <thead><tr><th>#</th><th>Публикация</th>
-          <th><PostSortLink query={query} sort="reactions">Лайки</PostSortLink></th>
-          <th><PostSortLink query={query} sort="views">Просмотры</PostSortLink></th>
-          <th><PostSortLink query={query} sort="comments">Комментарии</PostSortLink></th>
-          {query.platform === "vk" ? <th><PostSortLink query={query} sort="shares">Репосты</PostSortLink></th> : null}
-          <th><PostSortLink query={query} sort="view_share">Вовлечённость</PostSortLink></th>
-        </tr></thead>
-        <tbody>{rows.map((row, index) => <PlatformPublicationRow key={row.publicationId} row={row} index={index} showInteractions showShares={query.platform === "vk"} />)}{!rows.length ? <EmptyRatingRow query={query} publications columns={query.platform === "vk" ? 7 : 6} /> : null}</tbody>
-      </table>
+        <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Публикация</TableHead>
+          <TableHead><PostSortLink query={query} sort="reactions">Лайки</PostSortLink></TableHead>
+          <TableHead><PostSortLink query={query} sort="views">Просмотры</PostSortLink></TableHead>
+          <TableHead><PostSortLink query={query} sort="comments">Комментарии</PostSortLink></TableHead>
+          {query.platform === "vk" ? <TableHead><PostSortLink query={query} sort="shares">Репосты</PostSortLink></TableHead> : null}
+          <TableHead><PostSortLink query={query} sort="view_share">Вовлечённость</PostSortLink></TableHead>
+        </TableRow></TableHeader>
+        <TableBody>{rows.map((row, index) => <PlatformPublicationRow key={row.publicationId} row={row} index={index} showInteractions showShares={query.platform === "vk"} />)}{!rows.length ? <EmptyRatingRow query={query} publications columns={query.platform === "vk" ? 7 : 6} /> : null}</TableBody>
+      </Table>
     </RatingSection>
   );
 }
@@ -197,20 +200,20 @@ function PlatformPublicationRow({ row, index, showInteractions, showShares=false
   showShares?: boolean;
 }) {
   const label = `${row.institutionShortName || row.institutionCanonicalName} · ${publicationLabel(row.externalId ?? "",showShares ? "vk" : "rutube")}`;
-  return <tr>
-    <td className="rank rank-cell">{index + 1}</td>
-    <td className="entity-cell">{row.publicationId ? <Link className="entity-link" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
-      {row.deletedAt ? <span className="pill deleted">удалена</span> : null}
-      {row.joint ? <span className="pill coauthor">+{row.additionalAuthorCount} авт.</span> : null}
-      {row.repost ? <span className="pill repost">репост</span> : null}
-      {row.publicUrl ? <a className="telegram-link external" href={row.publicUrl} target="_blank" rel="noopener noreferrer">Открыть публикацию {showShares ? "VK" : "Rutube"}</a> : null}
-    </td>
+  return <TableRow>
+    <TableCell className="text-muted-foreground w-10">{index + 1}</TableCell>
+    <TableCell className="min-w-52 whitespace-normal">{row.publicationId ? <Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
+      {row.deletedAt ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive">удалена</span> : null}
+      {row.joint ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">+{row.additionalAuthorCount} авт.</span> : null}
+      {row.repost ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">репост</span> : null}
+      {row.publicUrl ? <a className="underline underline-offset-4 text-xs underline underline-offset-4" href={row.publicUrl} target="_blank" rel="noopener noreferrer">Открыть публикацию {showShares ? "VK" : "Rutube"}</a> : null}
+    </TableCell>
     {showInteractions ? <>
-      <td><strong>{formatMetric(row.reactions)}</strong></td><td>{formatMetric(row.views)}</td>
-      <td>{formatMetric(row.comments)}</td>{showShares ? <td>{formatMetric(row.shares)}</td> : null}
-      <td>{formatPercentage(row.viewShare)}</td>
-    </> : <td><strong>{formatMetric(row.views)}</strong></td>}
-  </tr>;
+      <TableCell><strong>{formatMetric(row.reactions)}</strong></TableCell><TableCell>{formatMetric(row.views)}</TableCell>
+      <TableCell>{formatMetric(row.comments)}</TableCell>{showShares ? <TableCell>{formatMetric(row.shares)}</TableCell> : null}
+      <TableCell>{formatPercentage(row.viewShare)}</TableCell>
+    </> : <TableCell><strong>{formatMetric(row.views)}</strong></TableCell>}
+  </TableRow>;
 }
 
 function RatingSection({ query, eyebrow, title, children }: {
@@ -220,16 +223,16 @@ function RatingSection({ query, eyebrow, title, children }: {
   const name=publications ? telegram ? "Публикации" : `Публикации ${PLATFORM_LONG_LABELS[query.platform]}` : telegram ? "Каналы" : "Вузы";
   const badge={"3h":"3 часа","1d":"24 часа","7d":"7 дней","30d":"30 дней"}[query.period];
   const description=publications ? telegram ? "Сравнение отдельных постов по реакциям, просмотрам и их соотношению." : "Последний известный замер каждой публикации, вышедшей за период." : telegram ? "Типичная и общая активность каналов в сравнении с размером аудитории." : `Если у вуза несколько аккаунтов ${PLATFORM_LONG_LABELS[query.platform]}, их публикации объединяются.`;
-  return <section className="panel section rating-panel" aria-label={title}>
-    <div className="rating-panel-head"><div><h2>{name}</h2><p className="panel-note">{description}</p></div><span className="period-badge">Период: {badge}</span></div>
-    {!publications ? <div className="rating-explanation">{telegram ? <><b>По умолчанию:</b> выше показаны каналы с большей долей среднего числа реакций от текущего числа подписчиков.</> : <><b>Вовлечённость:</b> (лайки + комментарии{query.platform === "vk" ? " + репосты" : ""}) / просмотры. Это отношение событий, а не уникальных пользователей.</>}</div> : telegram ? <div className="rating-explanation">Название вуза открывает <b>внутреннюю статистику</b>. Ссылка «Открыть пост в Telegram ↗» ведёт на оригинал в новой вкладке.</div> : null}
-    <div className="table-wrap rating-table-wrap">{children}</div>
+  return <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-5" aria-label={title}>
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-semibold">{name}</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p></div><span className="inline-flex shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-medium">Период: {badge}</span></div>
+    {!publications ? <div className="mb-4 rounded-md bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">{telegram ? <><b>По умолчанию:</b> выше показаны каналы с большей долей среднего числа реакций от текущего числа подписчиков.</> : <><b>Вовлечённость:</b> (лайки + комментарии{query.platform === "vk" ? " + репосты" : ""}) / просмотры. Это отношение событий, а не уникальных пользователей.</>}</div> : telegram ? <div className="mb-4 rounded-md bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">Название вуза открывает <b>внутреннюю статистику</b>. Ссылка «Открыть пост в Telegram ↗» ведёт на оригинал в новой вкладке.</div> : null}
+    <div className="min-w-0 overflow-x-auto">{children}</div>
   </section>;
 }
 
 function EmptyRatingRow({query,publications,columns}:{query:ParsedRatingQuery;publications:boolean;columns:number}) {
   const telegram=query.platform === "telegram";
-  return <tr><td colSpan={columns} className="empty-state">{publications ? telegram ? "Пока нет замеров." : `Пока нет публикаций ${PLATFORM_LONG_LABELS[query.platform]} за выбранный период.` : `Данные появятся после первого замера${telegram ? "" : ` ${PLATFORM_LONG_LABELS[query.platform]}`}.`}</td></tr>;
+  return <TableRow><TableCell colSpan={columns} className="space-y-3 py-10 text-center text-muted-foreground">{publications ? telegram ? "Пока нет замеров." : `Пока нет публикаций ${PLATFORM_LONG_LABELS[query.platform]} за выбранный период.` : `Данные появятся после первого замера${telegram ? "" : ` ${PLATFORM_LONG_LABELS[query.platform]}`}.`}</TableCell></TableRow>;
 }
 
 function EntitySortLink({ query, sort, children }: {
@@ -238,9 +241,9 @@ function EntitySortLink({ query, sort, children }: {
   children: ReactNode;
 }) {
   const direction = query.channelSort === sort && query.channelDirection === "desc" ? "asc" : "desc";
-  return <Link className="sort-link has-tooltip" scroll={false} prefetch={false} href={queryHref("/rating", {
+  return <Link className="inline-flex items-center gap-1 whitespace-normal underline-offset-4 hover:underline" scroll={false} prefetch={false} href={queryHref("/rating", {
     ...ratingHrefQuery(query), channel_sort: sort, channel_direction: direction,
-  })}>{children} <span className="info-mark" aria-hidden="true">ⓘ</span>{query.channelSort === sort ? <span className="sort-direction">{query.channelDirection === "desc" ? "↓" : "↑"}</span> : null}</Link>;
+  })}>{children} <span className="text-muted-foreground" aria-hidden="true">ⓘ</span>{query.channelSort === sort ? <span className="font-bold">{query.channelDirection === "desc" ? "↓" : "↑"}</span> : null}</Link>;
 }
 
 function PostSortLink({ query, sort, children }: {
@@ -249,9 +252,9 @@ function PostSortLink({ query, sort, children }: {
   children: ReactNode;
 }) {
   const direction = query.postSort === sort && query.postDirection === "desc" ? "asc" : "desc";
-  return <Link className="sort-link has-tooltip" scroll={false} prefetch={false} href={queryHref("/rating", {
+  return <Link className="inline-flex items-center gap-1 whitespace-normal underline-offset-4 hover:underline" scroll={false} prefetch={false} href={queryHref("/rating", {
     ...ratingHrefQuery(query), post_sort: sort, post_direction: direction,
-  })}>{children} <span className="info-mark" aria-hidden="true">ⓘ</span>{query.postSort === sort ? <span className="sort-direction">{query.postDirection === "desc" ? "↓" : "↑"}</span> : null}</Link>;
+  })}>{children} <span className="text-muted-foreground" aria-hidden="true">ⓘ</span>{query.postSort === sort ? <span className="font-bold">{query.postDirection === "desc" ? "↓" : "↑"}</span> : null}</Link>;
 }
 
 function ratingHrefQuery(query: ParsedRatingQuery) {

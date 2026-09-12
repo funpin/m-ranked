@@ -12,11 +12,9 @@ backend/target/
 .DS_Store
 .legacy-reference/
 
-# Run artefacts never enter the repository. The only tracked evidence file is
-# frontend/evidence/bundle-budget.json, the budget pnpm check:bundle compares against.
+# Historical run artifacts are not part of the active frontend gate.
 evidence/
-!frontend/evidence/
-frontend/evidence/*
-!frontend/evidence/bundle-budget.json
+# Keep only completed frontend calibration reports, never partial samples.
+frontend/reports/redesign/calibration-progress.json
 migration/reports/
 test-results/

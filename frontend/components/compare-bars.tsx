@@ -14,20 +14,20 @@ export function CompareBars({
   const values = items.map((item) => metricNumber(metric(item)) ?? 0);
   const maximum = Math.max(1, ...values);
   return (
-    <div className="compare-bars" role="list" aria-label={label}>
+    <div className="grid gap-4" role="list" aria-label={label}>
       {items.map((item, index) => {
         const value = metricNumber(metric(item));
         const width = value === null ? 0 : Math.max(2, value * 100 / maximum);
         const name = item.shortName || item.canonicalName;
         return (
-          <div className="compare-row" role="listitem" key={item.institutionId}>
-            <div className="compare-label"><span>{name}</span><strong>{formatMetric(value)}</strong></div>
+          <div className="grid gap-2" role="listitem" key={item.institutionId}>
+            <div className="flex items-baseline justify-between gap-3 text-sm"><span>{name}</span><strong>{formatMetric(value)}</strong></div>
             <div
-              className="bar-track"
+              className="h-2 overflow-hidden rounded-full bg-muted"
               role="img"
               aria-label={`${name}: ${formatMetric(value)} — ${label.toLocaleLowerCase("ru")}`}
             >
-              <span className={`bar-fill bar-color-${index % 6}`} style={{ width: `${width}%` }} />
+              <span className="block h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, width))}%`, backgroundColor: `var(--chart-${index % 18 + 1})` }} />
             </div>
           </div>
         );

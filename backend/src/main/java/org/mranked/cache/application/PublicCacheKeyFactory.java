@@ -58,6 +58,13 @@ public class PublicCacheKeyFactory {
         });
         String fingerprint = HexFormat.of().formatHex(digest.digest());
         String redisKey = PREFIX + ":" + namespace + ":r" + revision.id() + ":q" + fingerprint;
+        if (revision.sourceBacked() && namespace.equals("publication")) {
+            String type = String.valueOf(normalizedQuery.get("legacyType"));
+            String id = String.valueOf(normalizedQuery.get("legacyId"));
+            if ((type.equals("posts") || type.equals("platform_posts")) && id.matches("[1-9][0-9]{0,18}")) {
+                redisKey = "mranked:source:publication:" + type + ":" + id;
+            }
+        }
         return new PublicCacheKey(redisKey, fingerprint, revision);
     }
 

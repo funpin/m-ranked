@@ -34,7 +34,7 @@ _SHARD = re.compile(r"^(\d+)/(\d+)$")
 _SAFE_ERROR_CODE = re.compile(
     r"^[A-Za-z][A-Za-z0-9_.-]{0,79}(?::[A-Za-z0-9_.-]{1,80})?$"
 )
-_EXPECTED_SCHEMA_CONTRACT = "storage-publisher-final-2026-09-08-r3"
+_EXPECTED_SCHEMA_CONTRACT = "storage-publisher-final-2026-09-08-r4"
 
 
 def _row_value(row: Any, key: str, index: int) -> Any:
@@ -1473,6 +1473,14 @@ class PostgresCollectorRepository:
                 ["publications", "overview", "comparison"],
                 _json(payload),
             ),
+        )
+        # Source-backed detail caches must be invalidated at ingestion commit,
+        # independently of the hourly projection publisher.
+        connection.execute(
+            """INSERT INTO ops_and_admin.outbox_event(
+                   dataset_revision_id,event_type,aggregate_type,aggregate_id,affected_tags,payload
+               ) VALUES (%s,'source.account.updated','platform_account',%s,%s,%s::jsonb)""",
+            (revision_id, str(batch.account.id), ["publications"], _json(payload)),
         )
         return revision_id
 

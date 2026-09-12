@@ -230,7 +230,7 @@ systemd service must never wait for a console password or OTP.
 
 ## Database schema contract
 
-There is one supported database shape: `storage-publisher-final-2026-09-08-r3`.
+There is one supported database shape: `storage-publisher-final-2026-09-08-r4`.
 A clean PostgreSQL volume applies
 `backend/src/main/resources/db/final-schema.sql` directly after role creation.
 It does not create a Flyway schema or replay historical SQL files.
@@ -251,7 +251,7 @@ The database operator applies the reviewed release copy with `psql
 SELECT contract_id FROM ops_and_admin.schema_contract;
 ```
 
-Only the exact value `storage-publisher-final-2026-09-08-r3` permits the new API,
+Only the exact value `storage-publisher-final-2026-09-08-r4` permits the new API,
 collectors, Publisher and outbox worker to start. Start the application release
 after the transition; never keep a compatibility mode that accepts both old
 and final schemas. The existing production Flyway history table may remain as
@@ -330,7 +330,7 @@ rtk sudo nginx -t -c /etc/nginx/nginx.conf
 
 Activate only the shadow services. The script validates the immutable release
 manifest and both schema artifacts, then requires the database's exact
-`storage-publisher-final-2026-09-08-r3` contract before it atomically moves the `current` symlink.
+`storage-publisher-final-2026-09-08-r4` contract before it atomically moves the `current` symlink.
 It checks API/Web readiness against the newest already-published serving
 generation and restarts the outbox worker. It never
 starts target collectors, stops legacy units or reloads Nginx.

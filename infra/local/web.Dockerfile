@@ -2,7 +2,6 @@ FROM node:24-bookworm-slim AS build
 RUN npm install --global pnpm@11.19.0
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
-COPY frontend/packages ./packages
 RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store
 COPY frontend ./
 COPY contracts /app/contracts

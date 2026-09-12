@@ -7,7 +7,9 @@ const asOf = "2026-08-01T12:00:00Z";
 const revision = 17;
 const uuid = (kind: number, id: number) => `${String(kind).padStart(8,"0")}-0000-4000-8000-${String(id).padStart(12,"0")}`;
 
-const names = ["Альфа Университет", "Бета Институт"];
+const performanceFixture = process.env.REDESIGN_PERFORMANCE_FIXTURE === "true";
+const names = performanceFixture ? Array.from({ length: 207 }, (_, index) => `Университет ${index + 1}`) : ["Альфа Университет", "Бета Институт"];
+const selectionIds = names.map((_, index) => index + 1);
 const aggregate = (value: number | null, size = 2): Schema["AggregateMetric"] => ({ value, asOf, datasetRevision: revision, sampleSize: size, coverage: size / 2, quality: value === null ? "unsupported" : "exact" });
 const metric: Schema["OverviewMetric"] = { total: 12, median: 6, previousTotal: 10, previousMedian: 5, totalTrend: 2, medianTrend: 1,
   totalMetadata: aggregate(12), medianMetadata: aggregate(6), previousTotalMetadata: aggregate(10), previousMedianMetadata: aggregate(5) };
@@ -97,7 +99,11 @@ const server = createServer((request, response) => {
     const sourceRows=p.legacyId===99 ? Array.from({length:1205},(_,index)=>({...historyRows[index%historyRows.length]!,
       snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,
       reactions:counter(index),views:counter(index*10),deltaReactions:index?1:null,deltaViews:index?10:null,synthetic:index===0,
-    })) : historyRows;
+    })) : p.legacyId===7
+      // Publication 7 stands for a stretch where the collectors were down: the
+      // samples between the fortieth and the hundredth hour never arrived.
+      ? historyRows.filter((_row,index)=>index<40||index>=100)
+      : historyRows;
     const limit=Math.max(1,Number(url.searchParams.get("limit") ?? 200));
     const items=sourceRows.slice(-limit).map((row,index)=>({...row,
       comments:p.platform === "rutube" ? counter(null) : row.comments,
@@ -117,19 +123,19 @@ const server = createServer((request, response) => {
   if(institutionId) return json({institutionId:`institution-${institutionId[1]}`,legacyId:Number(institutionId[1]),canonicalName:names[0]!,shortName:null,platform,period:"30d",metrics:{totalReactions:10,totalViews:100,medianReactions:5,medianViews:50,quality:"exact",sampleSize:2,coverage:1,aggregates:{totalReactions:aggregate(10),totalViews:aggregate(100),medianReactions:aggregate(5),medianViews:aggregate(50)}},datasetRevision:revision,asOf} satisfies Schema["Institution"]);
   const accountsId=/^\/api\/v1\/institutions\/(\d+)\/accounts$/.exec(url.pathname);
   if(accountsId) {const ids=accountsId[1] === "3" ? [] : accountsId[1] === "2" ? [1,2] : [1];return json({items:ids.map((id) => account(id,platform === "telegram" ? "channels" : "platform_accounts")),legacyTotalAccountCount:ids.length,nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["InstitutionAccountsPage"]);}
-  if (url.pathname === "/api/v1/overview") return json({ items: url.searchParams.get("q") ? [] : [item(1, platform), item(2, platform)], nextCursor: null, datasetRevision: revision, asOf, integrationStatus: "unknown", integrationWarning: null } satisfies Schema["OverviewPage"]);
+  if (url.pathname === "/api/v1/overview") return json({ items: url.searchParams.get("q") ? [] : (performanceFixture ? selectionIds.slice(0,50).map(id => item(id,platform)) : [item(1, platform), item(2, platform)]), nextCursor: null, datasetRevision: revision, asOf, integrationStatus: "unknown", integrationWarning: null } satisfies Schema["OverviewPage"]);
   if (url.pathname === "/api/v1/compare/candidates") return json({
-    items: [1, 2].map((id) => ({ selectionId: `selection-${id}`, selectionType: platform === "telegram" ? "channels" : "institutions",
+    items: selectionIds.map((id) => ({ selectionId: `selection-${id}`, selectionType: platform === "telegram" ? "channels" : "institutions",
       selectionLegacyId: id, selectionLabel: names[id - 1]!, selectionDescription: names[id - 1]!, institutionId: `institution-${id}`, canonicalName: names[id - 1]! })),
     nextCursor: null, datasetRevision: revision, asOf,
   } satisfies Schema["ComparisonCandidatePage"]);
   if (url.pathname === "/api/v1/compare") {
     const type = platform === "telegram" ? "channels" : "institutions";
     const requested = url.searchParams.getAll(type).map(Number);
-    const selected = (requested.length ? requested : [1, 2]).filter((id) => id === 1 || id === 2);
-    const points = [0, 1, 2].map((hourOffset) => ({ hourOffset, value: hourOffset * 3, sampleSize: 2, coverage: 1, quality: "exact" }));
+    const selected = (requested.length ? requested : selectionIds).filter((id) => selectionIds.includes(id));
+    const points = (performanceFixture ? Array.from({ length: 337 }, (_, hour) => hour) : [0, 1, 2]).map((hourOffset) => ({ hourOffset, value: hourOffset * 3, sampleSize: 2, coverage: 1, quality: "exact" }));
     const series: Schema["ComparisonSeries"][] = selected.map((id) => ({ selectionId: `selection-${id}`, selectionType: type, selectionLegacyId: id, selectionLabel: names[id - 1]!, institutionId: `institution-${id}`, legacyId: id,
-      canonicalName: names[id - 1]!, shortName: null, primaryCohortSize: 2, engagementCohortSize: 2, points, engagementPoints: points }));
+      canonicalName: names[id - 1]!, shortName: null, primaryCohortSize: 2, engagementCohortSize: 2, points: performanceFixture ? points.map(point => ({...point, value: point.value * id / 10})) : points, engagementPoints: performanceFixture ? points.map(point => ({...point, value: point.value * id / 100})) : points }));
     return json({ cohortId: "fixture-cohort", nextSelectionCursor: null, platform: platform as "telegram", horizonHours: Number(url.searchParams.get("horizonHours") ?? 72) as 72, includePartial: url.searchParams.get("includePartial") === "true",
       metric: (url.searchParams.get("metric") ?? "reactions") as "reactions", aggregation: "median", selectionType: type, cohortSampleSize: 4, series, datasetRevision: revision, asOf } satisfies Schema["Comparison"]);
   }

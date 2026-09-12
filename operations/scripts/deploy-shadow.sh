@@ -905,7 +905,7 @@ jq -n \
   --arg releaseManifestSha256 "$release_manifest_sha256" \
   --arg previousRelease "$previous_release" --arg operator "$operator" \
   --arg ticket "$ticket" --arg finishedAt "$finished_at" \
-  --arg schemaContract "storage-publisher-final-2026-09-08-r3" \
+  --arg schemaContract "storage-publisher-final-2026-09-08-r4" \
   --arg finalSchemaSha256 "$schema_hash" \
   --arg productionTransitionSha256 "$transition_hash" \
   '{status:$status,releaseId:$releaseId,

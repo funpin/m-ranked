@@ -18,7 +18,7 @@ def persist_native_csv(connection, publication_id, month, snapshot_id, evidence)
         raise ValueError("native export evidence must already be sanitized")
     with connection.cursor(row_factory=dict_row) as cursor:
         cursor.execute("""SELECT snapshot.*,account.platform::text AS platform,publication.published_at,
-            publication.publication_type FROM ingest.publication_metric_snapshot snapshot
+            publication.publication_type FROM ingest.publication_metric_snapshot_resolved snapshot
             JOIN ingest.publication publication ON publication.id=snapshot.publication_id
             JOIN catalog.platform_account account ON account.id=publication.primary_account_id
             WHERE snapshot.published_month=%s AND snapshot.id=%s AND snapshot.publication_id=%s""",

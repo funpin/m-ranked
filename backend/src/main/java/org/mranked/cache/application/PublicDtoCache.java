@@ -66,6 +66,9 @@ public class PublicDtoCache {
             return loader.get();
         }
         String key = request.key().redisKey();
+        if (key.startsWith("mranked:source:publication:")) {
+            return getOrLoadSourcePublication(request, dtoType, loader);
+        }
         Optional<T> local = decode(l1.getIfPresent(key), dtoType);
         if (local.isPresent()) {
             localHits.increment();
@@ -89,6 +92,43 @@ public class PublicDtoCache {
         String encoded = encode(loaded.value());
         l1.put(key, encoded);
         safePut(key, encoded);
+        return loaded;
+    }
+
+    // Source publications deliberately use L2 only. Every replica observes the
+    // exact same invalidation; a disconnected Pub/Sub listener cannot serve L1
+    // data beyond the invalidation or extend an L2 entry's ten-minute lifetime.
+    private <T> RevisionedValue<T> getOrLoadSourcePublication(PublicCacheRequest request, Class<T> type,
+            java.util.function.Supplier<RevisionedValue<T>> loader) {
+        Duration ttl = l2Ttl.compareTo(Duration.ofMinutes(10)) > 0 ? Duration.ofMinutes(10) : l2Ttl;
+        PublicCacheStore.ScopedEntry entry;
+        try {
+            entry = l2.readScoped(request.key().redisKey(), ttl);
+            if (entry.payload().isPresent()) {
+                var envelope = objectMapper.readTree(entry.payload().get());
+                if (request.key().fingerprint().equals(envelope.path("shape").asString())
+                        && envelope.path("revision").asLong() <= request.revision().id()) {
+                    var revision = new DatasetRevision(envelope.path("revision").asLong(),
+                            java.time.Instant.parse(envelope.path("committedAt").asString()));
+                    T dto = objectMapper.treeToValue(envelope.path("value"), type);
+                    remoteHits.increment();
+                    return new RevisionedValue<>(revision, dto);
+                }
+            }
+        } catch (RuntimeException error) {
+            storeFailures.increment();
+            misses.increment();
+            return loader.get();
+        }
+        misses.increment();
+        RevisionedValue<T> loaded = loader.get();
+        String payload = encode(Map.of("shape", request.key().fingerprint(), "revision", loaded.revision().id(),
+                "committedAt", loaded.revision().committedAt().toString(), "value", loaded.value()));
+        try {
+            l2.putScoped(request.key().redisKey(), entry.generation(), payload, ttl);
+        } catch (RuntimeException error) {
+            storeFailures.increment();
+        }
         return loaded;
     }
 

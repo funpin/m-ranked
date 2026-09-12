@@ -69,7 +69,7 @@ final class SourceRatingSql {
                   ) publication ON true
                   LEFT JOIN LATERAL (
                       SELECT snapshot.views_count,snapshot.reactions_count,snapshot.comments_count,snapshot.shares_count
-                        FROM analytics.usable_publication_snapshot snapshot
+                        FROM analytics.publication_snapshot_slice(publication.id,publication.published_month) snapshot
                        WHERE snapshot.publication_id=publication.id AND snapshot.observed_at<=params.as_of
                          AND snapshot.published_month=publication.published_month
                          AND snapshot.collected_at<=params.as_of AND NOT snapshot.synthetic AND snapshot.quality<>'invalid'
@@ -162,7 +162,7 @@ final class SourceRatingSql {
                   ) identity ON true
                   LEFT JOIN LATERAL (
                       SELECT snapshot.views_count,snapshot.reactions_count,snapshot.comments_count,snapshot.shares_count
-                        FROM analytics.usable_publication_snapshot snapshot
+                        FROM analytics.publication_snapshot_slice(candidate.publication_id,candidate.published_month) snapshot
                        WHERE snapshot.publication_id=candidate.publication_id AND snapshot.observed_at<=params.as_of
                          AND snapshot.published_month=candidate.published_month
                          AND snapshot.collected_at<=params.as_of AND NOT snapshot.synthetic AND snapshot.quality<>'invalid'

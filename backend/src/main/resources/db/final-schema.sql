@@ -1,4 +1,4 @@
--- FINAL DATABASE SCHEMA — storage-publisher-final-2026-09-08-r3
+-- FINAL DATABASE SCHEMA — storage-publisher-final-2026-09-08-r4
 --
 -- This is the only bootstrap schema for a new database. It is a declarative
 -- snapshot, not a sequence of upgrade steps. Provision roles first with
@@ -11474,7 +11474,7 @@ INSERT INTO ops_and_admin.retention_policy (
 --
 
 CREATE VIEW ops_and_admin.schema_contract AS
- SELECT 'storage-publisher-final-2026-09-08-r3'::text AS contract_id;
+ SELECT 'storage-publisher-final-2026-09-08-r4'::text AS contract_id;
 
 
 ALTER VIEW ops_and_admin.schema_contract OWNER TO migration_owner;
@@ -24752,6 +24752,333 @@ GRANT SELECT ON TABLE rating.rating_run TO api_read;
 GRANT INSERT,UPDATE ON TABLE rating.rating_run TO api_write_admin;
 GRANT SELECT ON TABLE rating.rating_run TO maintenance;
 
+
+-- capacity-evidence:begin
+-- Lossless evidence storage. PostgreSQL 18+; apply with ON_ERROR_STOP in one transaction.
+-- No historical UPDATE or table rewrite is performed by this expand step.
+CREATE TABLE ingest.metric_evidence_dictionary (
+    id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    payload jsonb NOT NULL CHECK (jsonb_typeof(payload)='object'),
+    payload_sha256 bytea NOT NULL UNIQUE CHECK (payload_sha256=sha256(convert_to(payload::text,'UTF8')))
+);
+ALTER TABLE ingest.metric_evidence_dictionary OWNER TO migration_owner;
+REVOKE ALL ON ingest.metric_evidence_dictionary FROM PUBLIC;
+GRANT SELECT ON ingest.metric_evidence_dictionary TO api_read, collector_ingest, migration_bridge, maintenance, analytics_worker;
+ALTER TABLE ingest.publication_metric_snapshot
+    ADD COLUMN metric_evidence_id integer,
+    ALTER COLUMN metric_evidence DROP NOT NULL,
+    ADD CONSTRAINT snapshot_evidence_representation CHECK (
+        (metric_evidence IS NOT NULL AND metric_evidence_id IS NULL)
+        OR (metric_evidence IS NULL AND metric_evidence_id IS NOT NULL)
+    ),
+    ADD CONSTRAINT snapshot_evidence_dictionary_fk FOREIGN KEY (metric_evidence_id)
+        REFERENCES ingest.metric_evidence_dictionary(id);
+
+CREATE FUNCTION ingest.intern_metric_evidence(p_payload jsonb) RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,ingest AS $$
+DECLARE key integer; existing jsonb; hash bytea:=sha256(convert_to(p_payload::text,'UTF8'));
+BEGIN
+ IF p_payload IS NULL OR jsonb_typeof(p_payload)<>'object' THEN
+   RAISE EXCEPTION 'metric evidence must be an object' USING ERRCODE='23514';
+ END IF;
+ LOOP
+   SELECT id,payload INTO key,existing FROM ingest.metric_evidence_dictionary WHERE payload_sha256=hash;
+   IF FOUND THEN
+     IF existing IS DISTINCT FROM p_payload THEN
+       RAISE EXCEPTION 'metric evidence digest collision' USING ERRCODE='23505';
+     END IF;
+     RETURN key;
+   END IF;
+   INSERT INTO ingest.metric_evidence_dictionary(payload,payload_sha256) VALUES(p_payload,hash)
+       ON CONFLICT(payload_sha256) DO NOTHING RETURNING id INTO key;
+   IF FOUND THEN RETURN key; END IF;
+   -- At READ COMMITTED retry with a fresh snapshot after a concurrent insert.
+ END LOOP;
+END $$;
+ALTER FUNCTION ingest.intern_metric_evidence(jsonb) OWNER TO migration_owner;
+REVOKE ALL ON FUNCTION ingest.intern_metric_evidence(jsonb) FROM PUBLIC;
+
+CREATE FUNCTION ingest.compact_new_metric_evidence() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,ingest AS $$
+BEGIN
+ IF NEW.metric_evidence_id IS NOT NULL THEN
+   RAISE EXCEPTION 'supply logical metric evidence when inserting an observation' USING ERRCODE='23514';
+ END IF;
+ IF pg_column_size(NEW.metric_evidence)>=256 THEN
+   NEW.metric_evidence_id:=ingest.intern_metric_evidence(NEW.metric_evidence);
+   NEW.metric_evidence:=NULL;
+ END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION ingest.compact_new_metric_evidence() OWNER TO migration_owner;
+REVOKE ALL ON FUNCTION ingest.compact_new_metric_evidence() FROM PUBLIC;
+CREATE TRIGGER zz_compact_metric_evidence BEFORE INSERT ON ingest.publication_metric_snapshot
+ FOR EACH ROW EXECUTE FUNCTION ingest.compact_new_metric_evidence();
+
+CREATE VIEW ingest.publication_metric_snapshot_resolved AS
+ SELECT s.published_month,
+    s.id,
+    s.publication_id,
+    s.collection_run_id,
+    s.observed_at,
+    s.age_seconds,
+    s.sampling_bucket,
+    s.views_count,
+    s.reactions_count,
+    s.comments_count,
+    s.shares_count,
+    s.quality,
+    s.interval_uncertain,
+    s.synthetic,
+    s.metric_semantics_version,
+    s.capability_version,
+    s.source_fingerprint,
+    s.created_at,
+    s.collected_at,
+    s.ingested_xid,
+    s.correction_sequence,
+    s.supersedes_snapshot_id,
+    s.correction_reason,
+    s.views_quality,
+    s.reactions_quality,
+    s.comments_quality,
+    s.shares_quality,
+    coalesce(s.metric_evidence, evidence.payload) AS metric_evidence,
+    s.semantic_fingerprint
+   FROM ingest.publication_metric_snapshot s
+   LEFT JOIN ingest.metric_evidence_dictionary evidence ON evidence.id=s.metric_evidence_id;
+ALTER VIEW ingest.publication_metric_snapshot_resolved OWNER TO migration_owner;
+GRANT SELECT ON ingest.publication_metric_snapshot_resolved TO api_read, collector_ingest, migration_bridge, maintenance, analytics_worker;
+
+CREATE OR REPLACE VIEW ingest.publication_metric_snapshot_active AS
+ SELECT published_month,
+    id,
+    publication_id,
+    collection_run_id,
+    observed_at,
+    age_seconds,
+    sampling_bucket,
+    views_count,
+    reactions_count,
+    comments_count,
+    shares_count,
+    quality,
+    interval_uncertain,
+    synthetic,
+    metric_semantics_version,
+    capability_version,
+    source_fingerprint,
+    created_at,
+    collected_at,
+    ingested_xid,
+    correction_sequence,
+    supersedes_snapshot_id,
+    correction_reason,
+    views_quality,
+    reactions_quality,
+    comments_quality,
+    shares_quality,
+    metric_evidence,
+    semantic_fingerprint
+   FROM ingest.publication_metric_snapshot_resolved s
+  WHERE (NOT (EXISTS ( SELECT 1
+           FROM ingest.publication_metric_snapshot successor
+          WHERE ((successor.published_month = s.published_month) AND (successor.publication_id = s.publication_id) AND (successor.sampling_bucket = s.sampling_bucket) AND (successor.correction_sequence > s.correction_sequence)))));
+
+CREATE OR REPLACE FUNCTION ingest.prepare_immutable_publication_snapshot() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'ingest', 'ops_and_admin'
+    AS $$
+DECLARE previous ingest.publication_metric_snapshot%ROWTYPE;
+BEGIN
+ NEW.ingested_xid:=pg_current_xact_id();
+ PERFORM ops_and_admin.assert_publication_partition_writable(NEW.published_month);
+ PERFORM pg_advisory_xact_lock(hashtextextended('observation:'||NEW.published_month::text||':'||NEW.publication_id::text||':'||NEW.sampling_bucket::text,0));
+ NEW.views_quality:=coalesce(NEW.views_quality,NEW.quality);
+ NEW.reactions_quality:=coalesce(NEW.reactions_quality,NEW.quality);
+ NEW.comments_quality:=coalesce(NEW.comments_quality,NEW.quality);
+ NEW.shares_quality:=coalesce(NEW.shares_quality,NEW.quality);
+ SELECT * INTO previous FROM ingest.publication_metric_snapshot
+  WHERE published_month=NEW.published_month AND publication_id=NEW.publication_id
+   AND sampling_bucket=NEW.sampling_bucket AND source_fingerprint=NEW.source_fingerprint;
+ IF FOUND THEN
+   previous.metric_evidence:=coalesce(previous.metric_evidence,(SELECT payload FROM ingest.metric_evidence_dictionary WHERE id=previous.metric_evidence_id));
+   IF (to_jsonb(previous)-ARRAY['id','created_at','collection_run_id','correction_sequence','supersedes_snapshot_id','correction_reason','ingested_xid','metric_evidence_id'])
+    IS DISTINCT FROM (to_jsonb(NEW)-ARRAY['id','created_at','collection_run_id','correction_sequence','supersedes_snapshot_id','correction_reason','ingested_xid','metric_evidence_id']) THEN
+     RAISE EXCEPTION 'fingerprint reused for different observation' USING ERRCODE='23505';
+   END IF;
+   RETURN NULL;
+ END IF;
+ SELECT * INTO previous FROM ingest.publication_metric_snapshot
+  WHERE published_month=NEW.published_month AND publication_id=NEW.publication_id
+   AND sampling_bucket=NEW.sampling_bucket ORDER BY correction_sequence DESC LIMIT 1;
+ NEW.correction_sequence:=CASE WHEN FOUND THEN previous.correction_sequence+1 ELSE 0 END;
+ NEW.supersedes_snapshot_id:=previous.id;
+ NEW.correction_reason:=CASE WHEN previous.id IS NOT NULL THEN coalesce(nullif(btrim(NEW.correction_reason),''),'provider_payload_changed') END;
+ RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION ops_and_admin.publication_archive_record(p_month date, p_id bigint) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'ingest', 'catalog'
+    SET "TimeZone" TO 'UTC'
+    AS $$
+ SELECT (to_jsonb(s) || jsonb_build_object(
+   'primary_account_id',p.primary_account_id,'platform',a.platform,
+   'published_at',p.published_at,
+   'reaction_breakdown',coalesce((SELECT jsonb_object_agg(r.reaction_key,r.reaction_count ORDER BY r.reaction_key)
+     FROM ingest.reaction_breakdown r WHERE r.snapshot_published_month=s.published_month AND r.snapshot_id=s.id),'{}'::jsonb)))::text
+ FROM ingest.publication_metric_snapshot_resolved s
+ JOIN ingest.publication p ON p.id=s.publication_id
+ JOIN catalog.platform_account a ON a.id=p.primary_account_id
+ WHERE s.published_month=p_month AND s.id=p_id
+$$;
+
+CREATE OR REPLACE FUNCTION ingest.reject_observation_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ -- Only the owner-operated backfill may replace storage; logical data remains
+ -- exactly identical, including every counter, timestamp and lineage field.
+ IF TG_OP='UPDATE' AND current_user='migration_owner'
+    AND TG_TABLE_SCHEMA='ingest' AND TG_TABLE_NAME LIKE 'publication_metric_snapshot%' THEN
+   IF (to_jsonb(OLD)-ARRAY['metric_evidence','metric_evidence_id'])
+        IS NOT DISTINCT FROM (to_jsonb(NEW)-ARRAY['metric_evidence','metric_evidence_id'])
+      AND OLD.metric_evidence IS NOT NULL AND OLD.metric_evidence_id IS NULL
+      AND NEW.metric_evidence IS NULL AND NEW.metric_evidence_id IS NOT NULL
+      AND OLD.metric_evidence IS NOT DISTINCT FROM
+          (SELECT payload FROM ingest.metric_evidence_dictionary WHERE id=NEW.metric_evidence_id) THEN
+     RETURN NEW;
+   END IF;
+ END IF;
+ RAISE EXCEPTION 'observations are append-only; insert a correction' USING ERRCODE='55000';
+END $$;
+
+CREATE FUNCTION ingest.reject_evidence_dictionary_mutation() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+ -- Interned evidence is referenced by observations whose archive record must
+ -- stay byte-identical, so a dictionary entry is write-once: updating or
+ -- deleting one would silently rewrite history that is already published.
+ RAISE EXCEPTION 'metric evidence dictionary entries are immutable' USING ERRCODE='55000';
+END $$;
+ALTER FUNCTION ingest.reject_evidence_dictionary_mutation() OWNER TO migration_owner;
+REVOKE ALL ON FUNCTION ingest.reject_evidence_dictionary_mutation() FROM PUBLIC;
+CREATE TRIGGER evidence_dictionary_immutable BEFORE UPDATE OR DELETE ON ingest.metric_evidence_dictionary
+ FOR EACH ROW EXECUTE FUNCTION ingest.reject_evidence_dictionary_mutation();
+
+CREATE FUNCTION ops_and_admin.compact_metric_evidence_batch(p_month date,p_after bigint,p_limit integer DEFAULT 1000)
+RETURNS TABLE(last_id bigint, scanned integer, compacted integer)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,ingest,ops_and_admin
+SET lock_timeout='1s' SET statement_timeout='30s' AS $$
+BEGIN
+ IF p_limit IS NULL OR p_after IS NULL OR p_month IS NULL OR p_limit<1 OR p_limit>10000 OR p_after<0 OR p_month<>date_trunc('month',p_month::timestamp)::date THEN
+   RAISE EXCEPTION 'invalid compaction batch';
+ END IF;
+ PERFORM ops_and_admin.assert_publication_partition_writable(p_month);
+ RETURN QUERY WITH page AS MATERIALIZED (
+   SELECT id FROM ingest.publication_metric_snapshot
+    WHERE published_month=p_month AND id>p_after ORDER BY id LIMIT p_limit
+ ), changed AS (
+   UPDATE ingest.publication_metric_snapshot s
+      SET metric_evidence_id=ingest.intern_metric_evidence(s.metric_evidence), metric_evidence=NULL
+     FROM page WHERE s.published_month=p_month AND s.id=page.id AND s.metric_evidence IS NOT NULL
+       AND pg_column_size(s.metric_evidence)>=256
+   RETURNING s.id
+ ) SELECT coalesce(max(page.id),p_after),count(*)::integer,(SELECT count(*)::integer FROM changed) FROM page;
+END $$;
+ALTER FUNCTION ops_and_admin.compact_metric_evidence_batch(date,bigint,integer) OWNER TO migration_owner;
+REVOKE ALL ON FUNCTION ops_and_admin.compact_metric_evidence_batch(date,bigint,integer) FROM PUBLIC;
+-- Only migration_owner can call the batch function. No application UPDATE grant.
+CREATE FUNCTION analytics.publication_snapshot_slice(p_publication uuid,p_month date)
+RETURNS SETOF analytics.usable_publication_snapshot
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,ingest,analytics AS $$
+WITH ranked AS MATERIALIZED (
+ SELECT snapshot.*, row_number() OVER (
+   PARTITION BY snapshot.sampling_bucket ORDER BY snapshot.correction_sequence DESC
+ ) AS correction_rank
+ FROM ingest.publication_metric_snapshot snapshot
+ WHERE snapshot.published_month=p_month AND snapshot.publication_id=p_publication
+), active AS (
+ SELECT ranked.*, coalesce(ranked.metric_evidence,dictionary.payload) AS resolved_evidence
+ FROM ranked LEFT JOIN ingest.metric_evidence_dictionary dictionary ON dictionary.id=ranked.metric_evidence_id
+ WHERE correction_rank=1
+)
+ SELECT visible.published_month,
+    visible.id,
+    visible.publication_id,
+    visible.collection_run_id,
+    visible.observed_at,
+    visible.age_seconds,
+    visible.sampling_bucket,
+    visible.views_count,
+    visible.reactions_count,
+    visible.comments_count,
+    visible.shares_count,
+    visible.quality,
+    visible.interval_uncertain,
+    visible.synthetic,
+    visible.metric_semantics_version,
+    visible.capability_version,
+    visible.source_fingerprint,
+    visible.created_at,
+    visible.collected_at,
+    visible.correction_sequence,
+    visible.supersedes_snapshot_id,
+    visible.correction_reason,
+    visible.views_quality,
+    visible.reactions_quality,
+    visible.comments_quality,
+    visible.shares_quality,
+    visible.metric_evidence
+   FROM (( SELECT s.published_month,
+            s.id,
+            s.publication_id,
+            s.collection_run_id,
+            s.observed_at,
+            s.age_seconds,
+            s.sampling_bucket,
+                CASE
+                    WHEN (s.views_quality = ANY (ARRAY['invalid'::ingest.observation_quality, 'suspected_reset'::ingest.observation_quality])) THEN NULL::bigint
+                    ELSE s.views_count
+                END AS views_count,
+                CASE
+                    WHEN (s.reactions_quality = ANY (ARRAY['invalid'::ingest.observation_quality, 'suspected_reset'::ingest.observation_quality])) THEN NULL::bigint
+                    ELSE s.reactions_count
+                END AS reactions_count,
+                CASE
+                    WHEN (s.comments_quality = ANY (ARRAY['invalid'::ingest.observation_quality, 'suspected_reset'::ingest.observation_quality])) THEN NULL::bigint
+                    ELSE s.comments_count
+                END AS comments_count,
+                CASE
+                    WHEN (s.shares_quality = ANY (ARRAY['invalid'::ingest.observation_quality, 'suspected_reset'::ingest.observation_quality])) THEN NULL::bigint
+                    ELSE s.shares_count
+                END AS shares_count,
+            analytics.observation_quality_from_rank((COALESCE(( SELECT max(analytics.observation_quality_rank(v.quality)) AS max
+                   FROM ( VALUES (s.views_count,s.views_quality), (s.reactions_count,s.reactions_quality), (s.comments_count,s.comments_quality), (s.shares_count,s.shares_quality)) v(value, quality)
+                  WHERE ((v.value IS NOT NULL) AND (v.quality <> ALL (ARRAY['invalid'::ingest.observation_quality, 'suspected_reset'::ingest.observation_quality])))), analytics.observation_quality_rank(s.quality)))::integer) AS quality,
+            s.interval_uncertain,
+            s.synthetic,
+            s.metric_semantics_version,
+            s.capability_version,
+            s.source_fingerprint,
+            s.created_at,
+            s.collected_at,
+            s.correction_sequence,
+            s.supersedes_snapshot_id,
+            s.correction_reason,
+            s.views_quality,
+            s.reactions_quality,
+            s.comments_quality,
+            s.shares_quality,
+            s.resolved_evidence AS metric_evidence
+           FROM active s) visible
+     JOIN ingest.visible_publication publication ON ((publication.id = visible.publication_id)));
+$$;
+ALTER FUNCTION analytics.publication_snapshot_slice(uuid,date) OWNER TO migration_owner;
+REVOKE ALL ON FUNCTION analytics.publication_snapshot_slice(uuid,date) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION analytics.publication_snapshot_slice(uuid,date) TO api_read, analytics_worker, maintenance;
+
+-- capacity-evidence:end
 
 --
 -- PostgreSQL database dump complete

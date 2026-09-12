@@ -11,6 +11,8 @@ services:
       - -c
       - shared_buffers=96MB
       - -c
+      - effective_cache_size=768MB
+      - -c
       - work_mem=4MB
       - -c
       - maintenance_work_mem=64MB

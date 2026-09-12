@@ -1,0 +1,22 @@
+{
+  "calibration": "../reports/redesign/calibration.json",
+  "scope": "Frontend synthetic calibration; real-API provenance and workload eligibility remain mandatory in mobile-performance.mts. Comparison SVG INP tradeoff accepted in the redesign handoff. Ceilings use p75 plus about 15%, retaining stricter existing ordinary-route limits and CLS <= 0.1.",
+  "default": {
+    "lcpMs": 2500,
+    "inpMs": 200,
+    "cls": 0.1,
+    "initialJsGzipBytes": 174080
+  },
+  "comparison": {
+    "lcpMs": 8400,
+    "inpMs": 2850,
+    "cls": 0.1,
+    "initialJsGzipBytes": 330752
+  },
+  "publication": {
+    "lcpMs": 2500,
+    "inpMs": 250,
+    "cls": 0.1,
+    "initialJsGzipBytes": 353280
+  }
+}

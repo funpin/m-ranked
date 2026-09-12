@@ -116,7 +116,8 @@ final class SourceReadSql {
                        count(*) OVER (PARTITION BY activity_window.window_index,publication.publication_id) AS observation_count
                   FROM activity_windows activity_window
                   JOIN activity_publications publication ON publication.published_at<=activity_window.window_end
-                  JOIN analytics.usable_publication_snapshot snapshot
+                  JOIN LATERAL analytics.publication_snapshot_slice(publication.publication_id,
+                      date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date) snapshot
                     ON snapshot.publication_id=publication.publication_id
                    AND snapshot.observed_at>activity_window.window_start AND snapshot.observed_at<=activity_window.window_end
                  CROSS JOIN params
@@ -340,7 +341,8 @@ final class SourceReadSql {
                        WHEN '1d' THEN interval '1 day' WHEN '7d' THEN interval '7 days' ELSE interval '30 days' END
                    AND publication.published_at<=:asOf
                   LEFT JOIN LATERAL (
-                      SELECT snapshot.* FROM analytics.usable_publication_snapshot snapshot
+                      SELECT snapshot.* FROM analytics.publication_snapshot_slice(publication.id,
+                          date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date) snapshot
                        WHERE snapshot.publication_id=publication.id AND snapshot.observed_at<=:asOf
                          AND snapshot.collected_at<=:asOf AND NOT snapshot.synthetic AND snapshot.quality<>'invalid'
                        ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC LIMIT 1
@@ -396,7 +398,8 @@ final class SourceReadSql {
                   ORDER BY CASE WHEN candidate.entity_type='channels' AND account.platform='telegram' THEN 0 ELSE 1 END LIMIT 1) account_alias ON true
               LEFT JOIN LATERAL (SELECT candidate.external_id,candidate.public_url FROM ingest.publication_identity candidate
                   WHERE candidate.publication_id=publication.id AND candidate.role='primary' ORDER BY candidate.id LIMIT 1) identity ON true
-              LEFT JOIN LATERAL (SELECT snapshot.* FROM analytics.usable_publication_snapshot snapshot
+              LEFT JOIN LATERAL (SELECT snapshot.* FROM analytics.publication_snapshot_slice(publication.id,
+                      date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date) snapshot
                   WHERE snapshot.publication_id=publication.id AND snapshot.observed_at<=:asOf
                     AND snapshot.collected_at<=:asOf AND NOT snapshot.synthetic AND snapshot.quality<>'invalid'
                   ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC LIMIT 1) latest ON true
@@ -500,7 +503,8 @@ final class SourceReadSql {
                          analytics.observation_quality_rank(snapshot.reactions_quality)) AS engagement_quality_rank
                   FROM publications publication CROSS JOIN params
                   JOIN LATERAL (
-                      SELECT candidate.* FROM analytics.usable_publication_snapshot candidate
+                      SELECT candidate.* FROM analytics.publication_snapshot_slice(publication.publication_id,
+                           date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date) candidate
                        WHERE candidate.publication_id=publication.publication_id
                          AND candidate.published_month=date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date
                          AND candidate.age_seconds>=0 AND candidate.age_seconds<=:horizonSeconds

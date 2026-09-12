@@ -33,7 +33,7 @@ for attempt in range(120):
             contract = connection.execute(
                 "SELECT contract_id FROM ops_and_admin.schema_contract"
             ).fetchone()[0]
-            if contract == "storage-publisher-final-2026-09-08-r3":
+            if contract == "storage-publisher-final-2026-09-08-r4":
                 break
     except psycopg.Error:
         pass

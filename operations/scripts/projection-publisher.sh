@@ -15,11 +15,13 @@ fi
 
 PROJECTION_CAPACITY_PATH="${PROJECTION_CAPACITY_PATH:?PROJECTION_CAPACITY_PATH is required}"
 PROJECTION_CAPACITY_MULTIPLIER="${PROJECTION_CAPACITY_MULTIPLIER:-1}"
+PROJECTION_WAL_HEADROOM_MULTIPLIER="${PROJECTION_WAL_HEADROOM_MULTIPLIER:-3}"
 PROJECTION_MIN_FREE_BYTES="${PROJECTION_MIN_FREE_BYTES:-5368709120}"
 PROJECTION_LOCK_FILE="${PROJECTION_LOCK_FILE:-/run/m-ranked-projection-publisher/publisher.lock}"
 
 for value_name in \
-  PROJECTION_CAPACITY_MULTIPLIER PROJECTION_MIN_FREE_BYTES; do
+  PROJECTION_CAPACITY_MULTIPLIER PROJECTION_WAL_HEADROOM_MULTIPLIER \
+  PROJECTION_MIN_FREE_BYTES; do
   value="${!value_name}"
   if [[ ! "$value" =~ ^[0-9]+$ || "$value" == 0 ]]; then
     echo "$value_name must be a positive integer" >&2
@@ -61,7 +63,7 @@ schema_contract="$(
     --quiet --tuples-only --no-align \
     --command 'SELECT contract_id FROM ops_and_admin.schema_contract'
 )"
-if [[ "$schema_contract" != storage-publisher-final-2026-09-08-r3 ]]; then
+if [[ "$schema_contract" != storage-publisher-final-2026-09-08-r4 ]]; then
   echo "database schema contract mismatch" >&2
   exit 65
 fi
@@ -144,6 +146,7 @@ capacity_guard() {
       --tuples-only --no-align --field-separator='|' \
       --set capacity_multiplier="$PROJECTION_CAPACITY_MULTIPLIER" \
       --set min_free_bytes="$PROJECTION_MIN_FREE_BYTES" \
+      --set wal_headroom_multiplier="$PROJECTION_WAL_HEADROOM_MULTIPLIER" \
       --set available_kib="$available_kib" <<'SQL'
 WITH source_root(schema_name, relation_name) AS (VALUES
     ('ingest', 'publication_metric_snapshot'),
@@ -182,8 +185,29 @@ WITH source_root(schema_name, relation_name) AS (VALUES
            coalesce(sum(pg_indexes_size(oid)), 0)::numeric AS index_bytes
       FROM relation_oid
      GROUP BY class
+), evidence_expansion AS (
+    -- The staging projection resolves dictionary JSON. Its logical width is
+    -- larger than the compact heap, so physical table bytes alone undercount
+    -- rebuild scratch space after the r4 backfill. Bound it from catalog
+    -- statistics and the widest interned payload rather than scanning seven
+    -- million rows on every hourly run: a guard may overestimate, never stall.
+    -- Missing column statistics count every row, which is the safe direction.
+    SELECT coalesce(
+               (SELECT sum(part.reltuples::numeric * coalesce(1 - stat.null_frac, 1)::numeric)
+                  FROM pg_partition_tree('ingest.publication_metric_snapshot'::regclass) AS tree
+                  JOIN pg_class AS part ON part.oid = tree.relid
+                  JOIN pg_namespace AS space ON space.oid = part.relnamespace
+                  LEFT JOIN pg_stats AS stat
+                         ON stat.schemaname = space.nspname
+                        AND stat.tablename = part.relname
+                        AND stat.attname = 'metric_evidence_id'
+                 WHERE part.relkind = 'r' AND part.reltuples > 0)
+               * (SELECT max(pg_column_size(dictionary.payload))::numeric
+                    FROM ingest.metric_evidence_dictionary dictionary),
+               0) AS bytes
 ), components AS (
-    SELECT coalesce((SELECT heap_bytes FROM measured WHERE class='source'),0) AS source_heap,
+    SELECT coalesce((SELECT heap_bytes FROM measured WHERE class='source'),0)
+             + (SELECT bytes FROM evidence_expansion) AS source_heap,
            coalesce((SELECT index_bytes FROM measured WHERE class='source'),0) AS source_indexes,
            coalesce((SELECT heap_bytes FROM measured WHERE class='serving'),0) AS old_heap,
            coalesce((SELECT index_bytes FROM measured WHERE class='serving'),0) AS old_indexes
@@ -192,9 +216,22 @@ WITH source_root(schema_name, relation_name) AS (VALUES
            greatest(old_indexes, source_indexes) AS new_indexes,
            source_heap + source_indexes AS temp_bytes
       FROM components
+), wal_ceiling AS (
+    -- Rebuild WAL is not retained in proportion to the projection: nothing here
+    -- pins it. Archiving is off, wal_keep_size is 0 and the rebuild holds no
+    -- replication slot, so the checkpointer recycles segments as it goes and the
+    -- on-disk peak is governed by max_wal_size, overshooting only while a burst
+    -- outruns a checkpoint. Charge that ceiling with headroom for the overshoot.
+    SELECT greatest(
+               pg_size_bytes(current_setting('max_wal_size')),
+               pg_size_bytes(current_setting('min_wal_size'))
+           )::numeric AS ceiling_bytes
 ), total AS (
-    SELECT *, old_heap + old_indexes + new_heap + new_indexes AS wal_bytes
+    SELECT estimate.*,
+           wal_ceiling.ceiling_bytes
+             * :'wal_headroom_multiplier'::numeric AS wal_bytes
       FROM estimate
+     CROSS JOIN wal_ceiling
 ), required AS (
     SELECT *, old_heap + old_indexes + new_heap + new_indexes + temp_bytes + wal_bytes AS dynamic_bytes
       FROM total

@@ -31,7 +31,7 @@ MAX_RAW_EVIDENCE_BYTES = 64 * 1024 * 1024
 MAX_RELEASE_FILE_BYTES = 256 * 1024 * 1024
 MAX_RELEASE_TREE_BYTES = 4 * 1024 * 1024 * 1024
 
-SCHEMA_CONTRACT_ID = "storage-publisher-final-2026-09-08-r3"
+SCHEMA_CONTRACT_ID = "storage-publisher-final-2026-09-08-r4"
 FINAL_SCHEMA_PATH = "backend/src/main/resources/db/final-schema.sql"
 TRANSITION_PATH = "operations/sql/transition-production-to-final.sql"
 

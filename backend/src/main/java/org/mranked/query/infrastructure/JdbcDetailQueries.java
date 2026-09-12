@@ -91,7 +91,8 @@ final class JdbcDetailQueries {
             ), latest AS (
                 SELECT publication.id,publication.history_completeness,snapshot.*
                   FROM publications publication CROSS JOIN params
-                  LEFT JOIN LATERAL (SELECT candidate.* FROM analytics.usable_publication_snapshot candidate
+                  LEFT JOIN LATERAL (SELECT candidate.* FROM analytics.publication_snapshot_slice(publication.id,
+                        date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date) candidate
                     WHERE candidate.publication_id=publication.id AND candidate.observed_at<=params.as_of
                       AND candidate.collected_at<=params.as_of AND candidate.quality<>'invalid'
                       AND (:platform<>'telegram' OR NOT candidate.synthetic)
@@ -224,7 +225,8 @@ final class JdbcDetailQueries {
                 WHERE candidate.target_uuid=page.id AND candidate.entity_type=:publicationType LIMIT 1) alias ON true
               LEFT JOIN LATERAL (SELECT candidate.external_id,candidate.public_url FROM ingest.publication_identity candidate
                 WHERE candidate.publication_id=page.id AND candidate.role='primary' ORDER BY candidate.id LIMIT 1) identity ON true
-              LEFT JOIN LATERAL (SELECT snapshot.* FROM analytics.usable_publication_snapshot snapshot
+              LEFT JOIN LATERAL (SELECT snapshot.* FROM analytics.publication_snapshot_slice(page.id,
+                    date_trunc('month',page.published_at AT TIME ZONE 'UTC')::date) snapshot
                 WHERE snapshot.publication_id=page.id AND snapshot.observed_at<=:asOf
                   AND snapshot.collected_at<=:asOf AND snapshot.quality<>'invalid'
                 ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC LIMIT 1) latest ON true
@@ -337,14 +339,19 @@ final class JdbcDetailQueries {
 
     private List<HistorySnapshot> sourceHistory(UUID publication,int limit,Long after,long revision) {
         return jdbc.sql("""
-            WITH page AS (
+            WITH snapshots AS MATERIALIZED (
+                SELECT snapshot.* FROM ingest.visible_publication publication
+                CROSS JOIN LATERAL analytics.publication_snapshot_slice(publication.id,
+                    date_trunc('month',publication.published_at AT TIME ZONE 'UTC')::date) snapshot
+                WHERE publication.id=:publication
+            ), page AS (
                 SELECT snapshot.*
-                  FROM analytics.usable_publication_snapshot snapshot
+                  FROM snapshots snapshot
                  WHERE snapshot.publication_id=:publication AND snapshot.observed_at<=:asOf
                    AND snapshot.collected_at<=:asOf
                    AND (CAST(:after AS bigint) IS NULL OR (snapshot.observed_at,snapshot.published_month,snapshot.id)<(
                      SELECT cursor.observed_at,cursor.published_month,cursor.id
-                       FROM analytics.usable_publication_snapshot cursor
+                       FROM snapshots cursor
                       WHERE cursor.publication_id=:publication AND cursor.id=CAST(:after AS bigint)))
                  ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC
                  -- One extra older sample carries the deltas of the oldest returned

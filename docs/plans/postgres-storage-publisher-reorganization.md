@@ -11,7 +11,7 @@ Keep collectors running continuously while API/web deployments remain independen
 
 The storage target is at least 70% less growth than the supplied 0.9–1.2 GiB/day baseline and preferably no more than 0.35 GiB/day. Code-level estimates are not proof: acceptance requires a production-shaped replay or restored-copy measurement of rows, bytes, WAL, and temporary bytes.
 
-Database delivery has one current contract, `storage-publisher-final-2026-09-08-r3`:
+Database delivery has one current contract, `storage-publisher-final-2026-09-08-r4`:
 
 - a new database is created directly from `backend/src/main/resources/db/final-schema.sql`;
 - the verified production schema is changed once by `operations/sql/transition-production-to-final.sql`;

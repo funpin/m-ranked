@@ -10,5 +10,5 @@ export function RatingFilterForm(props:ComponentProps<"form">) {
     const query=new URLSearchParams();
     new FormData(event.currentTarget).forEach((value,key) => {if(typeof value === "string") query.append(key,value);});
     startTransition(()=>router.push(`/rating?${query}`,{scroll:false}));
-  }}>{props.children}<span className="rating-loading" role="status" hidden={!pending}>Обновляю…</span></form>;
+  }}>{props.children}<span className="text-xs text-muted-foreground" role="status" hidden={!pending}>Обновляю…</span></form>;
 }

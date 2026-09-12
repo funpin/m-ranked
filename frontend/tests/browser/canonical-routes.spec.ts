@@ -13,7 +13,7 @@ test("all account platforms use canonical pages and legacy redirects preserve id
     expect(new URL(response.headers().location!, response.url()).pathname).toBe(path);
     expect(new URL(response.headers().location!, response.url()).search).toBe("?period=7d");
     await page.goto(path);
-    await expect(page.locator(".brand")).toHaveAttribute("href", `/?platform=${platform}`);
+    await expect(page.getByTestId("brand")).toHaveAttribute("href", `/?platform=${platform}`);
     await expect(page.locator("tbody tr")).toHaveCount(2);
     await expect(page.locator("tbody a").first()).toHaveAttribute("href", /^\/publications\/[0-9a-f-]{36}$/);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", new RegExp(`${path}$`));

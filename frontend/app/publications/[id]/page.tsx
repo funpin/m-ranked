@@ -7,6 +7,7 @@ import { loadPublicationHistory } from "@/lib/detail-data";
 import { publicationHref, UUID_PATTERN } from "@/lib/entity-routes";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { normalizeHistoryLimit, queryHref, type SearchParams } from "@/lib/params";
+import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<SearchParams> };
@@ -34,7 +35,7 @@ export default async function PublicationPage({ params, searchParams }: Props) {
   let analysisLoadFailed = false;
   try {
     const loaded = await Promise.all([
-      loadPublicationHistory(id, undefined, historyLimit),
+      loadPublicationHistory(id, undefined, FULL_PUBLICATION_HISTORY_LIMIT),
       api.publicationAnomalyAnalysis(id)
         .then(value => ({ value, failed: false }))
         .catch(() => ({ value: null, failed: true })),
@@ -43,7 +44,7 @@ export default async function PublicationPage({ params, searchParams }: Props) {
     analysis = loaded[1].value;
     analysisLoadFailed = loaded[1].failed;
     if (analysis?.sourceDatasetRevision && analysis.sourceDatasetRevision > history.datasetRevision) {
-      history = await loadPublicationHistory(id, undefined, historyLimit);
+      history = await loadPublicationHistory(id, undefined, FULL_PUBLICATION_HISTORY_LIMIT);
     }
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();

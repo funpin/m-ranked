@@ -16,7 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 FINAL_SCHEMA = ROOT / "backend/src/main/resources/db/final-schema.sql"
 TRANSITION = ROOT / "operations/sql/transition-production-to-final.sql"
-CONTRACT = "storage-publisher-final-2026-09-08-r3"
+CONTRACT = "storage-publisher-final-2026-09-08-r4"
 
 
 def test_only_one_final_schema_is_active() -> None:
@@ -36,6 +36,50 @@ def test_only_one_final_schema_is_active() -> None:
     assert "BEGIN;" in transition
     assert transition.rstrip().endswith("COMMIT;")
     assert "$production_contract_guard$" in transition
+
+
+def _delta_markers(transition: str) -> list[str]:
+    return re.findall(r"^-- (\w+)-delta:begin$", transition, flags=re.MULTILINE)
+
+
+def _delta_block(transition: str, marker: str) -> str:
+    body = transition.split(f"-- {marker}-delta:begin\n", 1)[1]
+    return body.split(f"-- {marker}-delta:end", 1)[0]
+
+
+def test_every_transition_delta_creates_only_objects_the_final_schema_declares() -> None:
+    # A new database is built from the declarative contract and an existing one
+    # from these blocks. They must describe the same database, so an object that
+    # only one of them creates is drift that would surface as a production-only
+    # shape months later.
+    schema = FINAL_SCHEMA.read_text(encoding="utf-8")
+    transition = TRANSITION.read_text(encoding="utf-8")
+    markers = _delta_markers(transition)
+    assert markers, "the transition carries no replayable delta block"
+    assert markers == sorted(markers, key=lambda marker: int(marker.lstrip("r")))
+    for marker in markers:
+        block = _delta_block(transition, marker)
+        assert block.strip(), f"{marker} delta block is empty"
+        created = re.findall(
+            r"^CREATE (?:OR REPLACE )?(TABLE|VIEW|FUNCTION|TRIGGER|INDEX|UNIQUE INDEX) "
+            r"(?:IF NOT EXISTS )?([\w.]+)",
+            block,
+            flags=re.MULTILINE,
+        )
+        assert created, f"{marker} delta block creates nothing"
+        for kind, name in created:
+            assert name in schema, f"{marker} delta creates {kind} {name}, absent from the final schema"
+    assert CONTRACT in _delta_block(transition, markers[-1])
+
+
+def test_the_restored_copy_stand_replays_every_delta_the_transition_carries() -> None:
+    # The stand is the only rehearsal of the production replay path, so a delta
+    # it does not know about is a delta nobody runs before the release.
+    transition = TRANSITION.read_text(encoding="utf-8")
+    prodcopy = (ROOT / "infra/local/prodcopy.sh").read_text(encoding="utf-8")
+    assert f"CONTRACT={CONTRACT}" in prodcopy
+    for marker in _delta_markers(transition):
+        assert f"apply_delta {marker}" in prodcopy
 
 
 def test_standard_deploy_validates_artifacts_without_running_migrations() -> None:
@@ -665,7 +709,7 @@ test "$failures" -eq 1
 def test_restore_verifier_requires_the_final_schema_contract() -> None:
     restore = (ROOT / "operations/scripts/restore-verify.sh").read_text(encoding="utf-8")
 
-    assert "storage-publisher-final-2026-09-08-r3" in restore
+    assert "storage-publisher-final-2026-09-08-r4" in restore
     assert "SELECT contract_id FROM ops_and_admin.schema_contract" in restore
     assert "flyway_schema_history" not in restore
     assert "'schemaContract'" in restore
