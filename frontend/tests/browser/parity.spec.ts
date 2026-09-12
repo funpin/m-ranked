@@ -122,13 +122,14 @@ for(const path of ["/posts/1","/platform-posts/1"]) {
   test(`${path} real history controls, archive, reactions and keyboard`,async({page}) => {
     await page.goto(path);
     await expect(page.getByRole("heading",{name:"Сохранённый текст публикации"})).toBeVisible();
-    await expect(page.locator(".archived-publication-text")).toHaveText("Сохранённый текст <script>без исполнения</script>");
-    await expect(page.locator("canvas").first()).toHaveAttribute("data-chart-ready","true");
-    await page.locator("canvas").first().focus();await page.keyboard.press("End");
+    await expect(page.getByTestId("archived-publication-text")).toHaveText("Сохранённый текст <script>без исполнения</script>");
+    const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
+    await expect(chart).toHaveAttribute("data-chart-ready","true");
+    await chart.focus();await page.keyboard.press("End");
     await expect(page.getByRole("tooltip")).toContainText(["155"]);
     await page.keyboard.press("Escape");
     const auto=page.getByRole("button",{name:"Авто",exact:true}).first();await auto.click();await expect(auto).toHaveAttribute("aria-pressed","true");await page.reload();await expect(page.getByRole("button",{name:"Авто",exact:true}).first()).toHaveAttribute("aria-pressed","true");
-    await page.locator(".snapshot-jump").last().click();await expect(page.locator(".snapshot-highlight")).toHaveCount(1);
+    await page.getByTestId("snapshot-jump").last().click();await expect(page.locator("tr[data-selected]")).toHaveCount(1);
     if(path === "/posts/1") {await expect(page.locator("tbody tr")).toHaveCount(100);await page.getByRole("link",{name:"загрузить всю историю"}).click();await expect(page).toHaveURL(/history_limit=3000$/);await expect(page.locator("tbody tr")).toHaveCount(160);}
     expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
   });

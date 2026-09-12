@@ -12,12 +12,14 @@
 @import "./_migration.css" layer(legacy);
 
 @layer legacy {
-  /* The ported stylesheet colours bare button, input and select elements with
-     a direct declaration, and a direct declaration beats the inherited value
-     that shadcn's ghost and outline variants rely on - which layer order
-     cannot fix. Every shadcn component carries data-slot, so those elements
-     are handed back to the theme here. Removed with legacy.css. */
-  button[data-slot], input[data-slot], select[data-slot], textarea[data-slot], a[data-slot] {
+  /* The ported stylesheet paints every bare button, input and select with a
+     direct declaration, and a direct declaration beats the inherited value the
+     redrawn controls rely on - which layer order cannot fix. Colour is handed
+     back to the theme here; the ported padding, radius and font still apply,
+     and any redrawn control overrides those from the utilities layer.
+     Screens not yet converted lose only the filled button colour meanwhile.
+     Removed with legacy.css. */
+  button, input, select, textarea {
     color: inherit;
     background-color: transparent;
     border-color: var(--border);

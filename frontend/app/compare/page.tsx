@@ -190,7 +190,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
       <Card className="mt-6">
         <CardHeader className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <CardTitle className="font-heading text-lg">{primaryHeading}</CardTitle>
+            <CardTitle as="h2" className="font-heading text-lg">{primaryHeading}</CardTitle>
             <CardDescription className="mt-2">{platform === "telegram" ? "Точка — медиана на конкретном целом часу после публикации. Нажмите на вуз в легенде, чтобы скрыть или вернуть его линию." : "Точка — медиана на конкретном целом часу. Линии можно скрывать в легенде."}</CardDescription>
           </div>
           <Badge variant="secondary" className="shrink-0 rounded-full font-semibold">Первые {periodLabel}</Badge>
@@ -202,7 +202,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
       <Card className="mt-5">
         <CardHeader className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <CardTitle className="font-heading text-lg">{engagementHeading}</CardTitle>
+            <CardTitle as="h2" className="font-heading text-lg">{engagementHeading}</CardTitle>
             <CardDescription className="mt-2">{platform === "telegram" ? "Точка — медиана отношений «реакции / просмотры» у отдельных постов на конкретном часу. Линии включаются и выключаются общей легендой выше." : `Медиана отношений «лайки + комментарии${platform === "vk" ? " + репосты" : ""} / просмотры» у отдельных публикаций ${platformLabel}.`}</CardDescription>
           </div>
           <Badge variant="secondary" className="shrink-0 rounded-full font-semibold">Первые {periodLabel}</Badge>

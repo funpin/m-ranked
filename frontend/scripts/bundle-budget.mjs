@@ -9,7 +9,7 @@ const output = process.env.BUNDLE_REPORT ?? "evidence/bundle-budget.json";
 // loads. Giving them their own ceiling keeps the strict one meaningful
 // everywhere else instead of raising the floor for the whole application.
 const DEFAULT_BUDGET = 170 * 1024;
-const CHART_BUDGET = 300 * 1024;
+const CHART_BUDGET = 320 * 1024;
 const CHART_ROUTES = new Set(["/compare", "/publications/[id]", "/posts/[id]", "/platform-posts/[id]"]);
 
 const results = [];

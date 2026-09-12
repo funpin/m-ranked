@@ -4,10 +4,14 @@ import { cn } from "cn"
 function Card({
   className,
   size = "default",
+  // A card that names itself is a landmark; one that only groups visuals is
+  // not. The element is chosen at the call site so the document outline stays
+  // honest either way.
+  as: Component = "div",
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+}: React.ComponentProps<"div"> & { size?: "default" | "sm"; as?: "div" | "section" | "article" }) {
   return (
-    <div
+    <Component
       data-slot="card"
       data-size={size}
       className={cn(
@@ -32,9 +36,13 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+function CardTitle({ className, as: Component = "div", ...props }: React.ComponentProps<"div"> & {
+  /** Panels that head a section of the page carry a real heading, so the
+   *  document outline and heading navigation keep working. */
+  as?: "div" | "h2" | "h3"
+}) {
   return (
-    <div
+    <Component
       data-slot="card-title"
       className={cn("font-heading text-sm font-medium", className)}
       {...props}
