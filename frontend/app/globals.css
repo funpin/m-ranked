@@ -1,37 +1,6 @@
-/* Declared before Tailwind so the order is fixed: the ported legacy rules sit
-   above Tailwind's preflight, which keeps screens that have not been redrawn
-   yet intact, and below components and utilities, so every shadcn component
-   wins over legacy's bare element selectors (button, input, table, body). */
-@layer theme, base, legacy, components, utilities;
-
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-
-/* Removed together with legacy.css once the last screen is converted. */
-@import "./_migration.css" layer(legacy);
-
-@layer legacy {
-  /* The ported stylesheet paints every bare button, input and select with a
-     direct declaration, and a direct declaration beats the inherited value the
-     redrawn controls rely on - which layer order cannot fix. Colour is handed
-     back to the theme here; the ported padding, radius and font still apply,
-     and any redrawn control overrides those from the utilities layer.
-     Screens not yet converted lose only the filled button colour meanwhile.
-     Removed with legacy.css. */
-  button, input, select, textarea {
-    color: inherit;
-    background-color: transparent;
-    border-color: var(--border);
-  }
-}
-
-/* Unlayered, so it outranks the ported body rule: the page ground has to come
-   from the theme even while both stylesheets are loaded. Removed with legacy.css. */
-body {
-  background-color: var(--background);
-  color: var(--foreground);
-}
 
 /* The theme lives on <html data-theme>, set by the inline script in layout.tsx
    before first paint. Tailwind's dark variant follows that attribute rather
@@ -62,7 +31,8 @@ body {
   --muted-foreground: oklch(0.53 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Destructive text also appears on its own 10–20% tint; keep AA there. */
+  --destructive: oklch(0.52 0.215 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);

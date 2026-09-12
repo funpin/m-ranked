@@ -1,4 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
+import { buttonVariants } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -66,4 +67,9 @@ export function NativeSegments({ name, options, value, legend }: {
       </div>
     </fieldset>
   );
+}
+
+/** Keeps native submit, validation and disabled behavior, including without JS. */
+export function NativeButton({ className, variant = "default", ...props }: ComponentProps<"button"> & { variant?: "default" | "outline" | "destructive" }) {
+  return <button className={cn(buttonVariants({ variant }), "min-h-9 px-3", className)} {...props} />;
 }

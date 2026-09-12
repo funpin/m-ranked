@@ -73,9 +73,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="ru" data-theme="dark" data-scroll-behavior="smooth" suppressHydrationWarning className={cn(sans.variable, heading.variable)}>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
-        <a className="skip-link" href="#main-content">Перейти к содержимому</a>
+        <a className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[300] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring" href="#main-content">Перейти к содержимому</a>
         <Suspense><SiteHeader initialPlatform={activePlatform} /></Suspense>
-        <main id="main-content" className="page-shell">{children}</main>
+        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6 lg:px-10">{children}</main>
       </body>
     </html>
   );

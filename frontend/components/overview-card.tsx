@@ -152,6 +152,7 @@ export function OverviewCard({ item, integrationWarning }: { item: OverviewItem;
   }
   return (
     <Link
+      data-testid="platform-overview-card"
       className={cn(CARD, "hover:border-ring/40 no-underline hover:z-30 hover:-translate-y-0.5 hover:shadow-lg hover:no-underline focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none")}
       href={activityHref(item)}
       prefetch={false}
