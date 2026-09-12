@@ -1,136 +1,305 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import type { CompactChart as Chart } from "@mranked/legacy-chart";
-import { comparisonPointSegments } from "@/lib/comparison-chart-data";
+import { useCallback, useDeferredValue, useId, useMemo, useRef, useState } from "react";
+import { CartesianGrid, Line, LineChart, ReferenceDot, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
+import { comparisonEvidence, comparisonRows, seriesKey } from "@/lib/comparison-chart-data";
 import { useComparisonVisibility } from "./comparison-visibility";
+import { cn } from "@/lib/utils";
 import { formatCoverage, formatMetric, formatPercentage } from "@/lib/format";
 import { metricNumber } from "@/lib/params";
-import type { ComparisonSeries } from "@/lib/types";
+import type { ComparisonPoint, ComparisonSeries } from "@/lib/types";
 
-const COLORS = ["#0868df", "#16a085", "#e67e22", "#c13b4f", "#7b61c9", "#00838f", "#ef6c00", "#5c6bc0", "#2e7d32", "#ad1457", "#6d4c41", "#3949ab", "#00897b", "#f4511e", "#8e24aa", "#039be5", "#7cb342", "#d81b60"];
-type Point = { x: number; y: number | null };
-type LineChart = Chart<"line", Point[]>;
+/** Eighteen separated hues, cycled. One line per selected entity. */
+const SERIES_COLORS = Array.from({ length: 18 }, (_, index) => `var(--chart-${index + 1})`);
 
-export function ComparisonChart({ series, horizonHours, maximumHour:providedMaximumHour,label, axisLabel=label, metricWord="реакций", valueFormat = "metric", cohortKind = "primary", showLegend = true }: {
+/** Axis ceiling, rounded the way the inherited plot rounded it. */
+function niceCeiling(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  const power = 10 ** Math.floor(Math.log10(value));
+  const fraction = value / power;
+  return (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * power;
+}
+
+export function ComparisonChart({
+  series, horizonHours, maximumHour: providedMaximumHour, label, axisLabel = label,
+  metricWord = "реакций", valueFormat = "metric", cohortKind = "primary", showLegend = true,
+}: {
   series: ComparisonSeries[]; horizonHours: number; label: string;
-  axisLabel?:string;metricWord?:string;maximumHour?:number;
+  axisLabel?: string; metricWord?: string; maximumHour?: number;
   valueFormat?: "metric" | "percentage"; cohortKind?: "primary" | "engagement"; showLegend?: boolean;
 }) {
   const { hidden, toggle } = useComparisonVisibility();
-  const hiddenRef = useRef(hidden);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const chart = useRef<LineChart | null>(null);
-  const active = useRef({ datasetIndex: 0, index: 0 });
-  const [ready, setReady] = useState(false);
-  const [tooltip, setTooltip] = useState<string | null>(null);
+  // The legend reacts at once while the plot, which is the expensive half,
+  // catches up in a lower priority render.
+  const deferredHidden = useDeferredValue(hidden);
   const id = useId();
+  const plot = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<string | null>(null);
+  const [focused, setFocused] = useState<{ selectionId: string; hour: number } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    let observer: MutationObserver | undefined;
-    // The local, pinned legacy version is loaded only by routes with charts.
-    void import("@/lib/chart-line").then(({ default: ChartJS }) => {
-      if (cancelled || !canvas.current) return;
-      const css = getComputedStyle(document.documentElement);
-      const applyTheme=()=>{const light=document.documentElement.dataset.theme==="light";ChartJS.defaults.color=light?"#667085":"#98a6ba";ChartJS.defaults.borderColor=light?"rgba(102,112,133,.18)":"rgba(152,166,186,.18)";Object.assign(ChartJS.defaults.plugins.tooltip,{backgroundColor:light?"#161a22":"#05080d",titleColor:"#f4f7fb",bodyColor:light?"#e5eaf2":"#d8e1ed",borderColor:light?"#344054":"#33445b",borderWidth:1});};
-      applyTheme();
-      let lastObserved=1;for(const item of series)for(const point of item.points)if(point.value!==null)lastObserved=Math.max(lastObserved,point.hourOffset);
-      const maximumHour = Math.min(horizonHours,providedMaximumHour??lastObserved+1);
-      const instance = new ChartJS<"line", Point[]>(canvas.current, {
-        type: "line",
-        data: { datasets: series.map((item, index) => ({ label: item.selectionLabel,
-          data: comparisonPointSegments(item.points).flatMap((segment, segmentIndex) => [
-            ...(segmentIndex ? [{ x: segment[0]!.hourOffset - 0.5, y: null }] : []),
-            ...segment.map((point) => ({ x: point.hourOffset, y: point.numericValue })),
-          ]),
-          hidden: hiddenRef.current.has(item.selectionId), borderColor: COLORS[index % COLORS.length], backgroundColor: `${COLORS[index % COLORS.length]}22`,
-          spanGaps: false, tension: 0.15, pointRadius: 4, pointHoverRadius: 7, borderWidth: 3,
-        })) },
-        options: { responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
-          color: css.getPropertyValue("--legacy-muted"), interaction: { mode: "nearest", intersect: false },
-          plugins: { legend: { display: false }, tooltip: { callbacks: {
-            title: (items) => items.length ? `Через ${items[0]!.parsed.x} ч после публикации` : "",
-            label: (item) => `${item.dataset.label}: ${valueFormat === "percentage" ? `${item.parsed.y?.toFixed(2)}%` : `${Math.round(item.parsed.y ?? 0)} ${metricWord}`}`,
-            afterLabel: (item) => { const count=series[item.datasetIndex]?.points.find((point) => point.hourOffset === item.parsed.x)?.sampleSize ?? 0;return `Выборка: ${count} ${count===1 ? "публикация" : count>=2&&count<=4 ? "публикации" : "публикаций"}`; },
-          } } },
-          scales: { x: { type: "linear", min: 0, max: maximumHour, title: { display: true, text: "Часов после публикации" }, ticks: { precision: 0 } },
-            y: { beginAtZero: true, title: { display: true, text: axisLabel }, ticks: valueFormat === "percentage" ? { callback: value => `${value}%` } : { precision: 0 } } },
-        },
-      });
-      chart.current = instance;
-      observer = new MutationObserver(() => {
-        applyTheme();
-        // The inherited chart keeps resolved scale colors on a theme toggle.
-        instance.render();
-      });
-      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-      setReady(true);
+  const lastObserved = useMemo(() => {
+    let last = 1;
+    for (const item of series) for (const point of item.points) if (point.value !== null) last = Math.max(last, point.hourOffset);
+    return last;
+  }, [series]);
+  const maximumHour = Math.min(horizonHours, providedMaximumHour ?? lastObserved + 1);
+
+  const rows = useMemo(() => comparisonRows(series, maximumHour), [series, maximumHour]);
+  const evidence = useMemo(() => comparisonEvidence(series), [series]);
+
+  const config = useMemo(() => {
+    const value: ChartConfig = {};
+    series.forEach((item, index) => {
+      value[seriesKey(item.selectionId)] = { label: item.selectionLabel, color: SERIES_COLORS[index % SERIES_COLORS.length] };
     });
-    return () => { cancelled = true; observer?.disconnect(); chart.current?.destroy(); chart.current = null; };
-  }, [series, horizonHours,providedMaximumHour,label,axisLabel,metricWord,valueFormat]);
+    return value;
+  }, [series]);
 
-  useEffect(() => {
-    hiddenRef.current = hidden;
-    series.forEach((item, index) => chart.current?.setDatasetVisibility(index, !hidden.has(item.selectionId)));
-    chart.current?.update("none");
-  }, [hidden, series]);
+  // An explicit ceiling keeps the value/pixel mapping known, which is what the
+  // tooltip uses to resolve which line the pointer is nearest.
+  const axisMaximum = useMemo(() => {
+    let highest = 0;
+    for (const row of rows) for (const item of series) {
+      const candidate = row[seriesKey(item.selectionId)];
+      if (typeof candidate === "number") highest = Math.max(highest, candidate);
+    }
+    return niceCeiling(highest);
+  }, [rows, series]);
 
+  const show = useCallback(
+    (value: number | null) => (valueFormat === "percentage" ? formatPercentage(value) : formatMetric(value)),
+    [valueFormat],
+  );
+
+  const reading = useCallback((selectionId: string, hour: number) => {
+    const item = series.find((candidate) => candidate.selectionId === selectionId);
+    const point = evidence.get(selectionId)?.get(hour);
+    if (!item || !point) return null;
+    return `${item.selectionLabel} · Через ${hour} ч после публикации: ${show(point.value)} · Выборка: ${point.sampleSize}`;
+  }, [series, evidence, show]);
+
+  /** Arrow keys walk time and lines; Home and End jump to the ends. */
   function focusPoint(key?: string) {
-    const instance = chart.current;
-    if (!instance) return;
-    const visible = series.map((item, index) => ({ item, index })).filter(({ item }) => !hidden.has(item.selectionId));
-    if (!visible.length) { setTooltip("Все линии скрыты"); return; }
-    let selected = Math.max(0, visible.findIndex(({ index }) => index === active.current.datasetIndex));
-    if (key === "ArrowDown") selected = (selected + 1) % visible.length;
-    if (key === "ArrowUp") selected = (selected + visible.length - 1) % visible.length;
-    const current = visible[selected]!;
-    const points = current.item.points.map((point, index) => ({ point, index })).filter(({ point }) => point.value !== null);
-    if (!points.length) { setTooltip(`${current.item.selectionLabel}: нет доступных точек`); return; }
-    let index = Math.max(0, points.findIndex((point) => point.index === active.current.index));
-    if (key === "ArrowRight") index = Math.min(points.length - 1, index + 1);
-    if (key === "ArrowLeft") index = Math.max(0, index - 1);
-    if (key === "Home") index = 0;
-    if (key === "End") index = points.length - 1;
-    const selectedPoint = points[index]!;
-    active.current = { datasetIndex: current.index, index: selectedPoint.index };
-    const point = selectedPoint.point;
-    const x = instance.scales.x!.getPixelForValue(point.hourOffset);
-    const y = instance.scales.y!.getPixelForValue(metricNumber(point.value)!);
-    const chartIndex = instance.data.datasets[current.index]!.data.findIndex((candidate) => candidate.x === point.hourOffset);
-    const chartPoint = { datasetIndex: current.index, index: chartIndex };
-    instance.setActiveElements([chartPoint]);
-    instance.tooltip?.setActiveElements([chartPoint], { x, y });
-    // Active elements and tooltip already have their current coordinates.
-    instance.render();
-    setTooltip(`${current.item.selectionLabel} · Через ${point.hourOffset} ч после публикации: ${valueFormat === "percentage" ? formatPercentage(point.value) : formatMetric(point.value)} · Выборка: ${point.sampleSize}`);
+    const visible = series.filter((item) => !hidden.has(item.selectionId));
+    if (!visible.length) { setTooltip("Все линии скрыты"); setFocused(null); return; }
+    let line = Math.max(0, visible.findIndex((item) => item.selectionId === focused?.selectionId));
+    if (key === "ArrowDown") line = (line + 1) % visible.length;
+    if (key === "ArrowUp") line = (line + visible.length - 1) % visible.length;
+    const current = visible[line]!;
+    const hours = current.points.filter((point) => point.value !== null).map((point) => point.hourOffset);
+    if (!hours.length) { setTooltip(`${current.selectionLabel}: нет доступных точек`); setFocused(null); return; }
+    let at = Math.max(0, hours.indexOf(focused?.hour ?? hours[0]!));
+    if (key === "ArrowRight") at = Math.min(hours.length - 1, at + 1);
+    if (key === "ArrowLeft") at = Math.max(0, at - 1);
+    if (key === "Home") at = 0;
+    if (key === "End") at = hours.length - 1;
+    const hour = hours[at]!;
+    setFocused({ selectionId: current.selectionId, hour });
+    setTooltip(reading(current.selectionId, hour));
   }
 
-  function closeTooltip() {
-    chart.current?.setActiveElements([]);
-    chart.current?.tooltip?.setActiveElements([], { x: 0, y: 0 });
-    chart.current?.render();
-    setTooltip(null);
-  }
+  function closeTooltip() { setFocused(null); setTooltip(null); }
 
-  return <div className="compare-chart-wrap" role="region" aria-label={label}>
-    {showLegend ? <div className="chart-legend" role="list" aria-label="Легенда графика">
-      {series.map((item, index) => {
-        const last = item.points.filter((point) => point.value !== null).at(-1);
-        const cohortSize = cohortKind === "engagement" ? item.engagementCohortSize : item.primaryCohortSize;
-        return <div role="listitem" key={item.selectionId}><button type="button" className="legend-toggle" aria-pressed={!hidden.has(item.selectionId)}
-          aria-label={`${hidden.has(item.selectionId) ? "Вернуть" : "Скрыть"} линию: ${item.selectionLabel}`} onClick={() => toggle(item.selectionId)} title={last ? `${formatMetric(last.value)} · выборка ${last.sampleSize} из ${cohortSize} · покрытие ${formatCoverage(last.coverage)}` : "Нет доступных точек"}>
-          <span className="legend-swatch" style={{ backgroundColor: COLORS[index % COLORS.length] }} aria-hidden="true" />
-          <span className="legend-label">{item.selectionLabel}</span><small>{cohortSize} публикаций</small>
-        </button></div>;
-      })}
-    </div> : null}
-    <p id={`${id}-instructions`} className="sr-only">Клавиши влево и вправо выбирают время; вверх и вниз — линию. Home и End — первая и последняя точка. Escape закрывает подсказку.</p>
-    <div className="local-chart"><canvas ref={canvas} role="img" tabIndex={0} aria-label={label} aria-describedby={`${id}-instructions ${id}-tooltip`} data-chart-ready={ready}
-      onFocus={() => focusPoint()} onBlur={closeTooltip} onKeyDown={(event) => {
-        if (event.key === "Escape") { closeTooltip(); return; }
-        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) { event.preventDefault(); focusPoint(event.key); }
-      }}>Значения и размер выборки каждого ряда приведены в легенде выше.</canvas></div>
-    <div id={`${id}-tooltip`} role="tooltip" className="chart-tooltip" aria-hidden={!tooltip}>{tooltip || "\u00a0"}</div>
-  </div>;
+  const focusedIndex = focused ? series.findIndex((item) => item.selectionId === focused.selectionId) : -1;
+  const focusedValue = focused ? metricNumber(evidence.get(focused.selectionId)?.get(focused.hour)?.value ?? null) : null;
+
+  return (
+    <div className="min-w-0" role="region" aria-label={label}>
+      {showLegend ? (
+        <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3" role="list" aria-label="Легенда графика">
+          {series.map((item, index) => {
+            const isHidden = hidden.has(item.selectionId);
+            const last = item.points.filter((point) => point.value !== null).at(-1);
+            const cohortSize = cohortKind === "engagement" ? item.engagementCohortSize : item.primaryCohortSize;
+            return (
+              <div role="listitem" key={item.selectionId}>
+                <button
+                  type="button"
+                  aria-pressed={!isHidden}
+                  aria-label={`${isHidden ? "Вернуть" : "Скрыть"} линию: ${item.selectionLabel}`}
+                  title={last
+                    ? `${formatMetric(last.value)} · выборка ${last.sampleSize} из ${cohortSize} · покрытие ${formatCoverage(last.coverage)}`
+                    : "Нет доступных точек"}
+                  onClick={() => toggle(item.selectionId)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-md border bg-card px-2.5 py-2 text-left text-foreground transition-colors",
+                    "hover:bg-accent focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
+                    isHidden && "opacity-55",
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-6 w-[3px] shrink-0 rounded-full"
+                    style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className={cn("block truncate font-semibold", isHidden && "line-through")}>{item.selectionLabel}</span>
+                    <span className="block text-[10px] font-semibold text-muted-foreground">{cohortSize} публикаций</span>
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <p id={`${id}-instructions`} className="sr-only">
+        Клавиши влево и вправо выбирают время; вверх и вниз — линию. Home и End — первая и последняя точка. Escape закрывает подсказку.
+      </p>
+
+      <div
+        ref={plot}
+        role="img"
+        tabIndex={0}
+        aria-label={label}
+        aria-describedby={`${id}-instructions ${id}-tooltip`}
+        data-chart-ready={rows.length > 0}
+        data-testid="comparison-chart"
+        className="h-[400px] w-full outline-none sm:h-[460px] lg:h-[560px] focus-visible:ring-ring/50 focus-visible:ring-[3px] rounded-md"
+        onFocus={() => focusPoint()}
+        onBlur={closeTooltip}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") { closeTooltip(); return; }
+          if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+            event.preventDefault();
+            focusPoint(event.key);
+          }
+        }}
+      >
+        <ChartContainer config={config} className="h-full w-full">
+          <LineChart data={rows} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+            <CartesianGrid vertical={false} />
+            <XAxis
+              dataKey="hour" type="number" domain={[0, maximumHour]} tickLine={false} axisLine={false} tickMargin={8}
+              label={{ value: "Часов после публикации", position: "insideBottom", offset: -6, fill: "var(--muted-foreground)" }}
+            />
+            <YAxis
+              domain={[0, axisMaximum]} tickLine={false} axisLine={false} tickMargin={8} width={56}
+              tickFormatter={(value: number) => (valueFormat === "percentage" ? `${value}%` : String(value))}
+              label={{ value: axisLabel, angle: -90, position: "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }}
+            />
+            <ChartTooltip
+              cursor={{ strokeDasharray: "4 4" }}
+              content={(props) => (
+                <NearestSeriesTooltip
+                  {...props}
+                  axisMaximum={axisMaximum}
+                  config={config}
+                  evidence={evidence}
+                  hidden={deferredHidden}
+                  metricWord={metricWord}
+                  valueFormat={valueFormat}
+                />
+              )}
+            />
+            {series.map((item, index) => (
+              <Line
+                key={item.selectionId}
+                dataKey={seriesKey(item.selectionId)}
+                hide={deferredHidden.has(item.selectionId)}
+                type="monotone"
+                stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
+                strokeWidth={2}
+                // Point markers on this plot are 337 per line; they merge into
+                // noise and cost two orders of magnitude in DOM nodes.
+                dot={false}
+                activeDot={{ r: 4 }}
+                connectNulls={false}
+                isAnimationActive
+                animationDuration={420}
+              />
+            ))}
+            {focused && focusedValue !== null && focusedIndex >= 0 ? (
+              <ReferenceDot
+                x={focused.hour}
+                y={focusedValue}
+                r={6}
+                fill={SERIES_COLORS[focusedIndex % SERIES_COLORS.length]}
+                stroke="var(--background)"
+                strokeWidth={2}
+              />
+            ) : null}
+          </LineChart>
+        </ChartContainer>
+      </div>
+
+      <div
+        id={`${id}-tooltip`}
+        role="tooltip"
+        aria-hidden={!tooltip}
+        className={cn("text-sm text-muted-foreground", tooltip ? "py-2" : "sr-only")}
+      >
+        {tooltip || " "}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The inherited plot resolved the pointer to the single nearest point rather
+ * than listing every series crossing that hour, which at this selection size
+ * would be a list of two hundred rows. The axis ceiling is fixed, so the
+ * pointer's own value is known and the nearest line follows from it.
+ */
+function NearestSeriesTooltip({
+  active, payload, label, coordinate, viewBox, axisMaximum, config, evidence, hidden, metricWord, valueFormat,
+}: {
+  active?: boolean;
+  payload?: readonly { dataKey?: unknown; value?: unknown; name?: unknown }[];
+  label?: unknown;
+  coordinate?: { x?: number; y?: number };
+  viewBox?: { y?: number; height?: number };
+  axisMaximum: number;
+  config: ChartConfig;
+  evidence: Map<string, Map<number, ComparisonPoint>>;
+  hidden: Set<string>;
+  metricWord: string;
+  valueFormat: "metric" | "percentage";
+}) {
+  if (!active || !payload?.length || typeof label !== "number") return null;
+
+  const visible = payload
+    .map((entry) => ({
+      key: typeof entry.dataKey === "string" ? entry.dataKey : "",
+      value: typeof entry.value === "number" ? entry.value : null,
+    }))
+    .filter((entry): entry is { key: string; value: number } =>
+      entry.key !== "" && entry.value !== null && !hidden.has(entry.key.slice(1)));
+  if (!visible.length) return null;
+
+  const height = viewBox?.height ?? 0;
+  const top = viewBox?.y ?? 0;
+  const pointerValue = height > 0 && typeof coordinate?.y === "number"
+    ? axisMaximum * (1 - (coordinate.y - top) / height)
+    : null;
+
+  const nearest = pointerValue === null
+    ? visible[0]!
+    : visible.reduce((best, entry) =>
+        Math.abs(entry.value - pointerValue) < Math.abs(best.value - pointerValue) ? entry : best);
+
+  const key = nearest.key;
+  const selectionId = key.slice(1);
+  const point = evidence.get(selectionId)?.get(label);
+  const sampleSize = point?.sampleSize ?? 0;
+  const plural = sampleSize === 1 ? "публикация" : sampleSize >= 2 && sampleSize <= 4 ? "публикации" : "публикаций";
+
+  return (
+    <div className="border-border/50 bg-background grid min-w-[10rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
+      <div className="font-medium">Через {label} ч после публикации</div>
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+          style={{ backgroundColor: config[key]?.color }}
+        />
+        <span className="text-muted-foreground min-w-0 flex-1 truncate">{config[key]?.label}</span>
+        <span className="text-foreground font-mono font-medium tabular">
+          {valueFormat === "percentage" ? `${nearest.value.toFixed(2)}%` : `${Math.round(nearest.value)} ${metricWord}`}
+        </span>
+      </div>
+      <div className="text-muted-foreground">Выборка: {sampleSize} {plural}</div>
+    </div>
+  );
 }

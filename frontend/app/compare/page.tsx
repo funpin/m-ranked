@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import { ComparisonSelector } from "@/components/comparison-selector";
 import { ComparisonVisibility } from "@/components/comparison-visibility";
 import { ComparisonChart } from "@/components/comparison-chart";
-import { ApiFailureState, EmptyState, PageHeader } from "@/components/ui";
+import { ApiFailureState, EmptyState, InfoNotice, PageHeader } from "@/components/ui";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, ApiError } from "@/lib/api";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import {
@@ -127,36 +130,87 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
   const primaryHeading = aggregation === "median" && ["reactions", "views"].includes(metric) ? `Типичное накопление ${primaryWord}` : `${metricLabels[metric]} · ${aggregation === "median" ? "медиана" : "сумма"}`;
   const periodLabel = {24:"24 часа",48:"48 часов",72:"72 часа",168:"7 дней",336:"14 дней"}[hours];
   return <>
-    <h1>{platform === "telegram" ? "Сравнение каналов" : `Сравнение · ${platformLabel}`}</h1>
-    <p className="lead">{platform === "telegram" ? "Сравните, как аудитория разных вузов реагирует на публикации в первые часы и дни после выхода." : `Сравните, как публикации вузов набирают лайки и вовлечённость в ${platformLabel} после выхода.`}</p>
-    <form className="panel selector-panel compare-selector" action="/compare" method="get" aria-label="Настройка сравнения">
-      <input type="hidden" name="submitted" value="true" /><input type="hidden" name="platform" value={platform} />
-      {requestedMetric ? <input type="hidden" name="metric" value={metric} /> : null}
-      {requestedAggregation ? <input type="hidden" name="aggregation" value={aggregation} /> : null}
-      <ComparisonSelector key={retryHref} candidates={candidates} selected={acceptedIds} type={requestedSelection.type} query={query} platformLabel={platformLabel}>
-        <div className="selector-footer">
-          <label>Период после публикации<br /><select name="period" defaultValue={hours}><option value="24">24 часа</option><option value="48">48 часов</option><option value="72">72 часа</option><option value="168">7 дней</option><option value="336">14 дней</option></select></label>
-          <label><input name="include_partial" value="true" type="checkbox" defaultChecked={includePartial} /> Включить публикации с неполной историей</label>
-          <button type="submit">Показать сравнение</button>
-        </div>
-      </ComparisonSelector>
-    </form>
-    <section className="help-grid compare-help" aria-label="Как читать сравнение">
-      <div className="explain"><b>{primaryHeading}</b>{platform === "telegram" ? "Одна линия — один канал и одна неизменная выборка публикаций на всём горизонте. Точка показывает медианное число реакций на соответствующем целом часу." : `Одна линия — один вуз и одна неизменная выборка публикаций ${platformLabel} на всём горизонте. Точка — медианное число ${primaryWord} на соответствующем целом часу.`}</div>
-      <div className="explain"><b>{engagementHeading}</b>{platform === "telegram" ? "Для каждого поста рассчитывается отношение реакций к просмотрам, затем для каждого часа берётся медиана этих процентов по каналу. Это отношение количества реакций, а не точное число людей: один пользователь Telegram Premium может оставить несколько реакций." : `Для каждой публикации: (лайки + комментарии${platform === "vk" ? " + репосты" : ""}) / просмотры. На графике показана медиана этих процентов по неизменной выборке.`}</div>
+    <PageHeader
+      title={platform === "telegram" ? "Сравнение каналов" : `Сравнение · ${platformLabel}`}
+      description={platform === "telegram"
+        ? "Сравните, как аудитория разных вузов реагирует на публикации в первые часы и дни после выхода."
+        : `Сравните, как публикации вузов набирают лайки и вовлечённость в ${platformLabel} после выхода.`}
+    />
+
+    <Card className="mb-5">
+      <CardContent>
+        <form action="/compare" method="get" aria-label="Настройка сравнения">
+          <input type="hidden" name="submitted" value="true" /><input type="hidden" name="platform" value={platform} />
+          {requestedMetric ? <input type="hidden" name="metric" value={metric} /> : null}
+          {requestedAggregation ? <input type="hidden" name="aggregation" value={aggregation} /> : null}
+          <ComparisonSelector key={retryHref} candidates={candidates} selected={acceptedIds} type={requestedSelection.type} query={query} platformLabel={platformLabel}>
+            <div className="flex flex-wrap items-end gap-x-5 gap-y-3 pt-1">
+              <label className="grid gap-1.5 text-sm">
+                <span className="text-muted-foreground font-medium">Период после публикации</span>
+                {/* Native select: the form submits by GET and the browser
+                    restores this control on back and forward navigation. */}
+                <select
+                  name="period"
+                  defaultValue={hours}
+                  className="border-input bg-transparent dark:bg-input/30 h-9 rounded-md border px-3 py-1 text-sm shadow-xs focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                >
+                  <option value="24">24 часа</option><option value="48">48 часов</option><option value="72">72 часа</option><option value="168">7 дней</option><option value="336">14 дней</option>
+                </select>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input name="include_partial" value="true" type="checkbox" defaultChecked={includePartial} className="accent-primary size-4" />
+                Включить публикации с неполной историей
+              </label>
+              <Button type="submit" className="ml-auto">Показать сравнение</Button>
+            </div>
+          </ComparisonSelector>
+        </form>
+      </CardContent>
+    </Card>
+
+    <section className="mb-5 grid gap-3 md:grid-cols-2" aria-label="Как читать сравнение">
+      <Card className="bg-muted/40 shadow-none">
+        <CardContent className="text-muted-foreground text-sm">
+          <b className="text-foreground mb-1 block font-semibold">{primaryHeading}</b>
+          {platform === "telegram" ? "Одна линия — один канал и одна неизменная выборка публикаций на всём горизонте. Точка показывает медианное число реакций на соответствующем целом часу." : `Одна линия — один вуз и одна неизменная выборка публикаций ${platformLabel} на всём горизонте. Точка — медианное число ${primaryWord} на соответствующем целом часу.`}
+        </CardContent>
+      </Card>
+      <Card className="bg-muted/40 shadow-none">
+        <CardContent className="text-muted-foreground text-sm">
+          <b className="text-foreground mb-1 block font-semibold">{engagementHeading}</b>
+          {platform === "telegram" ? "Для каждого поста рассчитывается отношение реакций к просмотрам, затем для каждого часа берётся медиана этих процентов по каналу. Это отношение количества реакций, а не точное число людей: один пользователь Telegram Premium может оставить несколько реакций." : `Для каждой публикации: (лайки + комментарии${platform === "vk" ? " + репосты" : ""}) / просмотры. На графике показана медиана этих процентов по неизменной выборке.`}
+        </CardContent>
+      </Card>
     </section>
-    <p className="notice">{platform === "telegram" ? <><b>{includePartial ? "Неполная история включена:" : "Полная история:"}</b> {includePartial ? "допускаются посты, найденные после стартового порога, если у них есть данные с первого часа до конца выбранного горизонта. Выборка внутри линии не меняется." : "учитываются публикации, замеченные не позднее чем через 6 минут после выхода и имеющие замеры на всём выбранном горизонте."}</> : <><b>Постоянная выборка:</b> публикация участвует во всех точках только при наличии истории до конца выбранного горизонта{!includePartial ? " и первого замера не позднее 6 минут после выхода" : ""}.</>}</p>
-    {omittedSelectionCount > 0 ? <p className="notice">Не сопоставлено и пропущено legacy ID: {omittedSelectionCount}.</p> : null}
-    {selectionIssue ? <EmptyState title="Выбор не принят" description={selectionMessages[selectionIssue]} /> : comparisonRejected ? <EmptyState title="Выбранный ряд недоступен" description={comparisonRejected} /> : comparisonFailed ? <ApiFailureState retryHref={retryHref} /> : !selectedCount ? <div className="panel empty-state mt"><span className="sr-only">Нечего сравнивать. </span>Выберите хотя бы один {entitySingular} и нажмите «Показать сравнение».</div> : !selectedSeries.some((series) => series.points.some((point) => point.value !== null)) ? <div className="panel empty-state mt">Для выбранных {entityPlural} пока недостаточно замеров {platform === "telegram" ? "" : `${platformLabel} `}на всём горизонте. Выберите более короткий период или дождитесь накопления истории.</div> : null}
+
+    <InfoNotice>{platform === "telegram" ? <><b>{includePartial ? "Неполная история включена:" : "Полная история:"}</b> {includePartial ? "допускаются посты, найденные после стартового порога, если у них есть данные с первого часа до конца выбранного горизонта. Выборка внутри линии не меняется." : "учитываются публикации, замеченные не позднее чем через 6 минут после выхода и имеющие замеры на всём выбранном горизонте."}</> : <><b>Постоянная выборка:</b> публикация участвует во всех точках только при наличии истории до конца выбранного горизонта{!includePartial ? " и первого замера не позднее 6 минут после выхода" : ""}.</>}</InfoNotice>
+    {omittedSelectionCount > 0 ? <InfoNotice>Не сопоставлено и пропущено legacy ID: {omittedSelectionCount}.</InfoNotice> : null}
+    {selectionIssue ? <EmptyState title="Выбор не принят" description={selectionMessages[selectionIssue]} /> : comparisonRejected ? <EmptyState title="Выбранный ряд недоступен" description={comparisonRejected} /> : comparisonFailed ? <ApiFailureState retryHref={retryHref} /> : !selectedCount ? <EmptyState title="Нечего сравнивать" description={`Выберите хотя бы один ${entitySingular} и нажмите «Показать сравнение».`} /> : !selectedSeries.some((series) => series.points.some((point) => point.value !== null)) ? <EmptyState title="Недостаточно замеров" description={`Для выбранных ${entityPlural} пока недостаточно замеров ${platform === "telegram" ? "" : `${platformLabel} `}на всём горизонте. Выберите более короткий период или дождитесь накопления истории.`} /> : null}
     {!comparisonFailed && !selectionIssue && !comparisonRejected ? <ComparisonVisibility key={retryHref}>
-      <div className="section"><section className="panel comparison-panel">
-        <div className="rating-panel-head"><div><h2>{primaryHeading}</h2><p className="panel-note">{platform === "telegram" ? "Точка — медиана на конкретном целом часу после публикации. Нажмите на вуз в легенде, чтобы скрыть или вернуть его линию." : "Точка — медиана на конкретном целом часу. Линии можно скрывать в легенде."}</p></div><span className="period-badge">Первые {periodLabel}</span></div>
-        <ComparisonChart series={selectedSeries} horizonHours={hours} maximumHour={maximumHour} label={primaryHeading} metricWord={primaryWord} axisLabel={`${platform === "telegram" ? "Реакций" : "Лайков"}, ${aggregation === "median" ? "медиана" : "сумма"}`} />
-      </section></div>
-      {<section className="panel comparison-panel mt">
-        <div className="rating-panel-head"><div><h2>{engagementHeading}</h2><p className="panel-note">{platform === "telegram" ? "Точка — медиана отношений «реакции / просмотры» у отдельных постов на конкретном часу. Линии включаются и выключаются общей легендой выше." : `Медиана отношений «лайки + комментарии${platform === "vk" ? " + репосты" : ""} / просмотры» у отдельных публикаций ${platformLabel}.`}</p></div><span className="period-badge">Первые {periodLabel}</span></div>
-        <ComparisonChart series={engagementSeries} horizonHours={hours} maximumHour={maximumHour} label={engagementHeading} axisLabel={`${platform === "telegram" ? "Реакции" : "Взаимодействия"} / просмотры, медиана`} valueFormat="percentage" cohortKind="engagement" showLegend={false} />
-      </section>}
+      <Card className="mt-6">
+        <CardHeader className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <CardTitle className="font-heading text-lg">{primaryHeading}</CardTitle>
+            <CardDescription className="mt-2">{platform === "telegram" ? "Точка — медиана на конкретном целом часу после публикации. Нажмите на вуз в легенде, чтобы скрыть или вернуть его линию." : "Точка — медиана на конкретном целом часу. Линии можно скрывать в легенде."}</CardDescription>
+          </div>
+          <Badge variant="secondary" className="shrink-0 rounded-full font-semibold">Первые {periodLabel}</Badge>
+        </CardHeader>
+        <CardContent>
+          <ComparisonChart series={selectedSeries} horizonHours={hours} maximumHour={maximumHour} label={primaryHeading} metricWord={primaryWord} axisLabel={`${platform === "telegram" ? "Реакций" : "Лайков"}, ${aggregation === "median" ? "медиана" : "сумма"}`} />
+        </CardContent>
+      </Card>
+      <Card className="mt-5">
+        <CardHeader className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <CardTitle className="font-heading text-lg">{engagementHeading}</CardTitle>
+            <CardDescription className="mt-2">{platform === "telegram" ? "Точка — медиана отношений «реакции / просмотры» у отдельных постов на конкретном часу. Линии включаются и выключаются общей легендой выше." : `Медиана отношений «лайки + комментарии${platform === "vk" ? " + репосты" : ""} / просмотры» у отдельных публикаций ${platformLabel}.`}</CardDescription>
+          </div>
+          <Badge variant="secondary" className="shrink-0 rounded-full font-semibold">Первые {periodLabel}</Badge>
+        </CardHeader>
+        <CardContent>
+          <ComparisonChart series={engagementSeries} horizonHours={hours} maximumHour={maximumHour} label={engagementHeading} axisLabel={`${platform === "telegram" ? "Реакции" : "Взаимодействия"} / просмотры, медиана`} valueFormat="percentage" cohortKind="engagement" showLegend={false} />
+        </CardContent>
+      </Card>
     </ComparisonVisibility> : null}
   </>;
 }

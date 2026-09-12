@@ -4,8 +4,8 @@ import AxeBuilder from "@axe-core/playwright";
 for (const platform of ["telegram", "vk", "max", "rutube"]) {
   test(`${platform} navigation preserves platform in every destination`, async ({ page }) => {
     await page.goto(`/?platform=${platform}`);
-    await expect(page.locator(".brand")).toHaveAttribute("href", `/?platform=${platform}`);
-    for (const link of await page.locator(".main-nav a").all()) {
+    await expect(page.getByTestId("brand")).toHaveAttribute("href", `/?platform=${platform}`);
+    for (const link of await page.getByTestId("main-nav").locator("a").all()) {
       expect(new URL((await link.getAttribute("href"))!, "http://test").searchParams.get("platform")).toBe(platform);
     }
   });
@@ -37,7 +37,7 @@ test("compare search, bulk controls, count, legend and focused point tooltip wor
   const legend = page.getByRole("button", { name: "Скрыть линию: Альфа Университет" }).first();
   await legend.focus(); await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "Вернуть линию: Альфа Университет" })).toHaveCount(1);
-  const point = page.locator("canvas").first();
+  const point = page.getByTestId("comparison-chart").first();
   await expect(point).toHaveAttribute("data-chart-ready", "true");
   await point.focus();
   await expect(page.getByRole("tooltip")).toContainText(["Выборка: 2"]);
@@ -86,7 +86,7 @@ for (const platform of ["telegram", "vk", "rutube"]) {
 test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?platform=vk");
-  const toggle = page.locator(".menu-toggle");
+  const toggle = page.getByTestId("menu-toggle");
   await toggle.click();
   await page.keyboard.press("Escape");
   await expect(toggle).toBeFocused();
@@ -105,7 +105,13 @@ for (const theme of ["dark", "light"]) {
   test(`overview and interactive compare meet axe AA in ${theme} theme`, async ({ page }) => {
     for (const path of ["/?platform=vk", "/compare?platform=vk&period=24"]) {
       await page.goto(path);
-      await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+      // Colour transitions are still running right after the attribute flips,
+      // and sampling mid-transition reports blended values that exist in
+      // neither theme. Let them settle before measuring the settled page.
+      await page.evaluate(async (value) => {
+        document.documentElement.dataset.theme = value;
+        await Promise.allSettled(document.getAnimations().map((animation) => animation.finished));
+      }, theme);
       const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(result.violations).toEqual([]);
     }
@@ -132,5 +138,5 @@ test("account list and institutional zero/one/many routes preserve identity",asy
   await page.goto("/institutions/1?platform=telegram");await expect(page).toHaveURL(/\/accounts\/00000001-0000-4000-8000-000000000001$/);
   await page.goto("/institutions/3?platform=telegram");await expect(page.getByText("Telegram-каналы вуза не добавлены.")).toBeVisible();
   await page.goto("/institutions/2?platform=telegram");await expect(page.locator(".platform-overview-card")).toHaveCount(2);
-  await page.goto("/platform-accounts/3");await expect(page.locator(".brand")).toHaveAttribute("href","/?platform=max");
+  await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/?platform=max");
 });

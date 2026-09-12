@@ -1,10 +1,35 @@
+/* Declared before Tailwind so the order is fixed: the ported legacy rules sit
+   above Tailwind's preflight, which keeps screens that have not been redrawn
+   yet intact, and below components and utilities, so every shadcn component
+   wins over legacy's bare element selectors (button, input, table, body). */
+@layer theme, base, legacy, components, utilities;
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Ported legacy styling for screens that have not been redrawn yet.
-   Removed together with legacy.css once the last screen is converted. */
-@import "./_migration.css";
+/* Removed together with legacy.css once the last screen is converted. */
+@import "./_migration.css" layer(legacy);
+
+@layer legacy {
+  /* The ported stylesheet colours bare button, input and select elements with
+     a direct declaration, and a direct declaration beats the inherited value
+     that shadcn's ghost and outline variants rely on - which layer order
+     cannot fix. Every shadcn component carries data-slot, so those elements
+     are handed back to the theme here. Removed with legacy.css. */
+  button[data-slot], input[data-slot], select[data-slot], textarea[data-slot], a[data-slot] {
+    color: inherit;
+    background-color: transparent;
+    border-color: var(--border);
+  }
+}
+
+/* Unlayered, so it outranks the ported body rule: the page ground has to come
+   from the theme even while both stylesheets are loaded. Removed with legacy.css. */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
 
 /* The theme lives on <html data-theme>, set by the inline script in layout.tsx
    before first paint. Tailwind's dark variant follows that attribute rather
@@ -29,7 +54,10 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* The preset's 0.556 gives 4.34:1 against --accent, just under AA. Muted
+     text on a muted or accent ground is common here, so the token is
+     darkened once: 4.75:1 on --accent and 5.17:1 on --background. */
+  --muted-foreground: oklch(0.53 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -195,5 +223,12 @@
   /* Measurements, ranks and deltas must not jitter while a value animates. */
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+  /* Set for one frame while the theme swaps, so colours change at once rather
+     than blending through values that belong to neither theme. */
+  :root[data-theme-switching] *,
+  :root[data-theme-switching] *::before,
+  :root[data-theme-switching] *::after {
+    transition: none !important;
   }
 }
