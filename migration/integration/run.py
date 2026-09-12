@@ -119,7 +119,7 @@ class Gate:
         if not cases or any(list(c.iter('skipped')) for c in cases):
             raise RuntimeError(f'{path.name}: required integration tests were skipped')
 
-    def run(self, *, python, maven, visual=False, semantic_only=False):
+    def run(self, *, python, maven, semantic_only=False):
         resolved_python=shutil.which(python)
         if resolved_python is None:
             raise FileNotFoundError('integration Python executable is unavailable')
@@ -143,7 +143,7 @@ class Gate:
             envfile.chmod(0o600)
             compose=['docker','compose','--project-name',project,'--env-file',str(envfile),'-f',str(ROOT/'infra/compose.yaml')]
             container=project+'-postgres-1'
-            dbnames=(('clean_it','second_clean_it','bridge_it') if visual or semantic_only else
+            dbnames=(('clean_it','second_clean_it','bridge_it') if semantic_only else
                      ('clean_it','second_clean_it','collector_it','catalog_it','anomaly_it'))
             def url(db): return f'jdbc:postgresql://127.0.0.1:{pg_port}/{db}'
             def dsn(db,role,key):
@@ -161,11 +161,10 @@ class Gate:
                 for db in dbnames[2:]:
                     self.command('final-schema-'+db,mvn+['-Pschema-integration','-Dtest=MigrationInstallationTest#installAdditionalDisposableRehearsalDatabase','test'],env=migration_env|{'MRANKED_REHEARSAL_INSTALL_URL':url(db)},cwd=ROOT/'backend')
                 self.command('redis-ping',['docker','exec',project+'-redis-1','sh','-c','REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli --no-auth-warning ping'])
-                if visual or semantic_only:
-                    self.visual(python=python,mvn=mvn,directory=Path(directory),database_url=url('bridge_it'),
+                if semantic_only:
+                    self.browser_semantics(python=python,mvn=mvn,directory=Path(directory),database_url=url('bridge_it'),
                                 bridge_dsn=dsn('bridge_it','migration_bridge','MIGRATION_BRIDGE_DB_PASSWORD'),
-                                inspect_dsn=dsn('bridge_it','migration_owner','MIGRATION_DB_PASSWORD'),
-                                capture_visual=not semantic_only)
+                                inspect_dsn=dsn('bridge_it','migration_owner','MIGRATION_DB_PASSWORD'))
                     return
                 # Bridge import, identity-history, preservation and reverse-sync
                 # rehearsals belong to the retired migration schema (see
@@ -252,12 +251,12 @@ class Gate:
                 # Names are random and created by this invocation; no external volumes accepted.
                 self.command('cleanup',compose+['down','--volumes','--remove-orphans'])
 
-    def visual(self, *, python, mvn, directory, database_url, bridge_dsn, inspect_dsn, capture_visual=True):
+    def browser_semantics(self, *, python, mvn, directory, database_url, bridge_dsn, inspect_dsn):
         """One browser runtime, two real servers, one immutable fixture and clock."""
         fixture=directory/'visual.sqlite'
         producer=ROOT/'frontend/scripts/legacy-fixture.py'
         self.command('visual-fixture',[python,str(producer),'--database',str(fixture),
-                                      *(['--overview-status-only'] if not capture_visual else [])])
+                                      '--overview-status-only'])
         manifest=fixture.with_suffix('.manifest.json')
         clock=json.loads(manifest.read_text())['clock']
         epoch=datetime.fromisoformat(clock).timestamp()
@@ -337,8 +336,6 @@ class Gate:
                 'VISUAL_RUNTIME_EVIDENCE':str(runtime_path),'NEXT_DIST_DIR':dist,
                 'VISUAL_OUTPUT':str(self.output/'visual'),'SEMANTIC_OUTPUT':str(self.output/'overview-semantics')}|auth
             self.command('overview-semantics',['node','--import','tsx','scripts/overview-semantic-parity.mts'],cwd=ROOT/'frontend',env=visual_env,timeout=1200)
-            if capture_visual:
-                self.command('visual-parity',['pnpm','test:visual'],cwd=ROOT/'frontend',env=visual_env,timeout=2400)
         finally:
             for server in reversed(servers):
                 server.terminate()
@@ -354,9 +351,8 @@ def main():
     parser.add_argument('--python',default=sys.executable)
     parser.add_argument('--maven',default=str(ROOT/'backend/mvnw'))
     browser_mode=parser.add_mutually_exclusive_group()
-    browser_mode.add_argument('--visual-only',action='store_true',help='Audit historical legacy pixels in disposable services; intentional UI changes can differ')
     browser_mode.add_argument('--semantic-only',action='store_true',help='Verify public data semantics against the frozen legacy corpus without requiring historical pixels')
     args=parser.parse_args()
-    Gate(args.output).run(python=args.python,maven=args.maven,visual=args.visual_only,semantic_only=args.semantic_only)
+    Gate(args.output).run(python=args.python,maven=args.maven,semantic_only=args.semantic_only)
 
 if __name__=='__main__': main()
