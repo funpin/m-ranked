@@ -76,6 +76,14 @@ body {
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
+  /* Status colours for text. The chart ramp is tuned for strokes, which need
+     3:1; small text needs 4.5:1, so semantic text keeps its own tokens. These
+     are the values this product already verified against AA, darkened so they
+     also clear 4.5:1 on their own 12-15% tint, which is how status chips are
+     drawn: 5.18:1 and 5.21:1 on tint, 6.17:1 and 6.51:1 on the page ground. */
+  --success: #076f51;
+  --warning: #8a5000;
+
   /* Series palette. 1-3 keep the meaning the product has always used:
      reactions green, views blue, comments amber. 4-18 continue the cycle for
      comparison plots, which draw one line per selected entity. */
@@ -130,6 +138,9 @@ body {
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
+  --success: #44d2a0;
+  --warning: #f5b95f;
+
   --chart-1: oklch(0.77 0.15 162);
   --chart-2: oklch(0.70 0.16 255);
   --chart-3: oklch(0.79 0.14 55);
@@ -169,6 +180,8 @@ body {
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

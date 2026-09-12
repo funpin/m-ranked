@@ -72,7 +72,7 @@ export function PublicationDetail({history,historyLimit=100,analysis=null,analys
           <span>Опубликовано: <b className="text-foreground font-semibold">{legacyDate(p.publishedAt,true)}</b> · история {p.historyCompleteness === "complete" ? "полная" : "неполная"} · тип: {postTypeLabel(p.publicationType)}{telegram ? "" : ` · ${PLATFORM_LONG_LABELS[p.platform]}`}</span>
           {p.deletedAt ? <StatusPill tone="red">удалена из {PLATFORM_LONG_LABELS[p.platform]}</StatusPill> : null}
           {p.repost ? <StatusPill tone="neutral">репост</StatusPill> : null}
-          {p.ambiguousAlbumReactions ? <span className="text-chart-3 font-medium">реакции элементов альбома различаются</span> : null}
+          {p.ambiguousAlbumReactions ? <span className="text-warning font-medium">реакции элементов альбома различаются</span> : null}
           {p.joint ? <StatusPill tone="blue">+{p.additionalAuthorCount} авт.</StatusPill> : null}
         </p>
       </div>

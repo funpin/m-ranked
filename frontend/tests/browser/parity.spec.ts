@@ -49,7 +49,7 @@ test("form sort direction, platform autosubmit and browser history preserve fiel
   await page.goto("/?platform=vk&sort=subscribers&direction=desc");
   await page.locator('select[name="sort"]').selectOption("name");
   await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
-  await page.locator('.segments label:has(input[value="rutube"])').click();
+  await page.getByTestId("platform-segments").locator('label:has(input[value="rutube"])').click();
   await expect(page).toHaveURL(/platform=rutube/);
   await expect(page.locator('select[name="sort"]')).toHaveValue("name");
   await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
@@ -138,6 +138,6 @@ test("account list and institutional zero/one/many routes preserve identity",asy
   await page.goto("/channels/1");await expect(page.locator("tbody tr")).toHaveCount(2);
   await page.goto("/institutions/1?platform=telegram");await expect(page).toHaveURL(/\/accounts\/00000001-0000-4000-8000-000000000001$/);
   await page.goto("/institutions/3?platform=telegram");await expect(page.getByText("Telegram-каналы вуза не добавлены.")).toBeVisible();
-  await page.goto("/institutions/2?platform=telegram");await expect(page.locator(".platform-overview-card")).toHaveCount(2);
+  await page.goto("/institutions/2?platform=telegram");await expect(page.getByTestId("platform-overview-card")).toHaveCount(2);
   await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/?platform=max");
 });

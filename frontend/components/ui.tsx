@@ -19,7 +19,7 @@ export function PageHeader({
 }: {
   eyebrow?: string;
   title: string;
-  description: string;
+  description?: ReactNode;
   meta?: ReactNode;
 }) {
   return (
@@ -28,7 +28,7 @@ export function PageHeader({
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="font-heading text-3xl leading-tight font-bold tracking-tight text-balance">{title}</h1>
-          <p className="text-muted-foreground mt-2 max-w-3xl text-base text-pretty">{description}</p>
+          {description ? <p className="text-muted-foreground mt-2 max-w-4xl text-base text-pretty [&_b]:text-foreground [&_b]:font-semibold">{description}</p> : null}
         </div>
         {meta ? <div className="shrink-0">{meta}</div> : null}
       </div>
@@ -109,8 +109,8 @@ export function DataProvenance({
 
 const PILL_TONES = {
   blue: "border-transparent bg-chart-2/12 text-chart-2",
-  green: "border-transparent bg-chart-1/12 text-chart-1",
-  amber: "border-transparent bg-chart-3/15 text-chart-3",
+  green: "border-transparent bg-success/12 text-success",
+  amber: "border-transparent bg-warning/15 text-warning",
   red: "border-transparent bg-destructive/12 text-destructive",
   neutral: "border-transparent bg-muted text-muted-foreground",
 } as const;
@@ -173,7 +173,7 @@ export function InfoNotice({ children, tone = "blue" }: {
         tone === "amber" ? "border-l-chart-3 bg-chart-3/8" : "border-l-chart-2 bg-chart-2/8",
       )}
     >
-      <AlertCircle className={cn("mt-0.5 size-4 shrink-0", tone === "amber" ? "text-chart-3" : "text-chart-2")} aria-hidden="true" />
+      <AlertCircle className={cn("mt-0.5 size-4 shrink-0", tone === "amber" ? "text-warning" : "text-chart-2")} aria-hidden="true" />
       <div className="min-w-0 [&_b]:font-semibold">{children}</div>
     </aside>
   );
