@@ -1,12 +1,12 @@
-import Link from "next/link";
+import Link from "@/components/native-link";
 
 export default function NotFound() {
   return (
     <section className="panel error-state">
       <span className="pill pill-amber">404</span>
       <h1>Данные не найдены</h1>
-      <p>Объект отсутствует в текущей ревизии данных или его legacy-ID больше не сопоставлен.</p>
-      <Link className="button-link" href="/">Вернуться к обзору</Link>
+      <p>По этому адресу нет доступной страницы.</p>
+      <Link className="button-link" href="/" prefetch={false}>Вернуться к обзору</Link>
     </section>
   );
 }

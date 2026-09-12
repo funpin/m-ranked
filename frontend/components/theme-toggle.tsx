@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 type Theme = "dark" | "light";
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("dark");
+function getTheme(): Theme { return document.documentElement.dataset.theme === "light" ? "light" : "dark"; }
+function subscribe(notify: () => void) {
+  const observer = new MutationObserver(notify);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => observer.disconnect();
+}
 
-  useEffect(() => {
-    const current = document.documentElement.dataset.theme === "light" ? "light" : "dark";
-    setTheme(current);
-  }, []);
+export function ThemeToggle() {
+  const theme = useSyncExternalStore(subscribe, getTheme, () => "dark" as const);
 
   function toggleTheme() {
     const next: Theme = theme === "dark" ? "light" : "dark";
@@ -20,14 +22,14 @@ export function ThemeToggle() {
     } catch {
       // A blocked storage API must not prevent the visible preference change.
     }
-    setTheme(next);
+
   }
 
   const nextLabel = theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему";
   return (
     <button className="theme-toggle" type="button" onClick={toggleTheme} aria-label={nextLabel}>
-      <span aria-hidden="true">{theme === "dark" ? "☾" : "☀"}</span>
-      <span className="theme-label">{theme === "dark" ? "Тёмная" : "Светлая"}</span>
+      <span className="theme-toggle-icon" aria-hidden="true">{theme === "dark" ? "☾" : "☀"}</span>
+      <span className="theme-toggle-label">{theme === "dark" ? "Тёмная" : "Светлая"}</span>
     </button>
   );
 }

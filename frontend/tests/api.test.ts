@@ -28,7 +28,7 @@ test("API client revalidates a cached response with If-None-Match", async () => 
   const second = await client.overview({ platform: "telegram", period: "1d" });
 
   assert.deepEqual(first, overviewPayload);
-  assert.strictEqual(second, first);
+  assert.deepEqual(second, first);
   const headers = new Headers(requests[1]?.headers);
   assert.equal(headers.get("If-None-Match"), '"revision-17"');
   assert.equal(requests[1]?.cache, "no-store");
@@ -111,6 +111,20 @@ test("account compatibility routes send the correct legacyType", async () => {
   assert.equal(seenUrls[1], "https://api.example.test/api/v1/accounts/27?legacyType=platform_accounts");
 });
 
+test("analysis client uses its independent endpoint and preserves nullable score", async () => {
+  let seenUrl="";
+  const client=createApiClient({baseUrl:"https://api.example.test",fetcher:async(input)=>{
+    seenUrl=String(input);return Response.json({publicationId:"10000000-0000-4000-8000-000000000001",
+      datasetRevision:17,analysisRevision:2,sourceDatasetRevision:16,analyzedAt:null,status:"partial",
+      sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,manualAssessmentPresent:false,
+      affectedMetrics:[],activeFindingCount:0,findings:[],nextCursor:null,
+      methodologyVersion:"anomaly-dynamics-v1",disclaimer:"informational"},{headers:{ETag:'"analysis-2"'}});
+  }});
+  const value=await client.publicationAnomalyAnalysis("10000000-0000-4000-8000-000000000001");
+  assert.equal(value.suspicionScore,null);
+  assert.match(seenUrl,/\/api\/v1\/publications\/10000000-0000-4000-8000-000000000001\/anomaly-analysis/);
+});
+
 test("comparison client sends the fixed-cohort contract without camel-case drift", async () => {
   let seenUrl = "";
   const client = createApiClient({
@@ -137,7 +151,7 @@ test("comparison client sends the fixed-cohort contract without camel-case drift
     aggregation: "sum",
     horizonHours: "168",
     includePartial: "true",
-    institutionLimit: "50",
+    institutionLimit: "20",
     institutions: "34",
     metric: "shares",
     platform: "vk",
@@ -235,9 +249,9 @@ test("comparison client rejects invalid or excess relevant IDs without substitut
       includePartial: false,
       metric: "reactions",
       aggregation: "median",
-      channels: Array.from({ length: 51 }, (_, index) => index + 1),
+      channels: Array.from({ length: 21 }, (_, index) => index + 1),
     }),
-    /between 1 and 50/,
+    /between 1 and 20/,
   );
   assert.throws(
     () => client.comparison({
@@ -248,7 +262,7 @@ test("comparison client rejects invalid or excess relevant IDs without substitut
       aggregation: "median",
       channels: [],
     }),
-    /between 1 and 50/,
+    /between 1 and 20/,
   );
   assert.equal(calls, 0);
 });

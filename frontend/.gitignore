@@ -1,5 +1,12 @@
-.next/
-node_modules/
-out/
-*.tsbuildinfo
-.env.local
+/test-results/
+/playwright-report/
+/.next/
+/node_modules/
+/tsconfig.tsbuildinfo
+/next-env.d.ts
+/.next-visual/
+/.next-review-*/
+/.next-browser-tests/
+/.next-public-*/
+/.next-performance-*/
+/.next-compact-*/

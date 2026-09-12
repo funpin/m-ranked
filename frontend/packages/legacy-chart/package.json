@@ -1,0 +1,13 @@
+{
+  "name": "@mranked/legacy-chart",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./index.ts",
+  "peerDependencies": {
+    "chart.js": "4.4.7"
+  },
+  "dependencies": {
+    "@kurkle/color": "0.3.4"
+  }
+}

@@ -39,8 +39,8 @@ export const PLATFORM_LONG_LABELS: Record<Platform, string> = {
 export const PERIOD_LABELS: Record<Period, string> = {
   "3h": "3 часа",
   "1d": "Сутки",
-  "7d": "7 дней",
-  "30d": "30 дней",
+  "7d": "Неделя",
+  "30d": "Последний месяц",
 };
 
 export function formatMetric(value: MetricValue, fraction = false): string {
@@ -82,3 +82,28 @@ export function qualityLabel(value: string | null | undefined): string {
       return value || "качество не указано";
   }
 }
+
+export function legacyDate(value: string | null | undefined, withZone = false): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false }).formatToParts(date);
+  const get = (name: string) => parts.find((part) => part.type === name)?.value;
+  return `${get("day")}.${get("month")}.${get("year")}, ${get("hour")}:${get("minute")}:${get("second")}${withZone ? " МСК" : ""}`;
+}
+export const PERIOD_SHORT = {"3h":"за 3 часа","1d":"за сутки","7d":"за неделю","30d":"за месяц"} as const;
+export function legacyNumber(value: MetricValue) { const n = metricNumber(value); return n === null ? "—" : String(n); }
+
+export function duration(seconds: number | null) {
+  if (seconds === null || !Number.isFinite(seconds)) return "—";
+  const minutes = Math.max(0, Math.round(seconds / 60));
+  const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60);
+  return `${days ? `${days} д ` : ""}${hours || days ? `${hours} ч ` : ""}${minutes % 60} мин`;
+}
+export function publicationLabel(externalId: string | null, platform: Platform) {
+  if (!externalId) return "—";
+  if (platform === "telegram") return `№${externalId}`;
+  if (platform === "vk" && /^-?\d+_\d+$/.test(externalId)) return `№${externalId.split("_").at(-1)}`;
+  return externalId;
+}
+export function postTypeLabel(value: string) { return ({text:"текст",photo:"фото",video:"видео",album:"альбом",document:"документ",poll:"опрос",webpage:"веб-страница",contact:"контакт",geo:"геолокация",media:"медиа"} as Record<string,string>)[value] ?? value; }
