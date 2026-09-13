@@ -1,36 +1,35 @@
--- Фаза A2: разовый пересчёт витрины последних значений.
+-- Фаза A3: досев витрины публикациями, которых в ней нет.
 --
--- На проде publisher остановлен, поэтому analytics.publication_latest отстала
--- и неполна: часть публикаций отсутствует в ней вовсе. Триггер из фазы A ведёт
--- витрину только по новым наблюдениям и отставание сам не закрывает. Этот
--- пересчёт закрывает его один раз; дальше витрину ведёт триггер.
+-- Массовый пересчёт всей витрины на живом проде упирается во взаимную
+-- блокировку: триггер из фазы A обновляет отдельные строки прямо во время
+-- прогона, и по горячему месяцу столкновение почти неизбежно.
 --
--- Семантика дословно та же, что у триггера: время, качество и флаги берутся из
--- последнего годного наблюдения, а каждая метрика — из последнего наблюдения,
--- где она не NULL.
+-- Обновлять существующие строки и не требуется. Витрина хранит последнее
+-- известное значение метрики; у публикации, которую перестали наблюдать, оно
+-- и должно оставаться прежним. Чинить надо только отсутствующие строки —
+-- иначе новый код показал бы по ним пустые метрики.
 --
--- Идёт помесячно: один проход по всем 8 млн строк выплёскивается во временные
--- файлы сверх temp_file_limit (512 МБ), а публикация целиком лежит в партиции
--- своего месяца, поэтому разбиение корректно.
---
--- Каждый месяц — отдельная транзакция с повтором при взаимной блокировке:
--- триггер обновляет отдельные строки витрины прямо во время пересчёта, и
--- массовый upsert с коллектором захватывают строки в разном порядке.
---
--- Идемпотентен: повторный запуск обновляет те же строки теми же значениями.
+-- Порции по 200 публикаций, упорядоченные по идентификатору, с повтором.
+-- ON CONFLICT DO NOTHING: если триггер успел завести строку сам, порция её
+-- не трогает.
 \set ON_ERROR_STOP on
 
-DO $backfill$
+DO $seed$
 DECLARE
-    month_value date;
+    batch uuid[];
     touched bigint;
     total bigint := 0;
     attempt integer;
 BEGIN
-    FOR month_value IN
-        SELECT DISTINCT date_trunc('month', published_at AT TIME ZONE 'UTC')::date
-          FROM ingest.publication ORDER BY 1
     LOOP
+        SELECT array_agg(p.id) INTO batch FROM (
+            SELECT p.id FROM ingest.visible_publication p
+             WHERE NOT EXISTS (SELECT 1 FROM analytics.publication_latest l WHERE l.publication_id = p.id)
+               AND EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot s
+                            WHERE s.publication_id = p.id AND NOT s.synthetic AND s.quality <> 'invalid')
+             ORDER BY p.id LIMIT 200) p;
+        EXIT WHEN batch IS NULL;
+
         attempt := 0;
         LOOP
             BEGIN
@@ -52,7 +51,7 @@ BEGIN
                            row_number() OVER (PARTITION BY s.publication_id, s.published_month, s.sampling_bucket
                                               ORDER BY s.correction_sequence DESC) AS correction_rank
                       FROM ingest.publication_metric_snapshot s
-                             WHERE s.published_month = month_value
+                             WHERE s.publication_id = ANY(batch)
                                AND NOT s.synthetic AND s.quality <> 'invalid'
                   ) ranked
                  WHERE ranked.correction_rank = 1
@@ -94,33 +93,19 @@ BEGIN
               FROM folded
               JOIN ingest.visible_publication publication ON publication.id = folded.publication_id
               JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
-            ON CONFLICT (publication_id) DO UPDATE SET
-                observed_at = EXCLUDED.observed_at,
-                views_count = EXCLUDED.views_count, views_observed_at = EXCLUDED.views_observed_at, views_quality = EXCLUDED.views_quality,
-                reactions_count = EXCLUDED.reactions_count, reactions_observed_at = EXCLUDED.reactions_observed_at, reactions_quality = EXCLUDED.reactions_quality,
-                comments_count = EXCLUDED.comments_count, comments_observed_at = EXCLUDED.comments_observed_at, comments_quality = EXCLUDED.comments_quality,
-                shares_count = EXCLUDED.shares_count, shares_observed_at = EXCLUDED.shares_observed_at, shares_quality = EXCLUDED.shares_quality,
-                quality = EXCLUDED.quality, interval_uncertain = EXCLUDED.interval_uncertain, synthetic = EXCLUDED.synthetic,
-                history_completeness = EXCLUDED.history_completeness,
-                source_snapshot_refs = EXCLUDED.source_snapshot_refs,
-                dataset_revision_id = EXCLUDED.dataset_revision_id,
-                refreshed_at = EXCLUDED.refreshed_at;
+            ON CONFLICT (publication_id) DO NOTHING;
                 GET DIAGNOSTICS touched = ROW_COUNT;
                 total := total + touched;
-                RAISE NOTICE 'месяц % — строк %', month_value, touched;
                 EXIT;
             EXCEPTION WHEN deadlock_detected THEN
                 attempt := attempt + 1;
-                IF attempt > 10 THEN
-                    RAISE;
-                END IF;
-                RAISE NOTICE 'месяц %: взаимная блокировка, повтор %', month_value, attempt;
-                PERFORM pg_sleep(2 * attempt);
+                IF attempt > 10 THEN RAISE; END IF;
+                PERFORM pg_sleep(attempt);
             END;
         END LOOP;
+        RAISE NOTICE 'порция: добавлено %, всего %', touched, total;
+        EXIT WHEN touched = 0;
     END LOOP;
-    RAISE NOTICE 'всего обновлено строк витрины: %', total;
+    RAISE NOTICE 'досеяно строк витрины: %', total;
 END
-$backfill$;
-
-ANALYZE analytics.publication_latest;
+$seed$;
