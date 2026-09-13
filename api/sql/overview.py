@@ -85,6 +85,13 @@ WITH params AS (
       JOIN account_fact account ON account.institution_id=dimension.institution_id
        AND ((dimension.scope_platform='telegram' AND account.id=dimension.entity_id)
          OR dimension.scope_platform='all' OR account.platform::text=dimension.scope_platform)
+), publication_scope AS (
+    SELECT selected.scope_platform, selected.entity_id, publication.id AS publication_id
+      FROM selected_accounts selected
+      JOIN ingest.visible_publication publication ON publication.primary_account_id=selected.id
+     CROSS JOIN params
+     WHERE publication.published_at>params.as_of-params.duration
+       AND publication.published_at<=params.as_of AND publication.created_at<=params.as_of
 ), publication_fact AS (
     -- Счётчики берутся из витрины: у каждой метрики своё последнее известное
     -- значение, поэтому метрика, которую платформа не отдала в последний раз,
@@ -108,6 +115,29 @@ WITH params AS (
        AND NOT latest.synthetic AND latest.quality<>'invalid'
      WHERE publication.published_at>params.as_of-params.duration
        AND publication.published_at<=params.as_of AND publication.created_at<=params.as_of
+), publication_totals AS (
+    -- Всего публикаций сущности в базе, без ограничения периодом: счёт по
+    -- индексу (primary_account_id, published_at, id), без обращения к витрине.
+    SELECT selected.scope_platform, selected.entity_id, count(*)::bigint AS total_count
+      FROM selected_accounts selected
+      JOIN ingest.visible_publication publication ON publication.primary_account_id=selected.id
+     GROUP BY 1,2
+), publication_active AS (
+    -- Публикации любого возраста, у которых внутри окна есть наблюдение.
+    -- Витрина хранит аккаунт публикации своей колонкой и индексирует его вместе
+    -- со временем наблюдения, поэтому счётчик берётся прямо из неё: заход в
+    -- ingest.publication на каждую строку стоил бы 87 тысяч буферов.
+    SELECT selected.scope_platform, selected.entity_id, count(*)::bigint AS active_count
+      FROM selected_accounts selected
+      JOIN analytics.publication_latest latest ON latest.platform_account_id=selected.id
+     CROSS JOIN params
+     WHERE latest.observed_at>params.as_of-params.duration
+       AND latest.observed_at<=params.as_of
+     GROUP BY 1,2
+), publication_new AS (
+    -- Публикации, вышедшие внутри окна.
+    SELECT scope_platform, entity_id, count(*)::bigint AS new_count
+      FROM publication_scope GROUP BY 1,2
 ), metric_summary AS (
     SELECT scope_platform, entity_id, count(*)::bigint AS publication_count,
            count(*) FILTER (WHERE views_count IS NOT NULL)::integer AS views_samples,
@@ -154,9 +184,11 @@ WITH params AS (
                 ELSE 'awaiting_first_poll' END AS status_code,
            rating.rank AS rating_rank, rating.score AS rating_score,
            rating.period AS rating_period, rating.fetched_at AS rating_fetched_at,
-           metrics.publication_count AS total_publication_count,
-           metrics.publication_count AS activity_publication_count,
-           metrics.publication_count AS new_publication_count,
+           -- Три разных числа: всего в базе, с активностью за период,
+           -- вышедшие за период. Прежде все три брались из одного счётчика.
+           coalesce(totals.total_count,0) AS total_publication_count,
+           coalesce(active.active_count,0) AS activity_publication_count,
+           coalesce(fresh.new_count,0) AS new_publication_count,
            metrics.total_views, metrics.median_views,
            metrics.total_reactions, metrics.median_reactions,
            metrics.total_comments, metrics.median_comments,
@@ -177,6 +209,12 @@ WITH params AS (
         AND summary.entity_id=dimension.entity_id
       LEFT JOIN metric_summary metrics ON metrics.scope_platform=dimension.scope_platform
         AND metrics.entity_id=dimension.entity_id
+      LEFT JOIN publication_totals totals ON totals.scope_platform=dimension.scope_platform
+        AND totals.entity_id=dimension.entity_id
+      LEFT JOIN publication_new fresh ON fresh.scope_platform=dimension.scope_platform
+        AND fresh.entity_id=dimension.entity_id
+      LEFT JOIN publication_active active ON active.scope_platform=dimension.scope_platform
+        AND active.entity_id=dimension.entity_id
       LEFT JOIN LATERAL (
           SELECT observation.rank, observation.score, observation.period, observation.fetched_at
             FROM rating.official_institution_rating_observation observation

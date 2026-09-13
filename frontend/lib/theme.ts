@@ -11,8 +11,9 @@ export function readThemePreference(): ThemePreference {
   } catch {
     // A blocked storage API must not break the control.
   }
-  // Anyone who never chose keeps the dark default the product has always had.
-  return "dark";
+  // Пока выбора не было, тему задаёт операционная система; первое нажатие на
+  // переключатель записывает явное предпочтение и закрепляет его.
+  return "system";
 }
 
 export function systemTheme(): ResolvedTheme {

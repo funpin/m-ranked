@@ -52,10 +52,10 @@ export const viewport: Viewport = {
 const themeScript = `(() => {
   let stored = null;
   try { stored = localStorage.getItem("m-ranked-theme"); } catch (_) {}
-  // "system" is opt-in; anyone who never chose keeps the dark default.
+  // Выбор пользователя сильнее системы; без выбора решает система.
   document.documentElement.dataset.theme =
     stored === "light" || stored === "dark" ? stored
-    : stored === "system" && matchMedia("(prefers-color-scheme: light)").matches ? "light"
+    : matchMedia("(prefers-color-scheme: light)").matches ? "light"
     : "dark";
 })();`;
 

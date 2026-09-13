@@ -71,7 +71,7 @@ function ActivityBody({ item, integrationWarning }: { item: OverviewItem; integr
     ))}
   </div>;
   return <>
-    {item.ratingRank ? <span className="bg-chart-2/12 text-chart-2 absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[item.platform]}.`}>М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</span> : null}
+    {item.ratingRank ? <span className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[item.platform]}.`}>М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</span> : null}
     <div className="min-h-[116px]">
       <h3 className="font-heading line-clamp-2 min-h-[2.7em] cursor-help text-base leading-snug font-bold" tabIndex={0} title={item.canonicalName}>
         {item.shortName || item.canonicalName}<span className="text-muted-foreground ml-1 text-xs" aria-hidden="true">ⓘ</span>
@@ -97,7 +97,7 @@ function AllPlatformsBody({ item }: { item: OverviewItem }) {
   const status=overviewStatus(item);
   return (
     <>
-      {item.ratingRank ? <span className="bg-chart-2/12 text-chart-2 absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title="Официальное место в М‑Рейтинге: Общий.">М‑Рейтинг Общий · №{item.ratingRank}</span> : null}
+      {item.ratingRank ? <span className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title="Официальное место в М‑Рейтинге: Общий.">М‑Рейтинг Общий · №{item.ratingRank}</span> : null}
       <div>
         <h3 className="font-heading line-clamp-2 min-h-[2.7em] cursor-help text-base leading-snug font-bold" tabIndex={0} title={item.canonicalName}>
           {item.shortName || item.canonicalName}<span className="text-muted-foreground ml-1 text-xs" aria-hidden="true">ⓘ</span>

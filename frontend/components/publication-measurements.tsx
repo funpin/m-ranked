@@ -60,10 +60,12 @@ function MetricChart(props: {
               className={cn(
                 "text-foreground flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-xs font-semibold transition-colors",
                 "hover:bg-accent focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
-                isHidden && "opacity-55",
+                // Выключенная метрика приглушается цветом, а не прозрачностью:
+                // размытый текст проваливался под порог контраста на светлой теме.
+                isHidden && "text-muted-foreground",
               )}
             >
-              <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ background: metric.color }} />
+              <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", isHidden && "opacity-40")} style={{ background: metric.color }} />
               <span className={cn(isHidden && "line-through")}>{delta ? "Прирост" : "Всего"} {noun(metric,platform)}</span>
             </button>
           );
@@ -137,7 +139,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading text-lg">Накопление {phrase}</CardTitle>
-          <p className="text-muted-foreground mt-2 text-sm">Линии построены по одним и тем же замерам. Точки расставлены по времени замера, поэтому паузы в наблюдении видны как пустые промежутки. Ромбами с усиленной обводкой отмечены границы опубликованных сигналов. В режиме 1:1 используется общая шкала; «Авто» накладывает кривые с независимыми шкалами для сравнения их формы.</p>
+          <p className="text-muted-foreground mt-2 text-sm">Линии построены по одним и тем же замерам и расставлены по времени замера, поэтому паузы в наблюдении видны как длинные пустые промежутки. Ромбами отмечены границы опубликованных сигналов; остальные замеры читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» накладывает кривые с независимыми шкалами для сравнения их формы.</p>
         </CardHeader>
         <CardContent>
           <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} />

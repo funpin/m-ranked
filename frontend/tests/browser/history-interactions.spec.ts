@@ -113,7 +113,12 @@ test("a break in the observation is spaced by time and marked on the chart",asyn
     await new Promise(resolve=>setTimeout(resolve,600));
     const plot=document.querySelector('[role="img"][data-chart-ready="true"] svg')!;
     const curve=plot.querySelector("path.recharts-curve[d], path.recharts-area-area[d]")!;
-    const xs=[...(curve.getAttribute("d")??"").matchAll(/[ML]\s*(-?[\d.]+)/g)].map(match=>Number(match[1]));
+    // Каждая команда пути заканчивается координатами вершины — реального
+    // замера, — будь то отрезок или кубическая кривая сглаженной линии.
+    const xs=[...((curve.getAttribute("d")??"").match(/[A-Za-z][^A-Za-z]*/g)??[])].flatMap(command=>{
+      const numbers=[...command.matchAll(/-?[\d.]+/g)].map(match=>Number(match[0]));
+      return numbers.length>=2 ? [numbers[numbers.length-2]!] : [];
+    });
     let widest=0;
     for(let index=1;index<xs.length;index++) widest=Math.max(widest,Math.abs(xs[index]!-xs[index-1]!));
     return {widest,span:Math.max(...xs)-Math.min(...xs)};

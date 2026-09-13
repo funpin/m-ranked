@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { duration, legacyDate } from "@/lib/format";
 import { observationGaps } from "@/lib/observation-gaps";
@@ -8,6 +8,16 @@ import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLa
 import { cn } from "@/lib/utils";
 import type { HistorySnapshot } from "@/lib/types";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
+
+/** На оси значений место ограничено шириной колонки, а показатели доходят до
+ *  миллионов. Полное число не влезает и наезжает на соседнее, поэтому крупные
+ *  величины подписываются сокращённо — точные значения читаются в подсказке и
+ *  в таблице. */
+const compactAxisNumber = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 });
+function axisNumber(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  return Math.abs(value) < 10_000 ? value.toLocaleString("ru-RU") : compactAxisNumber.format(value);
+}
 
 /** Evidence samples are drawn as a larger diamond, so a published signal
  *  boundary is distinguishable from an ordinary observation without colour. */
@@ -109,18 +119,20 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   }, [rows, at]);
 
   const axes = scale === "shared"
-    ? [<YAxis key="y" yAxisId="y" tickLine={false} axisLine={false} width={64} allowDecimals={false}
+    ? [<YAxis key="y" yAxisId="y" tickLine={false} axisLine={false} width={76} allowDecimals={false}
+        tickFormatter={axisNumber} tickMargin={6}
         label={{ value: axisTitle, angle: -90, position: "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />]
     : metrics.map((metric, index) => (
         <YAxis key={metric.key} yAxisId={metric.key} orientation={index % 2 ? "right" : "left"}
-          hide={hidden.has(metric.key)} tickLine={false} axisLine={false} width={64} allowDecimals={false}
+          hide={hidden.has(metric.key)} tickLine={false} axisLine={false} width={76} allowDecimals={false}
+          tickFormatter={axisNumber} tickMargin={6}
           label={{ value: metricLabel(metric, platform), angle: -90, position: index % 2 ? "insideRight" : "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />
       ));
   const axisFor = (metric: Metric) => (scale === "shared" ? "y" : metric.key);
 
   const shared = {
     data,
-    margin: { left: 12, right: 12, top: 8, bottom: 28 },
+    margin: { left: 4, right: 4, top: 8, bottom: 28 },
     onClick: (state: { activeLabel?: unknown }) => {
       const row = nearestRow(state?.activeLabel);
       if (row) onActivate(row.snapshotId);
@@ -189,30 +201,26 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
             ))}
           </BarChart>
         ) : (
-          <AreaChart {...shared}>
-            <defs>
-              {metrics.map((metric) => (
-                <linearGradient key={metric.key} id={`${chartId}-${metric.key}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={metric.color} stopOpacity={0.22} />
-                  <stop offset="95%" stopColor={metric.color} stopOpacity={0.02} />
-                </linearGradient>
-              ))}
-            </defs>
+          <LineChart {...shared}>
             {children}
             {metrics.map((metric) => (
-              <Area key={metric.key} dataKey={metric.key} yAxisId={axisFor(metric)} hide={hidden.has(metric.key)}
-                type="monotone" stroke={metric.color} strokeWidth={3} fill={`url(#${chartId}-${metric.key})`}
+              <Line key={metric.key} dataKey={metric.key} yAxisId={axisFor(metric)} hide={hidden.has(metric.key)}
+                type="monotone" stroke={metric.color} strokeWidth={2.5}
                 connectNulls={false} isAnimationActive animationDuration={420}
-                activeDot={{ r: 6 }}
+                activeDot={{ r: 5 }}
                 dot={(props) => {
                   // Recharts types the per-point dot props loosely; the shape
-                  // this chart supplies is narrowed at the boundary.
+                  // this chart supplies is narrowed at the boundary. Точка
+                  // остаётся только там, где она что-то означает — на границе
+                  // опубликованного сигнала; кружок на каждом замере превращал
+                  // линию в пунктир и ничего не добавлял к чтению.
                   const dot = props as unknown as { cx?: number; cy?: number; payload?: { evidence?: boolean }; key?: string };
-                  return <SampleDot key={dot.key} cx={dot.cx} cy={dot.cy} fill={metric.color} evidence={dot.payload?.evidence} />;
+                  if (!dot.payload?.evidence) return <g key={dot.key} />;
+                  return <SampleDot key={dot.key} cx={dot.cx} cy={dot.cy} fill={metric.color} evidence />;
                 }}
               />
             ))}
-          </AreaChart>
+          </LineChart>
         )}
       </ChartContainer>
     </div>

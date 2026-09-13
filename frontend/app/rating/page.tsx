@@ -12,6 +12,7 @@ import { api, ApiError } from "@/lib/api";
 import { PERIOD_LABELS, PLATFORM_LONG_LABELS, publicationLabel } from "@/lib/format";
 import { first, queryHref, type SearchParams } from "@/lib/params";
 import { normalizeRatingQuery, type ParsedRatingQuery } from "@/lib/rating";
+import { cn } from "@/lib/utils";
 import type {
   ActivityRatingEntity,
   ActivityRatingPublication,
@@ -155,13 +156,20 @@ function TelegramPublicationTable({ query, rows }: {
           <TableHead><PostSortLink query={query} sort="view_share">Реакции / просмотры</PostSortLink></TableHead>
         </TableRow></TableHeader>
         <TableBody>{rows.map((row, index) => {
-          const external = telegramExternalLink(row);
-          const label = `${row.accountTitle || `@${row.accountUsername}`} · №${row.externalId ?? "—"}`;
-          return <TableRow key={row.publicationId}>
+          const channel = row.accountTitle || `@${row.accountUsername}`;
+          return <TableRow key={row.publicationId} className={cn("relative", row.publicationId && "hover:bg-muted/50 focus-within:bg-muted/50")}>
             <TableCell className="text-muted-foreground w-10">{index + 1}</TableCell>
-            <TableCell className="min-w-52 whitespace-normal">{row.publicationId ? <Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
-              {external ? <a href={external} target="_blank" rel="noopener noreferrer">{row.deletedAt ? "Открыть сохранённую публикацию в TGStat" : "Открыть пост в Telegram"} ↗</a> : null}
-              {row.deletedAt ? <span>удалена из Telegram</span> : null}
+            <TableCell className="min-w-52 whitespace-normal">
+              {/* Ссылка растянута на строку: кликается вся строка, но в разметке
+                  это по-прежнему одна обычная ссылка — её видно с клавиатуры и
+                  она открывается в новой вкладке средней кнопкой. */}
+              {row.publicationId
+                ? <Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 outline-none after:absolute after:inset-0 hover:underline focus-visible:underline" href={publicationHref(row.publicationId)} prefetch={false}>{channel}</Link>
+                : <strong className="font-semibold">{channel}</strong>}
+              <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2 text-xs">
+                <span>{publicationLabel(row.externalId ?? null, "telegram")}</span>
+                {row.deletedAt ? <span className="bg-destructive/10 text-destructive inline-flex items-center rounded-full px-2 py-0.5 font-medium">удалена</span> : null}
+              </div>
             </TableCell>
             <TableCell><strong>{formatMetric(row.reactions)}</strong></TableCell><TableCell>{formatMetric(row.views)}</TableCell>
             <TableCell>{formatPercentage(row.subscriberShare, 3)}</TableCell><TableCell>{formatPercentage(row.viewShare)}</TableCell>
@@ -225,7 +233,7 @@ function RatingSection({ query, eyebrow, title, children }: {
   const description=publications ? telegram ? "Сравнение отдельных постов по реакциям, просмотрам и их соотношению." : "Последний известный замер каждой публикации, вышедшей за период." : telegram ? "Типичная и общая активность каналов в сравнении с размером аудитории." : `Если у вуза несколько аккаунтов ${PLATFORM_LONG_LABELS[query.platform]}, их публикации объединяются.`;
   return <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-5" aria-label={title}>
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-semibold">{name}</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p></div><span className="inline-flex shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-medium">Период: {badge}</span></div>
-    {!publications ? <div className="mb-4 rounded-md bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">{telegram ? <><b>По умолчанию:</b> выше показаны каналы с большей долей среднего числа реакций от текущего числа подписчиков.</> : <><b>Вовлечённость:</b> (лайки + комментарии{query.platform === "vk" ? " + репосты" : ""}) / просмотры. Это отношение событий, а не уникальных пользователей.</>}</div> : telegram ? <div className="mb-4 rounded-md bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">Название вуза открывает <b>внутреннюю статистику</b>. Ссылка «Открыть пост в Telegram ↗» ведёт на оригинал в новой вкладке.</div> : null}
+    {!publications ? <div className="mb-4 rounded-md bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">{telegram ? <><b>По умолчанию:</b> выше показаны каналы с большей долей среднего числа реакций от текущего числа подписчиков.</> : <><b>Вовлечённость:</b> (лайки + комментарии{query.platform === "vk" ? " + репосты" : ""}) / просмотры. Это отношение событий, а не уникальных пользователей.</>}</div> : telegram ? <div className="mb-4 rounded-md bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">Строка открывает <b>внутреннюю статистику</b> публикации: там же лежит ссылка на оригинал в Telegram.</div> : null}
     <div className="min-w-0 overflow-x-auto">{children}</div>
   </section>;
 }
@@ -266,15 +274,6 @@ function ratingHrefQuery(query: ParsedRatingQuery) {
     post_sort: query.postSort,
     post_direction: query.postDirection,
   };
-}
-
-function telegramExternalLink(row: ActivityRatingPublication): string | null {
-  if (!row.accountUsername || !row.externalId) return row.publicUrl;
-  const username = encodeURIComponent(row.accountUsername.replace(/^@/, ""));
-  const message = encodeURIComponent(row.externalId);
-  return row.deletedAt
-    ? `https://tgstat.ru/channel/@${username}/${message}`
-    : `https://t.me/${username}/${message}`;
 }
 
 function formatMetric(value: number | null, fraction=false) { return value === null ? "—" : fraction ? value.toFixed(1) : String(value); }

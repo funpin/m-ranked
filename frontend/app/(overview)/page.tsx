@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, NativeInput, NativeSegments, NativeSelect } from "@/components/native-field";
 import { LegacyFilterForm } from "@/components/legacy-filter-form";
-import Link from "@/components/native-link";
 import { OverviewCard } from "@/components/overview-card";
 import { ApiFailureState, InfoNotice, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -104,7 +103,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   <option value="asc">По возрастанию</option>
                 </NativeSelect>
               </Field>
-              <Button type="submit">Применить</Button>
+              {/* Кнопка стоит в одной строке с селекторами, поэтому берёт их высоту. */}
+              <Button type="submit" className="h-9 px-4 text-sm">Применить</Button>
               <NativeSegments
                 name="platform"
                 legend="Площадка"
@@ -121,14 +121,6 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       ) : (
         <Card><CardContent className="text-muted-foreground py-6">{q ? `По запросу «${q}» вузы не найдены.` : platform === "telegram" ? "За выбранный период публикаций не найдено." : "Вузы ещё не добавлены."}</CardContent></Card>
       )}</section>
-
-      {page.nextCursor ? (
-        <nav className="mt-6 flex justify-center" aria-label="Пагинация">
-          <Button variant="outline" render={<Link prefetch={false} href={queryHref("/", { platform, period, q, sort, direction, cursor: page.nextCursor })} />}>
-            Следующая страница
-          </Button>
-        </nav>
-      ) : null}
 
       <InfoNotice>
         {platform === "all" ? <><b>Почему нет общей суммы:</b> лайк, реакция, просмотр видео и просмотр поста имеют разный смысл. Общий режим показывает покрытие и официальный общий М‑Рейтинг; единый межплатформенный индекс будет добавлен только после утверждения формулы.</> : platform === "telegram" ? <><b>Как считаются показатели:</b> в карточке показана активность всех отслеживаемых постов, для которых внутри выбранного периода есть сравнимые замеры, а не только новых публикаций. Реакции и просмотры — разница между первым и последним замером внутри окна; прирост до первого замера в период не включается. Для новых постов с полной историей отсчёт идёт от нуля в момент публикации. Медианы — типичный прирост одного поста за это окно и округляются до целого. Плашка у медианы сравнивает типичный прирост с предыдущим таким же периодом и скрывается, если сравнивать не с чем или изменения нет. Метки скачков временно отключены.</> : <><b>Как считаются показатели:</b> для каждой публикации берётся разница между первым и последним сравнимым снимком внутри окна. Метрики, которых нет в официальном источнике {PLATFORM_LONG_LABELS[platform]}, не заменяются нулями и не подменяются Telegram-данными.</>}

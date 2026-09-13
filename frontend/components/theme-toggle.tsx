@@ -1,65 +1,64 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { useEffect, useSyncExternalStore } from "react";
+import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  applyTheme,
   readThemePreference,
-  subscribeTheme,
-  systemTheme,
+  resolveTheme,
   themeLabel,
 } from "@/lib/theme";
 
-// Loaded on first interaction. Keeping the floating-menu primitive out of the
-// root layout's shared chunk saves about 48 KiB gzip on every route.
-const ThemeMenu = dynamic(() => import("@/components/theme-menu").then((module) => module.ThemeMenu), { ssr: false });
-
+/**
+ * One press, one switch.
+ *
+ * The control used to open a three-item menu, which made changing the theme a
+ * two-step interaction for the one thing people actually do — go the other
+ * way. The third state is still reachable: until someone presses the button,
+ * nothing is stored and the operating system keeps control.
+ */
 export function ThemeToggle() {
   const resolved = useSyncExternalStore(
-    subscribeTheme,
+    subscribe,
     () => (document.documentElement.dataset.theme === "light" ? "light" : "dark"),
     () => "dark" as const,
   );
-  const preference = useSyncExternalStore(subscribeTheme, readThemePreference, () => "dark" as const);
-  // "none" until the pointer arrives or the button is pressed; a press also
-  // opens the menu as soon as it arrives, so one click is still one click.
-  const [activation, setActivation] = useState<"none" | "preload" | "open">("none");
+  const preference = useSyncExternalStore(subscribe, readThemePreference, () => "system" as const);
 
-  // While the preference is "system", the operating system keeps control.
+  // While nothing is stored, the operating system keeps control. The stored
+  // value is re-read inside the handler rather than taken from the render:
+  // during hydration this component still holds the server's value, and a
+  // stale one here would overwrite a choice the inline script already applied.
   useEffect(() => {
-    if (preference !== "system") return;
     const query = window.matchMedia("(prefers-color-scheme: light)");
-    const follow = () => { document.documentElement.dataset.theme = systemTheme(); };
+    const follow = () => { document.documentElement.dataset.theme = resolveTheme(readThemePreference()); };
     follow();
     query.addEventListener("change", follow);
     return () => query.removeEventListener("change", follow);
   }, [preference]);
 
-  const label = themeLabel(preference);
-  const icon = preference === "system"
-    ? <Monitor className="size-[1.15rem]" aria-hidden="true" />
-    : resolved === "dark"
-      ? <Moon className="size-[1.15rem]" aria-hidden="true" />
-      : <Sun className="size-[1.15rem]" aria-hidden="true" />;
+  const next = resolved === "dark" ? "light" : "dark";
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={`${themeLabel(preference)}. Переключить на ${next === "dark" ? "тёмную" : "светлую"}`}
+      title={next === "dark" ? "Тёмная тема" : "Светлая тема"}
+      onClick={() => applyTheme(next)}
+    >
+      {resolved === "dark"
+        ? <Moon className="size-[1.15rem]" aria-hidden="true" />
+        : <Sun className="size-[1.15rem]" aria-hidden="true" />}
+    </Button>
+  );
+}
 
-  // Tabbing to the button must not swap it out from under the focus, so only
-  // a pointer or an actual press loads the menu.
-  if (activation === "none") {
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={label}
-        title={label}
-        aria-haspopup="menu"
-        onPointerEnter={() => setActivation("preload")}
-        onClick={() => setActivation("open")}
-      >
-        {icon}
-      </Button>
-    );
-  }
-
-  return <ThemeMenu preference={preference} resolved={resolved} label={label} defaultOpen={activation === "open"} />;
+/** The attribute on <html> and the stored preference are the two things that
+ *  can change the control, so the store watches both. */
+function subscribe(notify: () => void) {
+  const observer = new MutationObserver(notify);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  window.addEventListener("storage", notify);
+  return () => { observer.disconnect(); window.removeEventListener("storage", notify); };
 }

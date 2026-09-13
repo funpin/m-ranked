@@ -27,7 +27,7 @@ function Neighbour({ href, id, platform, direction }: {
       <Icon className="size-4 shrink-0" aria-hidden="true" />
       <span className="grid text-left">
         <span className="text-sm leading-tight font-semibold">{title}</span>
-        <span className="text-[11px] leading-tight font-medium opacity-75">
+        <span className="text-muted-foreground text-[11px] leading-tight font-medium">
           {id ? publicationLabel(id, platform) : back ? "Нет более раннего" : "Нет более нового"}
         </span>
       </span>
