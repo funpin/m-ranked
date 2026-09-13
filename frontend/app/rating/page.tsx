@@ -167,7 +167,7 @@ function TelegramPublicationTable({ query, rows }: {
                 ? <Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 outline-none after:absolute after:inset-0 hover:underline focus-visible:underline" href={publicationHref(row.publicationId)} prefetch={false}>{channel}</Link>
                 : <strong className="font-semibold">{channel}</strong>}
               <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2 text-xs">
-                <span>{publicationLabel(row.externalId ?? null, "telegram")}</span>
+                <span>{row.externalId ? `пост ${publicationLabel(row.externalId, "telegram")}` : "номер поста неизвестен"}</span>
                 {row.deletedAt ? <span className="bg-destructive/10 text-destructive inline-flex items-center rounded-full px-2 py-0.5 font-medium">удалена</span> : null}
               </div>
             </TableCell>

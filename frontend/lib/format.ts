@@ -102,7 +102,11 @@ export function duration(seconds: number | null) {
 }
 export function publicationLabel(externalId: string | null, platform: Platform) {
   if (!externalId) return "—";
-  if (platform === "telegram") return `№${externalId}`;
+  // Идентификатор поста Telegram хранится с префиксом «m:» — это внутренняя
+  // пометка источника, а не часть номера. API отдаёт очищенное значение
+  // отдельным полем, но там, где доступен только сырой идентификатор,
+  // префикс снимается здесь по тому же правилу.
+  if (platform === "telegram") return `№${externalId.startsWith("m:") ? externalId.slice(2) : externalId}`;
   if (platform === "vk" && /^-?\d+_\d+$/.test(externalId)) return `№${externalId.split("_").at(-1)}`;
   return externalId;
 }

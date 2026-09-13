@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-13T23:15:56.126Z",
+  "generatedAt": "2026-09-13T23:25:35.979Z",
   "producer": "next build diagnostics + per-chunk gzip level 9",
   "scope": "Static firstLoad diagnostic only. Required initially loaded dynamic chart chunks are also measured by mobile-performance.mts; this report alone cannot establish the initial-network JS gate.",
   "results": [
