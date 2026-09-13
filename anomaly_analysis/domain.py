@@ -15,6 +15,16 @@ class Metric(str, Enum):
     COMMENTS = "comments"
     SHARES = "shares"
 
+    @classmethod
+    def contains(cls, value: object) -> bool:
+        """Принадлежность значения перечислению.
+
+        Проверка `value in Metric` на Python 3.11 поднимает TypeError, если
+        слева не член перечисления, а строка; поведение изменилось только в
+        3.12. На сервере стоит 3.11, поэтому сравниваем явно.
+        """
+        return isinstance(value, str) and value in cls._value2member_map_
+
 
 class ObservationQuality(str, Enum):
     UNKNOWN = "unknown"
@@ -105,7 +115,7 @@ class PublicationHistory:
     def __post_init__(self) -> None:
         if self.platform not in {"telegram", "vk", "max", "rutube"}:
             raise ValueError("unsupported platform")
-        if any(metric not in Metric for metric in self.supported_metrics):
+        if any(not Metric.contains(metric) for metric in self.supported_metrics):
             raise ValueError("supported_metrics contains unsupported metric")
         object.__setattr__(self, "supported_metrics", frozenset(self.supported_metrics))
         if self.source_dataset_revision <= 0:
@@ -119,7 +129,7 @@ class PublicationHistory:
         if self.expected_sampling_seconds is not None and self.expected_sampling_seconds <= 0:
             raise ValueError("expected_sampling_seconds must be positive")
         copied = {metric: tuple(observations) for metric, observations in self.series.items()}
-        if any(metric not in Metric for metric in copied):
+        if any(not Metric.contains(metric) for metric in copied):
             raise ValueError("series contains unsupported metric")
         object.__setattr__(self, "series", MappingProxyType(copied))
 

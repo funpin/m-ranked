@@ -12,4 +12,5 @@ playwright==1.62.0
 pytest==8.4.1
 pyyaml==6.0.3
 jsonschema==4.26.0
+referencing==0.37.0
 git+https://github.com/MaxApiTeam/PyMax.git@53103f0c8df32f36110cbe0bcbfc3ad82173808a#egg=maxapi-python
