@@ -193,7 +193,7 @@ BEGIN
         RAISE EXCEPTION 'restored database is still in recovery';
     END IF;
     SELECT contract_id INTO installed_contract FROM ops_and_admin.schema_contract;
-    IF installed_contract IS DISTINCT FROM 'live-read-2026-09-13' THEN
+    IF installed_contract IS DISTINCT FROM 'live-read-2026-09-13-text-fingerprint' THEN
         RAISE EXCEPTION 'restored database does not match the live-read schema contract';
     END IF;
 END

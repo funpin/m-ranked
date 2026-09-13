@@ -35,7 +35,7 @@ Applications do not migrate a database at startup. Before activating a release:
 SELECT contract_id FROM ops_and_admin.schema_contract;
 ```
 
-The required value is `live-read-2026-09-13`. For an existing cluster, apply
+The required value is `live-read-2026-09-13-text-fingerprint`. For an existing cluster, apply
 only a separately reviewed forward schema change after a verified backup and
 isolated restore; never replay the bootstrap set over a populated database.
 

@@ -20,7 +20,7 @@ systemctl enable --now m-ranked-target-restore-verify.timer
 
 The verifier restores into a new private directory, starts PostgreSQL without a
 network listener, checks page checksums and `pg_amcheck --all`, requires
-PostgreSQL 18.6 and schema contract `live-read-2026-09-13`, records the latest
+PostgreSQL 18.6 and schema contract `live-read-2026-09-13-text-fingerprint`, records the latest
 dataset revision and removes only its own temporary cluster. Quarterly
 `m-ranked-target-pitr-drill.timer` replays archived WAL to a chosen point.
 

@@ -35,8 +35,17 @@ _SHARD = re.compile(r"^(\d+)/(\d+)$")
 _SAFE_ERROR_CODE = re.compile(
     r"^[A-Za-z][A-Za-z0-9_.-]{0,79}(?::[A-Za-z0-9_.-]{1,80})?$"
 )
-_EXPECTED_SCHEMA_CONTRACT = "live-read-2026-09-13"
+_EXPECTED_SCHEMA_CONTRACT = "live-read-2026-09-13-text-fingerprint"
 
+
+def _persist_raw_evidence() -> bool:
+    """Читает COLLECTOR_PERSIST_RAW_EVIDENCE; по умолчанию включено."""
+    raw = os.environ.get("COLLECTOR_PERSIST_RAW_EVIDENCE", "true").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError("COLLECTOR_PERSIST_RAW_EVIDENCE must be true or false")
 
 def _row_value(row: Any, key: str, index: int) -> Any:
     if isinstance(row, Mapping):
@@ -1340,6 +1349,12 @@ class PostgresCollectorRepository:
         fingerprint: str,
         evidence: Mapping[str, Any],
     ) -> None:
+        # Прод держит сохранение сырых свидетельств выключенным ради места:
+        # ingest.raw_payload растёт на каждое наблюдение. Прежде флаг ставила
+        # внешняя заплатка через legacy app.config; теперь его читает сам
+        # коллектор. По умолчанию сохраняем — это поведение разработки.
+        if not _persist_raw_evidence():
+            return
         collected = utc(collected_at, "lineage.collected_at")
         connection.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",

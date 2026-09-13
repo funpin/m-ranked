@@ -8,7 +8,7 @@ Docker network receives a generated `mranked-dr-<run-id>` name and ownership
 label. Cleanup addresses only resources created by that invocation.
 
 Run against an explicitly provisioned disposable fixture with the current
-`live-read-2026-09-13` schema contract:
+`live-read-2026-09-13-text-fingerprint` schema contract:
 
 ```sh
 rtk proxy .venv/bin/python -m operations.disaster_recovery.rehearse \
