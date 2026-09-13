@@ -565,7 +565,7 @@ class PostgresCollectorRepository:
                         "version": 1, "kind": "collector-account-identity",
                         "accountId": str(batch.account.id), "platform": batch.context.platform.value,
                         "sourceRunId": str(batch.context.run_id),
-                        "sourceFingerprint": batch.account_observation.source_fingerprint.hex(),
+                        "sourceFingerprint": batch.account_observation.source_fingerprint,
                         "observedAt": original["observed_at"],
                         "username": original.get("username"), "title": original.get("title"),
                         "url": original.get("url"), "nativeId": original.get("native_external_id"),
@@ -1337,16 +1337,16 @@ class PostgresCollectorRepository:
         owner_type: str,
         owner_id: UUID,
         collected_at: datetime,
-        fingerprint: bytes,
+        fingerprint: str,
         evidence: Mapping[str, Any],
     ) -> None:
         collected = utc(collected_at, "lineage.collected_at")
         connection.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-            ("raw-evidence:" + fingerprint.hex(),),
+            ("raw-evidence:" + fingerprint,),
         )
         object_uri, object_hash = self.evidence_store.put(evidence)
-        fingerprint_hex = fingerprint.hex()
+        fingerprint_hex = fingerprint
         if object_hash != fingerprint_hex:
             raise ValueError("canonical evidence fingerprint mismatch")
         payload_id = raw_payload_uuid(run_id, owner_type, owner_id, fingerprint_hex)
@@ -1378,7 +1378,7 @@ class PostgresCollectorRepository:
             self._persist_lineage(connection, context.run_id, "account", raw.account.id,
                                   collected, fingerprint, evidence)
             payload_id = raw_payload_uuid(
-                context.run_id, "account", raw.account.id, fingerprint.hex())
+                context.run_id, "account", raw.account.id, fingerprint)
             connection.execute(
                 """INSERT INTO ingest.evidence_quarantine(raw_payload_id,reason_code)
                    VALUES(%s,%s) ON CONFLICT DO NOTHING""",

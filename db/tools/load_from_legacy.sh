@@ -55,14 +55,8 @@ for t in $tables; do
       FROM information_schema.columns
      WHERE table_schema='$schema' AND table_name='$name'
        AND is_generated='NEVER'")
-  sel=$(src -At -c "
-    SELECT string_agg(
-             CASE WHEN column_name='source_fingerprint'
-                  THEN 'decode('||quote_ident(column_name)||E',\'hex\')'
-                  ELSE quote_ident(column_name) END, ',' ORDER BY ordinal_position)
-      FROM information_schema.columns
-     WHERE table_schema='$schema' AND table_name='$name'
-       AND is_generated='NEVER'")
+  # Преобразований типов больше нет: source_fingerprint остался text.
+  sel=$cols
   [ -z "$cols" ] && { echo "  $t — нет столбцов, пропуск"; continue; }
 
   docker exec -i "$CONTAINER" psql -U mranked_bootstrap -d "$SRC" -q -v ON_ERROR_STOP=1 \

@@ -47,7 +47,7 @@ def persist_native_csv(connection, publication_id, month, snapshot_id, evidence)
             'quality':row['quality'],'interval_uncertain':row['interval_uncertain'],
             'synthetic':row['synthetic'],'metric_semantics_version':row['metric_semantics_version'],
             'capability_version':row['capability_version'],
-            'source_fingerprint':bytes(row['source_fingerprint']).hex(),
+            'source_fingerprint':row['source_fingerprint'],
             'created_at':row['created_at'].isoformat(),
             'metric_quality':{metric:row[metric+'_quality'] for metric in ('views','reactions','comments','shares')},
             'metric_evidence':dict(row['metric_evidence']),
@@ -64,4 +64,4 @@ def persist_native_csv(connection, publication_id, month, snapshot_id, evidence)
         (published_month,snapshot_id,publication_id,fields,public_fields,evidence_sha256)
         VALUES(%s,%s,%s,%s::jsonb,%s::jsonb,%s) ON CONFLICT DO NOTHING""",
         (month,snapshot_id,publication_id,json.dumps(fields,ensure_ascii=False,sort_keys=True),
-         json.dumps(public,ensure_ascii=False,sort_keys=True),bytes(row['source_fingerprint']).hex()))
+         json.dumps(public,ensure_ascii=False,sort_keys=True),row['source_fingerprint']))

@@ -211,7 +211,11 @@ def test_normalization_preserves_zero_null_and_marks_invalid_and_resets() -> Non
     assert snapshot.metric_quality["reactions"] == ObservationQuality.INVALID
     assert snapshot.metric_quality["comments"] == ObservationQuality.SUSPECTED_RESET
     assert snapshot.quality == ObservationQuality.INVALID
-    assert len(snapshot.source_fingerprint) == 32
+    # Отпечаток хранится шестнадцатеричным текстом: колонка объявлена text,
+    # потому что перевод её в bytea на живой базе требует перезаписи всех
+    # партиций под ACCESS EXCLUSIVE.
+    assert len(snapshot.source_fingerprint) == 64
+    assert set(snapshot.source_fingerprint) <= set('0123456789abcdef')
     serialized = canonical_json(snapshot.sanitized_source)
     assert "top-secret" not in serialized
     assert "another-secret" not in serialized
@@ -1424,7 +1428,9 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
         params for statement, params in connection.calls
         if "INSERT INTO ingest.publication_metric_snapshot(" in statement
     )
-    assert isinstance(snapshot_call[14], bytes) and len(snapshot_call[14]) == 32
+    # Отпечаток источника уходит в базу шестнадцатеричным текстом, семантический —
+    # байтами: колонка source_fingerprint объявлена text, semantic_fingerprint — bytea.
+    assert isinstance(snapshot_call[14], str) and len(snapshot_call[14]) == 64
     assert snapshot_call[-1] == 7
     assert "NULL,%s" in next(
         statement for statement, _ in connection.calls

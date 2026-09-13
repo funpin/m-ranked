@@ -387,7 +387,7 @@ SELECT windowed.id AS snapshot_id,windowed.*,
        windowed.comments_count-windowed.previous_comments AS delta_comments,
        windowed.shares_count-windowed.previous_shares AS delta_shares,
        jsonb_strip_nulls(jsonb_build_object(
-         'sourceFingerprint',encode(windowed.source_fingerprint,'hex'),
+         'sourceFingerprint',windowed.source_fingerprint,
          'supersedesSnapshotId',windowed.supersedes_snapshot_id::text,
          'correctionSequence',windowed.correction_sequence,
          'correctionReason',windowed.correction_reason,

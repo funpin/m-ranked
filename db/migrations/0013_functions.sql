@@ -137,7 +137,7 @@ BEGIN
             dataset_revision_id, event_type, aggregate_type, aggregate_id,
             affected_tags, payload
         ) VALUES (
-            revision, 'cache.invalidated', 'cache', 'public',
+            revision, 'dataset.revision.changed', 'dataset', 'core',
             ARRAY['publications', 'overview', 'comparison'],
             jsonb_build_object('revision', revision, 'cause', 'configuration')
         )
