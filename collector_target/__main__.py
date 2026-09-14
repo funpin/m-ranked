@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import signal
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -62,6 +63,17 @@ def _default_interval(platform: Platform, settings: Settings) -> int:
         if platform == Platform.RUTUBE else settings.poll_interval_minutes
     )
     return minutes * 60
+
+
+def next_delay(elapsed_seconds: float, interval_seconds: int) -> float:
+    """Сколько ещё ждать до начала следующего слота.
+
+    Пауза отсчитывается от начала обхода, а не от его конца. Иначе период
+    равен «длительность цикла плюс интервал»: на проде пятиминутный шаг так
+    растягивался до семи минут у Telegram и до одиннадцати у ВК — ровно на
+    длительность самого обхода. Обход, не уложившийся в интервал, не ждёт.
+    """
+    return max(0.0, interval_seconds - elapsed_seconds)
 
 
 def _scheduled_slot(now: datetime, interval_seconds: int) -> datetime:
@@ -145,6 +157,7 @@ async def _run(args: argparse.Namespace) -> int:
                 pass
 
         while not stop.is_set():
+            began = time.monotonic()
             scheduled_at = repository.resumable_scheduled_at(
                 platform, args.partition, collector_version,
             ) or _scheduled_slot(clock.now(), interval_seconds)
@@ -159,10 +172,18 @@ async def _run(args: argparse.Namespace) -> int:
             )
             if args.once:
                 return 1 if summary.status == RunStatus.FAILED else 0
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
-            except TimeoutError:
-                pass
+            elapsed = time.monotonic() - began
+            remaining = next_delay(elapsed, interval_seconds)
+            if remaining > 0:
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=remaining)
+                except TimeoutError:
+                    pass
+            else:
+                logger.warning(
+                    "collector cycle overran its interval platform=%s seconds=%.1f interval=%s",
+                    platform.value, elapsed, interval_seconds,
+                )
         return 0
     except asyncio.CancelledError:
         raise

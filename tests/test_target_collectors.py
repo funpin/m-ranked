@@ -18,7 +18,7 @@ from collector_runtime.max_api import MaxChannel, MaxPost
 from collector_runtime.public_web import PublicChannel
 from collector_runtime.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from collector_runtime.vk import VkCommunity, VkPost
-from collector_target.__main__ import _parser, _run, _scheduled_slot
+from collector_target.__main__ import _parser, _run, _scheduled_slot, next_delay
 from collector_target.adapters import (
     max_batch,
     rutube_batch,
@@ -1547,3 +1547,17 @@ def test_runtime_protocols_and_cli_contract_are_explicit() -> None:
     assert _scheduled_slot(
         NOW + timedelta(seconds=299), 300,
     ) == NOW
+
+
+def test_cycle_waits_until_the_next_slot_rather_than_a_full_interval() -> None:
+    """Пауза отсчитывается от начала обхода.
+
+    Пока она отсчитывалась от конца, период равнялся «цикл плюс интервал»:
+    на проде это давало 442 секунды у Telegram при цикле 142 и 686 у ВК при
+    цикле 386, вместо заявленных 300.
+    """
+    assert next_delay(142.0, 300) == pytest.approx(158.0)
+    assert next_delay(0.0, 300) == pytest.approx(300.0)
+    # Обход, не уложившийся в интервал, начинает следующий немедленно.
+    assert next_delay(386.0, 300) == 0.0
+    assert next_delay(611.0, 300) == 0.0
