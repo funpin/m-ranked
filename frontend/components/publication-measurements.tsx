@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Clock, Eye, Heart, Hourglass, MessageCircle, Share2, Smile, Timer, Users, type LucideIcon } from "lucide-react";
 import { observationGaps } from "@/lib/observation-gaps";
 import Link from "@/components/native-link";
 import { duration, legacyDate, legacyNumber } from "@/lib/format";
@@ -33,6 +34,25 @@ function Reaction({ name }: { name: string }) {
 function Breakdown({ value, delta = false }: { value: ReturnType<typeof historyReactionEntries>; delta?: boolean }) {
   const entries = value ?? [];
   return <span className="flex flex-nowrap items-center gap-x-1.5 gap-y-0.5">{entries.length ? entries.map(({reaction:name,count}) => <span className="bg-muted inline-flex items-center gap-1 rounded-md px-1 py-px whitespace-nowrap" key={name}><Reaction name={name} /> <b>{delta && count >= 0 ? "+" : ""}{count}</b></span>) : delta || value === null ? "—" : null}</span>;
+}
+
+/** Заголовки колонок: монохромные значки вместо эмодзи. Эмодзи рисовались
+ *  шрифтом системы, лезли за высоту строки и в каждой теме выглядели
+ *  по-разному; название колонки читается наведением и скринридером. */
+const COLUMN_ICONS: Record<string, LucideIcon> = {
+  reactions: Heart, views: Eye, comments: MessageCircle, shares: Share2,
+};
+
+function ColumnHead({ icon: Icon, label, delta = false, align = "text-center" }: { icon: LucideIcon; label: string; delta?: boolean; align?: string }) {
+  return (
+    <th scope="col" className={cn("bg-card text-muted-foreground sticky top-0 z-[5] h-10 px-3 font-medium shadow-[inset_0_-1px_0_var(--border)]", align)}>
+      <span className="inline-flex cursor-help items-center justify-center gap-0.5 align-middle" tabIndex={0} title={label}>
+        <Icon className="size-4 shrink-0" aria-hidden="true" />
+        {delta ? <span aria-hidden="true" className="text-[10px] leading-none font-semibold">Δ</span> : null}
+        <span className="sr-only">{label}</span>
+      </span>
+    </th>
+  );
 }
 
 const PublicationPlot = dynamic(() => import("./publication-plot"), {
@@ -223,11 +243,17 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
         {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} замеров · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} замеров · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} замеров · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       </CardHeader>
       <CardContent>
-        {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-max min-w-0 border-separate border-spacing-0 text-xs"><thead><tr>{[
-          ["🕒","Время замера, МСК"],["⏱","От прошлого замера"],["⌛","После публикации"],
-          ...tableMetrics.flatMap((metric) => [[metric.icon,metricLabel(metric,platform)],[`Δ${metric.icon}`,`Дельта ${noun(metric,platform)}`],...(telegram && metric.key === "reactions" ? [["👥","Минимум людей"]] : [])]),
-          ...(showBreakdown ? [["😀","Реакции по типам"],["Δ😀","Дельта реакций по типам"]] : []),
-        ].map(([icon,label]) => <th key={label} className="bg-card sticky top-0 z-[5] h-[38px] px-1.5 py-1.5 text-center shadow-[0_1px_0_var(--border)]"><span className="border-input bg-muted text-foreground focus:ring-ring/50 inline-grid h-7 min-w-7 cursor-help place-items-center rounded-md border px-1 text-base leading-none font-black outline-none focus:ring-[3px]" tabIndex={0} role="img" aria-label={label} title={label}>{icon}</span></th>)}</tr></thead><tbody>
+        {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-max min-w-0 border-separate border-spacing-0 text-xs"><thead><tr>{([
+          { icon: Clock, label: "Время замера, МСК" },
+          { icon: Timer, label: "От прошлого замера" },
+          { icon: Hourglass, label: "После публикации" },
+          ...tableMetrics.flatMap((metric) => [
+            { icon: COLUMN_ICONS[metric.key] ?? Heart, label: metricLabel(metric,platform) },
+            { icon: COLUMN_ICONS[metric.key] ?? Heart, label: `Прирост: ${noun(metric,platform)}`, delta: true },
+            ...(telegram && metric.key === "reactions" ? [{ icon: Users, label: "Минимум людей" }] : []),
+          ]),
+          ...(showBreakdown ? [{ icon: Smile, label: "Реакции по типам" }, { icon: Smile, label: "Прирост реакций по типам", delta: true }] : []),
+        ] as { icon: LucideIcon; label: string; delta?: boolean }[]).map((column) => <ColumnHead key={column.label} icon={column.icon} label={column.label} delta={column.delta} />)}</tr></thead><tbody>
           {tableRows.map((row,index) => {
             const previous = rows[rows.length-tableRows.length+index-1];
             const elapsed = previous ? (Date.parse(row.observedAt)-Date.parse(previous.observedAt))/1000 : null;
@@ -239,13 +265,13 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
               data-selected={selected || undefined}
               data-anomaly-boundary={boundary || undefined}
               className={cn(
-                "border-border scroll-mt-[38px] border-b transition-colors [&>td]:px-1.5 [&>td]:py-1.5 [&>td]:whitespace-nowrap",
+                "scroll-mt-10 transition-colors hover:bg-muted/50 [&>td]:border-b [&>td]:border-border [&>td]:px-3 [&>td]:py-2 [&>td]:whitespace-nowrap",
                 row.synthetic && "bg-muted/40",
                 boundary && "shadow-[inset_4px_0_var(--chart-4)]",
                 selected && "bg-chart-3/20 shadow-[inset_4px_0_var(--chart-3)]",
               )}
               title={`${row.quality}${row.intervalUncertain ? " · интервал неопределён" : ""}${boundary?" · граница сигнала":""}`}
-            ><td><button type="button" data-testid="snapshot-jump" className={cn("bg-transparent underline underline-offset-2", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground", boundary && "font-black decoration-double")} title="Показать эту точку на графике" onClick={() => jump(row.snapshotId)}>{legacyDate(row.observedAt)}{boundary?<span className="sr-only">, граница сигнала аномальной динамики</span>:null}</button></td><td className="tabular">{signedDuration(elapsed)}</td><td className="tabular">{row.synthetic ? "момент публикации" : duration(row.ageHours*3600)}</td>
+            ><td><button type="button" data-testid="snapshot-jump" className={cn("bg-transparent underline underline-offset-2", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground", boundary && "font-black decoration-double")} title="Показать эту точку на графике" onClick={() => jump(row.snapshotId)}>{legacyDate(row.observedAt)}{boundary?<span className="sr-only">, граница сигнала аномальной динамики</span>:null}</button></td><td className="tabular text-right">{signedDuration(elapsed)}</td><td className="tabular text-right">{row.synthetic ? "момент публикации" : duration(row.ageHours*3600)}</td>
               {tableMetrics.map((metric) => <MetricCells key={metric.key} row={row} metric={metric} people={telegram && metric.key === "reactions"} />)}
               {showBreakdown ? <><td className="min-w-max"><Breakdown value={historyReactionEntries(row)} /></td><td className="min-w-max"><Breakdown value={historyReactionEntries(row,true)} delta /></td></> : null}</tr>;
           })}
@@ -257,5 +283,5 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
 
 function MetricCells({ row,metric,people }: {row:HistorySnapshot;metric:Metric;people:boolean}) {
   const delta = row[metric.delta];
-  return <><td className="tabular" title={row[metric.key].quality ?? undefined}>{legacyNumber(row[metric.key].value)}</td><td className="tabular">{delta === null ? "—" : `${delta >= 0 ? "+" : ""}${delta}`}</td>{people ? <td className="tabular">{delta === null ? "—" : delta > 0 ? `≥${Math.ceil(delta/3)}` : "0"}</td> : null}</>;
+  return <><td className="tabular text-right" title={row[metric.key].quality ?? undefined}>{legacyNumber(row[metric.key].value)}</td><td className="tabular text-right">{delta === null ? "—" : `${delta >= 0 ? "+" : ""}${delta}`}</td>{people ? <td className="tabular text-right">{delta === null ? "—" : delta > 0 ? `≥${Math.ceil(delta/3)}` : "0"}</td> : null}</>;
 }

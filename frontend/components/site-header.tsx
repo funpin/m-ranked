@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Menu, X } from "lucide-react";
 import { normalizePlatform, queryHref } from "@/lib/params";
+import { NAV_LINKS } from "@/lib/nav-links";
 import type { Platform } from "@/lib/types";
 import logo from "../assets/logo.png";
 import { ThemeToggle } from "./theme-toggle";
@@ -20,13 +21,6 @@ function GithubMark() {
   );
 }
 
-const links = [
-  { href: "/", label: "Обзор" },
-  { href: "/rating", label: "Рейтинг" },
-  { href: "/compare", label: "Сравнение" },
-  { href: "/export/snapshots.csv", label: "Экспорт CSV" },
-  { href: "/manage", label: "Управление" },
-];
 
 function subscribePlatform(notify: () => void) {
   const observer = new MutationObserver(notify);
@@ -102,7 +96,7 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
             : "max-[780px]:hidden",
         )}
       >
-        {links.map((link) => {
+        {NAV_LINKS.map((link) => {
           const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
           return (
             <Link

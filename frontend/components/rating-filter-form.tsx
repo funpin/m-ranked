@@ -1,4 +1,5 @@
 "use client";
+import { beginNavigation } from "@/lib/navigation-pending";
 import { useRouter } from "next/navigation";
 import { useTransition, type ComponentProps } from "react";
 
@@ -9,6 +10,7 @@ export function RatingFilterForm(props:ComponentProps<"form">) {
     event.preventDefault();
     const query=new URLSearchParams();
     new FormData(event.currentTarget).forEach((value,key) => {if(typeof value === "string") query.append(key,value);});
+    beginNavigation();
     startTransition(()=>router.push(`/rating?${query}`,{scroll:false}));
   }}>{props.children}<span className="text-xs text-muted-foreground" role="status" hidden={!pending}>Обновляю…</span></form>;
 }

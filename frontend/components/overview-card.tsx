@@ -10,6 +10,22 @@ import { metricEvidence, type AggregateMetric } from "@/lib/metric-evidence";
 import { AnimatedNumber } from "@/components/animated-number";
 import { cn } from "@/lib/utils";
 
+/** Каждая площадка узнаётся по своему цвету: строка аккаунта, её метка и
+ *  полоса слева красятся одной краской, поэтому в общем режиме карточка
+ *  читается без чтения подписей. */
+const PLATFORM_TONE: Record<string, string> = {
+  telegram: "border-l-platform-telegram bg-platform-telegram/8 text-platform-telegram",
+  vk: "border-l-platform-vk bg-platform-vk/8 text-platform-vk",
+  max: "border-l-platform-max bg-platform-max/8 text-platform-max",
+  rutube: "border-l-platform-rutube bg-platform-rutube/8 text-platform-rutube",
+};
+const PLATFORM_CHIP: Record<string, string> = {
+  telegram: "bg-platform-telegram/15 text-platform-telegram",
+  vk: "bg-platform-vk/15 text-platform-vk",
+  max: "bg-platform-max/15 text-platform-max",
+  rutube: "bg-platform-rutube/15 text-platform-rutube",
+};
+
 /** Доля публикаций, у которых внутри окна есть замер. Тонкая полоса отвечает
  *  на вопрос «много это или мало» быстрее, чем два числа рядом, и ничего не
  *  стоит: ни графической библиотеки, ни запроса. */
@@ -111,9 +127,11 @@ function ActivityBody({ item, integrationWarning }: { item: OverviewItem; integr
         {item.shortName || item.canonicalName}<span className="text-muted-foreground ml-1 text-xs" aria-hidden="true">ⓘ</span>
       </h3>
       <div className="text-muted-foreground mt-1 truncate text-xs">{accountName(item)}{item.accounts.length ? <> · {legacyNumber(item.subscriberCount)} подписчиков{item.accountCount > 1 ? ` · ещё ${item.accountCount - 1}` : ""}</> : null}</div>
-      {item.platform === "telegram" ? badges : null}
+      {/* Бейджи стоят внутри блока фиксированной высоты для всех площадок:
+          когда они выносились наружу, у ВК, MAX и RuTube тот же блок
+          резервировал 116 пикселей и оставался пустым. */}
+      {badges}
     </div>
-    {item.platform !== "telegram" ? badges : null}
     <div className="my-4 grid flex-1 grid-cols-2 content-center gap-x-5 gap-y-3">
       <MetricCell suffix={suffix} value={item.reactions.total} label={`${primary} ${short}`} trend={item.reactions.totalTrend} evidence={item.reactions.totalMetadata} />
       <MetricCell suffix={suffix} value={item.views.total} label={`просмотров ${short}`} trend={item.views.totalTrend} evidence={item.views.totalMetadata} />
@@ -142,10 +160,10 @@ function AllPlatformsBody({ item }: { item: OverviewItem }) {
           {[...item.accounts].sort((a,b)=>a.platform.localeCompare(b.platform)).map((account) => {
             const name = account.title || account.username || account.canonicalExternalId;
             return (
-              <div className="bg-muted/60 flex min-w-0 items-center gap-2 rounded-md px-2 py-2" key={account.accountId}>
-                <span className="bg-chart-2/12 text-chart-2 inline-block min-w-[66px] rounded-md px-1.5 py-0.5 text-center text-[11px] font-black">{PLATFORM_LABELS[account.platform]}</span>
+              <div className={cn("flex min-w-0 items-center gap-2 rounded-md border-l-[3px] px-2 py-2", PLATFORM_TONE[account.platform] ?? "bg-muted/60")} key={account.accountId}>
+                <span className={cn("inline-block min-w-[66px] rounded-md px-1.5 py-0.5 text-center text-[11px] font-black", PLATFORM_CHIP[account.platform] ?? "bg-muted text-muted-foreground")}>{PLATFORM_LABELS[account.platform]}</span>
                 {account.url
-                  ? <a className="text-chart-2 inline-flex min-w-0 items-center gap-1 truncate hover:underline" href={account.url} target="_blank" rel="noopener noreferrer">{name}<ExternalLink className="size-3.5 shrink-0" aria-hidden="true" /></a>
+                  ? <a className="inline-flex min-w-0 items-center gap-1 truncate hover:underline" href={account.url} target="_blank" rel="noopener noreferrer">{name}<ExternalLink className="size-3.5 shrink-0" aria-hidden="true" /></a>
                   : <span className="min-w-0 truncate">{name}</span>}
               </div>
             );

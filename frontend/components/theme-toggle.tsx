@@ -33,7 +33,9 @@ export function ThemeToggle() {
   useEffect(() => {
     const query = window.matchMedia("(prefers-color-scheme: light)");
     const follow = () => { document.documentElement.dataset.theme = resolveTheme(readThemePreference()); };
-    follow();
+    // Тему на первом кадре уже поставил инлайновый скрипт, а нажатие ставит её
+    // само. Повторять при монтировании нельзя: компонент приезжает позже
+    // остальной страницы и затирал бы атрибут, выставленный кем-то ещё.
     query.addEventListener("change", follow);
     return () => query.removeEventListener("change", follow);
   }, [preference]);
