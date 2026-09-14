@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Card, CardContent } from "@/components/ui/card";
-import { NativeInput, NativeSegments, NativeSelect } from "@/components/native-field";
+import { NativeButton, NativeInput, NativeSegments, NativeSelect } from "@/components/native-field";
 import { LegacyFilterForm } from "@/components/legacy-filter-form";
 import { OverviewCard } from "@/components/overview-card";
 import { CoverageSummary } from "@/components/coverage-summary";
@@ -85,13 +85,14 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       <div className="mb-5">
           <LegacyFilterForm key={`${platform}:${period}:${sort}:${direction}:${q}`} action="/" method="get" aria-label="Фильтры обзора">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[15rem] flex-1">
-                <NativeInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" className="pr-10" />
-                <button type="submit" aria-label="Применить фильтры" title="Применить фильтры"
-                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 absolute top-1/2 right-1 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md transition-colors focus-visible:ring-[3px] focus-visible:outline-none">
-                  <Search className="size-4" aria-hidden="true" />
-                </button>
+              <div className="min-w-[15rem] flex-1">
+                <NativeInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" />
               </div>
+              {/* Кнопка стоит рядом с полем, как в рейтинге: внутри поля она
+                  читалась как украшение, а не как способ применить фильтры. */}
+              <NativeButton type="submit" aria-label="Применить фильтры" title="Применить фильтры" className="size-9 min-h-9 shrink-0 px-0">
+                <Search className="size-4" aria-hidden="true" />
+              </NativeButton>
               <div className="w-[9rem]">
                 <NativeSelect name="period" defaultValue={period} aria-label="Период" title="Период">
                   {Object.entries(PERIOD_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
