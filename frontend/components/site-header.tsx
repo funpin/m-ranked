@@ -122,8 +122,10 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
 
       <div className="flex shrink-0 items-center gap-1">
         {/* Разделители отбивают служебные кнопки от разделов — так же, как
-            поиск, GitHub и тему разделяет ui.shadcn.com. */}
-        <Separator orientation="vertical" className="mx-2 h-5 self-center" />
+            поиск, GitHub и тему разделяет ui.shadcn.com. Выравнивание задаётся
+            тем же вариантом, что и в самом компоненте: иначе его правило
+            растянуть разделитель на всю высоту строки пересиливает. */}
+        <Separator orientation="vertical" className="mx-2 h-5 data-vertical:self-center" />
         <Button
           variant="ghost"
           size="icon"
@@ -134,7 +136,7 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
             </a>
           }
         />
-        <Separator orientation="vertical" className="mx-2 h-5 self-center" />
+        <Separator orientation="vertical" className="mx-2 h-5 data-vertical:self-center" />
         <ThemeToggle />
         <Button
           data-testid="menu-toggle"

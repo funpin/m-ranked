@@ -9,6 +9,11 @@ import { cn } from "@/lib/utils";
 import type { HistorySnapshot } from "@/lib/types";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
+/** Больше этого числа столбцов прироста на экране уже не различить: при
+ *  ширине графика около девятисот точек каждый столбец становится тоньше
+ *  волоса, и картинка перестаёт читаться. */
+const MAX_BARS = 56;
+
 /** На оси значений место ограничено шириной колонки, а показатели доходят до
  *  миллионов. Полное число не влезает и наезжает на соседнее, поэтому крупные
  *  величины подписываются сокращённо — точные значения читаются в подсказке и
@@ -56,13 +61,38 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   const chartId = useId();
 
   const at = useCallback((row: HistorySnapshot) => Date.parse(row.observedAt), []);
-  const data = useMemo(() => rows.map((row) => {
-    const point: Record<string, number | null | string | boolean> = {
-      t: at(row), snapshotId: row.snapshotId, evidence: evidenceIds.has(row.snapshotId),
-    };
-    for (const metric of metrics) point[metric.key] = historyMetricValue(row, metric, delta);
-    return point;
-  }), [rows, metrics, delta, evidenceIds, at]);
+  const data = useMemo(() => {
+    const points = rows.map((row) => {
+      const point: Record<string, number | null | string | boolean> = {
+        t: at(row), snapshotId: row.snapshotId, evidence: evidenceIds.has(row.snapshotId),
+      };
+      for (const metric of metrics) point[metric.key] = historyMetricValue(row, metric, delta);
+      return point;
+    });
+    // Столбцы прироста при сотне замеров вырождаются в частокол шириной в
+    // пиксель. Соседние замеры складываются в равные группы: прирост —
+    // величина складываемая, поэтому сумма по группе остаётся тем же
+    // приростом, только за более длинный промежуток. Накопление так сворачивать
+    // нельзя — там значения не складываются, — и линия его не требует.
+    if (!delta || points.length <= MAX_BARS) return points;
+    const size = Math.ceil(points.length / MAX_BARS);
+    const grouped: typeof points = [];
+    for (let start = 0; start < points.length; start += size) {
+      const chunk = points.slice(start, start + size);
+      const last = chunk[chunk.length - 1]!;
+      const merged: Record<string, number | null | string | boolean> = {
+        t: last.t, snapshotId: last.snapshotId,
+        evidence: chunk.some((point) => point.evidence === true),
+        from: chunk[0]!.t, samples: chunk.length,
+      };
+      for (const metric of metrics) {
+        const values = chunk.map((point) => point[metric.key]).filter((value): value is number => typeof value === "number");
+        merged[metric.key] = values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+      }
+      grouped.push(merged);
+    }
+    return grouped;
+  }, [rows, metrics, delta, evidenceIds, at]);
 
   const gaps = useMemo(() => observationGaps(rows), [rows]);
   const firstAt = rows.length ? at(rows[0]!) : 0;
@@ -161,7 +191,10 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
         <ReferenceArea key={`${gap.from}-${gap.to}`} x1={gap.from} x2={gap.to} yAxisId={primaryAxis}
           fill="var(--muted-foreground)" fillOpacity={0.12} ifOverflow="hidden" />
       ))}
+      {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
+          у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}
+        padding={delta ? { left: 18, right: 18 } : { left: 4, right: 4 }}
         scale="time" tickLine={false} axisLine={false} height={44} interval="preserveStartEnd"
         tick={(props) => <TimeTick {...props} rows={rows} />}
         label={{ value: "Время замера и возраст публикации", position: "insideBottom", offset: -6, fill: "var(--muted-foreground)" }} />
@@ -246,9 +279,24 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
 /** Reads exactly what the inherited tooltip read: the sample's wall clock, each
  *  visible metric, the reaction-to-view share and whether the point is the
  *  synthetic moment of publication. */
-function SnapshotTooltip({ active, label, metrics, hidden, platform, delta, nearestRow }: {
+/** Точка графика, собранная из нескольких замеров. Recharts типизирует
+ *  содержимое подсказки свободно, поэтому форма сужается на границе. */
+function groupedPoint(payload: unknown) {
+  if (!Array.isArray(payload) || !payload.length) return null;
+  const point = (payload[0] as { payload?: Record<string, unknown> } | undefined)?.payload;
+  if (!point || typeof point.samples !== "number" || point.samples < 2) return null;
+  if (typeof point.from !== "number" || typeof point.t !== "number") return null;
+  const values: Record<string, number | null> = {};
+  for (const [key, value] of Object.entries(point)) {
+    if (typeof value === "number" || value === null) values[key] = value as number | null;
+  }
+  return { from: point.from, t: point.t, samples: point.samples, values };
+}
+
+function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, delta, nearestRow }: {
   active?: boolean;
   label?: unknown;
+  payload?: unknown;
   metrics: Metric[];
   hidden: ReadonlySet<string>;
   platform: string;
@@ -256,6 +304,29 @@ function SnapshotTooltip({ active, label, metrics, hidden, platform, delta, near
   nearestRow: (instant: unknown) => HistorySnapshot | null;
 }) {
   if (!active) return null;
+  // Столбец может быть группой замеров. Тогда подписи берутся из самой
+  // группы: иначе высота показывала бы сумму, а подсказка — прирост одного
+  // замера из неё.
+  const group = groupedPoint(payload);
+  if (group) {
+    return (
+      <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
+        <div className="font-medium">{shortDate(new Date(group.from).toISOString())} — {shortDate(new Date(group.t).toISOString())}</div>
+        <div className="text-muted-foreground">Суммарно за {group.samples} замеров</div>
+        {metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => {
+          const value = group.values[metric.key];
+          return (
+            <div key={metric.key} className="flex items-center gap-2">
+              <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[2px]" style={{ background: metric.color }} />
+              <span className="text-foreground tabular">
+                Прирост {noun(metric, platform)}: {value === null || value === undefined ? "—" : `${value >= 0 ? "+" : ""}${value}`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   const row = nearestRow(label);
   if (!row) return null;
   const ratio = !delta ? historyRatioTooltip(row, platform) : "";

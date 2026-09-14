@@ -27,14 +27,24 @@ target="$BACKUP_DIR/mranked-$stamp.dump"
 partial="$target.partial"
 started=$(date -u +%s)
 
+# Пароль передаётся по имени переменной, а не значением в аргументах: аргументы
+# видны в списке процессов любому пользователю машины.
+export PGPASSWORD
 # Снимок пишется во временное имя: недоснятый файл не должен выглядеть готовым.
-docker exec -i -e "PGPASSWORD=${PGPASSWORD:-}" "$MRANKED_DB_CONTAINER" \
+docker exec -i -e PGPASSWORD "$MRANKED_DB_CONTAINER" \
   nice -n 10 pg_dump -h 127.0.0.1 -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" \
   -Fc --no-password > "$partial"
 
 # Проверка: оглавление читается, значит файл не оборван и заголовок цел.
-if ! pg_restore --list "$partial" > /dev/null 2>&1; then
-  if ! docker exec -i "$MRANKED_DB_CONTAINER" pg_restore --list /dev/stdin < "$partial" > /dev/null; then
+#
+# Формат с оглавлением требует файла, по которому можно перемещаться, поэтому
+# поток через стандартный ввод здесь не годится. Если клиента на хосте нет,
+# проверку делает разовый контейнер того же образа, что и сама база, — так
+# версия клиента заведомо совпадает с версией формата.
+if ! command -v pg_restore > /dev/null 2>&1 || ! pg_restore --list "$partial" > /dev/null 2>&1; then
+  image="$(docker inspect --format '{{.Config.Image}}' "$MRANKED_DB_CONTAINER")"
+  if ! docker run --rm -v "$BACKUP_DIR:/backups:ro" "$image" \
+       pg_restore --list "/backups/$(basename "$partial")" > /dev/null; then
     echo "dump failed verification, keeping it as $partial" >&2
     exit 65
   fi

@@ -21,7 +21,10 @@ if [[ ! -r "$script" ]]; then
 fi
 
 if [[ -n "${MRANKED_DB_CONTAINER:-}" ]]; then
-  runner=(docker exec -i -e "PGPASSWORD=${PGPASSWORD:-}" "$MRANKED_DB_CONTAINER" psql)
+  # Пароль уходит по имени переменной: значение в аргументах было бы видно
+  # в списке процессов любому пользователю машины.
+  export PGPASSWORD
+  runner=(docker exec -i -e PGPASSWORD "$MRANKED_DB_CONTAINER" psql)
 else
   : "${PGPASSFILE:?PGPASSFILE is required without MRANKED_DB_CONTAINER}"
   runner=(psql)

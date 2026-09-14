@@ -53,7 +53,9 @@ test("publication presents neutral anomaly evidence and preserves boundary rows"
   await page.goto("/posts/1");
   const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
   await expect(panel).toContainText("Эвристическая сила сигнала: 0.82");
+  // Суть оговорки остаётся видимой без нажатий; полный текст — под значком.
   await expect(panel).toContainText("не доказывает искусственное происхождение");
+  await expect(panel.getByRole("button",{name:/Как считается: Сигнал аномальной динамики/})).toHaveCount(1);
   await expect(panel).not.toContainText(/вероятность накрутки|мошенничество|накрутка обнаружена/i);
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);

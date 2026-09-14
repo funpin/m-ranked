@@ -243,7 +243,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
         {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} замеров · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} замеров · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} замеров · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       </CardHeader>
       <CardContent>
-        {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-max min-w-0 border-separate border-spacing-0 text-xs"><thead><tr>{([
+        {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
           { icon: Clock, label: "Время замера, МСК" },
           { icon: Timer, label: "От прошлого замера" },
           { icon: Hourglass, label: "После публикации" },
