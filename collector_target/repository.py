@@ -442,45 +442,95 @@ class PostgresCollectorRepository:
             ).fetchone()
         return row is not None
 
-    def metric_high_watermarks(
+    def metric_ever_positive(
         self,
         account: AccountRef,
         external_ids: Sequence[str],
-    ) -> Mapping[str, Mapping[str, int | None]]:
+    ) -> Mapping[str, Mapping[str, bool]]:
+        """Был ли каждый показатель публикации положительным в недавних замерах.
+
+        Распознавание временных обнулений у ВК спрашивает именно это, а не
+        величину прежнего максимума. Максимум считался по всей истории снимков
+        публикации — в среднем 335 строк на каждую, и на сотне публикаций это
+        167 тысяч буферов и больше секунды.
+
+        Окно ограничено двумя дюжинами последних замеров, и вот почему.
+        Проверка существования без окна выходит быстрее, когда показатель был
+        положительным: она останавливается на первой же подходящей строке, 50
+        мс. Но если положительным он не был ни разу — а у ВК это обычное дело
+        для комментариев и репостов, — останавливаться не на чем, и читается
+        вся история: 1357 мс на том же аккаунте. Окно убирает этот худший
+        случай: замер на проде вперемежку дал 1610/92/50 мс без окна против
+        180/154/129 с ним. Чуть хуже в лучшем случае, гораздо лучше в худшем.
+
+        Двух дюжин хватает с запасом: свежие публикации опрашиваются раз в пять
+        минут, старые — раз в час, то есть окно покрывает от полутора часов до
+        суток наблюдений, а обнуление у ВК живёт минуты.
+
+        Месяц публикации — ключ партиционирования снимков — вычисляется из
+        самой публикации и передаётся явно, иначе поиск идёт по всем 63
+        партициям.
+        """
         requested = tuple(dict.fromkeys(str(value) for value in external_ids if value))
         if not requested:
             return {}
         with self._connection() as connection:
             rows = connection.execute(
-                # Снимки публикации лежат в партиции её собственного месяца
-                # публикации, поэтому месяц передаётся явно. Без него отсекать
-                # партиции не по чему: планировщик обходил все 63 и на сотне
-                # публикаций читал 603 тысячи буферов со сбросом полугигабайта
-                # во временные файлы. С месяцем — 167 тысяч буферов без сброса,
-                # выполнение падает с 53 секунд до 0.8.
-                """SELECT identity.external_id,
-                          max(snapshot.views_count) AS views,
-                          max(snapshot.reactions_count) AS reactions,
-                          max(snapshot.comments_count) AS comments,
-                          max(snapshot.shares_count) AS shares
-                     FROM ingest.publication_identity AS identity
-                     JOIN ingest.publication AS publication
-                       ON publication.id=identity.publication_id
-                     JOIN ingest.publication_metric_snapshot_active AS snapshot
-                       ON snapshot.publication_id=identity.publication_id
-                      AND snapshot.published_month
-                          =date_trunc('month', publication.published_at)::date
-                    WHERE identity.platform_account_id=%s
-                      AND identity.external_id=ANY(%s)
-                    GROUP BY identity.external_id""",
+                """WITH scope AS MATERIALIZED (
+                       SELECT identity.publication_id, identity.external_id,
+                              date_trunc('month', publication.published_at)::date
+                                  AS published_month
+                         FROM ingest.publication_identity AS identity
+                         JOIN ingest.publication AS publication
+                           ON publication.id=identity.publication_id
+                        WHERE identity.platform_account_id=%s
+                          AND identity.external_id=ANY(%s)
+                   )
+                   SELECT scope.external_id,
+                          -- Ни одного замера — публикация новая, её ноль
+                          -- настоящий. Замеры есть, но по этому показателю все
+                          -- пустые — значит, обнуление уже распознано и длится,
+                          -- и ответ осторожный: иначе пустота записалась бы как
+                          -- настоящий ноль.
+                          CASE WHEN coalesce(recent.rows, 0)=0 THEN false
+                               WHEN recent.views_seen=0 THEN true
+                               ELSE coalesce(recent.views, false) END AS views,
+                          CASE WHEN coalesce(recent.rows, 0)=0 THEN false
+                               WHEN recent.reactions_seen=0 THEN true
+                               ELSE coalesce(recent.reactions, false) END AS reactions,
+                          CASE WHEN coalesce(recent.rows, 0)=0 THEN false
+                               WHEN recent.comments_seen=0 THEN true
+                               ELSE coalesce(recent.comments, false) END AS comments,
+                          CASE WHEN coalesce(recent.rows, 0)=0 THEN false
+                               WHEN recent.shares_seen=0 THEN true
+                               ELSE coalesce(recent.shares, false) END AS shares
+                     FROM scope
+                     LEFT JOIN LATERAL (
+                         SELECT count(*) AS rows,
+                                count(recent_rows.views_count) AS views_seen,
+                                count(recent_rows.reactions_count) AS reactions_seen,
+                                count(recent_rows.comments_count) AS comments_seen,
+                                count(recent_rows.shares_count) AS shares_seen,
+                                bool_or(recent_rows.views_count>0) AS views,
+                                bool_or(recent_rows.reactions_count>0) AS reactions,
+                                bool_or(recent_rows.comments_count>0) AS comments,
+                                bool_or(recent_rows.shares_count>0) AS shares
+                           FROM (SELECT snapshot.views_count, snapshot.reactions_count,
+                                        snapshot.comments_count, snapshot.shares_count
+                                   FROM ingest.publication_metric_snapshot_active snapshot
+                                  WHERE snapshot.publication_id=scope.publication_id
+                                    AND snapshot.published_month=scope.published_month
+                                  ORDER BY snapshot.observed_at DESC, snapshot.id DESC
+                                  LIMIT 24) recent_rows
+                     ) recent ON true""",
                 (account.id, list(requested)),
             ).fetchall()
         return {
             str(_row_value(row, "external_id", 0)): {
-                "views": _row_value(row, "views", 1),
-                "reactions": _row_value(row, "reactions", 2),
-                "comments": _row_value(row, "comments", 3),
-                "shares": _row_value(row, "shares", 4),
+                "views": bool(_row_value(row, "views", 1)),
+                "reactions": bool(_row_value(row, "reactions", 2)),
+                "comments": bool(_row_value(row, "comments", 3)),
+                "shares": bool(_row_value(row, "shares", 4)),
             }
             for row in rows
         }

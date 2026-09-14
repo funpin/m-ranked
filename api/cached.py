@@ -1,8 +1,11 @@
 """Кэширование публичных ответов и валидаторы ETag."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -13,7 +16,13 @@ from .cache import ResponseCache
 from .db import Database
 from .providers import public_representation_version
 
+logger = logging.getLogger(__name__)
+
 PUBLIC_CACHE = "public, max-age=30, stale-while-revalidate=60"
+
+# Задачи пересчёта держим за ссылку: без неё сборщик мусора вправе забрать
+# задачу до того, как она доработает.
+_REFRESHING: set[asyncio.Task[None]] = set()
 
 REVISION_SQL = "SELECT id, committed_at FROM analytics.latest_dataset_revision()"
 PINNED_REVISION_SQL = (
@@ -85,19 +94,50 @@ async def serve(request: Request, namespace: str, query: dict[str, Any],
     key = cache_key(namespace, pinned_revision, query)
     entry = cache.get(key)
     if entry is None:
-        revision, committed_at = await _resolve_revision(db, pinned_revision)
-        body = await build(revision, committed_at)
-        payload = json.dumps(body, ensure_ascii=False, separators=(",", ":"), default=str)
-        etag = '"' + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32] + '"'
-        cache.put(key, payload, etag, tags)
+        payload, etag = await _rebuild(db, cache, key, tags, build, pinned_revision)
     else:
         payload, etag = entry.value, entry.etag
+        # Несвежий ответ отдаётся сразу, а пересчёт идёт фоном. Иначе ровно
+        # один посетитель раз в окно ждал перестроения ответа: на проде это
+        # 730–1024 мс против полутора миллисекунд у остальных.
+        if entry.is_stale(time.monotonic()) and cache.begin_refresh(key):
+            task = asyncio.create_task(
+                _refresh(db, cache, key, tags, build, pinned_revision),
+                name=f"cache-refresh:{namespace}")
+            _REFRESHING.add(task)
+            task.add_done_callback(_REFRESHING.discard)
 
     if _matches(request.headers.get("if-none-match"), etag):
         return Response(status_code=304, headers={"ETag": etag, "Cache-Control": PUBLIC_CACHE})
 
     return Response(payload, media_type="application/json",
                     headers={"ETag": etag, "Cache-Control": PUBLIC_CACHE})
+
+
+async def _rebuild(db: Database, cache: ResponseCache, key: str, tags: frozenset[str],
+                   build: Callable[[int, Any], Awaitable[dict[str, Any]]],
+                   pinned_revision: int | None) -> tuple[str, str]:
+    """Строит представление заново и кладёт его в кэш."""
+    revision, committed_at = await _resolve_revision(db, pinned_revision)
+    body = await build(revision, committed_at)
+    payload = json.dumps(body, ensure_ascii=False, separators=(",", ":"), default=str)
+    etag = '"' + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32] + '"'
+    cache.put(key, payload, etag, tags)
+    return payload, etag
+
+
+async def _refresh(db: Database, cache: ResponseCache, key: str, tags: frozenset[str],
+                   build: Callable[[int, Any], Awaitable[dict[str, Any]]],
+                   pinned_revision: int | None) -> None:
+    """Фоновый пересчёт. Отказ оставляет прежнюю запись дожить свой срок."""
+    try:
+        await _rebuild(db, cache, key, tags, build, pinned_revision)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning("фоновый пересчёт ответа не удался: %s", key, exc_info=True)
+    finally:
+        cache.end_refresh(key)
 
 
 def _matches(header: str | None, etag: str) -> bool:

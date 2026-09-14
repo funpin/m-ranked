@@ -150,3 +150,53 @@ def test_vk_client_surfaces_api_errors():
 
     with pytest.raises(VkApiError, match="VK API 5"):
         asyncio.run(scenario())
+
+
+def test_zero_is_kept_unless_the_metric_was_positive_before() -> None:
+    """Замена максимума на «был ли хоть раз больше нуля» ничего не меняет.
+
+    Прежде сюда приходил прежний максимум и проверка звучала как «максимум
+    известен и больше нуля». Ровно три случая, и все три ведут себя так же:
+    истории нет, история есть но одни нули, история с положительным значением.
+    """
+    from collector_runtime.vk_collector import validated_vk_metrics
+
+    class Post:
+        views = 0
+        likes = 0
+        comments = 0
+        reposts = 0
+
+    post = Post()
+
+    # Истории нет — ноль настоящий, ВК тут ни при чём.
+    metrics, ignored = validated_vk_metrics(post, {})
+    assert metrics == {"views": 0, "reactions": 0, "comments": 0, "shares": 0}
+    assert ignored == []
+
+    # История есть, но положительным показатель не был — ноль тоже настоящий.
+    metrics, ignored = validated_vk_metrics(post, {
+        "views": False, "reactions": False, "comments": False, "shares": False})
+    assert metrics == {"views": 0, "reactions": 0, "comments": 0, "shares": 0}
+    assert ignored == []
+
+    # Показатель был положительным, а сейчас ноль — это обнуление ВК, и
+    # наблюдение записывается как отсутствующее, а не как настоящий ноль.
+    metrics, ignored = validated_vk_metrics(post, {"reactions": True, "views": True})
+    assert metrics["reactions"] is None and metrics["views"] is None
+    assert metrics["comments"] == 0 and metrics["shares"] == 0
+    assert sorted(ignored) == ["reactions", "views"]
+
+
+def test_positive_value_is_never_suppressed() -> None:
+    class Post:
+        views = 5
+        likes = 7
+        comments = 0
+        reposts = 1
+
+    metrics, ignored = __import__(
+        "collector_runtime.vk_collector", fromlist=["validated_vk_metrics"]
+    ).validated_vk_metrics(Post(), {"views": True, "reactions": True, "comments": True})
+    assert metrics == {"views": 5, "reactions": 7, "comments": None, "shares": 1}
+    assert ignored == ["comments"]

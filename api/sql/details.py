@@ -131,7 +131,7 @@ SELECT account.id AS account_id, canonical.legacy_id, canonical.entity_type,
 
 ACCOUNT_STATS = """
 WITH publications AS (
-    SELECT publication.id, publication.history_completeness
+    SELECT publication.id, publication.history_completeness, publication.published_at
       FROM ingest.visible_publication publication
      WHERE publication.primary_account_id=%(account_id)s::uuid
        AND publication.published_at>=%(as_of)s::timestamptz-make_interval(days=>%(days)s)
@@ -171,13 +171,72 @@ WITH publications AS (
      WHERE result.platform_account_id=%(account_id)s::uuid
        AND result.started_at<=%(as_of)s::timestamptz
      ORDER BY result.started_at DESC,result.id DESC LIMIT 1
+), yesterday_edge AS (
+    -- Значение каждой публикации на границе вчерашних суток по Москве.
+    -- Отсюда берутся плашки «за сутки» у плиток: медиана вчера против
+    -- медианы сейчас. Одним проходом по диапазону, как в недельном ряду.
+    SELECT DISTINCT ON (publication.id) publication.id,
+           snapshot.views_count, snapshot.reactions_count, snapshot.comments_count,
+           snapshot.views_quality, snapshot.reactions_quality, snapshot.comments_quality
+      FROM publications publication
+      JOIN ingest.publication_metric_snapshot_active snapshot
+        ON snapshot.publication_id=publication.id
+       AND snapshot.published_month=date_trunc('month', publication.published_at)::date
+     WHERE snapshot.observed_at
+           < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+              AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.observed_at
+           >= (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 3)::timestamp
+              AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.quality<>'invalid'
+     ORDER BY publication.id, snapshot.observed_at DESC, snapshot.id DESC
+), yesterday_metric AS (
+    SELECT value.metric_key,
+           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY value.metric_value)
+                 FILTER(WHERE value.metric_value IS NOT NULL)::numeric,0) AS median_value
+      FROM yesterday_edge edge
+     CROSS JOIN LATERAL (VALUES
+        ('views',CASE WHEN edge.views_quality IN ('invalid','suspected_reset')
+                      THEN NULL ELSE edge.views_count END),
+        ('reactions',CASE WHEN edge.reactions_quality IN ('invalid','suspected_reset')
+                          THEN NULL ELSE edge.reactions_count END),
+        ('comments',CASE WHEN edge.comments_quality IN ('invalid','suspected_reset')
+                         THEN NULL ELSE edge.comments_count END)
+     ) value(metric_key,metric_value)
+     GROUP BY value.metric_key
 ), official_rating AS (
     SELECT observation.rank,observation.period
       FROM rating.official_institution_rating_observation observation
      WHERE observation.institution_id=%(institution_id)s::uuid
        AND observation.fetched_at<=%(as_of)s::timestamptz
        AND observation.category=%(platform)s
-     ORDER BY observation.fetched_at DESC,observation.id DESC LIMIT 1
+     -- Порядок по самому периоду, а не по времени загрузки: всю
+     -- опубликованную историю мы забираем одним прогоном, и «загружен
+     -- позже» перестало означать «свежее». Название месяца переводится в
+     -- номер, год берётся из той же строки.
+     ORDER BY nullif(regexp_replace(observation.period,'[^0-9]','','g'),'')::int DESC NULLS LAST,
+              array_position(ARRAY['Январь','Февраль','Март','Апрель','Май','Июнь',
+                                        'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+                                  split_part(observation.period,' ',1)) DESC NULLS LAST,
+              observation.fetched_at DESC, observation.id DESC LIMIT 1
+), previous_rating AS (
+    -- Место в прошлом опубликованном периоде. Рейтинг выходит раз в месяц,
+    -- поэтому «предыдущий» здесь — предыдущий месяц, а не предыдущие сутки.
+    SELECT observation.rank, observation.period
+      FROM rating.official_institution_rating_observation observation
+     WHERE observation.institution_id=%(institution_id)s::uuid
+       AND observation.fetched_at<=%(as_of)s::timestamptz
+       AND observation.category=%(platform)s
+       AND observation.period<>(SELECT period FROM official_rating)
+     -- Порядок по самому периоду, а не по времени загрузки: всю
+     -- опубликованную историю мы забираем одним прогоном, и «загружен
+     -- позже» перестало означать «свежее». Название месяца переводится в
+     -- номер, год берётся из той же строки.
+     ORDER BY nullif(regexp_replace(observation.period,'[^0-9]','','g'),'')::int DESC NULLS LAST,
+              array_position(ARRAY['Январь','Февраль','Март','Апрель','Май','Июнь',
+                                        'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+                                  split_part(observation.period,' ',1)) DESC NULLS LAST,
+              observation.fetched_at DESC, observation.id DESC LIMIT 1
 )
 SELECT %(days)s::integer AS retention_days,
        (SELECT count(*) FROM publications)::bigint AS post_count,
@@ -188,12 +247,27 @@ SELECT %(days)s::integer AS retention_days,
                            ELSE sample_size::numeric/(SELECT count(*) FROM publications) END,
            'quality',analytics.observation_quality_from_rank(quality_rank)::text)) FROM metric),'{}'::jsonb) AS medians,
        official_rating.rank AS rating_rank, official_rating.period AS rating_period,
+       previous_rating.rank AS previous_rating_rank,
+       previous_rating.period AS previous_rating_period,
+       -- Вчерашние значения тех же плиток: по ним рисуется плашка «за сутки».
+       (SELECT count(*) FROM publications publication
+         WHERE publication.published_at
+               < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+                  AT TIME ZONE 'Europe/Moscow'))::bigint AS previous_post_count,
+       (SELECT count(*) FROM publications publication
+         WHERE publication.history_completeness='complete'
+           AND publication.published_at
+               < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+                  AT TIME ZONE 'Europe/Moscow'))::bigint AS previous_monitored,
+       coalesce((SELECT jsonb_object_agg(metric_key,median_value)
+                   FROM yesterday_metric),'{}'::jsonb) AS previous_medians,
        subscriber.subscriber_count,
        CASE WHEN collection.status IN ('failed','partial')
             THEN coalesce(collection.sanitized_error_code,'collection_failed') END AS last_error,
        greatest(collection.completed_at,collection.started_at) AS last_checked_at
   FROM (SELECT 1) singleton
   LEFT JOIN subscriber ON true LEFT JOIN collection ON true LEFT JOIN official_rating ON true
+  LEFT JOIN previous_rating ON true
 """
 
 
@@ -434,24 +508,30 @@ SELECT
 
 ACCOUNT_DAILY = """
 -- Недельная динамика аккаунта: сколько постов вышло в каждый из последних
--- семи дней и какими они оказались по медиане реакций и просмотров.
+-- семи дней, какими они оказались по медиане, и сколько за эти сутки набрали
+-- все отслеживаемые посты вместе.
 --
--- Считается живьём и стоит недорого: публикаций за неделю у канала десятки,
--- а их текущие значения лежат в витрине последних значений. Дни нарезаются по
--- московскому времени — так же, как подписаны все даты на экране.
-WITH days AS (
-    SELECT generate_series(
-        (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 6,
-        (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date,
-        interval '1 day')::date AS metric_day
+-- Медианы считаются по постам этого дня, а суммы — по всем постам площадки:
+-- это разные вопросы. Медиана отвечает «каким вышел типичный пост», сумма —
+-- «сколько площадка набрала за сутки», и второе совпадает с числом на
+-- карточке обзора.
+--
+-- Дни нарезаются по московскому времени — так же, как подписаны все даты на
+-- экране. Границей суток служит последний замер до полуночи, поэтому прирост
+-- за день — это разница двух границ, а не сумма отдельных наблюдений.
+WITH bounds AS (
+    SELECT (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date AS today
+), days AS (
+    SELECT generate_series(bounds.today - 6, bounds.today, interval '1 day')::date AS metric_day
+      FROM bounds
 ), published AS (
     SELECT (publication.published_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
            publication.id
       FROM ingest.visible_publication publication
+     CROSS JOIN bounds
      WHERE publication.primary_account_id=%(account_id)s::uuid
        AND publication.published_at<=%(as_of)s::timestamptz
-       AND (publication.published_at AT TIME ZONE 'Europe/Moscow')::date
-           >= (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 6
+       AND (publication.published_at AT TIME ZONE 'Europe/Moscow')::date >= bounds.today - 6
 ), valued AS (
     SELECT published.metric_day,
            CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset')
@@ -462,14 +542,59 @@ WITH days AS (
       LEFT JOIN analytics.publication_latest latest ON latest.publication_id=published.id
        AND latest.observed_at<=%(as_of)s::timestamptz
        AND NOT latest.synthetic AND latest.quality<>'invalid'
+), tracked AS (
+    -- Все посты площадки, а не только вышедшие на этой неделе: за сутки
+    -- набирают и старые. Месяц публикации передаётся явно — это ключ
+    -- партиционирования снимков.
+    SELECT publication.id,
+           date_trunc('month', publication.published_at)::date AS published_month
+      FROM ingest.visible_publication publication
+     WHERE publication.primary_account_id=%(account_id)s::uuid
+       AND publication.published_at<=%(as_of)s::timestamptz
+), edges AS (
+    -- Граница суток — последний замер публикации в эти сутки. Берётся одним
+    -- проходом по диапазону вместо восьми точечных поисков на публикацию:
+    -- на полутора сотнях постов это 800 мс против полусотни.
+    SELECT DISTINCT ON (tracked.id, (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date)
+           tracked.id,
+           (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
+           snapshot.reactions_count, snapshot.views_count
+      FROM tracked
+     CROSS JOIN bounds
+      JOIN ingest.publication_metric_snapshot_active snapshot
+        ON snapshot.publication_id=tracked.id
+       AND snapshot.published_month=tracked.published_month
+     WHERE snapshot.observed_at >= ((bounds.today - 7)::timestamp AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.observed_at<=%(as_of)s::timestamptz
+       AND snapshot.quality<>'invalid'
+     ORDER BY tracked.id,
+              (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date,
+              snapshot.observed_at DESC, snapshot.id DESC
+), growth AS (
+    -- Прирост за сутки — разница между границей этого дня и границей
+    -- предыдущего. Первый день ряда остаётся без пары и в сумму не идёт:
+    -- восьмая граница берётся ровно ради него.
+    SELECT metric_day,
+           greatest(reactions_count - lag(reactions_count) OVER pub, 0) AS reactions_gain,
+           greatest(views_count - lag(views_count) OVER pub, 0) AS views_gain
+      FROM edges
+    WINDOW pub AS (PARTITION BY id ORDER BY metric_day)
+), daily_growth AS (
+    SELECT metric_day, sum(reactions_gain)::numeric AS total_reactions,
+           sum(views_gain)::numeric AS total_views
+      FROM growth GROUP BY metric_day
 )
 SELECT days.metric_day,
        count(valued.metric_day)::integer AS published_count,
        round(percentile_cont(0.5) WITHIN GROUP(ORDER BY valued.reactions)
              FILTER(WHERE valued.reactions IS NOT NULL)::numeric,0) AS median_reactions,
        round(percentile_cont(0.5) WITHIN GROUP(ORDER BY valued.views)
-             FILTER(WHERE valued.views IS NOT NULL)::numeric,0) AS median_views
-  FROM days LEFT JOIN valued ON valued.metric_day=days.metric_day
+             FILTER(WHERE valued.views IS NOT NULL)::numeric,0) AS median_views,
+       max(daily_growth.total_reactions) AS total_reactions,
+       max(daily_growth.total_views) AS total_views
+  FROM days
+  LEFT JOIN valued ON valued.metric_day=days.metric_day
+  LEFT JOIN daily_growth ON daily_growth.metric_day=days.metric_day
  GROUP BY days.metric_day
  ORDER BY days.metric_day
 """

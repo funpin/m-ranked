@@ -24,7 +24,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     database = Database(settings)
     cache = ResponseCache(settings.cache_entries, settings.cache_ttl_seconds,
-                          settings.cache_min_age_seconds)
+                          settings.cache_min_age_seconds,
+                          settings.cache_stale_seconds)
     export_jobs = ExportJobs(database)
     listener = InvalidationListener(settings.read_dsn, cache) if settings.read_dsn else None
     outbox = OutboxMarker(settings.outbox_dsn) if settings.outbox_dsn else None

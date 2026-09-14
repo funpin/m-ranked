@@ -660,7 +660,7 @@ def test_vk_joint_identity_and_positive_to_zero_reset_are_preserved() -> None:
         posts=(post,),
         observed_at=NOW,
         collected_at=NOW,
-        high_watermarks={"-123_77": {"reactions": 9}},
+        ever_positive={"-123_77": {"reactions": True}},
     )
     publication = batch.publications[0]
     assert publication.external_id == "-123_77"
@@ -980,9 +980,9 @@ def test_vk_exact_lookup_omission_is_missing_but_auth_is_transient(
     tmp_path: Path,
 ) -> None:
     class History(_Tracking):
-        def metric_high_watermarks(
+        def metric_ever_positive(
             self, target: AccountRef, external_ids: list[str],
-        ) -> dict[str, dict[str, int | None]]:
+        ) -> dict[str, dict[str, bool]]:
             return {}
 
     class Client:

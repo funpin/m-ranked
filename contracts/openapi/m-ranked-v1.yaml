@@ -4466,7 +4466,42 @@ components:
           type: [number, 'null']
         medianViews:
           type: [number, 'null']
-      required: [day, publishedCount, medianReactions, medianViews]
+        totalReactions:
+          type: [number, 'null']
+          description: >-
+            Прирост реакций всех отслеживаемых публикаций за эти сутки — то же
+            число, что на карточке обзора. Медиана отвечает на вопрос «каким
+            вышел типичный пост», сумма — «сколько площадка набрала».
+        totalViews:
+          type: [number, 'null']
+      required: [day, publishedCount, medianReactions, medianViews, totalReactions, totalViews]
+    AccountStatsPrevious:
+      type: object
+      additionalProperties: false
+      description: >-
+        Те же величины сутками раньше: по ним рисуется плашка изменения рядом с
+        каждым числом. Место в официальном рейтинге сравнивается не с прошлыми
+        сутками, а с прошлым опубликованным месяцем — рейтинг выходит раз в
+        месяц. Пусто там, где сравнивать не с чем.
+      properties:
+        postCount:
+          type: [integer, 'null']
+          format: int64
+        monitored:
+          type: [integer, 'null']
+          format: int64
+        medianReactions:
+          type: [number, 'null']
+        medianViews:
+          type: [number, 'null']
+        medianComments:
+          type: [number, 'null']
+        ratingRank:
+          type: [integer, 'null']
+          format: int64
+        ratingPeriod:
+          type: [string, 'null']
+      required: [postCount, monitored, medianReactions, medianViews, medianComments, ratingRank, ratingPeriod]
     AccountStats:
       type: object
       additionalProperties: false
@@ -4519,10 +4554,13 @@ components:
             день без публикаций присутствует с нулём и пустыми медианами.
           items:
             $ref: '#/components/schemas/AccountDailyPoint'
+        previous:
+          $ref: '#/components/schemas/AccountStatsPrevious'
       required:
       - retentionDays
       - postCount
       - monitored
+      - previous
       - medianReactions
       - medianViews
       - medianComments

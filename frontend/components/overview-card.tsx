@@ -1,6 +1,8 @@
 import { accountHref } from "@/lib/entity-routes";
 import Link from "@/components/native-link";
-import { ExternalLink, FileText, Plus, TrendingUp } from "lucide-react";
+import { ExternalLink } from "lucide-react";
+import { Icon, type IconName } from "@/components/icon-sprite";
+import { DeltaBadge } from "@/components/delta-badge";
 import { legacyDate, legacyNumber, PERIOD_SHORT, PLATFORM_LABELS } from "@/lib/format";
 import { metricNumber, queryHref } from "@/lib/params";
 import type { OverviewItem, OverviewMetric, OverviewPage } from "@/lib/types";
@@ -66,17 +68,20 @@ function accountName(item: OverviewItem): string {
 
 /** The slot keeps its height whether or not there is a change to report, so a
  *  grid of cards does not shift as values load. */
-function Trend({ value, suffix }: { value: OverviewMetric["totalTrend"]; suffix:string }) {
-  const numeric = metricNumber(value);
-  if (numeric === null || numeric === 0) return <span className="block min-h-[22px]" />;
+/**
+ * Изменение против предыдущего такого же периода.
+ *
+ * Место под плашкой держится всегда, даже когда её нет: иначе карточки в
+ * сетке разъезжались бы по высоте в зависимости от того, у кого есть с чем
+ * сравнивать. За месяц сравнения нет ни у кого — истории наблюдений пока
+ * семнадцать суток, а нужно шестьдесят.
+ */
+function Trend({ value, label, suffix }: {
+  value: OverviewMetric["totalTrend"]; label: string; suffix: string;
+}) {
   return (
-    <span className="block min-h-[22px]">
-      <span className={cn(
-        "mt-1 inline-block w-max max-w-full rounded-full px-2 py-0.5 text-[10px] font-extrabold tabular",
-        numeric > 0 ? "bg-success/12 text-success" : "bg-destructive/12 text-destructive",
-      )}>
-        {numeric > 0 ? "+" : ""}{legacyNumber(numeric)} {suffix}
-      </span>
+    <span className="mt-1 block min-h-[22px]">
+      <DeltaBadge value={metricNumber(value)} label={`${label} против предыдущего периода (${suffix})`} />
     </span>
   );
 }
@@ -100,7 +105,7 @@ function MetricCell({ value, label, trend, evidence, suffix }: {
         {label}
         <span className="relative z-[2] -mt-1 shrink-0"><MethodNote title={label}>{text}</MethodNote></span>
       </small>
-      <Trend value={trend} suffix={suffix} />
+      <Trend value={trend} label={label} suffix={suffix} />
     </span>
   );
 }
@@ -113,12 +118,12 @@ function ActivityBody({ item, integrationWarning, href }: { item: OverviewItem; 
   const badges = <div className="mt-3">
     <div className="flex flex-wrap gap-1.5" aria-label={`Публикации ${short}`}>
     {[
-      { label: "Всего публикаций в базе.", value: item.totalPublicationCount, Icon: FileText, tone: "bg-muted text-muted-foreground", kind: "" },
-      { label: `Публикации из БД с активностью ${short}.`, value: item.activityPublicationCount, Icon: TrendingUp, tone: "bg-chart-2/12 text-chart-2", kind: "activity" },
-      { label: `Публикации, вышедшие ${short}.`, value: item.newPublicationCount, Icon: Plus, tone: "bg-success/12 text-success", kind: "new" },
-    ].map(({ label, value, Icon, tone, kind }) => (
+      { label: "Всего публикаций в базе.", value: item.totalPublicationCount, icon: "file-text" as IconName, tone: "bg-muted text-muted-foreground", kind: "" },
+      { label: `Публикации из БД с активностью ${short}.`, value: item.activityPublicationCount, icon: "trending-up" as IconName, tone: "bg-chart-2/12 text-chart-2", kind: "activity" },
+      { label: `Публикации, вышедшие ${short}.`, value: item.newPublicationCount, icon: "plus" as IconName, tone: "bg-success/12 text-success", kind: "new" },
+    ].map(({ label, value, icon, tone, kind }) => (
       <span key={kind} className={cn("inline-flex cursor-help items-center gap-1 rounded-md px-1.5 py-1 text-xs font-bold tabular", tone)} tabIndex={0} title={label} aria-label={`${label} ${value}`}>
-        <Icon className="size-3.5 shrink-0" aria-hidden="true" /><b>{value}</b>
+        <Icon name={icon} className="size-3.5 shrink-0" /><b>{value}</b>
       </span>
     ))}
     </div>

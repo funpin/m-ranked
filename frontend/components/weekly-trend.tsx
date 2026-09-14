@@ -1,9 +1,18 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
-type Point = { day: string; publishedCount: number; medianReactions: number | null; medianViews: number | null };
+type Point = {
+  day: string; publishedCount: number;
+  medianReactions: number | null; medianViews: number | null;
+  totalReactions: number | null; totalViews: number | null;
+};
+
+/** Что рисуют две линии: типичный пост или вся площадка. */
+export type TrendMode = "median" | "total";
 
 // Библиотека графиков приезжает отдельным куском, как и на странице
 // публикации: в первой загрузке страницы площадки ей делать нечего.
@@ -12,15 +21,24 @@ const AccountTrendPlot = dynamic(() => import("@/components/account-trend-plot")
   loading: () => <Skeleton className="h-[280px] w-full" role="status" aria-label="Загрузка графика" />,
 });
 
+const MODES: { id: TrendMode; label: string; hint: string }[] = [
+  { id: "median", label: "Медианы", hint: "Каким вышел типичный пост этого дня" },
+  { id: "total", label: "Всего за день", hint: "Сколько набрали все посты площадки за эти сутки" },
+];
+
 /**
- * Неделя канала: медианы реакций и просмотров по дням.
+ * Неделя канала: две линии и столбцы публикаций.
  *
- * Числа слева говорят, каков канал сейчас; график — куда он движется. Ряд
- * приходит всегда полным, поэтому день без публикаций виден как провал, а не
- * как разрыв.
+ * Переключатель меняет, что именно показывают линии. Медиана отвечает на
+ * вопрос «каким вышел типичный пост», сумма — «сколько площадка набрала»; это
+ * разные вопросы, и рисовать их одновременно означало бы четыре линии на двух
+ * шкалах. Сколько публикаций вышло в день, видно в обоих режимах: это опора,
+ * без которой ни то ни другое не читается.
  */
 export function WeeklyTrend({ points, primary }: { points: readonly Point[]; primary: string }) {
+  const [mode, setMode] = useState<TrendMode>("median");
   const published = points.reduce((total, point) => total + point.publishedCount, 0);
+  const totals = mode === "total";
   return (
     <section className="grid content-start gap-3 rounded-lg border p-4" aria-label="Динамика за неделю">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -29,6 +47,24 @@ export function WeeklyTrend({ points, primary }: { points: readonly Point[]; pri
           {published ? <>вышло <b className="text-foreground tabular">{published}</b> публикаций за 7 дней</> : "за 7 дней публикаций не было"}
         </span>
       </div>
+      {/* Переключатель в том же виде, что сегменты площадок в шапке обзора:
+          два состояния, подсвечено выбранное. */}
+      <div role="group" aria-label="Что показывают линии"
+        className="bg-muted text-muted-foreground inline-flex w-fit rounded-lg p-0.5">
+        {MODES.map((option) => (
+          <button key={option.id} type="button" title={option.hint}
+            aria-pressed={mode === option.id}
+            onClick={() => setMode(option.id)}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              mode === option.id
+                ? "bg-background text-foreground shadow-sm"
+                : "bg-transparent hover:text-foreground",
+            )}>
+            {option.label}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-hidden="true">
         <span className="flex items-center gap-1.5">
           <span className="bg-muted-foreground/40 size-2.5 rounded-[2px]" />
@@ -36,16 +72,16 @@ export function WeeklyTrend({ points, primary }: { points: readonly Point[]; pri
         </span>
         <span className="flex items-center gap-1.5">
           <span className="size-2.5 rounded-[2px]" style={{ background: "var(--chart-1)" }} />
-          медиана {primary} <span className="text-muted-foreground">· слева</span>
+          {totals ? `всего ${primary}` : `медиана ${primary}`} <span className="text-muted-foreground">· слева</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="size-2.5 rounded-[2px]" style={{ background: "var(--chart-2)" }} />
-          медиана просмотров <span className="text-muted-foreground">· справа</span>
+          {totals ? "всего просмотров" : "медиана просмотров"} <span className="text-muted-foreground">· справа</span>
         </span>
       </div>
       {points.length > 1
         ? <>
-            <AccountTrendPlot points={points} primary={primary} />
+            <AccountTrendPlot points={points} primary={primary} mode={mode} />
             <p className="text-muted-foreground text-xs">Нажмите на день — покажем публикации этого дня в таблице ниже.</p>
           </>
         : <p className="text-muted-foreground py-10 text-center text-sm">Недельного ряда ещё нет.</p>}

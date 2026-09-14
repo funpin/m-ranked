@@ -539,7 +539,7 @@ class VkGatewayCollector:
             for post in posts
             if (identity := post.identity_for_community(community.id)) is not None
         ]
-        high_watermarks = self.history.metric_high_watermarks(account, external_ids)
+        ever_positive = self.history.metric_ever_positive(account, external_ids)
         observed, collected = _times(self.clock)
         initial = vk_batch(
             account=account,
@@ -547,7 +547,7 @@ class VkGatewayCollector:
             posts=posts,
             observed_at=observed,
             collected_at=collected,
-            high_watermarks=high_watermarks,
+            ever_positive=ever_positive,
             sampling_interval_seconds=_interval(self.settings, observed),
             complete_history_max_first_age_seconds=(
                 self.settings.complete_history_max_first_age_minutes * 60
@@ -618,7 +618,7 @@ class VkGatewayCollector:
             for post in final_posts
             if (identity := post.identity_for_community(community.id)) is not None
         ]
-        final_watermarks = self.history.metric_high_watermarks(
+        final_ever_positive = self.history.metric_ever_positive(
             account, final_external_ids,
         )
         final_collected = utc(self.clock.now(), "gateway.collected_at")
@@ -630,7 +630,7 @@ class VkGatewayCollector:
             posts=final_posts,
             observed_at=observed,
             collected_at=final_collected,
-            high_watermarks=final_watermarks,
+            ever_positive=final_ever_positive,
             sampling_interval_seconds=_interval(self.settings, observed),
             complete_history_max_first_age_seconds=(
                 self.settings.complete_history_max_first_age_minutes * 60

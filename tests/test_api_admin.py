@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from api.identity_receipts import persist_admin_envelope
-from api.official_rating import _parse
+from api.official_rating import _filled_months, _parse_month
 from api.routes.admin import _account_body
 from api.security import AuthConfig
 
@@ -60,8 +60,39 @@ def test_official_rating_parser_builds_all_five_rankings() -> None:
         {"code": "b", "name": "Б", "scores": {"social": 2, "tg": 3, "vk": 2,
                                                     "ok": 1, "rt": 4}},
     ]}]}).encode()
-    parsed = _parse("const config = { year: 2026 };", source,
-                    "https://www.m-rating.ru/data.json")
+    months = _filled_months(source)
+    assert len(months) == 1
+    parsed = _parse_month("const config = { year: 2026 };", months[0], source,
+                          "https://www.m-rating.ru/data.json")
     assert parsed["period"] == "Июль 2026"
     assert set(parsed["rankings"]) == {"social", "telegram", "vk", "max", "rutube"}
     assert parsed["rankings"]["social"]["b"] == (1, 2.0)
+
+
+def test_only_months_with_published_scores_are_taken() -> None:
+    """Источник держит весь год одним файлом, у будущих месяцев оценки пустые.
+
+    Прежде отсюда брался только последний заполненный месяц, поэтому в базе
+    лежал ровно один период и сравнивать место в рейтинге было не с чем.
+    """
+    def month(name, score):
+        return {"name": name, "items": [
+            {"code": "a", "name": "А", "scores": {"social": score, "tg": score,
+                                                  "vk": score, "ok": score, "rt": score}}]}
+    source = json.dumps({"months": [
+        month("Май", 5), month("Июнь", 6), month("Июль", 7),
+        month("Август", None), month("Сентябрь", None)]}).encode()
+    filled = _filled_months(source)
+    assert [m["name"] for m in filled] == ["Май", "Июнь", "Июль"], "от старых к новым"
+
+    periods = [_parse_month("const config = { year: 2026 };", m, source,
+                            "https://www.m-rating.ru/data.json")["period"] for m in filled]
+    assert periods == ["Май 2026", "Июнь 2026", "Июль 2026"]
+
+
+def test_a_year_without_any_published_month_is_rejected() -> None:
+    source = json.dumps({"months": [{"name": "Январь", "items": [
+        {"code": "a", "name": "А", "scores": {"social": None, "tg": None,
+                                              "vk": None, "ok": None, "rt": None}}]}]}).encode()
+    with pytest.raises(ValueError):
+        _filled_months(source)

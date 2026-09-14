@@ -55,6 +55,9 @@ class Settings:
     # уведомления приходят чаще раза в секунду, и без границы кэш не доживает
     # до второго читателя.
     cache_min_age_seconds: int = field(default_factory=lambda: _int("API_CACHE_MIN_AGE_SECONDS", 10, 0, 600))
+    # Сколько ещё можно отдавать несвежий ответ, пока идёт фоновый пересчёт.
+    # Столько же обещает заголовку stale-while-revalidate.
+    cache_stale_seconds: int = field(default_factory=lambda: _int("API_CACHE_STALE_SECONDS", 60, 0, 3600))
     retention_days: int = field(default_factory=lambda: _int("PUBLICATION_RETENTION_DAYS", 70, 1, 3650))
 
     health_mode: str = field(default_factory=lambda: os.environ.get("HEALTH_DATA_SOURCE", "public_web"))

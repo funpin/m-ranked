@@ -141,7 +141,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       <NavigationBoundary fallback={<CardGridSkeleton />}>
         {platform === "all" ? <CoverageSummary items={items} /> : null}
 
-        <section className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
+        <section className="reveal grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
           items.map((item) => <OverviewCard item={item} integrationWarning={page.integrationWarning} key={item.entityId} />)
         ) : (
           <Card><CardContent className="text-muted-foreground py-6">{q ? `По запросу «${q}» вузы не найдены.` : platform === "telegram" ? "За выбранный период публикаций не найдено." : "Вузы ещё не добавлены."}</CardContent></Card>

@@ -20,62 +20,76 @@ def _put(cache: ResponseCache, key: str = "k", value: str = "v") -> None:
     cache.put(key, value, '"etag"', TAGS)
 
 
-def test_entry_survives_invalidation_until_the_floor() -> None:
-    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=30)
+def test_invalidation_marks_stale_but_keeps_serving() -> None:
+    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=0, stale_seconds=60)
     _put(cache)
 
-    assert cache.invalidate(TAGS) == 0, "свежая запись не выбрасывается"
+    assert cache.invalidate(TAGS) == 1, "запись помечена несвежей"
     entry = cache.get("k")
-    assert entry is not None and entry.value == "v"
-    # Жизнь укорочена до границы, а не до полного TTL.
-    assert entry.expires_at <= entry.born_at + 30 + 1e-6
+    assert entry is not None and entry.value == "v", "но продолжает обслуживать"
+    assert entry.is_stale(time.monotonic()), "и знает, что несвежая"
 
 
-def test_repeated_invalidation_does_not_extend_the_floor() -> None:
-    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=30)
-    _put(cache)
-    for _ in range(5):
-        cache.invalidate(TAGS)
-    entry = cache.get("k")
-    assert entry is not None
-    assert entry.expires_at <= entry.born_at + 30 + 1e-6
-
-
-def test_aged_entry_is_dropped_by_invalidation() -> None:
-    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=0)
+def test_fresh_entry_is_not_marked_before_the_floor() -> None:
+    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=30, stale_seconds=60)
     _put(cache)
     assert cache.invalidate(TAGS) == 1
-    assert cache.get("k") is None
+    entry = cache.get("k")
+    assert entry is not None
+    # Свежесть держится минимум min_age от рождения: пересчёт не чаще этого.
+    assert not entry.is_stale(time.monotonic())
+    assert entry.fresh_until >= entry.born_at + 30 - 1e-6
 
 
-def test_untagged_entry_is_not_touched() -> None:
-    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=0)
+def test_repeated_invalidation_does_not_move_the_deadline() -> None:
+    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=30, stale_seconds=60)
     _put(cache)
-    assert cache.invalidate(frozenset({"comparison"})) == 0
-    assert cache.get("k") is not None
+    assert cache.invalidate(TAGS) == 1
+    assert cache.invalidate(TAGS) == 0, "повторное уведомление ничего не меняет"
+    entry = cache.get("k")
+    assert entry is not None
+    assert entry.fresh_until <= entry.born_at + 30 + 1e-6
 
 
-def test_entry_expires_at_the_floor() -> None:
-    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=0.05)
+def test_stale_entry_stops_being_served_after_its_window() -> None:
+    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=0, stale_seconds=0.05)
     _put(cache)
     cache.invalidate(TAGS)
     assert cache.get("k") is not None
     time.sleep(0.08)
-    assert cache.get("k") is None, "после границы запись больше не отдаётся"
+    assert cache.get("k") is None, "слишком старую запись отдавать уже нельзя"
 
 
-def test_floor_never_outlives_the_ttl() -> None:
-    cache = ResponseCache(capacity=8, ttl_seconds=1, min_age_seconds=600)
+def test_untagged_entry_is_not_touched() -> None:
+    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=0, stale_seconds=60)
     _put(cache)
-    cache.invalidate(TAGS)
+    assert cache.invalidate(frozenset({"comparison"})) == 0
     entry = cache.get("k")
-    assert entry is not None
-    assert entry.expires_at <= entry.born_at + 1 + 1e-6
+    assert entry is not None and not entry.is_stale(time.monotonic())
 
 
-def test_negative_floor_is_rejected() -> None:
+def test_only_one_refresh_runs_per_key() -> None:
+    """Второй читатель несвежей записи не запускает второй пересчёт."""
+    cache = ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=0, stale_seconds=60)
+    assert cache.begin_refresh("k") is True
+    assert cache.begin_refresh("k") is False
+    cache.end_refresh("k")
+    assert cache.begin_refresh("k") is True
+
+
+def test_ttl_still_caps_a_never_invalidated_entry() -> None:
+    cache = ResponseCache(capacity=8, ttl_seconds=0.05, min_age_seconds=0, stale_seconds=60)
+    _put(cache)
+    assert cache.get("k") is not None
+    time.sleep(0.08)
+    assert cache.get("k") is None, "TTL остаётся страховкой на потерянное уведомление"
+
+
+def test_negative_windows_are_rejected() -> None:
     with pytest.raises(ValueError):
         ResponseCache(capacity=8, ttl_seconds=600, min_age_seconds=-1)
+    with pytest.raises(ValueError):
+        ResponseCache(capacity=8, ttl_seconds=600, stale_seconds=-1)
 
 
 def test_live_key_does_not_depend_on_the_current_revision() -> None:

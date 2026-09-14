@@ -1,5 +1,17 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+
+/**
+ * Ждёт, пока доиграют анимации появления.
+ *
+ * Список проявляется волной сверху вниз, и пока строка не дошла до своей
+ * очереди, она прозрачна. Проверять контраст в этот момент значит мерить
+ * промежуточное состояние перехода, а не то, что читатель видит.
+ */
+async function settled(page: Page) {
+  await page.evaluate(() => Promise.all(
+    document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
+}
 
 for (const theme of ["light", "dark"]) {
   test(`remaining screens fit the viewport and meet axe AA in ${theme} theme`, async ({ page }) => {
@@ -9,6 +21,7 @@ for (const theme of ["light", "dark"]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await settled(page);
       expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
     }
   });
@@ -93,4 +106,85 @@ test("нажатие по дню на графике переносит к пу�
 
   await banner.getByRole("button", { name: "показать все" }).click();
   await expect(page.getByRole("status")).toHaveCount(0);
+});
+
+test("значки ссылаются на общий набор, а не возят свои контуры", async ({ page }) => {
+  const response = await page.goto("/");
+  const html = (await response!.text());
+  // Контуры объявлены один раз, значки ссылаются на объявление.
+  expect(html.match(/<use href="#i-/g)?.length ?? 0).toBeGreaterThan(3);
+  expect(html.match(/id="i-info"/g)?.length ?? 0).toBe(1);
+  // Ни один значок из набора больше не приезжает своими контурами.
+  expect(html).not.toContain("lucide-info");
+  expect(html).not.toContain("lucide-file-text");
+  expect(html).not.toContain("lucide-trending-up");
+  // И значок всё ещё виден на экране.
+  await expect(page.locator('svg use[href="#i-info"]').first()).toBeAttached();
+});
+
+test("плашка изменения показывается рядом с числом и молчит, когда сравнивать не с чем", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const tiles = page.getByText("медиана реакций").locator("xpath=ancestor::div[1]");
+  // В заглушке вчерашняя медиана реакций 4, сегодняшняя 5 — плашка «+1».
+  await expect(tiles.getByTitle(/медиана реакций/)).toContainText("+1");
+  // Место в рейтинге сравнивается с прошлым периодом и знак читается наоборот:
+  // было пятое, стало второе — это подъём, значит зелёная стрелка вверх.
+  const rating = page.getByText(/М‑Рейтинг/).locator("xpath=ancestor::div[1]");
+  await expect(rating.getByTitle(/место против периода/)).toContainText("−3");
+});
+
+test("переключатель у графика меняет ряд, а столбцы публикаций остаются", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const trend = page.getByRole("region", { name: "Динамика за неделю" });
+  const toggle = trend.getByRole("group", { name: "Что показывают линии" });
+  await expect(toggle.getByRole("button", { name: "Медианы" })).toHaveAttribute("aria-pressed", "true");
+  await expect(trend).toContainText("медиана просмотров");
+
+  await toggle.getByRole("button", { name: "Всего за день" }).click();
+  await expect(toggle.getByRole("button", { name: "Всего за день" })).toHaveAttribute("aria-pressed", "true");
+  await expect(trend).toContainText("всего просмотров");
+  // Линий по-прежнему две, и столбцы публикаций на месте в обоих режимах.
+  await expect(trend.locator("path.recharts-line-curve")).toHaveCount(2);
+  await expect(trend.locator(".recharts-bar-rectangle")).toHaveCount(6);
+  await expect(trend).toContainText("публикаций в день");
+});
+
+test("строка таблицы открывает публикацию, а ссылка рядом уводит на площадку", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const row = page.locator("tbody tr[data-published-day]").first();
+  await expect(row).toHaveClass(/cursor-pointer/);
+  // Ссылка на сам пост остаётся отдельной и уводит наружу.
+  const outward = row.locator('a[target="_blank"]');
+  await expect(outward).toHaveCount(1);
+  await expect(outward).toHaveAttribute("rel", /noopener/);
+  // А ссылка на нашу страницу публикации — первая в строке, как и была.
+  await expect(row.locator('a[href^="/publications/"]')).toHaveCount(1);
+  // Нажатие мимо ссылок открывает нашу страницу публикации.
+  await row.getByRole("cell").nth(1).click();
+  await expect(page).toHaveURL(/\/(publications|posts)\//);
+});
+
+test("список проявляется волной, а не разом", async ({ page }) => {
+  await page.goto("/");
+  const cards = page.locator("section.reveal > *");
+  await expect(cards.first()).toBeVisible();
+  // Волна идёт сверху вниз: у каждой следующей задержка больше предыдущей.
+  const delays = await cards.evaluateAll((nodes) =>
+    nodes.slice(0, 5).map((node) => getComputedStyle(node).animationDelay));
+  expect(delays.length).toBeGreaterThan(1);
+  expect(new Set(delays).size).toBe(delays.length);
+  // И вся волна коротка: даже пятая карточка ждёт меньше десятой доли секунды.
+  const last = Number.parseFloat(delays.at(-1) ?? "0");
+  expect(last).toBeGreaterThan(0);
+  expect(last).toBeLessThan(0.15);
+});
+
+test("шапка таблицы не участвует в волне", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const head = page.locator("table.reveal > thead");
+  await expect(head).toBeVisible();
+  expect(await head.evaluate((node) => getComputedStyle(node).animationName)).toBe("none");
+  // А строки — участвуют.
+  const row = page.locator("table.reveal > tbody > tr").first();
+  expect(await row.evaluate((node) => getComputedStyle(node).animationName)).toBe("reveal");
 });

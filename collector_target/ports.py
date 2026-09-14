@@ -80,11 +80,19 @@ class CollectorRepository(Protocol):
 
 @runtime_checkable
 class MetricHistoryReader(Protocol):
-    def metric_high_watermarks(
+    def metric_ever_positive(
         self,
         account: AccountRef,
         external_ids: Sequence[str],
-    ) -> Mapping[str, Mapping[str, int | None]]:
+    ) -> Mapping[str, Mapping[str, bool]]:
+        """Был ли показатель публикации хоть раз больше нуля.
+
+        Единственный потребитель — распознавание временных обнулений у ВК:
+        ноль считается настоящим, только если раньше нуля не было. Само
+        значение прежнего максимума при этом не используется, а вычисление
+        его по всей истории снимков стоило десятикратно дороже ответа на
+        вопрос «было ли хоть раз».
+        """
         ...
 
 
