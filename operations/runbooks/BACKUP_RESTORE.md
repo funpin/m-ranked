@@ -20,7 +20,7 @@ systemctl enable --now m-ranked-target-restore-verify.timer
 
 The verifier restores into a new private directory, starts PostgreSQL without a
 network listener, checks page checksums and `pg_amcheck --all`, requires
-PostgreSQL 18.6 and schema contract `live-read-2026-09-13`, records the latest
+PostgreSQL 18.6 and schema contract `live-read-2026-09-13-text-fingerprint`, records the latest
 dataset revision and removes only its own temporary cluster. Quarterly
 `m-ranked-target-pitr-drill.timer` replays archived WAL to a chosen point.
 
@@ -28,3 +28,18 @@ During an incident, freeze writers, retain the damaged primary, restore to a
 new host/path and verify contract, checksums, revision and RPO/RTO before any
 promotion. Provider session files and identity receipts live outside PostgreSQL;
 back them up separately with distinct encryption and verify their inventory.
+
+## Ночной снимок там, где нет pgBackRest
+
+`m-ranked-target-dump-backup.timer` снимает базу целиком каждую ночь
+(`pg_dump -Fc`), проверяет снятое чтением оглавления и оставляет на диске три
+последние копии в `/var/backups/m-ranked`. Проверка выполняется клиентом из
+образа самой базы, если на хосте нет `pg_restore`.
+
+Это не замена pgBackRest: восстановление возможно только на момент снимка, а
+не на произвольную точку — архива WAL здесь нет. Восстановление:
+
+```bash
+docker exec -i mranked-production-postgres-1 \
+  pg_restore -h 127.0.0.1 -U mranked_bootstrap -d mranked_restore --clean --if-exists < снимок.dump
+```

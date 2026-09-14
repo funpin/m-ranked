@@ -329,21 +329,21 @@ def vk_batch(
     posts: Iterable[VkPost],
     observed_at: datetime,
     collected_at: datetime,
-    high_watermarks: Mapping[str, Mapping[str, int | None]] | None = None,
+    ever_positive: Mapping[str, Mapping[str, bool]] | None = None,
     sampling_interval_seconds: Interval = 300,
     complete_history_max_first_age_seconds: int = 360,
     source_version: str = "5.199",
 ) -> RawCollectionBatch:
     observed = utc(observed_at, "observed_at")
     collected = utc(collected_at, "collected_at")
-    watermarks = high_watermarks or {}
+    seen_positive = ever_positive or {}
     publications: list[RawPublication] = []
     for post in posts:
         identity = post.identity_for_community(community.id)
         if identity is None:
             continue
         metrics, ignored = validated_vk_metrics(
-            post, dict(watermarks.get(identity.external_key, {})),
+            post, dict(seen_positive.get(identity.external_key, {})),
         )
         public_key = identity.source_external_key or identity.external_key
         extra_identities = (

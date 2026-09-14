@@ -186,7 +186,7 @@ class Rehearsal:
             try:
                 before=self.state(self.source)
                 if (before['snapshots'] < 1
-                        or before['contract'] != 'live-read-2026-09-13'
+                        or before['contract'] != 'live-read-2026-09-13-text-fingerprint'
                         or before['unvalidatedConstraints']):
                     raise ValueError('source must contain representative validated live-read data')
                 self.report['sourceState']=before

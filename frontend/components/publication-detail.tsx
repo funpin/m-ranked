@@ -12,6 +12,8 @@ import { StatusPill } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { NavigationBoundary } from "@/components/navigation-boundary";
+import { PublicationSkeleton } from "@/components/skeletons";
 
 /** Previous and next keep their rel hints and stay readable when unavailable,
  *  so the absence of a neighbour is conveyed by words rather than by colour. */
@@ -27,7 +29,7 @@ function Neighbour({ href, id, platform, direction }: {
       <Icon className="size-4 shrink-0" aria-hidden="true" />
       <span className="grid text-left">
         <span className="text-sm leading-tight font-semibold">{title}</span>
-        <span className="text-[11px] leading-tight font-medium opacity-75">
+        <span className="text-muted-foreground text-[11px] leading-tight font-medium">
           {id ? publicationLabel(id, platform) : back ? "Нет более раннего" : "Нет более нового"}
         </span>
       </span>
@@ -82,6 +84,10 @@ export function PublicationDetail({history,historyLimit=100,analysis=null,analys
       </nav>
     </header>
 
+    {/* Заголовок и кнопки «назад/вперёд» остаются на месте, а данные прошлого
+        поста прячутся сразу: иначе на экране несколько секунд висели чужие
+        графики и числа, неотличимые от новых. */}
+    <NavigationBoundary fallback={<PublicationSkeleton />}>
     {p.deletedAt && history.archivedText ? (
       <Card className="mb-4">
         <CardHeader>
@@ -97,5 +103,6 @@ export function PublicationDetail({history,historyLimit=100,analysis=null,analys
     <AnomalyAnalysis analysis={analysis} loadFailed={analysisLoadFailed} historyRevision={history.datasetRevision} />
     <PublicationMeasurements key={p.publicationId} rows={history.items} platform={p.platform} historyLimit={historyLimit} analysis={analysis}
       fullHistoryHref={historyLimit < FULL_PUBLICATION_HISTORY_LIMIT ? queryHref(publicationHref(p.publicationId),{history_limit:FULL_PUBLICATION_HISTORY_LIMIT}) : undefined} />
+    </NavigationBoundary>
   </>;
 }

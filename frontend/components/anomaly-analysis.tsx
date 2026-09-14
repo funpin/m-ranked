@@ -1,7 +1,7 @@
 import { legacyDate } from "@/lib/format";
 import type { PublicationAnomalyAnalysis } from "@/lib/types";
 import { StatusPill } from "@/components/ui";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MethodNote } from "@/components/method-note";
 import { ChevronRight } from "lucide-react";
 
 const SOURCE_REVISION_FLOOR=1_000_000_000_000;
@@ -17,10 +17,10 @@ function Warning({ children }: { children: React.ReactNode }) {
 
 export function AnomalyAnalysis({analysis,loadFailed,historyRevision}:{analysis:PublicationAnomalyAnalysis|null;loadFailed:boolean;historyRevision:number}) {
   if(loadFailed) return (
-    <Card as="section" className="my-4" aria-labelledby="anomaly-title">
-      <CardHeader><CardTitle as="h2" id="anomaly-title" className="font-heading text-lg">Сигнал аномальной динамики</CardTitle></CardHeader>
-      <CardContent><Warning>Результат анализа временно недоступен. Это техническая ошибка, а не чистый результат.</Warning></CardContent>
-    </Card>
+    <section className="bg-muted/40 border-border my-4 rounded-xl border p-4" aria-labelledby="anomaly-title">
+      <h2 id="anomaly-title" className="font-heading text-sm font-semibold">Сигнал аномальной динамики</h2>
+      <div className="mt-3 text-sm"><Warning>Результат анализа временно недоступен. Это техническая ошибка, а не чистый результат.</Warning></div>
+    </section>
   );
   if(!analysis) return null;
   // Source-backed revisions are epoch-millis watermarks (DatasetRevision.SOURCE_ID_FLOOR),
@@ -28,12 +28,20 @@ export function AnomalyAnalysis({analysis,loadFailed,historyRevision}:{analysis:
   const comparableRevision=historyRevision<SOURCE_REVISION_FLOOR;
   const staleEvidence=comparableRevision && analysis.sourceDatasetRevision!==null && analysis.sourceDatasetRevision<historyRevision;
   return (
-    <Card as="section" className="my-4" aria-labelledby="anomaly-title">
-      <CardHeader className="flex flex-wrap items-start justify-between gap-4">
-        <CardTitle as="h2" id="anomaly-title" className="font-heading text-lg">Сигнал аномальной динамики</CardTitle>
+    // Блок вспомогательный: он не главный на странице, но и не примечание.
+    // Поэтому подложка приглушённая, а не карточная, заголовок мельче
+    // заголовков графиков, а длинная оговорка убрана под значок.
+    <section className="bg-muted/40 border-border my-4 rounded-xl border p-4" aria-labelledby="anomaly-title">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="anomaly-title" className="font-heading flex items-center gap-1.5 text-sm font-semibold">
+          Сигнал аномальной динамики
+          <MethodNote title="Сигнал аномальной динамики">
+            {analysis.disclaimer} Балл является версионированной эвристической оценкой силы сигнала, а не вероятностью.
+          </MethodNote>
+        </h2>
         <StatusPill tone={statusTones[analysis.status]}>{statusLabels[analysis.status]}</StatusPill>
-      </CardHeader>
-      <CardContent className="grid gap-3">
+      </div>
+      <div className="mt-3 grid gap-2 text-sm">
         <p>{analysis.suspicionScore===null ? "Автоматическая оценка: недостаточно применимых данных" : <>Эвристическая сила сигнала: <b className="tabular font-semibold">{Number(analysis.suspicionScore).toFixed(2)}</b>{analysis.overallSeverity ? ` · выраженность: ${severityLabels[analysis.overallSeverity]}` : ""}</>}</p>
         {analysis.affectedMetrics.length ? <p>Затронутые показатели: {analysis.affectedMetrics.map(metric=>metricLabels[metric]).join(", ")}.</p> : null}
         {analysis.manualAssessmentPresent ? <p><b className="font-semibold">Присутствует отдельная ручная оценка.</b> Она не включена в автоматический числовой балл.</p> : null}
@@ -61,8 +69,11 @@ export function AnomalyAnalysis({analysis,loadFailed,historyRevision}:{analysis:
             ))}
           </div>
         ) : <p className="text-muted-foreground">Активных сигналов нет.</p>}
-        <p className="text-muted-foreground text-sm">{analysis.disclaimer} Балл является версионированной эвристической оценкой силы сигнала, а не вероятностью.</p>
-      </CardContent>
-    </Card>
+        {/* Полная оговорка уехала под значок, но её суть остаётся на виду:
+            прятать за нажатие утверждение о том, чем сигнал НЕ является,
+            нельзя — иначе экран читается как обвинение. */}
+        <p className="text-muted-foreground text-xs">Информационный сигнал: сам по себе не доказывает искусственное происхождение активности.</p>
+      </div>
+    </section>
   );
 }

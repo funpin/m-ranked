@@ -309,7 +309,7 @@ CREATE VIEW ingest.account_metric_snapshot_active AS
 
 -- ops_and_admin.schema_contract
 CREATE VIEW ops_and_admin.schema_contract AS
- SELECT 'live-read-2026-09-13'::text AS contract_id;
+ SELECT 'live-read-2026-09-13-text-fingerprint'::text AS contract_id;
 
 -- rating.official_institution_rating_observation
 CREATE VIEW rating.official_institution_rating_observation AS

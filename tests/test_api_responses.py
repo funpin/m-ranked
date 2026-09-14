@@ -571,3 +571,35 @@ def test_overview_normalizes_unsupported_sort(client) -> None:
     default = client.get("/api/v1/overview?platform=all&sort=m_rating&limit=3")
     assert fallback.status_code == 200
     assert fallback.headers["etag"] == default.headers["etag"]
+
+
+@requires_database
+def test_detail_routes_pin_the_requested_dataset_revision(client) -> None:
+    """Страница детали собирается из нескольких запросов по одному снимку.
+
+    Ревизия набора данных на проде меняется каждые две секунды — её двигает
+    каждая запись коллектора. Без закрепления примерно каждый тринадцатый
+    просмотр складывал страницу из двух снимков, и расхождение приводило к
+    экрану «Сервис временно недоступен».
+    """
+    overview = client.get("/api/v1/overview?platform=telegram&limit=1").json()
+    current = int(overview["datasetRevision"])
+    account_id = overview["items"][0]["accounts"][0]["accountId"]
+
+    pinned = current - 1
+    response = client.get(f"/api/v1/accounts/{account_id}?revision={pinned}")
+    assert response.status_code == 200
+    assert response.json()["datasetRevision"] == pinned
+
+    publications = client.get(
+        f"/api/v1/accounts/{account_id}/publications?limit=1&revision={pinned}")
+    assert publications.status_code == 200
+    assert publications.json()["datasetRevision"] == pinned
+
+    # Неизвестная ревизия не ошибка: ответ приходит по текущей, и клиент
+    # видит это в самом поле, а не получает отказ.
+    unknown = client.get(f"/api/v1/accounts/{account_id}?revision=999999999")
+    assert unknown.status_code == 200
+    assert unknown.json()["datasetRevision"] != 999999999
+
+    assert client.get(f"/api/v1/accounts/{account_id}?revision=0").status_code == 400

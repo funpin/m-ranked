@@ -7,7 +7,7 @@ FastAPI, четыре Python-сборщика, anomaly worker, Next.js и Postgr
 
 1. подготовить Unix users, database roles и systemd credentials;
 2. установить один immutable release;
-3. проверить contract id `live-read-2026-09-13`;
+3. проверить contract id `live-read-2026-09-13-text-fingerprint`;
 4. запустить `m-ranked-target.target`;
 5. включить maintenance и backup/restore timers;
 6. проверить `/health`, `/api/v1/health`, свежесть сборщиков и outbox.

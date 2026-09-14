@@ -18,7 +18,9 @@ from collector_runtime.max_api import MaxChannel, MaxPost
 from collector_runtime.public_web import PublicChannel
 from collector_runtime.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from collector_runtime.vk import VkCommunity, VkPost
-from collector_target.__main__ import _parser, _run, _scheduled_slot
+from collector_target.__main__ import (
+    _parser, _run, _scheduled_slot, next_delay, platform_offset, slot_delay,
+)
 from collector_target.adapters import (
     max_batch,
     rutube_batch,
@@ -211,7 +213,11 @@ def test_normalization_preserves_zero_null_and_marks_invalid_and_resets() -> Non
     assert snapshot.metric_quality["reactions"] == ObservationQuality.INVALID
     assert snapshot.metric_quality["comments"] == ObservationQuality.SUSPECTED_RESET
     assert snapshot.quality == ObservationQuality.INVALID
-    assert len(snapshot.source_fingerprint) == 32
+    # Отпечаток хранится шестнадцатеричным текстом: колонка объявлена text,
+    # потому что перевод её в bytea на живой базе требует перезаписи всех
+    # партиций под ACCESS EXCLUSIVE.
+    assert len(snapshot.source_fingerprint) == 64
+    assert set(snapshot.source_fingerprint) <= set('0123456789abcdef')
     serialized = canonical_json(snapshot.sanitized_source)
     assert "top-secret" not in serialized
     assert "another-secret" not in serialized
@@ -654,7 +660,7 @@ def test_vk_joint_identity_and_positive_to_zero_reset_are_preserved() -> None:
         posts=(post,),
         observed_at=NOW,
         collected_at=NOW,
-        high_watermarks={"-123_77": {"reactions": 9}},
+        ever_positive={"-123_77": {"reactions": True}},
     )
     publication = batch.publications[0]
     assert publication.external_id == "-123_77"
@@ -974,9 +980,9 @@ def test_vk_exact_lookup_omission_is_missing_but_auth_is_transient(
     tmp_path: Path,
 ) -> None:
     class History(_Tracking):
-        def metric_high_watermarks(
+        def metric_ever_positive(
             self, target: AccountRef, external_ids: list[str],
-        ) -> dict[str, dict[str, int | None]]:
+        ) -> dict[str, dict[str, bool]]:
             return {}
 
     class Client:
@@ -1424,7 +1430,9 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
         params for statement, params in connection.calls
         if "INSERT INTO ingest.publication_metric_snapshot(" in statement
     )
-    assert isinstance(snapshot_call[14], bytes) and len(snapshot_call[14]) == 32
+    # Отпечаток источника уходит в базу шестнадцатеричным текстом, семантический —
+    # байтами: колонка source_fingerprint объявлена text, semantic_fingerprint — bytea.
+    assert isinstance(snapshot_call[14], str) and len(snapshot_call[14]) == 64
     assert snapshot_call[-1] == 7
     assert "NULL,%s" in next(
         statement for statement, _ in connection.calls
@@ -1541,3 +1549,79 @@ def test_runtime_protocols_and_cli_contract_are_explicit() -> None:
     assert _scheduled_slot(
         NOW + timedelta(seconds=299), 300,
     ) == NOW
+
+
+def test_cycle_waits_until_the_next_slot_rather_than_a_full_interval() -> None:
+    """Пауза отсчитывается от начала обхода.
+
+    Пока она отсчитывалась от конца, период равнялся «цикл плюс интервал»:
+    на проде это давало 442 секунды у Telegram при цикле 142 и 686 у ВК при
+    цикле 386, вместо заявленных 300.
+    """
+    assert next_delay(142.0, 300) == pytest.approx(158.0)
+    assert next_delay(0.0, 300) == pytest.approx(300.0)
+    # Обход, не уложившийся в интервал, начинает следующий немедленно.
+    assert next_delay(386.0, 300) == 0.0
+    assert next_delay(611.0, 300) == 0.0
+
+
+def test_platforms_get_different_slots_within_one_interval() -> None:
+    """Одновременный перезапуск не должен сводить площадки в одну фазу.
+
+    Слоты разложены по epoch и одинаковы для всех, поэтому после общей
+    выкатки телеграм и MAX начинали обход в одну и ту же секунду и делили
+    одно ядро вместо того, чтобы чередоваться: на проде это удваивало пик
+    при том же объёме работы.
+    """
+    offsets = {platform: platform_offset(platform, 300) for platform in Platform}
+    assert len(set(offsets.values())) == len(Platform), "у каждой площадки своя доля"
+    assert all(0 <= value < 300 for value in offsets.values())
+    # Смещение постоянно: оно выводится из имени, а не из момента запуска.
+    assert offsets == {platform: platform_offset(platform, 300) for platform in Platform}
+    # Доли разложены равномерно по интервалу.
+    assert sorted(offsets.values()) == [0, 75, 150, 225]
+
+
+def test_slot_delay_waits_only_to_the_platform_slot() -> None:
+    # Ровно на своём слоте ждать нечего.
+    assert slot_delay(600.0, 300, 0) == 0.0
+    assert slot_delay(750.0, 300, 150) == 0.0
+    # Между слотами — до ближайшего, а не полный круг.
+    assert slot_delay(610.0, 300, 0) == pytest.approx(290.0)
+    assert slot_delay(610.0, 300, 150) == pytest.approx(140.0)
+    # Смещение сдвигает сетку, а не растягивает её.
+    for offset in (0, 75, 150, 225):
+        assert slot_delay(1234.5, 300, offset) <= 300.0
+        assert slot_delay(1234.5, 300, offset) > 0.0
+
+
+def test_injected_connection_factory_still_opens_and_closes_per_call() -> None:
+    """Пул поднимается только для собственного DSN.
+
+    Подставленная фабрика соединений принадлежит вызывающему: держать её
+    соединения в пуле репозиторий не вправе, и тесты полагаются на то, что
+    каждое обращение открывает и закрывает своё.
+    """
+    opened: list[_ScriptedConnection] = []
+
+    def factory() -> _ScriptedConnection:
+        connection = _ScriptedConnection()
+        opened.append(connection)
+        return connection
+
+    repository = PostgresCollectorRepository(connection_factory=factory)
+    with repository._connection():
+        pass
+    with repository._connection():
+        pass
+    assert len(opened) == 2
+    assert all(connection.closed for connection in opened)
+    # Закрытие репозитория без собственного DSN безвредно и ничего не трогает.
+    repository.close()
+
+
+def test_pool_smaller_than_two_is_rejected() -> None:
+    # Словарь свидетельств берёт собственное соединение внутри уже открытого
+    # батча: на единственном соединении это встало бы намертво.
+    with pytest.raises(ValueError):
+        PostgresCollectorRepository("postgresql:///unused", pool_size=1)

@@ -1,0 +1,14 @@
+[Unit]
+Description=Check the official M-Rating once a day
+
+[Timer]
+# Источник обновляется раз в месяц, поэтому чаще раза в сутки смысла нет.
+# Ночью по московскому времени машина свободнее всего.
+OnCalendar=*-*-* 01:17:00
+RandomizedDelaySec=20min
+Persistent=true
+AccuracySec=5min
+Unit=m-ranked-target-official-rating.service
+
+[Install]
+WantedBy=timers.target

@@ -14,7 +14,9 @@
 :root {
   --radius: 0.625rem;
 
-  --background: oklch(1 0 0);
+  /* Полотно страницы на тон темнее карточек: иначе белая карточка на белом
+     фоне держится только на тонкой рамке и перестаёт читаться как карточка. */
+  --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -36,6 +38,14 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+
+  /* Цвета площадок. Оттенки взяты по смыслу названий — cyan, blue, indigo,
+     violet, — а светлота подобрана так, чтобы подпись держала контраст на
+     собственной подложке той же краски. */
+  --platform-telegram: oklch(0.52 0.11 215);
+  --platform-vk: oklch(0.52 0.19 260);
+  --platform-max: oklch(0.50 0.20 277);
+  --platform-rutube: oklch(0.52 0.23 294);
 
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -99,6 +109,11 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
 
+  --platform-telegram: oklch(0.79 0.12 215);
+  --platform-vk: oklch(0.72 0.16 260);
+  --platform-max: oklch(0.71 0.17 277);
+  --platform-rutube: oklch(0.74 0.18 294);
+
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -132,6 +147,17 @@
 }
 
 @theme inline {
+  /* Кегль поднят на один шаг по всей шкале, а отступы оставлены прежними:
+     текст читается крупнее, плотность интерфейса не меняется. Множители
+     межстрочного расстояния Tailwind задаёт отдельными токенами и пересчитает
+     их сам. */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1.0625rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.3125rem;
+  --text-2xl: 1.5625rem;
+
   --font-sans: var(--font-sans);
   --font-heading: var(--font-heading);
 
@@ -164,6 +190,11 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-platform-telegram: var(--platform-telegram);
+  --color-platform-vk: var(--platform-vk);
+  --color-platform-max: var(--platform-max);
+  --color-platform-rutube: var(--platform-rutube);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -204,6 +235,82 @@
     /* 14px body keeps the density this dashboard needs while the rem spacing
        scale stays on the standard 16px root. */
     @apply bg-background text-foreground text-sm;
+  }
+  /* Полоса-индикатор вырастает при появлении. Анимируется трансформация, а не
+     ширина, поэтому раскладка не пересчитывается; тем, кто просил меньше
+     движения, полоса показывается сразу. */
+  @keyframes meter-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .meter-fill {
+    transform-origin: left center;
+    animation: meter-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .meter-fill { animation: none; }
+  }
+  /* Элементы управления отвечают на нажатие и наведение коротким движением.
+     Всё на трансформациях и цвете, без библиотек и без пересчёта раскладки;
+     тем, кто просил меньше движения, переходы отключаются целиком. */
+  select, input[type="search"], button, [role="button"] {
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 120ms ease;
+  }
+  button:active:not(:disabled), [role="button"]:active {
+    transform: translateY(0.5px);
+  }
+  [data-testid="platform-segments"] label > span {
+    transition: background-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    select, input[type="search"], button, [role="button"],
+    [data-testid="platform-segments"] label > span { transition: none; }
+    button:active:not(:disabled), [role="button"]:active { transform: none; }
+  }
+  /* Список появляется не разом, а волной сверху вниз: так глаз успевает
+     заметить, что содержимое сменилось, и не воспринимает подмену как рывок.
+     Задержка маленькая — двадцать две миллисекунды на строку, — поэтому вся
+     волна укладывается в полсекунды даже на длинном списке. Дальше двадцатой
+     строки задержки нет: до неё ещё надо долистать. */
+  @keyframes reveal {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+  /* В таблице волна идёт по строкам, а не по секциям: иначе анимировалась бы
+     разом вся tbody, а шапка мигала бы вместе с ней. */
+  .reveal > *:not(thead):not(tbody),
+  .reveal > tbody > tr {
+    animation: reveal 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .reveal > *:not(thead):not(tbody):nth-child(1), .reveal > tbody > tr:nth-child(1) { animation-delay: 0ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(2), .reveal > tbody > tr:nth-child(2) { animation-delay: 22ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(3), .reveal > tbody > tr:nth-child(3) { animation-delay: 44ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(4), .reveal > tbody > tr:nth-child(4) { animation-delay: 66ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(5), .reveal > tbody > tr:nth-child(5) { animation-delay: 88ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(6), .reveal > tbody > tr:nth-child(6) { animation-delay: 110ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(7), .reveal > tbody > tr:nth-child(7) { animation-delay: 132ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(8), .reveal > tbody > tr:nth-child(8) { animation-delay: 154ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(9), .reveal > tbody > tr:nth-child(9) { animation-delay: 176ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(10), .reveal > tbody > tr:nth-child(10) { animation-delay: 198ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(11), .reveal > tbody > tr:nth-child(11) { animation-delay: 220ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(12), .reveal > tbody > tr:nth-child(12) { animation-delay: 242ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(13), .reveal > tbody > tr:nth-child(13) { animation-delay: 264ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(14), .reveal > tbody > tr:nth-child(14) { animation-delay: 286ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(15), .reveal > tbody > tr:nth-child(15) { animation-delay: 308ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(16), .reveal > tbody > tr:nth-child(16) { animation-delay: 330ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(17), .reveal > tbody > tr:nth-child(17) { animation-delay: 352ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(18), .reveal > tbody > tr:nth-child(18) { animation-delay: 374ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(19), .reveal > tbody > tr:nth-child(19) { animation-delay: 396ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(20), .reveal > tbody > tr:nth-child(20) { animation-delay: 418ms; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal > *:not(thead):not(tbody),
+    .reveal > tbody > tr { animation: none; }
+  }
+  /* Общая обводка значков. Атрибутами на каждом значке это стоило по 95 байт
+     четыреста раз на страницу — и в разметке, и в служебной нагрузке. */
+  .icon {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   /* Measurements, ranks and deltas must not jitter while a value animates. */
   .tabular {

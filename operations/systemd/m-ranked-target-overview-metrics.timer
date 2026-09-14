@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh M-Ranked overview card metrics every fifteen minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+Persistent=true
+AccuracySec=30s
+Unit=m-ranked-target-overview-metrics.service
+
+[Install]
+WantedBy=timers.target

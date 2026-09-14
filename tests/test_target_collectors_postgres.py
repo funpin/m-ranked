@@ -93,7 +93,7 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_live_readable(
         contract = admin.execute(
             "SELECT contract_id FROM ops_and_admin.schema_contract",
         ).fetchone()["contract_id"]
-        assert contract == "live-read-2026-09-13"
+        assert contract == "live-read-2026-09-13-text-fingerprint"
 
         admin.execute(
             """INSERT INTO catalog.institution(id, canonical_name)

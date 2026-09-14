@@ -3,7 +3,7 @@ import type { paths } from "../../contracts/openapi/m-ranked-v1-client";
 import { MAX_COMPARISON_INSTITUTIONS, COMPARISON_PAGE_SIZE } from "./types";
 import type { ActivityRatingRequest, ApiProblem, ComparisonRequest, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection } from "./types";
 import type { OverviewSort } from "./params";
-import { revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
+import { FRESHNESS_MS, revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 interface CacheEntry { etag: string; body: string; headers: [string, string][] }
@@ -96,17 +96,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
     institution(legacyId: number, platform: Platform, period: Period) {
       return client.GET("/api/v1/institutions/{legacyId}", { params: { path: { legacyId }, query: { platform, period } } }).then(unwrap);
     },
-    publication(legacyId: number | string, legacyType?: LegacyPublicationType) {
-      return client.GET("/api/v1/publications/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
+    publication(legacyId: number | string, legacyType?: LegacyPublicationType, revision?: number) {
+      return client.GET("/api/v1/publications/{legacyId}", { params: { path: { legacyId }, query: { legacyType, revision } } }).then(unwrap);
     },
-    account(legacyId: number | string, legacyType?: LegacyAccountType) {
-      return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
+    account(legacyId: number | string, legacyType?: LegacyAccountType, revision?: number) {
+      return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType, revision } } }).then(unwrap);
     },
-    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, limit = 100, cursor?: string) {
-      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
+    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, limit = 100, cursor?: string, revision?: number) {
+      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(200, Math.max(1, limit)), cursor, revision } } }).then(unwrap);
     },
-    institutionAccounts(legacyId: number, platform: Platform, limit = 100, cursor?: string) {
-      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
+    institutionAccounts(legacyId: number, platform: Platform, limit = 100, cursor?: string, revision?: number) {
+      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor, revision } } }).then(unwrap);
     },
     publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, limit = 100, cursor?: string) {
       return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(3000, Math.max(1, limit)), cursor } } }).then(unwrap);
@@ -138,7 +138,10 @@ export function createApiClient(options: ApiClientOptions = {}) {
 const nextPublicCache: PublicResponseCache = {
   async load(key, tags, produce) {
     const { unstable_cache } = await import("next/cache");
-    return unstable_cache(produce, key, { tags, revalidate: 300 })();
+    // Запись живёт ровно окно свежести: ключ включает снимок, который сам
+    // обновляется этим окном, поэтому более долгая запись всё равно никогда
+    // не будет прочитана — она лишь копилась бы на диске.
+    return unstable_cache(produce, key, { tags, revalidate: Math.ceil(FRESHNESS_MS / 1000) })();
   },
 };
 export const api = createApiClient({ publicCache: process.env.NEXT_PUBLIC_DATA_CACHE === "disabled" ? undefined : nextPublicCache });

@@ -343,3 +343,9 @@ REVOKE ALL ON FUNCTION ops_and_admin.refresh_storage_observation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION ops_and_admin.seed_anomaly_backfill(p_limit integer, p_manifest_hash text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION rating.reject_published_component_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION rating.reject_published_formula_mutation() FROM PUBLIC;
+
+-- ingest.metric_evidence_dictionary (5)
+-- Интернирование evidence перенесено из SECURITY DEFINER функции в код
+-- коллектора, поэтому коллекторным ролям нужны прямые права на словарь.
+GRANT SELECT, INSERT ON TABLE ingest.metric_evidence_dictionary TO collector_ingest;
+GRANT USAGE, SELECT ON SEQUENCE ingest.metric_evidence_dictionary_id_seq TO collector_ingest;

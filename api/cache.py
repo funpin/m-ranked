@@ -4,6 +4,24 @@
 штамповалась в пиковом режиме раз в 3.5 секунды, поэтому такой кэш был мёртв:
 каждая запись обесценивала весь его объём. Здесь ключ не зависит от ревизии,
 а сбрасывается по факту записи — через LISTEN/NOTIFY из outbox.
+
+У сброса есть нижняя граница возраста. На проде уведомление приходит чаще
+раза в секунду и всегда несёт все три области сразу: коллекторы пишут
+непрерывно. Сброс «сразу и насовсем» означал бы, что записи не доживают до
+второго читателя, и кэш снова мёртв — уже по другой причине. Поэтому
+уведомление не удаляет свежую запись, а помечает её несвежей.
+
+Несвежая запись продолжает обслуживать читателей, пока идёт пересчёт. Без
+этого ровно один посетитель раз в окно платил за перестроение ответа своим
+временем: на проде это 730–1024 мс против 1.5 мс у остальных — те самые
+редкие «зависания на секунду». Ответ и так объявляет в заголовке
+stale-while-revalidate, так что сервер просто перестал быть строже к себе,
+чем к своим клиентам. Совсем старую запись — дольше stale_seconds — отдавать
+уже нельзя, и тогда читатель ждёт пересчёт.
+
+Цифры на экране — приросты за три часа, сутки, неделю и месяц, и отставание
+в несколько секунд в них не видно; сам ответ несёт asOf и datasetRevision,
+по которым видно, какой это снимок.
 """
 from __future__ import annotations
 
@@ -27,6 +45,11 @@ class Entry:
     etag: str
     expires_at: float
     tags: frozenset[str]
+    born_at: float
+    fresh_until: float
+
+    def is_stale(self, now: float) -> bool:
+        return now >= self.fresh_until
 
 
 class ResponseCache:
@@ -38,12 +61,29 @@ class ResponseCache:
     намеренно: при 19 тысячах записей в час перебор ключей стоит дороже кэша.
     """
 
-    def __init__(self, capacity: int, ttl_seconds: int) -> None:
+    def __init__(self, capacity: int, ttl_seconds: int, min_age_seconds: float = 0.0,
+                 stale_seconds: float = 0.0) -> None:
+        if min_age_seconds < 0 or stale_seconds < 0:
+            raise ValueError("min_age_seconds and stale_seconds must not be negative")
         self._capacity = capacity
         self._ttl = ttl_seconds
+        self._min_age = min(float(min_age_seconds), float(ttl_seconds))
+        self._stale = min(float(stale_seconds), float(ttl_seconds))
         self._entries: OrderedDict[str, Entry] = OrderedDict()
+        self._refreshing: set[str] = set()
         self._hits = 0
         self._misses = 0
+        self._stale_hits = 0
+
+    def begin_refresh(self, key: str) -> bool:
+        """Занимает право пересчитать запись. Второй желающий получает отказ."""
+        if key in self._refreshing:
+            return False
+        self._refreshing.add(key)
+        return True
+
+    def end_refresh(self, key: str) -> None:
+        self._refreshing.discard(key)
 
     def get(self, key: str) -> Entry | None:
         if self._capacity == 0:
@@ -58,30 +98,55 @@ class ResponseCache:
             return None
         self._entries.move_to_end(key)
         self._hits += 1
+        if entry.is_stale(time.monotonic()):
+            self._stale_hits += 1
         return entry
 
     def put(self, key: str, value: Any, etag: str, tags: frozenset[str]) -> None:
         if self._capacity == 0:
             return
-        self._entries[key] = Entry(value, etag, time.monotonic() + self._ttl, tags)
+        born = time.monotonic()
+        # Пока записи не было, ответ считается свежим: помечает его несвежим
+        # уведомление о записи, а TTL остаётся страховкой на потерянное.
+        self._entries[key] = Entry(value, etag, born + self._ttl, tags, born,
+                                   born + self._ttl)
         self._entries.move_to_end(key)
         while len(self._entries) > self._capacity:
             self._entries.popitem(last=False)
 
     def invalidate(self, tags: frozenset[str]) -> int:
+        """Помечает записи с этими тегами несвежими, но не раньше нижней границы.
+
+        Запись не выбрасывается: она продолжает обслуживать читателей, пока
+        идёт пересчёт, и живёт после этого не дольше stale_seconds. Нижняя
+        граница возраста держит темп пересчёта: уведомления приходят чаще раза
+        в секунду, и без неё ответ перестраивался бы непрерывно.
+
+        Возвращает число записей, ставших несвежими прямо сейчас.
+        """
         if not tags:
             return 0
-        doomed = [key for key, entry in self._entries.items() if entry.tags & tags]
-        for key in doomed:
-            del self._entries[key]
-        return len(doomed)
+        now = time.monotonic()
+        marked = 0
+        for entry in self._entries.values():
+            if not entry.tags & tags:
+                continue
+            stale_from = max(now, entry.born_at + self._min_age)
+            if stale_from < entry.fresh_until:
+                entry.fresh_until = stale_from
+                entry.expires_at = min(entry.expires_at, stale_from + self._stale)
+                marked += 1
+        return marked
 
     def clear(self) -> None:
         self._entries.clear()
+        self._refreshing.clear()
 
     @property
     def stats(self) -> dict[str, int]:
-        return {"entries": len(self._entries), "hits": self._hits, "misses": self._misses}
+        return {"entries": len(self._entries), "hits": self._hits,
+                "misses": self._misses, "stale_hits": self._stale_hits,
+                "refreshing": len(self._refreshing)}
 
 
 class InvalidationListener:
@@ -134,6 +199,6 @@ class InvalidationListener:
             logger.warning("неразбираемое уведомление инвалидации: %r", payload)
             self._cache.clear()
             return
-        dropped = self._cache.invalidate(tags)
-        if dropped:
-            logger.info("сброшено записей кэша: %d, теги %s", dropped, sorted(tags))
+        marked = self._cache.invalidate(tags)
+        if marked:
+            logger.info("помечено несвежими записей кэша: %d, теги %s", marked, sorted(tags))

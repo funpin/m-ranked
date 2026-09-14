@@ -1,0 +1,29 @@
+[Unit]
+Description=M-Ranked overview card metrics refresh
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/overview-metrics.env
+Environment=TZ=UTC
+ExecStart=/opt/m-ranked/current/operations/scripts/refresh-overview-metrics.sh
+TimeoutStartSec=12min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0077
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

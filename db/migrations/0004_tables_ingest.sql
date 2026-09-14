@@ -50,7 +50,7 @@ CREATE TABLE ingest.publication_metric_snapshot (
     synthetic boolean DEFAULT false NOT NULL,
     metric_semantics_version integer DEFAULT 1 NOT NULL,
     capability_version integer DEFAULT 1 NOT NULL,
-    source_fingerprint bytea NOT NULL,
+    source_fingerprint text NOT NULL,
     created_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
     collected_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
     ingested_xid xid8,
@@ -77,7 +77,7 @@ CREATE TABLE ingest.publication_metric_snapshot (
     CONSTRAINT publication_metric_snapshot_reactions_count_check CHECK (((reactions_count IS NULL) OR (reactions_count >= 0))),
     CONSTRAINT publication_metric_snapshot_semantic_fingerprint_check CHECK (((semantic_fingerprint IS NULL) OR (octet_length(semantic_fingerprint) = 32))),
     CONSTRAINT publication_metric_snapshot_shares_count_check CHECK (((shares_count IS NULL) OR (shares_count >= 0))),
-    CONSTRAINT publication_metric_snapshot_source_fingerprint_check CHECK ((octet_length(source_fingerprint) = 32)),
+    CONSTRAINT publication_metric_snapshot_source_fingerprint_check CHECK ((btrim(source_fingerprint) <> ''::text)),
     CONSTRAINT publication_metric_snapshot_views_count_check CHECK (((views_count IS NULL) OR (views_count >= 0))),
     CONSTRAINT publication_snapshot_correction_lineage CHECK ((((correction_sequence = 0) AND (supersedes_snapshot_id IS NULL) AND (correction_reason IS NULL)) OR ((correction_sequence > 0) AND (supersedes_snapshot_id IS NOT NULL) AND (btrim(correction_reason) <> ''::text))))
 )
@@ -92,7 +92,7 @@ CREATE TABLE ingest.account_metric_snapshot (
     subscriber_count bigint,
     subscriber_display text,
     quality ingest.observation_quality NOT NULL,
-    source_fingerprint bytea NOT NULL,
+    source_fingerprint text NOT NULL,
     created_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
     collected_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
     correction_sequence bigint DEFAULT 0 NOT NULL,
@@ -105,7 +105,7 @@ CREATE TABLE ingest.account_metric_snapshot (
     CONSTRAINT account_metric_snapshot_collection_order_ck CHECK ((collected_at >= observed_at)),
     CONSTRAINT account_metric_snapshot_correction_sequence_check CHECK ((correction_sequence >= 0)),
     CONSTRAINT account_metric_snapshot_semantic_fingerprint_check CHECK (((semantic_fingerprint IS NULL) OR (octet_length(semantic_fingerprint) = 32))),
-    CONSTRAINT account_metric_snapshot_source_fingerprint_check CHECK ((octet_length(source_fingerprint) = 32)),
+    CONSTRAINT account_metric_snapshot_source_fingerprint_check CHECK ((btrim(source_fingerprint) <> ''::text)),
     CONSTRAINT account_metric_snapshot_subscriber_count_check CHECK (((subscriber_count IS NULL) OR (subscriber_count >= 0))),
     CONSTRAINT account_metric_snapshot_subscriber_semantic_flags_check CHECK ((jsonb_typeof(subscriber_semantic_flags) = 'object'::text)),
     CONSTRAINT account_snapshot_correction_lineage CHECK ((((correction_sequence = 0) AND (supersedes_snapshot_id IS NULL) AND (correction_reason IS NULL)) OR ((correction_sequence > 0) AND (supersedes_snapshot_id IS NOT NULL) AND (btrim(correction_reason) <> ''::text))))

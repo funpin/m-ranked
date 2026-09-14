@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+// Обзор сам по себе ссылок не содержит — навигация уходит через карточку,
+// поэтому страница проверяется только на отсутствие next/link.
+const linkFreeSources = ["app/(overview)/page.tsx"];
 const linkSources = [
-  "app/(overview)/page.tsx",
   "app/manage/page.tsx",
   "app/not-found.tsx",
   "app/rating/page.tsx",
@@ -17,11 +19,17 @@ const linkSources = [
 ];
 
 test("dynamic navigation never fans out API work through automatic prefetch", async () => {
-  for (const source of linkSources) {
+  // Единственное место, где разрешён next/link, — обёртка: она жёстко ставит
+  // prefetch в false, поэтому переход остаётся клиентским, а предзагрузки нет.
+  const wrapper = await readFile(new URL("../components/native-link.tsx", import.meta.url), "utf8");
+  assert.match(wrapper, /prefetch = false/, "обёртка ссылки обязана выключать предзагрузку по умолчанию");
+  assert.match(wrapper, /prefetch=\{prefetch\}/, "обёртка ссылки обязана передавать prefetch дальше");
+
+  for (const source of [...linkSources, ...linkFreeSources]) {
     const contents = await readFile(new URL(`../${source}`, import.meta.url), "utf8");
-    assert.doesNotMatch(contents, /from "next\/link"/, `${source} must use full-page navigation`);
+    assert.doesNotMatch(contents, /from "next\/link"/, `${source} must navigate through the wrapper`);
     const links = contents.match(/<Link\b(?:(?!>).)*>/gs) ?? [];
-    assert.ok(links.length > 0, `${source} must still contain a Link`);
+    assert.ok(links.length > 0 || linkFreeSources.includes(source), `${source} must still contain a Link`);
     for (const link of links) {
       assert.match(link, /\bprefetch=\{false\}/, `${source}: ${link}`);
     }

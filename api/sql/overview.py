@@ -38,14 +38,15 @@ WITH params AS (
            greatest(result.completed_at, result.started_at, metric.observed_at) AS last_checked_at
       FROM catalog.visible_platform_account account
      CROSS JOIN params
-      LEFT JOIN LATERAL (
-          SELECT alias.legacy_id, alias.legacy_route FROM catalog.legacy_entity_alias alias
-           WHERE alias.target_uuid=account.id AND alias.entity_type='channels'
-           ORDER BY alias.legacy_id LIMIT 1) channel_alias ON true
-      LEFT JOIN LATERAL (
-          SELECT alias.legacy_id, alias.legacy_route FROM catalog.legacy_entity_alias alias
-           WHERE alias.target_uuid=account.id AND alias.entity_type='platform_accounts'
-           ORDER BY alias.legacy_id LIMIT 1) platform_alias ON true
+      -- Пара «тип сущности и цель» уникальна по индексу, поэтому выбирать из
+      -- одной строки «первую по legacy_id» было нечего: сортировка и предел
+      -- заставляли планировщик обходить псевдонимы отдельным поиском на
+      -- каждый аккаунт. Обычное соединение даёт тот же результат одним
+      -- проходом по небольшой таблице.
+      LEFT JOIN catalog.legacy_entity_alias channel_alias
+        ON channel_alias.target_uuid=account.id AND channel_alias.entity_type='channels'
+      LEFT JOIN catalog.legacy_entity_alias platform_alias
+        ON platform_alias.target_uuid=account.id AND platform_alias.entity_type='platform_accounts'
       LEFT JOIN LATERAL (
           SELECT snapshot.subscriber_count, snapshot.subscriber_display, snapshot.observed_at
             FROM ingest.account_metric_snapshot_active snapshot
@@ -85,48 +86,36 @@ WITH params AS (
       JOIN account_fact account ON account.institution_id=dimension.institution_id
        AND ((dimension.scope_platform='telegram' AND account.id=dimension.entity_id)
          OR dimension.scope_platform='all' OR account.platform::text=dimension.scope_platform)
-), publication_fact AS (
-    -- Счётчики берутся из витрины: у каждой метрики своё последнее известное
-    -- значение, поэтому метрика, которую платформа не отдала в последний раз,
-    -- не пропадает с экрана. Качество маскирует значение так же, как это
-    -- делала прежняя функция чтения.
-    SELECT selected.scope_platform, selected.entity_id, publication.id,
-           CASE WHEN latest.views_quality IN ('invalid','suspected_reset')
-                THEN NULL ELSE latest.views_count END AS views_count,
-           CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset')
-                THEN NULL ELSE latest.reactions_count END AS reactions_count,
-           CASE WHEN latest.comments_quality IN ('invalid','suspected_reset')
-                THEN NULL ELSE latest.comments_count END AS comments_count,
-           CASE WHEN latest.shares_quality IN ('invalid','suspected_reset')
-                THEN NULL ELSE latest.shares_count END AS shares_count
+), publication_scope AS (
+    SELECT selected.scope_platform, selected.entity_id, publication.id AS publication_id
       FROM selected_accounts selected
       JOIN ingest.visible_publication publication ON publication.primary_account_id=selected.id
      CROSS JOIN params
-      LEFT JOIN analytics.publication_latest latest
-        ON latest.publication_id=publication.id
-       AND latest.observed_at<=params.as_of
-       AND NOT latest.synthetic AND latest.quality<>'invalid'
      WHERE publication.published_at>params.as_of-params.duration
        AND publication.published_at<=params.as_of AND publication.created_at<=params.as_of
-), metric_summary AS (
-    SELECT scope_platform, entity_id, count(*)::bigint AS publication_count,
-           count(*) FILTER (WHERE views_count IS NOT NULL)::integer AS views_samples,
-           sum(views_count)::numeric AS total_views,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY views_count)
-                 FILTER(WHERE views_count IS NOT NULL)::numeric,0) AS median_views,
-           count(*) FILTER (WHERE reactions_count IS NOT NULL)::integer AS reactions_samples,
-           sum(reactions_count)::numeric AS total_reactions,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY reactions_count)
-                 FILTER(WHERE reactions_count IS NOT NULL)::numeric,0) AS median_reactions,
-           count(*) FILTER (WHERE comments_count IS NOT NULL)::integer AS comments_samples,
-           sum(comments_count)::numeric AS total_comments,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY comments_count)
-                 FILTER(WHERE comments_count IS NOT NULL)::numeric,0) AS median_comments,
-           count(*) FILTER (WHERE shares_count IS NOT NULL)::integer AS shares_samples,
-           sum(shares_count)::numeric AS total_shares,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY shares_count)
-                 FILTER(WHERE shares_count IS NOT NULL)::numeric,0) AS median_shares
-      FROM publication_fact GROUP BY scope_platform, entity_id
+), publication_totals AS (
+    -- Всего публикаций сущности в базе, без ограничения периодом: счёт по
+    -- индексу (primary_account_id, published_at, id), без обращения к витрине.
+    SELECT selected.scope_platform, selected.entity_id, count(*)::bigint AS total_count
+      FROM selected_accounts selected
+      JOIN ingest.visible_publication publication ON publication.primary_account_id=selected.id
+     GROUP BY 1,2
+), publication_active AS (
+    -- Публикации любого возраста, у которых внутри окна есть наблюдение.
+    -- Витрина хранит аккаунт публикации своей колонкой и индексирует его вместе
+    -- со временем наблюдения, поэтому счётчик берётся прямо из неё: заход в
+    -- ingest.publication на каждую строку стоил бы 87 тысяч буферов.
+    SELECT selected.scope_platform, selected.entity_id, count(*)::bigint AS active_count
+      FROM selected_accounts selected
+      JOIN analytics.publication_latest latest ON latest.platform_account_id=selected.id
+     CROSS JOIN params
+     WHERE latest.observed_at>params.as_of-params.duration
+       AND latest.observed_at<=params.as_of
+     GROUP BY 1,2
+), publication_new AS (
+    -- Публикации, вышедшие внутри окна.
+    SELECT scope_platform, entity_id, count(*)::bigint AS new_count
+      FROM publication_scope GROUP BY 1,2
 ), account_summary AS (
     SELECT scope_platform, entity_id, count(*)::integer AS account_count,
            count(*) FILTER(WHERE enabled)::integer AS enabled_account_count,
@@ -154,13 +143,23 @@ WITH params AS (
                 ELSE 'awaiting_first_poll' END AS status_code,
            rating.rank AS rating_rank, rating.score AS rating_score,
            rating.period AS rating_period, rating.fetched_at AS rating_fetched_at,
-           metrics.publication_count AS total_publication_count,
-           metrics.publication_count AS activity_publication_count,
-           metrics.publication_count AS new_publication_count,
+           -- Три разных числа: всего в базе, с активностью за период,
+           -- вышедшие за период. Прежде все три брались из одного счётчика.
+           coalesce(totals.total_count,0) AS total_publication_count,
+           coalesce(active.active_count,0) AS activity_publication_count,
+           coalesce(fresh.new_count,0) AS new_publication_count,
            metrics.total_views, metrics.median_views,
            metrics.total_reactions, metrics.median_reactions,
            metrics.total_comments, metrics.median_comments,
            metrics.total_shares, metrics.median_shares,
+           -- Предыдущее окно той же длины: из него берётся плашка прироста
+           -- под каждым числом карточки. Пусто, когда наблюдений на дальней
+           -- границе ещё нет — за месяц истории пока не хватает.
+           metrics.previous_total_views, metrics.previous_median_views,
+           metrics.previous_total_reactions, metrics.previous_median_reactions,
+           metrics.previous_total_comments, metrics.previous_median_comments,
+           metrics.previous_total_shares, metrics.previous_median_shares,
+           coalesce(metrics.previous_publication_count, 0) AS previous_publication_count,
            coalesce(metrics.views_samples,0) AS views_samples,
            coalesce(metrics.reactions_samples,0) AS reactions_samples,
            coalesce(metrics.comments_samples,0) AS comments_samples,
@@ -175,15 +174,35 @@ WITH params AS (
         AND telegram.entity_id=dimension.entity_id AND telegram.platform='telegram'
       LEFT JOIN account_summary summary ON summary.scope_platform=dimension.scope_platform
         AND summary.entity_id=dimension.entity_id
-      LEFT JOIN metric_summary metrics ON metrics.scope_platform=dimension.scope_platform
-        AND metrics.entity_id=dimension.entity_id
+      -- Агрегаты карточки лежат готовыми: живым запросом прирост по всем
+      -- публикациям окна стоил 299 тысяч буферов и шести секунд, потому что
+      -- на каждую публикацию приходился отдельный поиск значения на начало
+      -- окна. Числа одинаковы для всех читателей, поэтому их пересчитывает
+      -- расписание, а экран только выбирает свою строку.
+      LEFT JOIN analytics.overview_card_metrics metrics
+        ON metrics.scope_platform=dimension.scope_platform
+       AND metrics.entity_id=dimension.entity_id
+       AND metrics.period=%(period)s
+      LEFT JOIN publication_totals totals ON totals.scope_platform=dimension.scope_platform
+        AND totals.entity_id=dimension.entity_id
+      LEFT JOIN publication_new fresh ON fresh.scope_platform=dimension.scope_platform
+        AND fresh.entity_id=dimension.entity_id
+      LEFT JOIN publication_active active ON active.scope_platform=dimension.scope_platform
+        AND active.entity_id=dimension.entity_id
       LEFT JOIN LATERAL (
           SELECT observation.rank, observation.score, observation.period, observation.fetched_at
             FROM rating.official_institution_rating_observation observation
            WHERE observation.institution_id=dimension.institution_id
              AND observation.category=CASE dimension.scope_platform WHEN 'all' THEN 'social' ELSE dimension.scope_platform END
              AND observation.fetched_at<=params.as_of
-           ORDER BY observation.fetched_at DESC, observation.id DESC LIMIT 1) rating ON true
+           -- Порядок по самому периоду, а не по времени загрузки: всю
+           -- опубликованную историю мы забираем одним прогоном, и «загружен
+           -- позже» перестало означать «свежее».
+           ORDER BY nullif(regexp_replace(observation.period,'[^0-9]','','g'),'')::int DESC NULLS LAST,
+                    array_position(ARRAY['Январь','Февраль','Март','Апрель','Май','Июнь',
+                          'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+                    split_part(observation.period,' ',1)) DESC NULLS LAST,
+                    observation.fetched_at DESC, observation.id DESC LIMIT 1) rating ON true
 ), filtered AS (
     SELECT card.*, row_number() OVER(ORDER BY
         CASE WHEN %(sort)s='name' AND %(direction)s='asc' THEN card.sort_name END ASC NULLS LAST,
@@ -206,6 +225,18 @@ WITH params AS (
             WHEN 'views' THEN card.total_views
             WHEN 'reactions' THEN card.total_reactions
             ELSE card.median_reactions END END DESC NULLS LAST,
+        -- Равные значения раскладываются по размеру площадки, а не по
+        -- алфавиту. Медиана прироста за короткое окно у всех вузов равна
+        -- нулю: она считается по всем постам с наблюдением в окне, включая
+        -- давно остывшие, и таких больше половины. Сортировка «по убыванию»
+        -- при этом честно ставила первым вуз на букву А с пятнадцатью
+        -- реакциями, а вуз с двумя тысячами — двадцатым. То же было у
+        -- покрытия и числа аккаунтов, где различимых значений всего четыре.
+        -- Направление у запасного ключа всегда одно: при равенстве метрики
+        -- заметнее тот, кто крупнее.
+        card.total_reactions DESC NULLS LAST,
+        card.total_views DESC NULLS LAST,
+        card.subscriber_count DESC NULLS LAST,
         card.sort_name, card.entity_id) AS page_position
       FROM card_source card
      WHERE %(search)s='' OR card.search_text LIKE '%%'||lower(%(search)s)||'%%'

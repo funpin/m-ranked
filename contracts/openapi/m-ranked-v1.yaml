@@ -287,6 +287,17 @@ paths:
       summary: Resolve a legacy publication id and return latest independent counters
       security: []
       parameters:
+        - name: revision
+          in: query
+          required: false
+          description: >-
+            Собрать ответ по этой ревизии набора данных, а не по текущей. Экран детали
+            складывается из нескольких запросов, а ревизия меняется каждые несколько
+            секунд; первый запрос сообщает свою, остальные её закрепляют. Неизвестная
+            ревизия не ошибка: ответ придёт по текущей, и это видно в datasetRevision.
+          schema:
+            type: integer
+            minimum: 1
         - $ref: '#/components/parameters/EntityId'
         - name: legacyType
           in: query
@@ -621,6 +632,17 @@ paths:
         Subscriber history is intentionally absent because no account-latest projection exists.
       security: []
       parameters:
+        - name: revision
+          in: query
+          required: false
+          description: >-
+            Собрать ответ по этой ревизии набора данных, а не по текущей. Экран детали
+            складывается из нескольких запросов, а ревизия меняется каждые несколько
+            секунд; первый запрос сообщает свою, остальные её закрепляют. Неизвестная
+            ревизия не ошибка: ответ придёт по текущей, и это видно в datasetRevision.
+          schema:
+            type: integer
+            minimum: 1
         - $ref: '#/components/parameters/EntityId'
         - name: legacyType
           in: query
@@ -1626,6 +1648,17 @@ paths:
       operationId: getAccountPublications
       summary: Revision-pinned bounded account detail continuation
       parameters:
+      - name: revision
+        in: query
+        required: false
+        description: >-
+          Собрать ответ по этой ревизии набора данных, а не по текущей. Экран детали
+          складывается из нескольких запросов, а ревизия меняется каждые несколько
+          секунд; первый запрос сообщает свою, остальные её закрепляют. Неизвестная
+          ревизия не ошибка: ответ придёт по текущей, и это видно в datasetRevision.
+        schema:
+          type: integer
+          minimum: 1
       - $ref: '#/components/parameters/EntityId'
       - name: limit
         in: query
@@ -1665,6 +1698,17 @@ paths:
       operationId: getInstitutionAccounts
       summary: Revision-pinned bounded institution detail continuation
       parameters:
+      - name: revision
+        in: query
+        required: false
+        description: >-
+          Собрать ответ по этой ревизии набора данных, а не по текущей. Экран детали
+          складывается из нескольких запросов, а ревизия меняется каждые несколько
+          секунд; первый запрос сообщает свою, остальные её закрепляют. Неизвестная
+          ревизия не ошибка: ответ придёт по текущей, и это видно в datasetRevision.
+        schema:
+          type: integer
+          minimum: 1
       - name: legacyId
         in: path
         required: true
@@ -4408,6 +4452,56 @@ components:
         asOf:
           type: string
           format: date-time
+    AccountDailyPoint:
+      type: object
+      additionalProperties: false
+      properties:
+        day:
+          type: string
+          format: date
+        publishedCount:
+          type: integer
+          minimum: 0
+        medianReactions:
+          type: [number, 'null']
+        medianViews:
+          type: [number, 'null']
+        totalReactions:
+          type: [number, 'null']
+          description: >-
+            Прирост реакций всех отслеживаемых публикаций за эти сутки — то же
+            число, что на карточке обзора. Медиана отвечает на вопрос «каким
+            вышел типичный пост», сумма — «сколько площадка набрала».
+        totalViews:
+          type: [number, 'null']
+      required: [day, publishedCount, medianReactions, medianViews, totalReactions, totalViews]
+    AccountStatsPrevious:
+      type: object
+      additionalProperties: false
+      description: >-
+        Те же величины сутками раньше: по ним рисуется плашка изменения рядом с
+        каждым числом. Место в официальном рейтинге сравнивается не с прошлыми
+        сутками, а с прошлым опубликованным месяцем — рейтинг выходит раз в
+        месяц. Пусто там, где сравнивать не с чем.
+      properties:
+        postCount:
+          type: [integer, 'null']
+          format: int64
+        monitored:
+          type: [integer, 'null']
+          format: int64
+        medianReactions:
+          type: [number, 'null']
+        medianViews:
+          type: [number, 'null']
+        medianComments:
+          type: [number, 'null']
+        ratingRank:
+          type: [integer, 'null']
+          format: int64
+        ratingPeriod:
+          type: [string, 'null']
+      required: [postCount, monitored, medianReactions, medianViews, medianComments, ratingRank, ratingPeriod]
     AccountStats:
       type: object
       additionalProperties: false
@@ -4452,10 +4546,21 @@ components:
           - string
           - 'null'
           format: date-time
+        dailySeries:
+          type: array
+          description: >-
+            Последние семь дней по московскому времени — сколько публикаций вышло
+            в этот день и какими они оказались по медиане. Ряд всегда полон:
+            день без публикаций присутствует с нулём и пустыми медианами.
+          items:
+            $ref: '#/components/schemas/AccountDailyPoint'
+        previous:
+          $ref: '#/components/schemas/AccountStatsPrevious'
       required:
       - retentionDays
       - postCount
       - monitored
+      - previous
       - medianReactions
       - medianViews
       - medianComments

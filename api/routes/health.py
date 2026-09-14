@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1/health", tags=["Operations"])
 logger = logging.getLogger(__name__)
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
-EXPECTED_CONTRACT = "live-read-2026-09-13"
+EXPECTED_CONTRACT = "live-read-2026-09-13-text-fingerprint"
 
 NO_STORE = {"Cache-Control": "no-store"}
 

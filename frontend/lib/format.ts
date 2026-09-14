@@ -91,6 +91,17 @@ export function legacyDate(value: string | null | undefined, withZone = false): 
   const get = (name: string) => parts.find((part) => part.type === name)?.value;
   return `${get("day")}.${get("month")}.${get("year")}, ${get("hour")}:${get("minute")}:${get("second")}${withZone ? " МСК" : ""}`;
 }
+/** Календарный день публикации по московскому времени: YYYY-MM-DD.
+ *  В этих же сутках API считает недельный ряд площадки, поэтому точка графика
+ *  и строка таблицы должны разделяться одинаково. */
+export function moscowDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const get = (name: string) => parts.find((part) => part.type === name)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
 export const PERIOD_SHORT = {"3h":"за 3 часа","1d":"за сутки","7d":"за неделю","30d":"за месяц"} as const;
 export function legacyNumber(value: MetricValue) { const n = metricNumber(value); return n === null ? "—" : String(n); }
 
@@ -102,8 +113,21 @@ export function duration(seconds: number | null) {
 }
 export function publicationLabel(externalId: string | null, platform: Platform) {
   if (!externalId) return "—";
-  if (platform === "telegram") return `№${externalId}`;
+  // Идентификатор поста Telegram хранится с префиксом «m:» — это внутренняя
+  // пометка источника, а не часть номера. API отдаёт очищенное значение
+  // отдельным полем, но там, где доступен только сырой идентификатор,
+  // префикс снимается здесь по тому же правилу.
+  if (platform === "telegram") return `№${externalId.startsWith("m:") ? externalId.slice(2) : externalId}`;
   if (platform === "vk" && /^-?\d+_\d+$/.test(externalId)) return `№${externalId.split("_").at(-1)}`;
   return externalId;
 }
 export function postTypeLabel(value: string) { return ({text:"текст",photo:"фото",video:"видео",album:"альбом",document:"документ",poll:"опрос",webpage:"веб-страница",contact:"контакт",geo:"геолокация",media:"медиа"} as Record<string,string>)[value] ?? value; }
+
+/** На оси значений место ограничено шириной колонки, а показатели доходят до
+ *  миллионов. Полное число не влезает и наезжает на соседнее, поэтому крупные
+ *  величины подписываются сокращённо — точные значения читаются в подсказке. */
+const compactAxisNumber = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 });
+export function axisNumber(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  return Math.abs(value) < 10_000 ? value.toLocaleString("ru-RU") : compactAxisNumber.format(value);
+}

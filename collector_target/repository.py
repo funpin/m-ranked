@@ -35,8 +35,17 @@ _SHARD = re.compile(r"^(\d+)/(\d+)$")
 _SAFE_ERROR_CODE = re.compile(
     r"^[A-Za-z][A-Za-z0-9_.-]{0,79}(?::[A-Za-z0-9_.-]{1,80})?$"
 )
-_EXPECTED_SCHEMA_CONTRACT = "live-read-2026-09-13"
+_EXPECTED_SCHEMA_CONTRACT = "live-read-2026-09-13-text-fingerprint"
 
+
+def _persist_raw_evidence() -> bool:
+    """Читает COLLECTOR_PERSIST_RAW_EVIDENCE; по умолчанию включено."""
+    raw = os.environ.get("COLLECTOR_PERSIST_RAW_EVIDENCE", "true").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError("COLLECTOR_PERSIST_RAW_EVIDENCE must be true or false")
 
 def _row_value(row: Any, key: str, index: int) -> Any:
     if isinstance(row, Mapping):
@@ -70,9 +79,15 @@ class PostgresCollectorRepository:
         statement_timeout_seconds: int = 60,
         snapshot_heartbeat_hours: int = 24,
         evidence_store: ImmutableEvidenceStore | None = None,
+        pool_size: int = 3,
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
+        if pool_size < 2:
+            # Меньше двух нельзя: словарь свидетельств берёт собственное
+            # соединение внутри уже открытого батча, и на единственном
+            # соединении это встало бы намертво.
+            raise ValueError("pool_size must be at least 2")
         if raw_retention_days < 1:
             raise ValueError("raw_retention_days must be positive")
         if statement_timeout_seconds < 1:
@@ -80,6 +95,13 @@ class PostgresCollectorRepository:
         if snapshot_heartbeat_hours < 1:
             raise ValueError("snapshot_heartbeat_hours must be positive")
         self._factory = connection_factory or self._psycopg_factory(str(dsn))
+        # Пул поднимается только для собственного DSN: подставленная фабрика
+        # соединений принадлежит вызывающему, и её жизненным циклом
+        # распоряжается он.
+        self._dsn = None if connection_factory is not None else str(dsn)
+        self._pool_size = pool_size
+        self._pool: Any = None
+        self._pool_lock = threading.Lock()
         self.raw_retention = timedelta(days=raw_retention_days)
         self.statement_timeout_seconds = statement_timeout_seconds
         self.snapshot_heartbeat = timedelta(hours=snapshot_heartbeat_hours)
@@ -144,15 +166,64 @@ class PostgresCollectorRepository:
 
         return connect
 
+    def _prepare_session(self, connection: Any) -> None:
+        """Настройки сеанса, одинаковые для любого соединения."""
+        connection.execute("SET TIME ZONE 'UTC'")
+        connection.execute(
+            "SELECT set_config('statement_timeout', %s, false)",
+            (f"{self.statement_timeout_seconds}s",),
+        )
+
+    def _ensure_pool(self) -> Any:
+        """Пул соединений, открываемый при первом обращении.
+
+        Прежде каждый вызов репозитория поднимал собственное соединение и
+        закрывал его: около трёх новых обслуживающих процессов в секунду.
+        Дорога не сама установка соединения, а то, что вместе с ней теряется
+        кэш планов. Снимки разложены по 63 партициям, и планирование одного
+        запроса по ним занимало от 100 до 360 миллисекунд — на каждый вызов.
+        Переиспользованное соединение готовит запрос один раз.
+        """
+        if self._pool is not None:
+            return self._pool
+        with self._pool_lock:
+            if self._pool is None:
+                from psycopg.rows import dict_row
+                from psycopg_pool import ConnectionPool
+
+                self._pool = ConnectionPool(
+                    self._dsn,
+                    min_size=1,
+                    max_size=self._pool_size,
+                    max_idle=300.0,
+                    timeout=30.0,
+                    kwargs={"autocommit": True, "row_factory": dict_row},
+                    configure=self._prepare_session,
+                    # База живёт в контейнере и переживает перезапуски. Проверка
+                    # при выдаче стоит одного обращения и избавляет от отказа
+                    # цикла на соединении, оборванном с той стороны.
+                    check=ConnectionPool.check_connection,
+                    open=False,
+                )
+                self._pool.open()
+        return self._pool
+
+    def close(self) -> None:
+        """Закрывает пул. Соединения из подставленной фабрики не трогает."""
+        with self._pool_lock:
+            pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.close()
+
     @contextmanager
     def _connection(self) -> Iterator[Any]:
+        if self._dsn is not None:
+            with self._ensure_pool().connection() as connection:
+                yield connection
+            return
         connection = self._factory()
         try:
-            connection.execute("SET TIME ZONE 'UTC'")
-            connection.execute(
-                "SELECT set_config('statement_timeout', %s, false)",
-                (f"{self.statement_timeout_seconds}s",),
-            )
+            self._prepare_session(connection)
             yield connection
         finally:
             connection.close()
@@ -371,35 +442,95 @@ class PostgresCollectorRepository:
             ).fetchone()
         return row is not None
 
-    def metric_high_watermarks(
+    def metric_ever_positive(
         self,
         account: AccountRef,
         external_ids: Sequence[str],
-    ) -> Mapping[str, Mapping[str, int | None]]:
+    ) -> Mapping[str, Mapping[str, bool]]:
+        """Был ли каждый показатель публикации положительным в недавних замерах.
+
+        Распознавание временных обнулений у ВК спрашивает именно это, а не
+        величину прежнего максимума. Максимум считался по всей истории снимков
+        публикации — в среднем 335 строк на каждую, и на сотне публикаций это
+        167 тысяч буферов и больше секунды.
+
+        Окно ограничено двумя дюжинами последних замеров, и вот почему.
+        Проверка существования без окна выходит быстрее, когда показатель был
+        положительным: она останавливается на первой же подходящей строке, 50
+        мс. Но если положительным он не был ни разу — а у ВК это обычное дело
+        для комментариев и репостов, — останавливаться не на чем, и читается
+        вся история: 1357 мс на том же аккаунте. Окно убирает этот худший
+        случай: замер на проде вперемежку дал 1610/92/50 мс без окна против
+        180/154/129 с ним. Чуть хуже в лучшем случае, гораздо лучше в худшем.
+
+        Двух дюжин хватает с запасом: свежие публикации опрашиваются раз в пять
+        минут, старые — раз в час, то есть окно покрывает от полутора часов до
+        суток наблюдений, а обнуление у ВК живёт минуты.
+
+        Месяц публикации — ключ партиционирования снимков — вычисляется из
+        самой публикации и передаётся явно, иначе поиск идёт по всем 63
+        партициям.
+        """
         requested = tuple(dict.fromkeys(str(value) for value in external_ids if value))
         if not requested:
             return {}
         with self._connection() as connection:
             rows = connection.execute(
-                """SELECT identity.external_id,
-                          max(snapshot.views_count) AS views,
-                          max(snapshot.reactions_count) AS reactions,
-                          max(snapshot.comments_count) AS comments,
-                          max(snapshot.shares_count) AS shares
-                     FROM ingest.publication_identity AS identity
-                     JOIN ingest.publication_metric_snapshot_active AS snapshot
-                       ON snapshot.publication_id=identity.publication_id
-                    WHERE identity.platform_account_id=%s
-                      AND identity.external_id=ANY(%s)
-                    GROUP BY identity.external_id""",
+                """WITH scope AS MATERIALIZED (
+                       SELECT identity.publication_id, identity.external_id,
+                              date_trunc('month', publication.published_at)::date
+                                  AS published_month
+                         FROM ingest.publication_identity AS identity
+                         JOIN ingest.publication AS publication
+                           ON publication.id=identity.publication_id
+                        WHERE identity.platform_account_id=%s
+                          AND identity.external_id=ANY(%s)
+                   )
+                   SELECT scope.external_id,
+                          -- Ни одного замера — публикация новая, её ноль
+                          -- настоящий. Замеры есть, но по этому показателю все
+                          -- пустые — значит, обнуление уже распознано и длится,
+                          -- и ответ осторожный: иначе пустота записалась бы как
+                          -- настоящий ноль.
+                          CASE WHEN coalesce(recent.rows, 0)=0 THEN false
+                               WHEN recent.views_seen=0 THEN true
+                               ELSE coalesce(recent.views, false) END AS views,
+                          CASE WHEN coalesce(recent.rows, 0)=0 THEN false
+                               WHEN recent.reactions_seen=0 THEN true
+                               ELSE coalesce(recent.reactions, false) END AS reactions,
+                          CASE WHEN coalesce(recent.rows, 0)=0 THEN false
+                               WHEN recent.comments_seen=0 THEN true
+                               ELSE coalesce(recent.comments, false) END AS comments,
+                          CASE WHEN coalesce(recent.rows, 0)=0 THEN false
+                               WHEN recent.shares_seen=0 THEN true
+                               ELSE coalesce(recent.shares, false) END AS shares
+                     FROM scope
+                     LEFT JOIN LATERAL (
+                         SELECT count(*) AS rows,
+                                count(recent_rows.views_count) AS views_seen,
+                                count(recent_rows.reactions_count) AS reactions_seen,
+                                count(recent_rows.comments_count) AS comments_seen,
+                                count(recent_rows.shares_count) AS shares_seen,
+                                bool_or(recent_rows.views_count>0) AS views,
+                                bool_or(recent_rows.reactions_count>0) AS reactions,
+                                bool_or(recent_rows.comments_count>0) AS comments,
+                                bool_or(recent_rows.shares_count>0) AS shares
+                           FROM (SELECT snapshot.views_count, snapshot.reactions_count,
+                                        snapshot.comments_count, snapshot.shares_count
+                                   FROM ingest.publication_metric_snapshot_active snapshot
+                                  WHERE snapshot.publication_id=scope.publication_id
+                                    AND snapshot.published_month=scope.published_month
+                                  ORDER BY snapshot.observed_at DESC, snapshot.id DESC
+                                  LIMIT 24) recent_rows
+                     ) recent ON true""",
                 (account.id, list(requested)),
             ).fetchall()
         return {
             str(_row_value(row, "external_id", 0)): {
-                "views": _row_value(row, "views", 1),
-                "reactions": _row_value(row, "reactions", 2),
-                "comments": _row_value(row, "comments", 3),
-                "shares": _row_value(row, "shares", 4),
+                "views": bool(_row_value(row, "views", 1)),
+                "reactions": bool(_row_value(row, "reactions", 2)),
+                "comments": bool(_row_value(row, "comments", 3)),
+                "shares": bool(_row_value(row, "shares", 4)),
             }
             for row in rows
         }
@@ -468,10 +599,16 @@ class PostgresCollectorRepository:
                           ORDER BY identity.id
                           LIMIT 1
                      ) AS primary_identity ON true
+                     -- Месяц публикации — ключ партиционирования снимков, и
+                     -- он же вычисляется из самой публикации. Без него поиск
+                     -- последнего замера шёл по всем партициям на каждую
+                     -- строку выдачи.
                      LEFT JOIN LATERAL (
                          SELECT snapshot.observed_at, snapshot.sampling_bucket
                            FROM ingest.publication_metric_snapshot_active AS snapshot
                           WHERE snapshot.publication_id=publication.id
+                            AND snapshot.published_month
+                                =date_trunc('month', publication.published_at)::date
                           ORDER BY snapshot.observed_at DESC, snapshot.id DESC
                           LIMIT 1
                      ) AS latest ON true
@@ -565,7 +702,7 @@ class PostgresCollectorRepository:
                         "version": 1, "kind": "collector-account-identity",
                         "accountId": str(batch.account.id), "platform": batch.context.platform.value,
                         "sourceRunId": str(batch.context.run_id),
-                        "sourceFingerprint": batch.account_observation.source_fingerprint.hex(),
+                        "sourceFingerprint": batch.account_observation.source_fingerprint,
                         "observedAt": original["observed_at"],
                         "username": original.get("username"), "title": original.get("title"),
                         "url": original.get("url"), "nativeId": original.get("native_external_id"),
@@ -1337,16 +1474,22 @@ class PostgresCollectorRepository:
         owner_type: str,
         owner_id: UUID,
         collected_at: datetime,
-        fingerprint: bytes,
+        fingerprint: str,
         evidence: Mapping[str, Any],
     ) -> None:
+        # Прод держит сохранение сырых свидетельств выключенным ради места:
+        # ingest.raw_payload растёт на каждое наблюдение. Прежде флаг ставила
+        # внешняя заплатка через legacy app.config; теперь его читает сам
+        # коллектор. По умолчанию сохраняем — это поведение разработки.
+        if not _persist_raw_evidence():
+            return
         collected = utc(collected_at, "lineage.collected_at")
         connection.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-            ("raw-evidence:" + fingerprint.hex(),),
+            ("raw-evidence:" + fingerprint,),
         )
         object_uri, object_hash = self.evidence_store.put(evidence)
-        fingerprint_hex = fingerprint.hex()
+        fingerprint_hex = fingerprint
         if object_hash != fingerprint_hex:
             raise ValueError("canonical evidence fingerprint mismatch")
         payload_id = raw_payload_uuid(run_id, owner_type, owner_id, fingerprint_hex)
@@ -1378,7 +1521,7 @@ class PostgresCollectorRepository:
             self._persist_lineage(connection, context.run_id, "account", raw.account.id,
                                   collected, fingerprint, evidence)
             payload_id = raw_payload_uuid(
-                context.run_id, "account", raw.account.id, fingerprint.hex())
+                context.run_id, "account", raw.account.id, fingerprint)
             connection.execute(
                 """INSERT INTO ingest.evidence_quarantine(raw_payload_id,reason_code)
                    VALUES(%s,%s) ON CONFLICT DO NOTHING""",

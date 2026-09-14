@@ -53,7 +53,9 @@ test("publication presents neutral anomaly evidence and preserves boundary rows"
   await page.goto("/posts/1");
   const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
   await expect(panel).toContainText("Эвристическая сила сигнала: 0.82");
+  // Суть оговорки остаётся видимой без нажатий; полный текст — под значком.
   await expect(panel).toContainText("не доказывает искусственное происхождение");
+  await expect(panel.getByRole("button",{name:/Как считается: Сигнал аномальной динамики/})).toHaveCount(1);
   await expect(panel).not.toContainText(/вероятность накрутки|мошенничество|накрутка обнаружена/i);
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
@@ -113,7 +115,12 @@ test("a break in the observation is spaced by time and marked on the chart",asyn
     await new Promise(resolve=>setTimeout(resolve,600));
     const plot=document.querySelector('[role="img"][data-chart-ready="true"] svg')!;
     const curve=plot.querySelector("path.recharts-curve[d], path.recharts-area-area[d]")!;
-    const xs=[...(curve.getAttribute("d")??"").matchAll(/[ML]\s*(-?[\d.]+)/g)].map(match=>Number(match[1]));
+    // Каждая команда пути заканчивается координатами вершины — реального
+    // замера, — будь то отрезок или кубическая кривая сглаженной линии.
+    const xs=[...((curve.getAttribute("d")??"").match(/[A-Za-z][^A-Za-z]*/g)??[])].flatMap(command=>{
+      const numbers=[...command.matchAll(/-?[\d.]+/g)].map(match=>Number(match[0]));
+      return numbers.length>=2 ? [numbers[numbers.length-2]!] : [];
+    });
     let widest=0;
     for(let index=1;index<xs.length;index++) widest=Math.max(widest,Math.abs(xs[index]!-xs[index-1]!));
     return {widest,span:Math.max(...xs)-Math.min(...xs)};
@@ -141,11 +148,14 @@ test("manual unresolved signal stays separate from automatic clean score",async(
 
 
 test("a point older than the 1000-row boundary remains reachable and the next publication resets its range",async({page}) => {
+  test.setTimeout(60_000);
   await page.goto("/posts/99");
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
   const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
-  await expect(chart).toHaveAttribute("data-chart-ready","true");
+  // Hydrating 1205 native table rows precedes the lazy renderer on CI's shared
+  // CPU. This is a reachability test; measured latency has a separate gate.
+  await expect(chart).toHaveAttribute("data-chart-ready","true",{timeout:30_000});
   await expect(page.locator("tbody tr")).toHaveCount(1205);
   await chart.focus();await page.keyboard.press("Home");await page.keyboard.press("Enter");
   await expect(page.locator("tbody tr")).toHaveCount(1205);

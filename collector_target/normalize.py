@@ -108,9 +108,16 @@ def canonical_json(value: Any) -> str:
     )
 
 
-def source_fingerprint(value: Any) -> bytes:
-    """Return the database-native 32-byte SHA-256 fingerprint."""
-    return hashlib.sha256(canonical_json(value).encode("utf-8")).digest()
+def source_fingerprint(value: Any) -> str:
+    """Отпечаток источника в том виде, в каком его хранит колонка.
+
+    Колонка объявлена text и содержит sha256 шестнадцатеричными символами.
+    Хранение в bytea вдвое экономнее, но перевод типа на живой базе требует
+    ACCESS EXCLUSIVE на перезапись всех партиций разом: PostgreSQL не даёт
+    менять тип унаследованной колонки и не принимает партицию обратно с
+    другим типом. Экономия в 842 МБ не стоит часов остановленного сбора.
+    """
+    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
 def semantic_fingerprint(value: Any) -> bytes:
