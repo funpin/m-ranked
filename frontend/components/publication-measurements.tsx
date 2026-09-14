@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
+import { MethodNote } from "@/components/method-note";
 import type { HistorySnapshot, Platform, PublicationAnomalyAnalysis } from "@/lib/types";
 
 import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
@@ -46,6 +47,18 @@ function MetricChart(props: {
   const { metrics, platform, delta } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
   const { hidden, setHidden, scale, setScale } = useHistoryPreferences(platform, delta, keys);
+
+  /** «Авто» рисует одну шкалу слева и одну справа, поэтому одновременно
+   *  показываются не больше двух метрик: третья вытесняет лишнюю, а не
+   *  остаётся без подписанной шкалы. Метрика, которую только что включили,
+   *  не вытесняется никогда. */
+  function capped(next: Set<Metric["key"]>, keep?: Metric) {
+    const shown = metrics.filter((metric) => !next.has(metric.key));
+    if (shown.length <= 2) return next;
+    const droppable = shown.filter((metric) => metric !== keep);
+    for (const metric of droppable.slice(0, shown.length - 2)) next.add(metric.key);
+    return next;
+  }
   return <>
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-wrap gap-2" aria-label={delta ? "Показатели графика прироста" : "Показатели графика"}>
@@ -56,7 +69,12 @@ function MetricChart(props: {
               key={metric.key}
               type="button"
               aria-pressed={!isHidden}
-              onClick={() => setHidden((old) => { const next = new Set(old);if(next.has(metric.key)) next.delete(metric.key);else next.add(metric.key);return next; })}
+              onClick={() => setHidden((old) => {
+                const next = new Set(old);
+                if (next.has(metric.key)) { next.delete(metric.key); return scale === "auto" ? capped(next, metric) : next; }
+                next.add(metric.key);
+                return next;
+              })}
               className={cn(
                 "text-foreground flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-xs font-semibold transition-colors",
                 "hover:bg-accent focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
@@ -82,7 +100,10 @@ function MetricChart(props: {
             // Base UI reports an empty selection when the pressed item is
             // toggled off; the plot always has exactly one scale mode.
             const value = next[0];
-            if (value === "shared" || value === "auto") setScale(value);
+            if (value !== "shared" && value !== "auto") return;
+            // Переход в «Авто» с тремя показанными метриками тоже подрезается.
+            if (value === "auto") setHidden((old) => capped(new Set(old)));
+            setScale(value);
           }}
         >
           <ToggleGroupItem value="shared">1:1</ToggleGroupItem>
@@ -138,8 +159,12 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
     <div className="grid gap-4 xl:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle as="h2" className="font-heading text-lg">Накопление {phrase}</CardTitle>
-          <p className="text-muted-foreground mt-2 text-sm">Линии построены по одним и тем же замерам и расставлены по времени замера, поэтому паузы в наблюдении видны как длинные пустые промежутки. Ромбами отмечены границы опубликованных сигналов; остальные замеры читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» накладывает кривые с независимыми шкалами для сравнения их формы.</p>
+          <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
+            Накопление {phrase}
+            <MethodNote title={`Накопление ${phrase}`}>
+              Линии построены по одним и тем же замерам и расставлены по времени замера, поэтому паузы в наблюдении видны как длинные пустые промежутки. Ромбами отмечены границы опубликованных сигналов; остальные замеры читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+            </MethodNote>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} />
@@ -147,8 +172,12 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle as="h2" className="font-heading text-lg">Прирост между замерами</CardTitle>
-          <p className="text-muted-foreground mt-2 text-sm">Сколько новых {phrase} появилось после предыдущего опроса. Ромбами с усиленной обводкой отмечены границы сигналов. В режиме 1:1 используется общая шкала; «Авто» показывает показатели на независимых шкалах.</p>
+          <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
+            Прирост между замерами
+            <MethodNote title="Прирост между замерами">
+              Сколько новых {phrase} появилось после предыдущего опроса. Столбец с обводкой отмечает границу сигнала, отрицательный столбец — исправление источника. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+            </MethodNote>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} />
@@ -159,7 +188,12 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
     <Card className="mt-4">
       <CardContent>
         <div data-testid="chart-range-head" className="text-muted-foreground flex flex-wrap items-baseline justify-between gap-3 text-xs">
-          <b className="text-foreground text-sm">Масштаб по времени</b>
+          <b className="text-foreground flex items-center gap-1.5 text-sm">
+            Масштаб по времени
+            <MethodNote title="Масштаб по времени">
+              Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается. Пропуски в наблюдении показаны на графиках заштрихованными промежутками.
+            </MethodNote>
+          </b>
           <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} замеров` : "Нет замеров"}</span>
         </div>
         <Slider
@@ -177,8 +211,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
           getAriaLabel={(index) => (index === 0 ? "Начало диапазона" : "Конец диапазона")}
         />
         <div className="grid gap-2">
-          {gaps.length ? <p data-observation-gaps={gaps.length} className="text-muted-foreground text-sm">Пропуски в наблюдении: {gaps.length}, суммарно {duration(gapSeconds)}. На графиках они показаны заштрихованными промежутками.</p> : null}
-          <p className="text-muted-foreground text-sm">Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается.</p>
+          {gaps.length ? <p data-observation-gaps={gaps.length} className="text-muted-foreground text-sm">Пропуски в наблюдении: {gaps.length}, суммарно {duration(gapSeconds)}.</p> : null}
           {end-start+1 > displayed.length ? <Badge variant="secondary" className="w-fit rounded-full font-semibold">Не отображено точек: {end-start+1-displayed.length}</Badge> : null}
         </div>
       </CardContent>

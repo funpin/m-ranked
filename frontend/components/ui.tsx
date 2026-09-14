@@ -14,11 +14,14 @@ import type { Metrics, MetricValue } from "@/lib/types";
 export function PageHeader({
   eyebrow,
   title,
+  titleNote,
   description,
   meta,
 }: {
   eyebrow?: string;
   title: string;
+  /** Методика страницы — рядом с заголовком, а не абзацем под ним. */
+  titleNote?: ReactNode;
   description?: ReactNode;
   meta?: ReactNode;
 }) {
@@ -27,7 +30,7 @@ export function PageHeader({
       {eyebrow ? <p className="text-muted-foreground mb-1 text-[11px] font-semibold tracking-wide uppercase">{eyebrow}</p> : null}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="font-heading text-3xl leading-tight font-bold tracking-tight text-balance">{title}</h1>
+          <h1 className="font-heading flex items-center gap-2 text-3xl leading-tight font-bold tracking-tight text-balance">{title}{titleNote}</h1>
           {description ? <p className="text-muted-foreground mt-2 max-w-4xl text-base text-pretty [&_b]:text-foreground [&_b]:font-semibold">{description}</p> : null}
         </div>
         {meta ? <div className="shrink-0">{meta}</div> : null}

@@ -45,16 +45,18 @@ export function Field({ label, hint, className, children }: {
  * A segmented control built from real radio inputs, so the form still submits
  * and restores it natively while it reads as the design system's toggle group.
  */
-export function NativeSegments({ name, options, value, legend }: {
+export function NativeSegments({ name, options, value, legend, labelled = true }: {
   name: string;
   legend: string;
   value: string;
   options: readonly { value: string; label: string }[];
+  /** В компактной панели подпись мешает: набор и так читается по значениям. */
+  labelled?: boolean;
 }) {
   return (
     <fieldset className="m-0 grid gap-1.5 border-0 p-0">
       <legend className="sr-only">{legend}</legend>
-      <span className="text-muted-foreground text-sm font-medium" aria-hidden="true">{legend}</span>
+      {labelled ? <span className="text-muted-foreground text-sm font-medium" aria-hidden="true">{legend}</span> : null}
       <div data-testid="platform-segments" className="bg-muted flex w-fit rounded-md p-0.5">
         {options.map((option) => (
           <label key={option.value} className="relative m-0 cursor-pointer">

@@ -10,6 +10,37 @@ import { metricEvidence, type AggregateMetric } from "@/lib/metric-evidence";
 import { AnimatedNumber } from "@/components/animated-number";
 import { cn } from "@/lib/utils";
 
+/** Доля публикаций, у которых внутри окна есть замер. Тонкая полоса отвечает
+ *  на вопрос «много это или мало» быстрее, чем два числа рядом, и ничего не
+ *  стоит: ни графической библиотеки, ни запроса. */
+function ActivityMeter({ active, total, period }: { active: number | null; total: number | null; period: string }) {
+  if (!total || active === null) return null;
+  const share = Math.min(100, Math.round((active / total) * 100));
+  const text = `Замер внутри окна есть у ${active} публикаций из ${total} — ${share}%`;
+  return (
+    <div className="mt-2.5 cursor-help" tabIndex={0} title={text}
+      role="meter" aria-valuenow={share} aria-valuemin={0} aria-valuemax={100} aria-label={text}>
+      <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+        <div className="bg-chart-2 meter-fill h-full rounded-full" style={{ width: `${share}%` }} />
+      </div>
+      <small className="text-muted-foreground mt-1 block text-[10px] font-medium tracking-wide uppercase">
+        активны {active} из {total} {period}
+      </small>
+    </div>
+  );
+}
+
+/** Покрытие площадок как четыре отрезка: заполненность видно, не читая дробь. */
+function CoverageMeter({ connected }: { connected: number | null }) {
+  return (
+    <span className="mt-1.5 flex gap-1" aria-hidden="true">
+      {[0, 1, 2, 3].map((index) => (
+        <span key={index} className={cn("h-1.5 flex-1 rounded-full", index < (connected ?? 0) ? "bg-chart-2 meter-fill" : "bg-muted")} />
+      ))}
+    </span>
+  );
+}
+
 function accountName(item: OverviewItem): string {
   const account = item.accounts[0];
   if (!account) return "Официальный аккаунт не добавлен";
@@ -59,7 +90,8 @@ function ActivityBody({ item, integrationWarning }: { item: OverviewItem; integr
   const primary = item.platform === "vk" || item.platform === "rutube" ? "лайков" : "реакций";
   const suffix=short;
   const status=overviewStatus(item,integrationWarning);
-  const badges = <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`Публикации ${short}`}>
+  const badges = <div className="mt-3">
+    <div className="flex flex-wrap gap-1.5" aria-label={`Публикации ${short}`}>
     {[
       { label: "Всего публикаций в базе.", value: item.totalPublicationCount, Icon: FileText, tone: "bg-muted text-muted-foreground", kind: "" },
       { label: `Публикации из БД с активностью ${short}.`, value: item.activityPublicationCount, Icon: TrendingUp, tone: "bg-chart-2/12 text-chart-2", kind: "activity" },
@@ -69,6 +101,8 @@ function ActivityBody({ item, integrationWarning }: { item: OverviewItem; integr
         <Icon className="size-3.5 shrink-0" aria-hidden="true" /><b>{value}</b>
       </span>
     ))}
+    </div>
+    <ActivityMeter active={item.activityPublicationCount} total={item.totalPublicationCount} period={short} />
   </div>;
   return <>
     {item.ratingRank ? <span className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[item.platform]}.`}>М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</span> : null}
@@ -119,7 +153,7 @@ function AllPlatformsBody({ item }: { item: OverviewItem }) {
         </div>
       ) : <div className="text-muted-foreground py-4">Официальный аккаунт этой площадки пока не подтверждён.</div>}
       <div className="my-3.5 grid grid-cols-2 gap-3">
-        <span className="grid min-w-0 gap-0.5"><b className="font-heading tabular text-[27px] leading-none font-extrabold tracking-tight">{item.connectedPlatformCount}/4</b><small className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">площадок подключено</small></span>
+        <span className="grid min-w-0 gap-0.5"><b className="font-heading tabular text-[27px] leading-none font-extrabold tracking-tight">{item.connectedPlatformCount}/4</b><small className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">площадок подключено</small><CoverageMeter connected={item.connectedPlatformCount} /></span>
         <span className="grid min-w-0 gap-0.5"><b className="font-heading tabular text-[27px] leading-none font-extrabold tracking-tight">{item.accountCount}</b><small className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">аккаунтов добавлено</small></span>
       </div>
       <div className="border-border mt-auto min-h-[67px] border-t pt-3.5">

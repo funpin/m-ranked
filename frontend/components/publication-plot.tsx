@@ -118,17 +118,27 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       Math.abs(at(row) - instant) < Math.abs(at(best) - instant) ? row : best, rows[0]!);
   }, [rows, at]);
 
-  const axes = scale === "shared"
-    ? [<YAxis key="y" yAxisId="y" tickLine={false} axisLine={false} width={76} allowDecimals={false}
-        tickFormatter={axisNumber} tickMargin={6}
+  // В режиме «Авто» шкала строится только по показанным метрикам: первая идёт
+  // слева, вторая справа. Раньше сторона выбиралась по месту метрики в полном
+  // списке, и при двух показанных метриках левая шкала доставалась скрытой —
+  // на экране оставалась только правая.
+  const visible = metrics.filter((metric) => !hidden.has(metric.key)).slice(0, 2);
+  // Сетка, подсветка пропусков и линия выбранного замера привязываются к одной
+  // шкале — левой, а при общем масштабе к единственной.
+  const primaryAxis = scale === "shared" ? "y" : visible[0]?.key ?? "y";
+  // Скрытая метрика всё равно должна ссылаться на существующую шкалу.
+  const axisFor = (metric: Metric) =>
+    scale === "shared" || !visible.includes(metric) ? primaryAxis : metric.key;
+  const axes = scale === "shared" || !visible.length
+    ? [<YAxis key="y" yAxisId="y" tickLine={false} axisLine={false} width={72} allowDecimals={false}
+        tickFormatter={axisNumber} tickMargin={6} hide={!visible.length}
         label={{ value: axisTitle, angle: -90, position: "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />]
-    : metrics.map((metric, index) => (
-        <YAxis key={metric.key} yAxisId={metric.key} orientation={index % 2 ? "right" : "left"}
-          hide={hidden.has(metric.key)} tickLine={false} axisLine={false} width={76} allowDecimals={false}
+    : visible.map((metric, index) => (
+        <YAxis key={metric.key} yAxisId={metric.key} orientation={index ? "right" : "left"}
+          tickLine={false} axisLine={false} width={72} allowDecimals={false}
           tickFormatter={axisNumber} tickMargin={6}
-          label={{ value: metricLabel(metric, platform), angle: -90, position: index % 2 ? "insideRight" : "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />
+          label={{ value: metricLabel(metric, platform), angle: -90, position: index ? "insideRight" : "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />
       ));
-  const axisFor = (metric: Metric) => (scale === "shared" ? "y" : metric.key);
 
   const shared = {
     data,
@@ -141,10 +151,14 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
 
   const children = (
     <>
-      <CartesianGrid vertical={false} />
+      {/* Горизонтальные линии сетки привязаны к основной шкале: без явного
+          yAxisId сетка ищет шкалу с идентификатором по умолчанию, не находит
+          её и рисует одну линию по краю. Цвет задан явно, иначе контейнер
+          приглушает стандартный штрих вдвое и на тёмной теме его не видно. */}
+      <CartesianGrid vertical={false} yAxisId={primaryAxis} stroke="var(--border)" />
       {/* The renderer shades the stretches where no observation exists. */}
       {gaps.map((gap) => (
-        <ReferenceArea key={`${gap.from}-${gap.to}`} x1={gap.from} x2={gap.to} yAxisId={axisFor(metrics[0]!)}
+        <ReferenceArea key={`${gap.from}-${gap.to}`} x1={gap.from} x2={gap.to} yAxisId={primaryAxis}
           fill="var(--muted-foreground)" fillOpacity={0.12} ifOverflow="hidden" />
       ))}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}
@@ -159,7 +173,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
         )}
       />
       {selectedAt ? (
-        <ReferenceLine x={Date.parse(selectedAt)} yAxisId={axisFor(metrics[0]!)} stroke="var(--foreground)" strokeOpacity={0.45} strokeDasharray="3 3" />
+        <ReferenceLine x={Date.parse(selectedAt)} yAxisId={primaryAxis} stroke="var(--foreground)" strokeOpacity={0.45} strokeDasharray="3 3" />
       ) : null}
     </>
   );
@@ -187,7 +201,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
             {children}
             {metrics.map((metric) => (
               <Bar key={metric.key} dataKey={metric.key} yAxisId={axisFor(metric)} hide={hidden.has(metric.key)}
-                isAnimationActive animationDuration={420} maxBarSize={18}>
+                isAnimationActive animationDuration={420} maxBarSize={28} radius={4}>
                 {data.map((point) => (
                   <Cell
                     key={String(point.snapshotId)}

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Field, NativeInput, NativeSegments, NativeSelect } from "@/components/native-field";
+import { NativeInput, NativeSegments, NativeSelect } from "@/components/native-field";
 import { LegacyFilterForm } from "@/components/legacy-filter-form";
 import { OverviewCard } from "@/components/overview-card";
-import { ApiFailureState, InfoNotice, PageHeader } from "@/components/ui";
+import { CoverageSummary } from "@/components/coverage-summary";
+import { ApiFailureState, PageHeader } from "@/components/ui";
+import { MethodNote } from "@/components/method-note";
+import { Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { PERIOD_LABELS, PLATFORM_LABELS, PLATFORM_LONG_LABELS } from "@/lib/format";
 import {
@@ -61,23 +63,40 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader
         title={platform === "all" ? "Обзор вузов" : "Обзор каналов"}
-        description={platform === "all" ? <><b>Общий контур вуза:</b> официальные аккаунты и общий М‑Рейтинг без сложения несопоставимых метрик разных площадок.</> : platform === "telegram" ? <><b>Активность всех постов в базе за выбранный период</b> — включая публикации, вышедшие раньше. Это прирост реакций и просмотров внутри временного окна, а не сумма текущих показателей только у новых постов.</> : <><b>Активность всех публикаций в базе за выбранный период</b> — включая публикации, вышедшие раньше. Это прирост доступных метрик {PLATFORM_LONG_LABELS[platform]} внутри временного окна, а не сумма текущих показателей только у новых публикаций. Данные других соцсетей в расчёт не попадают.</>}
+        titleNote={
+          <MethodNote title="Как считаются показатели">
+            {platform === "all"
+              ? <><b>Почему нет общей суммы:</b> лайк, реакция, просмотр видео и просмотр поста имеют разный смысл. Общий режим показывает покрытие и официальный общий М‑Рейтинг; единый межплатформенный индекс будет добавлен только после утверждения формулы.</>
+              : platform === "telegram"
+                ? <>В карточке показана активность всех отслеживаемых постов, для которых внутри выбранного периода есть сравнимые замеры, а не только новых публикаций. Реакции и просмотры — разница между первым и последним замером внутри окна; прирост до первого замера в период не включается. Для новых постов с полной историей отсчёт идёт от нуля в момент публикации. Медианы — типичный прирост одного поста за это окно и округляются до целого. Плашка у медианы сравнивает типичный прирост с предыдущим таким же периодом и скрывается, если сравнивать не с чем или изменения нет.</>
+                : <>Для каждой публикации берётся разница между первым и последним сравнимым снимком внутри окна. Метрики, которых нет в официальном источнике {PLATFORM_LONG_LABELS[platform]}, не заменяются нулями и не подменяются Telegram-данными.</>}
+          </MethodNote>
+        }
+        description={platform === "all"
+          ? "Официальные аккаунты и общий М‑Рейтинг без сложения несопоставимых метрик."
+          : "Прирост показателей всех постов в базе за выбранный период, а не только новых."}
       />
 
-      <Card className="mb-5">
-        <CardContent>
+      {/* Панель фильтров без карточки и без подписей над полями: подписи
+          дублировали сами значения, а рамка панели спорила с рамками карточек
+          вузов. Имена для скринридера остались на самих полях. */}
+      <div className="mb-5">
           <LegacyFilterForm key={`${platform}:${period}:${sort}:${direction}:${q}`} action="/" method="get" aria-label="Фильтры обзора">
-            <Field label="Поиск вуза" className="mb-4">
-              <NativeInput name="q" type="search" defaultValue={q} placeholder="Сокращение или полное название" />
-            </Field>
-            <div className="flex flex-wrap items-end gap-3">
-              <Field label="Период" className="w-[9.5rem]">
-                <NativeSelect name="period" defaultValue={period}>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[15rem] flex-1">
+                <NativeInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" className="pr-10" />
+                <button type="submit" aria-label="Применить фильтры" title="Применить фильтры"
+                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 absolute top-1/2 right-1 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md transition-colors focus-visible:ring-[3px] focus-visible:outline-none">
+                  <Search className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="w-[9rem]">
+                <NativeSelect name="period" defaultValue={period} aria-label="Период" title="Период">
                   {Object.entries(PERIOD_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                 </NativeSelect>
-              </Field>
-              <Field label="Сортировать ⓘ" hint="Порядок карточек в списке" className="w-[15rem]">
-                <NativeSelect name="sort" defaultValue={sort}>
+              </div>
+              <div className="w-[14rem]">
+                <NativeSelect name="sort" defaultValue={sort} aria-label="Сортировка" title="Порядок карточек в списке">
                   <option value="name">Название вуза · алфавит</option>
                   {platform === "all" ? (
                     <>
@@ -96,35 +115,31 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                     </>
                   )}
                 </NativeSelect>
-              </Field>
-              <Field label="Порядок" className="w-[11rem]">
-                <NativeSelect name="direction" defaultValue={direction}>
+              </div>
+              <div className="w-[10.5rem]">
+                <NativeSelect name="direction" defaultValue={direction} aria-label="Порядок" title="Порядок">
                   <option value="desc">По убыванию</option>
                   <option value="asc">По возрастанию</option>
                 </NativeSelect>
-              </Field>
-              {/* Кнопка стоит в одной строке с селекторами, поэтому берёт их высоту. */}
-              <Button type="submit" className="h-9 px-4 text-sm">Применить</Button>
+              </div>
               <NativeSegments
                 name="platform"
                 legend="Площадка"
                 value={platform}
                 options={PLATFORM_VALUES.map((value) => ({ value, label: PLATFORM_LABELS[value] }))}
+                labelled={false}
               />
             </div>
           </LegacyFilterForm>
-        </CardContent>
-      </Card>
+      </div>
+
+      {platform === "all" ? <CoverageSummary items={items} /> : null}
 
       <section className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
         items.map((item) => <OverviewCard item={item} integrationWarning={page.integrationWarning} key={item.entityId} />)
       ) : (
         <Card><CardContent className="text-muted-foreground py-6">{q ? `По запросу «${q}» вузы не найдены.` : platform === "telegram" ? "За выбранный период публикаций не найдено." : "Вузы ещё не добавлены."}</CardContent></Card>
       )}</section>
-
-      <InfoNotice>
-        {platform === "all" ? <><b>Почему нет общей суммы:</b> лайк, реакция, просмотр видео и просмотр поста имеют разный смысл. Общий режим показывает покрытие и официальный общий М‑Рейтинг; единый межплатформенный индекс будет добавлен только после утверждения формулы.</> : platform === "telegram" ? <><b>Как считаются показатели:</b> в карточке показана активность всех отслеживаемых постов, для которых внутри выбранного периода есть сравнимые замеры, а не только новых публикаций. Реакции и просмотры — разница между первым и последним замером внутри окна; прирост до первого замера в период не включается. Для новых постов с полной историей отсчёт идёт от нуля в момент публикации. Медианы — типичный прирост одного поста за это окно и округляются до целого. Плашка у медианы сравнивает типичный прирост с предыдущим таким же периодом и скрывается, если сравнивать не с чем или изменения нет. Метки скачков временно отключены.</> : <><b>Как считаются показатели:</b> для каждой публикации берётся разница между первым и последним сравнимым снимком внутри окна. Метрики, которых нет в официальном источнике {PLATFORM_LONG_LABELS[platform]}, не заменяются нулями и не подменяются Telegram-данными.</>}
-      </InfoNotice>
     </>
   );
 }

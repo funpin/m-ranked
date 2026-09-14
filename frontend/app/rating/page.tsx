@@ -13,6 +13,8 @@ import { PERIOD_LABELS, PLATFORM_LONG_LABELS, publicationLabel } from "@/lib/for
 import { first, queryHref, type SearchParams } from "@/lib/params";
 import { normalizeRatingQuery, type ParsedRatingQuery } from "@/lib/rating";
 import { cn } from "@/lib/utils";
+import { MethodNote } from "@/components/method-note";
+import { Search } from "lucide-react";
 import type {
   ActivityRatingEntity,
   ActivityRatingPublication,
@@ -62,10 +64,13 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1><p className="mt-2 mb-5 text-sm text-muted-foreground">{platform === "telegram" ? "Для каждой публикации берётся её последний замер за выбранный период." : `Только публикации и замеры ${PLATFORM_LONG_LABELS[platform]}. Данные других площадок в расчёт не входят.`}</p></div></div>
-      <RatingFilterForm key={`${period}:${page.channelSort}:${page.channelDirection}:${page.postSort}:${page.postDirection}`} className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mb-5 flex flex-wrap items-end gap-3" action="/rating" method="get" aria-label="Настройка рейтинга">
+      {/* Та же компактная панель, что и в обзоре: без карточки и без подписи
+          над единственным полем. */}
+      <RatingFilterForm key={`${period}:${page.channelSort}:${page.channelDirection}:${page.postSort}:${page.postDirection}`} className="mb-5 flex flex-wrap items-center gap-2" action="/rating" method="get" aria-label="Настройка рейтинга">
         <input type="hidden" name="platform" value={platform} />
-        <label><span>Период ⓘ</span><br /><NativeSelect name="period" defaultValue={period}>{Object.entries(PERIOD_LABELS).map(([value,label]) => <option value={value} key={value}>{label}</option>)}</NativeSelect></label>
-        <input type="hidden" name="channel_sort" value={page.channelSort} /><input type="hidden" name="channel_direction" value={page.channelDirection} /><input type="hidden" name="post_sort" value={page.postSort} /><input type="hidden" name="post_direction" value={page.postDirection} /><NativeButton type="submit">Применить</NativeButton>
+        <div className="w-[12rem]"><NativeSelect name="period" defaultValue={period} aria-label="Период" title="Период рейтинга">{Object.entries(PERIOD_LABELS).map(([value,label]) => <option value={value} key={value}>{label}</option>)}</NativeSelect></div>
+        <input type="hidden" name="channel_sort" value={page.channelSort} /><input type="hidden" name="channel_direction" value={page.channelDirection} /><input type="hidden" name="post_sort" value={page.postSort} /><input type="hidden" name="post_direction" value={page.postDirection} />
+        <NativeButton type="submit" aria-label="Применить период" title="Применить период" className="size-9 min-h-9 px-0"><Search className="size-4" aria-hidden="true" /></NativeButton>
       </RatingFilterForm>
 
       {platform === "telegram"
@@ -231,9 +236,20 @@ function RatingSection({ query, eyebrow, title, children }: {
   const name=publications ? telegram ? "Публикации" : `Публикации ${PLATFORM_LONG_LABELS[query.platform]}` : telegram ? "Каналы" : "Вузы";
   const badge={"3h":"3 часа","1d":"24 часа","7d":"7 дней","30d":"30 дней"}[query.period];
   const description=publications ? telegram ? "Сравнение отдельных постов по реакциям, просмотрам и их соотношению." : "Последний известный замер каждой публикации, вышедшей за период." : telegram ? "Типичная и общая активность каналов в сравнении с размером аудитории." : `Если у вуза несколько аккаунтов ${PLATFORM_LONG_LABELS[query.platform]}, их публикации объединяются.`;
+  const note = !publications
+    ? telegram
+      ? <><b>По умолчанию:</b> выше показаны каналы с большей долей среднего числа реакций от текущего числа подписчиков. {description}</>
+      : <><b>Вовлечённость:</b> (лайки + комментарии{query.platform === "vk" ? " + репосты" : ""}) / просмотры. Это отношение событий, а не уникальных пользователей. {description}</>
+    : telegram
+      ? <>Строка открывает <b>внутреннюю статистику</b> публикации: там же лежит ссылка на оригинал в Telegram. {description}</>
+      : <>{description}</>;
   return <section className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-5" aria-label={title}>
-    <div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-semibold">{name}</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p></div><span className="inline-flex shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-medium">Период: {badge}</span></div>
-    {!publications ? <div className="mb-4 rounded-md bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">{telegram ? <><b>По умолчанию:</b> выше показаны каналы с большей долей среднего числа реакций от текущего числа подписчиков.</> : <><b>Вовлечённость:</b> (лайки + комментарии{query.platform === "vk" ? " + репосты" : ""}) / просмотры. Это отношение событий, а не уникальных пользователей.</>}</div> : telegram ? <div className="mb-4 rounded-md bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">Строка открывает <b>внутреннюю статистику</b> публикации: там же лежит ссылка на оригинал в Telegram.</div> : null}
+    {/* Пояснение к разделу ушло под значок: три строки над каждой таблицей
+        отодвигали сами таблицы, а читались один раз. */}
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <h2 className="font-heading flex items-center gap-1.5 text-lg font-semibold">{name}<MethodNote title={name}>{note}</MethodNote></h2>
+      <span className="inline-flex shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-medium">Период: {badge}</span>
+    </div>
     <div className="min-w-0 overflow-x-auto">{children}</div>
   </section>;
 }
