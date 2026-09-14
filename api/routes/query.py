@@ -170,7 +170,11 @@ async def account(
             "platform": row["platform"], "days": request.app.state.settings.retention_days,
             "as_of": committed_at,
         })
-        stats = dto.account_stats(stats_row, revision, committed_at) if stats_row else None
+        daily = await db.fetch_all(details.ACCOUNT_DAILY, {
+            "account_id": row["account_id"], "as_of": committed_at,
+        }) if stats_row else []
+        stats = dto.account_stats(stats_row, revision, committed_at,
+                                  dto.account_daily(list(daily))) if stats_row else None
         return dto.account(row, revision, stats)
 
     return await serve(request, "account", {

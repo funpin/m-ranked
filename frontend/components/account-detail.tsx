@@ -5,6 +5,7 @@ import { duration, legacyDate, legacyNumber, PLATFORM_LABELS, PLATFORM_LONG_LABE
 import { metricEvidence } from "@/lib/metric-evidence";
 import type { AccountView, PublicationListItem } from "@/lib/types";
 import { ChannelSwitch } from "@/components/channel-switch";
+import { WeeklyTrend } from "@/components/weekly-trend";
 
 export function AccountDetail({ account, posts, truncated = false, siblings = [] }: { account: AccountView; posts: PublicationListItem[]; truncated?: boolean; siblings?: readonly AccountView[] }) {
   const name = account.title || account.institutionShortName || account.institutionName;
@@ -21,7 +22,8 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
         <span><b className="text-2xl font-heading tabular">{stats.monitored}</b><small>с полной историей{telegram ? "" : " ⓘ"}</small></span>
         {([{ metric:stats.medianReactions, label:`медиана ${primary}` },{ metric:stats.medianViews,label:"медиана просмотров" },{ metric:stats.medianComments,label:"медиана комментариев" }]).map(({metric,label}) => <span key={label} tabIndex={0} title={metricEvidence(metric)}><b className="text-2xl font-heading tabular">{metric.value === null ? "—" : Math.trunc(metric.value)}</b><small>{label} ⓘ</small><span className="sr-only">{metricEvidence(metric)}</span></span>)}
         <span tabIndex={0} title={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[account.platform]}.`}><b className="text-2xl font-heading tabular">{stats.ratingRank ? `№${stats.ratingRank}` : "—"}</b><small>М‑Рейтинг {PLATFORM_LABELS[account.platform]} ⓘ{stats.ratingPeriod ? ` · ${stats.ratingPeriod}` : ""}</small></span>
-      </div></> : <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Сводка публикаций ещё не рассчитана.</p>}
+      </div>
+      <WeeklyTrend points={stats.dailySeries ?? []} /></> : <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Сводка публикаций ещё не рассчитана.</p>}
     </div>
     <div className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-5 min-w-0 overflow-x-auto">{truncated ? <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Показаны первые 100 публикаций. Более старые записи доступны через API с курсором.</p> : null}<Table><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead></TableRow></TableHeader><TableBody>
       {posts.map((post) => {

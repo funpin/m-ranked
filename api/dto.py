@@ -183,7 +183,18 @@ def institution(row: dict[str, Any], platform: str, period: str, revision: int) 
     }
 
 
-def account_stats(row: dict[str, Any], revision: int, as_of: Any) -> dict[str, Any]:
+def account_daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Недельная динамика: день, сколько постов вышло и какими они вышли."""
+    return [{
+        "day": row["metric_day"].isoformat(),
+        "publishedCount": int(row["published_count"]),
+        "medianReactions": number(row["median_reactions"]),
+        "medianViews": number(row["median_views"]),
+    } for row in rows]
+
+
+def account_stats(row: dict[str, Any], revision: int, as_of: Any,
+                  daily: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     medians = row["medians"] or {}
 
     def median(name: str) -> dict[str, Any]:
@@ -209,6 +220,7 @@ def account_stats(row: dict[str, Any], revision: int, as_of: Any) -> dict[str, A
         "subscriberCount": row["subscriber_count"],
         "lastError": row["last_error"],
         "lastCheckedAt": iso(row["last_checked_at"]),
+        "dailySeries": daily or [],
     }
 
 

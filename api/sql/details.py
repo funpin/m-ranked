@@ -431,3 +431,45 @@ SELECT
    ORDER BY neighbour.published_at,neighbour.id LIMIT 1) AS next
   FROM ingest.visible_publication publication WHERE publication.id=%(publication_id)s::uuid
 """
+
+ACCOUNT_DAILY = """
+-- Недельная динамика аккаунта: сколько постов вышло в каждый из последних
+-- семи дней и какими они оказались по медиане реакций и просмотров.
+--
+-- Считается живьём и стоит недорого: публикаций за неделю у канала десятки,
+-- а их текущие значения лежат в витрине последних значений. Дни нарезаются по
+-- московскому времени — так же, как подписаны все даты на экране.
+WITH days AS (
+    SELECT generate_series(
+        (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 6,
+        (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date,
+        interval '1 day')::date AS metric_day
+), published AS (
+    SELECT (publication.published_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
+           publication.id
+      FROM ingest.visible_publication publication
+     WHERE publication.primary_account_id=%(account_id)s::uuid
+       AND publication.published_at<=%(as_of)s::timestamptz
+       AND (publication.published_at AT TIME ZONE 'Europe/Moscow')::date
+           >= (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 6
+), valued AS (
+    SELECT published.metric_day,
+           CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE latest.reactions_count END AS reactions,
+           CASE WHEN latest.views_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE latest.views_count END AS views
+      FROM published
+      LEFT JOIN analytics.publication_latest latest ON latest.publication_id=published.id
+       AND latest.observed_at<=%(as_of)s::timestamptz
+       AND NOT latest.synthetic AND latest.quality<>'invalid'
+)
+SELECT days.metric_day,
+       count(valued.metric_day)::integer AS published_count,
+       round(percentile_cont(0.5) WITHIN GROUP(ORDER BY valued.reactions)
+             FILTER(WHERE valued.reactions IS NOT NULL)::numeric,0) AS median_reactions,
+       round(percentile_cont(0.5) WITHIN GROUP(ORDER BY valued.views)
+             FILTER(WHERE valued.views IS NOT NULL)::numeric,0) AS median_views
+  FROM days LEFT JOIN valued ON valued.metric_day=days.metric_day
+ GROUP BY days.metric_day
+ ORDER BY days.metric_day
+"""

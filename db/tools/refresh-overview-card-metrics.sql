@@ -6,14 +6,26 @@
 -- общий — по вузу.
 --
 -- Замена содержимого идёт одной транзакцией обычными DELETE и INSERT: читатели
--- продолжают видеть прежний снимок и ничего не ждут, а TRUNCATE ради четырёх
--- тысяч строк забирал бы исключительную блокировку.
+-- продолжают видеть прежний снимок и ничего не ждут, а TRUNCATE ради тысячи
+-- строк забирал бы исключительную блокировку.
+--
+-- Промежуточный набор держится в общем выражении, а не во временной таблице:
+-- роли обслуживания не выдано право создавать временные таблицы, и ради
+-- одного запроса расширять её полномочия незачем.
 BEGIN;
 
 SET LOCAL statement_timeout = '10min';
 SET LOCAL synchronous_commit = off;
 
-CREATE TEMP TABLE overview_growth ON COMMIT DROP AS
+DELETE FROM analytics.overview_card_metrics;
+
+INSERT INTO analytics.overview_card_metrics (
+    scope_platform, entity_id, period, publication_count,
+    views_samples, total_views, median_views,
+    reactions_samples, total_reactions, median_reactions,
+    comments_samples, total_comments, median_comments,
+    shares_samples, total_shares, median_shares,
+    computed_as_of)
 WITH params AS (
     SELECT (SELECT max(committed_at) FROM analytics.dataset_revision) AS as_of
 ), periods(period, duration) AS (
@@ -21,7 +33,7 @@ WITH params AS (
            ('1d', interval '1 day'),
            ('7d', interval '7 days'),
            ('30d', interval '30 days')
-)
+), overview_growth AS MATERIALIZED (
 SELECT period.period,
        params.as_of,
        latest.platform_account_id,
@@ -58,17 +70,8 @@ SELECT period.period,
  WHERE latest.observed_at > params.as_of - period.duration
    AND latest.observed_at <= params.as_of
    AND NOT latest.synthetic
-   AND latest.quality <> 'invalid';
-
-DELETE FROM analytics.overview_card_metrics;
-
-INSERT INTO analytics.overview_card_metrics (
-    scope_platform, entity_id, period, publication_count,
-    views_samples, total_views, median_views,
-    reactions_samples, total_reactions, median_reactions,
-    comments_samples, total_comments, median_comments,
-    shares_samples, total_shares, median_shares,
-    computed_as_of)
+   AND latest.quality <> 'invalid'
+)
 SELECT scope.scope_platform, scope.entity_id, growth.period,
        count(*)::bigint,
        count(*) FILTER (WHERE growth.views_count IS NOT NULL)::integer,
