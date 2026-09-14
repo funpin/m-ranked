@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PublicationDetail } from "@/components/publication-detail";
 import { ApiFailureState } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { loadPublicationHistory } from "@/lib/detail-data";
+import { loadPublicationHistory, reportDetailFailure } from "@/lib/detail-data";
 import { publicationHref, UUID_PATTERN } from "@/lib/entity-routes";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { normalizeHistoryLimit, queryHref, type SearchParams } from "@/lib/params";
@@ -48,6 +48,7 @@ export default async function PublicationPage({ params, searchParams }: Props) {
     }
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
+    reportDetailFailure(`publication:${id}`, error);
     return <ApiFailureState retryHref={queryHref(publicationHref(id), { history_limit: historyLimit })} />;
   }
   return <PublicationDetail history={history} historyLimit={historyLimit} analysis={analysis} analysisLoadFailed={analysisLoadFailed} />;

@@ -54,3 +54,43 @@ test("keyboard skip link becomes visible and focuses the main content", async ({
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
 });
+
+test("недельный график площадки рисуется двумя линиями со своими шкалами", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const trend = page.getByRole("region", { name: "Динамика за неделю" });
+  await expect(trend).toContainText("вышло 17 публикаций за 7 дней");
+  // Две линии на двух шкалах: медианы реакций и просмотров живут в разных
+  // порядках величин и общей шкалы не терпят.
+  await expect(trend.locator("path.recharts-line-curve")).toHaveCount(2);
+  await expect(trend.locator(".recharts-yAxis")).toHaveCount(2);
+  // Обе шкалы подписаны: без подписей две линии в разных порядках величин
+  // читаются как одна кривая неизвестного масштаба. Подписи в этой версии
+  // Recharts лежат не внутри группы оси, а в отдельных слоях, поэтому
+  // считаются по самой картинке.
+  const labelled = await trend.locator("svg.recharts-surface text").count();
+  expect(labelled).toBeGreaterThan(10);
+  // Публикации дня — фоновыми столбцами, по одному на каждый день ряда.
+  await expect(trend.locator(".recharts-bar-rectangle")).toHaveCount(6);
+  await expect(trend).toContainText("публикаций в день");
+});
+
+test("нажатие по дню на графике переносит к публикациям этого дня", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const trend = page.getByRole("region", { name: "Динамика за неделю" });
+  await expect(trend.locator(".recharts-bar-rectangle").first()).toBeVisible();
+
+  const rows = page.locator("tbody tr[data-published-day]");
+  await expect(rows.first()).toBeVisible();
+  await expect(page.getByRole("status")).toHaveCount(0);
+
+  // Столбец первого дня ряда — 1 июля, тот же день, что и у публикаций.
+  await trend.locator(".recharts-bar-rectangle").first().click();
+
+  const banner = page.getByRole("status");
+  await expect(banner).toContainText("публикации этого дня");
+  await expect(banner).toContainText("1.07");
+  await expect(page.locator('tbody tr[data-published-day="2026-07-01"]').first()).toBeVisible();
+
+  await banner.getByRole("button", { name: "показать все" }).click();
+  await expect(page.getByRole("status")).toHaveCount(0);
+});

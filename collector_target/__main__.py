@@ -76,6 +76,31 @@ def next_delay(elapsed_seconds: float, interval_seconds: int) -> float:
     return max(0.0, interval_seconds - elapsed_seconds)
 
 
+def platform_offset(platform: Platform, interval_seconds: int) -> int:
+    """Своя доля интервала у каждой площадки.
+
+    Слоты разложены по epoch и одинаковы для всех, поэтому сборщики с общим
+    интервалом начинали обход в одну и ту же секунду. Достаточно было
+    перезапустить их вместе — а это делает любая выкатка, — и телеграм с MAX
+    навсегда занимали одно ядро одновременно вместо того, чтобы чередоваться:
+    пиковая нагрузка удваивалась, хотя работы было столько же. Смещение
+    выводится из имени площадки, поэтому переживает перезапуск и одинаково у
+    всех партиций одной площадки.
+    """
+    order = sorted(member.value for member in Platform)
+    return interval_seconds * order.index(platform.value) // len(order)
+
+
+def slot_delay(now_epoch: float, interval_seconds: int, offset_seconds: int) -> float:
+    """Сколько ждать до ближайшего слота этой площадки.
+
+    Обход, не уложившийся в свой интервал, не ждёт полного круга: следующий
+    слот может быть уже через несколько секунд, и расписание само выправится.
+    """
+    position = (now_epoch - offset_seconds) % interval_seconds
+    return float(interval_seconds - position) if position else 0.0
+
+
 def _scheduled_slot(now: datetime, interval_seconds: int) -> datetime:
     instant = now.astimezone(timezone.utc)
     epoch = int(instant.timestamp())
@@ -101,6 +126,7 @@ async def _close(adapter: Any, platform: Platform) -> None:
 async def _run(args: argparse.Namespace) -> int:
     platform = Platform(args.platform)
     adapter: Any | None = None
+    repository: PostgresCollectorRepository | None = None
     try:
         settings = Settings.load(args.env_file)
         settings = apply_platform_auth_file(
@@ -148,6 +174,7 @@ async def _run(args: argparse.Namespace) -> int:
             account_concurrency=account_concurrency,
             clock=clock,
         )
+        offset = platform_offset(platform, interval_seconds)
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for signum in (signal.SIGINT, signal.SIGTERM):
@@ -173,17 +200,24 @@ async def _run(args: argparse.Namespace) -> int:
             if args.once:
                 return 1 if summary.status == RunStatus.FAILED else 0
             elapsed = time.monotonic() - began
-            remaining = next_delay(elapsed, interval_seconds)
+            if elapsed >= interval_seconds:
+                logger.warning(
+                    "collector cycle overran its interval platform=%s seconds=%.1f interval=%s",
+                    platform.value, elapsed, interval_seconds,
+                )
+            # Ждём не «столько-то от начала обхода», а до своего слота: иначе
+            # площадки с общим интервалом, запущенные вместе, так и остаются
+            # в одной фазе. Первый обход после запуска может оказаться короче
+            # интервала — этим расписание и притягивается к своему слоту.
+            remaining = min(
+                next_delay(elapsed, interval_seconds),
+                slot_delay(clock.now().timestamp(), interval_seconds, offset),
+            )
             if remaining > 0:
                 try:
                     await asyncio.wait_for(stop.wait(), timeout=remaining)
                 except TimeoutError:
                     pass
-            else:
-                logger.warning(
-                    "collector cycle overran its interval platform=%s seconds=%.1f interval=%s",
-                    platform.value, elapsed, interval_seconds,
-                )
         return 0
     except asyncio.CancelledError:
         raise
@@ -197,6 +231,10 @@ async def _run(args: argparse.Namespace) -> int:
     finally:
         if adapter is not None:
             await _close(adapter, platform)
+        # Пул соединений держит собственные потоки: без явного закрытия выход
+        # ждал бы их до таймаута systemd.
+        if repository is not None:
+            repository.close()
 
 
 def main(argv: list[str] | None = None) -> int:

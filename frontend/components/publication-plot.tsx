@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
-import { duration, legacyDate } from "@/lib/format";
+import { axisNumber, duration, legacyDate } from "@/lib/format";
 import { observationGaps } from "@/lib/observation-gaps";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
@@ -13,16 +13,6 @@ function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, "
  *  ширине графика около девятисот точек каждый столбец становится тоньше
  *  волоса, и картинка перестаёт читаться. */
 const MAX_BARS = 56;
-
-/** На оси значений место ограничено шириной колонки, а показатели доходят до
- *  миллионов. Полное число не влезает и наезжает на соседнее, поэтому крупные
- *  величины подписываются сокращённо — точные значения читаются в подсказке и
- *  в таблице. */
-const compactAxisNumber = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 });
-function axisNumber(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "";
-  return Math.abs(value) < 10_000 ? value.toLocaleString("ru-RU") : compactAxisNumber.format(value);
-}
 
 /** Evidence samples are drawn as a larger diamond, so a published signal
  *  boundary is distinguishable from an ordinary observation without colour. */

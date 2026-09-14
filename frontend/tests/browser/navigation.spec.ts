@@ -61,3 +61,21 @@ test.describe("без JavaScript", () => {
     await expect(page.getByTestId("platform-overview-card").first()).toBeVisible();
   });
 });
+
+test("заготовка при переходе принадлежит той странице, куда идём", async ({ page }, info) => {
+  test.skip(info.project.name === "mobile", "меню спрятано за гамбургером; переходы проверяются на широком экране");
+  await page.goto("/?platform=telegram");
+  // Ответ задерживается, чтобы заготовка успела показаться и её можно было
+  // разглядеть: без задержки переход завершается за один кадр.
+  await page.route("**/rating**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.continue();
+  });
+  await page.getByTestId("main-nav").getByRole("link", { name: "Рейтинг" }).click();
+  // На экране заготовка таблицы рейтинга, а не сетка карточек обзора и не
+  // её заголовок с фильтрами.
+  await expect(page.getByText("Загрузка таблицы")).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Поиск вуза" })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/rating/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+});

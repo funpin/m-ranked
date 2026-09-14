@@ -3,6 +3,20 @@ import { createServer } from "node:http";
 import type { components } from "../../contracts/openapi/m-ranked-v1-client";
 
 type Schema = components["schemas"];
+// Недельный ряд: полный, с днём без публикаций посередине — так проверяется и
+// провал, и то, что ряд не рвётся.
+function weekly() {
+  const counts = [3, 5, 0, 2, 4, 1, 2];
+  const reactions = [5, 7, null, 4, 9, 3, 6];
+  const views = [50, 80, null, 40, 95, 30, 60];
+  return counts.map((published, index) => ({
+    day: new Date(Date.UTC(2026, 6, 1 + index)).toISOString().slice(0, 10),
+    publishedCount: published,
+    medianReactions: reactions[index],
+    medianViews: views[index],
+  }));
+}
+
 const asOf = "2026-08-01T12:00:00Z";
 const revision = 17;
 const uuid = (kind: number, id: number) => `${String(kind).padStart(8,"0")}-0000-4000-8000-${String(id).padStart(12,"0")}`;
@@ -29,7 +43,7 @@ const counter = (value:number|null):Schema["CounterMetric"] => ({value,observedA
 function account(id:number,legacyType:"channels"|"platform_accounts"="channels"):Schema["Account"] {
   const platform=legacyType === "channels" ? "telegram" : id === 3 ? "max" : id === 4 ? "rutube" : "vk";
   return {accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id),legacyId:id,legacyType,channelLegacyId:platform === "telegram" ? id : null,platformAccountLegacyId:id,institutionId:`institution-${id}`,institutionLegacyId:id,institutionName:names[0]!,institutionShortName:null,platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Канал ${id}`,url:`https://example.test/account/${id}`,accessMode:"public",enabled:true,publicationCount:2,latestObservedAt:asOf,datasetRevision:revision,asOf,
-    stats:{retentionDays:70,postCount:2,monitored:1,medianReactions:aggregate(5),medianViews:aggregate(50),medianComments:aggregate(0),ratingRank:2,ratingPeriod:"2026-Q2",subscriberCount:100,lastError:null,lastCheckedAt:asOf}};
+    stats:{retentionDays:70,postCount:2,monitored:1,medianReactions:aggregate(5),medianViews:aggregate(50),medianComments:aggregate(0),ratingRank:2,ratingPeriod:"2026-Q2",subscriberCount:100,lastError:null,lastCheckedAt:asOf,dailySeries:weekly()}};
 }
 function publication(id:number,type:"posts"|"platform_posts"="posts"):Schema["Publication"] {
   const platform=type === "posts" ? "telegram" : id === 21 ? "vk" : id === 41 ? "rutube" : "max";

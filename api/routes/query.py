@@ -151,11 +151,26 @@ async def institution(
     }, DETAIL_TAGS, build)
 
 
+def _pinned_revision(value: int | None) -> int | None:
+    """Клиент просит собрать страницу по одному снимку данных.
+
+    Экран детали складывается из нескольких запросов, а ревизия на проде
+    меняется каждые две секунды. Первый запрос сообщает свою ревизию,
+    остальные её закрепляют — иначе страница собирается из разных снимков.
+    """
+    if value is None:
+        return None
+    if value < 1:
+        raise BadRequest("ревизия набора данных должна быть положительной")
+    return value
+
+
 @router.get("/accounts/{legacyId}")
 async def account(
     legacyId: str,
     request: Request,
     legacyType: str = Query("platform_accounts"),
+    revision: int | None = Query(None),
 ) -> Response:
     resolved_type = _legacy_type(legacyType, ("channels", "platform_accounts"))
     identity = _entity_params(legacyId, resolved_type)
@@ -179,7 +194,7 @@ async def account(
 
     return await serve(request, "account", {
         "id": legacyId.lower(), "legacyType": resolved_type,
-    }, DETAIL_TAGS, build)
+    }, DETAIL_TAGS, build, _pinned_revision(revision))
 
 
 @router.get("/publications/{legacyId}")
@@ -187,6 +202,7 @@ async def publication(
     legacyId: str,
     request: Request,
     legacyType: str = Query("posts"),
+    revision: int | None = Query(None),
 ) -> Response:
     resolved_type = _legacy_type(legacyType, ("posts", "platform_posts"))
     identity = _entity_params(legacyId, resolved_type)
@@ -200,7 +216,7 @@ async def publication(
 
     return await serve(request, "publication", {
         "id": legacyId.lower(), "legacyType": resolved_type,
-    }, DETAIL_TAGS, build)
+    }, DETAIL_TAGS, build, _pinned_revision(revision))
 
 
 @router.get("/institutions/{legacyId}/accounts")
@@ -210,6 +226,7 @@ async def institution_accounts(
     platform: str = Query("all"),
     limit: int = Query(50),
     cursor: str | None = Query(None),
+    revision: int | None = Query(None),
 ) -> Response:
     resolved_platform = normalize.platform(platform)
     page_size = normalize.limit(limit)
@@ -246,7 +263,7 @@ async def institution_accounts(
     return await serve(request, "institution-accounts", {
         "legacyId": legacy_id, "platform": resolved_platform,
         "limit": page_size, "cursor": cursor or "",
-    }, DETAIL_TAGS, build)
+    }, DETAIL_TAGS, build, _pinned_revision(revision))
 
 
 @router.get("/accounts/{legacyId}/publications")
@@ -256,6 +273,7 @@ async def account_publications(
     legacyType: str = Query("platform_accounts"),
     limit: int = Query(50),
     cursor: str | None = Query(None),
+    revision: int | None = Query(None),
 ) -> Response:
     resolved_type = _legacy_type(legacyType, ("channels", "platform_accounts"))
     page_size = normalize.limit(limit)
@@ -286,7 +304,7 @@ async def account_publications(
     return await serve(request, "account-publications", {
         "id": legacyId.lower(), "legacyType": resolved_type,
         "limit": page_size, "cursor": cursor or "",
-    }, DETAIL_TAGS, build)
+    }, DETAIL_TAGS, build, _pinned_revision(revision))
 
 
 @router.get("/publications/{legacyId}/history")

@@ -50,6 +50,11 @@ class Settings:
 
     cache_entries: int = field(default_factory=lambda: _int("API_CACHE_ENTRIES", 512, 0, 65536))
     cache_ttl_seconds: int = field(default_factory=lambda: _int("API_CACHE_TTL_SECONDS", 600, 1, 86_400))
+    # Нижняя граница возраста записи кэша. Уведомление о записи не выбрасывает
+    # запись моложе неё, а укорачивает ей жизнь до этой отметки: на проде
+    # уведомления приходят чаще раза в секунду, и без границы кэш не доживает
+    # до второго читателя.
+    cache_min_age_seconds: int = field(default_factory=lambda: _int("API_CACHE_MIN_AGE_SECONDS", 10, 0, 600))
     retention_days: int = field(default_factory=lambda: _int("PUBLICATION_RETENTION_DAYS", 70, 1, 3650))
 
     health_mode: str = field(default_factory=lambda: os.environ.get("HEALTH_DATA_SOURCE", "public_web"))

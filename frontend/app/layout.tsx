@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/site-header";
 import { publicOrigin } from "@/lib/deployment";
 import "./globals.css";
 import { Geologica, Montserrat } from "next/font/google";
+import { RouteBoundary } from "@/components/navigation-boundary";
 import { SiteHeaderFallback } from "@/components/site-header-fallback";
 import { cn } from "@/lib/utils";
 
@@ -76,7 +77,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <a className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[300] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring" href="#main-content">Перейти к содержимому</a>
         <Suspense fallback={<SiteHeaderFallback platform={activePlatform} />}><SiteHeader initialPlatform={activePlatform} /></Suspense>
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6 lg:px-10">{children}</main>
+        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6 lg:px-10"><RouteBoundary>{children}</RouteBoundary></main>
       </body>
     </html>
   );

@@ -287,6 +287,17 @@ paths:
       summary: Resolve a legacy publication id and return latest independent counters
       security: []
       parameters:
+        - name: revision
+          in: query
+          required: false
+          description: >-
+            Собрать ответ по этой ревизии набора данных, а не по текущей. Экран детали
+            складывается из нескольких запросов, а ревизия меняется каждые несколько
+            секунд; первый запрос сообщает свою, остальные её закрепляют. Неизвестная
+            ревизия не ошибка: ответ придёт по текущей, и это видно в datasetRevision.
+          schema:
+            type: integer
+            minimum: 1
         - $ref: '#/components/parameters/EntityId'
         - name: legacyType
           in: query
@@ -621,6 +632,17 @@ paths:
         Subscriber history is intentionally absent because no account-latest projection exists.
       security: []
       parameters:
+        - name: revision
+          in: query
+          required: false
+          description: >-
+            Собрать ответ по этой ревизии набора данных, а не по текущей. Экран детали
+            складывается из нескольких запросов, а ревизия меняется каждые несколько
+            секунд; первый запрос сообщает свою, остальные её закрепляют. Неизвестная
+            ревизия не ошибка: ответ придёт по текущей, и это видно в datasetRevision.
+          schema:
+            type: integer
+            minimum: 1
         - $ref: '#/components/parameters/EntityId'
         - name: legacyType
           in: query
@@ -1626,6 +1648,17 @@ paths:
       operationId: getAccountPublications
       summary: Revision-pinned bounded account detail continuation
       parameters:
+      - name: revision
+        in: query
+        required: false
+        description: >-
+          Собрать ответ по этой ревизии набора данных, а не по текущей. Экран детали
+          складывается из нескольких запросов, а ревизия меняется каждые несколько
+          секунд; первый запрос сообщает свою, остальные её закрепляют. Неизвестная
+          ревизия не ошибка: ответ придёт по текущей, и это видно в datasetRevision.
+        schema:
+          type: integer
+          minimum: 1
       - $ref: '#/components/parameters/EntityId'
       - name: limit
         in: query
@@ -1665,6 +1698,17 @@ paths:
       operationId: getInstitutionAccounts
       summary: Revision-pinned bounded institution detail continuation
       parameters:
+      - name: revision
+        in: query
+        required: false
+        description: >-
+          Собрать ответ по этой ревизии набора данных, а не по текущей. Экран детали
+          складывается из нескольких запросов, а ревизия меняется каждые несколько
+          секунд; первый запрос сообщает свою, остальные её закрепляют. Неизвестная
+          ревизия не ошибка: ответ придёт по текущей, и это видно в datasetRevision.
+        schema:
+          type: integer
+          minimum: 1
       - name: legacyId
         in: path
         required: true

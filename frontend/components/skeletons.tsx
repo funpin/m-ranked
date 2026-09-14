@@ -66,3 +66,38 @@ export function PublicationSkeleton() {
     </div>
   );
 }
+
+/** Страница вуза: плитки со сводкой, недельная полоса и таблица публикаций. */
+export function AccountSkeleton() {
+  return (
+    <div className="grid gap-5" role="status" aria-live="polite">
+      <span className="sr-only">Загрузка данных площадки</span>
+      <div className="bg-card grid gap-4 rounded-xl border p-5 shadow-sm">
+        <Skeleton className="h-4 w-full max-w-3xl" />
+        <div className="grid gap-3 sm:grid-cols-[1.6fr_1fr]">
+          {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-20 w-full" />)}
+        </div>
+        <Skeleton className="h-32 w-full" />
+      </div>
+      <div className="bg-card grid gap-3 rounded-xl border p-5 shadow-sm">
+        {Array.from({ length: 10 }, (_, index) => <Skeleton key={index} className="h-8 w-full" />)}
+      </div>
+    </div>
+  );
+}
+
+/** Заготовка страницы, на которую уходит переход.
+ *
+ *  Раскладки маршрутов различаются, и показывать при уходе на рейтинг сетку
+ *  карточек обзора значит обещать не то, что появится. Возвращает null для
+ *  перехода внутри текущего маршрута — там уместна заготовка самой страницы.
+ */
+export function skeletonFor(href: string) {
+  if (!href) return null;
+  const path = href.split("?")[0] ?? "";
+  if (path === "/" ) return <CardGridSkeleton />;
+  if (path.startsWith("/rating") || path.startsWith("/compare")) return <TableSkeleton />;
+  if (/^\/(accounts|channels|platform-accounts|institutions)\//.test(path)) return <AccountSkeleton />;
+  if (/^\/(publications|posts|platform-posts)\//.test(path)) return <PublicationSkeleton />;
+  return null;
+}

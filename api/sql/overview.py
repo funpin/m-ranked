@@ -209,6 +209,18 @@ WITH params AS (
             WHEN 'views' THEN card.total_views
             WHEN 'reactions' THEN card.total_reactions
             ELSE card.median_reactions END END DESC NULLS LAST,
+        -- Равные значения раскладываются по размеру площадки, а не по
+        -- алфавиту. Медиана прироста за короткое окно у всех вузов равна
+        -- нулю: она считается по всем постам с наблюдением в окне, включая
+        -- давно остывшие, и таких больше половины. Сортировка «по убыванию»
+        -- при этом честно ставила первым вуз на букву А с пятнадцатью
+        -- реакциями, а вуз с двумя тысячами — двадцатым. То же было у
+        -- покрытия и числа аккаунтов, где различимых значений всего четыре.
+        -- Направление у запасного ключа всегда одно: при равенстве метрики
+        -- заметнее тот, кто крупнее.
+        card.total_reactions DESC NULLS LAST,
+        card.total_views DESC NULLS LAST,
+        card.subscriber_count DESC NULLS LAST,
         card.sort_name, card.entity_id) AS page_position
       FROM card_source card
      WHERE %(search)s='' OR card.search_text LIKE '%%'||lower(%(search)s)||'%%'

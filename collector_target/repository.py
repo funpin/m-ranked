@@ -79,9 +79,15 @@ class PostgresCollectorRepository:
         statement_timeout_seconds: int = 60,
         snapshot_heartbeat_hours: int = 24,
         evidence_store: ImmutableEvidenceStore | None = None,
+        pool_size: int = 3,
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
+        if pool_size < 2:
+            # Меньше двух нельзя: словарь свидетельств берёт собственное
+            # соединение внутри уже открытого батча, и на единственном
+            # соединении это встало бы намертво.
+            raise ValueError("pool_size must be at least 2")
         if raw_retention_days < 1:
             raise ValueError("raw_retention_days must be positive")
         if statement_timeout_seconds < 1:
@@ -89,6 +95,13 @@ class PostgresCollectorRepository:
         if snapshot_heartbeat_hours < 1:
             raise ValueError("snapshot_heartbeat_hours must be positive")
         self._factory = connection_factory or self._psycopg_factory(str(dsn))
+        # Пул поднимается только для собственного DSN: подставленная фабрика
+        # соединений принадлежит вызывающему, и её жизненным циклом
+        # распоряжается он.
+        self._dsn = None if connection_factory is not None else str(dsn)
+        self._pool_size = pool_size
+        self._pool: Any = None
+        self._pool_lock = threading.Lock()
         self.raw_retention = timedelta(days=raw_retention_days)
         self.statement_timeout_seconds = statement_timeout_seconds
         self.snapshot_heartbeat = timedelta(hours=snapshot_heartbeat_hours)
@@ -153,15 +166,64 @@ class PostgresCollectorRepository:
 
         return connect
 
+    def _prepare_session(self, connection: Any) -> None:
+        """Настройки сеанса, одинаковые для любого соединения."""
+        connection.execute("SET TIME ZONE 'UTC'")
+        connection.execute(
+            "SELECT set_config('statement_timeout', %s, false)",
+            (f"{self.statement_timeout_seconds}s",),
+        )
+
+    def _ensure_pool(self) -> Any:
+        """Пул соединений, открываемый при первом обращении.
+
+        Прежде каждый вызов репозитория поднимал собственное соединение и
+        закрывал его: около трёх новых обслуживающих процессов в секунду.
+        Дорога не сама установка соединения, а то, что вместе с ней теряется
+        кэш планов. Снимки разложены по 63 партициям, и планирование одного
+        запроса по ним занимало от 100 до 360 миллисекунд — на каждый вызов.
+        Переиспользованное соединение готовит запрос один раз.
+        """
+        if self._pool is not None:
+            return self._pool
+        with self._pool_lock:
+            if self._pool is None:
+                from psycopg.rows import dict_row
+                from psycopg_pool import ConnectionPool
+
+                self._pool = ConnectionPool(
+                    self._dsn,
+                    min_size=1,
+                    max_size=self._pool_size,
+                    max_idle=300.0,
+                    timeout=30.0,
+                    kwargs={"autocommit": True, "row_factory": dict_row},
+                    configure=self._prepare_session,
+                    # База живёт в контейнере и переживает перезапуски. Проверка
+                    # при выдаче стоит одного обращения и избавляет от отказа
+                    # цикла на соединении, оборванном с той стороны.
+                    check=ConnectionPool.check_connection,
+                    open=False,
+                )
+                self._pool.open()
+        return self._pool
+
+    def close(self) -> None:
+        """Закрывает пул. Соединения из подставленной фабрики не трогает."""
+        with self._pool_lock:
+            pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.close()
+
     @contextmanager
     def _connection(self) -> Iterator[Any]:
+        if self._dsn is not None:
+            with self._ensure_pool().connection() as connection:
+                yield connection
+            return
         connection = self._factory()
         try:
-            connection.execute("SET TIME ZONE 'UTC'")
-            connection.execute(
-                "SELECT set_config('statement_timeout', %s, false)",
-                (f"{self.statement_timeout_seconds}s",),
-            )
+            self._prepare_session(connection)
             yield connection
         finally:
             connection.close()
@@ -390,14 +452,24 @@ class PostgresCollectorRepository:
             return {}
         with self._connection() as connection:
             rows = connection.execute(
+                # Снимки публикации лежат в партиции её собственного месяца
+                # публикации, поэтому месяц передаётся явно. Без него отсекать
+                # партиции не по чему: планировщик обходил все 63 и на сотне
+                # публикаций читал 603 тысячи буферов со сбросом полугигабайта
+                # во временные файлы. С месяцем — 167 тысяч буферов без сброса,
+                # выполнение падает с 53 секунд до 0.8.
                 """SELECT identity.external_id,
                           max(snapshot.views_count) AS views,
                           max(snapshot.reactions_count) AS reactions,
                           max(snapshot.comments_count) AS comments,
                           max(snapshot.shares_count) AS shares
                      FROM ingest.publication_identity AS identity
+                     JOIN ingest.publication AS publication
+                       ON publication.id=identity.publication_id
                      JOIN ingest.publication_metric_snapshot_active AS snapshot
                        ON snapshot.publication_id=identity.publication_id
+                      AND snapshot.published_month
+                          =date_trunc('month', publication.published_at)::date
                     WHERE identity.platform_account_id=%s
                       AND identity.external_id=ANY(%s)
                     GROUP BY identity.external_id""",
@@ -477,10 +549,16 @@ class PostgresCollectorRepository:
                           ORDER BY identity.id
                           LIMIT 1
                      ) AS primary_identity ON true
+                     -- Месяц публикации — ключ партиционирования снимков, и
+                     -- он же вычисляется из самой публикации. Без него поиск
+                     -- последнего замера шёл по всем партициям на каждую
+                     -- строку выдачи.
                      LEFT JOIN LATERAL (
                          SELECT snapshot.observed_at, snapshot.sampling_bucket
                            FROM ingest.publication_metric_snapshot_active AS snapshot
                           WHERE snapshot.publication_id=publication.id
+                            AND snapshot.published_month
+                                =date_trunc('month', publication.published_at)::date
                           ORDER BY snapshot.observed_at DESC, snapshot.id DESC
                           LIMIT 1
                      ) AS latest ON true

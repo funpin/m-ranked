@@ -4,6 +4,16 @@
 штамповалась в пиковом режиме раз в 3.5 секунды, поэтому такой кэш был мёртв:
 каждая запись обесценивала весь его объём. Здесь ключ не зависит от ревизии,
 а сбрасывается по факту записи — через LISTEN/NOTIFY из outbox.
+
+У сброса есть нижняя граница возраста. На проде уведомление приходит чаще
+раза в секунду и всегда несёт все три области сразу: коллекторы пишут
+непрерывно. Сброс «сразу и насовсем» означал бы, что записи не доживают до
+второго читателя, и кэш снова мёртв — уже по другой причине. Поэтому
+уведомление не удаляет свежую запись, а укорачивает ей жизнь до этой границы:
+каждый ответ строится не чаще раза в min_age секунд и не бывает старше их.
+Цифры на экране — приросты за три часа, сутки, неделю и месяц, и отставание
+в несколько секунд в них не видно; сам ответ несёт asOf и datasetRevision,
+по которым видно, какой это снимок.
 """
 from __future__ import annotations
 
@@ -27,6 +37,7 @@ class Entry:
     etag: str
     expires_at: float
     tags: frozenset[str]
+    born_at: float
 
 
 class ResponseCache:
@@ -38,9 +49,12 @@ class ResponseCache:
     намеренно: при 19 тысячах записей в час перебор ключей стоит дороже кэша.
     """
 
-    def __init__(self, capacity: int, ttl_seconds: int) -> None:
+    def __init__(self, capacity: int, ttl_seconds: int, min_age_seconds: float = 0.0) -> None:
+        if min_age_seconds < 0:
+            raise ValueError("min_age_seconds must not be negative")
         self._capacity = capacity
         self._ttl = ttl_seconds
+        self._min_age = min(float(min_age_seconds), float(ttl_seconds))
         self._entries: OrderedDict[str, Entry] = OrderedDict()
         self._hits = 0
         self._misses = 0
@@ -63,15 +77,30 @@ class ResponseCache:
     def put(self, key: str, value: Any, etag: str, tags: frozenset[str]) -> None:
         if self._capacity == 0:
             return
-        self._entries[key] = Entry(value, etag, time.monotonic() + self._ttl, tags)
+        born = time.monotonic()
+        self._entries[key] = Entry(value, etag, born + self._ttl, tags, born)
         self._entries.move_to_end(key)
         while len(self._entries) > self._capacity:
             self._entries.popitem(last=False)
 
     def invalidate(self, tags: frozenset[str]) -> int:
+        """Сбрасывает записи с этими тегами, но не раньше нижней границы.
+
+        Возвращает число выброшенных прямо сейчас записей; укороченные до
+        границы в счёт не идут — они ещё обслуживают читателей.
+        """
         if not tags:
             return 0
-        doomed = [key for key, entry in self._entries.items() if entry.tags & tags]
+        now = time.monotonic()
+        doomed: list[str] = []
+        for key, entry in self._entries.items():
+            if not entry.tags & tags:
+                continue
+            deadline = entry.born_at + self._min_age
+            if deadline <= now:
+                doomed.append(key)
+            else:
+                entry.expires_at = min(entry.expires_at, deadline)
         for key in doomed:
             del self._entries[key]
         return len(doomed)
