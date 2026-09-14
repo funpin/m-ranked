@@ -1,6 +1,6 @@
 [Unit]
-Description=M-Ranked overview card metrics refresh
-Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+Description=M-Ranked full database dump
+Documentation=file:/opt/m-ranked/current/operations/runbooks/BACKUP_RESTORE.md
 After=network-online.target docker.service
 Wants=network-online.target
 
@@ -9,16 +9,17 @@ Type=oneshot
 User=root
 Group=root
 WorkingDirectory=/opt/m-ranked/current
-EnvironmentFile=/etc/m-ranked/overview-metrics.env
+EnvironmentFile=/etc/m-ranked/dump-backup.env
 Environment=TZ=UTC
-ExecStart=/opt/m-ranked/current/operations/scripts/refresh-overview-metrics.sh
-TimeoutStartSec=12min
+ExecStart=/opt/m-ranked/current/operations/scripts/dump-backup.sh
+TimeoutStartSec=90min
+Nice=10
+IOSchedulingClass=idle
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
-ProtectControlGroups=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true

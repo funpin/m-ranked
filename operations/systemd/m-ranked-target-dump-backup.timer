@@ -1,0 +1,12 @@
+[Unit]
+Description=Take a full M-Ranked database dump every night
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=20min
+AccuracySec=1min
+Unit=m-ranked-target-dump-backup.service
+
+[Install]
+WantedBy=timers.target
