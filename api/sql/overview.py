@@ -92,29 +92,6 @@ WITH params AS (
      CROSS JOIN params
      WHERE publication.published_at>params.as_of-params.duration
        AND publication.published_at<=params.as_of AND publication.created_at<=params.as_of
-), publication_fact AS (
-    -- Счётчики берутся из витрины: у каждой метрики своё последнее известное
-    -- значение, поэтому метрика, которую платформа не отдала в последний раз,
-    -- не пропадает с экрана. Качество маскирует значение так же, как это
-    -- делала прежняя функция чтения.
-    SELECT selected.scope_platform, selected.entity_id, publication.id,
-           CASE WHEN latest.views_quality IN ('invalid','suspected_reset')
-                THEN NULL ELSE latest.views_count END AS views_count,
-           CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset')
-                THEN NULL ELSE latest.reactions_count END AS reactions_count,
-           CASE WHEN latest.comments_quality IN ('invalid','suspected_reset')
-                THEN NULL ELSE latest.comments_count END AS comments_count,
-           CASE WHEN latest.shares_quality IN ('invalid','suspected_reset')
-                THEN NULL ELSE latest.shares_count END AS shares_count
-      FROM selected_accounts selected
-      JOIN ingest.visible_publication publication ON publication.primary_account_id=selected.id
-     CROSS JOIN params
-      LEFT JOIN analytics.publication_latest latest
-        ON latest.publication_id=publication.id
-       AND latest.observed_at<=params.as_of
-       AND NOT latest.synthetic AND latest.quality<>'invalid'
-     WHERE publication.published_at>params.as_of-params.duration
-       AND publication.published_at<=params.as_of AND publication.created_at<=params.as_of
 ), publication_totals AS (
     -- Всего публикаций сущности в базе, без ограничения периодом: счёт по
     -- индексу (primary_account_id, published_at, id), без обращения к витрине.
@@ -138,25 +115,6 @@ WITH params AS (
     -- Публикации, вышедшие внутри окна.
     SELECT scope_platform, entity_id, count(*)::bigint AS new_count
       FROM publication_scope GROUP BY 1,2
-), metric_summary AS (
-    SELECT scope_platform, entity_id, count(*)::bigint AS publication_count,
-           count(*) FILTER (WHERE views_count IS NOT NULL)::integer AS views_samples,
-           sum(views_count)::numeric AS total_views,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY views_count)
-                 FILTER(WHERE views_count IS NOT NULL)::numeric,0) AS median_views,
-           count(*) FILTER (WHERE reactions_count IS NOT NULL)::integer AS reactions_samples,
-           sum(reactions_count)::numeric AS total_reactions,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY reactions_count)
-                 FILTER(WHERE reactions_count IS NOT NULL)::numeric,0) AS median_reactions,
-           count(*) FILTER (WHERE comments_count IS NOT NULL)::integer AS comments_samples,
-           sum(comments_count)::numeric AS total_comments,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY comments_count)
-                 FILTER(WHERE comments_count IS NOT NULL)::numeric,0) AS median_comments,
-           count(*) FILTER (WHERE shares_count IS NOT NULL)::integer AS shares_samples,
-           sum(shares_count)::numeric AS total_shares,
-           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY shares_count)
-                 FILTER(WHERE shares_count IS NOT NULL)::numeric,0) AS median_shares
-      FROM publication_fact GROUP BY scope_platform, entity_id
 ), account_summary AS (
     SELECT scope_platform, entity_id, count(*)::integer AS account_count,
            count(*) FILTER(WHERE enabled)::integer AS enabled_account_count,
@@ -207,8 +165,15 @@ WITH params AS (
         AND telegram.entity_id=dimension.entity_id AND telegram.platform='telegram'
       LEFT JOIN account_summary summary ON summary.scope_platform=dimension.scope_platform
         AND summary.entity_id=dimension.entity_id
-      LEFT JOIN metric_summary metrics ON metrics.scope_platform=dimension.scope_platform
-        AND metrics.entity_id=dimension.entity_id
+      -- Агрегаты карточки лежат готовыми: живым запросом прирост по всем
+      -- публикациям окна стоил 299 тысяч буферов и шести секунд, потому что
+      -- на каждую публикацию приходился отдельный поиск значения на начало
+      -- окна. Числа одинаковы для всех читателей, поэтому их пересчитывает
+      -- расписание, а экран только выбирает свою строку.
+      LEFT JOIN analytics.overview_card_metrics metrics
+        ON metrics.scope_platform=dimension.scope_platform
+       AND metrics.entity_id=dimension.entity_id
+       AND metrics.period=%(period)s
       LEFT JOIN publication_totals totals ON totals.scope_platform=dimension.scope_platform
         AND totals.entity_id=dimension.entity_id
       LEFT JOIN publication_new fresh ON fresh.scope_platform=dimension.scope_platform
