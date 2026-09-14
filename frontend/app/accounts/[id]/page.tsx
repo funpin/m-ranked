@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import { loadAccountPublications } from "@/lib/detail-data";
 import { accountHref, UUID_PATTERN } from "@/lib/entity-routes";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
+import type { AccountView } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ id: string }> };
@@ -38,5 +39,13 @@ export default async function AccountPage({ params }: Props) {
     if (error instanceof ApiError && error.status === 404) notFound();
     return <ApiFailureState retryHref={accountHref(id)} />;
   }
-  return <AccountDetail account={account} posts={posts.items} truncated={Boolean(posts.nextCursor)} />;
+  // Соседние площадки того же вуза. Справочник отвечает быстро, а без него
+  // переход к другой сети требовал возврата в обзор и поиска карточки заново.
+  let siblings: AccountView[] = [];
+  try {
+    if (account.institutionLegacyId !== null) {
+      siblings = [...(await api.institutionAccounts(account.institutionLegacyId, "all")).items];
+    }
+  } catch { /* Селектор необязателен: страница постов ценна и без него. */ }
+  return <AccountDetail account={account} posts={posts.items} truncated={Boolean(posts.nextCursor)} siblings={siblings} />;
 }

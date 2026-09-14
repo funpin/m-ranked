@@ -4,14 +4,16 @@ import Link from "@/components/native-link";
 import { duration, legacyDate, legacyNumber, PLATFORM_LABELS, PLATFORM_LONG_LABELS, postTypeLabel, publicationLabel } from "@/lib/format";
 import { metricEvidence } from "@/lib/metric-evidence";
 import type { AccountView, PublicationListItem } from "@/lib/types";
+import { ChannelSwitch } from "@/components/channel-switch";
 
-export function AccountDetail({ account, posts, truncated = false }: { account: AccountView; posts: PublicationListItem[]; truncated?: boolean }) {
+export function AccountDetail({ account, posts, truncated = false, siblings = [] }: { account: AccountView; posts: PublicationListItem[]; truncated?: boolean; siblings?: readonly AccountView[] }) {
   const name = account.title || account.institutionShortName || account.institutionName;
   const stats = account.stats;
   const telegram = account.platform === "telegram";
   const primary = account.platform === "vk" || account.platform === "rutube" ? "лайков" : "реакций";
   return <><span data-active-platform={account.platform} hidden />
-    <h1 className="mb-5 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">{name}{account.username ? <> <span className="text-muted-foreground">@{account.username}</span></> : null}</h1>
+    <h1 className="mb-3 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">{name}{account.username ? <> <span className="text-muted-foreground">@{account.username}</span></> : null}</h1>
+    <ChannelSwitch accounts={siblings} currentId={account.accountId} />
     <div className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
       {stats ? <><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{telegram ? `Данные ниже — по всем публикациям, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Метки скачков временно отключены; реакции и просмотры продолжают накапливаться для настройки алгоритма.` : `Данные ниже — по всем публикациям ${PLATFORM_LONG_LABELS[account.platform]}, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Недоступные площадке метрики показываются прочерком.`}</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>span]:grid [&>span]:gap-1 [&>span]:rounded-lg [&>span]:border [&>span]:p-4 [&_small]:text-muted-foreground mt-4">
