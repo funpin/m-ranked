@@ -32,8 +32,8 @@ back them up separately with distinct encryption and verify their inventory.
 ## Ночной снимок там, где нет pgBackRest
 
 `m-ranked-target-dump-backup.timer` снимает базу целиком каждую ночь
-(`pg_dump -Fc`), проверяет снятое чтением оглавления и оставляет на диске пять
-последних копий в `/var/backups/m-ranked`. Проверка выполняется клиентом из
+(`pg_dump -Fc`), проверяет снятое чтением оглавления и оставляет на диске три
+последние копии в `/var/backups/m-ranked`. Проверка выполняется клиентом из
 образа самой базы, если на хосте нет `pg_restore`.
 
 Это не замена pgBackRest: восстановление возможно только на момент снимка, а
