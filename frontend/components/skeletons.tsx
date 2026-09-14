@@ -38,3 +38,31 @@ export function TableSkeleton({ rows = 10 }: { rows?: number }) {
     </div>
   );
 }
+
+/** Публикация: карточка сигнала, два графика и таблица замеров. Высоты те же,
+ *  что у настоящих блоков, поэтому подмена не дёргает страницу. */
+export function PublicationSkeleton() {
+  return (
+    <div className="grid gap-4" role="status" aria-live="polite">
+      <span className="sr-only">Загрузка публикации</span>
+      <div className="bg-card grid gap-3 rounded-xl border p-5 shadow-sm">
+        <Skeleton className="h-5 w-64" />
+        <Skeleton className="h-4 w-full max-w-xl" />
+        <Skeleton className="h-4 w-3/4 max-w-lg" />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {Array.from({ length: 2 }, (_, index) => (
+          <div key={index} className="bg-card grid gap-4 rounded-xl border p-5 shadow-sm">
+            <Skeleton className="h-5 w-56" />
+            <div className="flex gap-2"><Skeleton className="h-8 w-36" /><Skeleton className="h-8 w-40" /><Skeleton className="h-8 w-44" /></div>
+            <Skeleton className="h-[360px] w-full" />
+          </div>
+        ))}
+      </div>
+      <div className="bg-card grid gap-3 rounded-xl border p-5 shadow-sm">
+        <Skeleton className="h-5 w-44" />
+        {Array.from({ length: 8 }, (_, index) => <Skeleton key={index} className="h-8 w-full" />)}
+      </div>
+    </div>
+  );
+}

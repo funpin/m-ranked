@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { Contrast } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { HEADER_BUTTON } from "@/components/header-button";
 import { cn } from "@/lib/utils";
 import {
   applyTheme,
@@ -46,13 +46,18 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon"
+      className={HEADER_BUTTON}
       aria-label={`${themeLabel(preference)}. Переключить на ${next === "dark" ? "тёмную" : "светлую"}`}
       title={next === "dark" ? "Тёмная тема" : "Светлая тема"}
       onClick={() => applyTheme(next)}
     >
-      {/* Один значок на оба состояния, как в системе, откуда взят стиль:
-          кнопка обозначает саму тему, а не текущее её положение. */}
-      <Contrast className={cn("size-[1.15rem] transition-transform", resolved === "light" && "-scale-x-100")} aria-hidden="true" />
+      {/* Круг с закрашенной половиной — тот же знак, что в системе, откуда
+          взят стиль. Один значок на оба состояния: кнопка обозначает саму
+          тему, а не её текущее положение. */}
+      <svg viewBox="0 0 24 24" className={cn("size-[1.15rem] transition-transform", resolved === "light" && "-scale-x-100")} aria-hidden="true">
+        <circle cx="12" cy="12" r="9.25" fill="none" stroke="currentColor" strokeWidth="1.75" />
+        <path d="M12 2.75a9.25 9.25 0 0 0 0 18.5z" fill="currentColor" />
+      </svg>
     </Button>
   );
 }

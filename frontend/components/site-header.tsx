@@ -11,6 +11,7 @@ import logo from "../assets/logo.png";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { HEADER_BUTTON } from "@/components/header-button";
 import { cn } from "@/lib/utils";
 
 /** Логотип GitHub — фирменный знак, в наборе иконок интерфейса его нет. */
@@ -122,23 +123,24 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
       <div className="flex shrink-0 items-center gap-1">
         {/* Разделители отбивают служебные кнопки от разделов — так же, как
             поиск, GitHub и тему разделяет ui.shadcn.com. */}
-        <Separator orientation="vertical" className="mx-1.5 h-5 self-center" />
+        <Separator orientation="vertical" className="mx-2 h-5 self-center" />
         <Button
           variant="ghost"
           size="icon"
+          className={HEADER_BUTTON}
           render={
             <a href="https://github.com/funpin/m-ranked" target="_blank" rel="noopener noreferrer" aria-label="Исходный код на GitHub" title="Исходный код на GitHub">
               <GithubMark />
             </a>
           }
         />
-        <Separator orientation="vertical" className="mx-1.5 h-5 self-center" />
+        <Separator orientation="vertical" className="mx-2 h-5 self-center" />
         <ThemeToggle />
         <Button
           data-testid="menu-toggle"
           variant="ghost"
           size="icon"
-          className="min-[781px]:hidden"
+          className={cn(HEADER_BUTTON, "min-[781px]:hidden")}
           ref={toggle}
           type="button"
           aria-label={visible ? "Закрыть меню" : "Открыть меню"}
