@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-14T22:01:38.752Z",
+  "generatedAt": "2026-09-14T22:53:43.875Z",
   "producer": "next build diagnostics + per-chunk gzip level 9",
   "scope": "Static firstLoad diagnostic only. Required initially loaded dynamic chart chunks are also measured by mobile-performance.mts; this report alone cannot establish the initial-network JS gate.",
   "results": [
@@ -113,7 +113,7 @@
     },
     {
       "route": "/accounts/[id]",
-      "gzipBytes": 168225,
+      "gzipBytes": 168299,
       "budgetBytes": 174080,
       "passed": true,
       "chunks": [
@@ -134,8 +134,8 @@
           "gzipBytes": 1137
         },
         {
-          "file": ".next/static/chunks/211p3i3p95p7-.js",
-          "gzipBytes": 4477
+          "file": ".next/static/chunks/3cpxhkj0x3k5t.js",
+          "gzipBytes": 4551
         },
         {
           "file": ".next/static/chunks/0zhiqq2bo1_ye.js",

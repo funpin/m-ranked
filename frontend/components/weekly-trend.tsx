@@ -65,23 +65,29 @@ export function WeeklyTrend({ points, primary }: { points: readonly Point[]; pri
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-hidden="true">
-        <span className="flex items-center gap-1.5">
-          <span className="bg-muted-foreground/40 size-2.5 rounded-[2px]" />
-          публикаций в день <span className="text-muted-foreground">· фоном</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[2px]" style={{ background: "var(--chart-1)" }} />
-          {totals ? `всего ${primary}` : `медиана ${primary}`} <span className="text-muted-foreground">· слева</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-[2px]" style={{ background: "var(--chart-2)" }} />
-          {totals ? "всего просмотров" : "медиана просмотров"} <span className="text-muted-foreground">· справа</span>
-        </span>
-      </div>
       {points.length > 1
         ? <>
             <AccountTrendPlot points={points} primary={primary} mode={mode} />
+            {/* Легенда под графиком и всегда в три колонки на широком экране,
+                в три строки на узком. Раньше она переносилась по ширине, а
+                подписи в двух режимах разной длины — «медиана лайков» против
+                «всего лайков», — поэтому при переключении менялось число строк
+                и блок прыгал по высоте. Сетка с постоянным числом колонок этого
+                не допускает: от режима высота больше не зависит. */}
+            <ul className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-3" aria-hidden="true">
+              {[
+                { color: "var(--muted-foreground)", faded: true, name: "публикаций в день", side: "фоном" },
+                { color: "var(--chart-1)", name: totals ? `всего ${primary}` : `медиана ${primary}`, side: "слева" },
+                { color: "var(--chart-2)", name: totals ? "всего просмотров" : "медиана просмотров", side: "справа" },
+              ].map((item) => (
+                <li key={item.side} className="flex min-w-0 items-center gap-1.5">
+                  <span className={cn("size-2.5 shrink-0 rounded-[2px]", item.faded && "opacity-40")}
+                    style={{ background: item.color }} />
+                  <span className="truncate">{item.name}</span>
+                  <span className="text-muted-foreground shrink-0">· {item.side}</span>
+                </li>
+              ))}
+            </ul>
             <p className="text-muted-foreground text-xs">Нажмите на день — покажем публикации этого дня в таблице ниже.</p>
           </>
         : <p className="text-muted-foreground py-10 text-center text-sm">Недельного ряда ещё нет.</p>}

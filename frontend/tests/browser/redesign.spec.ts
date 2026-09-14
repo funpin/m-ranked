@@ -149,6 +149,32 @@ test("переключатель у графика меняет ряд, а ст�
   await expect(trend).toContainText("публикаций в день");
 });
 
+test("переключение режима не меняет высоту блока", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const trend = page.getByRole("region", { name: "Динамика за неделю" });
+  const toggle = trend.getByRole("group", { name: "Что показывают линии" });
+  const legend = trend.locator("ul");
+  const height = async (target: typeof trend) => (await target.boundingBox())!.height;
+  // Ждём саму картинку: пока на её месте заготовка, страница короче, полоса
+  // прокрутки то появляется, то нет, и от этого переносится текст вокруг.
+  await expect(trend.locator("svg.recharts-surface")).toBeVisible();
+
+  const medians = { block: await height(trend), legend: await height(legend) };
+  await toggle.getByRole("button", { name: "Всего за день" }).click();
+  await expect(trend).toContainText("всего просмотров");
+  const totals = { block: await height(trend), legend: await height(legend) };
+
+  // Подписи в двух режимах разной длины, и раньше легенда переносилась по
+  // ширине — число строк менялось, блок прыгал. Сетка с постоянным числом
+  // колонок этого не допускает.
+  expect(totals.legend).toBe(medians.legend);
+  expect(totals.block).toBe(medians.block);
+
+  // И легенда стоит под графиком, а не над ним.
+  const plot = trend.locator("svg.recharts-surface");
+  expect((await legend.boundingBox())!.y).toBeGreaterThan((await plot.boundingBox())!.y);
+});
+
 test("строка таблицы открывает публикацию, а ссылка рядом уводит на площадку", async ({ page }) => {
   await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
   const row = page.locator("tbody tr[data-published-day]").first();
