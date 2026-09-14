@@ -11,7 +11,9 @@ umask 077
 : "${BACKUP_DATABASE:?BACKUP_DATABASE is required}"
 : "${BACKUP_DB_USER:?BACKUP_DB_USER is required}"
 : "${BACKUP_DIR:=/var/backups/m-ranked}"
-: "${BACKUP_KEEP:=7}"
+# Пять копий по гигабайту — потолок, при котором диск на боевой машине
+# остаётся с запасом: полный диск останавливает саму базу.
+: "${BACKUP_KEEP:=5}"
 : "${MRANKED_DB_CONTAINER:?MRANKED_DB_CONTAINER is required}"
 
 if [[ ! "$BACKUP_KEEP" =~ ^[0-9]+$ ]] || (( BACKUP_KEEP < 1 || BACKUP_KEEP > 90 )); then
