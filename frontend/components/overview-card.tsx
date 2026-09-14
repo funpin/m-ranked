@@ -1,6 +1,5 @@
 import { accountHref } from "@/lib/entity-routes";
 import Link from "@/components/native-link";
-import type { ReactNode } from "react";
 import { ExternalLink, FileText, Plus, TrendingUp } from "lucide-react";
 import { legacyDate, legacyNumber, PERIOD_SHORT, PLATFORM_LABELS } from "@/lib/format";
 import { metricNumber, queryHref } from "@/lib/params";
@@ -8,6 +7,7 @@ import type { OverviewItem, OverviewMetric, OverviewPage } from "@/lib/types";
 import { overviewStatus } from "@/lib/overview-status";
 import { metricEvidence, type AggregateMetric } from "@/lib/metric-evidence";
 import { AnimatedNumber } from "@/components/animated-number";
+import { MethodNote } from "@/components/method-note";
 import { cn } from "@/lib/utils";
 
 /** Каждая площадка узнаётся по своему цвету: строка аккаунта, её метка и
@@ -90,18 +90,22 @@ function MetricCell({ value, label, trend, evidence, suffix }: {
 }) {
   const text = metricEvidence(evidence);
   return (
-    <span className="grid min-w-0 cursor-help content-start" tabIndex={0} title={text}>
+    <span className="grid min-w-0 content-start">
       <b className="font-heading tabular text-[27px] leading-none font-extrabold tracking-tight">
         <AnimatedNumber value={metricNumber(value)} />
       </b>
-      <small className="text-muted-foreground mt-1 min-h-[2.7em] text-[10px] leading-snug font-medium tracking-wide uppercase">{label} ⓘ</small>
+      {/* Пояснение открывается нажатием на значок, а не наведением на само
+          число: под курсором-вопросом было неочевидно, что там что-то есть. */}
+      <small className="text-muted-foreground mt-1 flex min-h-[2.7em] items-start gap-1 text-[10px] leading-snug font-medium tracking-wide uppercase">
+        {label}
+        <span className="relative z-[2] -mt-1 shrink-0"><MethodNote title={label}>{text}</MethodNote></span>
+      </small>
       <Trend value={trend} suffix={suffix} />
-      <span className="sr-only">{text}</span>
     </span>
   );
 }
 
-function ActivityBody({ item, integrationWarning }: { item: OverviewItem; integrationWarning: OverviewPage["integrationWarning"] }) {
+function ActivityBody({ item, integrationWarning, href }: { item: OverviewItem; integrationWarning: OverviewPage["integrationWarning"]; href: string }) {
   const short = PERIOD_SHORT[item.period];
   const primary = item.platform === "vk" || item.platform === "rutube" ? "лайков" : "реакций";
   const suffix=short;
@@ -123,8 +127,11 @@ function ActivityBody({ item, integrationWarning }: { item: OverviewItem; integr
   return <>
     {item.ratingRank ? <span className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[item.platform]}.`}>М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</span> : null}
     <div className="min-h-[116px]">
-      <h3 className="font-heading line-clamp-2 min-h-[2.7em] cursor-help text-base leading-snug font-bold" tabIndex={0} title={item.canonicalName}>
-        {item.shortName || item.canonicalName}<span className="text-muted-foreground ml-1 text-xs" aria-hidden="true">ⓘ</span>
+      <h3 className="font-heading flex min-h-[2.7em] items-start gap-1 text-base leading-snug font-bold">
+        <Link className="line-clamp-2 no-underline outline-none after:absolute after:inset-0 hover:underline focus-visible:underline" href={href} prefetch={false}>
+          {item.shortName || item.canonicalName}
+        </Link>
+        <span className="relative z-[2] shrink-0"><MethodNote title="Полное название">{item.canonicalName}</MethodNote></span>
       </h3>
       <div className="text-muted-foreground mt-1 truncate text-xs">{accountName(item)}{item.accounts.length ? <> · {legacyNumber(item.subscriberCount)} подписчиков{item.accountCount > 1 ? ` · ещё ${item.accountCount - 1}` : ""}</> : null}</div>
       {/* Бейджи стоят внутри блока фиксированной высоты для всех площадок:
@@ -151,8 +158,9 @@ function AllPlatformsBody({ item }: { item: OverviewItem }) {
     <>
       {item.ratingRank ? <span className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title="Официальное место в М‑Рейтинге: Общий.">М‑Рейтинг Общий · №{item.ratingRank}</span> : null}
       <div>
-        <h3 className="font-heading line-clamp-2 min-h-[2.7em] cursor-help text-base leading-snug font-bold" tabIndex={0} title={item.canonicalName}>
-          {item.shortName || item.canonicalName}<span className="text-muted-foreground ml-1 text-xs" aria-hidden="true">ⓘ</span>
+        <h3 className="font-heading flex min-h-[2.7em] items-start gap-1 text-base leading-snug font-bold">
+          <span className="line-clamp-2">{item.shortName || item.canonicalName}</span>
+          <span className="shrink-0"><MethodNote title="Полное название">{item.canonicalName}</MethodNote></span>
         </h3>
       </div>
       {item.accounts.length ? (
@@ -196,20 +204,19 @@ function activityHref(item: OverviewItem): string {
 const CARD = "bg-card text-card-foreground relative z-[1] flex min-h-[470px] min-w-0 flex-col rounded-xl border p-5 pt-6 shadow-sm transition-[transform,box-shadow] duration-200";
 
 export function OverviewCard({ item, integrationWarning }: { item: OverviewItem; integrationWarning: OverviewPage["integrationWarning"] }) {
-  const body: ReactNode = item.platform === "all"
-    ? <AllPlatformsBody item={item} />
-    : <ActivityBody item={item} integrationWarning={integrationWarning} />;
   if (item.platform === "all") {
-    return <article data-testid="platform-overview-card" className={cn(CARD, "min-h-[310px]")}>{body}</article>;
+    return <article data-testid="platform-overview-card" className={cn(CARD, "min-h-[310px]")}><AllPlatformsBody item={item} /></article>;
   }
+  // Карточка перестала быть одной большой ссылкой: ссылка — название, а она
+  // растянута на всю карточку. Так внутри помещаются настоящие кнопки с
+  // пояснениями, а раньше приходилось обходиться подсказкой по наведению,
+  // отчего курсор над названием и числами превращался в вопросительный знак.
   return (
-    <Link
+    <article
       data-testid="platform-overview-card"
-      className={cn(CARD, "hover:border-ring/40 no-underline hover:z-30 hover:-translate-y-0.5 hover:shadow-lg hover:no-underline focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none")}
-      href={activityHref(item)}
-      prefetch={false}
+      className={cn(CARD, "hover:border-ring/40 focus-within:border-ring/40 hover:z-30 hover:-translate-y-0.5 hover:shadow-lg")}
     >
-      {body}
-    </Link>
+      <ActivityBody item={item} integrationWarning={integrationWarning} href={activityHref(item)} />
+    </article>
   );
 }

@@ -9,13 +9,15 @@ import { LoadingState } from "@/components/loading-state";
 const GIVE_UP_MS = 12_000;
 
 /**
- * Показывает заготовку страницы, пока едет следующий маршрут.
+ * Показывает заготовку вместо того куска страницы, который меняется.
  *
- * Содержимое остаётся серверным: сервер присылает страницу целиком, а эта
- * обёртка только подменяет её на скелетон на время клиентского перехода. При
- * выключенных скриптах обёртка не делает ничего и страница видна сразу.
+ * Обёртка ставится не на всю страницу, а вокруг изменчивой части: при смене
+ * фильтра заголовок и сама строка фильтров остаются на месте и продолжают
+ * отвечать на нажатия, а серым мигает только список. Содержимое остаётся
+ * серверным — обёртка лишь подменяет его на время клиентского перехода, и
+ * при выключенных скриптах не делает ничего.
  */
-export function NavigationBoundary({ children }: { children: ReactNode }) {
+export function NavigationBoundary({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
   const pending = useSyncExternalStore(subscribeNavigation, readNavigation, () => false);
 
   // Признак прибытия — смена адреса. Слот children роутер отдаёт одним и тем
@@ -39,7 +41,7 @@ export function NavigationBoundary({ children }: { children: ReactNode }) {
     };
   }, [pending]);
 
-  return pending ? <LoadingState /> : <>{children}</>;
+  return pending ? <>{fallback ?? <LoadingState />}</> : <>{children}</>;
 }
 
 /** Нажатие, которое действительно уводит на другой адрес в этой же вкладке. */

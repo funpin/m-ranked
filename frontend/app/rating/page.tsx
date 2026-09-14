@@ -14,6 +14,8 @@ import { first, queryHref, type SearchParams } from "@/lib/params";
 import { normalizeRatingQuery, type ParsedRatingQuery } from "@/lib/rating";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
+import { NavigationBoundary } from "@/components/navigation-boundary";
+import { TableSkeleton } from "@/components/skeletons";
 import { Search } from "lucide-react";
 import type {
   ActivityRatingEntity,
@@ -73,6 +75,8 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
         <NativeButton type="submit" aria-label="Применить период" title="Применить период" className="size-9 min-h-9 px-0"><Search className="size-4" aria-hidden="true" /></NativeButton>
       </RatingFilterForm>
 
+      {/* Заголовок и строка периода остаются на месте: меняются только таблицы. */}
+      <NavigationBoundary fallback={<TableSkeleton />}>
       {platform === "telegram"
         ? <TelegramEntityTable query={query} rows={page.entities} offset={page.entityOffset} />
         : <VkEntityTable query={query} rows={page.entities} offset={page.entityOffset} />}
@@ -84,7 +88,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
       {platform === "telegram"
         ? <TelegramPublicationTable query={query} rows={page.publications} />
         : <VkPublicationTable query={query} rows={page.publications} />}
-
+      </NavigationBoundary>
     </>
   );
 }

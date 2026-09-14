@@ -4,6 +4,8 @@ import { NativeInput, NativeSegments, NativeSelect } from "@/components/native-f
 import { LegacyFilterForm } from "@/components/legacy-filter-form";
 import { OverviewCard } from "@/components/overview-card";
 import { CoverageSummary } from "@/components/coverage-summary";
+import { NavigationBoundary } from "@/components/navigation-boundary";
+import { CardGridSkeleton } from "@/components/skeletons";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
 import { Search } from "lucide-react";
@@ -133,13 +135,17 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
           </LegacyFilterForm>
       </div>
 
-      {platform === "all" ? <CoverageSummary items={items} /> : null}
+      {/* Заготовка стоит только вокруг списка: заголовок и фильтры остаются
+          видимыми и рабочими, пока едет новая выборка. */}
+      <NavigationBoundary fallback={<CardGridSkeleton />}>
+        {platform === "all" ? <CoverageSummary items={items} /> : null}
 
-      <section className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
-        items.map((item) => <OverviewCard item={item} integrationWarning={page.integrationWarning} key={item.entityId} />)
-      ) : (
-        <Card><CardContent className="text-muted-foreground py-6">{q ? `По запросу «${q}» вузы не найдены.` : platform === "telegram" ? "За выбранный период публикаций не найдено." : "Вузы ещё не добавлены."}</CardContent></Card>
-      )}</section>
+        <section className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
+          items.map((item) => <OverviewCard item={item} integrationWarning={page.integrationWarning} key={item.entityId} />)
+        ) : (
+          <Card><CardContent className="text-muted-foreground py-6">{q ? `По запросу «${q}» вузы не найдены.` : platform === "telegram" ? "За выбранный период публикаций не найдено." : "Вузы ещё не добавлены."}</CardContent></Card>
+        )}</section>
+      </NavigationBoundary>
     </>
   );
 }

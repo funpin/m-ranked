@@ -20,7 +20,7 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
     >
       <Link
         data-testid="brand"
-        className="text-foreground mr-auto flex shrink-0 items-center gap-2 text-base font-bold tracking-tight no-underline"
+        className="text-foreground flex shrink-0 items-center gap-2 text-base font-bold tracking-tight no-underline"
         href={queryHref("/", { platform })}
         aria-label="m-ranked — обзор"
       >
@@ -28,12 +28,12 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
         <img src={logo.src} alt="" width={28} height={28} className="size-7 rounded-md object-cover" fetchPriority="high" decoding="async" />
         <strong className="font-heading font-bold">m-ranked</strong>
       </Link>
-      <div data-testid="main-nav" className="flex items-center gap-1 max-[780px]:hidden">
+      <div data-testid="main-nav" className="mr-auto flex items-center gap-1 max-[780px]:hidden">
         {NAV_LINKS.map((link) => (
           <Link
             key={link.href}
             href={queryHref(link.href, { platform })}
-            className="text-muted-foreground rounded-md px-3 py-1.5 text-sm font-medium no-underline transition-colors"
+            className="text-muted-foreground rounded-md px-3 py-1.5 text-[0.875rem] font-medium no-underline transition-colors"
           >
             {link.label}
           </Link>

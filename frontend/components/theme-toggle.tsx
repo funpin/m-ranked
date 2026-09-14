@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Contrast } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   applyTheme,
   readThemePreference,
@@ -49,9 +50,9 @@ export function ThemeToggle() {
       title={next === "dark" ? "Тёмная тема" : "Светлая тема"}
       onClick={() => applyTheme(next)}
     >
-      {resolved === "dark"
-        ? <Moon className="size-[1.15rem]" aria-hidden="true" />
-        : <Sun className="size-[1.15rem]" aria-hidden="true" />}
+      {/* Один значок на оба состояния, как в системе, откуда взят стиль:
+          кнопка обозначает саму тему, а не текущее её положение. */}
+      <Contrast className={cn("size-[1.15rem] transition-transform", resolved === "light" && "-scale-x-100")} aria-hidden="true" />
     </Button>
   );
 }
