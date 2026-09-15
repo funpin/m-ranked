@@ -65,9 +65,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.db = database
     app.state.cache = cache
-    app.state.auth = AuthConfig.from_environment()
+    # Неверная настройка админки закрывает админку, а не весь API: публичное
+    # чтение к учётным записям отношения не имеет, и ронять из-за них сайт
+    # целиком — менять одну неприятность на другую, большую.
+    try:
+        app.state.auth = AuthConfig.from_environment()
+    except ValueError as error:
+        logger.error("административный интерфейс отключён: %s", error)
+        app.state.auth = AuthConfig.disabled(str(error))
     app.state.security = SecurityTelemetry.from_environment()
-    app.state.session_policy = SessionPolicy.from_environment()
+    try:
+        app.state.session_policy = SessionPolicy.from_environment()
+    except ValueError as error:
+        logger.error("административные сессии отключены: %s", error)
+        app.state.auth = AuthConfig.disabled(str(error))
+        app.state.session_policy = SessionPolicy()
     # Единственные часы приложения: тест подменяет их и получает
     # воспроизводимые шаги TOTP и сроки сессии.
     app.state.clock = time.time

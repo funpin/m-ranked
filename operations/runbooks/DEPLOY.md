@@ -1,89 +1,82 @@
-# Deploy M-Ranked
+# Выкатка M-Ranked
 
-Owner: application operator. Database bootstrap/restore requires a database
-operator. Commands below assume an immutable release at
-`/opt/m-ranked/releases/<release>` and symlink `/opt/m-ranked/current`.
+Владелец — оператор приложения; миграции и восстановление базы требуют
+оператора базы. Релиз неизменяем: дерево лежит в
+`/opt/m-ranked/releases/<релиз>`, а `/opt/m-ranked/current` — симлинк на него.
 
-## Prerequisites
+Документ читается сверху вниз и в этом же порядке выполняется. Порядок важнее
+отдельных команд: почти каждый отказ выкатки — это правильная команда, сделанная
+не в свой момент.
 
-- Python 3.13+, Node 24 and pnpm;
-- PostgreSQL 18 and `psql`;
-- system users for API, web, anomaly worker and each collector;
-- private systemd credentials under `/etc/m-ranked/credentials`;
-- a verified pgBackRest repository and restore drill.
-
-## Build and install
+## 0. Преflight на своей машине
 
 ```bash
-python3 -m venv .venv
-# Релиз ставит только среды выполнения, и только по хешам: pytest, Playwright
-# и прочий инструментарий живут в requirements/dev.txt и в релиз не попадают.
-.venv/bin/pip install --require-hashes --no-deps --upgrade -r requirements/tooling.lock
-.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/api.lock
-.venv/bin/pip install --require-hashes --no-deps --no-build-isolation -r requirements/collector.lock
-.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/anomaly.lock
-# PyMax собирается из закреплённого коммита отдельным шагом: зависимость из git
-# несовместима с проверкой хешей, поэтому она и вынесена в отдельный файл.
-.venv/bin/pip install --no-deps -r requirements/pymax.txt
-# Режим telegram_web дополнительно требует браузера:
-# .venv/bin/pip install --requirement requirements/telegram-web.txt
-pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend build
+git fetch && git status --short            # дерево чистое
+operations/scripts/release-preflight.sh <sha, выкаченный сейчас>
 ```
 
-Lock-файлы пересоздаются только скриптом и только целиком:
+Скрипт печатает дельту релиза: новые миграции, изменившиеся юниты и nginx,
+изменившиеся lock-файлы, новые переменные окружения. Всё, что он назвал, должно
+быть сделано на сервере **до** перезапуска соответствующей службы.
 
-```bash
-python3 operations/scripts/generate_python_lock.py requirements/api.txt requirements/api.lock
-python3 operations/scripts/generate_python_lock.py requirements/collector.txt \
-  requirements/collector.lock --extra setuptools==80.9.0 wheel==0.45.1
-```
-
-Перед выкаткой проверьте, что задание `supply-chain` и `container-images`
-прошли на этом коммите, а вложения провенанса относятся к тем же SBOM:
+Проверьте, что на этом коммите прошли задания `supply-chain` и
+`container-images`, а вложения провенанса относятся к тем же SBOM:
 
 ```bash
 gh attestation verify --owner funpin sbom-image-api.json
 ```
 
 Оба задания обязаны быть required checks для `alpha` и релизной ветки
-(Settings → Rules → Rulesets). Без этого ворота можно обойти слиянием.
+(Settings → Rules → Rulesets). Без этого ворота обходятся слиянием.
 
-Copy the repository tree and the standalone Next.js output into the immutable
-release, then atomically update `/opt/m-ranked/current`. Do not copy `.env`,
-provider sessions, dumps or credentials into a release.
+## 1. Точка отката
 
-## Database
+Запишите, куда смотрит симлинк сейчас, — это и есть план отката:
 
-A fresh cluster is created by `infra/postgres/init/001-create-roles.sh` and
-`002-apply-schema.sh`, which applies `db/migrations/*.sql` in order.
-Applications do not migrate a database at startup. Before activating a release:
-
-```sql
-SELECT contract_id FROM ops_and_admin.schema_contract;
+```bash
+readlink -f /opt/m-ranked/current
+systemctl is-active m-ranked-target-api m-ranked-target-web
 ```
 
-The required value is `live-read-2026-09-13-text-fingerprint`. For an existing cluster, apply
-only a separately reviewed forward schema change after a verified backup and
-isolated restore; never replay the bootstrap set over a populated database.
+## 2. Миграции — до кода, не после
 
-## Credentials
+Приложения не мигрируют базу на старте. Сначала резервная копия и проверенное
+восстановление, потом по одному файлу:
 
-Install examples from `operations/env/` as mode 0600 environment files.
-Database passwords, `ADMIN_AUTH_USERS` and `ADMIN_CSRF_SECRET` are systemd
-credentials loaded by `m-ranked-target-api.service`. Collectors use one
-mode-0600 libpq passfile plus one platform-scoped auth file. Session state stays
-under `/var/lib/m-ranked/collectors/<platform>`.
+```bash
+psql --no-psqlrc --set ON_ERROR_STOP=1 -f db/migrations/00NN_*.sql
+psql --no-psqlrc -tAc "SELECT contract_id FROM ops_and_admin.schema_contract"
+```
 
-### Administrative sign-in
+Ожидаемое значение — `live-read-2026-09-13-text-fingerprint`. Для живого
+кластера применяется только отдельно просмотренное прямое изменение; набор
+bootstrap по населённой базе не проигрывается никогда.
 
-Every entry in `ADMIN_AUTH_USERS` carries `totpSecret`, a base32 secret of at
-least sixteen bytes, and a bcrypt hash of at least ten rounds. All entries must
-share the same bcrypt cost: a cheaper hash for one account would tell an
-attacker by response time which names exist. The API refuses to start when a
-secret is missing, when the costs differ, or when `ADMIN_CSRF_SECRET` is shorter
-than 32 bytes; only a stand that is not production may set
-`ADMIN_REQUIRE_MFA=false`. Mint a secret and the enrolment URI with:
+Релиз, которому нужны новые таблицы, до миграции держит `/api/v1/health/ready`
+в DOWN. Это не декорация: выкатка кода вперёд миграции — штатный способ получить
+отказ на ровном месте.
+
+## 3. Учётные данные и переменные
+
+Секреты живут systemd-credential'ами в `/etc/m-ranked/credentials` и файлами
+окружения mode 0600; в релиз они не копируются никогда. Если преflight назвал
+новые обязательные переменные — правьте их сейчас, до перезапуска.
+
+Настройка админки проверяется при старте. С версии c636b74 её ошибка **не
+роняет API**: закрывается только административная поверхность (503 с причиной),
+публичное чтение продолжает работать, в журнале появляется
+`административный интерфейс отключён: …`, а по счётчику
+`mranked_api_security_events_total{event="config.rejected"}` срабатывает алерт.
+Требования к записи `ADMIN_AUTH_USERS`:
+
+- `passwordHash` — bcrypt не меньше десяти раундов, и **одинаковой** стоимости
+  у всех записей (разная стоимость выдаёт временем ответа, какие имена есть);
+- `totpSecret` — base32 не меньше шестнадцати байт у каждой записи;
+  `ADMIN_REQUIRE_MFA=false` допустим только на стенде, не на проде;
+- `ADMIN_CSRF_SECRET` — не короче 32 байт, общий и постоянный: с его сменой
+  разом отваливаются все CSRF-токены.
+
+Секрет и ссылка для аутентификатора:
 
 ```bash
 python - <<'SECRET'
@@ -95,60 +88,150 @@ print("otpauth://totp/" + urllib.parse.quote("m-ranked:admin")
 SECRET
 ```
 
-Password and one-time code are separate fields and are presented once, to
-`POST /api/v1/admin/session`. The response carries no session token: that lives
-only in the `__Host-mranked-admin` cookie, which is `Secure`, `HttpOnly`,
-`SameSite=Strict` and `Path=/`. The body carries a CSRF token bound to that one
-session. A code is spent when the session is created, so ordinary multi-request
-work needs no further code, and the same code cannot open a second session.
+## 4. Доставка дерева
+
+На машине нет rsync: дерево едет архивом и распаковывается поверх очищенного
+каталога релиза. `.venv` переносится с предыдущего релиза жёсткими ссылками, а
+не копируется.
+
+Три вещи, которых нет в `git archive` и без которых выкатка падает молча:
+
+1. **`frontend/.next/cache` обязан существовать в релизе.** Контейнер web
+   монтирует туда `/var/lib/m-ranked/web-cache`, а точку монтирования в
+   read-only слое создать не может: docker падает с кодом 125 и сайт ложится.
+   Сборка standalone этот каталог не создаёт — создайте руками.
+2. **`api/data/official-m-rating-channel-codes.json` под `.gitignore`**, но
+   нужен ежедневному заданию официального рейтинга. Копируется отдельно.
+3. `.env`, сессии площадок, дампы и учётные данные в релиз не попадают.
+
+## 5. Зависимости
+
+```bash
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend build
+mkdir -p frontend/.next/cache
+```
+
+Python на проде — 3.11, а `requirements/*.lock` собраны под 3.13. Целиком их
+поставить нельзя: пакет с колесом `cp313` (psycopg-binary, pydantic-core,
+uvloop, httptools, watchfiles) на 3.11 просто не встанет. Ставятся только
+изменившиеся пакеты и только по хешу из lock; для платформенных колёс нужна
+сборка под 3.11 отдельно.
+
+Частичное обновление опаснее полного: FastAPI без совместимого pydantic даёт
+`ImportError` на старте и бесконечный перезапуск юнита. Меняете FastAPI или
+Starlette — проверьте pydantic и уже потом перезапускайте.
+
+Для справки, полная установка среды (пригодна там, где Python 3.13):
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install --require-hashes --no-deps --upgrade -r requirements/tooling.lock
+.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/api.lock
+.venv/bin/pip install --require-hashes --no-deps --no-build-isolation -r requirements/collector.lock
+.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/anomaly.lock
+.venv/bin/pip install --no-deps -r requirements/pymax.txt
+# Режим telegram_web дополнительно требует браузера:
+# .venv/bin/pip install -r requirements/telegram-web.txt
+```
+
+Lock-файлы правятся только пересозданием, целиком:
+
+```bash
+python3 operations/scripts/generate_python_lock.py requirements/api.txt requirements/api.lock
+python3 operations/scripts/generate_python_lock.py requirements/collector.txt \
+  requirements/collector.lock --extra setuptools==80.9.0 wheel==0.45.1
+```
+
+## 6. nginx
+
+Конфигурация проверяется до перезагрузки, а не после:
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+Кука сессии админки несёт префикс `__Host-`: без HTTPS браузер её не сохранит.
+Админка работает только через `https://`, не по адресу и не по http.
+
+## 7. Переключение и перезапуск
+
+Симлинк переключается атомарно, потом службы:
+
+```bash
+systemctl daemon-reload                      # если менялись юниты
+systemctl restart m-ranked-target-api
+systemctl restart m-ranked-target-web
+```
+
+Коллекторы перезапускаются **по одному**, с паузой: одновременный перезапуск
+сводит их в одну фазу и удваивает пик на единственном ядре.
+
+```bash
+for platform in telegram vk max rutube; do
+  systemctl restart "m-ranked-target-collector@$platform"
+  sleep 60
+done
+```
+
+## 8. Проверка
+
+Выкатка не закончена, пока всё это не ответило:
+
+```bash
+systemctl is-active m-ranked-target-api m-ranked-target-web
+curl -fsS http://127.0.0.1:8080/api/v1/health/live
+curl -fsS http://127.0.0.1:8080/api/v1/health/ready
+curl -fsS http://127.0.0.1:8080/api/v1/health/freshness
+# публичные страницы и публичный API — снаружи, не с петли
+curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/rating?platform=telegram'
+curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/api/v1/rating?platform=telegram'
+curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/'
+journalctl -u m-ranked-target-api --since '-5 min' --no-pager | tail -30
+```
+
+Затем вход в админку целиком — он проверяет и сессии, и миграцию:
 
 ```bash
 jar=$(mktemp)
-curl --silent --show-error --cookie-jar "$jar" --header 'Content-Type: application/json' \
-  --data '{"username":"admin","password":"…","otp":"123456"}' \
-  https://m.funpin.org/api/v1/admin/session   # 201, тело несёт CSRF-токен
-curl --silent --cookie "$jar" https://m.funpin.org/api/v1/admin/jobs?limit=1
-curl --silent --cookie "$jar" --request DELETE --header "X-XSRF-TOKEN: $token" \
+curl -sS --cookie-jar "$jar" -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"…","otp":"123456"}' \
+  https://m.funpin.org/api/v1/admin/session      # 201, в теле CSRF-токен
+curl -sS --cookie "$jar" 'https://m.funpin.org/api/v1/admin/jobs?limit=1'
+curl -sS --cookie "$jar" -X DELETE -H "X-XSRF-TOKEN: $token" \
   https://m.funpin.org/api/v1/admin/session
 rm -f "$jar"
 ```
 
-Sessions expire on idle (`ADMIN_SESSION_IDLE_SECONDS`, default 30 minutes) and
-absolutely (`ADMIN_SESSION_ABSOLUTE_SECONDS`, default 8 hours). Every request
-re-checks the session against `ops_and_admin.admin_session`, so removing an
-account from `ADMIN_AUTH_USERS` or changing its roles invalidates its sessions
-on the next request. `DELETE /api/v1/admin/sessions` revokes every session of
-one account without disclosing any token.
+Сверх этого: четыре юнита коллекторов, работник аномалий, возраст outbox, место
+на диске, архив WAL и последнее успешное восстановление. Пока хоть один нужный
+юнит перезапускается или свежесть выше порога — выкатка не завершена.
 
-Repeated failures are answered with 429 and `Retry-After` **per source address**
-only. An account is never locked out: five wrong attempts from a stranger must
-not keep its owner from signing in.
+## 9. Если API не отвечает
 
-### Ordering and worker assumptions
-
-Migration `0025_admin_session.sql` must be applied before the API release that
-depends on it; `/api/v1/health/ready` reports DOWN until the tables exist.
-
-Session state, the one-time-code ledger and the per-address backoff live in
-PostgreSQL, so they survive a restart and are shared. The API still runs a
-single uvicorn worker (`api/__main__.py`); before running more than one worker
-or more than one host, re-read `api/security.py` — the bcrypt admission
-semaphore is the only remaining per-process security limit, and it bounds CPU
-rather than granting access.
-
-## Activate
+Порядок разбора — от процесса к сети, а не наоборот:
 
 ```bash
-systemctl daemon-reload
-systemctl enable --now m-ranked-target.target
-systemctl enable --now m-ranked-target-maintenance.timer
-systemctl enable --now m-ranked-target-backup-daily.timer
-systemctl enable --now m-ranked-target-backup-weekly.timer
-systemctl enable --now m-ranked-target-backup-monthly.timer
-systemctl enable --now m-ranked-target-restore-verify.timer
+systemctl status m-ranked-target-api --no-pager
+journalctl -u m-ranked-target-api -n 100 --no-pager
 ```
 
-Verify bounded health endpoints, four collector units, anomaly worker, outbox
-age, database space, WAL archive and the latest successful restore. A deploy is
-not complete while any required unit is restarting or freshness exceeds its
-configured threshold.
+Что встречается в журнале и что это значит:
+
+| Строка | Причина | Что делать |
+| --- | --- | --- |
+| `ValueError: ADMIN_AUTH_USERS: …` при старте | релиз до c636b74 роняет весь процесс из-за настройки админки | привести `ADMIN_AUTH_USERS` к требованиям раздела 3; на c636b74 и позже это закрывает только админку |
+| `ValueError: ADMIN_CSRF_SECRET короче 32 байт` | секрет короче нового минимума | выдать новый секрет ≥32 байт |
+| `ModuleNotFoundError` / `ImportError` | частично обновлённый `.venv` | доставить недостающие пакеты по хешу из lock, см. раздел 5 |
+| `/health/ready` даёт DOWN, `/health/live` — UP | миграция не применена | применить миграции раздела 2 |
+| 502 от nginx при живом юните | API слушает не тот адрес или упал после старта | `ss -ltnp | grep 8080`, затем журнал |
+
+Откат — переключение симлинка на предыдущий релиз и перезапуск тех же служб.
+Миграция при этом остаётся применённой: прямые изменения схемы пишутся
+совместимыми с предыдущим релизом именно ради этого.
+
+## Что ещё читать
+
+- `HEALTH.md` — что означает каждый health-endpoint;
+- `BACKUP_RESTORE.md` — резервные копии и проверка восстановления;
+- `docs/architecture/security/dependency-policy.md` — пороги выпуска по CVE.

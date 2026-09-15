@@ -1493,6 +1493,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/sessions:
     delete:
       tags: [Admin]
@@ -1523,6 +1525,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/csrf:
     get:
       tags: [Admin]
@@ -1544,6 +1548,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/jobs:
     get:
       tags: [Admin]
@@ -1918,6 +1924,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/OptimisticLockConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/anomaly-signals/{findingId}/reviews:
     post:
       tags: [Admin]
@@ -1965,6 +1973,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/OptimisticLockConflict' }
         '500': { $ref: '#/components/responses/InternalError' }
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/exports:
     post:
       operationId: createExportJob
@@ -2017,6 +2027,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/exports/{id}:
     get:
       operationId: getExportJob
@@ -2048,6 +2060,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
     delete:
       operationId: cancelExportJob
       summary: Cancel the current user's export and delete its artifact
@@ -2084,6 +2098,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/exports/{id}/download:
     get:
       operationId: downloadExportJob
@@ -2129,6 +2145,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
 components:
   securitySchemes:
     adminSession:
@@ -2285,6 +2303,8 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    '503':
+      $ref: '#/components/responses/AdminUnavailable'
   schemas:
     AdminManagedAccount:
       type: object

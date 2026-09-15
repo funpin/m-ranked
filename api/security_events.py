@@ -26,12 +26,12 @@ from fastapi import Request
 logger = logging.getLogger("api.security")
 
 EVENTS = frozenset({"auth.success", "auth.failure", "auth.throttled",
-                    "authz.denied", "csrf.rejected",
+                    "authz.denied", "csrf.rejected", "config.rejected",
                     "session.opened", "session.closed", "session.revoked"})
 REASONS = frozenset({"none", "credentials", "otp", "otp-replay", "otp-missing",
                      "role", "token-mismatch", "token-invalid", "account", "address",
                      "session", "identity", "origin", "overload", "logout", "admin",
-                     "csp"})
+                     "csp", "config"})
 PUBLISH_INTERVAL_SECONDS = 15
 MAX_SERIES = 64
 

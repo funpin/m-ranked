@@ -50,6 +50,13 @@ groups:
           severity: warning
         annotations:
           summary: Session tokens are being rejected steadily; expired, revoked or guessed.
+      - alert: MRankedAdminSurfaceDisabled
+        expr: sum(increase(mranked_api_security_events_total{event="config.rejected"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The admin surface refused its own configuration and is closed; public reads continue.
       - alert: MRankedSecurityMetricsMissing
         expr: absent(mranked_api_security_sample_unixtime)
         for: 30m

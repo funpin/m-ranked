@@ -127,7 +127,11 @@ class AuthConfig:
     """
 
     def __init__(self, users: dict[str, AuthUser], csrf_secret: bytes,
-                 cost: int = MIN_BCRYPT_COST, verifiers: int = 2) -> None:
+                 cost: int = MIN_BCRYPT_COST, verifiers: int = 2,
+                 failure: str | None = None) -> None:
+        # failure заполняется, когда конфигурация не прошла проверку: тогда
+        # админка закрыта, но публичное чтение продолжает работать.
+        self.failure = failure
         self.users = users
         self.csrf_secret = csrf_secret
         self.cost = cost
@@ -140,6 +144,11 @@ class AuthConfig:
         # Проверка пароля стоит десятки миллисекунд процессора. Без границы
         # параллелизма поток неудачных входов съел бы ядро целиком.
         self.verifiers = asyncio.Semaphore(max(1, verifiers))
+
+    @classmethod
+    def disabled(cls, failure: str) -> "AuthConfig":
+        """Закрытая админка: записей нет, вход отвечает 503 с указанной причиной."""
+        return cls({}, secrets.token_bytes(32), failure=failure)
 
     @classmethod
     def from_environment(cls) -> "AuthConfig":
@@ -242,6 +251,22 @@ def _unauthorized() -> ApiProblem:
                       "urn:m-ranked:problem:unauthorized")
 
 
+def usable_auth(request: Request) -> AuthConfig:
+    """Отказ конфигурации админки закрывает админку, а не весь API.
+
+    Публичное чтение не имеет отношения к учётным записям, и превращать их
+    неверную настройку в полный отказ сайта нельзя: закрыта должна быть ровно
+    та поверхность, настройка которой сломана.
+    """
+    config: AuthConfig = request.app.state.auth
+    if config.failure is not None:
+        _telemetry(request).record("config.rejected", request, reason="config")
+        raise ApiProblem(503, "Service Unavailable",
+                         "Административный интерфейс отключён: "+config.failure,
+                         "urn:m-ranked:problem:admin-unavailable")
+    return config
+
+
 def _telemetry(request: Request) -> SecurityTelemetry:
     existing = getattr(request.app.state, "security", None)
     if existing is None:
@@ -258,6 +283,7 @@ def _store(request: Request) -> SessionStore:
 
 
 async def current_session(request: Request) -> SessionRecord:
+    usable_auth(request)
     record = await _store(request).resolve(request.cookies.get(SESSION_COOKIE) or "")
     if record is None:
         _telemetry(request).record("auth.failure", request, reason="session")
@@ -269,7 +295,7 @@ async def principal(
     request: Request,
     record: Annotated[SessionRecord, Depends(current_session)],
 ) -> Principal:
-    config: AuthConfig = request.app.state.auth
+    config = usable_auth(request)
     user = config.users.get(record.subject)
     if user is None or user.roles != record.roles:
         # Запись убрали или роли изменили — сессия больше не отражает права.
@@ -333,4 +359,4 @@ def throttled(seconds: int) -> ApiProblem:
 
 __all__ = ["Attempt", "AuthConfig", "AuthUser", "Principal", "SESSION_COOKIE",
            "csrf_token", "current_session", "principal", "require_csrf", "require_roles",
-           "same_origin", "source_address", "throttled", "totp_code"]
+           "same_origin", "source_address", "throttled", "totp_code", "usable_auth"]

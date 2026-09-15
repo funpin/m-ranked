@@ -200,3 +200,38 @@ def test_a_role_set_is_carried_verbatim(monkeypatch) -> None:
     config = configured(monkeypatch, entry())
     assert config.users["admin"] == AuthUser(config.users["admin"].password_hash,
                                              frozenset({"ADMIN"}), SECRET)
+
+
+def test_a_broken_admin_configuration_closes_the_admin_surface_only(monkeypatch) -> None:
+    """Ошибка настройки админки не должна ронять публичное чтение.
+
+    Ровно это и случилось на выкатке: у записи не было totpSecret, приложение
+    отказывалось стартовать целиком, и вместе с админкой переставали отвечать
+    страницы рейтинга.
+    """
+    from fastapi.testclient import TestClient
+
+    from api.app import create_app
+    from api.config import Settings
+
+    monkeypatch.setenv("ADMIN_AUTH_USERS", json.dumps([
+        {"username": "admin", "passwordHash": "$2b$10$"+"a"*53, "roles": ["ADMIN"]},
+    ]))
+    monkeypatch.delenv("ADMIN_REQUIRE_MFA", raising=False)
+    monkeypatch.setenv("ADMIN_CSRF_SECRET", CSRF_SECRET)
+    monkeypatch.setenv("API_READ_DB_HOST", "")
+
+    application = create_app(Settings())
+    assert application.state.auth.failure is not None
+    assert "totpSecret" in application.state.auth.failure
+
+    client = TestClient(application)
+    assert client.get("/api/v1/health/live").status_code == 200
+    for path in ("/api/v1/admin/csrf", "/api/v1/admin/jobs?limit=1"):
+        closed = client.get(path)
+        assert closed.status_code == 503, path
+        assert "totpSecret" in closed.json()["detail"]
+    opened = client.post("/api/v1/admin/session",
+                         json={"username": "admin", "password": "whatever", "otp": "123456"})
+    assert opened.status_code == 503
+    assert application.state.security.counters[("config.rejected", "config")] >= 1

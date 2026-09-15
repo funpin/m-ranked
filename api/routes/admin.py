@@ -21,7 +21,7 @@ from .. import dto
 from ..identity_receipts import persist_admin_envelope
 from ..security import (SESSION_COOKIE, Principal, csrf_token, current_session,
                         require_csrf, require_roles, same_origin, source_address,
-                        throttled)
+                        throttled, usable_auth)
 from ..sessions import SessionRecord
 from ..sql import admin as sql
 
@@ -263,6 +263,7 @@ def _session_cookie(response: JSONResponse, token: str, seconds: int) -> JSONRes
 async def open_session(body: LoginRequest, request: Request) -> Response:
     """Единственное место, где предъявляются пароль и одноразовый код."""
     telemetry = request.app.state.security
+    configuration = usable_auth(request)
     store = request.app.state.sessions
     address = source_address(request)
     if not same_origin(request):
@@ -275,8 +276,7 @@ async def open_session(body: LoginRequest, request: Request) -> Response:
                          reason="address", retryAfter=wait)
         raise throttled(wait)
     moment = request.app.state.clock()
-    attempt = await request.app.state.auth.verify(body.username, body.password, body.otp,
-                                                  moment)
+    attempt = await configuration.verify(body.username, body.password, body.otp, moment)
     opened = None
     if attempt.accepted and attempt.counter is not None:
         opened = await store.open(body.username, attempt.user.roles, attempt.counter, address)
