@@ -219,12 +219,15 @@ function PlatformPublicationRow({ row, index, showInteractions, showShares=false
   const label = `${row.institutionShortName || row.institutionCanonicalName} · ${publicationLabel(row.externalId ?? "",showShares ? "vk" : "rutube")}`;
   return <TableRow>
     <TableCell className="text-muted-foreground w-10">{index + 1}</TableCell>
-    <TableCell className="min-w-52 whitespace-normal">{row.publicationId ? <Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
+    {/* Раньше подписи шли встык: «№148934Открыть публикацию VK». Гибкая строка
+        с зазором разводит название, метки и ссылку, а сама ссылка сократилась до
+        названия площадки — полная фраза осталась в подсказке. */}
+    <TableCell className="min-w-52 whitespace-normal"><span className="flex flex-wrap items-center gap-x-2 gap-y-1">{row.publicationId ? <Link data-testid="rating-entity-link" className="font-semibold underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{label}</Link> : <strong>{label}</strong>}
       {row.deletedAt ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive">удалена</span> : null}
       {row.joint ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">+{row.additionalAuthorCount} авт.</span> : null}
       {row.repost ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">репост</span> : null}
-      {row.publicUrl ? <a className="underline underline-offset-4 text-xs underline underline-offset-4" href={row.publicUrl} target="_blank" rel="noopener noreferrer">Открыть публикацию {showShares ? "VK" : "Rutube"}</a> : null}
-    </TableCell>
+      {row.publicUrl ? <a className="shrink-0 text-xs text-muted-foreground underline underline-offset-4" href={row.publicUrl} target="_blank" rel="noopener noreferrer" title={`Открыть публикацию ${showShares ? "ВКонтакте" : "на Rutube"}`}>{showShares ? "VK" : "Rutube"}</a> : null}
+    </span></TableCell>
     {showInteractions ? <>
       <TableCell><strong>{formatMetric(row.reactions)}</strong></TableCell><TableCell>{formatMetric(row.views)}</TableCell>
       <TableCell>{formatMetric(row.comments)}</TableCell>{showShares ? <TableCell>{formatMetric(row.shares)}</TableCell> : null}

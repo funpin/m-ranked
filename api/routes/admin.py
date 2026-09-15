@@ -6,6 +6,7 @@ import hashlib
 import os
 import re
 import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -363,6 +364,43 @@ async def catalog_accounts(id: uuid.UUID, request: Request,
                       if len(items) == limit else None})
 
 
+_PROJECT_SIZE: tuple[float, int | None] = (0.0, None)
+_PROJECT_SIZE_TTL = 300.0
+
+
+def _project_bytes() -> int | None:
+    """Размер дерева релиза. Пересчитывается не чаще раза в пять минут.
+
+    Поле возвращалось пустым, и панель писала «размер не предоставлен
+    сервером» — при том, что рядом размер базы показывался. Дерево релиза
+    неизменяемо, поэтому считать его на каждый запрос незачем, а обход сорока
+    тысяч файлов на одном ядре стоит заметно дороже самого ответа.
+    """
+    global _PROJECT_SIZE
+    cached_at, cached = _PROJECT_SIZE
+    now = time.monotonic()
+    if cached is not None and now - cached_at < _PROJECT_SIZE_TTL:
+        return cached
+    total = 0
+    stack = [Path.cwd()]
+    try:
+        while stack:
+            with os.scandir(stack.pop()) as entries:
+                for entry in entries:
+                    # По символическим ссылкам не идём: иначе счёт уйдёт за
+                    # пределы дерева, а то и закольцуется.
+                    if entry.is_symlink():
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append(Path(entry.path))
+                    elif entry.is_file(follow_symlinks=False):
+                        total += entry.stat(follow_symlinks=False).st_size
+    except OSError:
+        return cached
+    _PROJECT_SIZE = (now, total)
+    return total
+
+
 @router.get("/api/v1/admin/catalog/status")
 async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)]) -> Response:
     row = await request.app.state.db.admin_fetch_one(sql.CATALOG_STATUS)
@@ -371,7 +409,10 @@ async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)
         total, free = usage.total, usage.free
     except OSError:
         total = free = None
-    statuses = {platform: os.environ.get(f"MRANKED_INTEGRATIONS_{platform.upper()}", "unknown")
+    # Имя переменной то же, что читают api/providers.py и проверка готовности:
+    # админка одна искала MRANKED_INTEGRATIONS_*, которую никто не выставляет,
+    # и поэтому показывала «статус не получен» при настроенных площадках.
+    statuses = {platform: os.environ.get(f"INTEGRATION_{platform.upper()}", "unknown")
                 for platform in PLATFORMS}
     if any(value not in ("configured", "missing", "unknown") for value in statuses.values()):
         raise ApiProblem(500, "Internal Server Error", "Некорректный статус интеграции")
@@ -387,7 +428,8 @@ async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)
         "integrations": [{"platform": platform, "status": statuses[platform],
                           "detail": details[platform]}
                          for platform in ("telegram", "vk", "max", "rutube")],
-        "storage": {"diskTotalBytes": total, "diskFreeBytes": free, "projectBytes": None,
+        "storage": {"diskTotalBytes": total, "diskFreeBytes": free,
+                    "projectBytes": _project_bytes(),
                     "databaseBytes": row["database_bytes"]},
     })
 
