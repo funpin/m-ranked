@@ -104,8 +104,6 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   {platform === "all" ? (
                     <>
                       <option value="m_rating">Общий М‑Рейтинг · место</option>
-                      <option value="coverage">Подключённые площадки</option>
-                      <option value="accounts">Количество аккаунтов</option>
                     </>
                   ) : (
                     <>

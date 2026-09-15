@@ -85,6 +85,11 @@ class Settings:
     max_session_path: Path = Path("data/max.session.db")
     rutube_public_api_enabled: bool = True
     rutube_api_base: str = "https://rutube.ru/api"
+    # Сколько страниц публичного предпросмотра читать за обход. Единица —
+    # прежнее поведение: только самая свежая. Больше нужно ровно один раз,
+    # чтобы дочитать историю канала назад; в обычном цикле обход
+    # останавливается сам, как только упирается в уже известные посты.
+    telegram_history_pages: int = 1
     telegram_concurrency: int = 6
     vk_concurrency: int = 3
     vk_requests_per_second: float = 3.0
@@ -112,6 +117,7 @@ class Settings:
             telegram_session_path=Path(os.getenv("TELEGRAM_SESSION_PATH", "data/telegram.session")),
             database_path=Path(os.getenv("DATABASE_PATH", "data/reactions.db")),
             initial_channels=channels,
+            telegram_history_pages=_int("TELEGRAM_HISTORY_PAGES", 1),
             poll_interval_minutes=_int("POLL_INTERVAL_MINUTES", 5),
             track_post_for_hours=_int("TRACK_POST_FOR_HOURS", 960),
             complete_history_max_first_age_minutes=_int(

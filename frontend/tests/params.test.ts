@@ -25,7 +25,11 @@ test("legacy platform and period aliases normalize to the public API vocabulary"
 });
 
 test("overview sort keys normalize per platform before the API request", () => {
-  assert.equal(normalizeSort("coverage", "all"), "coverage");
+  // Сортировки по числу площадок и аккаунтов убраны из набора: прежние
+  // ссылки на них должны не ломаться, а приводиться к сортировке по
+  // умолчанию — месту в общем М-Рейтинге.
+  assert.equal(normalizeSort("coverage", "all"), "m_rating");
+  assert.equal(normalizeSort("accounts", "all"), "m_rating");
   assert.equal(normalizeSort("coverage", "telegram"), "median_reactions");
   assert.equal(normalizeSort("subscribers", "vk"), "subscribers");
   assert.equal(normalizeSort("subscribers", "all"), "m_rating");

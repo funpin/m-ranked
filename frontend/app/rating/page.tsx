@@ -1,6 +1,6 @@
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { NativeButton } from "@/components/native-field";
-import { NativeSelect } from "@/components/native-field";
+import { NativeSegments, NativeSelect } from "@/components/native-field";
 import { accountHref, publicationHref } from "@/lib/entity-routes";
 import { PlatformPending } from "@/components/platform-pending";
 import { RatingFilterForm } from "@/components/rating-filter-form";
@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import Link from "@/components/native-link";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { PERIOD_LABELS, PLATFORM_LONG_LABELS, publicationLabel } from "@/lib/format";
+import { PERIOD_LABELS, PLATFORM_LABELS, PLATFORM_LONG_LABELS, publicationLabel } from "@/lib/format";
 import { first, queryHref, type SearchParams } from "@/lib/params";
 import { normalizeRatingQuery, type ParsedRatingQuery } from "@/lib/rating";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import { MethodNote } from "@/components/method-note";
 import { NavigationBoundary } from "@/components/navigation-boundary";
 import { TableSkeleton } from "@/components/skeletons";
 import { Search } from "lucide-react";
+import { PLATFORM_VALUES } from "@/lib/types";
 import type {
   ActivityRatingEntity,
   ActivityRatingPublication,
@@ -69,7 +70,11 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
       {/* Та же компактная панель, что и в обзоре: без карточки и без подписи
           над единственным полем. */}
       <RatingFilterForm key={`${period}:${page.channelSort}:${page.channelDirection}:${page.postSort}:${page.postDirection}`} className="mb-5 flex flex-wrap items-center gap-2" action="/rating" method="get" aria-label="Настройка рейтинга">
-        <input type="hidden" name="platform" value={platform} />
+        {/* Раньше площадка была скрытым полем: сменить её можно было
+            только вернувшись в обзор. */}
+        <NativeSegments name="platform" legend="Площадка" value={platform}
+          options={PLATFORM_VALUES.map((value) => ({ value, label: PLATFORM_LABELS[value] }))}
+          labelled={false} />
         <div className="w-[12rem]"><NativeSelect name="period" defaultValue={period} aria-label="Период" title="Период рейтинга">{Object.entries(PERIOD_LABELS).map(([value,label]) => <option value={value} key={value}>{label}</option>)}</NativeSelect></div>
         <input type="hidden" name="channel_sort" value={page.channelSort} /><input type="hidden" name="channel_direction" value={page.channelDirection} /><input type="hidden" name="post_sort" value={page.postSort} /><input type="hidden" name="post_direction" value={page.postDirection} />
         <NativeButton type="submit" aria-label="Применить период" title="Применить период" className="size-9 min-h-9 px-0"><Search className="size-4" aria-hidden="true" /></NativeButton>

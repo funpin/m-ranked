@@ -308,6 +308,39 @@ class TelegramPublicWebCollector:
         )
         self._owns_client = client is None
 
+    async def _with_history(self, channel: Any, username: str, html: str) -> Any:
+        """Дочитать страницы назад, если обход просят вести вглубь.
+
+        Публичный предпросмотр отдаёт горсть сообщений за раз, остальное — за
+        ссылкой «ещё». Пока её не разбирали, история канала обрывалась на том,
+        что попало на первую страницу в день подключения: у каналов, пишущих
+        альбомами, это семь постов за месяц при живой ленте за годы.
+
+        По умолчанию страница одна — прежнее поведение и прежняя цена обхода.
+        Глубину поднимают разово, чтобы дочитать пропущенное.
+        """
+        budget = max(1, int(getattr(self.settings, "telegram_history_pages", 1)))
+        if budget == 1:
+            return channel
+        posts = list(channel.posts)
+        seen = {post.message_id for post in posts}
+        before = older_page_before(html)
+        for _ in range(budget - 1):
+            if before is None:
+                break
+            response = await self.client.get(f"https://t.me/s/{username}?before={before}")
+            response.raise_for_status()
+            page = parse_public_channel(response.text, username)
+            fresh = [post for post in page.posts if post.message_id not in seen]
+            # Страница без новых номеров означает, что дальше сервер ничего не
+            # отдаёт: продолжать незачем.
+            if not fresh:
+                break
+            posts.extend(fresh)
+            seen.update(post.message_id for post in fresh)
+            before = older_page_before(response.text)
+        return replace(channel, posts=sorted(posts, key=lambda post: post.message_id))
+
     async def collect(
         self, account: AccountRef, context: CollectionContext,
     ) -> RawCollectionBatch:

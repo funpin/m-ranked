@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from collector_runtime.public_web import (
+    older_page_before,
     parse_compact_count,
     parse_exact_subscriber_count,
     parse_public_channel,
@@ -168,3 +169,31 @@ def test_snapshot_due_ignores_stored_bucket_from_previous_interval_scale():
         15,
         last_measurement_bucket=five_minute_bucket,
     )
+
+
+def test_older_page_before_reads_the_link_to_earlier_messages() -> None:
+    """Ссылка «ещё» — единственный путь к истории глубже первой страницы.
+
+    Пока её не разбирали, у канала, пишущего альбомами, в базе оседало семь
+    постов за месяц: альбом занимает один блок предпросмотра, но съедает
+    несколько номеров, и первая страница заканчивалась быстрее, чем месяц.
+    """
+    html = (
+        '<a href="/s/kursksu?before=25124" class="tme_messages_more js-messages_more"'
+        ' data-before="25124">ещё</a>'
+    )
+    assert older_page_before(html) == 25124
+
+
+def test_older_page_before_takes_the_earliest_of_several_links() -> None:
+    """В разметке бывают обе ссылки — назад и вперёд; нужна та, что старее."""
+    html = (
+        '<a class="tme_messages_more" data-before="25150">новее</a>'
+        '<a class="tme_messages_more" data-before="25124">старее</a>'
+    )
+    assert older_page_before(html) == 25124
+
+
+def test_older_page_before_is_none_without_the_link() -> None:
+    """Начало канала: дальше идти некуда, и обход обязан остановиться сам."""
+    assert older_page_before("<div class='tgme_widget_message'></div>") is None
