@@ -7,12 +7,15 @@ export type CatalogStatus=components["schemas"]["AdminCatalogStatus"];
 export class CatalogApiError extends Error {constructor(readonly status:number,message:string){super(message);}}
 type Fetcher=(input:string|URL,init?:RequestInit)=>Promise<Response>;
 
-/** Per-request private reader. Authorization and cookies never enter a cache or a client component. */
+/** Per-request private reader. The session cookie never enters a cache or a client component. */
 export function catalogReader(incoming:Headers,fetcher:Fetcher=fetch,base=process.env.API_BASE_URL ?? "http://127.0.0.1:8080") {
   const origin=new URL(base);
   if(!["http:","https:"].includes(origin.protocol)||origin.username||origin.password) throw new Error("Invalid API origin");
   const headers=new Headers({Accept:"application/json"});
-  for(const name of ["authorization","cookie"]) {const value=incoming.get(name);if(value) headers.set(name,value);}
+  // Наружу уходит только кука сессии: заголовок Basic здесь больше не ходит,
+  // а чужие куки страницы административному API не нужны.
+  const session=/(?:^|;\s*)(__Host-mranked-admin=[A-Za-z0-9_-]{1,512})(?:;|$)/.exec(incoming.get("cookie")??"");
+  if(session) headers.set("cookie",session[1]);
   const client=createClient<paths>({baseUrl:origin.origin,headers,fetch:async(request)=>{
     try {return await fetcher(new URL(request.url),{method:request.method,headers:request.headers,cache:"no-store",redirect:"error",signal:AbortSignal.timeout(8000)});}
     catch {throw new CatalogApiError(0,"Административный API недоступен.");}

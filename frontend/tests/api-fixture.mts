@@ -85,7 +85,7 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
   if(id===6) return {...base,suspicionScore:0,overallSeverity:"medium",manualAssessmentPresent:true,affectedMetrics:["comments"],findings:[{...base.findings[0]!,id:uuid(8,6),origin:"manual",metric:"comments",detectorId:null,detectorVersion:null,suspicionScore:null,severity:"medium",explanationCode:"operator_context",reviewState:"unresolved"}]};
   return base;
 }
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   const url = new URL(request.url!, "http://127.0.0.1");
   const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis))?$/.exec(url.pathname);
   if (canonical) {
@@ -99,11 +99,28 @@ const server = createServer((request, response) => {
   const platform = (url.searchParams.get("platform") ?? "telegram") as Schema["PlatformValue"];
   function json(data: unknown, status = 200) { response.writeHead(status, { "Content-Type": "application/json", ETag: `"fixture-${revision}-${url.search}"`, "Cache-Control": "no-store" }); response.end(JSON.stringify(data)); }
   if (url.pathname === "/api/v1/revision") return json({ datasetRevision: revision, asOf, representationVersion: "a".repeat(64) });
+  // Сессия вместо Basic: роль носит непрозрачная кука, как на проде.
+  const sessionRole=/(?:^|;\s*)__Host-mranked-admin=fixture-(viewer|editor|admin)(?:;|$)/
+    .exec(request.headers.cookie??"")?.[1]??null;
+  if(url.pathname==="/api/v1/admin/session") {
+    if(request.method==="DELETE") {
+      response.setHeader("Set-Cookie","__Host-mranked-admin=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict");
+      return json({outcome:"closed"});
+    }
+    if(request.method!=="POST") return json({detail:"Method not allowed"},405);
+    const chunks:Buffer[]=[];
+    for await (const chunk of request) { chunks.push(chunk as Buffer); if(Buffer.concat(chunks).length>4096) return json({detail:"Too large"},413); }
+    const body=JSON.parse(Buffer.concat(chunks).toString("utf8")||"{}") as {username?:string;password?:string;otp?:string};
+    const role=String(body.username??"");
+    if(!["viewer","editor","admin"].includes(role)||body.password!=="fixture-password"||!/^\d{6}$/.test(String(body.otp??"")))
+      return json({detail:"Неверные учётные данные"},401);
+    response.setHeader("Set-Cookie",`__Host-mranked-admin=fixture-${role}; Path=/; Secure; HttpOnly; SameSite=Strict`);
+    return json({headerName:"X-XSRF-TOKEN",parameterName:"_csrf",token:"fixture-csrf-token",expiresAt:asOf,canEdit:role!=="viewer",canDelete:role==="admin"},201);
+  }
   if(url.pathname.startsWith("/api/v1/admin/catalog/")) {
-    const credentials=Buffer.from((request.headers.authorization??"").replace(/^Basic /,""),"base64").toString();
-    const role=credentials.endsWith(":fixture-password")?credentials.split(":")[0]:null;
-    if(!role||!["viewer","editor","admin"].includes(role)) {response.setHeader("WWW-Authenticate",'Basic realm="m-ranked"');return json({detail:"Not authenticated"},401);}
-    if(url.pathname.endsWith("/session")) return json({headerName:"X-XSRF-TOKEN",token:"fixture-csrf-token",canEdit:role!=="viewer",canDelete:role==="admin"});
+    const role=sessionRole;
+    if(!role) return json({detail:"Требуется вход администратора"},401);
+    if(url.pathname.endsWith("/session")) return json({headerName:"X-XSRF-TOKEN",token:"fixture-csrf-token",expiresAt:asOf,canEdit:role!=="viewer",canDelete:role==="admin"});
     const uuid=(index:number)=>`00000000-0000-4000-8000-${String(index).padStart(12,"0")}`;
     const ratings=Object.fromEntries(["all","telegram","vk","max","rutube"].map((platform)=>[platform,{rank:platform==="all"?2:null,score:platform==="all"?50:null}]));
     if(url.pathname.endsWith("/institutions")) return json({items:[1,2].map((id)=>({id:uuid(id),legacyId:id,name:names[id-1],shortName:id===1?"Альфа":"Бета",rowVersion:4,officialRatings:ratings,nextAccountAfter:null,accounts:["telegram","vk","max","rutube"].map((platform,index)=>({id:uuid(id*10+index),legacyId:id*10+index,channelId:platform==="telegram"?id:null,institutionId:uuid(id),platform,externalKey:`${platform}_${id}`,username:`${platform}_${id}`,title:`${platform} ${id}`,url:`https://example.test/${platform}/${id}`,accessMode:"public_api",legacyAccessMode:"public",lastErrorCode:null,enabled:true,rowVersion:7,nativeId:platform==="max"?`-123${id}`:null,subscribers:100}))})),nextAfter:null});

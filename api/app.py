@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import time
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
@@ -13,8 +14,11 @@ from .config import Settings
 from .db import Database
 from .errors import ApiProblem, handle, handle_validation
 from .export_jobs import ExportJobs
+from .limits import BodyLimit
 from .outbox import OutboxMarker
 from .security import AuthConfig
+from .security_events import SecurityTelemetry
+from .sessions import SessionPolicy, SessionStore
 from .routes import admin, analysis, compare, emoji, exports, health, query, rating
 
 logger = logging.getLogger(__name__)
@@ -62,10 +66,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db = database
     app.state.cache = cache
     app.state.auth = AuthConfig.from_environment()
+    app.state.security = SecurityTelemetry.from_environment()
+    app.state.session_policy = SessionPolicy.from_environment()
+    # Единственные часы приложения: тест подменяет их и получает
+    # воспроизводимые шаги TOTP и сроки сессии.
+    app.state.clock = time.time
+    app.state.sessions = SessionStore(database, app.state.session_policy,
+                                      lambda: app.state.clock())
     app.state.export_jobs = export_jobs
     app.add_exception_handler(ApiProblem, handle)
     app.add_exception_handler(RequestValidationError, handle_validation)
 
     for module in (health, query, rating, compare, emoji, exports, analysis, admin):
         app.include_router(module.router)
+    app.add_middleware(BodyLimit, maximum=settings.max_body_bytes)
     return app

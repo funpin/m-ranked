@@ -48,6 +48,10 @@ class Settings:
     read_pool_max: int = field(default_factory=lambda: _int("API_READ_POOL_MAX", 8, 1, 64))
     statement_timeout_ms: int = field(default_factory=lambda: _int("API_STATEMENT_TIMEOUT_MS", 15_000, 100, 120_000))
 
+    # Верхняя граница тела запроса не зависит от настройки обратного прокси.
+    max_body_bytes: int = field(
+        default_factory=lambda: _int("API_MAX_BODY_BYTES", 1_048_576, 4_096, 16_777_216))
+
     cache_entries: int = field(default_factory=lambda: _int("API_CACHE_ENTRIES", 512, 0, 65536))
     cache_ttl_seconds: int = field(default_factory=lambda: _int("API_CACHE_TTL_SECONDS", 600, 1, 86_400))
     # Нижняя граница возраста записи кэша. Уведомление о записи не выбрасывает

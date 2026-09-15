@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+# Все действия закреплены коммитом: подвижный тег вида @v6 отдал бы выполнение
+# в CI тому, кто перепишет тег в чужом репозитории. Комментарий рядом хранит
+# человекочитаемую версию.
 jobs:
   canonical-integrity:
     runs-on: ubuntu-24.04
@@ -24,9 +27,11 @@ jobs:
       OUTBOX_WORKER_DB_PASSWORD: ci-outbox-worker-password
       POSTGRES_PORT: 55439
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
       - run: sudo apt-get update && sudo apt-get install -y gawk jq
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
       - run: |
@@ -50,7 +55,7 @@ jobs:
           .venv/bin/pytest -q --basetemp=/opt/m-ranked-ci-tests/pytest
       - if: always()
         run: docker compose -f infra/compose.yaml down --volumes --remove-orphans
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
           name: canonical-integrity-evidence
@@ -60,14 +65,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
         with:
           package_json_file: frontend/package.json
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
           cache: pnpm
@@ -83,9 +90,181 @@ jobs:
         working-directory: frontend
       - run: pnpm build && pnpm check:bundle
         working-directory: frontend
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
           name: current-browser-evidence
           path: |
             frontend/test-results
+  container-images:
+    # Сканируется не Dockerfile, а собранный образ: именно он уезжает на хост.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      TRIVY_VERSION: 0.74.0
+      TRIVY_SHA256: 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build every production image
+        run: |
+          for image in api collector anomaly; do
+            docker build --file "infra/local/$image.Dockerfile" --tag "m-ranked-$image:ci" .
+            docker image inspect "m-ranked-$image:ci" --format '{{index .Id}}' \
+              | tee "digest-$image.txt"
+          done
+      - name: Scan every built image
+        run: |
+          curl --fail --silent --show-error --location --output trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tar.gz" | sha256sum --check --strict
+          tar -xzf trivy.tar.gz trivy
+          for image in api collector anomaly; do
+            ./trivy image --scanners vuln,secret,misconfig --severity HIGH,CRITICAL \
+              --ignore-unfixed --exit-code 1 --format table "m-ranked-$image:ci"
+            ./trivy image --format cyclonedx --output "sbom-image-$image.json" "m-ranked-$image:ci"
+          done
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: sbom-image-*.json
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: container-image-evidence
+          path: |
+            sbom-image-*.json
+            digest-*.txt
+  supply-chain:
+    # Обязательные ворота безопасности: состав зависимостей, статический
+    # анализ, секреты в истории, конфигурация образов и состав поставки.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+      TRIVY_VERSION: 0.74.0
+      TRIVY_SHA256: 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # Секреты ищутся по всей истории, а не только в последнем коммите.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install the Python environment under audit
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements.txt -r operations/requirements.txt
+      - name: Production locks install exactly what they pin
+        run: |
+          # Проверяется не окружение разработки, а то, что уедет в образ:
+          # установка идёт с проверкой хешей, из того же lock.
+          for lock in requirements/api.lock requirements/anomaly.lock; do
+            python -m venv "$RUNNER_TEMP/$(basename "$lock" .lock)"
+            "$RUNNER_TEMP/$(basename "$lock" .lock)/bin/pip" install --quiet \
+              --require-hashes --no-deps --upgrade -r requirements/tooling.lock
+            "$RUNNER_TEMP/$(basename "$lock" .lock)/bin/pip" install --quiet \
+              --require-hashes --no-deps --only-binary=:all: -r "$lock"
+          done
+          python -m venv "$RUNNER_TEMP/collector"
+          "$RUNNER_TEMP/collector/bin/pip" install --quiet --require-hashes --no-deps \
+            --upgrade -r requirements/tooling.lock
+          "$RUNNER_TEMP/collector/bin/pip" install --quiet --require-hashes --no-deps \
+            --no-build-isolation -r requirements/collector.lock
+      - name: Known vulnerabilities in every production environment
+        run: |
+          .venv/bin/pip-audit --progress-spinner off
+          for environment in api anomaly collector; do
+            .venv/bin/pip-audit --progress-spinner off \
+              --path "$RUNNER_TEMP/$environment/lib" || exit 1
+          done
+      - name: Known vulnerabilities in production frontend dependencies
+        run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level=high
+        working-directory: frontend
+      - name: Static analysis
+        run: |
+          .venv/bin/python -m pip install semgrep==1.177.0
+          .venv/bin/semgrep scan --config p/python --config p/javascript --config p/secrets \
+            --severity ERROR --metrics off --error \
+            --exclude node_modules --exclude .venv --sarif --output semgrep.sarif .
+      - name: Secrets across the whole history
+        run: |
+          curl --fail --silent --show-error --location \
+            --output gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf gitleaks.tar.gz gitleaks
+          # Сначала канарейка: сканер, который молчит на заведомом ключе,
+          # молчал бы и на настоящем. Значение живёт только в этом шаге.
+          canary="$(openssl rand -hex 32)"
+          printf 'aws_secret_access_key = "%s"\n' "$canary" > "$RUNNER_TEMP/canary.txt"
+          if ./gitleaks dir --redact --no-banner --exit-code 1 "$RUNNER_TEMP"; then
+            echo "секретный сканер не увидел канарейку" >&2
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/canary.txt"
+          ./gitleaks git --redact --no-banner --exit-code 1 .
+      - name: Image and infrastructure configuration
+        run: |
+          curl --fail --silent --show-error --location \
+            --output trivy.tar.gz \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tar.gz" | sha256sum --check --strict
+          tar -xzf trivy.tar.gz trivy
+          ./trivy config --severity HIGH,CRITICAL --exit-code 1 \
+            --skip-dirs node_modules --skip-dirs .venv .
+      - name: Software bill of materials for every production environment
+        run: |
+          .venv/bin/python -m pip install cyclonedx-bom==7.3.1
+          for environment in api anomaly collector; do
+            .venv/bin/cyclonedx-py environment "$RUNNER_TEMP/$environment" \
+              --output-format JSON -o "sbom-$environment.json"
+          done
+      - name: Software bill of materials for the frontend
+        # cdxgen закреплён в pnpm-lock и запускается из него, а не из сети.
+        run: FETCH_LICENSE=false pnpm exec cdxgen -t pnpm -o "$GITHUB_WORKSPACE/sbom-frontend.json" --no-recurse .
+        working-directory: frontend
+      - name: No test or build tooling inside a production environment
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          forbidden = {"pytest", "playwright", "semgrep", "pip-audit", "cyclonedx-bom",
+                       "jsonschema", "pyyaml-dev"}
+          failures = []
+          for path in pathlib.Path(".").glob("sbom-*.json"):
+              if path.name == "sbom-frontend.json":
+                  continue
+              names = {item["name"].lower() for item in json.loads(path.read_text())["components"]}
+              present = sorted(names & forbidden)
+              if present:
+                  failures.append(f"{path.name}: {present}")
+          if failures:
+              print("\n".join(failures), file=sys.stderr)
+              sys.exit(1)
+          PY
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: supply-chain-evidence
+          path: |
+            sbom-*.json
+            semgrep.sarif

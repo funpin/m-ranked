@@ -1,0 +1,13 @@
+{
+  "$comment": "Разобранные и признанные недостижимыми находки. Пустой список означает, что исключений нет.",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {"type": "application", "name": "m-ranked"},
+    "properties": [
+      {"name": "policy", "value": "docs/architecture/security/dependency-policy.md"}
+    ]
+  },
+  "vulnerabilities": []
+}

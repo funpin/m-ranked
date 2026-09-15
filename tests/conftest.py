@@ -24,3 +24,17 @@ requires_api_database = pytest.mark.skipif(
     not api_database_configured(),
     reason="не задано подключение к базе (API_READ_DB_*)",
 )
+
+ADMIN_DATABASE_VARS = ("API_WRITE_ADMIN_DB_HOST", "API_WRITE_ADMIN_DB_USER",
+                       "API_WRITE_ADMIN_DB_PASSWORD", "API_WRITE_ADMIN_DB_NAME")
+
+
+def admin_database_configured() -> bool:
+    return all(os.environ.get(name) for name in ADMIN_DATABASE_VARS)
+
+
+# Сессиям и учёту кодов нужна только применённая схема, без наполнения данными.
+requires_admin_database = pytest.mark.skipif(
+    not admin_database_configured(),
+    reason="не задано подключение к административной базе (API_WRITE_ADMIN_DB_*)",
+)

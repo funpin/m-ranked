@@ -6,6 +6,8 @@ services:
 
   api:
     mem_limit: 768m
+    security_opt:
+      - no-new-privileges:true
     build:
       context: ..
       dockerfile: infra/local/api.Dockerfile
@@ -28,6 +30,13 @@ services:
       ADMIN_AUTH_USERS: >-
         [{"username":"admin","passwordHash":"$$2a$$10$$3P6XJBtkor5EEWC7uK9i4.xQC3ZLjEnCGjdhxOeUCkf860gh9fZja","roles":["ADMIN"]}]
       ADMIN_CSRF_SECRET: local-demo-csrf-secret-change-in-production
+      # Этот секрет из примера приложение принимает только с явного
+      # разрешения — в продуктовой конфигурации его нет.
+      ADMIN_ALLOW_DEMO_SECRETS: "true"
+      # Локальный стенд входит одним демонстрационным паролем. На проде второй
+      # фактор обязателен: у каждой записи ADMIN_AUTH_USERS есть totpSecret, а
+      # эта переменная не задаётся вовсе.
+      ADMIN_REQUIRE_MFA: "false"
       MRANKED_IDENTITY_RECEIPT_DIR: /state/identity-receipts
       MRANKED_EXPORTS_SPOOL_DIRECTORY: /state/exports
     ports:
@@ -39,6 +48,8 @@ services:
         condition: service_healthy
 
   web:
+    security_opt:
+      - no-new-privileges:true
     build:
       context: ..
       dockerfile: infra/local/web.Dockerfile

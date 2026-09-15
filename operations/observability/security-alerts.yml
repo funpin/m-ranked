@@ -1,0 +1,59 @@
+groups:
+  - name: mranked-security
+    rules:
+      - alert: MRankedAdminAuthFailureBurst
+        expr: sum(rate(mranked_api_security_events_total{event="auth.failure"}[10m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Administrative authentication is failing repeatedly.
+      - alert: MRankedAdminCredentialStuffing
+        expr: sum(increase(mranked_api_security_events_total{event="auth.throttled"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: An administrative account or source address is locked out by backoff.
+      - alert: MRankedAdminSecondFactorRejected
+        expr: sum(increase(mranked_api_security_events_total{reason=~"otp|otp-replay"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: A second-factor code was wrong or replayed; a password may be compromised.
+      - alert: MRankedAdminAuthorizationDenied
+        expr: sum(increase(mranked_api_security_events_total{event="authz.denied"}[30m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Administrative role checks are denying requests repeatedly.
+      - alert: MRankedAdminCsrfRejected
+        expr: sum(increase(mranked_api_security_events_total{event="csrf.rejected"}[30m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Administrative CSRF tokens are being rejected repeatedly.
+      - alert: MRankedAdminSessionRevocationBurst
+        expr: sum(increase(mranked_api_security_events_total{event="session.revoked"}[30m])) > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Administrative sessions are being revoked repeatedly; identity or roles changed.
+      - alert: MRankedAdminSessionRejected
+        expr: sum(rate(mranked_api_security_events_total{reason="session"}[15m])) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Session tokens are being rejected steadily; expired, revoked or guessed.
+      - alert: MRankedSecurityMetricsMissing
+        expr: absent(mranked_api_security_sample_unixtime)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: The API security counters are no longer being scraped.

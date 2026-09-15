@@ -1,5 +1,9 @@
 packages:
   - packages/*
+# js-yaml 4.3.1 приходит транзитивно из инструментов сборки и уязвим к
+# CVE-2026-84375; 4.3.2 — исправленный выпуск той же линии.
+overrides:
+  js-yaml@4: 4.3.2
 allowBuilds:
   esbuild: true
   unrs-resolver: false

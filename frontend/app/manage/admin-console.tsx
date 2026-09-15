@@ -89,6 +89,7 @@ export function AdminConsole() {
   const accountRequestSequence = useRef(0);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -108,10 +109,12 @@ export function AdminConsole() {
   const [mutationResult, setMutationResult] = useState<SetEnabledResponse | null>(null);
 
   function clearPrivateState(message?: string) {
-    sessionRef.current?.close();
+    // Сессия гасится и на сервере: закрытая вкладка не должна оставлять её живой.
+    void sessionRef.current?.signOut().catch(() => undefined);
     sessionRef.current = null;
     setUsername("");
     setPassword("");
+    setOtp("");
     setAuthenticated(false);
     setJobs([]);
     setSelectedJobId(null);
@@ -178,20 +181,21 @@ export function AdminConsole() {
     setNotice(null);
     let session: AdminSession | null = null;
     try {
-      session = createAdminSession({ username, password });
+      session = createAdminSession({ username, password, otp });
       await session.initialize();
       const page = await session.jobs({ platform, status, limit });
       sessionRef.current?.close();
       sessionRef.current = session;
       setJobs(page.items);
       setAuthenticated(true);
-      setNotice("Административная сессия открыта только в памяти этой страницы.");
+      setNotice("Сессия открыта. Пароль и код больше не хранятся на странице.");
     } catch (authError) {
       session?.close();
       setError(messageFor(authError));
       setAuthenticated(false);
     } finally {
       setPassword("");
+      setOtp("");
       setBusy(false);
     }
   }
@@ -350,7 +354,8 @@ export function AdminConsole() {
           </div>
           <form className="grid gap-3" onSubmit={authenticate} autoComplete="off">
             <label className="grid gap-1.5 text-sm"><span>Имя пользователя</span><Input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="off" maxLength={200} required /></label>
-            <label className="grid gap-1.5 text-sm"><span>Пароль</span><Input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="off" maxLength={4096} required /></label>
+            <label className="grid gap-1.5 text-sm"><span>Пароль</span><Input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" maxLength={1024} required /></label>
+            <label className="grid gap-1.5 text-sm"><span>Код подтверждения</span><Input value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required /><span className="text-muted-foreground text-xs">Шесть цифр из приложения-аутентификатора. Код действует один раз и тратится при входе.</span></label>
             <NativeButton type="submit" disabled={busy}>{busy ? "Проверяем…" : "Войти"}</NativeButton>
           </form>
         </section>

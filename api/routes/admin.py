@@ -19,7 +19,10 @@ from psycopg import errors as pg_errors
 from ..errors import ApiProblem, BadRequest, NotFound
 from .. import dto
 from ..identity_receipts import persist_admin_envelope
-from ..security import Principal, issue_csrf, require_csrf, require_roles
+from ..security import (SESSION_COOKIE, Principal, csrf_token, current_session,
+                        require_csrf, require_roles, same_origin, source_address,
+                        throttled)
+from ..sessions import SessionRecord
 from ..sql import admin as sql
 
 router = APIRouter(tags=["Admin"])
@@ -27,6 +30,12 @@ READ = require_roles("VIEWER", "EDITOR", "ADMIN")
 WRITE = require_roles("EDITOR", "ADMIN")
 ADMIN = require_roles("ADMIN")
 PLATFORMS = frozenset({"telegram", "vk", "max", "rutube"})
+RUTUBE_HOSTS = frozenset({"rutube.ru", "www.rutube.ru"})
+RUTUBE_PATHS = (
+    (re.compile(r"/video/person/(\d{1,20})/?"), "video/person"),
+    (re.compile(r"/channel/([A-Za-z0-9_-]{1,64})/?"), "channel"),
+    (re.compile(r"/u/([A-Za-z0-9_-]{1,64})/?"), "u"),
+)
 
 
 class InstitutionCreate(BaseModel):
@@ -92,9 +101,34 @@ def _nullable(value: str | None, maximum: int) -> str | None:
 
 
 def _web_url(value: str) -> None:
-    parsed = urlsplit(value)
-    if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname or parsed.username:
-        raise BadRequest("Аккаунт должен использовать HTTP(S)-ссылку без учётных данных")
+    try:
+        parsed, port = urlsplit(value), urlsplit(value).port
+    except ValueError:
+        raise BadRequest("Некорректная ссылка аккаунта") from None
+    if (parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username
+            or parsed.password or port not in (None, 443)):
+        raise BadRequest("Аккаунт должен использовать HTTPS-ссылку без учётных данных")
+
+
+def _rutube_url(value: str) -> str:
+    """Свести ссылку RUTUBE к каноничному виду; иначе запрос отклоняется.
+
+    Значение попадает в platform_account.current_url, а collector потом
+    выполняет по нему GET, поэтому произвольный хост здесь означал бы SSRF.
+    """
+    try:
+        parsed, port = urlsplit(value), urlsplit(value).port
+    except ValueError:
+        raise BadRequest("Некорректная ссылка RUTUBE") from None
+    if (parsed.scheme.lower() != "https" or (parsed.hostname or "").lower() not in RUTUBE_HOSTS
+            or parsed.username or parsed.password or port not in (None, 443)
+            or parsed.query or parsed.fragment):
+        raise BadRequest("Ссылка RUTUBE должна вести на https://rutube.ru без параметров")
+    for pattern, prefix in RUTUBE_PATHS:
+        match = pattern.fullmatch(parsed.path)
+        if match:
+            return f"https://rutube.ru/{prefix}/{match.group(1)}/"
+    raise BadRequest("Ссылка RUTUBE должна вести на канал")
 
 
 def _account_body(platform: str, reference: str, title: str | None,
@@ -128,6 +162,9 @@ def _account_body(platform: str, reference: str, title: str | None,
         key = path.rsplit("/", 1)[-1].lstrip("@")
         if not key or len(key) > 200:
             raise BadRequest("Не удалось определить аккаунт")
+        if platform == "rutube":
+            url = _rutube_url(url) if url else (
+                f"https://rutube.ru/channel/{key}/" if key.isdigit() else None)
     if url:
         _web_url(url)
     return {
@@ -193,25 +230,115 @@ def _no_store(body: Any, status: int = 200, correlation: uuid.UUID | None = None
     return JSONResponse(body, status_code=status, headers=headers)
 
 
-def _csrf_response(request: Request, body: dict[str, Any]) -> JSONResponse:
-    token = issue_csrf(request.app.state.auth)
-    body["token"] = token
-    response = _no_store(body)
-    response.set_cookie("XSRF-TOKEN", token, path="/api/v1/admin", httponly=False,
-                        samesite="lax")
+class LoginRequest(BaseModel):
+    """Пароль и код — разные поля. Склейка их в одну строку была бы подгонкой."""
+
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=1, max_length=1024)
+    otp: str = Field(default="", max_length=16)
+
+
+class RevokeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    subject: str = Field(min_length=1, max_length=200)
+
+
+def _csrf_response(request: Request, body: dict[str, Any],
+                   record: SessionRecord, status: int = 200) -> JSONResponse:
+    body["token"] = csrf_token(request.app.state.auth.csrf_secret, record.id)
+    body["expiresAt"] = record.absolute_expires_at.isoformat()
+    return _no_store(body, status)
+
+
+def _session_cookie(response: JSONResponse, token: str, seconds: int) -> JSONResponse:
+    # Префикс __Host- требует Secure, Path=/ и запрещает Domain, поэтому куку
+    # нельзя ни поставить с соседнего поддомена, ни сузить по пути.
+    response.set_cookie(SESSION_COOKIE, token, max_age=seconds, path="/",
+                        httponly=True, secure=True, samesite="strict")
     return response
 
 
+@router.post("/api/v1/admin/session")
+async def open_session(body: LoginRequest, request: Request) -> Response:
+    """Единственное место, где предъявляются пароль и одноразовый код."""
+    telemetry = request.app.state.security
+    store = request.app.state.sessions
+    address = source_address(request)
+    if not same_origin(request):
+        telemetry.record("auth.failure", request, username=body.username, reason="origin")
+        raise ApiProblem(403, "Forbidden", "Недопустимый источник запроса",
+                         "urn:m-ranked:problem:forbidden")
+    wait = await store.retry_after(address)
+    if wait:
+        telemetry.record("auth.throttled", request, username=body.username,
+                         reason="address", retryAfter=wait)
+        raise throttled(wait)
+    moment = request.app.state.clock()
+    attempt = await request.app.state.auth.verify(body.username, body.password, body.otp,
+                                                  moment)
+    opened = None
+    if attempt.accepted and attempt.counter is not None:
+        opened = await store.open(body.username, attempt.user.roles, attempt.counter, address)
+    elif attempt.accepted:
+        # Второй фактор выключен конфигурацией стенда: кода нет, тратить нечего.
+        opened = await store.open(body.username, attempt.user.roles, None, address)
+    if opened is None:
+        if attempt.reason == "otp" and attempt.user is not None:
+            await store.record_code_failure(body.username, int(moment//30))
+        await store.record_failure(address)
+        telemetry.record("auth.failure", request, username=body.username,
+                         reason=attempt.reason if attempt.reason != "none" else "otp-replay")
+        raise ApiProblem(401, "Unauthorized", "Неверные учётные данные",
+                         "urn:m-ranked:problem:unauthorized")
+    token, record = opened
+    await store.clear_failures(address)
+    await store.maybe_purge()
+    telemetry.record("auth.success", request, username=body.username)
+    telemetry.record("session.opened", request, username=body.username)
+    body_out = {"headerName": "X-XSRF-TOKEN", "parameterName": "_csrf",
+                "canEdit": bool(record.roles & {"EDITOR", "ADMIN"}),
+                "canDelete": "ADMIN" in record.roles}
+    response = _csrf_response(request, body_out, record, status=201)
+    return _session_cookie(response, token,
+                           request.app.state.session_policy.absolute_seconds)
+
+
+@router.delete("/api/v1/admin/session")
+async def close_session(request: Request, user: Annotated[Principal, Depends(READ)],
+                        _: Annotated[None, Depends(require_csrf)]) -> Response:
+    await request.app.state.sessions.revoke(user.session_id, "logout")
+    request.app.state.security.record("session.closed", request, username=user.username,
+                                      reason="logout")
+    response = _no_store({"outcome": "closed"})
+    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, secure=True,
+                           samesite="strict")
+    return response
+
+
+@router.delete("/api/v1/admin/sessions")
+async def revoke_sessions(body: RevokeRequest, request: Request,
+                          user: Annotated[Principal, Depends(ADMIN)],
+                          _: Annotated[None, Depends(require_csrf)]) -> Response:
+    revoked = await request.app.state.sessions.revoke_subject(body.subject, "admin")
+    request.app.state.security.record("session.revoked", request, username=body.subject,
+                                      reason="admin", revoked=revoked)
+    return _no_store({"outcome": "revoked", "sessions": revoked})
+
+
 @router.get("/api/v1/admin/csrf")
-async def csrf(request: Request, _: Annotated[Principal, Depends(READ)]) -> Response:
-    return _csrf_response(request, {"headerName": "X-XSRF-TOKEN", "parameterName": "_csrf"})
+async def csrf(request: Request, _: Annotated[Principal, Depends(READ)],
+               record: Annotated[SessionRecord, Depends(current_session)]) -> Response:
+    return _csrf_response(request, {"headerName": "X-XSRF-TOKEN",
+                                    "parameterName": "_csrf"}, record)
 
 
 @router.get("/api/v1/admin/catalog/session")
-async def catalog_session(request: Request, user: Annotated[Principal, Depends(READ)]) -> Response:
+async def catalog_session(request: Request, user: Annotated[Principal, Depends(READ)],
+                          record: Annotated[SessionRecord, Depends(current_session)]) -> Response:
     return _csrf_response(request, {"headerName": "X-XSRF-TOKEN",
                                     "canEdit": bool(user.roles & {"EDITOR", "ADMIN"}),
-                                    "canDelete": "ADMIN" in user.roles})
+                                    "canDelete": "ADMIN" in user.roles}, record)
 
 
 @router.get("/api/v1/admin/catalog/institutions")

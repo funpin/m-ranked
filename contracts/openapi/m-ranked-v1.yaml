@@ -787,7 +787,7 @@ paths:
       summary: getCatalogSession
       description: Requires VIEWER, EDITOR or ADMIN. Authoritative bounded query on the administrative connection.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -816,7 +816,7 @@ paths:
       summary: getCatalogStatus
       description: Requires VIEWER, EDITOR or ADMIN. Authoritative bounded query on the administrative connection.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -845,7 +845,7 @@ paths:
       summary: getManagedInstitutions
       description: Requires VIEWER, EDITOR or ADMIN. Authoritative bounded query on the administrative connection.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -893,7 +893,7 @@ paths:
         payload to a durable result; reuse with another payload returns 409. Changes, audit, projections and dataset revision
         commit atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -942,7 +942,7 @@ paths:
       summary: getManagedInstitutionAccounts
       description: Requires VIEWER, EDITOR or ADMIN. Authoritative bounded query on the administrative connection.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -997,7 +997,7 @@ paths:
         payload to a durable result; reuse with another payload returns 409. Changes, audit, projections and dataset revision
         commit atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -1053,7 +1053,7 @@ paths:
         to a durable result; reuse with another payload returns 409. Changes, audit, projections and dataset revision commit
         atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -1111,7 +1111,7 @@ paths:
         payload to a durable result; reuse with another payload returns 409. Changes, audit, projections and dataset revision
         commit atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -1162,7 +1162,7 @@ paths:
         to a durable result; reuse with another payload returns 409. Changes, audit, projections and dataset revision commit
         atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -1220,7 +1220,7 @@ paths:
         payload to a durable result; reuse with another payload returns 409. Changes, audit, projections and dataset revision
         commit atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -1277,7 +1277,7 @@ paths:
         payload to a durable result; reuse with another payload returns 409. Changes, audit, projections and dataset revision
         commit atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -1334,7 +1334,7 @@ paths:
         payload to a durable result; reuse with another payload returns 409. Changes, audit, projections and dataset revision
         commit atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -1391,7 +1391,7 @@ paths:
         the actor and exact command payload to a durable result; reuse with another payload returns 409. Changes, audit, projections
         and dataset revision commit atomically. Deleted enrollments retain immutable history and disappear from public queries.
       security:
-      - basicAuth: []
+      - adminSession: []
       responses:
         '200':
           description: Consistent private result; never cached.
@@ -1432,13 +1432,104 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AdminCatalogLegacyCommand'
+  /api/v1/admin/session:
+    post:
+      tags: [Admin]
+      operationId: openAdminSession
+      summary: Exchange username, password and a one-time code for a session
+      description: >-
+        The only endpoint that accepts a password or a TOTP code. The code is spent once,
+        when the session is created. On success the session token is returned solely in the
+        __Host-mranked-admin cookie; the body carries the session-bound CSRF token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+      responses:
+        '201':
+          description: A new session was created and its cookie issued.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              description: Opaque session token; Secure, HttpOnly, SameSite=Strict, Path=/.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSession'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+    delete:
+      tags: [Admin]
+      operationId: closeAdminSession
+      summary: End the current session
+      description: Requires VIEWER, EDITOR or ADMIN and the session-bound CSRF token.
+      security:
+        - adminSession: []
+      responses:
+        '200':
+          description: The session is revoked server-side and its cookie expired.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSessionOutcome'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/sessions:
+    delete:
+      tags: [Admin]
+      operationId: revokeAdminSessions
+      summary: Revoke every session of one account
+      description: Requires ADMIN and the session-bound CSRF token. Tokens are never disclosed.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSessionRevocation'
+      responses:
+        '200':
+          description: The sessions of that account are revoked.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSessionOutcome'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/admin/csrf:
     get:
       tags: [Admin]
       operationId: getAdminCsrf
       summary: Issue a double-submit CSRF token for an authenticated admin client
       security:
-        - basicAuth: []
+        - adminSession: []
       responses:
         '200':
           description: Token metadata; the matching XSRF-TOKEN cookie is also issued.
@@ -1460,7 +1551,7 @@ paths:
       summary: Read bounded collection-run status
       description: Requires VIEWER, EDITOR or ADMIN. No raw response or payload is returned.
       security:
-        - basicAuth: []
+        - adminSession: []
       parameters:
         - name: platform
           in: query
@@ -1504,7 +1595,7 @@ paths:
       summary: Read one collection run and bounded per-account outcomes
       description: Requires VIEWER, EDITOR or ADMIN. Errors are limited to sanitized codes.
       security:
-        - basicAuth: []
+        - adminSession: []
       parameters:
         - name: jobId
           in: path
@@ -1550,7 +1641,7 @@ paths:
         optimistic row version and update time from the dedicated administrative database
         connection. External identifiers, URLs, credentials and raw collector evidence are omitted.
       security:
-        - basicAuth: []
+        - adminSession: []
       parameters:
         - name: accountId
           in: path
@@ -1589,7 +1680,7 @@ paths:
         are written to append-only audit with only enabled/rowVersion state. A changed command
         rebuilds and publishes its revision-pinned projections in the same database transaction.
       security:
-        - basicAuth: []
+        - adminSession: []
       parameters:
         - name: accountId
           in: path
@@ -1788,7 +1879,7 @@ paths:
       summary: Create an append-only manual anomaly signal
       description: ADMIN only. The manual signal has no fabricated detector score.
       security:
-        - basicAuth: []
+        - adminSession: []
       parameters:
         - name: publicationId
           in: path
@@ -1834,7 +1925,7 @@ paths:
       summary: Append an effective review decision to an anomaly signal
       description: ADMIN only. Private comments are never exposed by the public API.
       security:
-        - basicAuth: []
+        - adminSession: []
       parameters:
         - name: findingId
           in: path
@@ -1882,7 +1973,7 @@ paths:
         TTL, 2 million rows, 512 MiB and 300 seconds. Artifacts live on disk and are removed on cancellation or expiry.
         A revision changed before worker startup fails closed.
       security:
-      - basicAuth: []
+      - adminSession: []
       parameters:
       - name: X-XSRF-TOKEN
         in: header
@@ -1931,7 +2022,7 @@ paths:
       operationId: getExportJob
       summary: Read the current user's export progress
       security:
-      - basicAuth: []
+      - adminSession: []
       parameters:
       - name: id
         in: path
@@ -1961,7 +2052,7 @@ paths:
       operationId: cancelExportJob
       summary: Cancel the current user's export and delete its artifact
       security:
-      - basicAuth: []
+      - adminSession: []
       parameters:
       - name: id
         in: path
@@ -1998,7 +2089,7 @@ paths:
       operationId: downloadExportJob
       summary: Stream a completed unexpired artifact owned by the current user
       security:
-      - basicAuth: []
+      - adminSession: []
       parameters:
       - name: id
         in: path
@@ -2040,12 +2131,21 @@ paths:
                 $ref: '#/components/schemas/Problem'
 components:
   securitySchemes:
-    basicAuth:
-      type: http
-      scheme: basic
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: __Host-mranked-admin
       description: >-
-        Transitional stateless admin authentication. Store only bcrypt hashes in runtime
-        configuration and expose this surface exclusively behind TLS. OIDC remains a later slice.
+        Server-side administrative session. POST /api/v1/admin/session takes username,
+        password and the current six-digit TOTP code (RFC 6238, 30-second step) as three
+        separate fields and returns an opaque session token in a __Host- cookie that is
+        Secure, HttpOnly and SameSite=Strict; the token is never present in a response body.
+        A TOTP code is spent once, when the session is created, so ordinary multi-request
+        work needs no further code. Every request re-checks the session server-side for
+        idle timeout, absolute timeout, revocation and the current role set. The CSRF token
+        returned alongside is bound to that one session. Repeated failures are answered with
+        429 and Retry-After per source address; accounts are never locked out. Federated
+        sign-in with OIDC remains a later slice.
   parameters:
     Platform:
       name: platform
@@ -2133,12 +2233,25 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Unauthorized:
-      description: Authentication is missing or invalid.
+      description: >-
+        No valid administrative session. Expired, revoked, unknown and malformed session
+        tokens are all reported the same way.
       headers:
         Cache-Control:
           $ref: '#/components/headers/NoStore'
-        WWW-Authenticate:
-          description: Basic authentication challenge for the transitional admin surface.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: >-
+        Too many failed sign-in attempts from this source address, or the password
+        verifier is saturated. The body never says which factor was wrong.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+        Retry-After:
+          description: Seconds to wait before retrying.
           schema:
             type: string
       content:
@@ -2523,6 +2636,7 @@ components:
       required:
       - headerName
       - token
+      - expiresAt
       - canEdit
       - canDelete
       properties:
@@ -2531,6 +2645,9 @@ components:
           const: X-XSRF-TOKEN
         token:
           type: string
+        expiresAt:
+          type: string
+          format: date-time
         canEdit:
           type: boolean
         canDelete:
@@ -3855,7 +3972,7 @@ components:
     AdminCsrf:
       type: object
       additionalProperties: false
-      required: [headerName, parameterName, token]
+      required: [headerName, parameterName, token, expiresAt]
       properties:
         headerName:
           type: string
@@ -3866,6 +3983,68 @@ components:
         token:
           type: string
           minLength: 1
+        expiresAt:
+          type: string
+          format: date-time
+    AdminLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 200
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        otp:
+          type: string
+          maxLength: 16
+          description: Current six-digit TOTP code. Never appended to the password.
+    AdminSession:
+      type: object
+      additionalProperties: false
+      required: [headerName, parameterName, token, expiresAt, canEdit, canDelete]
+      properties:
+        headerName:
+          type: string
+          const: X-XSRF-TOKEN
+        parameterName:
+          type: string
+          const: _csrf
+        token:
+          type: string
+          minLength: 1
+          description: CSRF token bound to this session. Not the session token.
+        expiresAt:
+          type: string
+          format: date-time
+        canEdit:
+          type: boolean
+        canDelete:
+          type: boolean
+    AdminSessionRevocation:
+      type: object
+      additionalProperties: false
+      required: [subject]
+      properties:
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 200
+    AdminSessionOutcome:
+      type: object
+      additionalProperties: false
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [closed, revoked]
+        sessions:
+          type: integer
+          minimum: 0
     RunStatus:
       type: string
       enum: [pending, running, succeeded, partial, failed, skipped, cancelled]

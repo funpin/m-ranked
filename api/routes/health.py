@@ -23,7 +23,12 @@ CONTRACT_SQL = "SELECT contract_id FROM ops_and_admin.schema_contract"
 SOURCE_SCHEMA_SQL = """
 SELECT to_regclass('catalog.visible_platform_account') IS NOT NULL
    AND to_regclass('ingest.visible_publication') IS NOT NULL
-   AND to_regclass('analytics.usable_publication_snapshot') IS NOT NULL AS ready
+   AND to_regclass('analytics.usable_publication_snapshot') IS NOT NULL
+   -- Миграция 0025: без этих таблиц админка не сможет ни открыть сессию,
+   -- ни удержать одноразовость кода, поэтому узел не готов принимать нагрузку.
+   AND to_regclass('ops_and_admin.admin_session') IS NOT NULL
+   AND to_regclass('ops_and_admin.admin_totp_use') IS NOT NULL
+   AND to_regclass('ops_and_admin.admin_login_failure') IS NOT NULL AS ready
 """
 REVISION_SQL = "SELECT id, committed_at FROM analytics.latest_dataset_revision()"
 SNAPSHOT_SQL = "SELECT ops_and_admin.public_health_snapshot() AS snapshot"

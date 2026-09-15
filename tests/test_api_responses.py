@@ -61,8 +61,36 @@ def client():
 
     # TestClient поднимает lifespan приложения, поэтому пул соединений и
     # слушатель инвалидации работают так же, как под uvicorn.
-    with TestClient(create_app(Settings())) as http:
+    # https в базовом адресе: иначе клиент не сохранит куку сессии,
+    # помеченную Secure, и ни один административный тест не пройдёт.
+    with TestClient(create_app(Settings()), base_url="https://testserver") as http:
         yield http
+
+
+
+TEST_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+TEST_PASSWORD = "admin-test-password"
+
+
+def sign_in(client, monkeypatch, username: str, *roles: str) -> str:
+    """Открыть настоящую сессию и вернуть привязанный к ней CSRF-токен."""
+    import base64
+    import bcrypt
+
+    from api.security import AuthConfig, AuthUser, totp_code
+
+    secret = base64.b32decode(TEST_TOTP_SECRET)
+    config = AuthConfig({username: AuthUser(
+        bcrypt.hashpw(TEST_PASSWORD.encode(), bcrypt.gensalt(rounds=10)),
+        frozenset(roles), secret)}, b"0123456789abcdef0123456789abcdef")
+    monkeypatch.setattr(client.app.state, "auth", config)
+    client.cookies.clear()
+    opened = client.post("/api/v1/admin/session", json={
+        "username": username, "password": TEST_PASSWORD,
+        "otp": totp_code(secret, int(client.app.state.clock()//30)),
+    })
+    assert opened.status_code == 201, opened.text
+    return opened.json()["token"]
 
 
 CASES = [
@@ -353,10 +381,6 @@ def test_emoji_validation_and_success_headers(client, validator_for, monkeypatch
 
 @requires_database
 def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) -> None:
-    import bcrypt
-
-    from api.security import AuthConfig, issue_csrf
-
     publication = "99269506-1466-5e18-a215-a3db2688d786"
     analysis = assert_contract_response(
         client.get(f"/api/v1/publications/{publication}/anomaly-analysis?limit=1"),
@@ -374,21 +398,17 @@ def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) 
     assert_contract_response(
         unauthorized, validator_for,
         "/api/v1/admin/publications/{publicationId}/anomaly-signals", "401", "post")
-    assert unauthorized.headers["www-authenticate"].startswith("Basic")
+    assert "www-authenticate" not in unauthorized.headers
 
-    password_hash = bcrypt.hashpw(b"test-password", bcrypt.gensalt(rounds=4))
-    auth = AuthConfig({"analysis-admin": (password_hash, frozenset({"ADMIN"}))}, b"test-secret")
-    monkeypatch.setattr(client.app.state, "auth", auth)
 
     async def fake_create(_sql, values):
         assert values["actor"] == "analysis-admin"
         return {"result": {"findingId": str(uuid.uuid4()), "analysisRevision": 523}}
 
     import uuid
+    csrf = sign_in(client, monkeypatch, "analysis-admin", "ADMIN")
     monkeypatch.setattr(client.app.state.db, "admin_fetch_one", fake_create)
-    csrf = issue_csrf(auth)
-    client.cookies.set("XSRF-TOKEN", csrf, path="/api/v1/admin")
-    response = client.post(path, auth=("analysis-admin", "test-password"), headers={
+    response = client.post(path, headers={
         "X-XSRF-TOKEN": csrf, "Idempotency-Key": str(uuid.uuid4()),
     }, json={
         "metric": "views", "severity": "medium", "explanationCode": "manual_check",
@@ -400,7 +420,7 @@ def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) 
         "/api/v1/admin/publications/{publicationId}/anomaly-signals", method="post")
     assert response.headers["cache-control"] == "no-store"
 
-    missing_csrf = client.post(path, auth=("analysis-admin", "test-password"), headers={
+    missing_csrf = client.post(path, headers={
         "Idempotency-Key": str(uuid.uuid4()),
     }, json={
         "metric": "views", "severity": "medium", "explanationCode": "manual_check",
@@ -413,88 +433,71 @@ def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) 
 @requires_database
 def test_admin_reads_and_background_export(client, validator_for, monkeypatch) -> None:
     import time
-    import bcrypt
-
-    from api.security import AuthConfig
-
-    password_hash = bcrypt.hashpw(b"admin-password", bcrypt.gensalt(rounds=4))
-    monkeypatch.setattr(client.app.state, "auth", AuthConfig({
-        "api-admin": (password_hash, frozenset({"ADMIN"})),
-    }, b"admin-test-secret"))
-    auth = ("api-admin", "admin-password")
 
     unauthorized = client.get("/api/v1/admin/jobs")
     assert_contract_response(unauthorized, validator_for, "/api/v1/admin/jobs", "401")
 
-    csrf_response = client.get("/api/v1/admin/csrf", auth=auth)
+    sign_in(client, monkeypatch, "api-admin", "ADMIN")
+    csrf_response = client.get("/api/v1/admin/csrf")
     csrf = assert_contract_response(csrf_response, validator_for, "/api/v1/admin/csrf")
-    assert "XSRF-TOKEN=" in csrf_response.headers["set-cookie"]
-    session = client.get("/api/v1/admin/catalog/session", auth=auth)
+    session = client.get("/api/v1/admin/catalog/session")
     csrf = assert_contract_response(session, validator_for, "/api/v1/admin/catalog/session")
-    status = client.get("/api/v1/admin/catalog/status", auth=auth)
+    status = client.get("/api/v1/admin/catalog/status")
     assert_contract_response(status, validator_for, "/api/v1/admin/catalog/status")
 
-    institutions = client.get("/api/v1/admin/catalog/institutions?limit=2", auth=auth)
+    institutions = client.get("/api/v1/admin/catalog/institutions?limit=2")
     page = assert_contract_response(
         institutions, validator_for, "/api/v1/admin/catalog/institutions")
     assert page["items"]
     institution_id = page["items"][0]["id"]
     accounts = client.get(
-        f"/api/v1/admin/catalog/institutions/{institution_id}/accounts?limit=2", auth=auth)
+        f"/api/v1/admin/catalog/institutions/{institution_id}/accounts?limit=2")
     account_page = assert_contract_response(
         accounts, validator_for, "/api/v1/admin/catalog/institutions/{id}/accounts")
     if account_page["items"]:
         account_id = account_page["items"][0]["id"]
-        state = client.get(f"/api/v1/admin/platform-accounts/{account_id}", auth=auth)
+        state = client.get(f"/api/v1/admin/platform-accounts/{account_id}")
         assert_contract_response(
             state, validator_for, "/api/v1/admin/platform-accounts/{accountId}")
 
-    jobs = client.get("/api/v1/admin/jobs?limit=2", auth=auth)
+    jobs = client.get("/api/v1/admin/jobs?limit=2")
     jobs_page = assert_contract_response(jobs, validator_for, "/api/v1/admin/jobs")
     if jobs_page["items"]:
         job_id = jobs_page["items"][0]["jobId"]
-        detail = client.get(f"/api/v1/admin/jobs/{job_id}?accountResultLimit=2", auth=auth)
+        detail = client.get(f"/api/v1/admin/jobs/{job_id}?accountResultLimit=2")
         assert_contract_response(detail, validator_for, "/api/v1/admin/jobs/{jobId}")
 
-    created = client.post("/api/v1/admin/exports", auth=auth,
+    created = client.post("/api/v1/admin/exports",
                           headers={"X-XSRF-TOKEN": csrf["token"]}, json={"platform": "rutube"})
     export = assert_contract_response(
         created, validator_for, "/api/v1/admin/exports", "202", "post")
     assert created.headers["location"].endswith(export["id"])
     for _ in range(100):
-        current = client.get(f"/api/v1/admin/exports/{export['id']}", auth=auth)
+        current = client.get(f"/api/v1/admin/exports/{export['id']}")
         export = assert_contract_response(
             current, validator_for, "/api/v1/admin/exports/{id}")
         if export["state"] not in ("queued", "running"):
             break
         time.sleep(0.02)
     assert export["state"] == "succeeded", export
-    download = client.get(f"/api/v1/admin/exports/{export['id']}/download", auth=auth)
+    download = client.get(f"/api/v1/admin/exports/{export['id']}/download")
     assert download.status_code == 200
     assert download.headers["x-dataset-revision"] == str(export["datasetRevision"])
     assert download.content.startswith(b"platform,institution,publication_id,")
-    cancelled = client.delete(f"/api/v1/admin/exports/{export['id']}", auth=auth,
+    cancelled = client.delete(f"/api/v1/admin/exports/{export['id']}",
                               headers={"X-XSRF-TOKEN": csrf["token"]})
     assert_contract_response(cancelled, validator_for, "/api/v1/admin/exports/{id}",
                              method="delete")
 
 
 def test_catalog_command_normalization_and_contract(client, validator_for, monkeypatch) -> None:
-    import bcrypt
     import uuid
 
     from api.routes import admin
-    from api.security import AuthConfig, issue_csrf
 
-    password_hash = bcrypt.hashpw(b"editor-password", bcrypt.gensalt(rounds=4))
-    config = AuthConfig({"api-editor": (password_hash, frozenset({"EDITOR"}))},
-                        b"catalog-test-secret")
-    monkeypatch.setattr(client.app.state, "auth", config)
+    token = sign_in(client, monkeypatch, "api-editor", "EDITOR")
     correlation = uuid.uuid4()
     target = uuid.uuid4()
-    token = issue_csrf(config)
-    client.cookies.clear()
-    client.cookies.set("XSRF-TOKEN", token, path="/api/v1/admin")
 
     async def fake_command(_request, action, command_target, expected, body, actor,
                            supplied_correlation, connection=None):
@@ -509,7 +512,7 @@ def test_catalog_command_normalization_and_contract(client, validator_for, monke
                 "correlationId": str(correlation)}
 
     monkeypatch.setattr(admin, "_catalog_command", fake_command)
-    response = client.post("/api/v1/admin/catalog/accounts", auth=("api-editor", "editor-password"),
+    response = client.post("/api/v1/admin/catalog/accounts",
                            headers={"X-XSRF-TOKEN": token,
                                     "X-Correlation-Id": str(correlation)}, json={
                                "institutionId": str(uuid.uuid4()), "platform": "telegram",
@@ -519,7 +522,6 @@ def test_catalog_command_normalization_and_contract(client, validator_for, monke
                              method="post")
     forbidden = client.delete(
         f"/api/v1/admin/catalog/accounts/{target}?expectedRowVersion=0",
-        auth=("api-editor", "editor-password"),
         headers={"X-XSRF-TOKEN": token, "X-Correlation-Id": str(correlation)})
     assert_contract_response(forbidden, validator_for,
                              "/api/v1/admin/catalog/accounts/{id}", "403", "delete")

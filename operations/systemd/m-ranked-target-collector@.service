@@ -55,6 +55,10 @@ LockPersonality=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Коллектор ходит только к публичным площадкам и к локальной базе: закрываем
+# внутренние диапазоны, чтобы ссылка из каталога не стала каналом к инфраструктуре.
+IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10
+IPAddressDeny=169.254.0.0/16 fe80::/10 fc00::/7
 SystemCallArchitectures=native
 ReadWritePaths=-/var/lib/m-ranked/collectors/%i -/var/lib/m-ranked/identity-receipts/collector/%i
 RuntimeDirectory=m-ranked-collector-%i

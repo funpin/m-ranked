@@ -1,0 +1,9 @@
+# Среда выполнения API. Ничего сверх того, что импортирует пакет api/.
+fastapi==0.141.1
+# Starlette 1.0.1 закрывает CVE-2026-48710 из каталога CISA KEV; FastAPI
+# допускает линию 1.x начиная с 0.131.
+starlette==1.6.0
+uvicorn[standard]==0.40.0
+psycopg[binary,pool]==3.3.5
+httpx==0.28.1
+bcrypt==4.3.0

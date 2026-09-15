@@ -3,9 +3,11 @@ import test from "node:test";
 import {catalogReader,CatalogApiError} from "../lib/catalog-api";
 
 test("private catalog reader forwards only session headers and never caches",async()=>{
-  const reader=catalogReader(new Headers({authorization:"Basic test-session",cookie:"XSRF-TOKEN=csrf",host:"untrusted.example","x-injected":"do not forward"}),async(input,init)=>{
+  const reader=catalogReader(new Headers({authorization:"Basic test-session",cookie:"theme=dark; __Host-mranked-admin=session-token; other=1",host:"untrusted.example","x-injected":"do not forward"}),async(input,init)=>{
     const url=new URL(String(input));assert.equal(url.origin,"https://api.test");assert.equal(init?.cache,"no-store");assert.equal(init?.redirect,"error");
-    const headers=new Headers(init?.headers);assert.equal(headers.get("authorization"),"Basic test-session");assert.equal(headers.get("cookie"),"XSRF-TOKEN=csrf");assert.equal(headers.get("host"),null);assert.equal(headers.get("x-injected"),null);
+    const headers=new Headers(init?.headers);
+    // Наружу уходит только кука сессии: Basic, чужие куки и Host остаются здесь.
+    assert.equal(headers.get("authorization"),null);assert.equal(headers.get("cookie"),"__Host-mranked-admin=session-token");assert.equal(headers.get("host"),null);assert.equal(headers.get("x-injected"),null);
     return Response.json({items:[],nextAfter:null});
   },"https://api.test");
   assert.deepEqual(await reader.institutions(),[]);

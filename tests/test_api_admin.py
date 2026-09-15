@@ -25,7 +25,15 @@ def test_admin_identity_receipt_preserves_database_json(monkeypatch, tmp_path: P
     assert persist_admin_envelope(original) == digest
 
 
+SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+# Политика требует единой стоимости bcrypt, поэтому заглушка тоже в десять раундов.
+HASH = "$2b$10$" + "a"*53
+CSRF_SECRET = "0123456789abcdef0123456789abcdef"
+
+
 def test_admin_auth_rejects_plaintext_or_unknown_roles(monkeypatch) -> None:
+    monkeypatch.setenv("ADMIN_REQUIRE_MFA", "false")
+    monkeypatch.setenv("ADMIN_CSRF_SECRET", CSRF_SECRET)
     monkeypatch.setenv("ADMIN_AUTH_USERS", json.dumps([
         {"username": "admin", "passwordHash": "plaintext", "roles": ["ADMIN"]},
     ]))
@@ -36,6 +44,32 @@ def test_admin_auth_rejects_plaintext_or_unknown_roles(monkeypatch) -> None:
     ]))
     with pytest.raises(ValueError):
         AuthConfig.from_environment()
+
+
+def test_admin_auth_requires_a_second_factor_by_default(monkeypatch) -> None:
+    monkeypatch.setenv("ADMIN_CSRF_SECRET", CSRF_SECRET)
+    without_secret = json.dumps([
+        {"username": "admin", "passwordHash": HASH, "roles": ["ADMIN"]},
+    ])
+    monkeypatch.delenv("ADMIN_REQUIRE_MFA", raising=False)
+    monkeypatch.setenv("ADMIN_AUTH_USERS", without_secret)
+    with pytest.raises(ValueError, match="totpSecret"):
+        AuthConfig.from_environment()
+    monkeypatch.setenv("ADMIN_REQUIRE_MFA", "false")
+    assert AuthConfig.from_environment().users["admin"].totp_secret is None
+    monkeypatch.delenv("ADMIN_REQUIRE_MFA", raising=False)
+    monkeypatch.setenv("ADMIN_AUTH_USERS", json.dumps([
+        {"username": "admin", "passwordHash": HASH, "roles": ["ADMIN"],
+         "totpSecret": SECRET},
+    ]))
+    assert len(AuthConfig.from_environment().users["admin"].totp_secret) >= 16
+    for broken in ("SHORTSECRET", "не base32", "JBSWY3DPEHPK3PX!"):
+        monkeypatch.setenv("ADMIN_AUTH_USERS", json.dumps([
+            {"username": "admin", "passwordHash": HASH, "roles": ["ADMIN"],
+             "totpSecret": broken},
+        ]))
+        with pytest.raises(ValueError):
+            AuthConfig.from_environment()
 
 
 def test_account_reference_normalization() -> None:
@@ -51,6 +85,27 @@ def test_account_reference_normalization() -> None:
     assert vk["url"] == "https://vk.com/public123"
     with pytest.raises(Exception):
         _account_body("max", "file:///etc/passwd", None, None, institution)
+
+
+def test_account_rutube_url_is_confined_to_rutube() -> None:
+    institution = __import__("uuid").uuid4()
+    channel = _account_body("rutube", "https://rutube.ru/channel/123", None, None, institution)
+    assert channel["url"] == "https://rutube.ru/channel/123/"
+    assert channel["externalKey"] == "123"
+    assert _account_body("rutube", "123", None, None,
+                         institution)["url"] == "https://rutube.ru/channel/123/"
+    assert _account_body("rutube", "https://www.rutube.ru/u/studio/", None, None,
+                         institution)["url"] == "https://rutube.ru/u/studio/"
+    for hostile in ("http://rutube.ru/channel/123/", "https://rutube.ru:8080/channel/123/",
+                    "https://127.0.0.1/channel/123/", "https://[::1]/channel/123/",
+                    "https://169.254.169.254/latest/meta-data/",
+                    "https://rutube.ru@127.0.0.1/channel/123/",
+                    "https://rutube.ru.evil.example/channel/123/",
+                    "https://rutube.ru/channel/123/?next=http://127.0.0.1"):
+        with pytest.raises(Exception):
+            _account_body("rutube", hostile, None, None, institution)
+        with pytest.raises(Exception):
+            _account_body("rutube", "123", None, hostile, institution)
 
 
 def test_official_rating_parser_builds_all_five_rankings() -> None:

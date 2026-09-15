@@ -1,0 +1,16 @@
+# Разобранные находки истории. Каждая строка — отпечаток конкретной находки:
+# новый секрет в тех же файлах гейт всё равно остановит.
+#
+# migration/reports/integration-review-20260905-r6/observations.xml — отчёт
+# pytest с ноутбука разработчика. В тексте упавшего теста виден DSN временной
+# интеграционной базы (host=127.0.0.1, dbname=mranked_observations_it_*),
+# созданной на один прогон. Это локальный пароль bootstrap-роли, не
+# production-учётные данные; каталог удалён из рабочего дерева.
+e8d127b4d96b82b5233cbc85a448131c5180c8bb:migration/reports/integration-review-20260905-r6/observations.xml:generic-api-key:1
+e8d127b4d96b82b5233cbc85a448131c5180c8bb:migration/reports/integration-review-20260905-r6/observations.xml:generic-api-key:73
+ca864a95914aeefd6d1b7dc583b071c736096414:migration/reports/integration-review-20260905-r6/observations.xml:generic-api-key:1
+ca864a95914aeefd6d1b7dc583b071c736096414:migration/reports/integration-review-20260905-r6/observations.xml:generic-api-key:73
+8475074f4a41cd9d8e13b623f1c51adf30426c00:migration/reports/integration-review-20260905-r6/observations.xml:generic-api-key:1
+8475074f4a41cd9d8e13b623f1c51adf30426c00:migration/reports/integration-review-20260905-r6/observations.xml:generic-api-key:73
+# report.json — карта SHA-256 файлов ревизии каталога, а не ключ.
+8475074f4a41cd9d8e13b623f1c51adf30426c00:migration/reports/catalog-review-v20-20260905/report.json:generic-api-key:141

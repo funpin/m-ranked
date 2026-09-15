@@ -63,7 +63,10 @@ const themeScript = `(() => {
 })();`;
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const path = (await headers()).get("x-mranked-path") ?? "/";
+  const incoming = await headers();
+  const path = incoming.get("x-mranked-path") ?? "/";
+  // nonce выдаёт прокси на каждый ответ; свой инлайн-скрипт обязан его нести.
+  const nonce = incoming.get("x-nonce") ?? undefined;
   let activePlatform: Platform = path.startsWith("/institutions/") ? "all" : "telegram";
   const identity = /^\/(accounts|publications)\/([0-9a-f-]{36})$/i.exec(path);
   if (identity) {
@@ -74,7 +77,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   }
   return (
     <html lang="ru" data-theme="dark" data-scroll-behavior="smooth" suppressHydrationWarning className={cn(sans.variable, heading.variable)}>
-      <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
+      <head><script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         {/* Набор контуров объявляется раз на страницу: значки ссылаются на
             него вместо того, чтобы возить свои контуры сотнями копий. */}

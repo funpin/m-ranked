@@ -1,19 +1,46 @@
 import { test,expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-function credentials(role:string){return `Basic ${Buffer.from(`${role}:fixture-password`).toString("base64")}`;}
-test("manage challenges anonymous requests before rendering any administrative data",async({request})=>{
-  const response=await request.get("/manage");expect(response.status()).toBe(401);expect(response.headers()["cache-control"]).toBe("no-store");expect(response.headers()["www-authenticate"]).toContain("Basic");
-  expect(await response.json()).toEqual({detail:"Not authenticated"});
+/** Вход идёт настоящей формой: куку ставит фасад, как и в браузере пользователя. */
+async function signIn(page:import("@playwright/test").Page,role:string){
+  await page.goto("/manage");
+  await page.locator('[data-testid="admin-login"] input[name="username"]').fill(role);
+  await page.locator('[data-testid="admin-login"] input[name="password"]').fill("fixture-password");
+  await page.locator('[data-testid="admin-login"] input[name="otp"]').fill("123456");
+  await page.getByRole("button",{name:"Войти"}).click();
+  await expect(page.getByTestId("platform-table")).toBeVisible();
+}
+test("manage shows a sign-in form and no administrative data without a session",async({page})=>{
+  const response=await page.goto("/manage");
+  expect(response?.status()).toBe(200);
+  expect(response?.headers()["cache-control"]).toContain("no-store");
+  await expect(page.getByTestId("admin-login")).toBeVisible();
+  await expect(page.getByTestId("platform-table")).toHaveCount(0);
+  // Пароль и код — разные поля: код не дописывается к паролю.
+  await expect(page.locator('[data-testid="admin-login"] input[name="password"]')).toHaveAttribute("type","password");
+  await expect(page.locator('[data-testid="admin-login"] input[name="otp"]')).toHaveAttribute("inputmode","numeric");
+});
+test("the sign-in form opens a session and the catalog appears",async({page})=>{
+  await page.goto("/manage");
+  await page.locator('[data-testid="admin-login"] input[name="username"]').fill("admin");
+  await page.locator('[data-testid="admin-login"] input[name="password"]').fill("fixture-password");
+  await page.locator('[data-testid="admin-login"] input[name="otp"]').fill("123456");
+  await page.getByRole("button",{name:"Войти"}).click();
+  await expect(page.getByTestId("platform-table")).toBeVisible();
+  await expect(page.getByRole("button",{name:"Выйти"})).toBeVisible();
+  const cookies=await page.context().cookies();
+  const session=cookies.find((cookie)=>cookie.name==="__Host-mranked-admin");
+  expect(session?.httpOnly).toBe(true);expect(session?.secure).toBe(true);expect(session?.sameSite).toBe("Strict");
+  expect(await page.content()).not.toContain("fixture-password");
 });
 for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR catalog and correct capabilities`,async({page})=>{
-  await page.setExtraHTTPHeaders({authorization:credentials(role)});
+  await signIn(page,role);
   const response=await page.goto("/manage");expect(response?.status()).toBe(200);expect(response?.headers()["cache-control"]).toContain("no-store");
   await expect(page.getByRole("heading",{name:"Управление каналами"})).toBeVisible();
   await expect(page.getByTestId('platform-table').locator('tbody tr')).toHaveCount(8);
   await expect(page.locator('[data-testid="institution-create"] input[name="name"]')).toBeEnabled({enabled:role!=="viewer"});
   await expect(page.getByRole("button",{name:"Удалить",exact:true}).first()).toBeEnabled({enabled:role==="admin"});
-  const html=await page.content();expect(html).not.toContain(credentials(role));expect(html).not.toContain("fixture-password");
+  const html=await page.content();expect(html).not.toContain("fixture-password");
   await expect(page.locator('#accountMatrix input[name="telegram"]')).toHaveValue("https://example.test/telegram/1");
   const nativeId=page.getByTestId("native-id-editor").first();
   await nativeId.locator("summary").click();
@@ -37,8 +64,7 @@ for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR
 });
 
 test("catalog deletion requires dialog confirmation and preserves the native payload", async ({ page }) => {
-  await page.setExtraHTTPHeaders({ authorization: credentials("admin") });
-  await page.goto("/manage");
+  await signIn(page, "admin");
   const form = page.locator('form[action$="/delete"]').first();
   const trigger = form.getByRole("button", { name: "Удалить", exact: true });
   const action = await form.getAttribute("action");
@@ -66,10 +92,11 @@ test("catalog deletion requires dialog confirmation and preserves the native pay
 });
 
 test("catalog forms submit with JavaScript disabled", async ({ browser }) => {
-  const context = await browser.newContext({ javaScriptEnabled: false, extraHTTPHeaders: { authorization: credentials("editor") } });
+  const context = await browser.newContext({ javaScriptEnabled: false });
   try {
     const page = await context.newPage();
-    await page.goto("/manage");
+    // Форма входа тоже обычная: без скриптов она отправляется так же.
+    await signIn(page, "editor");
     const form = page.getByTestId("institution-create");
     await form.getByRole("textbox", { name: "Полное название" }).fill("Тестовый университет");
     let posted: URLSearchParams | undefined;
