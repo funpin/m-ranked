@@ -14,6 +14,7 @@ from collector_runtime.config import Settings
 from collector_runtime.max_user_api import MaxUserClient
 from collector_runtime.public_web import (
     PublicChannel,
+    older_page_before,
     parse_exact_subscriber_count,
     parse_public_channel,
     parse_public_page,
@@ -356,6 +357,7 @@ class TelegramPublicWebCollector:
         channel = parse_public_channel(feed_response.text, username)
         if not channel.posts:
             raise ValueError("Telegram public preview returned no posts")
+        channel = await self._with_history(channel, username, feed_response.text)
         comments: dict[int, int | None] = {}
         if self.comments_reader is not None:
             try:
