@@ -1,0 +1,20 @@
+[Unit]
+Description=Поднять сборщик, который завис
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/opt/m-ranked/current/operations/scripts/collector-watchdog.sh
+Environment=TZ=UTC
+NoNewPrivileges=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+UMask=0077
