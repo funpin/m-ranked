@@ -81,7 +81,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
       </RatingFilterForm>
 
       {/* Заголовок и строка периода остаются на месте: меняются только таблицы. */}
-      <NavigationBoundary fallback={<TableSkeleton />}>
+      <NavigationBoundary fallback={<TableSkeleton chrome={false} />}>
       {platform === "telegram"
         ? <TelegramEntityTable query={query} rows={page.entities} offset={page.entityOffset} />
         : <VkEntityTable query={query} rows={page.entities} offset={page.entityOffset} />}

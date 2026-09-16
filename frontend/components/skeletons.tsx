@@ -126,14 +126,16 @@ export function PublicationSkeleton() {
  * график во всю высоту блока. Прежняя заготовка рисовала шесть одинаковых
  * полос и широкий блок под ними — при подмене страница подпрыгивала.
  */
-export function AccountSkeleton() {
+export function AccountSkeleton({ chrome = true }: { chrome?: boolean }) {
   return (
     <div className="grid gap-5" role="status" aria-live="polite">
       <span className="sr-only">Загрузка данных площадки</span>
-      <Skeleton className="mb-1 h-9 w-96 max-w-full" />
-      <div className="flex flex-wrap gap-2">
-        {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-10 w-44" />)}
-      </div>
+      {chrome ? <>
+        <Skeleton className="mb-1 h-9 w-96 max-w-full" />
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-10 w-44" />)}
+        </div>
+      </> : null}
       <div className="bg-card grid gap-4 rounded-xl border p-5 shadow-sm">
         <Skeleton className="h-4 w-full max-w-3xl" />
         <div className="mt-4 grid gap-4 lg:grid-cols-2">

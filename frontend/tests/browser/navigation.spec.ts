@@ -9,6 +9,15 @@ function kept(page: Page) {
   return page.evaluate(() => (window as unknown as { __stamp?: string }).__stamp);
 }
 
+async function delayMatchingNavigation(page: Page, matches: (url: URL) => boolean) {
+  await page.route("**/*", async (route) => {
+    if (matches(new URL(route.request().url()))) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    await route.continue();
+  });
+}
+
 test("переход по меню и открытие карточки не перезагружают документ", async ({ page }, info) => {
   test.skip(info.project.name === "mobile", "меню спрятано за гамбургером; переходы проверяются на широком экране");
   await page.goto("/?platform=telegram");
@@ -78,4 +87,39 @@ test("заготовка при переходе принадлежит той �
   await expect(page.getByRole("searchbox", { name: "Поиск вуза" })).toHaveCount(0);
   await expect(page).toHaveURL(/\/rating/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+});
+
+test("локальные заготовки не дублируют постоянную шапку страницы", async ({ page }) => {
+  await page.goto("/?platform=telegram");
+  await delayMatchingNavigation(page, (url) => ["/", "/rating"].includes(url.pathname) && url.searchParams.get("period") === "7d");
+
+  await page.locator('select[name="period"]').selectOption("7d");
+  await page.getByRole("button", { name: "Применить фильтры" }).click();
+
+  await expect(page.getByText("Загрузка карточек")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+
+  await expect(page).toHaveURL(/period=7d/);
+  await page.goto("/rating?platform=telegram");
+  await page.locator('select[name="period"]').selectOption("7d");
+  await page.getByRole("button", { name: "Применить период" }).click();
+
+  await expect(page.getByText("Загрузка таблицы")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+});
+
+test("локальная заготовка карточки не повторяет название и переключатель", async ({ page }) => {
+  const currentId = "00000001-0000-4000-8000-000000000002";
+  const siblingId = "00000002-0000-4000-8000-000000000001";
+  await page.goto(`/accounts/${currentId}`);
+  await delayMatchingNavigation(page, (url) => url.pathname === `/accounts/${siblingId}`);
+
+  await page.getByRole("navigation", { name: "Площадки вуза" })
+    .getByRole("link", { name: /Канал 1/ }).click();
+
+  const loading = page.locator('[role="status"]').filter({ hasText: "Загрузка данных площадки" });
+  await expect(loading).toBeVisible();
+  await expect(loading.locator(':scope > [data-slot="skeleton"]')).toHaveCount(0);
+  await expect(loading.locator(":scope > .flex")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 });

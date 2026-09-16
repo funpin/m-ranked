@@ -136,7 +136,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
 
       {/* Заготовка стоит только вокруг списка: заголовок и фильтры остаются
           видимыми и рабочими, пока едет новая выборка. */}
-      <NavigationBoundary fallback={<CardGridSkeleton />}>
+      <NavigationBoundary fallback={<CardGridSkeleton chrome={false} />}>
         {platform === "all" ? <CoverageSummary items={items} /> : null}
 
         <section className="reveal grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
