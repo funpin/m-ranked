@@ -308,6 +308,8 @@ class TelegramPublicWebCollector:
             headers={"User-Agent": "Mozilla/5.0 (compatible; m-ranked/target; read-only)"},
         )
         self._owns_client = client is None
+        # Каналы, чью историю уже дочитали в этом процессе.
+        self._history_walked: set[str] = set()
 
     async def _with_history(self, channel: Any, username: str, html: str) -> Any:
         """Дочитать страницы назад, если обход просят вести вглубь.
@@ -321,8 +323,14 @@ class TelegramPublicWebCollector:
         Глубину поднимают разово, чтобы дочитать пропущенное.
         """
         budget = max(1, int(getattr(self.settings, "telegram_history_pages", 1)))
-        if budget == 1:
+        if budget == 1 or username in self._history_walked:
             return channel
+        # Обход идёт один раз на канал за жизнь процесса. Без этого он
+        # повторялся каждые пять минут и съедал весь бюджет цикла: замер на
+        # проде — 5175 запросов истории против трёх замеров постов за двадцать
+        # минут, цикл растянулся с пяти минут до двенадцати, и публикации
+        # старше двух недель переставали измеряться вовсе.
+        self._history_walked.add(username)
         posts = list(channel.posts)
         seen = {post.message_id for post in posts}
         before = older_page_before(html)

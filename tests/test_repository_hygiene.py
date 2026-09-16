@@ -115,3 +115,12 @@ def test_the_repository_root_stays_readable() -> None:
     assert present <= allowed, f"лишнее в корне: {sorted(present - allowed)}"
     assert (ROOT / "requirements.txt").read_text(encoding="utf-8").strip().endswith(
         "-r requirements/dev.txt")
+
+
+def test_anomaly_metrics_migration_cannot_restore_the_removed_revision_barrier() -> None:
+    migration = (ROOT / "db/migrations/0027_anomaly_metrics_live_revision.sql").read_text(
+        encoding="utf-8",
+    )
+    body = migration.split("CREATE OR REPLACE FUNCTION", 1)[1]
+    assert "analytics.latest_dataset_revision()" in body
+    assert "latest_fully_published_dataset_revision()" not in body

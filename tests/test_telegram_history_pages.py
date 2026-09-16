@@ -99,3 +99,26 @@ def test_walk_stops_where_the_channel_ends() -> None:
     result = asyncio.run(collector._with_history(channel, "example", _page("example", [50, 60], 50)))
     assert [post.message_id for post in result.posts] == [10, 20, 30, 40, 50, 60]
     assert len(client.requested) == 2
+
+
+def test_history_is_walked_once_per_channel() -> None:
+    """Повторный обход той же ленты — чистая трата бюджета цикла.
+
+    Пока этого не было, сорок страниц перечитывались каждые пять минут: на
+    проде это 5175 запросов истории против трёх замеров постов за двадцать
+    минут. Цикл растягивался с пяти минут до двенадцати, и публикации старше
+    двух недель переставали измеряться.
+    """
+    collector, client = _collector(10)
+    channel = _channel(client, "example")
+    first_page = _page("example", [50, 60], 50)
+
+    client.requested.clear()
+    asyncio.run(collector._with_history(channel, "example", first_page))
+    walked = len(client.requested)
+    assert walked > 0
+
+    client.requested.clear()
+    again = asyncio.run(collector._with_history(channel, "example", first_page))
+    assert client.requested == []
+    assert [post.message_id for post in again.posts] == [50, 60]

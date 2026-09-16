@@ -490,6 +490,7 @@ def test_admin_reads_and_background_export(client, validator_for, monkeypatch) -
                              method="delete")
 
 
+@requires_database
 def test_catalog_command_normalization_and_contract(client, validator_for, monkeypatch) -> None:
     import uuid
 

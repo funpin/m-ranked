@@ -118,6 +118,25 @@ def test_trigger_exact_replay_correction_and_future_as_of_isolation(databases):
     assert original["id"] != corrected["id"]
 
 
+def test_operational_metrics_follow_the_live_dataset_revision(databases):
+    """The live-read cutover must not leave metrics on the removed barrier."""
+    with psycopg.connect(
+        databases["worker"], autocommit=True, row_factory=dict_row,
+    ) as connection:
+        metrics = connection.execute(
+            "SELECT analytics.anomaly_operational_metrics() AS value"
+        ).fetchone()["value"]
+    if isinstance(metrics, str):
+        metrics = json.loads(metrics)
+    assert {
+        "candidate_backlog",
+        "eligible_backlog",
+        "latest_source_dataset_revision",
+        "source_revision_lag",
+    } <= metrics.keys()
+    assert metrics["source_revision_lag"] >= 0
+
+
 def test_claim_lease_recovery_atomic_publication_retention_and_core_independence(databases):
     with _admin(databases["admin"]) as connection:
         connection.execute("UPDATE ops_and_admin.anomaly_analysis_candidate SET eligible_at=now()-interval '1 second' WHERE publication_id=%s", (PUBLICATION,))
