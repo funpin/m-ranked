@@ -22,9 +22,19 @@ for example `--partition 0/4`.
 
 The database DSN is read only from `COLLECTOR_DATABASE_URL`, with
 `DATABASE_URL` as a fallback, so credentials do not appear in the process list.
-`COLLECTOR_VERSION` and `COLLECTOR_POLL_INTERVAL_SECONDS` are optional. Existing
-platform credentials and `DATA_SOURCE` continue to come from `.env`/`Settings`
-when no credential file is configured.
+`COLLECTOR_VERSION` is optional. Poll intervals are configured per process with
+`COLLECTOR_TELEGRAM_POLL_INTERVAL_SECONDS`,
+`COLLECTOR_VK_POLL_INTERVAL_SECONDS`, `COLLECTOR_MAX_POLL_INTERVAL_SECONDS`, and
+`COLLECTOR_RUTUBE_POLL_INTERVAL_SECONDS`. The legacy common
+`COLLECTOR_POLL_INTERVAL_SECONDS` remains a compatibility fallback for
+Telegram/VK/MAX only; it deliberately cannot shorten Rutube's provider-friendly
+one-hour default. A CLI `--interval-seconds` value has highest precedence.
+Existing platform credentials and `DATA_SOURCE` continue to come from
+`.env`/`Settings` when no credential file is configured.
+
+MAX wraps every PyMax connect/request in `MAX_REQUEST_TIMEOUT_SECONDS` (default
+30 seconds). A timeout closes and invalidates that SDK client so the next cycle
+starts with a fresh connection instead of waiting for the watchdog.
 
 Tracked-publication refresh has two independent bounded controls:
 
@@ -79,6 +89,11 @@ the target runtime does not perform an interactive login.
 - Each account commits its account/publication observations, reaction rows,
   retrievable sanitized evidence, account cursor, dataset revision, and outbox event
   in one PostgreSQL transaction.
+- Publication metadata, identities, latest-snapshot reads, metric snapshots,
+  reaction breakdowns, routine presence probes, lineage metadata and native
+  export rows are set-based per account batch. Batch size no longer multiplies
+  database round trips; PostgreSQL's immutable-observation triggers still
+  serialize correction slots and suppress exact replay.
 - Each changed batch emits `cache.invalidated` with bounded affected tags plus a
   `source.account.updated` domain event. PostgreSQL `NOTIFY` clears in-process
   API caches immediately; their TTL is the fallback for a disconnected listener.

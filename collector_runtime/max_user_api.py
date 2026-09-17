@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import math
 import os
 import re
 from datetime import datetime, timezone
@@ -252,12 +254,16 @@ class MaxUserClient:
         first_name: str | None = None,
         last_name: str | None = None,
         client: Any | None = None,
+        request_timeout_seconds: float = 30.0,
     ) -> None:
         if not phone and client is None:
             raise ValueError("MAX_USER_PHONE is required")
         self.session_path = Path(session_path)
         self.session_path.parent.mkdir(parents=True, exist_ok=True)
         self._connected = False
+        if not math.isfinite(request_timeout_seconds) or request_timeout_seconds <= 0:
+            raise ValueError("MAX request timeout must be positive")
+        self.request_timeout_seconds = float(request_timeout_seconds)
         if client is not None:
             self.client = client
             return
@@ -290,7 +296,8 @@ class MaxUserClient:
     async def connect(self) -> None:
         if self._connected:
             return
-        await self.client.connect()
+        async with asyncio.timeout(self.request_timeout_seconds):
+            await self.client.connect()
         is_connected = getattr(self.client, "is_connected", None)
         if callable(is_connected) and not is_connected():
             raise ConnectionError("MAX client did not establish a session")
@@ -299,15 +306,19 @@ class MaxUserClient:
         self._connected = True
 
     async def _request(self, method: Any, *args: Any, **kwargs: Any) -> Any:
-        await self.connect()
         try:
-            return await method(*args, **kwargs)
+            await self.connect()
+            async with asyncio.timeout(self.request_timeout_seconds):
+                return await method(*args, **kwargs)
+        except asyncio.CancelledError:
+            raise
         except Exception:
             # PyMax.connect() is intentionally one-shot. Mark the wrapper as
             # disconnected so the next polling cycle builds a fresh runtime.
             self._connected = False
             try:
-                await self.client.close()
+                async with asyncio.timeout(min(5.0, self.request_timeout_seconds)):
+                    await self.client.close()
             except Exception:
                 pass
             raise
@@ -316,8 +327,11 @@ class MaxUserClient:
         await self.connect()
 
     async def close(self) -> None:
-        await self.client.close()
-        self._connected = False
+        try:
+            async with asyncio.timeout(min(5.0, self.request_timeout_seconds)):
+                await self.client.close()
+        finally:
+            self._connected = False
 
     @staticmethod
     def _reference_url(reference: str) -> str:

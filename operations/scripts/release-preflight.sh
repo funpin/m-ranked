@@ -41,6 +41,11 @@ if [ -n "$(changed api/security.py api/sessions.py api/config.py)" ]; then
 else
   echo "чтение конфигурации не менялось"
 fi
+collector_config_changes="$(changed collector_runtime/config.py collector_target/__main__.py operations/env)"
+if [ -n "$collector_config_changes" ]; then
+  echo "Менялась конфигурация коллекторов — сверьте collector-common.env, platform env и collector-watchdog.env:"
+  echo "$collector_config_changes"
+fi
 
 section "Конфигурация nginx (нужен nginx -t и reload)"
 nginx_changes="$(changed operations/nginx)"

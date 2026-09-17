@@ -83,6 +83,7 @@ class Settings:
     max_user_first_name: str | None = None
     max_user_last_name: str | None = None
     max_session_path: Path = Path("data/max.session.db")
+    max_request_timeout_seconds: float = 30.0
     rutube_public_api_enabled: bool = True
     rutube_api_base: str = "https://rutube.ru/api"
     # Сколько страниц публичного предпросмотра читать за обход. Единица —
@@ -181,6 +182,9 @@ class Settings:
             ),
             max_session_path=Path(
                 os.getenv("MAX_SESSION_PATH", "data/max.session.db")
+            ),
+            max_request_timeout_seconds=_float(
+                "MAX_REQUEST_TIMEOUT_SECONDS", 30.0,
             ),
             rutube_public_api_enabled=_bool("RUTUBE_PUBLIC_API_ENABLED", True),
             rutube_api_base=(

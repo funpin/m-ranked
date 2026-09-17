@@ -146,6 +146,24 @@ def test_max_user_client_reconnects_after_request_failure(tmp_path):
     assert sdk.connect_calls == 2
 
 
+def test_max_user_client_times_out_and_closes_a_stuck_request(tmp_path):
+    class StuckSdkClient(FakeSdkClient):
+        async def join_channel(self, link):
+            await asyncio.Event().wait()
+
+    sdk = StuckSdkClient()
+    client = MaxUserClient(
+        "", tmp_path / "max.session.db", client=sdk,
+        request_timeout_seconds=0.01,
+    )
+
+    with pytest.raises(TimeoutError):
+        asyncio.run(client.resolve_channel("vuz"))
+
+    assert sdk.closed is True
+    assert client._connected is False
+
+
 def test_model_dict_falls_back_when_pydantic_serializer_is_unresolved():
     class BrokenModel:
         visible = "ignored class attribute"

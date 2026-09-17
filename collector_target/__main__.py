@@ -65,6 +65,35 @@ def _default_interval(platform: Platform, settings: Settings) -> int:
     return minutes * 60
 
 
+def _poll_interval_seconds(
+    platform: Platform,
+    settings: Settings,
+    cli_override: int | None = None,
+) -> int:
+    """Resolve a platform interval without letting a legacy global override Rutube.
+
+    ``COLLECTOR_POLL_INTERVAL_SECONDS`` predates the isolated platform units and
+    is retained for the three five-minute collectors. Rutube has a deliberately
+    slower provider policy, so changing it now requires the explicit platform
+    variable (or the CLI flag) instead of an accidental value in common.env.
+    """
+    def positive(value: int, source: str) -> int:
+        if value <= 0:
+            raise ValueError(f"{source} must be a positive integer")
+        return value
+
+    if cli_override is not None:
+        return positive(cli_override, "--interval-seconds")
+    specific_name = f"COLLECTOR_{platform.value.upper()}_POLL_INTERVAL_SECONDS"
+    specific = os.getenv(specific_name, "").strip()
+    if specific:
+        return positive(int(specific), specific_name)
+    legacy = os.getenv("COLLECTOR_POLL_INTERVAL_SECONDS", "").strip()
+    if legacy and platform != Platform.RUTUBE:
+        return positive(int(legacy), "COLLECTOR_POLL_INTERVAL_SECONDS")
+    return positive(_default_interval(platform, settings), "platform default interval")
+
+
 def next_delay(elapsed_seconds: float, interval_seconds: int) -> float:
     """Сколько ещё ждать до начала следующего слота.
 
@@ -142,9 +171,9 @@ async def _run(args: argparse.Namespace) -> int:
         if not dsn:
             logger.error("collector startup failed code=MissingDatabaseUrl")
             return 2
-        interval_seconds = args.interval_seconds or int(
-            os.getenv("COLLECTOR_POLL_INTERVAL_SECONDS", "0") or 0
-        ) or _default_interval(platform, settings)
+        interval_seconds = _poll_interval_seconds(
+            platform, settings, args.interval_seconds,
+        )
         account_concurrency = args.account_concurrency or _default_concurrency(
             platform, settings,
         )

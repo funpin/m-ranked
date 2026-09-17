@@ -670,12 +670,12 @@ class PostgresCollectorRepository:
         deletion_probe_count = 0
         changed = False
         identity_receipt = None
-        metric_evidence_ids = {
-            publication.id: self._metric_evidence_id(
+        metric_evidence_ids = tuple(
+            self._metric_evidence_id(
                 self._metric_evidence(publication.snapshot)
             )
             for publication in batch.publications
-        }
+        )
         with self._connection() as connection, connection.transaction():
             for published_month in sorted({
                 publication.snapshot.published_month
@@ -709,10 +709,15 @@ class PostgresCollectorRepository:
                     }
                     identity_receipt = IdentityEvidenceStore(configured_root()/"collector"/batch.context.platform.value).put(receipt)
 
+            publication_results = self._persist_publications(
+                connection, batch, metric_evidence_ids,
+            )
             persisted_ids = {}
-            for publication in batch.publications:
-                publication_id, discovered, snapshot, publication_changed = self._persist_publication(
-                    connection, batch, publication, metric_evidence_ids[publication.id],
+            for publication, publication_result in zip(
+                batch.publications, publication_results, strict=True,
+            ):
+                publication_id, discovered, snapshot, publication_changed = (
+                    publication_result
                 )
                 persisted_ids[publication.id] = publication_id
                 discovered_count += int(discovered)
@@ -729,21 +734,31 @@ class PostgresCollectorRepository:
                 for probe in batch.deletion_probes
             )
             explicit_probe_ids = {probe.publication_id for probe in explicit_probes}
-            presence_probes = tuple(
-                CanonicalDeletionProbe(
+            presence_by_id: dict[UUID, CanonicalDeletionProbe] = {}
+            for publication in batch.publications:
+                publication_id = persisted_ids[publication.id]
+                if (
+                    publication_id in explicit_probe_ids
+                    or publication.snapshot.synthetic
+                ):
+                    continue
+                candidate = CanonicalDeletionProbe(
                     persisted_ids[publication.id],
                     publication.snapshot.observed_at,
                     DeletionProbeOutcome.PRESENT,
                     f"{batch.context.platform.value}_publication_observed",
                     2,
                 )
-                for publication in batch.publications
-                if (
-                    persisted_ids[publication.id] not in explicit_probe_ids
-                    and not publication.snapshot.synthetic
-                )
+                previous = presence_by_id.get(publication_id)
+                if previous is None or previous.observed_at < candidate.observed_at:
+                    presence_by_id[publication_id] = candidate
+            presence_probes = tuple(presence_by_id.values())
+            presence_changes = self._persist_presence_probes(
+                connection, batch, presence_probes,
             )
-            for probe in (*presence_probes, *explicit_probes):
+            deletion_probe_count += presence_changes
+            changed = changed or presence_changes > 0
+            for probe in explicit_probes:
                 probe_changed = self._persist_deletion_probe(
                     connection, batch, probe,
                 )
@@ -1006,53 +1021,113 @@ class PostgresCollectorRepository:
                 changed = True
         return changed
 
-    def _persist_publication(
+    def _persist_publications(
         self,
         connection: Any,
         batch: CanonicalAccountBatch,
-        publication: CanonicalPublication,
-        metric_evidence_id: int,
-    ) -> tuple[UUID, bool, bool, bool]:
-        if publication.account_id != batch.account.id:
+        metric_evidence_ids: Sequence[int],
+    ) -> tuple[tuple[UUID, bool, bool, bool], ...]:
+        publications = batch.publications
+        if not publications:
+            return ()
+        if any(item.account_id != batch.account.id for item in publications):
             raise ValueError("publication account does not match batch account")
-        lock_name = f"publication:{batch.account.id}:{publication.external_id}"
-        connection.execute(
-            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-            (lock_name,),
-        )
-        identity_row = connection.execute(
-            """SELECT publication_id
-                 FROM ingest.publication_identity
-                WHERE platform_account_id=%s AND external_id=%s""",
-            (batch.account.id, publication.external_id),
-        ).fetchone()
-        known = identity_row is not None
-        publication_id = (
-            _row_value(identity_row, "publication_id", 0)
-            if identity_row is not None else publication.id
-        )
+        external_ids = list(dict.fromkeys(
+            item.external_id for item in publications
+        ))
 
-        if publication.content_group_id is not None:
+        # A stable order prevents two overlapping account batches from taking
+        # the same advisory locks in opposite order.
+        lock_names = sorted(
+            f"publication:{batch.account.id}:{external_id}"
+            for external_id in external_ids
+        )
+        connection.execute(
+            """SELECT pg_advisory_xact_lock(hashtextextended(lock_name, 0))
+                 FROM unnest(%s::text[]) AS locks(lock_name)
+                ORDER BY lock_name""",
+            (lock_names,),
+        )
+        identity_rows = connection.execute(
+            """SELECT external_id, publication_id
+                 FROM ingest.publication_identity
+                WHERE platform_account_id=%s AND external_id=ANY(%s::text[])""",
+            (batch.account.id, external_ids),
+        ).fetchall()
+        existing_ids = {
+            str(_row_value(row, "external_id", 0)):
+                _row_value(row, "publication_id", 1)
+            for row in identity_rows
+        }
+        resolved_ids = {
+            item.id: existing_ids.get(item.external_id, item.id)
+            for item in publications
+        }
+
+        content_groups = [
+            {
+                "id": item.content_group_id,
+                "group_type": f"{batch.context.platform.value}_logical_group",
+            }
+            for item in publications
+            if item.content_group_id is not None
+        ]
+        if content_groups:
             connection.execute(
                 """INSERT INTO ingest.content_group(id, group_type)
-                   VALUES (%s,%s) ON CONFLICT (id) DO NOTHING""",
-                (
-                    publication.content_group_id,
-                    f"{batch.context.platform.value}_logical_group",
-                ),
+                   SELECT item.id, item.group_type
+                     FROM jsonb_to_recordset(%s::jsonb)
+                       AS item(id uuid, group_type text)
+                   ON CONFLICT (id) DO NOTHING""",
+                (_json(content_groups),),
             )
 
-        first_age = max(
-            0,
-            int((publication.discovered_at - publication.published_at).total_seconds()),
-        )
-        changed_row = connection.execute(
-            """INSERT INTO ingest.publication AS current(
+        publication_by_resolved_id: dict[UUID, CanonicalPublication] = {}
+        for item in publications:
+            publication_by_resolved_id.setdefault(resolved_ids[item.id], item)
+        publication_input = [
+            {
+                "source_id": item.id,
+                "id": publication_id,
+                "primary_account_id": batch.account.id,
+                "content_group_id": item.content_group_id,
+                "published_at": item.published_at,
+                "discovered_at": item.discovered_at,
+                "first_observation_age_seconds": max(
+                    0,
+                    int((item.discovered_at - item.published_at).total_seconds()),
+                ),
+                "publication_type": item.publication_type,
+                "is_repost": item.is_repost,
+                "history_completeness": item.history_completeness.value,
+                "synthetic_baseline_allowed": item.synthetic_baseline_allowed,
+                "quality_flags": item.quality_flags,
+            }
+            for publication_id, item in publication_by_resolved_id.items()
+        ]
+        changed_rows = connection.execute(
+            """WITH input AS (
+                   SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
+                       source_id uuid, id uuid, primary_account_id uuid,
+                       content_group_id uuid, published_at timestamptz,
+                       discovered_at timestamptz,
+                       first_observation_age_seconds integer,
+                       publication_type text, is_repost boolean,
+                       history_completeness text,
+                       synthetic_baseline_allowed boolean, quality_flags jsonb
+                   )
+               )
+               INSERT INTO ingest.publication AS current(
                    id, primary_account_id, content_group_id, published_at,
                    discovered_at, first_observation_age_seconds, publication_type,
                    is_repost, history_completeness, synthetic_baseline_allowed,
                    quality_flags
-               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
+               ) SELECT id, primary_account_id, content_group_id, published_at,
+                        discovered_at, first_observation_age_seconds,
+                        publication_type, is_repost,
+                        history_completeness::ingest.history_completeness,
+                        synthetic_baseline_allowed, quality_flags
+                   FROM input
                ON CONFLICT (id) DO UPDATE SET
                    content_group_id=COALESCE(excluded.content_group_id, current.content_group_id),
                    published_at=excluded.published_at,
@@ -1124,29 +1199,45 @@ class PostgresCollectorRepository:
                        NULL::timestamptz
                    )
                RETURNING id""",
-            (
-                publication_id,
-                batch.account.id,
-                publication.content_group_id,
-                publication.published_at,
-                publication.discovered_at,
-                first_age,
-                publication.publication_type,
-                publication.is_repost,
-                publication.history_completeness.value,
-                publication.synthetic_baseline_allowed,
-                _json(publication.quality_flags),
-            ),
-        ).fetchone()
-        publication_changed = changed_row is not None
+            (_json(publication_input),),
+        ).fetchall()
+        publication_changed_ids = {
+            _row_value(row, "id", 0) for row in changed_rows
+        }
 
-        identity_changed = False
-        for identity in publication.identities:
-            identity_result = connection.execute(
-                """INSERT INTO ingest.publication_identity(
+        identities_by_external_id: dict[str, dict[str, Any]] = {}
+        for item in publications:
+            publication_id = resolved_ids[item.id]
+            for identity in item.identities:
+                candidate = {
+                    "publication_id": publication_id,
+                    "platform_account_id": batch.account.id,
+                    "external_id": identity.external_id,
+                    "source_external_id": identity.source_external_id,
+                    "role": identity.role.value,
+                    "public_url": identity.public_url,
+                }
+                previous = identities_by_external_id.setdefault(
+                    identity.external_id, candidate,
+                )
+                if previous["publication_id"] != publication_id:
+                    raise RuntimeError("publication identity conflict within batch")
+        identity_input = list(identities_by_external_id.values())
+        identity_changed_rows = connection.execute(
+                """WITH input AS (
+                       SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
+                           publication_id uuid, platform_account_id uuid,
+                           external_id text, source_external_id text,
+                           role text, public_url text
+                       )
+                   )
+                   INSERT INTO ingest.publication_identity(
                        publication_id, platform_account_id, external_id,
                        source_external_id, role, public_url
-                   ) VALUES (%s,%s,%s,%s,%s,%s)
+                   ) SELECT publication_id, platform_account_id, external_id,
+                            source_external_id,
+                            role::ingest.publication_account_role, public_url
+                       FROM input
                    ON CONFLICT (platform_account_id, external_id) DO UPDATE SET
                        source_external_id=COALESCE(
                            excluded.source_external_id,
@@ -1174,128 +1265,428 @@ class PostgresCollectorRepository:
                          )
                      )
                    RETURNING publication_id""",
-                (
-                    publication_id,
-                    batch.account.id,
-                    identity.external_id,
-                    identity.source_external_id,
-                    identity.role.value,
-                    identity.public_url,
-                ),
-            ).fetchone()
-            if identity_result is None:
-                mapped = connection.execute(
-                    """SELECT publication_id
-                         FROM ingest.publication_identity
-                        WHERE platform_account_id=%s AND external_id=%s""",
-                    (batch.account.id, identity.external_id),
-                ).fetchone()
-                if (
-                    mapped is None
-                    or _row_value(mapped, "publication_id", 0) != publication_id
-                ):
-                    raise RuntimeError("publication identity conflict")
-            else:
-                identity_changed = True
+                (_json(identity_input),),
+            ).fetchall()
+        identity_changed_ids = {
+            _row_value(row, "publication_id", 0)
+            for row in identity_changed_rows
+        }
+        identity_conflicts = connection.execute(
+            """WITH input AS (
+                   SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
+                       publication_id uuid, platform_account_id uuid,
+                       external_id text
+                   )
+               )
+               SELECT input.external_id, identity.publication_id
+                 FROM input
+                 LEFT JOIN ingest.publication_identity AS identity
+                   ON identity.platform_account_id=input.platform_account_id
+                  AND identity.external_id=input.external_id
+                WHERE identity.publication_id IS DISTINCT FROM input.publication_id""",
+            (_json(identity_input),),
+        ).fetchall()
+        if identity_conflicts:
+            raise RuntimeError("publication identity conflict")
 
-        snapshot = publication.snapshot
-        latest_state = connection.execute(
-            """SELECT semantic_fingerprint, observed_at
-                FROM ingest.publication_metric_snapshot_active
-                WHERE publication_id=%s
-                  AND published_month=%s
-                  AND synthetic=%s
-                ORDER BY observed_at DESC, id DESC
-                LIMIT 1""",
-            (publication_id, snapshot.published_month, snapshot.synthetic),
-        ).fetchone()
-        unchanged = (
-            latest_state is not None
-            and _row_value(latest_state, "semantic_fingerprint", 0) is not None
-            and bytes(_row_value(latest_state, "semantic_fingerprint", 0))
-                == snapshot.semantic_fingerprint
-        )
-        heartbeat_due = (
-            latest_state is None
-            or snapshot.observed_at - utc(
-                _row_value(latest_state, "observed_at", 1),
-                "snapshot.observed_at",
-            ) >= self.snapshot_heartbeat
-        )
-        if unchanged and not heartbeat_due:
-            return (
-                publication_id,
-                not known,
-                False,
-                publication_changed or identity_changed,
+        snapshot_keys = list(dict.fromkeys(
+            (
+                resolved_ids[item.id],
+                item.snapshot.published_month,
+                item.snapshot.synthetic,
             )
-        snapshot_row = connection.execute(
-            """INSERT INTO ingest.publication_metric_snapshot(
+            for item in publications
+        ))
+        snapshot_key_input = [
+            {
+                "publication_id": publication_id,
+                "published_month": published_month,
+                "synthetic": synthetic,
+            }
+            for publication_id, published_month, synthetic in snapshot_keys
+        ]
+        latest_rows = connection.execute(
+            """WITH input AS (
+                   SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
+                       publication_id uuid, published_month date, synthetic boolean
+                   )
+               )
+               SELECT input.publication_id, input.published_month,
+                      input.synthetic, latest.semantic_fingerprint,
+                      latest.observed_at
+                 FROM input
+                 LEFT JOIN LATERAL (
+                     SELECT snapshot.semantic_fingerprint, snapshot.observed_at
+                       FROM ingest.publication_metric_snapshot_active AS snapshot
+                      WHERE snapshot.publication_id=input.publication_id
+                        AND snapshot.published_month=input.published_month
+                        AND snapshot.synthetic=input.synthetic
+                      ORDER BY snapshot.observed_at DESC, snapshot.id DESC
+                      LIMIT 1
+                 ) AS latest ON true""",
+            (_json(snapshot_key_input),),
+        ).fetchall()
+        latest_by_id = {
+            (
+                _row_value(row, "publication_id", 0),
+                _row_value(row, "published_month", 1),
+                bool(_row_value(row, "synthetic", 2)),
+            ): row for row in latest_rows
+        }
+        snapshots_to_insert = []
+        snapshots_by_key: dict[tuple[Any, ...], CanonicalPublication] = {}
+        virtual_latest = {
+            group: (
+                _row_value(row, "semantic_fingerprint", 3),
+                _row_value(row, "observed_at", 4),
+            )
+            for group, row in latest_by_id.items()
+        }
+        for item_index, item in enumerate(publications):
+            publication_id = resolved_ids[item.id]
+            snapshot = item.snapshot
+            snapshot_group = (
+                publication_id, snapshot.published_month, snapshot.synthetic,
+            )
+            latest_fingerprint, latest_observed_at = virtual_latest.get(
+                snapshot_group, (None, None),
+            )
+            unchanged = (
+                latest_fingerprint is not None
+                and bytes(latest_fingerprint) == snapshot.semantic_fingerprint
+            )
+            heartbeat_due = (
+                latest_observed_at is None
+                or snapshot.observed_at - utc(
+                    latest_observed_at, "snapshot.observed_at",
+                ) >= self.snapshot_heartbeat
+            )
+            if unchanged and not heartbeat_due:
+                continue
+            snapshot_input = {
+                "published_month": snapshot.published_month,
+                "publication_id": publication_id,
+                "collection_run_id": batch.context.run_id,
+                "observed_at": snapshot.observed_at,
+                "collected_at": snapshot.collected_at,
+                "age_seconds": snapshot.age_seconds,
+                "sampling_bucket": snapshot.sampling_bucket,
+                "views_count": snapshot.views_count,
+                "reactions_count": snapshot.reactions_count,
+                "comments_count": snapshot.comments_count,
+                "shares_count": snapshot.shares_count,
+                "quality": snapshot.quality.value,
+                "interval_uncertain": snapshot.interval_uncertain,
+                "synthetic": snapshot.synthetic,
+                "source_fingerprint": snapshot.source_fingerprint,
+                "semantic_fingerprint": snapshot.semantic_fingerprint.hex(),
+                "views_quality": snapshot.metric_quality["views"].value,
+                "reactions_quality": snapshot.metric_quality["reactions"].value,
+                "comments_quality": snapshot.metric_quality["comments"].value,
+                "shares_quality": snapshot.metric_quality["shares"].value,
+                "metric_evidence_id": metric_evidence_ids[item_index],
+            }
+            snapshots_to_insert.append(snapshot_input)
+            snapshots_by_key[
+                (
+                    publication_id, snapshot.published_month,
+                    snapshot.synthetic, snapshot.sampling_bucket,
+                    snapshot.source_fingerprint,
+                )
+            ] = item
+            virtual_latest[snapshot_group] = (
+                snapshot.semantic_fingerprint, snapshot.observed_at,
+            )
+
+        inserted_snapshots: dict[tuple[Any, ...], tuple[Any, int]] = {}
+        if snapshots_to_insert:
+            snapshot_rows = connection.execute(
+                """WITH input AS (
+                       SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
+                           published_month date, publication_id uuid,
+                           collection_run_id uuid, observed_at timestamptz,
+                           collected_at timestamptz, age_seconds integer,
+                           sampling_bucket bigint, views_count bigint,
+                           reactions_count bigint, comments_count bigint,
+                           shares_count bigint, quality text,
+                           interval_uncertain boolean, synthetic boolean,
+                           source_fingerprint text, semantic_fingerprint text,
+                           views_quality text, reactions_quality text,
+                           comments_quality text, shares_quality text,
+                           metric_evidence_id integer
+                       )
+                   )
+                   INSERT INTO ingest.publication_metric_snapshot(
                    published_month, publication_id, collection_run_id, observed_at,
                    collected_at, age_seconds, sampling_bucket, views_count, reactions_count,
                    comments_count, shares_count, quality, interval_uncertain,
                    synthetic, metric_semantics_version, capability_version,
                    source_fingerprint, semantic_fingerprint, views_quality, reactions_quality, comments_quality, shares_quality, metric_evidence, metric_evidence_id
-               ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,1,%s,%s,%s,%s,%s,%s,NULL,%s)
+                   ) SELECT published_month, publication_id, collection_run_id,
+                            observed_at, collected_at, age_seconds, sampling_bucket,
+                            views_count, reactions_count, comments_count, shares_count,
+                            quality::ingest.observation_quality, interval_uncertain,
+                            synthetic, 1, 1, source_fingerprint,
+                            decode(semantic_fingerprint, 'hex'),
+                            views_quality::ingest.observation_quality,
+                            reactions_quality::ingest.observation_quality,
+                            comments_quality::ingest.observation_quality,
+                            shares_quality::ingest.observation_quality, NULL,
+                            metric_evidence_id
+                       FROM input
+                   RETURNING publication_id, published_month, synthetic,
+                             sampling_bucket, source_fingerprint, id""",
+                (_json(snapshots_to_insert),),
+            ).fetchall()
+            inserted_snapshots = {
+                (
+                    _row_value(row, "publication_id", 0),
+                    _row_value(row, "published_month", 1),
+                    bool(_row_value(row, "synthetic", 2)),
+                    int(_row_value(row, "sampling_bucket", 3)),
+                    str(_row_value(row, "source_fingerprint", 4)),
+                ): (
+                    _row_value(row, "published_month", 1),
+                    int(_row_value(row, "id", 5)),
+                )
+                for row in snapshot_rows
+            }
 
-               RETURNING id""",
-            (
-                snapshot.published_month,
-                publication_id,
-                batch.context.run_id,
-                snapshot.observed_at,
-                snapshot.collected_at,
-                snapshot.age_seconds,
-                snapshot.sampling_bucket,
-                snapshot.views_count,
-                snapshot.reactions_count,
-                snapshot.comments_count,
-                snapshot.shares_count,
-                snapshot.quality.value,
-                snapshot.interval_uncertain,
-                snapshot.synthetic,
-                snapshot.source_fingerprint,
-                snapshot.semantic_fingerprint,
-                *(snapshot.metric_quality[metric].value for metric in ("views", "reactions", "comments", "shares")),
-                metric_evidence_id,
-            ),
-        ).fetchone()
-        snapshot_inserted = snapshot_row is not None
-        if snapshot_row is not None:
-            snapshot_id = _row_value(snapshot_row, "id", 0)
-            for reaction_key, reaction_count in snapshot.reaction_breakdown.items():
-                connection.execute(
-                    """INSERT INTO ingest.reaction_breakdown(
+        reaction_input = [
+            {
+                "snapshot_published_month": month,
+                "snapshot_id": snapshot_id,
+                "reaction_key": reaction_key,
+                "reaction_count": reaction_count,
+            }
+            for snapshot_key, (month, snapshot_id) in inserted_snapshots.items()
+            for reaction_key, reaction_count in
+                snapshots_by_key[snapshot_key].snapshot.reaction_breakdown.items()
+        ]
+        if reaction_input:
+            connection.execute(
+                """INSERT INTO ingest.reaction_breakdown(
                            snapshot_published_month, snapshot_id,
                            reaction_key, reaction_count
-                       ) VALUES (%s,%s,%s,%s)
+                       ) SELECT item.snapshot_published_month, item.snapshot_id,
+                                item.reaction_key, item.reaction_count
+                           FROM jsonb_to_recordset(%s::jsonb) AS item(
+                               snapshot_published_month date, snapshot_id bigint,
+                               reaction_key text, reaction_count bigint
+                           )
                        ON CONFLICT DO NOTHING""",
-                    (
-                        snapshot.published_month,
-                        snapshot_id,
-                        reaction_key,
-                        reaction_count,
-                    ),
-                )
-        if snapshot_inserted or publication_changed:
-            self._persist_lineage(
-                connection,
-                batch.context.run_id,
-                "publication",
-                publication_id,
-                snapshot.collected_at,
-                snapshot.source_fingerprint,
-                snapshot.sanitized_source,
+                (_json(reaction_input),),
             )
-        if snapshot_inserted:
-            from .legacy_csv import persist_native_csv
-            persist_native_csv(connection,publication_id,snapshot.published_month,snapshot_id,snapshot.sanitized_source)
-        return (
-            publication_id,
-            not known,
-            snapshot_inserted,
-            publication_changed or identity_changed or snapshot_inserted,
+
+        lineage_items = []
+        lineage_keys: set[tuple[UUID, str]] = set()
+        for item in publications:
+            publication_id = resolved_ids[item.id]
+            snapshot_key = (
+                publication_id, item.snapshot.published_month,
+                item.snapshot.synthetic, item.snapshot.sampling_bucket,
+                item.snapshot.source_fingerprint,
+            )
+            lineage_key = (publication_id, item.snapshot.source_fingerprint)
+            if (
+                snapshot_key in inserted_snapshots
+                or publication_id in publication_changed_ids
+            ) and lineage_key not in lineage_keys:
+                lineage_items.append((
+                    "publication", publication_id,
+                    item.snapshot.collected_at,
+                    item.snapshot.source_fingerprint,
+                    item.snapshot.sanitized_source,
+                ))
+                lineage_keys.add(lineage_key)
+        self._persist_lineages(
+            connection, batch.context.run_id, lineage_items,
         )
+        if inserted_snapshots:
+            from .legacy_csv import persist_native_csv_batch
+            persist_native_csv_batch(connection, [
+                (
+                    snapshot_key[0],
+                    month,
+                    snapshot_id,
+                    snapshots_by_key[snapshot_key].snapshot.sanitized_source,
+                )
+                for snapshot_key, (month, snapshot_id)
+                in inserted_snapshots.items()
+            ])
+
+        discovered_ids: set[UUID] = set()
+        results = []
+        for item in publications:
+            publication_id = resolved_ids[item.id]
+            snapshot_key = (
+                publication_id, item.snapshot.published_month,
+                item.snapshot.synthetic, item.snapshot.sampling_bucket,
+                item.snapshot.source_fingerprint,
+            )
+            discovered = (
+                item.external_id not in existing_ids
+                and publication_id not in discovered_ids
+            )
+            if discovered:
+                discovered_ids.add(publication_id)
+            snapshot_inserted = snapshot_key in inserted_snapshots
+            results.append((
+                publication_id,
+                discovered,
+                snapshot_inserted,
+                publication_id in publication_changed_ids
+                    or publication_id in identity_changed_ids
+                    or snapshot_inserted,
+            ))
+        return tuple(results)
+
+    def _persist_presence_probes(
+        self,
+        connection: Any,
+        batch: CanonicalAccountBatch,
+        probes: Sequence[CanonicalDeletionProbe],
+    ) -> int:
+        """Persist routine positive observations with a bounded SQL round trip count."""
+        if not probes:
+            return 0
+        probe_by_id = {probe.publication_id: probe for probe in probes}
+        if len(probe_by_id) != len(probes):
+            raise ValueError("only one presence probe per publication is allowed")
+        rows = connection.execute(
+            """SELECT publication.id, publication.deleted_at,
+                      state.status::text AS status,
+                      state.last_probe_outcome::text AS last_probe_outcome,
+                      state.last_checked_at, state.last_present_at,
+                      state.first_missing_at, state.consecutive_missing,
+                      state.reason_code, state.last_collection_run_id
+                 FROM ingest.publication AS publication
+                 LEFT JOIN ingest.publication_availability_state AS state
+                   ON state.publication_id=publication.id
+                WHERE publication.primary_account_id=%s
+                  AND publication.id=ANY(%s::uuid[])
+                FOR UPDATE OF publication""",
+            (batch.account.id, list(probe_by_id)),
+        ).fetchall()
+        if len(rows) != len(probes):
+            raise RuntimeError("deletion probe publication is not owned by account")
+
+        states = []
+        events = []
+        reset_ids = []
+        for row in rows:
+            publication_id = _row_value(row, "id", 0)
+            probe = probe_by_id[publication_id]
+            prior_status = _row_value(row, "status", 2)
+            prior_checked = _row_value(row, "last_checked_at", 4)
+            prior_run = _row_value(row, "last_collection_run_id", 9)
+            if prior_checked is not None:
+                checked = utc(prior_checked, "availability.last_checked_at")
+                if (
+                    prior_run == batch.context.run_id
+                    and checked == probe.observed_at
+                ) or probe.observed_at <= checked:
+                    continue
+            old_status = (
+                DeletionProbeOutcome(prior_status)
+                if prior_status is not None else (
+                    DeletionProbeOutcome.CONFIRMED_DELETED
+                    if _row_value(row, "deleted_at", 1) is not None
+                    else DeletionProbeOutcome.PRESENT
+                )
+            )
+            previous_outcome = _row_value(row, "last_probe_outcome", 3)
+            previous_reason = _row_value(row, "reason_code", 8)
+            states.append({
+                "publication_id": publication_id,
+                "status": DeletionProbeOutcome.PRESENT.value,
+                "last_probe_outcome": DeletionProbeOutcome.PRESENT.value,
+                "last_checked_at": probe.observed_at,
+                "last_present_at": probe.observed_at,
+                "reason_code": probe.reason_code,
+                "last_collection_run_id": batch.context.run_id,
+            })
+            if (
+                prior_status is None
+                or old_status != DeletionProbeOutcome.PRESENT
+                or previous_outcome != DeletionProbeOutcome.PRESENT.value
+                or previous_reason != probe.reason_code
+            ):
+                events.append({
+                    "publication_id": publication_id,
+                    "collection_run_id": batch.context.run_id,
+                    "observed_at": probe.observed_at,
+                    "old_status": old_status.value if prior_status is not None else None,
+                    "new_status": DeletionProbeOutcome.PRESENT.value,
+                    "probe_outcome": DeletionProbeOutcome.PRESENT.value,
+                    "reason_code": probe.reason_code,
+                    "consecutive_missing": 0,
+                })
+            if _row_value(row, "deleted_at", 1) is not None:
+                reset_ids.append(publication_id)
+        if not states:
+            return 0
+
+        connection.execute(
+            """INSERT INTO ingest.publication_availability_state(
+                   publication_id, status, last_probe_outcome, last_checked_at,
+                   last_present_at, first_missing_at, consecutive_missing,
+                   reason_code, last_collection_run_id
+               ) SELECT item.publication_id,
+                        item.status::ingest.deletion_probe_outcome,
+                        item.last_probe_outcome::ingest.deletion_probe_outcome,
+                        item.last_checked_at, item.last_present_at, NULL, 0,
+                        item.reason_code, item.last_collection_run_id
+                   FROM jsonb_to_recordset(%s::jsonb) AS item(
+                       publication_id uuid, status text,
+                       last_probe_outcome text, last_checked_at timestamptz,
+                       last_present_at timestamptz, reason_code text,
+                       last_collection_run_id uuid
+                   )
+               ON CONFLICT (publication_id) DO UPDATE SET
+                   status=excluded.status,
+                   last_probe_outcome=excluded.last_probe_outcome,
+                   last_checked_at=excluded.last_checked_at,
+                   last_present_at=excluded.last_present_at,
+                   first_missing_at=NULL,
+                   consecutive_missing=0,
+                   reason_code=excluded.reason_code,
+                   last_collection_run_id=excluded.last_collection_run_id,
+                   updated_at=transaction_timestamp()""",
+            (_json(states),),
+        )
+        inserted_count = 0
+        if events:
+            inserted_rows = connection.execute(
+                """INSERT INTO ingest.publication_availability_event(
+                       publication_id, collection_run_id, observed_at,
+                       old_status, new_status, probe_outcome, reason_code,
+                       consecutive_missing
+                   ) SELECT item.publication_id, item.collection_run_id,
+                            item.observed_at,
+                            item.old_status::ingest.deletion_probe_outcome,
+                            item.new_status::ingest.deletion_probe_outcome,
+                            item.probe_outcome::ingest.deletion_probe_outcome,
+                            item.reason_code, item.consecutive_missing
+                       FROM jsonb_to_recordset(%s::jsonb) AS item(
+                           publication_id uuid, collection_run_id uuid,
+                           observed_at timestamptz, old_status text,
+                           new_status text, probe_outcome text,
+                           reason_code text, consecutive_missing integer
+                       )
+                   ON CONFLICT (publication_id, collection_run_id, observed_at)
+                   DO NOTHING
+                   RETURNING publication_id""",
+                (_json(events),),
+            ).fetchall()
+            inserted_count = len(inserted_rows)
+        if reset_ids:
+            connection.execute(
+                """UPDATE ingest.publication SET deleted_at=NULL
+                    WHERE id=ANY(%s::uuid[]) AND deleted_at IS NOT NULL""",
+                (reset_ids,),
+            )
+        return inserted_count
 
     def _persist_deletion_probe(
         self,
@@ -1476,40 +1867,72 @@ class PostgresCollectorRepository:
         collected_at: datetime,
         fingerprint: str,
         evidence: Mapping[str, Any],
+        *,
+        force: bool = False,
+    ) -> None:
+        self._persist_lineages(connection, run_id, [
+            (owner_type, owner_id, collected_at, fingerprint, evidence),
+        ], force=force)
+
+    def _persist_lineages(
+        self,
+        connection: Any,
+        run_id: UUID,
+        items: Sequence[tuple[str, UUID, datetime, str, Mapping[str, Any]]],
+        *,
+        force: bool = False,
     ) -> None:
         # Прод держит сохранение сырых свидетельств выключенным ради места:
         # ingest.raw_payload растёт на каждое наблюдение. Прежде флаг ставила
         # внешняя заплатка через legacy app.config; теперь его читает сам
         # коллектор. По умолчанию сохраняем — это поведение разработки.
-        if not _persist_raw_evidence():
+        if not items or (not force and not _persist_raw_evidence()):
             return
-        collected = utc(collected_at, "lineage.collected_at")
+        lock_names = sorted({
+            "raw-evidence:" + fingerprint
+            for _owner_type, _owner_id, _collected_at, fingerprint, _evidence
+            in items
+        })
         connection.execute(
-            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-            ("raw-evidence:" + fingerprint,),
+            """SELECT pg_advisory_xact_lock(hashtextextended(lock_name, 0))
+                 FROM unnest(%s::text[]) AS locks(lock_name)
+                ORDER BY lock_name""",
+            (lock_names,),
         )
-        object_uri, object_hash = self.evidence_store.put(evidence)
-        fingerprint_hex = fingerprint
-        if object_hash != fingerprint_hex:
-            raise ValueError("canonical evidence fingerprint mismatch")
-        payload_id = raw_payload_uuid(run_id, owner_type, owner_id, fingerprint_hex)
+        payloads = []
+        for owner_type, owner_id, collected_at, fingerprint, evidence in items:
+            collected = utc(collected_at, "lineage.collected_at")
+            object_uri, object_hash = self.evidence_store.put(evidence)
+            if object_hash != fingerprint:
+                raise ValueError("canonical evidence fingerprint mismatch")
+            payloads.append({
+                "id": raw_payload_uuid(
+                    run_id, owner_type, owner_id, fingerprint,
+                ),
+                "collection_run_id": run_id,
+                "owner_type": owner_type,
+                "owner_id": owner_id,
+                "collected_at": collected,
+                "sha256": fingerprint,
+                "external_ref": object_uri,
+                "purge_after": collected + self.raw_retention,
+            })
         connection.execute(
             """INSERT INTO ingest.raw_payload(
                    id, collection_run_id, owner_type, owner_id, collected_at,
                    sha256, content_encoding, external_ref, purge_after
-               ) VALUES (%s,%s,%s,%s,%s,%s,'identity',%s,%s)
+               ) SELECT item.id, item.collection_run_id,
+                        item.owner_type::ingest.raw_owner_type, item.owner_id,
+                        item.collected_at, item.sha256, 'identity',
+                        item.external_ref, item.purge_after
+                   FROM jsonb_to_recordset(%s::jsonb) AS item(
+                       id uuid, collection_run_id uuid, owner_type text,
+                       owner_id uuid, collected_at timestamptz, sha256 text,
+                       external_ref text, purge_after timestamptz
+                   )
                ON CONFLICT (collection_run_id, owner_type, owner_id, sha256)
                DO NOTHING""",
-            (
-                payload_id,
-                run_id,
-                owner_type,
-                owner_id,
-                collected,
-                fingerprint_hex,
-                object_uri,
-                collected + self.raw_retention,
-            ),
+            (_json(payloads),),
         )
 
     def quarantine_rejected_batch(self, raw: Any, context: CollectionContext, error_code: str) -> None:
@@ -1518,8 +1941,20 @@ class PostgresCollectorRepository:
         fingerprint = source_fingerprint(evidence)
         collected = utc(context.started_at, "quarantine.collected_at")
         with self._connection() as connection, connection.transaction():
-            self._persist_lineage(connection, context.run_id, "account", raw.account.id,
-                                  collected, fingerprint, evidence)
+            # Rejected input must remain inspectable even when routine raw
+            # evidence retention is disabled.  Otherwise the quarantine row
+            # references a payload that was deliberately skipped and the
+            # whole account fails with a foreign-key violation.
+            self._persist_lineage(
+                connection,
+                context.run_id,
+                "account",
+                raw.account.id,
+                collected,
+                fingerprint,
+                evidence,
+                force=True,
+            )
             payload_id = raw_payload_uuid(
                 context.run_id, "account", raw.account.id, fingerprint)
             connection.execute(

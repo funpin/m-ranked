@@ -15,3 +15,4 @@ def test_storage_retention_does_not_extend_post_tracking(monkeypatch, tmp_path):
     assert settings.collector_refresh_limit == 100
     assert settings.collector_refresh_scan_limit == 400
     assert settings.publication_snapshot_heartbeat_hours == 24
+    assert settings.max_request_timeout_seconds == 30.0

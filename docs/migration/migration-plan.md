@@ -7,7 +7,7 @@
 | 0. Capacity safety | ≥30 GB free or disk extension; fresh backup | no disk/backup alerts | 24 h | do not start backlog work |
 | 1. Repair metrics | review/apply `db/migrations/0027_anomaly_metrics_live_revision.sql` | function returns ten keys <5 s; API ready | 15 min | `CREATE OR REPLACE` prior body only if old dependency also exists; normally forward-fix |
 | 2. Repair outbox | validate outbox credential/role and deployed API unit; start marker canary | pending decreases, no lock waits/API regression | 30 min | disable marker, retain rows |
-| 3. Schedule collectors | remove global Rutube 300 s override; propose 900 s + jitter | no freshness breach; CPU PSI and partial rate fall | 24 h | restore exact env value and restart only Rutube |
+| 3. Schedule collectors | deploy per-platform env; Telegram/VK/MAX 300 s, Rutube 3600 s; bounded MAX request timeout; platform-aware watchdog | no freshness breach; CPU PSI and partial rate fall; no MAX request exceeds timeout | 24 h | restore prior env/release and restart only affected collector |
 | 4. Analyze canary | batch 5, max points 1024, CPU 0.5, low IO weight | queue decreases; API p95 ≤baseline+10%; no missed collector slots | 1 h then 24 h | stop Analyze; leases expire safely |
 | 5. Observability | collect 7 d cgroup, endpoint and pg query metrics | no missing series; thresholds approved | 7 d | exporter off; no data-path effect |
 | 6. Contract foundation | add raw event v1, transfer outbox/inbox in local mode | contract/idempotency/failure tests green | soak 24 h | feature flag uses current direct path |
@@ -34,4 +34,3 @@ a rewriting default or unmeasured index build on the 5M/8M-row partitions.
 - UTC/null/Unicode/integer semantics match current characterization tests;
 - Analyze stop has no effect on collect/transfer/API/SSR;
 - the same contract/E2E suite passes local and remote transport profiles.
-

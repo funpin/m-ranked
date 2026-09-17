@@ -711,6 +711,7 @@ class MaxGatewayCollector:
             settings.max_session_path,
             settings.max_user_first_name,
             settings.max_user_last_name,
+            request_timeout_seconds=settings.max_request_timeout_seconds,
         )
 
     async def collect(
