@@ -46,7 +46,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
   const entityCursor = first(rawParams.entityCursor);
   const { platform, period } = query;
 
-  if (platform === "max" || platform === "all") return <PlatformPending platform={platform} kind="rating" />;
+  if (platform === "all") return <PlatformPending platform={platform} kind="rating" />;
 
   let page;
   try {
@@ -73,7 +73,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
         {/* Раньше площадка была скрытым полем: сменить её можно было
             только вернувшись в обзор. */}
         <NativeSegments name="platform" legend="Площадка" value={platform}
-          options={PLATFORM_VALUES.map((value) => ({ value, label: PLATFORM_LABELS[value] }))}
+          options={PLATFORM_VALUES.filter((value) => value !== "all").map((value) => ({ value, label: PLATFORM_LABELS[value] }))}
           labelled={false} />
         <div className="w-[12rem]"><NativeSelect name="period" defaultValue={period} aria-label="Период" title="Период рейтинга">{Object.entries(PERIOD_LABELS).map(([value,label]) => <option value={value} key={value}>{label}</option>)}</NativeSelect></div>
         <input type="hidden" name="channel_sort" value={page.channelSort} /><input type="hidden" name="channel_direction" value={page.channelDirection} /><input type="hidden" name="post_sort" value={page.postSort} /><input type="hidden" name="post_direction" value={page.postDirection} />
@@ -84,7 +84,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
       <NavigationBoundary fallback={<TableSkeleton chrome={false} />}>
       {platform === "telegram"
         ? <TelegramEntityTable query={query} rows={page.entities} offset={page.entityOffset} />
-        : <VkEntityTable query={query} rows={page.entities} offset={page.entityOffset} />}
+        : <PlatformEntityTable query={query} rows={page.entities} offset={page.entityOffset} />}
 
       {page.nextEntityCursor ? <nav className="my-5 flex flex-wrap justify-end gap-2" aria-label="Страницы рейтинга">
         <Link className="inline-flex min-h-9 items-center justify-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent" href={queryHref("/rating", { ...ratingHrefQuery(query), entityCursor: page.nextEntityCursor })} prefetch={false}>Следующая страница рейтинга</Link>
@@ -92,7 +92,7 @@ export default async function RatingPage({ searchParams }: { searchParams: Promi
 
       {platform === "telegram"
         ? <TelegramPublicationTable query={query} rows={page.publications} />
-        : <VkPublicationTable query={query} rows={page.publications} />}
+        : <PlatformPublicationTable query={query} rows={page.publications} />}
       </NavigationBoundary>
     </>
   );
@@ -126,18 +126,18 @@ function TelegramEntityTable({ query, rows, offset }: {
   );
 }
 
-function VkEntityTable({ query, rows, offset }: {
+function PlatformEntityTable({ query, rows, offset }: {
   query: ParsedRatingQuery;
   rows: ActivityRatingEntity[];
   offset: number;
 }) {
   return (
-    <RatingSection query={query} eyebrow="Вузы" title="Рейтинг активности ВК" empty={rows.length === 0}>
+    <RatingSection query={query} eyebrow="Вузы" title={`Рейтинг активности ${PLATFORM_LONG_LABELS[query.platform]}`} empty={rows.length === 0}>
       <Table data-testid="rating-table" className="tabular">
-        <caption className="sr-only">Вузы по активности ВКонтакте</caption>
+        <caption className="sr-only">Вузы по активности {PLATFORM_LONG_LABELS[query.platform]}</caption>
         <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Вуз</TableHead>
-          <TableHead><EntitySortLink query={query} sort="average">Среднее лайков</EntitySortLink></TableHead>
-          <TableHead><EntitySortLink query={query} sort="total">Лайков всего</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="average">Среднее реакций</EntitySortLink></TableHead>
+          <TableHead><EntitySortLink query={query} sort="total">Реакций всего</EntitySortLink></TableHead>
           <TableHead><EntitySortLink query={query} sort="views">Просмотры</EntitySortLink></TableHead>
           <TableHead><EntitySortLink query={query} sort="engagement">Вовлечённость</EntitySortLink></TableHead>
           <TableHead><EntitySortLink query={query} sort="subscribers">Подписчики</EntitySortLink></TableHead>
@@ -194,34 +194,34 @@ function TelegramPublicationTable({ query, rows }: {
   );
 }
 
-function VkPublicationTable({ query, rows }: {
+function PlatformPublicationTable({ query, rows }: {
   query: ParsedRatingQuery;
   rows: ActivityRatingPublication[];
 }) {
   return (
-    <RatingSection query={query} eyebrow="Публикации" title="Публикации ВК" empty={rows.length === 0}>
+    <RatingSection query={query} eyebrow="Публикации" title={`Публикации ${PLATFORM_LONG_LABELS[query.platform]}`} empty={rows.length === 0}>
       <Table data-testid="rating-table" className="tabular">
-        <caption className="sr-only">Публикации ВКонтакте по активности</caption>
+        <caption className="sr-only">Публикации {PLATFORM_LONG_LABELS[query.platform]} по активности</caption>
         <TableHeader><TableRow><TableHead>#</TableHead><TableHead>Публикация</TableHead>
-          <TableHead><PostSortLink query={query} sort="reactions">Лайки</PostSortLink></TableHead>
+          <TableHead><PostSortLink query={query} sort="reactions">Реакции</PostSortLink></TableHead>
           <TableHead><PostSortLink query={query} sort="views">Просмотры</PostSortLink></TableHead>
           <TableHead><PostSortLink query={query} sort="comments">Комментарии</PostSortLink></TableHead>
           {query.platform === "vk" ? <TableHead><PostSortLink query={query} sort="shares">Репосты</PostSortLink></TableHead> : null}
           <TableHead><PostSortLink query={query} sort="view_share">Вовлечённость</PostSortLink></TableHead>
         </TableRow></TableHeader>
-        <TableBody>{rows.map((row, index) => <PlatformPublicationRow key={row.publicationId} row={row} index={index} showInteractions showShares={query.platform === "vk"} />)}{!rows.length ? <EmptyRatingRow query={query} publications columns={query.platform === "vk" ? 7 : 6} /> : null}</TableBody>
+        <TableBody>{rows.map((row, index) => <PlatformPublicationRow key={row.publicationId} row={row} index={index} platform={query.platform} />)}{!rows.length ? <EmptyRatingRow query={query} publications columns={query.platform === "vk" ? 7 : 6} /> : null}</TableBody>
       </Table>
     </RatingSection>
   );
 }
 
-function PlatformPublicationRow({ row, index, showInteractions, showShares=false }: {
+function PlatformPublicationRow({ row, index, platform }: {
   row: ActivityRatingPublication;
   index: number;
-  showInteractions: boolean;
-  showShares?: boolean;
+  platform: ParsedRatingQuery["platform"];
 }) {
-  const label = `${row.institutionShortName || row.institutionCanonicalName} · ${publicationLabel(row.externalId ?? "",showShares ? "vk" : "rutube")}`;
+  const showShares = platform === "vk";
+  const label = `${row.institutionShortName || row.institutionCanonicalName} · ${publicationLabel(row.externalId ?? "", platform)}`;
   return <TableRow>
     <TableCell className="text-muted-foreground w-10">{index + 1}</TableCell>
     {/* Раньше подписи шли встык: «№148934Открыть публикацию VK». Гибкая строка
@@ -231,13 +231,11 @@ function PlatformPublicationRow({ row, index, showInteractions, showShares=false
       {row.deletedAt ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive">удалена</span> : null}
       {row.joint ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">+{row.additionalAuthorCount} авт.</span> : null}
       {row.repost ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">репост</span> : null}
-      {row.publicUrl ? <a className="shrink-0 text-xs text-muted-foreground underline underline-offset-4" href={row.publicUrl} target="_blank" rel="noopener noreferrer" title={`Открыть публикацию ${showShares ? "ВКонтакте" : "на Rutube"}`}>{showShares ? "VK" : "Rutube"}</a> : null}
+      {row.publicUrl ? <a className="shrink-0 text-xs text-muted-foreground underline underline-offset-4" href={row.publicUrl} target="_blank" rel="noopener noreferrer" title={`Открыть публикацию ${PLATFORM_LONG_LABELS[platform]}`}>{PLATFORM_LABELS[platform]}</a> : null}
     </span></TableCell>
-    {showInteractions ? <>
-      <TableCell><strong>{formatMetric(row.reactions)}</strong></TableCell><TableCell>{formatMetric(row.views)}</TableCell>
-      <TableCell>{formatMetric(row.comments)}</TableCell>{showShares ? <TableCell>{formatMetric(row.shares)}</TableCell> : null}
-      <TableCell>{formatPercentage(row.viewShare)}</TableCell>
-    </> : <TableCell><strong>{formatMetric(row.views)}</strong></TableCell>}
+    <TableCell><strong>{formatMetric(row.reactions)}</strong></TableCell><TableCell>{formatMetric(row.views)}</TableCell>
+    <TableCell>{formatMetric(row.comments)}</TableCell>{showShares ? <TableCell>{formatMetric(row.shares)}</TableCell> : null}
+    <TableCell>{formatPercentage(row.viewShare)}</TableCell>
   </TableRow>;
 }
 

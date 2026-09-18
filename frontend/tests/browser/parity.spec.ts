@@ -68,9 +68,14 @@ test("legacy validation returns 422 and repeated scalar chooses last", async ({ 
   await expect(page.locator('input[name="platform"][value="telegram"]')).toBeChecked();
 });
 
-for (const platform of ["telegram", "vk", "rutube"]) {
+for (const platform of ["telegram", "vk", "max", "rutube"]) {
   test(`${platform} rating exposes all 205 rows with stable global ranks`, async ({ page }) => {
     await page.goto(`/rating?platform=${platform}`);
+    if (platform === "max") {
+      await expect(page.getByRole("heading", { level: 1, name: "Рейтинг · MAX" })).toBeVisible();
+      await expect(page.locator('input[name="platform"][value="max"]')).toBeChecked();
+      await expect(page.locator('input[name="platform"][value="all"]')).toHaveCount(0);
+    }
     const first = await page.getByTestId("rating-table").first().getByTestId("rating-entity-link").allTextContents();
     expect(first).toHaveLength(200);
     await page.getByRole("link", { name: "Следующая страница рейтинга" }).click();

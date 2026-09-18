@@ -99,7 +99,7 @@ export function PublicationDetail({history,historyLimit=100,analysis=null}:{hist
       </Card>
     ) : null}
 
-    <PublicationMeasurements key={p.publicationId} rows={history.items} platform={p.platform} historyLimit={historyLimit} analysis={analysis}
+    <PublicationMeasurements key={p.publicationId} rows={history.items} platform={p.platform} publishedAt={p.publishedAt} historyLimit={historyLimit} analysis={analysis}
       fullHistoryHref={historyLimit < FULL_PUBLICATION_HISTORY_LIMIT ? queryHref(publicationHref(p.publicationId),{history_limit:FULL_PUBLICATION_HISTORY_LIMIT}) : undefined} />
     </NavigationBoundary>
   </>;

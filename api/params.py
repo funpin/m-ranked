@@ -25,11 +25,13 @@ SORTS_PLATFORM = frozenset({"name", "subscribers", "posts", "views", "reactions"
 RATING_CHANNEL_SORTS = {
     "telegram": frozenset({"average", "total", "engagement", "subscribers"}),
     "vk": frozenset({"average", "total", "engagement", "views", "subscribers"}),
+    "max": frozenset({"average", "total", "engagement", "views", "subscribers"}),
     "rutube": frozenset({"average", "total", "engagement", "views", "subscribers"}),
 }
 RATING_POST_SORTS = {
     "telegram": frozenset({"reactions", "subscriber_share", "view_share", "views"}),
     "vk": frozenset({"reactions", "views", "comments", "shares", "interactions", "view_share"}),
+    "max": frozenset({"reactions", "views", "comments", "interactions", "view_share"}),
     "rutube": frozenset({"reactions", "views", "comments", "interactions", "view_share"}),
 }
 
@@ -82,7 +84,7 @@ def rating_query(platform_value: str | None, period_value: str | None,
     normalized_platform = (platform_value or "telegram").strip().lower()
     if normalized_platform == "tg":
         normalized_platform = "telegram"
-    if normalized_platform in ("all", "max"):
+    if normalized_platform == "all":
         raise BadRequest("рейтинг активности для этой платформы ещё не доступен")
     if normalized_platform not in RATING_CHANNEL_SORTS:
         normalized_platform = "telegram"

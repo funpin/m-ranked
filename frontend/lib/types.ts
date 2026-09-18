@@ -62,7 +62,7 @@ export type ComparisonSeries = components["schemas"]["ComparisonSeries"];
 
 export type ComparisonView = components["schemas"]["Comparison"];
 
-export type ActivityRatingPlatform = Exclude<Platform, "all" | "max">;
+export type ActivityRatingPlatform = Exclude<Platform, "all">;
 export type ActivityRatingEntityType = "channels" | "institutions";
 export type ActivityRatingChannelSort =
   | "average"

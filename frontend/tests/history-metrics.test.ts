@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { availableHistoryMetrics, tabulatedHistoryMetrics, historyMetrics, historyMetricValue, historyMetricTooltip, historyRatioTooltip } from "../lib/history-metrics";
-import { sampleHistory } from "../lib/history-data";
+import { elapsedSincePublication, sampleHistory } from "../lib/history-data";
 import type { HistorySnapshot } from "../lib/types";
 
 const counter = (value:number|null) => ({value,observedAt:null,quality:null});
@@ -10,6 +10,12 @@ const row = (index:number):HistorySnapshot => ({snapshotId:String(index),observe
   deltaReactions:index === 500 ? -3 : index === 700 ? null : 1,deltaViews:10,deltaComments:null,deltaShares:null,
   reactionsBreakdown:{},reactionsBreakdownEntries:[],deltaReactionsBreakdown:null,deltaReactionsBreakdownEntries:null,
   synthetic:false,intervalUncertain:false,quality:"exact",rawEvidence:{}});
+
+test("elapsed tooltip time keeps exact seconds and lets hours exceed one day", () => {
+  assert.equal(elapsedSincePublication("2026-09-18T10:00:01Z","2026-09-18T19:40:11Z"),"+9:40:10");
+  assert.equal(elapsedSincePublication("2026-09-17T10:00:01Z","2026-09-18T19:40:11Z"),"+33:40:10");
+  assert.equal(elapsedSincePublication("invalid","2026-09-18T19:40:11Z"),null);
+});
 
 test("sampling and zoom preserve stored interval deltas, negative corrections and missing values", () => {
   const rows=Array.from({length:2000},(_,index)=>row(index));

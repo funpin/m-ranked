@@ -13,6 +13,7 @@ for(const [path,reaction,hasComments,hasShares] of [
     await expect(page.getByRole("button",{name:"Всего комментариев",exact:true})).toHaveCount(hasComments?1:0);
     await expect(page.getByRole("button",{name:"Всего репостов",exact:true})).toHaveCount(hasShares?1:0);
     await total.focus();await page.keyboard.press("End");
+    await expect(page.getByRole("tooltip").first()).toContainText("(+159:00:00)");
     await expect(page.getByRole("tooltip").first()).toContainText(`${reaction==="лайков"?"Лайки":"Реакции"} / просмотры: 9.75%`);
     await growth.focus();await page.keyboard.press("End");
     await expect(page.getByRole("tooltip")).toContainText(`Прирост ${reaction}: -3`);
@@ -21,6 +22,7 @@ for(const [path,reaction,hasComments,hasShares] of [
     // The pointer tooltip is rendered text now, so it is read rather than
     // intercepted on its way to a canvas.
     await growth.hover({position:{x:box!.width-20,y:box!.height/2}});
+    await expect(growth.getByText(/\(\+\d+:\d{2}:\d{2}\)/)).toBeVisible();
     await expect(growth.getByText(/^Прирост (реакций|лайков): [+-]?\d/)).toBeVisible();
     await growth.screenshot({path:testInfo.outputPath("growth-tooltip.png")});
   });

@@ -15,9 +15,17 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
+from api.params import rating_query
 from conftest import requires_api_database as requires_database
 
 CONTRACT = pathlib.Path(__file__).resolve().parents[1] / "contracts/openapi/m-ranked-v1.yaml"
+
+
+def test_max_rating_query_uses_generic_platform_sorts() -> None:
+    query = rating_query("max", None, None, None, "shares", None)
+    assert query.platform == "max"
+    assert query.channel_sort == "engagement"
+    assert query.post_sort == "view_share"
 
 
 @pytest.fixture(scope="module")
@@ -279,6 +287,10 @@ def test_rating_normalization_and_cursor(client) -> None:
     assert not ({row["entityId"] for row in first["entities"]}
                 & {row["entityId"] for row in second["entities"]})
     assert second["entityOffset"] == first["entityOffset"] + len(first["entities"])
+
+    max_rating = client.get("/api/v1/rating?platform=max&entityLimit=2")
+    assert max_rating.status_code == 200
+    assert max_rating.json()["platform"] == "max"
 
     stale_dimensions = client.get("/api/v1/rating", params={
         "platform": "rutube", "entityLimit": 2, "entityCursor": first["nextEntityCursor"],

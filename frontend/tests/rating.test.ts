@@ -38,7 +38,8 @@ test("rating keeps VK shares but applies the RUTUBE post fallback", () => {
   assert.equal(normalizeRatingQuery({ platform: "rutube", post_sort: "shares" }).postSort, "view_share");
 });
 
-test("rating retains MAX/all for the page's explicit pending branch", () => {
+test("rating normalizes MAX like the other platform ratings and retains all for its pending branch", () => {
   assert.equal(normalizeRatingQuery({ platform: "max" }).platform, "max");
+  assert.equal(normalizeRatingQuery({ platform: "max", post_sort: "shares" }).postSort, "view_share");
   assert.equal(normalizeRatingQuery({ platform: "all" }).platform, "all");
 });

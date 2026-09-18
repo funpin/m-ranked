@@ -389,7 +389,7 @@ paths:
       summary: Read the legacy activity rating for one platform and period
       description: >-
         Returns activity entities plus the top 50 publications from one dataset revision. Telegram
-        ranks enabled channels and keeps channels without publications; VK and RUTUBE aggregate
+        ranks enabled channels and keeps channels without publications; VK, MAX and RUTUBE aggregate
         institutions that have publications. Metrics come from each publication's coherent latest
         non-synthetic cumulative snapshot. Entities use `entityLimit` and revision-bound `entityCursor` continuation;
         `entitiesTruncated` reports when this target API cannot return the legacy page's unbounded
@@ -401,7 +401,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [telegram, vk, rutube]
+            enum: [telegram, vk, max, rutube]
             default: telegram
         - name: period
           in: query
@@ -3663,7 +3663,7 @@ components:
           description: Fetch the next entity page with the same query. Null after the final page.
         platform:
           type: string
-          enum: [telegram, vk, rutube]
+          enum: [telegram, vk, max, rutube]
         period:
           $ref: '#/components/schemas/PeriodValue'
         entityType:

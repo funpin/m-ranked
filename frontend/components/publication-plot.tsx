@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, duration, legacyDate } from "@/lib/format";
+import { elapsedSincePublication } from "@/lib/history-data";
 import type { ObservationGap } from "@/lib/observation-gaps";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
@@ -44,9 +45,9 @@ function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
   );
 }
 
-export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, evidenceIds, hidden, scale, gaps }: {
+export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly ObservationGap[];
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly ObservationGap[];
 }) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const active = useRef(0);
@@ -103,10 +104,10 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
     : delta ? `Прирост: ${commonTitle.toLowerCase()}` : commonTitle;
 
   const reading = useCallback((row: HistorySnapshot) => [
-    legacyDate(row.observedAt),
+    tooltipTime(row.observedAt,publishedAt,false),
     ...metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => historyMetricTooltip(row, metric, platform, delta)),
     !delta ? historyRatioTooltip(row, platform) : "",
-  ].filter(Boolean).join(" · "), [metrics, hidden, platform, delta]);
+  ].filter(Boolean).join(" · "), [metrics, hidden, platform, delta, publishedAt]);
 
   // Selecting a row elsewhere moves the chart's own cursor to that sample.
   useEffect(() => {
@@ -193,7 +194,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       <ChartTooltip
         cursor={{ strokeDasharray: "4 4" }}
         content={(props) => (
-          <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} delta={delta} nearestRow={nearestRow} />
+          <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} publishedAt={publishedAt} delta={delta} nearestRow={nearestRow} />
         )}
       />
       {selectedAt ? (
@@ -284,13 +285,27 @@ function groupedPoint(payload: unknown) {
   return { from: point.from, t: point.t, samples: point.samples, values };
 }
 
-function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, delta, nearestRow }: {
+function tooltipTime(observedAt:string,publishedAt:string,short=true) {
+  const elapsed=elapsedSincePublication(publishedAt,observedAt);
+  return `${short ? shortDate(observedAt) : legacyDate(observedAt)}${elapsed ? ` (${elapsed})` : ""}`;
+}
+
+function TooltipTime({ observedAt, publishedAt, rangeStart }: { observedAt:string;publishedAt:string;rangeStart?:string }) {
+  const elapsed=elapsedSincePublication(publishedAt,observedAt);
+  return <div className="flex items-baseline justify-between gap-3 whitespace-nowrap font-medium">
+    <span>{rangeStart ? `${shortDate(rangeStart)} — ` : ""}{shortDate(observedAt)}</span>
+    {elapsed ? <span className="text-muted-foreground tabular">({elapsed})</span> : null}
+  </div>;
+}
+
+function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, publishedAt, delta, nearestRow }: {
   active?: boolean;
   label?: unknown;
   payload?: unknown;
   metrics: Metric[];
   hidden: ReadonlySet<string>;
   platform: string;
+  publishedAt: string;
   delta: boolean;
   nearestRow: (instant: unknown) => HistorySnapshot | null;
 }) {
@@ -302,7 +317,7 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, de
   if (group) {
     return (
       <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
-        <div className="font-medium">{shortDate(new Date(group.from).toISOString())} — {shortDate(new Date(group.t).toISOString())}</div>
+        <TooltipTime observedAt={new Date(group.t).toISOString()} rangeStart={new Date(group.from).toISOString()} publishedAt={publishedAt} />
         <div className="text-muted-foreground">Суммарно за {group.samples} замеров</div>
         {metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => {
           const value = group.values[metric.key];
@@ -323,7 +338,7 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, de
   const ratio = !delta ? historyRatioTooltip(row, platform) : "";
   return (
     <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
-      <div className="font-medium">{shortDate(row.observedAt)}</div>
+      <TooltipTime observedAt={row.observedAt} publishedAt={publishedAt} />
       {row.synthetic ? <div className="text-muted-foreground">Момент публикации · синтетическая точка</div> : null}
       {metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => (
         <div key={metric.key} className="flex items-center gap-2">

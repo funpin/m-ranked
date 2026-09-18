@@ -62,7 +62,7 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
 
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>; gaps: ReturnType<typeof observationGaps>;
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; gaps: ReturnType<typeof observationGaps>;
 }) {
   const { metrics, platform, delta } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
@@ -136,7 +136,7 @@ function MetricChart(props: {
   </>;
 }
 
-export function PublicationMeasurements({ rows, platform, historyLimit, analysis=null, fullHistoryHref }: { rows: HistorySnapshot[];platform:Exclude<Platform,"all">;historyLimit:number;analysis?:PublicationAnomalyAnalysis|null;fullHistoryHref?:string }) {
+export function PublicationMeasurements({ rows, platform, publishedAt, historyLimit, analysis=null, fullHistoryHref }: { rows: HistorySnapshot[];platform:Exclude<Platform,"all">;publishedAt:string;historyLimit:number;analysis?:PublicationAnomalyAnalysis|null;fullHistoryHref?:string }) {
   const [start,setStart] = useState(0), [end,setEnd] = useState(Math.max(0,rows.length-1));
   const [selectedId,setSelectedId] = useState<string>();
   const telegram = platform === "telegram";
@@ -193,7 +193,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} gaps={visibleGaps} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
         </CardContent>
       </Card>
       <Card>
@@ -206,7 +206,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} gaps={visibleGaps} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
         </CardContent>
       </Card>
     </div>

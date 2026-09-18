@@ -40,7 +40,7 @@ function item(id: number, platform: Schema["PlatformValue"]): Schema["OverviewRo
     ratingPeriod: "2026-Q2", ratingFetchedAt: asOf, totalPublicationCount: 2, activityPublicationCount: 2, newPublicationCount: 0,
     views: metric, reactions: metric, comments: { ...metric, total: 0, totalMetadata: aggregate(0, 1) }, shares: { ...metric, total: null, totalMetadata: aggregate(null, 0) }, asOf };
 }
-function entity(id: number, platform: "telegram" | "vk" | "rutube"): Schema["ActivityRatingEntity"] {
+function entity(id: number, platform: "telegram" | "vk" | "max" | "rutube"): Schema["ActivityRatingEntity"] {
   return { entityId: platform === "telegram" ? uuid(1,id) : uuid(9,id), entityType: platform === "telegram" ? "channels" : "institutions", legacyId: id, legacyRoute: platform === "telegram" ? `/channels/${id}` : `/institutions/${id}`,
     institutionId: `institution-${id}`, institutionLegacyId: id, canonicalName: `Университет ${String(id).padStart(3, "0")}`, shortName: null, username: `fixture_${id}`, title: `Университет ${String(id).padStart(3, "0")}`,
     publicationCount: 1, averageReactions: id, averageViews: id * 10, totalReactions: id, totalViews: id * 10, totalComments: id % 2 ? 0 : null, totalShares: null, totalInteractions: id, engagementRate: 1, subscriberCount: 100 };
@@ -182,8 +182,9 @@ const server = createServer(async (request, response) => {
     const cursor = url.searchParams.get("entityCursor");
     if (cursor && cursor !== "fixture-page-2") return json({ title: "Invalid cursor", detail: "Dataset changed", status: 400 }, 400);
     const offset = cursor ? 200 : 0;
-    const rows = Array.from({ length: cursor ? 5 : 200 }, (_, index) => entity(offset + index + 1, platform as "telegram"));
-    return json({ platform: platform as "telegram", period: (url.searchParams.get("period") ?? "30d") as "30d", entityType: platform === "telegram" ? "channels" : "institutions", publicationLegacyType: platform === "telegram" ? "posts" : "platform_posts",
+    const ratingPlatform = platform as "telegram" | "vk" | "max" | "rutube";
+    const rows = Array.from({ length: cursor ? 5 : 200 }, (_, index) => entity(offset + index + 1, ratingPlatform));
+    return json({ platform: ratingPlatform, period: (url.searchParams.get("period") ?? "30d") as "30d", entityType: platform === "telegram" ? "channels" : "institutions", publicationLegacyType: platform === "telegram" ? "posts" : "platform_posts",
       channelSort: url.searchParams.get("channel_sort") ?? "engagement", channelDirection: (url.searchParams.get("channel_direction") ?? "desc") as "desc", postSort: url.searchParams.get("post_sort") ?? "view_share", postDirection: (url.searchParams.get("post_direction") ?? "desc") as "desc",
       entities: rows, publications: [], entityLimit: 200, entitiesTruncated: !cursor, entityOffset: offset, nextEntityCursor: cursor ? null : "fixture-page-2", datasetRevision: revision, asOf } satisfies Schema["Rating"]);
   }
