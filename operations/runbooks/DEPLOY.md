@@ -153,7 +153,7 @@ Lock-файлы правятся только пересозданием, цел
 ```bash
 python3 operations/scripts/generate_python_lock.py requirements/api.txt requirements/api.lock
 python3 operations/scripts/generate_python_lock.py requirements/collector.txt \
-  requirements/collector.lock --extra setuptools==80.9.0 wheel==0.45.1
+  requirements/collector.lock --extra setuptools==80.9.0 wheel==0.46.2
 ```
 
 ## 6. nginx

@@ -119,6 +119,20 @@ jobs:
             docker image inspect "m-ranked-$image:ci" --format '{{index .Id}}' \
               | tee "digest-$image.txt"
           done
+      - name: Smoke-test runtime images without build tooling
+        run: |
+          for image in api collector anomaly; do
+            case "$image" in
+              api) module=api ;;
+              collector) module=collector_target ;;
+              anomaly) module=anomaly_analysis ;;
+            esac
+            docker run --rm --entrypoint python "m-ranked-$image:ci" -c \
+              "import importlib.util; import $module; \
+          forbidden = [name for name in ('pip', 'setuptools', 'wheel') \
+          if importlib.util.find_spec(name) is not None]; \
+          assert not forbidden, f'build tooling remains in runtime: {forbidden}'"
+          done
       - name: Scan every built image
         run: |
           curl --fail --silent --show-error --location --output trivy.tar.gz \

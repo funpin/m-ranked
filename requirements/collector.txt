@@ -6,5 +6,5 @@ psycopg[binary,pool]==3.3.5
 httpx==0.28.1
 python-dotenv==1.2.3
 beautifulsoup4==4.13.4
-lxml==6.0.2
+lxml==6.1.0
 Telethon==1.40.0
