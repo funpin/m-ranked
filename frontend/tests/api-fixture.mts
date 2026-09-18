@@ -57,9 +57,9 @@ function publication(id:number,type:"posts"|"platform_posts"="posts"):Schema["Pu
   const platform=type === "posts" ? "telegram" : id === 21 ? "vk" : id === 41 ? "rutube" : "max";
   return {publicationId:uuid(type === "posts" ? 5 : 6,id),legacyId:id,legacyType:type,institutionId:"institution-1",platform,publishedAt:"2026-07-01T00:00:00Z",publicationType:"album",deletedAt:id === 1 ? asOf : null,views:counter(50),reactions:counter(5),comments:counter(0),shares:counter(null),quality:"exact",intervalUncertain:false,synthetic:false,historyCompleteness:"complete",datasetRevision:revision,asOf,accountLegacyId:platform === "telegram" || platform === "vk" ? 1 : platform === "rutube" ? 4 : 3,accountLegacyType:type === "posts" ? "channels" : "platform_accounts",accountName:names[0]!,accountUsername:"fixture_1",externalId:String(id+100),displayExternalId:String(id+100),repost:false,joint:false,additionalAuthorCount:0,ambiguousAlbumReactions:false,publicUrl:`https://example.test/post/${id}`};
 }
-function postItem(id:number,type:"posts"|"platform_posts"):Schema["PublicationListItem"] {
+function postItem(id:number,type:"posts"|"platform_posts",day?:string|null):Schema["PublicationListItem"] {
   const p=publication(id,type);
-  return {publicationId:p.publicationId,legacyId:id,legacyType:type,legacyRoute:`/${type === "posts" ? "posts" : "platform-posts"}/${id}`,externalId:p.externalId,publishedAt:p.publishedAt,publicUrl:p.publicUrl,publicationType:p.publicationType,deletedAt:p.deletedAt,historyCompleteness:"complete",views:p.views,reactions:p.reactions,comments:p.comments,shares:p.shares,title:null,archivedText:null,displayExternalId:p.displayExternalId,repost:p.repost,joint:p.joint,additionalAuthorCount:p.additionalAuthorCount,ambiguousAlbumReactions:p.ambiguousAlbumReactions};
+  return {publicationId:p.publicationId,legacyId:id,legacyType:type,legacyRoute:`/${type === "posts" ? "posts" : "platform-posts"}/${id}`,externalId:p.externalId,publishedAt:id===2?"2026-07-02T00:00:00Z":p.publishedAt,publicUrl:p.publicUrl,publicationType:p.publicationType,deletedAt:p.deletedAt,historyCompleteness:"complete",views:p.views,reactions:p.reactions,comments:p.comments,shares:p.shares,title:null,archivedText:null,dailyGrowth:day?{day,reactions:id===1?5:3,views:id===1?50:40}:null,displayExternalId:p.displayExternalId,repost:p.repost,joint:p.joint,additionalAuthorCount:p.additionalAuthorCount,ambiguousAlbumReactions:p.ambiguousAlbumReactions};
 }
 const historyRows:Schema["HistorySnapshot"][] = Array.from({length:160},(_,index) => ({snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,views:counter(index*10),reactions:counter(index === 159 ? 155 : index),comments:counter(0),shares:counter(null),deltaViews:index ? 10 : null,deltaReactions:index ? index === 159 ? -3 : 1 : null,deltaComments:index ? 0 : null,deltaShares:null,reactionsBreakdown:{"👍":index,"custom:123456":1},reactionsBreakdownEntries:[{reaction:"👍",count:index},{reaction:"custom:123456",count:1}],deltaReactionsBreakdown:index?{"👍":1}:null,deltaReactionsBreakdownEntries:index?[{reaction:"👍",count:1}]:null,synthetic:index === 0,intervalUncertain:index === 40,quality:"exact",rawEvidence:{fingerprint:`fixture-${index}`}}));
 function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["PublicationAnomalyAnalysis"] {
@@ -131,7 +131,7 @@ const server = createServer(async (request, response) => {
   if(accountId) return Number(accountId[1]) > 1000 ? json({title:"Not Found",status:404},404) : json(account(Number(accountId[1]),url.searchParams.get("legacyType") as "channels"|"platform_accounts"));
   const pubId=/^\/api\/v1\/publications\/(\d+)$/.exec(url.pathname);
   if(pubId) return json(publication(Number(pubId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts"));
-  if(/^\/api\/v1\/accounts\/\d+\/publications$/.test(url.pathname)) return json({items:[postItem(1,url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts"),postItem(2,"posts")],nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);
+  if(/^\/api\/v1\/accounts\/\d+\/publications$/.test(url.pathname)) {const day=url.searchParams.get("day");return json({items:[postItem(1,url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts",day),postItem(2,"posts",day)],nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);}
   const historyId=/^\/api\/v1\/publications\/(\d+)\/history$/.exec(url.pathname);
   if(historyId) {
     const p=publication(Number(historyId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts");
@@ -141,7 +141,7 @@ const server = createServer(async (request, response) => {
     })) : p.legacyId===7
       // Publication 7 stands for a stretch where the collectors were down: the
       // samples between the fortieth and the hundredth hour never arrived.
-      ? historyRows.filter((_row,index)=>index<40||index>=100)
+      ? historyRows.map(row=>({...row,ageHours:row.ageHours+168})).filter((_row,index)=>index<40||index>=100)
       : historyRows;
     const limit=Math.max(1,Number(url.searchParams.get("limit") ?? 200));
     const items=sourceRows.slice(-limit).map((row,index)=>({...row,

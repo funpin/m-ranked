@@ -102,8 +102,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
     account(legacyId: number | string, legacyType?: LegacyAccountType, revision?: number) {
       return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType, revision } } }).then(unwrap);
     },
-    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, limit = 100, cursor?: string, revision?: number) {
-      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(200, Math.max(1, limit)), cursor, revision } } }).then(unwrap);
+    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, limit = 100, cursor?: string, revision?: number, day?: string) {
+      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(200, Math.max(1, limit)), cursor, revision, day } } }).then(unwrap);
     },
     institutionAccounts(legacyId: number, platform: Platform, limit = 100, cursor?: string, revision?: number) {
       return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor, revision } } }).then(unwrap);

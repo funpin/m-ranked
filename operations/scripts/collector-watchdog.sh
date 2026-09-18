@@ -53,10 +53,12 @@ unit_uptime_minutes() {
 
 progress_age_minutes() {
   local platform=$1
-  docker exec "$CONTAINER" psql \
+  # psql expands :'variables' only while reading a script. --set therefore
+  # safely quotes the platform as a SQL literal when the query comes from stdin.
+  docker exec -i "$CONTAINER" psql \
     --username "$DB_USER" --dbname "$DB_NAME" --no-psqlrc \
     --set ON_ERROR_STOP=1 --set "platform=$platform" \
-    --tuples-only --no-align --command "
+    --tuples-only --no-align --file=- <<'SQL' | tail -n 1
       SET statement_timeout='5s';
       SET lock_timeout='1s';
       SET default_transaction_read_only=on;
@@ -77,7 +79,8 @@ progress_age_minutes() {
         floor(extract(epoch FROM now()-max(happened_at))/60)::bigint::text,
         'never'
       )
-      FROM progress;" | tail -n 1
+      FROM progress;
+SQL
 }
 
 require_minutes WATCHDOG_STARTUP_GRACE_MINUTES "$STARTUP_GRACE_MINUTES"

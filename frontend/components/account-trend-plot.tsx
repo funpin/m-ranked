@@ -3,7 +3,8 @@
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, legacyNumber } from "@/lib/format";
-import { toggleFocusedDay, useFocusedDay } from "@/lib/day-focus";
+import { selectedDayHref } from "@/lib/day-selection";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type Point = {
   day: string; publishedCount: number;
@@ -35,9 +36,12 @@ function dayLabel(day: string) {
  * растянута втрое, поэтому они занимают нижнюю треть поля и не спорят с
  * линиями.
  */
-export default function AccountTrendPlot({ points, primary, mode = "median" }: {
-  points: readonly Point[]; primary: string; mode?: Mode;
+export default function AccountTrendPlot({ points, primary, mode = "median", selectedDay }: {
+  points: readonly Point[]; primary: string; mode?: Mode; selectedDay?: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
   const totals = mode === "total";
   const reactionsKey = totals ? "totalReactions" : "medianReactions";
   const viewsKey = totals ? "totalViews" : "medianViews";
@@ -59,15 +63,14 @@ export default function AccountTrendPlot({ points, primary, mode = "median" }: {
     postsBand: (point.publishedCount / busiest) * ceiling * 0.3,
   }));
 
-  // Нажатие по дню переносит к публикациям этого дня в таблице ниже — так же,
-  // как точка на графике поста переносит к своему замеру.
-  const focused = useFocusedDay();
+  // Выбранный день живёт в URL: сервер построит таблицу с суточными
+  // приростами, а ссылку можно перезагрузить или открыть в другой вкладке.
   // Recharts отдаёт при нажатии только номер и подпись деления, без самой
   // точки ряда, поэтому день берётся по номеру из тех же данных.
   const pick = (state: { activeIndex?: number | string | null }) => {
     const index = Number(state?.activeIndex);
     const day = Number.isInteger(index) ? data[index]?.day : undefined;
-    if (day) toggleFocusedDay(day);
+    if (day) router.replace(selectedDayHref(pathname, search.toString(), day === selectedDay ? undefined : day, mode), { scroll: false });
   };
 
   return (
@@ -87,10 +90,10 @@ export default function AccountTrendPlot({ points, primary, mode = "median" }: {
         <ChartTooltip cursor={{ strokeDasharray: "4 4" }}
           content={(props) => <TrendTooltip {...props} primary={primary} mode={mode} />} />
         <Line yAxisId="reactions" dataKey={reactionsKey} type="monotone" stroke="var(--chart-1)"
-          strokeWidth={2.5} dot={(props) => markedDot(props, focused, "var(--chart-1)")} activeDot={{ r: 5 }}
+          strokeWidth={2.5} dot={(props) => markedDot(props, selectedDay ?? null, "var(--chart-1)")} activeDot={{ r: 5 }}
           connectNulls={false} isAnimationActive animationDuration={420} />
         <Line yAxisId="views" dataKey={viewsKey} type="monotone" stroke="var(--chart-2)"
-          strokeWidth={2.5} dot={(props) => markedDot(props, focused, "var(--chart-2)")} activeDot={{ r: 5 }}
+          strokeWidth={2.5} dot={(props) => markedDot(props, selectedDay ?? null, "var(--chart-2)")} activeDot={{ r: 5 }}
           connectNulls={false} isAnimationActive animationDuration={420} />
       </ComposedChart>
     </ChartContainer>

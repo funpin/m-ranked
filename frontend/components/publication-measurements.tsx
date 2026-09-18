@@ -62,7 +62,7 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
 
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>;
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>; gaps: ReturnType<typeof observationGaps>;
 }) {
   const { metrics, platform, delta } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
@@ -166,8 +166,14 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
   const phrase=nouns.length<=1 ? nouns[0] ?? "метрик" : `${nouns.slice(0,-1).join(", ")} и ${nouns.at(-1)}`;
   const tableMetrics = useMemo(() => tabulatedHistoryMetrics(rows),[rows]);
   const showBreakdown = rows.some(row => (historyReactionEntries(row)?.length ?? 0)>0);
-  const gaps = useMemo(() => observationGaps(rows),[rows]);
-  const gapSeconds = gaps.reduce((total,gap) => total+(gap.to-gap.from)/1000,0);
+  const gaps = useMemo(() => observationGaps(rows,platform),[rows,platform]);
+  const visibleGaps = useMemo(() => {
+    if (!rows.length) return gaps;
+    const low = Date.parse(rows[start]!.observedAt);
+    const high = Date.parse(rows[end]!.observedAt);
+    return gaps.filter(gap => gap.to >= low && gap.from <= high);
+  },[gaps,rows,start,end]);
+  const gapSeconds = visibleGaps.reduce((total,gap) => total+gap.missingSeconds,0);
   function jump(id: string) {
     const index = rows.findIndex((row) => row.snapshotId === id);
     if(index<0) return;
@@ -187,7 +193,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} gaps={visibleGaps} />
         </CardContent>
       </Card>
       <Card>
@@ -200,7 +206,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} gaps={visibleGaps} />
         </CardContent>
       </Card>
     </div>
@@ -231,7 +237,7 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
           getAriaLabel={(index) => (index === 0 ? "Начало диапазона" : "Конец диапазона")}
         />
         <div className="grid gap-2">
-          {gaps.length ? <p data-observation-gaps={gaps.length} className="text-muted-foreground text-sm">Пропуски в наблюдении: {gaps.length}, суммарно {duration(gapSeconds)}.</p> : null}
+          {visibleGaps.length ? <p data-observation-gaps={visibleGaps.length} className="text-muted-foreground text-sm">Пропуски сверх расписания: {visibleGaps.length}, суммарно {duration(gapSeconds)}. Заштрихована только просроченная часть.</p> : null}
           {end-start+1 > displayed.length ? <Badge variant="secondary" className="w-fit rounded-full font-semibold">Не отображено точек: {end-start+1-displayed.length}</Badge> : null}
         </div>
       </CardContent>

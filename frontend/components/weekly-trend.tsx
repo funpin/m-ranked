@@ -2,8 +2,10 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { selectedDayHref } from "@/lib/day-selection";
 
 type Point = {
   day: string; publishedCount: number;
@@ -35,8 +37,15 @@ const MODES: { id: TrendMode; label: string; hint: string }[] = [
  * шкалах. Сколько публикаций вышло в день, видно в обоих режимах: это опора,
  * без которой ни то ни другое не читается.
  */
-export function WeeklyTrend({ points, primary }: { points: readonly Point[]; primary: string }) {
-  const [mode, setMode] = useState<TrendMode>("median");
+export function WeeklyTrend({ points, primary, selectedDay, selectedTrend }: { points: readonly Point[]; primary: string; selectedDay?: string; selectedTrend?: TrendMode }) {
+  const [mode, setMode] = useState<TrendMode>(selectedTrend ?? "median");
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const chooseMode = (next: TrendMode) => {
+    setMode(next);
+    if (selectedDay) router.replace(selectedDayHref(pathname, search.toString(), selectedDay, next), { scroll: false });
+  };
   const published = points.reduce((total, point) => total + point.publishedCount, 0);
   const totals = mode === "total";
   return (
@@ -54,7 +63,7 @@ export function WeeklyTrend({ points, primary }: { points: readonly Point[]; pri
         {MODES.map((option) => (
           <button key={option.id} type="button" title={option.hint}
             aria-pressed={mode === option.id}
-            onClick={() => setMode(option.id)}
+            onClick={() => chooseMode(option.id)}
             className={cn(
               "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
               mode === option.id
@@ -67,7 +76,7 @@ export function WeeklyTrend({ points, primary }: { points: readonly Point[]; pri
       </div>
       {points.length > 1
         ? <>
-            <AccountTrendPlot points={points} primary={primary} mode={mode} />
+            <AccountTrendPlot points={points} primary={primary} mode={mode} selectedDay={selectedDay} />
             {/* Легенда под графиком и всегда в три колонки на широком экране,
                 в три строки на узком. Раньше она переносилась по ширине, а
                 подписи в двух режимах разной длины — «медиана лайков» против
@@ -88,7 +97,9 @@ export function WeeklyTrend({ points, primary }: { points: readonly Point[]; pri
                 </li>
               ))}
             </ul>
-            <p className="text-muted-foreground text-xs">Нажмите на день — покажем публикации этого дня в таблице ниже.</p>
+            <p className="text-muted-foreground min-h-9 text-xs">{totals
+              ? "Нажмите на день — покажем прирост каждой публикации за эти сутки в таблице ниже."
+              : "Нажмите на день — покажем публикации, вышедшие в этот день."}</p>
           </>
         : <p className="text-muted-foreground py-10 text-center text-sm">Недельного ряда ещё нет.</p>}
     </section>

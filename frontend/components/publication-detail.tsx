@@ -7,7 +7,6 @@ import { queryHref } from "@/lib/params";
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
 import type { PublicationAnomalyAnalysis } from "@/lib/types";
 import { PublicationMeasurements } from "./publication-measurements";
-import { AnomalyAnalysis } from "./anomaly-analysis";
 import { StatusPill } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,7 +52,7 @@ function Neighbour({ href, id, platform, direction }: {
   );
 }
 
-export function PublicationDetail({history,historyLimit=100,analysis=null,analysisLoadFailed=false}:{history:DetailHistory;historyLimit?:number;analysis?:PublicationAnomalyAnalysis|null;analysisLoadFailed?:boolean}) {
+export function PublicationDetail({history,historyLimit=100,analysis=null}:{history:DetailHistory;historyLimit?:number;analysis?:PublicationAnomalyAnalysis|null}) {
   const p=history.publication, telegram=p.platform === "telegram";
   const url=telegram && p.deletedAt && p.accountUsername ? `https://tgstat.ru/channel/@${p.accountUsername}/${p.displayExternalId ?? p.externalId}` : p.publicUrl;
   const label=`${publicationLabel(p.displayExternalId ?? p.externalId,p.platform)}${telegram && p.deletedAt ? " в TGStat" : ""}`;
@@ -100,7 +99,6 @@ export function PublicationDetail({history,historyLimit=100,analysis=null,analys
       </Card>
     ) : null}
 
-    <AnomalyAnalysis analysis={analysis} loadFailed={analysisLoadFailed} historyRevision={history.datasetRevision} />
     <PublicationMeasurements key={p.publicationId} rows={history.items} platform={p.platform} historyLimit={historyLimit} analysis={analysis}
       fullHistoryHref={historyLimit < FULL_PUBLICATION_HISTORY_LIMIT ? queryHref(publicationHref(p.publicationId),{history_limit:FULL_PUBLICATION_HISTORY_LIMIT}) : undefined} />
     </NavigationBoundary>

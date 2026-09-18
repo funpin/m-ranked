@@ -156,7 +156,7 @@ def test_public_screen_query_budgets() -> None:
             }, DEFAULT_BUDGET),
             ("account-publications", details.ACCOUNT_PUBLICATIONS, common | {
                 "account_id": fixture["account_id"], "publication_legacy_type": "posts",
-                "after_id": None, "fetch_limit": 51, "days": 70,
+                "after_id": None, "fetch_limit": 51, "days": 70, "growth_day": None,
             }, DEFAULT_BUDGET),
             ("publication", details.PUBLICATION, common | {
                 "entity_uuid": None, "legacy_id": fixture["publication_legacy_id"],

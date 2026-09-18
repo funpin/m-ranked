@@ -25,11 +25,12 @@ function short(value: number) {
  * У места в рейтинге знак читается наоборот: подняться — это уменьшить номер,
  * поэтому −3 показывается зелёным и со стрелкой вверх.
  */
-export function DeltaBadge({ value, tone = "growth", label, className }: {
+export function DeltaBadge({ value, tone = "growth", label, className, compact = true }: {
   value: number | null | undefined;
   tone?: DeltaTone;
   label?: string;
   className?: string;
+  compact?: boolean;
 }) {
   if (value === null || value === undefined || !Number.isFinite(value)) return null;
   const better = tone === "rank" ? value < 0 : value > 0;
@@ -40,7 +41,8 @@ export function DeltaBadge({ value, tone = "growth", label, className }: {
   // врал только знак у числа.
   const shown = tone === "rank" ? -value : value;
   const name = value === 0 ? "minus" : better ? "trending-up" : "trending-down";
-  const words = value === 0 ? "без изменений" : `${better ? "рост" : "спад"} на ${short(value)}`;
+  const formatted = compact ? short(shown) : new Intl.NumberFormat("ru-RU").format(Math.abs(shown));
+  const words = value === 0 ? "без изменений" : `${better ? "рост" : "спад"} на ${new Intl.NumberFormat("ru-RU").format(Math.abs(value))}`;
   return (
     <span
       className={cn(
@@ -53,7 +55,7 @@ export function DeltaBadge({ value, tone = "growth", label, className }: {
       title={label ? `${label}: ${words}` : words}
     >
       <Icon name={name} className="size-3 shrink-0" />
-      {value === 0 ? "0" : `${sign(shown)}${short(shown)}`}
+      {value === 0 ? "0" : `${sign(shown)}${formatted}`}
     </span>
   );
 }

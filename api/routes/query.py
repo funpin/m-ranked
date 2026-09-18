@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse, Response
@@ -274,6 +276,7 @@ async def account_publications(
     limit: int = Query(50),
     cursor: str | None = Query(None),
     revision: int | None = Query(None),
+    day: date | None = Query(None),
 ) -> Response:
     resolved_type = _legacy_type(legacyType, ("channels", "platform_accounts"))
     page_size = normalize.limit(limit)
@@ -284,13 +287,17 @@ async def account_publications(
         account_row = await db.fetch_one(details.ACCOUNT, {**identity, "as_of": committed_at})
         if account_row is None:
             raise NotFound(f"аккаунт {legacyId} не найден")
-        dimensions = f"account-publications:{account_row['account_id']}"
+        today = committed_at.astimezone(ZoneInfo("Europe/Moscow")).date()
+        if day is not None and not today - timedelta(days=6) <= day <= today:
+            raise BadRequest("day должен входить в последние 7 московских суток")
+        dimensions = f"account-publications:{account_row['account_id']}:{day.isoformat() if day else '-'}"
         after_id = normalize.scoped_cursor(cursor, revision, dimensions)
         publication_type = "posts" if account_row["platform"] == "telegram" else "platform_posts"
         rows = await db.fetch_all(details.ACCOUNT_PUBLICATIONS, {
             "account_id": account_row["account_id"], "publication_legacy_type": publication_type,
             "after_id": after_id, "fetch_limit": page_size + 1,
             "days": request.app.state.settings.retention_days, "as_of": committed_at,
+            "growth_day": day,
         })
         has_more = len(rows) > page_size
         visible = rows[:page_size]
@@ -303,7 +310,7 @@ async def account_publications(
 
     return await serve(request, "account-publications", {
         "id": legacyId.lower(), "legacyType": resolved_type,
-        "limit": page_size, "cursor": cursor or "",
+        "limit": page_size, "cursor": cursor or "", "day": day.isoformat() if day else "",
     }, DETAIL_TAGS, build, _pinned_revision(revision))
 
 

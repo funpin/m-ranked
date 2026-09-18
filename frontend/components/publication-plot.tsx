@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, duration, legacyDate } from "@/lib/format";
-import { observationGaps } from "@/lib/observation-gaps";
+import type { ObservationGap } from "@/lib/observation-gaps";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
 import type { HistorySnapshot } from "@/lib/types";
@@ -27,24 +27,26 @@ function SampleDot(props: { cx?: number; cy?: number; fill?: string; evidence?: 
 
 /** Two lines per tick: the wall clock of the sample and the age of the
  *  publication at that moment, exactly as the inherited axis read. */
-function TimeTick({ x, y, payload, rows }: {
+function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
   x?: number | string; y?: number | string; payload?: { value?: number }; rows: HistorySnapshot[];
+  index?: number; visibleTicksCount?: number;
 }) {
   const value = payload?.value;
   if (x === undefined || y === undefined || typeof value !== "number" || !rows.length) return null;
   const nearest = rows.reduce((best, row) =>
     Math.abs(Date.parse(row.observedAt) - value) < Math.abs(Date.parse(best.observedAt) - value) ? row : best, rows[0]!);
+  const anchor: "start" | "middle" | "end" = index === 0 ? "start" : index === (visibleTicksCount ?? 0) - 1 ? "end" : "middle";
   return (
-    <text x={x} y={y} textAnchor="middle" fill="var(--muted-foreground)" fontSize={11}>
+    <text x={x} y={y} textAnchor={anchor} fill="var(--muted-foreground)" fontSize={11}>
       <tspan x={x} dy="0.8em">{shortDate(new Date(value).toISOString())}</tspan>
       <tspan x={x} dy="1.1em">{nearest.synthetic ? "момент публикации" : `через ${duration(nearest.ageHours * 3600)}`}</tspan>
     </text>
   );
 }
 
-export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, evidenceIds, hidden, scale }: {
+export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, evidenceIds, hidden, scale, gaps }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto";
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly ObservationGap[];
 }) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const active = useRef(0);
@@ -84,7 +86,6 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
     return grouped;
   }, [rows, metrics, delta, evidenceIds, at]);
 
-  const gaps = useMemo(() => observationGaps(rows), [rows]);
   const firstAt = rows.length ? at(rows[0]!) : 0;
   const lastAt = rows.length ? at(rows[rows.length - 1]!) : 1;
 
@@ -334,4 +335,3 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, de
     </div>
   );
 }
-

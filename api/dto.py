@@ -327,6 +327,7 @@ def publication(row: dict[str, Any], revision: int) -> dict[str, Any]:
 
 
 def publication_list_item(row: dict[str, Any]) -> dict[str, Any]:
+    growth_day = row.get("growth_day")
     return {
         "publicationId": str(row["publication_id"]),
         "legacyId": row["legacy_id"],
@@ -344,6 +345,11 @@ def publication_list_item(row: dict[str, Any]) -> dict[str, Any]:
         "shares": counter(row, "shares"),
         "title": None,
         "archivedText": None,
+        "dailyGrowth": None if growth_day is None else {
+            "day": growth_day.isoformat(),
+            "reactions": row.get("day_reactions_gain"),
+            "views": row.get("day_views_gain"),
+        },
         **_presentation(row),
     }
 

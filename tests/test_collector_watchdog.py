@@ -62,3 +62,5 @@ def test_watchdog_does_not_use_snapshot_freshness_as_liveness() -> None:
     assert "collection_account_result" in text
     assert "publication_metric_snapshot" not in text
     assert "PLATFORMS=(telegram vk max rutube)" in text
+    assert "--file=-" in text
+    assert "--command" not in text

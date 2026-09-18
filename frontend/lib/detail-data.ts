@@ -12,8 +12,8 @@ export function reportDetailFailure(where: string, error: unknown) {
 }
 import type { LegacyAccountType, LegacyPublicationType, PublicationHistory } from "./types";
 
-export async function loadAccountPublications(id: number | string, type?: LegacyAccountType, limit = 100, revision?: number) {
-  return api.accountPublications(id, type, limit, undefined, revision);
+export async function loadAccountPublications(id: number | string, type?: LegacyAccountType, limit = 100, revision?: number, day?: string) {
+  return api.accountPublications(id, type, limit, undefined, revision, day);
 }
 export type DetailHistory=PublicationHistory & {accountDisplayName?:string;previousDisplayId?:string;nextDisplayId?:string;accountId?:string;previousPublicationId?:string;nextPublicationId?:string};
 export async function loadPublicationHistory(id: number | string, type?: LegacyPublicationType, limit = 100): Promise<DetailHistory> {

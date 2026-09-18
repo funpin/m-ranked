@@ -87,7 +87,7 @@ test("недельный график площадки рисуется двум
   await expect(trend).toContainText("публикаций в день");
 });
 
-test("нажатие по дню на графике переносит к публикациям этого дня", async ({ page }) => {
+test("в режиме медианы нажатие выделяет публикации этого дня", async ({ page }) => {
   await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
   const trend = page.getByRole("region", { name: "Динамика за неделю" });
   await expect(trend.locator(".recharts-bar-rectangle").first()).toBeVisible();
@@ -96,16 +96,34 @@ test("нажатие по дню на графике переносит к пу�
   await expect(rows.first()).toBeVisible();
   await expect(page.getByRole("status")).toHaveCount(0);
 
-  // Столбец первого дня ряда — 1 июля, тот же день, что и у публикаций.
+  // Столбец первого дня ряда — 1 июля.
   await trend.locator(".recharts-bar-rectangle").first().click();
 
   const banner = page.getByRole("status");
   await expect(banner).toContainText("публикации этого дня");
   await expect(banner).toContainText("1.07");
-  await expect(page.locator('tbody tr[data-published-day="2026-07-01"]').first()).toBeVisible();
+  await expect(page).toHaveURL(/day=2026-07-01&trend=median/);
+  await expect(rows.first()).toHaveCSS("opacity", "1");
+  await expect(rows.nth(1)).toHaveCSS("opacity", "0.45");
+  await expect(rows.first()).not.toContainText("+50");
 
-  await banner.getByRole("button", { name: "показать все" }).click();
+  await banner.getByRole("link", { name: "показать все" }).click();
   await expect(page.getByRole("status")).toHaveCount(0);
+});
+
+test("в режиме всего нажатие показывает суточный прирост каждой публикации", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  const trend = page.getByRole("region", { name: "Динамика за неделю" });
+  await trend.getByRole("button", { name: "Всего за день" }).click();
+  await trend.locator(".recharts-bar-rectangle").first().click();
+
+  const banner = page.getByRole("status");
+  await expect(banner).toContainText("прирост за сутки");
+  await expect(page).toHaveURL(/day=2026-07-01&trend=total/);
+  const rows = page.locator("tbody tr[data-published-day]");
+  await expect(rows.first()).toContainText("+50");
+  await expect(rows.nth(1)).toContainText("+40");
+  await expect(rows.nth(1)).toHaveCSS("opacity", "1");
 });
 
 test("значки ссылаются на общий набор, а не возят свои контуры", async ({ page }) => {
@@ -177,7 +195,7 @@ test("переключение режима не меняет высоту бл�
 
 test("строка таблицы открывает публикацию, а ссылка рядом уводит на площадку", async ({ page }) => {
   await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
-  const row = page.locator("tbody tr[data-published-day]").first();
+  const row = page.locator("tbody tr").first();
   await expect(row).toHaveClass(/cursor-pointer/);
   // Ссылка на сам пост остаётся отдельной и уводит наружу.
   const outward = row.locator('a[target="_blank"]');

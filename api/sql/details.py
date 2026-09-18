@@ -331,6 +331,38 @@ WITH page AS (
            (SELECT cursor.published_at,cursor.id FROM ingest.visible_publication cursor
              WHERE cursor.id=%(after_id)s::uuid AND cursor.primary_account_id=%(account_id)s::uuid))
      ORDER BY publication.published_at DESC,publication.id DESC LIMIT %(fetch_limit)s
+), growth_edges AS (
+    -- Последний валидный замер выбранного дня и предыдущего дня.
+    -- Партиция снимков фиксируется месяцем публикации.
+    SELECT DISTINCT ON (page.id, (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date)
+           page.id AS publication_id,
+           (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
+           CASE WHEN snapshot.reactions_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE snapshot.reactions_count END AS reactions_count,
+           CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE snapshot.views_count END AS views_count
+      FROM page
+      JOIN ingest.publication_metric_snapshot_active snapshot
+        ON snapshot.publication_id=page.id
+       AND snapshot.published_month=date_trunc('month',page.published_at)::date
+     WHERE %(growth_day)s::date IS NOT NULL
+       AND snapshot.observed_at >= (((%(growth_day)s::date - 1)::timestamp)
+                                    AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.observed_at < (((%(growth_day)s::date + 1)::timestamp)
+                                   AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.observed_at<=%(as_of)s::timestamptz
+       AND snapshot.quality<>'invalid'
+     ORDER BY page.id,
+              (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date,
+              snapshot.observed_at DESC,snapshot.id DESC
+), growth AS (
+    SELECT page.id AS publication_id,
+           max(edge.reactions_count) FILTER (WHERE edge.metric_day=%(growth_day)s::date) AS end_reactions,
+           max(edge.reactions_count) FILTER (WHERE edge.metric_day=%(growth_day)s::date-1) AS previous_reactions,
+           max(edge.views_count) FILTER (WHERE edge.metric_day=%(growth_day)s::date) AS end_views,
+           max(edge.views_count) FILTER (WHERE edge.metric_day=%(growth_day)s::date-1) AS previous_views
+      FROM page LEFT JOIN growth_edges edge ON edge.publication_id=page.id
+     GROUP BY page.id
 )
 SELECT page.id AS publication_id, alias.legacy_id, alias.entity_type, alias.legacy_route,
        identity.external_id, identity.public_url, page.published_at,page.publication_type,
@@ -341,7 +373,20 @@ SELECT page.id AS publication_id, alias.legacy_id, alias.entity_type, alias.lega
        latest.views_count,latest.views_observed_at,latest.views_quality::text AS views_quality,
        latest.reactions_count,latest.reactions_observed_at,latest.reactions_quality::text AS reactions_quality,
        latest.comments_count,latest.comments_observed_at,latest.comments_quality::text AS comments_quality,
-       latest.shares_count,latest.shares_observed_at,latest.shares_quality::text AS shares_quality
+       latest.shares_count,latest.shares_observed_at,latest.shares_quality::text AS shares_quality,
+       %(growth_day)s::date AS growth_day,
+       CASE WHEN growth.end_reactions IS NULL THEN NULL
+            WHEN growth.previous_reactions IS NOT NULL
+              THEN greatest(growth.end_reactions-growth.previous_reactions,0)
+            WHEN (page.published_at AT TIME ZONE 'Europe/Moscow')::date=%(growth_day)s::date
+              THEN greatest(growth.end_reactions,0)
+            ELSE NULL END AS day_reactions_gain,
+       CASE WHEN growth.end_views IS NULL THEN NULL
+            WHEN growth.previous_views IS NOT NULL
+              THEN greatest(growth.end_views-growth.previous_views,0)
+            WHEN (page.published_at AT TIME ZONE 'Europe/Moscow')::date=%(growth_day)s::date
+              THEN greatest(growth.end_views,0)
+            ELSE NULL END AS day_views_gain
   FROM page
   JOIN catalog.visible_platform_account account ON account.id=page.primary_account_id
   JOIN LATERAL (SELECT candidate.* FROM catalog.legacy_entity_alias candidate
@@ -353,6 +398,7 @@ SELECT page.id AS publication_id, alias.legacy_id, alias.entity_type, alias.lega
        ORDER BY candidate.id LIMIT 1) identity ON true
   LEFT JOIN analytics.publication_latest latest ON latest.publication_id=page.id
    AND latest.observed_at<=%(as_of)s::timestamptz AND NOT latest.synthetic AND latest.quality<>'invalid'
+  LEFT JOIN growth ON growth.publication_id=page.id
  ORDER BY page.published_at DESC,page.id DESC
 """
 
@@ -547,6 +593,7 @@ WITH bounds AS (
     -- набирают и старые. Месяц публикации передаётся явно — это ключ
     -- партиционирования снимков.
     SELECT publication.id,
+           (publication.published_at AT TIME ZONE 'Europe/Moscow')::date AS published_day,
            date_trunc('month', publication.published_at)::date AS published_month
       FROM ingest.visible_publication publication
      WHERE publication.primary_account_id=%(account_id)s::uuid
@@ -557,8 +604,12 @@ WITH bounds AS (
     -- на полутора сотнях постов это 800 мс против полусотни.
     SELECT DISTINCT ON (tracked.id, (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date)
            tracked.id,
+           tracked.published_day,
            (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
-           snapshot.reactions_count, snapshot.views_count
+           CASE WHEN snapshot.reactions_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE snapshot.reactions_count END AS reactions_count,
+           CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE snapshot.views_count END AS views_count
       FROM tracked
      CROSS JOIN bounds
       JOIN ingest.publication_metric_snapshot_active snapshot
@@ -570,15 +621,25 @@ WITH bounds AS (
      ORDER BY tracked.id,
               (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date,
               snapshot.observed_at DESC, snapshot.id DESC
-), growth AS (
-    -- Прирост за сутки — разница между границей этого дня и границей
-    -- предыдущего. Первый день ряда остаётся без пары и в сумму не идёт:
-    -- восьмая граница берётся ровно ради него.
-    SELECT metric_day,
-           greatest(reactions_count - lag(reactions_count) OVER pub, 0) AS reactions_gain,
-           greatest(views_count - lag(views_count) OVER pub, 0) AS views_gain
+), growth_window AS (
+    -- Сохраняем не только значения, но и календарный день предыдущей границы.
+    -- Иначе lag() перенес бы многодневный прирост на один день при пропуске замера.
+    SELECT *, lag(metric_day) OVER pub AS previous_day,
+           lag(reactions_count) OVER pub AS previous_reactions,
+           lag(views_count) OVER pub AS previous_views
       FROM edges
     WINDOW pub AS (PARTITION BY id ORDER BY metric_day)
+), growth AS (
+    SELECT metric_day,
+           CASE WHEN previous_day=metric_day-1
+                  THEN greatest(reactions_count-previous_reactions,0)
+                WHEN published_day=metric_day THEN greatest(reactions_count,0)
+                ELSE NULL END AS reactions_gain,
+           CASE WHEN previous_day=metric_day-1
+                  THEN greatest(views_count-previous_views,0)
+                WHEN published_day=metric_day THEN greatest(views_count,0)
+                ELSE NULL END AS views_gain
+      FROM growth_window
 ), daily_growth AS (
     SELECT metric_day, sum(reactions_gain)::numeric AS total_reactions,
            sum(views_gain)::numeric AS total_views

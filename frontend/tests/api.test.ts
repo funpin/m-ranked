@@ -111,6 +111,22 @@ test("account compatibility routes send the correct legacyType", async () => {
   assert.equal(seenUrls[1], "https://api.example.test/api/v1/accounts/27?legacyType=platform_accounts");
 });
 
+test("account publication query forwards the selected Moscow day", async () => {
+  let seenUrl = "";
+  const client = createApiClient({
+    baseUrl: "https://api.example.test",
+    fetcher: async (input) => {
+      seenUrl = String(input);
+      return Response.json({ items: [], nextCursor: null, datasetRevision: 17, asOf: "2026-09-18T12:00:00Z" });
+    },
+  });
+
+  await client.accountPublications(12, "channels", 100, undefined, 17, "2026-09-18");
+  const query = new URL(seenUrl).searchParams;
+  assert.equal(query.get("day"), "2026-09-18");
+  assert.equal(query.get("revision"), "17");
+});
+
 test("analysis client uses its independent endpoint and preserves nullable score", async () => {
   let seenUrl="";
   const client=createApiClient({baseUrl:"https://api.example.test",fetcher:async(input)=>{
