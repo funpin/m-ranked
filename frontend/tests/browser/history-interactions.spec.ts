@@ -1,12 +1,30 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-for(const [path,reaction,hasComments,hasShares] of [
-  ["/posts/1","реакций",true,false], ["/platform-posts/21","лайков",true,true],
-  ["/platform-posts/1","реакций",true,false], ["/platform-posts/41","лайков",false,false],
+test("publication charts use the full content width and stack vertically",async({page})=>{
+  await page.setViewportSize({width:1440,height:900});
+  await page.goto("/posts/1");
+  const stack=page.getByTestId("publication-chart-stack");
+  const total=page.getByRole("img",{name:"Накопление показателей",exact:true});
+  const growth=page.getByRole("img",{name:"Прирост между замерами",exact:true});
+  await expect(total).toHaveAttribute("data-chart-ready","true");
+  const [stackBox,totalBox,growthBox]=await Promise.all([stack.boundingBox(),total.boundingBox(),growth.boundingBox()]);
+  expect(stackBox).not.toBeNull();expect(totalBox).not.toBeNull();expect(growthBox).not.toBeNull();
+  expect(totalBox!.width).toBeGreaterThan(stackBox!.width*0.9);
+  expect(growthBox!.width).toBeCloseTo(totalBox!.width,0);
+  expect(growthBox!.y).toBeGreaterThan(totalBox!.y+totalBox!.height);
+});
+
+for(const [path,platform,platformLabel,reaction,hasComments,hasShares] of [
+  ["/posts/1","telegram","TG","реакций",true,false], ["/platform-posts/21","vk","ВК","лайков",true,true],
+  ["/platform-posts/1","max","MAX","реакций",true,false], ["/platform-posts/41","rutube","RUTUBE","лайков",false,false],
 ] as const) {
   test(`${path} uses shared metrics, ratios and exact growth tooltips`, async({page},testInfo) => {
     await page.goto(path);
+    const meta=page.getByTestId("publication-meta");
+    await expect(meta).toHaveAttribute("data-platform",platform);
+    await expect(meta.locator(":scope > span").first()).toHaveText(platformLabel);
+    await expect(page.getByTestId("publication-meta-copy")).toHaveText(/^Опубликовано: .* · история (полная|неполная) · тип: [^·]+$/);
     const total=page.getByRole("img",{name:"Накопление показателей",exact:true});
     const growth=page.getByRole("img",{name:"Прирост между замерами",exact:true});
     await expect(total).toHaveAttribute("data-chart-ready","true");

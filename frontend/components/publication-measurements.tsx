@@ -182,7 +182,7 @@ export function PublicationMeasurements({ rows, platform, publishedAt, historyLi
   }
   const maximum = Math.max(0, rows.length - 1);
   return <>
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div data-testid="publication-chart-stack" className="grid gap-4">
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">

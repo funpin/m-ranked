@@ -99,7 +99,7 @@ export function PublicationSkeleton() {
         <Skeleton className="h-4 w-full max-w-xl" />
         <Skeleton className="h-4 w-3/4 max-w-lg" />
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4">
         {Array.from({ length: 2 }, (_, index) => (
           <div key={index} className="bg-card grid gap-4 rounded-xl border p-5 shadow-sm">
             <Skeleton className="h-5 w-56" />

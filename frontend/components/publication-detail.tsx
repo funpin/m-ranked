@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { NavigationBoundary } from "@/components/navigation-boundary";
+import { PlatformChip } from "@/components/platform-chip";
 import { PublicationSkeleton } from "@/components/skeletons";
 
 /** Previous and next keep their rel hints and stay readable when unavailable,
@@ -69,8 +70,9 @@ export function PublicationDetail({history,historyLimit=100,analysis=null}:{hist
             ? <a className="text-chart-2 inline-flex items-center gap-1 hover:underline" href={url} target="_blank" rel="noopener noreferrer">{label}<ExternalLink className="size-4 shrink-0" aria-hidden="true" /></a>
             : label}
         </h1>
-        <p className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-2">
-          <span>Опубликовано: <b className="text-foreground font-semibold">{legacyDate(p.publishedAt,true)}</b> · история {p.historyCompleteness === "complete" ? "полная" : "неполная"} · тип: {postTypeLabel(p.publicationType)}{telegram ? "" : ` · ${PLATFORM_LONG_LABELS[p.platform]}`}</span>
+        <p data-testid="publication-meta" data-platform={p.platform} className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-2 gap-y-2">
+          <PlatformChip platform={p.platform} className="shrink-0 rounded-lg border border-current/30 px-2.5 py-1 text-xs tracking-wide" />
+          <span data-testid="publication-meta-copy">Опубликовано: <b className="text-foreground font-semibold">{legacyDate(p.publishedAt,true)}</b> · история {p.historyCompleteness === "complete" ? "полная" : "неполная"} · тип: {postTypeLabel(p.publicationType)}</span>
           {p.deletedAt ? <StatusPill tone="red">удалена из {PLATFORM_LONG_LABELS[p.platform]}</StatusPill> : null}
           {p.repost ? <StatusPill tone="neutral">репост</StatusPill> : null}
           {p.ambiguousAlbumReactions ? <span className="text-warning font-medium">реакции элементов альбома различаются</span> : null}
