@@ -14,3 +14,9 @@ ca864a95914aeefd6d1b7dc583b071c736096414:migration/reports/integration-review-20
 8475074f4a41cd9d8e13b623f1c51adf30426c00:migration/reports/integration-review-20260905-r6/observations.xml:generic-api-key:73
 # report.json — карта SHA-256 файлов ревизии каталога, а не ключ.
 8475074f4a41cd9d8e13b623f1c51adf30426c00:migration/reports/catalog-review-v20-20260905/report.json:generic-api-key:141
+# c636b74 — три теста используют одинаковую очевидную заглушку из повторов
+# `0123456789abcdef` для 32-байтного CSRF-секрета. Это не учётные данные;
+# отпечатки привязаны к конкретному коммиту, файлу и строке.
+c636b74c961b0699defe93396c8e04db09bf384d:tests/test_api_admin.py:generic-api-key:31
+c636b74c961b0699defe93396c8e04db09bf384d:tests/test_admin_session_postgres.py:generic-api-key:27
+c636b74c961b0699defe93396c8e04db09bf384d:tests/test_api_security.py:generic-api-key:27
