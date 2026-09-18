@@ -41,7 +41,7 @@ export function DaySpotlight({ day, mode = "median" }: { day?: string; mode?: "m
         {dayLabel(day)}
       </span>
       <span className="text-muted-foreground">{mode === "median" ? "публикации этого дня" : "прирост за сутки показан рядом с реакциями и просмотрами"}</span>
-      <Link href={selectedDayHref(pathname, search.toString())} scroll={false}
+      <Link href={selectedDayHref(pathname, search.toString(), undefined, mode)} scroll={false}
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-md bg-transparent underline underline-offset-4">
         <X className="size-3.5" aria-hidden="true" />{mode === "median" ? "показать все" : "скрыть прирост"}
       </Link>

@@ -23,5 +23,7 @@ test("отсутствующая и битая дата дня не дают", (
 test("выбор дня живёт в URL и не стирает остальные параметры", () => {
   assert.equal(selectedDayHref("/accounts/id", "platform=vk", "2026-09-14"), "/accounts/id?platform=vk&day=2026-09-14&trend=median");
   assert.equal(selectedDayHref("/accounts/id", "platform=vk", "2026-09-14", "total"), "/accounts/id?platform=vk&day=2026-09-14&trend=total");
+  assert.equal(selectedDayHref("/accounts/id", "platform=vk", undefined, "total"), "/accounts/id?platform=vk&trend=total");
+  assert.equal(selectedDayHref("/accounts/id", "platform=vk&day=2026-09-14&trend=total", undefined, "total"), "/accounts/id?platform=vk&trend=total");
   assert.equal(selectedDayHref("/accounts/id", "platform=vk&day=2026-09-14&trend=median"), "/accounts/id?platform=vk");
 });

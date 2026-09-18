@@ -115,11 +115,18 @@ test("в режиме всего нажатие показывает суточ�
   await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
   const trend = page.getByRole("region", { name: "Динамика за неделю" });
   await trend.getByRole("button", { name: "Всего за день" }).click();
-  await trend.locator(".recharts-bar-rectangle").first().click();
+  await expect(page).toHaveURL(/trend=total/);
+  // Режим хранится в URL независимо от выбранного дня: серверный refresh не
+  // должен возвращать график к медианам перед следующим кликом по точке.
+  await page.reload();
+  const reloadedTrend = page.getByRole("region", { name: "Динамика за неделю" });
+  await expect(reloadedTrend.getByRole("button", { name: "Всего за день" })).toHaveAttribute("aria-pressed", "true");
+  await reloadedTrend.locator(".recharts-bar-rectangle").first().click();
 
   const banner = page.getByRole("status");
   await expect(banner).toContainText("прирост за сутки");
-  await expect(page).toHaveURL(/day=2026-07-01&trend=total/);
+  await expect(page).toHaveURL((url) =>
+    url.searchParams.get("day") === "2026-07-01" && url.searchParams.get("trend") === "total");
   const rows = page.locator("tbody tr[data-published-day]");
   await expect(rows.first()).toContainText("+50");
   await expect(rows.nth(1)).toContainText("+40");

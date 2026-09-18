@@ -5,9 +5,14 @@ export function selectedDayHref(pathname: string, search: string, day?: string, 
   const params = new URLSearchParams(search);
   if (day) {
     params.set("day", day);
-    params.set("trend", mode ?? "median");
   } else {
     params.delete("day");
+  }
+  if (mode === "total") {
+    params.set("trend", mode);
+  } else if (day) {
+    params.set("trend", "median");
+  } else {
     params.delete("trend");
   }
   const query = params.toString();

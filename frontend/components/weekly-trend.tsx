@@ -44,7 +44,7 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend }: { p
   const search = useSearchParams();
   const chooseMode = (next: TrendMode) => {
     setMode(next);
-    if (selectedDay) router.replace(selectedDayHref(pathname, search.toString(), selectedDay, next), { scroll: false });
+    router.replace(selectedDayHref(pathname, search.toString(), selectedDay, next), { scroll: false });
   };
   const published = points.reduce((total, point) => total + point.publishedCount, 0);
   const totals = mode === "total";

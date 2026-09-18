@@ -39,7 +39,7 @@ export default async function AccountPage({ params, searchParams }: Props) {
     const requestedDay = typeof query.day === "string" ? query.day : undefined;
     selectedDay = account.stats?.dailySeries?.some(point => point.day === requestedDay)
       ? requestedDay : undefined;
-    selectedTrend = selectedDay && query.trend === "total" ? "total" : selectedDay ? "median" : undefined;
+    selectedTrend = query.trend === "total" ? "total" : "median";
     // Остальное читается по той же ревизии и одновременно: последовательная
     // цепочка из трёх запросов давала 345 мс вместо 160, а ревизия за это
     // время успевала смениться — она меняется каждые две секунды.
