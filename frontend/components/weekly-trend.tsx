@@ -49,7 +49,7 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend }: { p
   const published = points.reduce((total, point) => total + point.publishedCount, 0);
   const totals = mode === "total";
   return (
-    <section className="grid content-start gap-3 rounded-lg border p-4" aria-label="Динамика за неделю">
+    <section className="grid min-w-0 content-start gap-3 rounded-lg border p-4" aria-label="Динамика за неделю">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <b className="text-sm font-semibold">Неделя</b>
         <span className="text-muted-foreground text-xs">
@@ -97,7 +97,7 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend }: { p
                 </li>
               ))}
             </ul>
-            <p className="text-muted-foreground min-h-9 text-xs">{totals
+            <p className="text-muted-foreground min-h-[3.25rem] text-xs">{totals
               ? "Нажмите на день — покажем прирост каждой публикации за эти сутки в таблице ниже."
               : "Нажмите на день — покажем публикации, вышедшие в этот день."}</p>
           </>

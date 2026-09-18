@@ -74,7 +74,7 @@ export default function AccountTrendPlot({ points, primary, mode = "median", sel
   };
 
   return (
-    <ChartContainer config={config} className="h-[280px] w-full [&_.recharts-surface]:cursor-pointer">
+    <ChartContainer config={config} className="h-[280px] w-full min-w-0 max-w-full [&_.recharts-surface]:cursor-pointer">
       <ComposedChart data={data} margin={{ left: 4, right: 4, top: 8, bottom: 8 }} onClick={pick}>
         <CartesianGrid vertical={false} yAxisId="reactions" stroke="var(--border)" />
         <Bar yAxisId="views" dataKey="postsBand" fill="var(--muted-foreground)"

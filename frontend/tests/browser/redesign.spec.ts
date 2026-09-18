@@ -13,16 +13,53 @@ async function settled(page: Page) {
     document.getAnimations().map((animation) => animation.finished.catch(() => undefined))));
 }
 
+async function viewportLayout(page: Page) {
+  return page.evaluate(() => {
+    const viewportWidth = window.innerWidth;
+    const offenders = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .map((element) => {
+        const bounds = element.getBoundingClientRect();
+        let ancestor = element.parentElement;
+        let clipped = false;
+        while (ancestor && ancestor !== document.body) {
+          if (/^(auto|scroll|hidden|clip)$/.test(getComputedStyle(ancestor).overflowX)) {
+            clipped = true;
+            break;
+          }
+          ancestor = ancestor.parentElement;
+        }
+        return {
+          element: element.tagName.toLowerCase(),
+          marker: element.id || element.dataset.slot || element.getAttribute("role") || element.className.toString().slice(0, 80),
+          left: Math.round(bounds.left),
+          right: Math.round(bounds.right),
+          clipped,
+        };
+      })
+      .filter(({ left, right, clipped }) => !clipped && (left < -1 || right > viewportWidth + 1))
+      .sort((a, b) => (b.right - viewportWidth) - (a.right - viewportWidth))
+      .slice(0, 5);
+    return {
+      overflow: document.documentElement.scrollWidth - viewportWidth,
+      offenders,
+    };
+  });
+}
+
 for (const theme of ["light", "dark"]) {
   test(`remaining screens fit the viewport and meet axe AA in ${theme} theme`, async ({ page }) => {
     await page.addInitScript((value) => localStorage.setItem("m-ranked-theme", value), theme);
     await page.setExtraHTTPHeaders({ authorization: `Basic ${Buffer.from("admin:fixture-password").toString("base64")}` });
     for (const path of ["/rating?platform=telegram", "/accounts/00000001-0000-4000-8000-000000000001", "/compare?platform=max", "/missing-page", "/manage"]) {
-      await page.goto(path);
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      await settled(page);
-      expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
+      await test.step(path, async () => {
+        await page.goto(path);
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        await settled(page);
+        await expect.poll(() => viewportLayout(page), {
+          message: `${path} must not overflow the viewport after layout settles`,
+        }).toEqual({ overflow: 0, offenders: [] });
+        expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
+      });
     }
   });
 }
@@ -179,21 +216,31 @@ test("переключение режима не меняет высоту бл�
   const trend = page.getByRole("region", { name: "Динамика за неделю" });
   const toggle = trend.getByRole("group", { name: "Что показывают линии" });
   const legend = trend.locator("ul");
+  const hint = trend.locator("p");
+  const plotBox = trend.locator('[data-slot="chart"]');
   const height = async (target: typeof trend) => (await target.boundingBox())!.height;
   // Ждём саму картинку: пока на её месте заготовка, страница короче, полоса
   // прокрутки то появляется, то нет, и от этого переносится текст вокруг.
   await expect(trend.locator("svg.recharts-surface")).toBeVisible();
+  await settled(page);
 
-  const medians = { block: await height(trend), legend: await height(legend) };
+  const medians = {
+    block: await height(trend), legend: await height(legend),
+    hint: await height(hint), plot: await height(plotBox),
+  };
   await toggle.getByRole("button", { name: "Всего за день" }).click();
   await expect(trend).toContainText("всего просмотров");
-  const totals = { block: await height(trend), legend: await height(legend) };
+  await expect(page).toHaveURL(/trend=total/);
+  await settled(page);
+  const totals = {
+    block: await height(trend), legend: await height(legend),
+    hint: await height(hint), plot: await height(plotBox),
+  };
 
   // Подписи в двух режимах разной длины, и раньше легенда переносилась по
   // ширине — число строк менялось, блок прыгал. Сетка с постоянным числом
   // колонок этого не допускает.
-  expect(totals.legend).toBe(medians.legend);
-  expect(totals.block).toBe(medians.block);
+  expect(totals).toEqual(medians);
 
   // И легенда стоит под графиком, а не над ним.
   const plot = trend.locator("svg.recharts-surface");

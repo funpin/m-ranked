@@ -26,9 +26,9 @@ function Tile({ value, label, note, delta, tone, deltaLabel }: {
   delta?: number | null; tone?: DeltaTone; deltaLabel?: string;
 }) {
   return (
-    <div className="grid content-start gap-1 rounded-lg border p-4">
+    <div className="grid min-w-0 content-start gap-1 rounded-lg border p-4">
       <b className="font-heading tabular text-2xl leading-none">{value}</b>
-      <small className="text-muted-foreground flex items-center gap-1">
+      <small className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1">
         {label}
         {note ? <MethodNote title={label}>{note}</MethodNote> : null}
       </small>
@@ -73,8 +73,8 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
       {/* Слева шесть чисел, справа один график за неделю. Линии внутри плиток
           соперничали с самими числами и ничего толком не показывали: на ста
           пикселях ширины форма недели не читается. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div className="grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <Tile value={String(stats.postCount)} label="публикаций в базе"
             delta={change(stats.postCount, previous.postCount)} deltaLabel="публикаций за сутки" />
           <Tile value={String(stats.monitored)} label={`с полной историей${telegram ? "" : " ⓘ"}`}
