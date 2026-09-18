@@ -1,14 +1,16 @@
 import type { HistorySnapshot } from "./types";
 
-/** Exact elapsed wall-clock time for a chart observation. Hours deliberately
- *  keep growing past 24 so the value remains one compact h:mm:ss duration. */
+/** Exact elapsed wall-clock time for a chart observation. Once a full day has
+ *  elapsed, keep days separate so the clock portion remains easy to scan. */
 export function elapsedSincePublication(publishedAt:string,observedAt:string):string|null {
   const published=Date.parse(publishedAt),observed=Date.parse(observedAt);
   if(!Number.isFinite(published)||!Number.isFinite(observed)||observed<published)return null;
   const seconds=Math.floor((observed-published)/1000);
-  const hours=Math.floor(seconds/3600);
+  const days=Math.floor(seconds/86400);
+  const hours=Math.floor(seconds%86400/3600);
   const minutes=Math.floor(seconds%3600/60);
-  return `+${hours}:${String(minutes).padStart(2,"0")}:${String(seconds%60).padStart(2,"0")}`;
+  const clock=`${days ? String(hours).padStart(2,"0") : hours}:${String(minutes).padStart(2,"0")}:${String(seconds%60).padStart(2,"0")}`;
+  return `+${days ? `${days} д ` : ""}${clock}`;
 }
 
 export function signedDuration(seconds:number|null):string {

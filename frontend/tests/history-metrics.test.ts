@@ -11,9 +11,10 @@ const row = (index:number):HistorySnapshot => ({snapshotId:String(index),observe
   reactionsBreakdown:{},reactionsBreakdownEntries:[],deltaReactionsBreakdown:null,deltaReactionsBreakdownEntries:null,
   synthetic:false,intervalUncertain:false,quality:"exact",rawEvidence:{}});
 
-test("elapsed tooltip time keeps exact seconds and lets hours exceed one day", () => {
+test("elapsed tooltip time keeps exact seconds and separates completed days", () => {
   assert.equal(elapsedSincePublication("2026-09-18T10:00:01Z","2026-09-18T19:40:11Z"),"+9:40:10");
-  assert.equal(elapsedSincePublication("2026-09-17T10:00:01Z","2026-09-18T19:40:11Z"),"+33:40:10");
+  assert.equal(elapsedSincePublication("2026-09-17T10:00:01Z","2026-09-18T19:40:11Z"),"+1 д 09:40:10");
+  assert.equal(elapsedSincePublication("2026-09-17T10:00:01Z","2026-09-18T10:00:01Z"),"+1 д 00:00:00");
   assert.equal(elapsedSincePublication("invalid","2026-09-18T19:40:11Z"),null);
 });
 
