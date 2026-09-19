@@ -83,17 +83,16 @@ test("publication hides the analyzer panel but preserves boundary rows for futur
 
 test("cumulative and delta charts both draw when anomaly boundaries size points per sample",async({page})=>{
   await page.goto("/posts/1");
-  const drawn=await page.evaluate(async()=>{
-    await new Promise(resolve=>setTimeout(resolve,600));
-    return [...document.querySelectorAll('[role="img"][data-chart-ready="true"] svg')].map(svg=>({
-      shapes:svg.querySelectorAll("path.recharts-curve, path.recharts-area-area, path.recharts-rectangle, rect.recharts-rectangle").length,
-      broken:[...svg.querySelectorAll("path[d]")].some(path=>/NaN|Infinity/.test(path.getAttribute("d")??"")),
-    }));
-  });
-  expect(drawn.length).toBe(2);
   // A per-sample point size once collapsed the whole line geometry to NaN and
   // left the cumulative plot blank while the bar plot still drew.
-  for(const plot of drawn) {expect(plot.shapes).toBeGreaterThan(0);expect(plot.broken).toBe(false);}
+  await expect.poll(async()=>page.evaluate(()=>{
+    const plots=[...document.querySelectorAll('[role="img"][data-chart-ready="true"] svg')];
+    return {
+      count:plots.length,
+      allDrawn:plots.length===2&&plots.every(svg=>svg.querySelectorAll("path.recharts-curve, path.recharts-area-area, path.recharts-rectangle, rect.recharts-rectangle").length>0),
+      anyBroken:plots.some(svg=>[...svg.querySelectorAll("path[d]")].some(path=>/NaN|Infinity/.test(path.getAttribute("d")??""))),
+    };
+  }),{timeout:15_000}).toEqual({count:2,allDrawn:true,anyBroken:false});
 });
 
 test("a long interval between saved changes is spaced by time without claiming collector downtime",async({page})=>{
