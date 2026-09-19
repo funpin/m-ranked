@@ -20,3 +20,7 @@ ca864a95914aeefd6d1b7dc583b071c736096414:migration/reports/integration-review-20
 c636b74c961b0699defe93396c8e04db09bf384d:tests/test_api_admin.py:generic-api-key:31
 c636b74c961b0699defe93396c8e04db09bf384d:tests/test_admin_session_postgres.py:generic-api-key:27
 c636b74c961b0699defe93396c8e04db09bf384d:tests/test_api_security.py:generic-api-key:27
+# 122d8e2 — стабильные имена checkpoint и глобального lease содержат слово
+# `key`, но являются публичными идентификаторами координации, не секретами.
+122d8e28cf354be95d3abf9b397886afd724221f:operations/scripts/collector-watchdog.sh:generic-api-key:82
+122d8e28cf354be95d3abf9b397886afd724221f:collector_target/phase.py:generic-api-key:23
