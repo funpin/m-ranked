@@ -105,6 +105,22 @@ test("keyboard skip link becomes visible and focuses the main content", async ({
   await expect(page.getByRole("main")).toBeFocused();
 });
 
+test("страница аккаунта поясняет сокращение и выделяет сводные числа", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+
+  const heading = page.getByRole("heading", { level: 1 });
+  await expect(heading).toContainText("Канал 1");
+  await expect(page.getByTestId("institution-full-name")).toHaveText("Альфа Университет");
+
+  const values = page.locator('[data-slot="account-summary-value"]');
+  await expect(values).toHaveCount(6);
+  for (const value of await values.all()) {
+    await expect.poll(async () => Number.parseFloat(await value.evaluate(
+      element => getComputedStyle(element).fontSize,
+    ))).toBeGreaterThanOrEqual(30);
+  }
+});
+
 test("недельный график площадки рисуется двумя линиями со своими шкалами", async ({ page }) => {
   await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
   const trend = page.getByRole("region", { name: "Динамика за неделю" });

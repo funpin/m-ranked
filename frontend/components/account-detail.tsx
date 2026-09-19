@@ -27,7 +27,7 @@ function Tile({ value, label, note, delta, tone, deltaLabel }: {
 }) {
   return (
     <div className="grid min-w-0 content-start gap-1 rounded-lg border p-4">
-      <b className="font-heading tabular text-2xl leading-none">{value}</b>
+      <b data-slot="account-summary-value" className="font-heading tabular text-3xl leading-none font-extrabold tracking-tight sm:text-4xl">{value}</b>
       <small className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1">
         {label}
         {note ? <MethodNote title={label}>{note}</MethodNote> : null}
@@ -53,6 +53,8 @@ function MetricWithGrowth({ value, quality, growth, label }: { value: number | n
 
 export function AccountDetail({ account, posts, truncated = false, siblings = [], selectedDay, selectedTrend }: { account: AccountView; posts: PublicationListItem[]; truncated?: boolean; siblings?: readonly AccountView[]; selectedDay?: string; selectedTrend?: "median" | "total" }) {
   const name = account.title || account.institutionShortName || account.institutionName;
+  const institutionName = account.institutionName.trim();
+  const showInstitutionName = institutionName !== name.trim();
   const stats = account.stats;
   const telegram = account.platform === "telegram";
   const series = stats?.dailySeries ?? [];
@@ -62,7 +64,10 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
   };
   const primary = account.platform === "vk" || account.platform === "rutube" ? "лайков" : "реакций";
   return <><span data-active-platform={account.platform} hidden />
-    <h1 className="mb-3 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">{name}{account.username ? <> <span className="text-muted-foreground">@{account.username}</span></> : null}</h1>
+    <header className="mb-4 min-w-0">
+      <h1 className="font-heading text-2xl font-semibold tracking-tight wrap-break-word sm:text-3xl">{name}{account.username ? <> <span className="text-muted-foreground">@{account.username}</span></> : null}</h1>
+      {showInstitutionName ? <p data-testid="institution-full-name" className="mt-1 max-w-4xl text-sm leading-relaxed text-muted-foreground sm:text-base">{institutionName}</p> : null}
+    </header>
     <ChannelSwitch accounts={siblings} currentId={account.accountId} />
     {/* Заголовок и переключатель площадок остаются на месте, а блоки с
         данными подменяются заготовкой — так же, как при смене фильтра в
