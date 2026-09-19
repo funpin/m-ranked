@@ -34,6 +34,15 @@ def _dsn(name: str) -> str:
     return value
 
 
+def _ensure_initial_revision(connection) -> None:
+    """A production database always has a published revision before ingest."""
+    connection.execute(
+        """INSERT INTO analytics.dataset_revision(cause,correlation_id,metadata)
+           SELECT 'migration',gen_random_uuid(),'{"fixture":true}'::jsonb
+            WHERE NOT EXISTS (SELECT 1 FROM analytics.dataset_revision)"""
+    )
+
+
 @pytest.mark.parametrize("retained_legacy_baseline", [False, True])
 def test_real_postgres_telegram_public_baseline_is_idempotent_and_live_readable(retained_legacy_baseline: bool) -> None:
     psycopg = pytest.importorskip("psycopg")
@@ -94,6 +103,7 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_live_readable(
             "SELECT contract_id FROM ops_and_admin.schema_contract",
         ).fetchone()["contract_id"]
         assert contract == "live-read-2026-09-13-text-fingerprint"
+        _ensure_initial_revision(admin)
 
         admin.execute(
             """INSERT INTO catalog.institution(id, canonical_name)
@@ -498,6 +508,7 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
 
     admin = connect(admin_dsn)
     try:
+        _ensure_initial_revision(admin)
         admin.execute(
             """INSERT INTO catalog.institution(id, canonical_name)
                VALUES (%s,%s)""",

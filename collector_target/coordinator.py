@@ -120,6 +120,15 @@ class PollCycleCoordinator:
                         raise
                     except Exception as error:
                         code = sanitize_error_code(error)
+                        try:
+                            self.metrics.provider_error(self.platform, code)
+                        except Exception:
+                            pass
+                        if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
+                            try:
+                                self.metrics.request_timeout(self.platform)
+                            except Exception:
+                                pass
                         self.repository.record_account_failure(
                             context,
                             account,
@@ -127,9 +136,15 @@ class PollCycleCoordinator:
                             code,
                         )
                         logger.error(
-                            "collector account failed platform=%s account=%s code=%s",
+                            "collector account failed platform=%s partition=%s run=%s "
+                            "scheduled_at=%s phase=collect status=failed account=%s "
+                            "collector_version=%s code=%s",
                             self.platform.value,
+                            self.partition_key,
+                            context.run_id,
+                            context.scheduled_at.isoformat(),
                             account.id,
+                            self.collector_version,
                             code,
                         )
                     finally:
@@ -180,8 +195,13 @@ class PollCycleCoordinator:
             )
         except Exception as error:
             logger.error(
-                "collector failed to finalize run platform=%s code=%s",
+                "collector failed to finalize run platform=%s partition=%s run=%s "
+                "scheduled_at=%s phase=finalize status=failed collector_version=%s code=%s",
                 self.platform.value,
+                self.partition_key,
+                context.run_id,
+                context.scheduled_at.isoformat(),
+                self.collector_version,
                 sanitize_error_code(error),
             )
 

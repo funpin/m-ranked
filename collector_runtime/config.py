@@ -101,6 +101,36 @@ class Settings:
     collector_refresh_limit: int = 100
     collector_refresh_scan_limit: int = 400
     publication_snapshot_heartbeat_hours: int = 24
+    collector_schedule_mode: str = "legacy"
+    collector_phase_max_wait_seconds: int = 900
+    collector_phase_retry_seconds: float = 2.0
+    collector_phase_request_stale_seconds: int = 120
+    collector_shutdown_grace_seconds: int = 45
+    collector_telegram_cycle_deadline_seconds: int = 900
+    collector_vk_cycle_deadline_seconds: int = 600
+    collector_max_cycle_deadline_seconds: int = 600
+    collector_rutube_cycle_deadline_seconds: int = 1800
+
+    def __post_init__(self) -> None:
+        if self.collector_schedule_mode.strip().lower() not in {
+            "legacy", "phased", "shadow",
+        }:
+            raise ValueError(
+                "COLLECTOR_SCHEDULE_MODE must be legacy, phased or shadow"
+            )
+        positive = {
+            "COLLECTOR_PHASE_MAX_WAIT_SECONDS": self.collector_phase_max_wait_seconds,
+            "COLLECTOR_PHASE_RETRY_SECONDS": self.collector_phase_retry_seconds,
+            "COLLECTOR_PHASE_REQUEST_STALE_SECONDS": self.collector_phase_request_stale_seconds,
+            "COLLECTOR_SHUTDOWN_GRACE_SECONDS": self.collector_shutdown_grace_seconds,
+            "COLLECTOR_TELEGRAM_CYCLE_DEADLINE_SECONDS": self.collector_telegram_cycle_deadline_seconds,
+            "COLLECTOR_VK_CYCLE_DEADLINE_SECONDS": self.collector_vk_cycle_deadline_seconds,
+            "COLLECTOR_MAX_CYCLE_DEADLINE_SECONDS": self.collector_max_cycle_deadline_seconds,
+            "COLLECTOR_RUTUBE_CYCLE_DEADLINE_SECONDS": self.collector_rutube_cycle_deadline_seconds,
+        }
+        invalid = [name for name, value in positive.items() if value <= 0]
+        if invalid:
+            raise ValueError(f"{', '.join(invalid)} must be positive")
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -206,6 +236,34 @@ class Settings:
             ),
             publication_snapshot_heartbeat_hours=_int(
                 "PUBLICATION_SNAPSHOT_HEARTBEAT_HOURS", 24
+            ),
+            collector_schedule_mode=(
+                os.getenv("COLLECTOR_SCHEDULE_MODE", "legacy").strip().lower()
+                or "legacy"
+            ),
+            collector_phase_max_wait_seconds=_int(
+                "COLLECTOR_PHASE_MAX_WAIT_SECONDS", 900
+            ),
+            collector_phase_retry_seconds=_float(
+                "COLLECTOR_PHASE_RETRY_SECONDS", 2.0
+            ),
+            collector_phase_request_stale_seconds=_int(
+                "COLLECTOR_PHASE_REQUEST_STALE_SECONDS", 120
+            ),
+            collector_shutdown_grace_seconds=_int(
+                "COLLECTOR_SHUTDOWN_GRACE_SECONDS", 45
+            ),
+            collector_telegram_cycle_deadline_seconds=_int(
+                "COLLECTOR_TELEGRAM_CYCLE_DEADLINE_SECONDS", 900
+            ),
+            collector_vk_cycle_deadline_seconds=_int(
+                "COLLECTOR_VK_CYCLE_DEADLINE_SECONDS", 600
+            ),
+            collector_max_cycle_deadline_seconds=_int(
+                "COLLECTOR_MAX_CYCLE_DEADLINE_SECONDS", 600
+            ),
+            collector_rutube_cycle_deadline_seconds=_int(
+                "COLLECTOR_RUTUBE_CYCLE_DEADLINE_SECONDS", 1800
             ),
         )
 

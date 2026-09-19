@@ -10,7 +10,16 @@ SQLite/Java stack and never copies data back to another database.
    `ops_and_admin.schema_contract.contract_id`.
 4. Start `m-ranked-target.target`.
 5. Verify health, one bounded public read, admin authentication and collector
-   leases before reopening external traffic.
+leases before reopening external traffic.
+
+## Phase scheduler rollback
+
+The phase scheduler has no schema migration. To roll back scheduler behaviour
+without changing the release, set `COLLECTOR_SCHEDULE_MODE=legacy` in
+`collector-common.env` and restart the four collector instances one by one.
+Existing `collector.phase.v1` checkpoints are inert in legacy mode and may be
+kept for investigation. Do not delete running `collection_run` rows: a newer
+worker can resume them by their deterministic logical slot.
 
 If the incident includes an incompatible schema change or database corruption,
 do not start an older binary. Follow [BACKUP_RESTORE.md](BACKUP_RESTORE.md) and

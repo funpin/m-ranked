@@ -7,6 +7,33 @@
   freshness and the current live dataset revision.
 - `GET /api/v1/health/legacy` preserves the frozen compatibility response.
 
+Collector process liveness and data freshness are intentionally separate:
+
+- `live`: the unit is active and either completes work or refreshes a
+  `collector.phase.v1` requested/active checkpoint;
+- `ready`: PostgreSQL and the schema contract passed startup checks;
+- `freshness`: completed platform runs and phase schedule lag fit the agreed
+  platform window;
+- `partial`: successful account batches were committed but at least one account
+  failed or was quarantined.
+
+A worker may wait behind another healthy phase and create no run. Conversely,
+an active process with increasing schedule lag is live but not fresh. The
+watchdog uses run/account progress plus phase state; it never uses publication
+snapshot timestamps because unchanged metrics are intentionally deduplicated.
+
+Troubleshooting phased workers:
+
+- repeated `phase=waiting`: inspect the active platform and phase wait metric;
+- lease appears stuck: verify the holder database session; terminating a dead
+  session releases the advisory lock automatically;
+- lag grows: compare total cycle time with the capacity table in ADR-009;
+- `GlobalPhaseLeaseLost`: investigate PostgreSQL connectivity; the cycle is
+  cancelled to avoid unprotected overlap;
+- `partial`: inspect safe per-account error codes and quarantine evidence;
+- old `running` run: restart the same platform/version/partition to resume its
+  deterministic `scheduled_at`.
+
 All health responses are `no-store`. Readiness does not wait for a projection
 publisher: public data is read directly from canonical tables. A configured
 collector with no successful recent run makes freshness unhealthy, while an

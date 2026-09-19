@@ -28,3 +28,22 @@ This is not a production or C++ comparison. A C++ compiler was unavailable local
 production CPU hot path justified a native spike. Future comparison must use the same Linux
 host/cgroup, serialized fixture/golden output, release flags, ≥30 runs, malformed/null/extreme
 cases, RSS/startup/image size, sanitizers and fuzzing.
+
+## Collector phase scheduler
+
+Run the deterministic 24-hour capacity simulation and bounded idle-wait probe:
+
+```bash
+.venv/bin/python benchmarks/collector_phase.py
+```
+
+The 2026-09-19 result is stored in
+[`results/2026-09-19-collector-phase.json`](results/2026-09-19-collector-phase.json).
+Both p50 and conservative profiles produced zero overlap and every platform ran;
+the conservative profile distributed the three short-period platforms evenly
+(`70/70/70`) and ran Rutube 25 times.  Lag/coalescing confirm that the desired
+five-minute cadence is over capacity under strict serialization.  The idle
+probe used four waiting coroutines in one process, so its 31.9 MiB RSS is not a
+four-process production RSS measurement; production cgroup RSS remains a
+rollout observation.  Persistence was not changed: the existing 100-publication
+fixture remains 24 SQL calls with one set-based statement per major entity.

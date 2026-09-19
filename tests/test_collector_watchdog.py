@@ -60,6 +60,8 @@ def test_watchdog_does_not_use_snapshot_freshness_as_liveness() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
 
     assert "collection_account_result" in text
+    assert "collector.phase.v1" in text
+    assert "value->>'state' IN ('requested','active')" in text
     assert "publication_metric_snapshot" not in text
     assert "PLATFORMS=(telegram vk max rutube)" in text
     assert "--file=-" in text

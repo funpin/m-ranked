@@ -177,8 +177,10 @@ systemctl restart m-ranked-target-api
 systemctl restart m-ranked-target-web
 ```
 
-Коллекторы перезапускаются **по одному**, с паузой: одновременный перезапуск
-сводит их в одну фазу и удваивает пик на единственном ядре.
+При `COLLECTOR_SCHEDULE_MODE=legacy` коллекторы перезапускаются **по одному**,
+с паузой: offsets не исключают overlap. В `phased` режиме одновременный restart
+безопасен: workers сначала объявляют UTC-слоты, затем PostgreSQL пропускает в
+тяжёлую фазу только один процесс.
 
 ```bash
 for platform in telegram vk max rutube; do
@@ -186,6 +188,18 @@ for platform in telegram vk max rutube; do
   sleep 60
 done
 ```
+
+Первое включение phased scheduler выполняется expand/contract:
+
+1. Установить `COLLECTOR_SCHEDULE_MODE=shadow` на одном instance и проверить
+   `scheduled_at`, `schedule_lag_seconds` и отсутствие provider calls.
+2. Переключить canary на `phased`; убедиться, что checkpoint
+   `collector.phase.v1` меняет `requested -> active -> completed`.
+3. Включить `phased` на остальных instances.
+4. Наблюдать не меньше полного часового интервала Rutube: phase wait, lag,
+   overruns, coalesced slots, partial/failed runs и watchdog.
+5. Не менять интервалы `300/300/300/3600` в том же rollout. Они остаются
+   desired cadence; изменение production cadence требует отдельного решения.
 
 ## 8. Проверка
 
@@ -219,6 +233,10 @@ rm -f "$jar"
 Сверх этого: четыре юнита коллекторов, работник аномалий, возраст outbox, место
 на диске, архив WAL и последнее успешное восстановление. Пока хоть один нужный
 юнит перезапускается или свежесть выше порога — выкатка не завершена.
+
+Ожидание `phase=waiting` само по себе штатно. Растущий `schedule_lag_seconds`
+означает нехватку сериализованной ёмкости и не должен маскироваться повышением
+freshness threshold.
 
 ## 9. Если API не отвечает
 

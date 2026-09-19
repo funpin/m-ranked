@@ -9,12 +9,19 @@ groups:
         annotations:
           summary: Collector account failures exceed ten percent.
       - alert: MRankedCollectorStale
-        expr: time() - mranked_collector_last_success_unixtime > 900
+        expr: (time() - mranked_collector_last_success_unixtime{platform!="rutube"} > 2700) or (time() - mranked_collector_last_success_unixtime{platform="rutube"} > 5400)
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: No successful account collection for over fifteen minutes.
+          summary: Collector account progress exceeds its platform freshness window.
+      - alert: MRankedCollectorScheduleLag
+        expr: (mranked_collector_schedule_lag_seconds{platform!="rutube"} > 1800) or (mranked_collector_schedule_lag_seconds{platform="rutube"} > 5400)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Exclusive phase capacity cannot keep up with desired cadence.
       - alert: MRankedCollectorMetricsMissing
         expr: node_textfile_scrape_error > 0
         for: 5m

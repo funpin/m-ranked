@@ -1152,6 +1152,14 @@ class _MemoryRepository:
     ) -> datetime | None:
         return None
 
+    def last_completed_scheduled_at(
+        self,
+        platform: Platform,
+        partition_key: str,
+        collector_version: str,
+    ) -> datetime | None:
+        return None
+
     def enabled_accounts(self, platform: Platform, partition_key: str) -> tuple[AccountRef, ...]:
         return self.accounts
 
@@ -1218,6 +1226,9 @@ class _RetryAdapter:
         if target.id == self.failing_id and attempt == 1:
             raise RuntimeError("password=secret should never be persisted")
         return replace(raw_batch(target, run_context), publications=())
+
+    async def close(self) -> None:
+        return None
 
 
 def test_coordinator_resumes_failed_accounts_without_replaying_successes() -> None:

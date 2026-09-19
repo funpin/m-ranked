@@ -29,6 +29,13 @@ API использует отдельные роли `api_read`, `api_write_admi
 Telegram поддерживает public web, Web K и MTProto; MAX и Telegram сохраняют
 свои session-файлы как отдельные зашифрованные runtime-секреты.
 
+В `phased` mode поверх platform lease действует один общий PostgreSQL advisory
+lease полного цикла. Durable request checkpoints задают fairness, а пропущенные
+UTC-слоты схлопываются в один запуск. `legacy` сохраняет прежние offsets как
+оперативный rollback, `shadow` проверяет решения scheduler без provider calls.
+Архитектура, capacity gate и rollout описаны в
+[ADR-009](architecture/adr/ADR-009-collector-phase-arbiter.md).
+
 ## База и кэш
 
 Схема создаётся из `db/migrations/*.sql`; текущий contract id —

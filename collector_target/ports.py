@@ -26,6 +26,9 @@ class PlatformCollector(Protocol):
     ) -> RawCollectionBatch:
         ...
 
+    async def close(self) -> None:
+        ...
+
 
 @runtime_checkable
 class CollectorRepository(Protocol):
@@ -36,6 +39,14 @@ class CollectorRepository(Protocol):
         ...
 
     def resumable_scheduled_at(
+        self,
+        platform: Platform,
+        partition_key: str,
+        collector_version: str,
+    ) -> datetime | None:
+        ...
+
+    def last_completed_scheduled_at(
         self,
         platform: Platform,
         partition_key: str,

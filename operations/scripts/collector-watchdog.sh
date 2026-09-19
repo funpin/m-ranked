@@ -74,6 +74,15 @@ progress_age_minutes() {
           FROM ingest.collection_run
          WHERE platform=:'platform'::catalog.platform_code
            AND completed_at IS NOT NULL
+        UNION ALL
+        -- A phased worker waiting behind another healthy platform is live even
+        -- though it correctly creates no collection run or metric snapshot.
+        SELECT updated_at
+          FROM ops_and_admin.operational_checkpoint
+         WHERE checkpoint_key='collector.phase.v1'
+           AND scope_type='platform'
+           AND platform=:'platform'::catalog.platform_code
+           AND value->>'state' IN ('requested','active')
       )
       SELECT coalesce(
         floor(extract(epoch FROM now()-max(happened_at))/60)::bigint::text,

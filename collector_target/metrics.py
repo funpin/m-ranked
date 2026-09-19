@@ -21,6 +21,17 @@ class CollectorMetrics:
         self._runs=defaultdict(int)
         self._snapshots=defaultdict(int)
         self._last_success=defaultdict(float)
+        self._phase_wait=defaultdict(float)
+        self._phase_attempts=defaultdict(int)
+        self._phase_results=defaultdict(int)
+        self._cycle_duration=defaultdict(float)
+        self._schedule_lag=defaultdict(float)
+        self._overruns=defaultdict(int)
+        self._coalesced=defaultdict(int)
+        self._resumes=defaultdict(int)
+        self._request_timeouts=defaultdict(int)
+        self._shutdowns=defaultdict(int)
+        self._provider_errors=defaultdict(int)
 
     def account(self, platform: Platform, *, succeeded: bool, duration: float, snapshots: int = 0):
         if not math.isfinite(duration) or duration<0 or snapshots<0: raise ValueError('invalid metric observation')
@@ -38,6 +49,62 @@ class CollectorMetrics:
         with self._lock:
             self._runs[(Platform(platform).value,RunStatus(status).value)]+=1
             self._last_success.setdefault(Platform(platform).value,0.)
+            self._publish()
+
+    def phase_wait(
+        self, platform: Platform, *, result: str, duration: float, attempts: int,
+    ) -> None:
+        if not math.isfinite(duration) or duration < 0 or attempts < 0:
+            raise ValueError("invalid phase metric observation")
+        name = Platform(platform).value
+        with self._lock:
+            self._phase_wait[name] += duration
+            self._phase_attempts[name] += attempts
+            self._phase_results[(name, result)] += 1
+            self._publish()
+
+    def cycle(
+        self,
+        platform: Platform,
+        *,
+        duration: float,
+        schedule_lag: float,
+        overrun: bool,
+        coalesced_slots: int = 0,
+        resumed: bool = False,
+    ) -> None:
+        if (
+            not math.isfinite(duration) or duration < 0
+            or not math.isfinite(schedule_lag) or schedule_lag < 0
+            or coalesced_slots < 0
+        ):
+            raise ValueError("invalid cycle metric observation")
+        name = Platform(platform).value
+        with self._lock:
+            self._cycle_duration[name] = duration
+            self._schedule_lag[name] = schedule_lag
+            self._overruns[name] += int(overrun)
+            self._coalesced[name] += coalesced_slots
+            self._resumes[name] += int(resumed)
+            self._publish()
+
+    def request_timeout(self, platform: Platform) -> None:
+        with self._lock:
+            self._request_timeouts[Platform(platform).value] += 1
+            self._publish()
+
+    def provider_error(self, platform: Platform, error_class: str) -> None:
+        cleaned = "".join(
+            character for character in error_class
+            if character.isalnum() or character == "_"
+        )[:64] or "unknown"
+        with self._lock:
+            self._provider_errors[(Platform(platform).value, cleaned)] += 1
+            self._publish()
+
+    def shutdown(self, platform: Platform, *, forced: bool) -> None:
+        with self._lock:
+            self._shutdowns[(Platform(platform).value, "forced" if forced else "graceful")] += 1
             self._publish()
 
     def render(self) -> str:
@@ -62,6 +129,36 @@ class CollectorMetrics:
         lines += ['# TYPE mranked_collector_last_success_unixtime gauge']
         for platform,value in sorted(self._last_success.items()):
             lines.append(f'mranked_collector_last_success_unixtime{{platform="{platform}"}} {value:.6f}')
+        lines += ['# TYPE mranked_collector_phase_wait_seconds_total counter']
+        for platform,value in sorted(self._phase_wait.items()):
+            lines.append(f'mranked_collector_phase_wait_seconds_total{{platform="{platform}"}} {value:.9g}')
+        lines += ['# TYPE mranked_collector_phase_acquisitions_total counter']
+        for (platform,result),value in sorted(self._phase_results.items()):
+            lines.append(f'mranked_collector_phase_acquisitions_total{{platform="{platform}",result="{result}"}} {value}')
+        lines += ['# TYPE mranked_collector_phase_attempts_total counter']
+        for platform,value in sorted(self._phase_attempts.items()):
+            lines.append(f'mranked_collector_phase_attempts_total{{platform="{platform}"}} {value}')
+        lines += ['# TYPE mranked_collector_cycle_duration_seconds gauge']
+        for platform,value in sorted(self._cycle_duration.items()):
+            lines.append(f'mranked_collector_cycle_duration_seconds{{platform="{platform}"}} {value:.9g}')
+        lines += ['# TYPE mranked_collector_schedule_lag_seconds gauge']
+        for platform,value in sorted(self._schedule_lag.items()):
+            lines.append(f'mranked_collector_schedule_lag_seconds{{platform="{platform}"}} {value:.9g}')
+        for metric,values in (
+            ('cycle_overruns_total', self._overruns),
+            ('coalesced_slots_total', self._coalesced),
+            ('resumed_runs_total', self._resumes),
+            ('adapter_request_timeouts_total', self._request_timeouts),
+        ):
+            lines.append(f'# TYPE mranked_collector_{metric} counter')
+            for platform,value in sorted(values.items()):
+                lines.append(f'mranked_collector_{metric}{{platform="{platform}"}} {value}')
+        lines += ['# TYPE mranked_collector_shutdowns_total counter']
+        for (platform,outcome),value in sorted(self._shutdowns.items()):
+            lines.append(f'mranked_collector_shutdowns_total{{platform="{platform}",outcome="{outcome}"}} {value}')
+        lines += ['# TYPE mranked_collector_provider_errors_total counter']
+        for (platform,error_class),value in sorted(self._provider_errors.items()):
+            lines.append(f'mranked_collector_provider_errors_total{{platform="{platform}",error_class="{error_class}"}} {value}')
         return '\n'.join(lines)+'\n'
 
     def _publish(self):

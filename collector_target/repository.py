@@ -354,6 +354,30 @@ class PostgresCollectorRepository:
             if row is not None else None
         )
 
+    def last_completed_scheduled_at(
+        self,
+        platform: Platform,
+        partition_key: str,
+        collector_version: str,
+    ) -> datetime | None:
+        """Latest terminal logical slot, used to coalesce missed periods."""
+        with self._connection() as connection:
+            row = connection.execute(
+                """SELECT scheduled_at
+                     FROM ingest.collection_run
+                    WHERE platform=%s
+                      AND partition_key=%s
+                      AND collector_version=%s
+                      AND completed_at IS NOT NULL
+                    ORDER BY scheduled_at DESC, completed_at DESC
+                    LIMIT 1""",
+                (platform.value, partition_key, collector_version),
+            ).fetchone()
+        return (
+            utc(_row_value(row, "scheduled_at", 0), "run.scheduled_at")
+            if row is not None else None
+        )
+
     def enabled_accounts(
         self, platform: Platform, partition_key: str,
     ) -> Sequence[AccountRef]:
