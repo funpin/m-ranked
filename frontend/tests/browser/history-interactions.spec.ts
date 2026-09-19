@@ -54,7 +54,10 @@ test("clicking an old chart point expands history and scrolls to the exact row",
   await expect(total).toHaveAttribute("data-chart-ready","true");
   await expect(page.locator("tbody tr")).toHaveCount(160);
   const box=await total.boundingBox();expect(box).not.toBeNull();
-  await total.click({position:{x:60,y:box!.height-65}});
+  // The left axis consumes roughly 72 px. Click just inside the plotting area:
+  // x=60 lands on the axis on the mobile viewport and Recharts may reuse a
+  // middle active label instead of selecting an old point.
+  await total.click({position:{x:80,y:box!.height-65}});
   const selected=page.locator("tr[data-selected]");
   await expect(selected).toHaveCount(1);
   const id=await selected.getAttribute("id");
