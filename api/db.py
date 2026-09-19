@@ -22,13 +22,18 @@ class Database:
         self._read = await self._pool(s.read_dsn, s.read_pool_min, s.read_pool_max)
         if s.admin_dsn:
             # Командам админки хватает пары соединений: это редкий путь.
-            self._admin = await self._pool(s.admin_dsn, 1, 4)
+            # Проверяем соединение при выдаче: после рестарта PostgreSQL пул
+            # иначе один раз отдаёт приложению уже закрытое соединение, и
+            # первая административная команда падает вместо переподключения.
+            self._admin = await self._pool(s.admin_dsn, 1, 4, check_connection=True)
 
-    async def _pool(self, dsn: str, minimum: int, maximum: int) -> AsyncConnectionPool:
+    async def _pool(self, dsn: str, minimum: int, maximum: int,
+                    check_connection: bool = False) -> AsyncConnectionPool:
         pool = AsyncConnectionPool(
             dsn, min_size=minimum, max_size=maximum, open=False,
             kwargs={"row_factory": dict_row, "autocommit": True},
             configure=self._configure,
+            check=AsyncConnectionPool.check_connection if check_connection else None,
         )
         await pool.open(wait=True, timeout=30)
         return pool

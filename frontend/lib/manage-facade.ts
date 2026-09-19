@@ -7,6 +7,7 @@ const ACTION = /^\/manage\/(?:channels|institutions|platform-accounts|m-rating\/
 // Native same-origin form navigations must retain their Origin. no-referrer
 // makes Chromium send Origin:null; same-origin still withholds cross-site URLs.
 const NO_STORE = { "Cache-Control": "no-store", "Referrer-Policy": "same-origin" };
+const JSON_HEADERS = { ...NO_STORE, "Content-Type": "application/json; charset=utf-8" };
 
 function requestOrigin(request: NextRequest): string | null {
   // NextURL normalizes 127.0.0.1 and [::1] to localhost. The browser's Host
@@ -39,7 +40,17 @@ function forwardingHeaders(request: NextRequest): Headers {
 
 function failure(status: number, detail: string | object[]): NextResponse {
   // Никакого WWW-Authenticate: вход идёт формой на /manage, а не окном браузера.
-  return NextResponse.json({ detail }, { status, headers: NO_STORE });
+  return NextResponse.json({ detail }, { status, headers: JSON_HEADERS });
+}
+
+type CommandError = "conflict" | "forbidden" | "invalid" | "not-found" | "unavailable" | "failed";
+
+function commandFailure(code: CommandError, correlation: string): NextResponse {
+  const query = new URLSearchParams({ command_error: code, correlation_id: correlation });
+  return new NextResponse(null, {
+    status: 303,
+    headers: { ...NO_STORE, Location: `/manage?${query.toString()}` },
+  });
 }
 
 /** This only prepares SSR; FastAPI independently authenticates and authorizes every read/command. */
@@ -237,15 +248,18 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
       method: "POST", headers, body: JSON.stringify({ path, fields }), cache: "no-store", redirect: "error",
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(900_000)]),
     });
-  } catch { return failure(503, "Не удалось получить результат команды. Повторите ту же форму: её идентификатор защищает от повторной записи."); }
+  } catch { return commandFailure("unavailable", correlation); }
   const payload = await boundedJson(upstream);
   if (!upstream.ok) {
-    if (upstream.status === 401) return failure(401, "Требуется вход администратора");
-    if (upstream.status === 404) return failure(404, path.startsWith("/manage/channels/") ? "Канал не найден" : path.startsWith("/manage/platform-accounts/") ? "Аккаунт не найден" : "Вуз не найден");
-    if (upstream.status === 403) return failure(403, "Доступ к управлению недоступен");
-    if (upstream.status === 409) return failure(409, "Данные изменились. Обновите страницу и повторите действие.");
-    return failure(upstream.status, upstream.status === 400 && payload?.type === "urn:m-ranked:problem:legacy-form"
-      && typeof payload.detail === "string" && SAFE_DETAILS.has(payload.detail) ? payload.detail : "Не удалось выполнить команду");
+    if (upstream.status === 401) return new NextResponse(null, { status: 303, headers: { ...NO_STORE, Location: "/manage?sign_in=failed" } });
+    if (upstream.status === 404) return commandFailure("not-found", correlation);
+    if (upstream.status === 403) return commandFailure("forbidden", correlation);
+    if (upstream.status === 409) return commandFailure("conflict", correlation);
+    if (upstream.status === 400 && payload?.type === "urn:m-ranked:problem:legacy-form"
+      && typeof payload.detail === "string" && SAFE_DETAILS.has(payload.detail))
+      return commandFailure("invalid", correlation);
+    return commandFailure(upstream.status === 502 || upstream.status === 503 || upstream.status === 504
+      ? "unavailable" : "failed", correlation);
   }
   if (typeof payload?.location !== "string" || !/^\/manage(?:\?[A-Za-z0-9_=&-]*)?$/.test(payload.location))
     return failure(502, "Некорректный адрес результата команды");

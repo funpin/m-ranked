@@ -20,6 +20,7 @@ Environment=API_WRITE_ADMIN_DB_PASSWORD_FILE=%d/api-write-admin-db-password
 Environment=OUTBOX_WORKER_DB_PASSWORD_FILE=%d/outbox-worker-db-password
 Environment=ADMIN_AUTH_USERS_FILE=%d/admin-auth-users
 Environment=ADMIN_CSRF_SECRET_FILE=%d/admin-csrf-secret
+Environment=MRANKED_IDENTITY_RECEIPT_DIR=/var/lib/m-ranked/identity-receipts
 Environment=MRANKED_SECURITY_METRICS_FILE=/var/lib/node_exporter/textfile_collector/m-ranked-api-security.prom
 Environment=PYTHONUNBUFFERED=1
 Environment=TZ=UTC

@@ -170,17 +170,36 @@ test("unannounced oversized stream is cancelled and read errors are sanitized", 
 });
 
 test("upstream errors are fixed allowlisted values and never reveal exception details", async () => {
-  for (const [status, type, detail, expected] of [
-    [400, "urn:m-ranked:problem:legacy-form", "MAX chat_id должен быть числом", "MAX chat_id должен быть числом"],
-    [400, "urn:m-ranked:problem:legacy-form", "password=secret", "Не удалось выполнить команду"],
-    [400, "urn:m-ranked:problem:invalid-request", "Укажите название вуза", "Не удалось выполнить команду"],
-    [500, "urn:m-ranked:problem:internal-error", "database-password=secret", "Не удалось выполнить команду"],
-    [404, "anything", "database-secret", "Вуз не найден"],
-    [409, "anything", "database-secret", "Данные изменились. Обновите страницу и повторите действие."],
+  for (const [status, type, detail, code] of [
+    [400, "urn:m-ranked:problem:legacy-form", "MAX chat_id должен быть числом", "invalid"],
+    [400, "urn:m-ranked:problem:legacy-form", "password=secret", "failed"],
+    [400, "urn:m-ranked:problem:invalid-request", "Укажите название вуза", "failed"],
+    [500, "urn:m-ranked:problem:internal-error", "database-password=secret", "failed"],
+    [503, "urn:m-ranked:problem:internal-error", "database-password=secret", "unavailable"],
+    [404, "anything", "database-secret", "not-found"],
+    [409, "anything", "database-secret", "conflict"],
   ] as const) {
-    const response = await submitManage(request(undefined, `name=a&csrf_token=${csrf}`), server(() => Response.json({ type, detail }, { status })).fetcher);
-    assert.equal(response.status, status); assert.deepEqual(await response.json(), { detail: expected });
+    const response = await submitManage(request(undefined, `name=a&csrf_token=${csrf}&correlation_id=${correlation}`), server(() => Response.json({ type, detail }, { status })).fetcher);
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), `/manage?command_error=${code}&correlation_id=${correlation}`);
+    assert.doesNotMatch(response.headers.get("location")!, /secret/);
   }
+});
+
+test("JSON failures declare UTF-8 explicitly", async () => {
+  const response = await submitManage(request("/manage/institutions", "name=a&csrf_token=wrong"), server().fetcher);
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get("content-type"), "application/json; charset=utf-8");
+  assert.match(await response.text(), /Недействительный защитный токен/);
+});
+
+test("an uncertain command result returns to the console with its correlation ID", async () => {
+  const response = await submitManage(
+    request(undefined, `name=a&csrf_token=${csrf}&correlation_id=${correlation}`),
+    server(async () => { throw new Error("database-password=secret"); }).fetcher,
+  );
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), `/manage?command_error=unavailable&correlation_id=${correlation}`);
 });
 
 test("malformed/oversized session, fetch failure and open redirects fail closed", async () => {

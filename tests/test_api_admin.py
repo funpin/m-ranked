@@ -9,6 +9,7 @@ import pytest
 
 from api.identity_receipts import persist_admin_envelope
 from api.official_rating import _filled_months, _parse_month
+from api.routes import admin
 from api.routes.admin import _account_body
 from api.security import AuthConfig
 
@@ -23,6 +24,18 @@ def test_admin_identity_receipt_preserves_database_json(monkeypatch, tmp_path: P
     assert receipt.read_text(encoding="utf-8") == original
     assert os.stat(receipt).st_mode & 0o777 == 0o400
     assert persist_admin_envelope(original) == digest
+
+
+def test_project_size_does_not_break_status_after_release_directory_is_removed(
+        monkeypatch) -> None:
+    class MissingWorkingDirectory:
+        @staticmethod
+        def cwd() -> Path:
+            raise FileNotFoundError("release was removed")
+
+    monkeypatch.setattr(admin, "Path", MissingWorkingDirectory)
+    monkeypatch.setattr(admin, "_PROJECT_SIZE", (0.0, None))
+    assert admin._project_bytes() is None
 
 
 SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"

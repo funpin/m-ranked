@@ -382,8 +382,12 @@ def _project_bytes() -> int | None:
     if cached is not None and now - cached_at < _PROJECT_SIZE_TTL:
         return cached
     total = 0
-    stack = [Path.cwd()]
     try:
+        # После атомарного переключения current старый релиз могут удалить до
+        # перезапуска процесса. В таком процессе getcwd() возвращает ENOENT;
+        # необязательный размер проекта не должен из-за этого ронять весь
+        # endpoint состояния админки.
+        stack = [Path.cwd()]
         while stack:
             with os.scandir(stack.pop()) as entries:
                 for entry in entries:

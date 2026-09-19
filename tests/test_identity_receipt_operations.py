@@ -32,3 +32,7 @@ def test_all_live_receipt_participants_use_one_explicit_root():
         values = [line.partition("=")[2] for line in content.splitlines()
                   if line.startswith("MRANKED_IDENTITY_RECEIPT_DIR=")]
         assert values == ["/var/lib/m-ranked/identity-receipts"]
+
+    api_unit = (ROOT / "systemd" / "m-ranked-target-api.service").read_text()
+    assert "Environment=MRANKED_IDENTITY_RECEIPT_DIR=/var/lib/m-ranked/identity-receipts\n" \
+        in api_unit
