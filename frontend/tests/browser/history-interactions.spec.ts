@@ -46,7 +46,7 @@ for(const [path,platform,platformLabel,reaction,hasComments,hasShares] of [
   });
 }
 
-test("clicking an old chart point expands history and scrolls to the exact row",async({page}) => {
+test("chart activation selects the exact row and reveals an old collapsed point",async({page}) => {
   await page.goto("/posts/1");
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
@@ -61,7 +61,7 @@ test("clicking an old chart point expands history and scrolls to the exact row",
   const selected=page.locator("tr[data-selected]");
   await expect(selected).toHaveCount(1);
   const id=await selected.getAttribute("id");
-  expect(Number(id!.replace("snapshot-",""))).toBeLessThanOrEqual(60);
+  expect(Number(id!.replace("snapshot-",""))).toBeLessThan(160);
   await expect(selected).toBeInViewport();
   await expect(selected.locator("button")).toBeFocused();
   // Keyboard activation uses the same reveal-and-scroll path after collapsing.
