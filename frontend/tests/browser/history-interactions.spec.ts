@@ -6,7 +6,7 @@ test("publication charts use the full content width and stack vertically",async(
   await page.goto("/posts/1");
   const stack=page.getByTestId("publication-chart-stack");
   const total=page.getByRole("img",{name:"Накопление показателей",exact:true});
-  const growth=page.getByRole("img",{name:"Прирост между замерами",exact:true});
+  const growth=page.getByRole("img",{name:"Прирост между сохранёнными точками",exact:true});
   await expect(total).toHaveAttribute("data-chart-ready","true");
   const [stackBox,totalBox,growthBox]=await Promise.all([stack.boundingBox(),total.boundingBox(),growth.boundingBox()]);
   expect(stackBox).not.toBeNull();expect(totalBox).not.toBeNull();expect(growthBox).not.toBeNull();
@@ -26,7 +26,7 @@ for(const [path,platform,platformLabel,reaction,hasComments,hasShares] of [
     await expect(meta.locator(":scope > span").first()).toHaveText(platformLabel);
     await expect(page.getByTestId("publication-meta-copy")).toHaveText(/^Опубликовано: .* · история (полная|неполная) · тип: [^·]+$/);
     const total=page.getByRole("img",{name:"Накопление показателей",exact:true});
-    const growth=page.getByRole("img",{name:"Прирост между замерами",exact:true});
+    const growth=page.getByRole("img",{name:"Прирост между сохранёнными точками",exact:true});
     await expect(total).toHaveAttribute("data-chart-ready","true");
     await expect(page.getByRole("button",{name:"Всего комментариев",exact:true})).toHaveCount(hasComments?1:0);
     await expect(page.getByRole("button",{name:"Всего репостов",exact:true})).toHaveCount(hasShares?1:0);
@@ -93,12 +93,11 @@ test("cumulative and delta charts both draw when anomaly boundaries size points 
   for(const plot of drawn) {expect(plot.shapes).toBeGreaterThan(0);expect(plot.broken).toBe(false);}
 });
 
-test("a break in the observation is spaced by time and marked on the chart",async({page})=>{
+test("a long interval between saved changes is spaced by time without claiming collector downtime",async({page})=>{
   await page.goto("/posts/7");
-  const note=page.locator("[data-observation-gaps]");
-  await expect(note).toHaveAttribute("data-observation-gaps","1");
-  await expect(note).toContainText("Пропуски сверх расписания: 1");
-  await expect(note).toContainText("2 д 12 ч");
+  await expect(page.getByTestId("sparse-history-note")).toContainText("не означает, что сборщик не работал");
+  await expect(page.getByTestId("saved-history-note")).toContainText("могли быть успешные опросы с теми же значениями");
+  await expect(page.locator("[data-observation-gaps]")).toHaveCount(0);
   // Neighbouring samples across the break are placed far apart, not side by
   // side: the plotted geometry leaves a wide horizontal stretch between two
   // consecutive samples of the series.
@@ -146,6 +145,6 @@ test("a point older than the 1000-row boundary remains reachable and the next pu
   // the database holds for the publication.
   await expect(page.locator("tbody tr")).toHaveCount(100);
   await expect(page.getByRole("img",{name:"Накопление показателей",exact:true})).toHaveAttribute("data-chart-ready","true");
-  await expect(page.getByTestId("chart-range-head")).toContainText("160 замеров");
+  await expect(page.getByTestId("chart-range-head")).toContainText("160 сохранённых точек");
   await expect(page.getByRole("link",{name:"загрузить всю историю"})).toBeVisible();
 });

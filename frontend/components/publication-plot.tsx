@@ -1,10 +1,9 @@
 "use client";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, duration, legacyDate } from "@/lib/format";
 import { elapsedSincePublication } from "@/lib/history-data";
-import type { ObservationGap } from "@/lib/observation-gaps";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
 import type { HistorySnapshot } from "@/lib/types";
@@ -45,9 +44,9 @@ function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
   );
 }
 
-export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps }: {
+export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly ObservationGap[];
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto";
 }) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const active = useRef(0);
@@ -145,8 +144,8 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   // списке, и при двух показанных метриках левая шкала доставалась скрытой —
   // на экране оставалась только правая.
   const visible = metrics.filter((metric) => !hidden.has(metric.key)).slice(0, 2);
-  // Сетка, подсветка пропусков и линия выбранного замера привязываются к одной
-  // шкале — левой, а при общем масштабе к единственной.
+  // Сетка и линия выбранной точки привязываются к одной шкале — левой, а при
+  // общем масштабе к единственной.
   const primaryAxis = scale === "shared" ? "y" : visible[0]?.key ?? "y";
   // Скрытая метрика всё равно должна ссылаться на существующую шкалу.
   const axisFor = (metric: Metric) =>
@@ -178,18 +177,13 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
           её и рисует одну линию по краю. Цвет задан явно, иначе контейнер
           приглушает стандартный штрих вдвое и на тёмной теме его не видно. */}
       <CartesianGrid vertical={false} yAxisId={primaryAxis} stroke="var(--border)" />
-      {/* The renderer shades the stretches where no observation exists. */}
-      {gaps.map((gap) => (
-        <ReferenceArea key={`${gap.from}-${gap.to}`} x1={gap.from} x2={gap.to} yAxisId={primaryAxis}
-          fill="var(--muted-foreground)" fillOpacity={0.12} ifOverflow="hidden" />
-      ))}
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}
         padding={delta ? { left: 18, right: 18 } : { left: 4, right: 4 }}
         scale="time" tickLine={false} axisLine={false} height={44} interval="preserveStartEnd"
         tick={(props) => <TimeTick {...props} rows={rows} />}
-        label={{ value: "Время замера и возраст публикации", position: "insideBottom", offset: -6, fill: "var(--muted-foreground)" }} />
+        label={{ value: "Время сохранённой точки и возраст публикации", position: "insideBottom", offset: -6, fill: "var(--muted-foreground)" }} />
       {axes}
       <ChartTooltip
         cursor={{ strokeDasharray: "4 4" }}
@@ -209,7 +203,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       role="img"
       tabIndex={0}
       data-chart-ready={rows.length > 0}
-      aria-label={delta ? "Прирост между замерами" : "Накопление показателей"}
+      aria-label={delta ? "Прирост между сохранёнными точками" : "Накопление показателей"}
       aria-describedby={`${chartId}-instructions ${chartId}-tooltip`}
       className="focus-visible:ring-ring/50 h-[360px] w-full rounded-md outline-none focus-visible:ring-[3px]"
       onFocus={() => keyboard()}
@@ -263,7 +257,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
         )}
       </ChartContainer>
     </div>
-    <p id={`${chartId}-instructions`} className="sr-only">Стрелки влево и вправо выбирают замер; Home и End — первый и последний. Enter или пробел открывает соответствующую строку таблицы. Escape закрывает подсказку.</p>
+    <p id={`${chartId}-instructions`} className="sr-only">Стрелки влево и вправо выбирают сохранённую точку; Home и End — первую и последнюю. Enter или пробел открывает соответствующую строку таблицы. Escape закрывает подсказку.</p>
     <div id={`${chartId}-tooltip`} role="tooltip" aria-hidden={!tooltip} className={cn("text-muted-foreground text-sm", tooltip ? "py-2" : "sr-only")}>{tooltip}</div>
   </>;
 }
@@ -318,7 +312,7 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, pu
     return (
       <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
         <TooltipTime observedAt={new Date(group.t).toISOString()} rangeStart={new Date(group.from).toISOString()} publishedAt={publishedAt} />
-        <div className="text-muted-foreground">Суммарно за {group.samples} замеров</div>
+        <div className="text-muted-foreground">Суммарно за {group.samples} сохранённых точек</div>
         {metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => {
           const value = group.values[metric.key];
           return (

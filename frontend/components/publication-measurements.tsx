@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Clock, Eye, Heart, Hourglass, MessageCircle, Share2, Smile, Timer, Users, type LucideIcon } from "lucide-react";
-import { observationGaps } from "@/lib/observation-gaps";
 import Link from "@/components/native-link";
 import { duration, legacyDate, legacyNumber } from "@/lib/format";
 import { useHistoryPreferences } from "@/lib/history-preferences";
@@ -62,7 +61,7 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
 
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; gaps: ReturnType<typeof observationGaps>;
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>;
 }) {
   const { metrics, platform, delta } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
@@ -166,14 +165,6 @@ export function PublicationMeasurements({ rows, platform, publishedAt, historyLi
   const phrase=nouns.length<=1 ? nouns[0] ?? "метрик" : `${nouns.slice(0,-1).join(", ")} и ${nouns.at(-1)}`;
   const tableMetrics = useMemo(() => tabulatedHistoryMetrics(rows),[rows]);
   const showBreakdown = rows.some(row => (historyReactionEntries(row)?.length ?? 0)>0);
-  const gaps = useMemo(() => observationGaps(rows,platform),[rows,platform]);
-  const visibleGaps = useMemo(() => {
-    if (!rows.length) return gaps;
-    const low = Date.parse(rows[start]!.observedAt);
-    const high = Date.parse(rows[end]!.observedAt);
-    return gaps.filter(gap => gap.to >= low && gap.from <= high);
-  },[gaps,rows,start,end]);
-  const gapSeconds = visibleGaps.reduce((total,gap) => total+gap.missingSeconds,0);
   function jump(id: string) {
     const index = rows.findIndex((row) => row.snapshotId === id);
     if(index<0) return;
@@ -188,25 +179,25 @@ export function PublicationMeasurements({ rows, platform, publishedAt, historyLi
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Накопление {phrase}
             <MethodNote title={`Накопление ${phrase}`}>
-              Линии построены по одним и тем же замерам и расставлены по времени замера, поэтому паузы в наблюдении видны как длинные пустые промежутки. Ромбами отмечены границы опубликованных сигналов; остальные замеры читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы опубликованных сигналов; остальные точки читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} />
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
-            Прирост между замерами
-            <MethodNote title="Прирост между замерами">
-              Сколько новых {phrase} появилось после предыдущего опроса. Столбец с обводкой отмечает границу сигнала, отрицательный столбец — исправление источника. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+            Прирост между сохранёнными точками
+            <MethodNote title="Прирост между сохранёнными точками">
+              Сколько новых {phrase} появилось между соседними сохранёнными изменениями или контрольными снимками. Это не обязательно прирост за один опрос: одинаковые результаты между точками обычно не сохраняются. Столбец с обводкой отмечает границу сигнала, отрицательный столбец — исправление источника. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} />
         </CardContent>
       </Card>
     </div>
@@ -217,10 +208,10 @@ export function PublicationMeasurements({ rows, platform, publishedAt, historyLi
           <b className="text-foreground flex items-center gap-1.5 text-sm">
             Масштаб по времени
             <MethodNote title="Масштаб по времени">
-              Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается. Пропуски в наблюдении показаны на графиках заштрихованными промежутками.
+              Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых сохранённых точек; при приближении детализация возвращается. Расстояние между точками отражает время между сохранёнными изменениями, а не расписание опросов сборщика.
             </MethodNote>
           </b>
-          <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} замеров` : "Нет замеров"}</span>
+          <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} сохранённых точек` : "Нет сохранённых точек"}</span>
         </div>
         <Slider
           className="my-4"
@@ -237,7 +228,7 @@ export function PublicationMeasurements({ rows, platform, publishedAt, historyLi
           getAriaLabel={(index) => (index === 0 ? "Начало диапазона" : "Конец диапазона")}
         />
         <div className="grid gap-2">
-          {visibleGaps.length ? <p data-observation-gaps={visibleGaps.length} className="text-muted-foreground text-sm">Пропуски сверх расписания: {visibleGaps.length}, суммарно {duration(gapSeconds)}. Заштрихована только просроченная часть.</p> : null}
+          <p data-testid="sparse-history-note" className="text-muted-foreground text-sm">Графики показывают сохранённые изменения метрик и контрольные снимки. Опросы без изменений обычно не записываются, поэтому длинный интервал между точками сам по себе не означает, что сборщик не работал.</p>
           {end-start+1 > displayed.length ? <Badge variant="secondary" className="w-fit rounded-full font-semibold">Не отображено точек: {end-start+1-displayed.length}</Badge> : null}
         </div>
       </CardContent>
@@ -245,13 +236,14 @@ export function PublicationMeasurements({ rows, platform, publishedAt, historyLi
 
     <Card className="mt-4 overflow-hidden">
       <CardHeader>
-        <CardTitle as="h2" className="font-heading text-lg">История замеров</CardTitle>
-        {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} замеров · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} замеров · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} замеров · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
+        <CardTitle as="h2" className="font-heading text-lg">История сохранённых точек</CardTitle>
+        <p data-testid="saved-history-note" className="text-muted-foreground mt-2 text-sm">Каждая строка — изменение метрик или контрольный снимок. Интервал до предыдущей строки не равен простою сборщика: между строками могли быть успешные опросы с теми же значениями.</p>
+        {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       </CardHeader>
       <CardContent>
         {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
-          { icon: Clock, label: "Время замера, МСК" },
-          { icon: Timer, label: "От прошлого замера" },
+          { icon: Clock, label: "Время сохранённой точки, МСК" },
+          { icon: Timer, label: "От предыдущей сохранённой точки" },
           { icon: Hourglass, label: "После публикации" },
           ...tableMetrics.flatMap((metric) => [
             { icon: COLUMN_ICONS[metric.key] ?? Heart, label: metricLabel(metric,platform) },
@@ -281,7 +273,7 @@ export function PublicationMeasurements({ rows, platform, publishedAt, historyLi
               {tableMetrics.map((metric) => <MetricCells key={metric.key} row={row} metric={metric} people={telegram && metric.key === "reactions"} />)}
               {showBreakdown ? <><td className="min-w-max"><Breakdown value={historyReactionEntries(row)} /></td><td className="min-w-max"><Breakdown value={historyReactionEntries(row,true)} delta /></td></> : null}</tr>;
           })}
-        </tbody></table></div> : <p className="text-muted-foreground py-6 text-center">Замеров ещё нет.</p>}
+        </tbody></table></div> : <p className="text-muted-foreground py-6 text-center">Сохранённых точек ещё нет.</p>}
       </CardContent>
     </Card>
   </>;
