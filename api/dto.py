@@ -375,6 +375,18 @@ def history_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "intervalUncertain": row["interval_uncertain"],
         "quality": row["quality"],
         "rawEvidence": row["lineage"],
+        "collectorInterval": row["collector_interval"],
+    }
+
+
+def collector_coverage(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "availableFrom": iso(row["available_from"]),
+        "through": iso(row["through_at"]),
+        "expectedIntervalSeconds": row["expected_interval_seconds"],
+        "successfulPolls": row["successful_polls"],
+        "failedPolls": row["failed_polls"],
+        "gaps": row["gaps"],
     }
 
 

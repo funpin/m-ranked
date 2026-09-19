@@ -9,7 +9,7 @@ const row = (index:number):HistorySnapshot => ({snapshotId:String(index),observe
   reactions:counter(index),views:counter(index*10),comments:counter(null),shares:counter(null),
   deltaReactions:index === 500 ? -3 : index === 700 ? null : 1,deltaViews:10,deltaComments:null,deltaShares:null,
   reactionsBreakdown:{},reactionsBreakdownEntries:[],deltaReactionsBreakdown:null,deltaReactionsBreakdownEntries:null,
-  synthetic:false,intervalUncertain:false,quality:"exact",rawEvidence:{}});
+  synthetic:false,intervalUncertain:false,quality:"exact",rawEvidence:{},collectorInterval:null});
 
 test("elapsed tooltip time keeps exact seconds and separates completed days", () => {
   assert.equal(elapsedSincePublication("2026-09-18T10:00:01Z","2026-09-18T19:40:11Z"),"+9:40:10");

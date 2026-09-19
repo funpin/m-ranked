@@ -464,7 +464,11 @@ SELECT publication.id AS publication_id, alias.legacy_id,alias.entity_type,
 
 
 HISTORY = """
-WITH ranked AS MATERIALIZED (
+WITH account AS MATERIALIZED (
+    SELECT publication.primary_account_id
+      FROM ingest.visible_publication publication
+     WHERE publication.id=%(publication_id)s::uuid
+), ranked AS MATERIALIZED (
     SELECT snapshot.*,
            row_number() OVER (PARTITION BY snapshot.publication_id,snapshot.sampling_bucket
                               ORDER BY snapshot.correction_sequence DESC) AS correction_position
@@ -497,6 +501,7 @@ WITH ranked AS MATERIALIZED (
            lag(decorated.comments_count) OVER chronology AS previous_comments,
            lag(decorated.shares_count) OVER chronology AS previous_shares,
            lag(decorated.reaction_breakdown) OVER chronology AS previous_breakdown,
+           lag(decorated.observed_at) OVER chronology AS previous_observed_at,
            row_number() OVER (ORDER BY decorated.observed_at DESC,decorated.published_month DESC,decorated.id DESC) AS position
       FROM decorated
     WINDOW chronology AS (ORDER BY decorated.observed_at,decorated.published_month,decorated.id)
@@ -514,8 +519,25 @@ SELECT windowed.id AS snapshot_id,windowed.*,
          'reactionDetailsSource','canonical')) AS lineage,
        delta_reactions.breakdown AS delta_reaction_breakdown,
        coalesce(analytics.ordered_history_reactions(windowed.reaction_breakdown::text,false),'[]'::jsonb) AS reaction_entries,
-       delta_reactions.entries AS delta_reaction_entries
+       delta_reactions.entries AS delta_reaction_entries,
+       CASE WHEN windowed.previous_observed_at IS NULL THEN NULL
+            ELSE jsonb_build_object(
+              'from',windowed.previous_observed_at,
+              'to',windowed.observed_at,
+              'successfulPolls',coalesce(interval_results.successful_polls,0),
+              'failedPolls',coalesce(interval_results.failed_polls,0)
+            ) END AS collector_interval
   FROM windowed
+ CROSS JOIN account
+  LEFT JOIN LATERAL (
+    SELECT count(*) FILTER (WHERE result.status='succeeded')::integer AS successful_polls,
+           count(*) FILTER (WHERE result.status NOT IN ('running','succeeded'))::integer AS failed_polls
+      FROM ingest.collection_account_result result
+     WHERE result.platform_account_id=account.primary_account_id
+       AND result.started_at>windowed.previous_observed_at
+       AND result.started_at<=windowed.observed_at
+       AND result.completed_at<=%(as_of)s::timestamptz
+  ) interval_results ON windowed.previous_observed_at IS NOT NULL
  CROSS JOIN LATERAL (
     SELECT computed.entries,
            CASE WHEN computed.entries IS NULL THEN NULL
@@ -534,6 +556,85 @@ SELECT windowed.id AS snapshot_id,windowed.*,
  ) delta_reactions
  WHERE windowed.position<=%(fetch_limit)s
  ORDER BY windowed.observed_at DESC,windowed.published_month DESC,windowed.id DESC
+"""
+
+
+COLLECTOR_COVERAGE = """
+WITH parameters AS (
+    SELECT %(publication_id)s::uuid AS publication_id,
+           %(from_at)s::timestamptz AS requested_from,
+           %(as_of)s::timestamptz AS through_at,
+           %(expected_interval_seconds)s::integer AS expected_seconds
+), account AS MATERIALIZED (
+    SELECT publication.primary_account_id
+      FROM ingest.visible_publication publication
+      JOIN parameters ON parameters.publication_id=publication.id
+), range_results AS MATERIALIZED (
+    SELECT result.started_at,result.completed_at,result.status::text AS status
+      FROM account
+      JOIN ingest.collection_account_result result
+        ON result.platform_account_id=account.primary_account_id
+     CROSS JOIN parameters
+     WHERE result.started_at>=parameters.requested_from
+       AND result.started_at<=parameters.through_at
+       AND (result.completed_at IS NULL OR result.completed_at<=parameters.through_at)
+), prior_success AS (
+    SELECT result.started_at
+      FROM account
+      JOIN ingest.collection_account_result result
+        ON result.platform_account_id=account.primary_account_id
+     CROSS JOIN parameters
+     WHERE result.status='succeeded'
+       AND result.completed_at<=parameters.through_at
+       AND result.started_at<parameters.requested_from
+     ORDER BY result.started_at DESC
+     LIMIT 1
+), success_points AS MATERIALIZED (
+    SELECT prior_success.started_at FROM prior_success
+    UNION ALL
+    SELECT result.started_at FROM range_results result WHERE result.status='succeeded'
+), success_windows AS (
+    SELECT success.started_at,
+           lead(success.started_at) OVER (ORDER BY success.started_at) AS next_started_at
+      FROM success_points success
+), gaps AS MATERIALIZED (
+    SELECT greatest(
+             success_window.started_at + make_interval(secs=>parameters.expected_seconds),
+             parameters.requested_from
+           ) AS gap_from,
+           coalesce(success_window.next_started_at,parameters.through_at) AS gap_to
+      FROM success_windows success_window
+     CROSS JOIN parameters
+     WHERE coalesce(success_window.next_started_at,parameters.through_at)-success_window.started_at
+             >= make_interval(secs=>parameters.expected_seconds*1.75)
+       AND coalesce(success_window.next_started_at,parameters.through_at)>parameters.requested_from
+), first_success AS (
+    SELECT result.started_at
+      FROM account
+      JOIN ingest.collection_account_result result
+        ON result.platform_account_id=account.primary_account_id
+     CROSS JOIN parameters
+     WHERE result.status='succeeded'
+       AND result.completed_at<=parameters.through_at
+     ORDER BY result.started_at
+     LIMIT 1
+)
+SELECT (SELECT started_at FROM first_success) AS available_from,
+       parameters.through_at,
+       parameters.expected_seconds AS expected_interval_seconds,
+       count(*) FILTER (WHERE range_results.status='succeeded')::integer AS successful_polls,
+       count(*) FILTER (WHERE range_results.status NOT IN ('running','succeeded'))::integer AS failed_polls,
+       coalesce((
+         SELECT jsonb_agg(jsonb_build_object(
+                  'from',gap.gap_from,
+                  'to',gap.gap_to,
+                  'missingSeconds',floor(extract(epoch FROM gap.gap_to-gap.gap_from))::bigint
+                ) ORDER BY gap.gap_from)
+           FROM gaps gap
+       ),'[]'::jsonb) AS gaps
+  FROM parameters
+  LEFT JOIN range_results ON true
+ GROUP BY parameters.through_at,parameters.expected_seconds
 """
 
 

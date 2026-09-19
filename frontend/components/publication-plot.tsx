@@ -1,12 +1,12 @@
 "use client";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, duration, legacyDate } from "@/lib/format";
 import { elapsedSincePublication } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
-import type { HistorySnapshot } from "@/lib/types";
+import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
 /** Больше этого числа столбцов прироста на экране уже не различить: при
@@ -44,9 +44,9 @@ function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
   );
 }
 
-export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale }: {
+export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto";
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly CollectorGap[];
 }) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const active = useRef(0);
@@ -177,6 +177,12 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
           её и рисует одну линию по краю. Цвет задан явно, иначе контейнер
           приглушает стандартный штрих вдвое и на тёмной теме его не видно. */}
       <CartesianGrid vertical={false} yAxisId={primaryAxis} stroke="var(--border)" />
+      {gaps.map((gap) => (
+        <ReferenceArea key={`${gap.from}-${gap.to}`} x1={Date.parse(gap.from)} x2={Date.parse(gap.to)} yAxisId={primaryAxis}
+          className="collector-gap"
+          fill="var(--destructive)" fillOpacity={0.13} stroke="var(--destructive)" strokeOpacity={0.35}
+          strokeDasharray="4 4" ifOverflow="hidden" />
+      ))}
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}

@@ -4559,6 +4559,7 @@ components:
       - intervalUncertain
       - quality
       - rawEvidence
+      - collectorInterval
       properties:
         snapshotId:
           type: string
@@ -4631,6 +4632,84 @@ components:
           additionalProperties: true
           description: Sanitized immutable observation lineage; this does not expose provider secrets or unrestricted
             raw payloads.
+        collectorInterval:
+          oneOf:
+          - $ref: '#/components/schemas/CollectorInterval'
+          - type: 'null'
+          description: Account collector cycles between the previous and this saved metric point. Null means this is the first point in the returned page and has no preceding interval.
+    CollectorInterval:
+      type: object
+      additionalProperties: false
+      required:
+      - from
+      - to
+      - successfulPolls
+      - failedPolls
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        successfulPolls:
+          type: integer
+          minimum: 0
+        failedPolls:
+          type: integer
+          minimum: 0
+    CollectorGap:
+      type: object
+      additionalProperties: false
+      required:
+      - from
+      - to
+      - missingSeconds
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        missingSeconds:
+          type: integer
+          format: int64
+          minimum: 0
+    CollectorCoverage:
+      type: object
+      additionalProperties: false
+      required:
+      - availableFrom
+      - through
+      - expectedIntervalSeconds
+      - successfulPolls
+      - failedPolls
+      - gaps
+      properties:
+        availableFrom:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: First successful account cycle retained in the run journal. Earlier intervals are unknown, not confirmed gaps.
+        through:
+          type: string
+          format: date-time
+        expectedIntervalSeconds:
+          type: integer
+          minimum: 1
+        successfulPolls:
+          type: integer
+          minimum: 0
+        failedPolls:
+          type: integer
+          minimum: 0
+        gaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectorGap'
+          description: Confirmed overdue stretches derived from successful account cycles, never from sparse metric snapshots.
     ReactionBreakdownEntry:
       type: object
       additionalProperties: false
@@ -4649,6 +4728,7 @@ components:
       required:
       - publication
       - items
+      - collectorCoverage
       - previousLegacyId
       - nextLegacyId
       - archivedText
@@ -4663,6 +4743,8 @@ components:
           maxItems: 2000
           items:
             $ref: '#/components/schemas/HistorySnapshot'
+        collectorCoverage:
+          $ref: '#/components/schemas/CollectorCoverage'
         previousLegacyId:
           type:
           - integer

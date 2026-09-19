@@ -61,7 +61,9 @@ function postItem(id:number,type:"posts"|"platform_posts",day?:string|null):Sche
   const p=publication(id,type);
   return {publicationId:p.publicationId,legacyId:id,legacyType:type,legacyRoute:`/${type === "posts" ? "posts" : "platform-posts"}/${id}`,externalId:p.externalId,publishedAt:id===2?"2026-07-02T00:00:00Z":p.publishedAt,publicUrl:p.publicUrl,publicationType:p.publicationType,deletedAt:p.deletedAt,historyCompleteness:"complete",views:p.views,reactions:p.reactions,comments:p.comments,shares:p.shares,title:null,archivedText:null,dailyGrowth:day?{day,reactions:id===1?5:3,views:id===1?50:40}:null,displayExternalId:p.displayExternalId,repost:p.repost,joint:p.joint,additionalAuthorCount:p.additionalAuthorCount,ambiguousAlbumReactions:p.ambiguousAlbumReactions};
 }
-const historyRows:Schema["HistorySnapshot"][] = Array.from({length:160},(_,index) => ({snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,views:counter(index*10),reactions:counter(index === 159 ? 155 : index),comments:counter(0),shares:counter(null),deltaViews:index ? 10 : null,deltaReactions:index ? index === 159 ? -3 : 1 : null,deltaComments:index ? 0 : null,deltaShares:null,reactionsBreakdown:{"👍":index,"custom:123456":1},reactionsBreakdownEntries:[{reaction:"👍",count:index},{reaction:"custom:123456",count:1}],deltaReactionsBreakdown:index?{"👍":1}:null,deltaReactionsBreakdownEntries:index?[{reaction:"👍",count:1}]:null,synthetic:index === 0,intervalUncertain:index === 40,quality:"exact",rawEvidence:{fingerprint:`fixture-${index}`}}));
+const historyStart=Date.parse("2026-07-01T00:00:00Z");
+const historyAt=(index:number)=>new Date(historyStart+index*3600000).toISOString();
+const historyRows:Schema["HistorySnapshot"][] = Array.from({length:160},(_,index) => ({snapshotId:String(index+1),observedAt:historyAt(index),ageHours:index,views:counter(index*10),reactions:counter(index === 159 ? 155 : index),comments:counter(0),shares:counter(null),deltaViews:index ? 10 : null,deltaReactions:index ? index === 159 ? -3 : 1 : null,deltaComments:index ? 0 : null,deltaShares:null,reactionsBreakdown:{"👍":index,"custom:123456":1},reactionsBreakdownEntries:[{reaction:"👍",count:index},{reaction:"custom:123456",count:1}],deltaReactionsBreakdown:index?{"👍":1}:null,deltaReactionsBreakdownEntries:index?[{reaction:"👍",count:1}]:null,synthetic:index === 0,intervalUncertain:index === 40,quality:"exact",rawEvidence:{fingerprint:`fixture-${index}`},collectorInterval:index?{from:historyAt(index-1),to:historyAt(index),successfulPolls:12,failedPolls:0}:null}));
 function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["PublicationAnomalyAnalysis"] {
   const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,analysisRevision:3,sourceDatasetRevision:16,
     analyzedAt:asOf,status:"ready",sourceRevisionAt:asOf,suspicionScore:0.82,overallSeverity:"high",
@@ -139,12 +141,19 @@ const server = createServer(async (request, response) => {
       snapshotId:String(index+1),observedAt:new Date(Date.parse("2026-07-01T00:00:00Z")+index*3600000).toISOString(),ageHours:index,
       reactions:counter(index),views:counter(index*10),deltaReactions:index?1:null,deltaViews:index?10:null,synthetic:index===0,
     })) : p.legacyId===7
-      // Publication 7 stands for a stretch where the collectors were down: the
-      // samples between the fortieth and the hundredth hour never arrived.
+      // Publication 7 has no saved metric changes for sixty hours, while the
+      // independent account-cycle journal remains complete.
       ? historyRows.map(row=>({...row,ageHours:row.ageHours+168})).filter((_row,index)=>index<40||index>=100)
       : historyRows;
     const limit=Math.max(1,Number(url.searchParams.get("limit") ?? 200));
-    const items=sourceRows.slice(-limit).map((row,index)=>({...row,
+    const visibleRows=sourceRows.slice(-limit);
+    const visibleOffset=sourceRows.length-visibleRows.length;
+    const trueGap=p.legacyId===8 ? {from:historyAt(100+5/60),to:historyAt(100+55/60),missingSeconds:3000} : null;
+    const items=visibleRows.map((row,index)=>{
+      const previous=sourceRows[visibleOffset+index-1];
+      const seconds=previous ? (Date.parse(row.observedAt)-Date.parse(previous.observedAt))/1000 : 0;
+      const overlapsGap=trueGap && previous && Date.parse(trueGap.to)>Date.parse(previous.observedAt) && Date.parse(trueGap.from)<Date.parse(row.observedAt);
+      return {...row,
       comments:p.platform === "rutube" ? counter(null) : row.comments,
       deltaComments:p.platform === "rutube" ? null : row.deltaComments,
       shares:p.platform === "vk" ? counter(index*2) : row.shares,
@@ -153,8 +162,12 @@ const server = createServer(async (request, response) => {
       reactionsBreakdownEntries:p.platform === "vk" || p.platform === "rutube" ? [] : row.reactionsBreakdownEntries,
       deltaReactionsBreakdown:p.platform === "vk" || p.platform === "rutube" ? null : row.deltaReactionsBreakdown,
       deltaReactionsBreakdownEntries:p.platform === "vk" || p.platform === "rutube" ? null : row.deltaReactionsBreakdownEntries,
-    }));
-    return json({publication:p,items,nextCursor:sourceRows.length>limit?"older":null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
+      collectorInterval:previous?{from:previous.observedAt,to:row.observedAt,successfulPolls:Math.max(0,Math.round(seconds/300)-(overlapsGap?10:0)),failedPolls:0}:null,
+    }});
+    const coverageFrom=visibleRows[0]?.observedAt??p.publishedAt;
+    const coverageThrough=visibleRows.at(-1)?.observedAt??asOf;
+    const collectorCoverage:Schema["CollectorCoverage"]={availableFrom:sourceRows[0]?.observedAt??null,through:coverageThrough,expectedIntervalSeconds:p.platform==="rutube"?3600:300,successfulPolls:Math.max(0,Math.round((Date.parse(coverageThrough)-Date.parse(coverageFrom))/(p.platform==="rutube"?3600000:300000))-(trueGap?10:0)),failedPolls:0,gaps:trueGap&&Date.parse(trueGap.to)>Date.parse(coverageFrom)?[trueGap]:[]};
+    return json({publication:p,items,collectorCoverage,nextCursor:sourceRows.length>limit?"older":null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
   }
   const anomalyId=/^\/api\/v1\/publications\/(\d+)\/anomaly-analysis$/.exec(url.pathname);
   if(anomalyId) return json(anomaly(Number(anomalyId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts"));

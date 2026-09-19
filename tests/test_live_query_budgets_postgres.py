@@ -167,6 +167,10 @@ def test_public_screen_query_budgets() -> None:
                 "published_month": date(fixture["published_at"].year, fixture["published_at"].month, 1),
                 "after_snapshot_id": None, "fetch_limit": 2001,
             }, DEFAULT_BUDGET),
+            ("publication-collector-coverage", details.COLLECTOR_COVERAGE, common | {
+                "publication_id": fixture["publication_id"],
+                "from_at": fixture["published_at"], "expected_interval_seconds": 300,
+            }, DEFAULT_BUDGET),
             ("publication-neighbours", details.NEIGHBOURS, {
                 "publication_id": fixture["publication_id"], "legacy_type": "posts",
             }, DEFAULT_BUDGET),

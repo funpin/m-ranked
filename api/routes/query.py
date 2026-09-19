@@ -28,6 +28,7 @@ REVISION_SQL = "SELECT id, committed_at FROM analytics.latest_dataset_revision()
 # Обзор и списки затрагиваются записью публикаций и справочника.
 OVERVIEW_TAGS = frozenset({"publications", "overview"})
 DETAIL_TAGS = frozenset({"publications", "catalog"})
+COLLECTOR_INTERVAL_SECONDS = {"telegram": 300, "vk": 300, "max": 300, "rutube": 3600}
 
 
 def _iso(value: Any) -> Any:
@@ -353,6 +354,13 @@ async def publication_history(
         })
         has_more = len(rows) > page_size
         visible = rows[:page_size]
+        coverage_from = visible[-1]["observed_at"] if visible else publication_row["published_at"]
+        coverage_row = await db.fetch_one(details.COLLECTOR_COVERAGE, {
+            "publication_id": publication_id,
+            "from_at": coverage_from,
+            "as_of": committed_at,
+            "expected_interval_seconds": COLLECTOR_INTERVAL_SECONDS[publication_row["platform"]],
+        })
         cursor_uuid = str(uuid.UUID(int=int(visible[-1]["snapshot_id"]))) if has_more and visible else None
         neighbours = await db.fetch_one(details.NEIGHBOURS, {
             "publication_id": publication_id, "legacy_type": canonical_type,
@@ -360,6 +368,7 @@ async def publication_history(
         return {
             "publication": dto.publication(publication_row, revision),
             "items": [dto.history_snapshot(row) for row in visible],
+            "collectorCoverage": dto.collector_coverage(coverage_row),
             "previousLegacyId": neighbours["previous"] if neighbours else None,
             "nextLegacyId": neighbours["next"] if neighbours else None,
             "archivedText": None,

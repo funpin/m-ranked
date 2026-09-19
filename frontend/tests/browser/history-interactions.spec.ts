@@ -100,7 +100,11 @@ test("a long interval between saved changes is spaced by time without claiming c
   await page.goto("/posts/7");
   await expect(page.getByTestId("sparse-history-note")).toContainText("не означает, что сборщик не работал");
   await expect(page.getByTestId("saved-history-note")).toContainText("могли быть успешные опросы с теми же значениями");
-  await expect(page.locator("[data-observation-gaps]")).toHaveCount(0);
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("подтверждённых пропусков в выбранном диапазоне нет");
+  await expect(page.locator(".collector-gap")).toHaveCount(0);
+  await expect(page.getByTestId("collector-covered-badge").first()).toHaveText("Сбор шёл");
+  await expect(page.getByTestId("snapshot-history-table")).toContainText("Успешных циклов: 732");
+  await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
   // Neighbouring samples across the break are placed far apart, not side by
   // side: the plotted geometry leaves a wide horizontal stretch between two
   // consecutive samples of the series.
@@ -120,6 +124,16 @@ test("a long interval between saved changes is spaced by time without claiming c
   });
   expect(spacing.span).toBeGreaterThan(100);
   expect(spacing.widest).toBeGreaterThan(spacing.span/8);
+});
+
+test("a confirmed account-cycle outage is marked in both charts and the table",async({page})=>{
+  await page.goto("/posts/8");
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("Подтверждённые пропуски сбора");
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("50 мин");
+  await expect(page.getByTestId("collector-gap-badge")).toHaveCount(1);
+  await expect(page.getByTestId("collector-gap-badge")).toHaveText("Пропуск 50 мин");
+  await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
+  await expect(page.locator(".collector-gap")).toHaveCount(2);
 });
 
 test("publication page with hidden analyzer meets axe AA and exposes non-color boundary text",async({page})=>{
