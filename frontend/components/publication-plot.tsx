@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis, usePlotArea, useXAxisScale } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, duration, legacyDate } from "@/lib/format";
 import { elapsedSincePublication } from "@/lib/history-data";
@@ -13,6 +13,52 @@ function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, "
  *  ширине графика около девятисот точек каждый столбец становится тоньше
  *  волоса, и картинка перестаёт читаться. */
 const MAX_BARS = 56;
+const GAP_MERGE_DISTANCE_PX = 2;
+
+/** Draw confirmed collector gaps as subpaths of one SVG element.
+ *
+ * A noisy account can have hundreds of short gaps. Rendering each one as a
+ * Recharts ReferenceArea created thousands of React/SVG nodes across the two
+ * plots and made the whole page expensive to paint while scrolling. Gaps whose
+ * visible separation is two pixels or less are merged at the current scale:
+ * zooming in separates them again. The textual count and duration remain exact.
+ * One path keeps the overlay at one DOM node per chart. */
+function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
+  const scale = useXAxisScale();
+  const plot = usePlotArea();
+  const overlay = useMemo(() => {
+    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0 };
+    const minX = plot.x;
+    const maxX = plot.x + plot.width;
+    const minY = plot.y;
+    const maxY = plot.y + plot.height;
+    const projected = gaps.flatMap((gap) => {
+      const from = scale(Date.parse(gap.from));
+      const to = scale(Date.parse(gap.to));
+      if (from === undefined || to === undefined) return [];
+      const left = Math.max(minX, Math.min(from, to));
+      const right = Math.min(maxX, Math.max(from, to));
+      if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return [];
+      return [{ left, right }];
+    }).sort((a,b) => a.left-b.left || a.right-b.right);
+    const blocks: {left:number;right:number}[] = [];
+    for (const range of projected) {
+      const previous = blocks.at(-1);
+      if (previous && range.left <= previous.right + GAP_MERGE_DISTANCE_PX) {
+        previous.right = Math.max(previous.right, range.right);
+      } else {
+        blocks.push({...range});
+      }
+    }
+    const path = blocks.map(({left,right}) =>
+      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${maxY.toFixed(2)}H${left.toFixed(2)}Z`,
+    ).join("");
+    return {path,blocks:blocks.length};
+  }, [gaps, plot, scale]);
+  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length}
+    d={overlay.path} fill="var(--destructive)" fillOpacity={0.13}
+    stroke="var(--destructive)" strokeOpacity={0.45} strokeWidth={1} pointerEvents="none" /> : null;
+}
 
 /** Evidence samples are drawn as a larger diamond, so a published signal
  *  boundary is distinguishable from an ordinary observation without colour. */
@@ -177,12 +223,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
           её и рисует одну линию по краю. Цвет задан явно, иначе контейнер
           приглушает стандартный штрих вдвое и на тёмной теме его не видно. */}
       <CartesianGrid vertical={false} yAxisId={primaryAxis} stroke="var(--border)" />
-      {gaps.map((gap) => (
-        <ReferenceArea key={`${gap.from}-${gap.to}`} x1={Date.parse(gap.from)} x2={Date.parse(gap.to)} yAxisId={primaryAxis}
-          className="collector-gap"
-          fill="var(--destructive)" fillOpacity={0.13} stroke="var(--destructive)" strokeOpacity={0.35}
-          strokeDasharray="4 4" ifOverflow="hidden" />
-      ))}
+      <CollectorGapOverlay gaps={gaps} />
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}

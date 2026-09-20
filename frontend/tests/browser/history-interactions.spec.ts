@@ -175,3 +175,13 @@ test("a point older than the 1000-row boundary remains reachable and the next pu
   await expect(page.getByTestId("chart-range-head")).toContainText("160 сохранённых точек");
   await expect(page.getByRole("link",{name:"загрузить всю историю"})).toBeVisible();
 });
+
+test("hundreds of collector gaps use one SVG overlay per chart",async({page})=>{
+  await page.goto("/posts/98");
+  await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("800");
+  const overlays=page.locator(".collector-gap");
+  await expect(overlays).toHaveCount(2);
+  await expect(overlays.first()).toHaveAttribute("data-gap-count","800");
+  await expect(overlays.first()).toHaveAttribute("data-gap-blocks","1");
+});

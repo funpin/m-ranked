@@ -3,14 +3,16 @@
 import Link from "@/components/native-link";
 import { RowLink } from "@/components/row-link";
 import { NativeButton } from "@/components/native-field";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatMetric, formatPercentage, PLATFORM_LONG_LABELS, publicationLabel } from "@/lib/format";
 import { accountHref, publicationHref } from "@/lib/entity-routes";
 import { queryHref } from "@/lib/params";
 import { statisticsHrefQuery, type ParsedStatisticsQuery } from "@/lib/statistics";
 import type { StatisticsEntity, StatisticsPage, StatisticsPublication, StatisticsPublicationSort } from "@/lib/types";
-import { ArrowDown, ArrowUp, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { ArrowDown, ArrowUp, CircleHelp, ExternalLink } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 const PUBLICATION_LABELS: Record<StatisticsPublicationSort, string> = {
   erv: "ERV",
@@ -81,7 +83,7 @@ function PublicationTable({ rows, query }: { rows: StatisticsPublication[]; quer
   const columns = publicationColumns(query);
   return <div className="hidden overflow-x-auto rounded-lg border md:block"><Table data-testid="statistics-publications-table" className="tabular">
     <caption className="sr-only">Публикации, отсортированные по показателю {PUBLICATION_LABELS[query.publicationSort]}</caption>
-    <TableHeader><TableRow><TableHead className="w-12">#</TableHead><TableHead>Вуз и аккаунт</TableHead>
+    <TableHeader><TableRow><TableHead className="w-12">#</TableHead><TableHead>Вуз</TableHead>
       {columns.map((metric) => <SortablePublicationHead key={metric} metric={metric} query={query} />)}
       <TableHead className="w-12"><span className="sr-only">Источник</span></TableHead>
     </TableRow></TableHeader>
@@ -104,11 +106,9 @@ function SortablePublicationHead({ metric, query }: { metric: StatisticsPublicat
 
 function PublicationRow({ row, columns }: { row: StatisticsPublication; columns: StatisticsPublicationSort[] }) {
   const href = publicationHref(row.publicationId);
-  const institution = row.institutionShortName || row.institutionCanonicalName;
-  const account = row.accountTitle || (row.accountUsername ? `@${row.accountUsername}` : row.accountExternalId);
   return <RowLink href={href} className="cursor-pointer hover:bg-muted/50 focus-within:bg-muted/50">
     <TableCell className="text-muted-foreground">{row.rank}</TableCell>
-    <TableCell className="min-w-64 whitespace-normal"><Link className="font-semibold underline-offset-4 hover:underline" href={href} prefetch={false} title={row.institutionCanonicalName}>{institution}</Link><div className="mt-0.5 text-xs text-muted-foreground" title={account}>{account} · {publicationLabel(row.externalId, row.platform)}</div></TableCell>
+    <TableCell className="min-w-64 whitespace-normal"><PublicationIdentity row={row} href={href} /></TableCell>
     {columns.map((metric) => <TableCell key={metric} className={metric === "erv" ? "font-semibold" : undefined}>{publicationMetric(row, metric)}</TableCell>)}
     <TableCell>{row.publicUrl ? <a className="relative z-10 inline-flex size-8 items-center justify-center rounded-md hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" href={row.publicUrl} target="_blank" rel="noopener noreferrer" aria-label={`Открыть оригинал ${PLATFORM_LONG_LABELS[row.platform]}`}><ExternalLink className="size-4" aria-hidden="true" /></a> : null}</TableCell>
   </RowLink>;
@@ -118,38 +118,58 @@ function PublicationCards({ rows, query }: { rows: StatisticsPublication[]; quer
   return <div className="grid gap-3 md:hidden" data-testid="statistics-publication-cards">{rows.map((row) => {
     const href = publicationHref(row.publicationId);
     return <article key={row.publicationId} className="rounded-xl border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className="text-xs font-semibold text-muted-foreground">#{row.rank}</span><h3 className="truncate font-semibold" title={row.institutionCanonicalName}>{row.institutionShortName || row.institutionCanonicalName}</h3><p className="truncate text-xs text-muted-foreground">{row.accountTitle || (row.accountUsername ? `@${row.accountUsername}` : row.accountExternalId)}</p></div><div className="text-right"><strong className="font-heading text-xl">{publicationMetric(row, query.publicationSort)}</strong><p className="text-[11px] uppercase text-muted-foreground">{PUBLICATION_LABELS[query.publicationSort]}</p></div></div>
+      <div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><span className="text-xs font-semibold text-muted-foreground">#{row.rank}</span><PublicationIdentity row={row} href={href} /></div><div className="shrink-0 text-right"><strong className="font-heading text-xl">{publicationMetric(row, query.publicationSort)}</strong><p className="text-[11px] uppercase text-muted-foreground">{PUBLICATION_LABELS[query.publicationSort]}</p></div></div>
       <dl className="mt-3 grid grid-cols-3 gap-2 text-sm"><MetricPair label="ERV" value={formatPercentage(row.erv)} /><MetricPair label="Просмотры" value={formatMetric(row.views)} /><MetricPair label="Взаимодействия" value={formatMetric(row.interactions)} /></dl>
       <div className="mt-4 flex items-center gap-2"><Link className="inline-flex min-h-9 flex-1 items-center justify-center rounded-md border px-3 text-sm font-medium" href={href} prefetch={false}>Открыть карточку</Link>{row.publicUrl ? <a className="inline-flex size-9 items-center justify-center rounded-md border" href={row.publicUrl} target="_blank" rel="noopener noreferrer" aria-label={`Открыть оригинал ${PLATFORM_LONG_LABELS[row.platform]}`}><ExternalLink className="size-4" aria-hidden="true" /></a> : null}</div>
     </article>;
   })}</div>;
 }
 
+function PublicationIdentity({ row, href }: { row: StatisticsPublication; href: string }) {
+  const number = publicationLabel(row.externalId, row.platform);
+  return <div className="min-w-0">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <Link className="font-semibold underline-offset-4 hover:underline" href={href} prefetch={false} title={row.institutionCanonicalName}>{row.institutionShortName || row.institutionCanonicalName}</Link>
+      <Badge variant="secondary" className="max-w-48 rounded-full font-semibold tabular text-ellipsis" title={`Публикация №${number}`}>№{number}</Badge>
+    </div>
+    <div className="mt-0.5 text-xs leading-snug text-muted-foreground" title={row.institutionCanonicalName}>{row.institutionCanonicalName}</div>
+  </div>;
+}
+
 const ENTITY_LABELS = { erv: "ERV", median_interactions: "Медиана", interactions: "Взаимодействия", views: "Просмотры", publications: "Публикации" } as const;
 
 function EntityTable({ rows, query }: { rows: StatisticsEntity[]; query: ParsedStatisticsQuery }) {
   const metrics = [query.entitySort, ...(["erv", "median_interactions", "interactions", "views", "publications"] as const).filter((metric) => metric !== query.entitySort)];
-  return <div className="hidden overflow-x-auto rounded-lg border md:block"><Table data-testid="statistics-entities-table" className="tabular"><caption className="sr-only">Агрегированная статистика вузов</caption><TableHeader><TableRow><TableHead>#</TableHead><TableHead>Вуз</TableHead>{metrics.map((metric) => {
+  return <TooltipProvider><div className="hidden overflow-x-auto rounded-lg border md:block"><Table data-testid="statistics-entities-table" className="tabular"><caption className="sr-only">Агрегированная статистика вузов</caption><TableHeader><TableRow><TableHead>#</TableHead><TableHead>Вуз</TableHead>{metrics.map((metric) => {
     const active = metric === query.entitySort;
     const direction = active && query.entityDirection === "desc" ? "asc" : "desc";
-    return <TableHead key={metric} aria-sort={active ? (query.entityDirection === "asc" ? "ascending" : "descending") : "none"}><Link className="inline-flex items-center gap-1 whitespace-nowrap" scroll={false} prefetch={false} href={queryHref("/statistics", { ...statisticsHrefQuery(query), entity_sort: metric, entity_direction: direction })}>{ENTITY_LABELS[metric]}{active ? query.entityDirection === "asc" ? <ArrowUp className="size-3.5" aria-hidden="true" /> : <ArrowDown className="size-3.5" aria-hidden="true" /> : null}</Link></TableHead>;
-  })}</TableRow></TableHeader><TableBody>{rows.map((row) => <EntityRow key={row.institutionId} row={row} metrics={metrics} />)}</TableBody></Table></div>;
+    return <TableHead key={metric} aria-sort={active ? (query.entityDirection === "asc" ? "ascending" : "descending") : "none"}><span className="inline-flex items-center gap-1"><Link className="inline-flex items-center gap-1 whitespace-nowrap" scroll={false} prefetch={false} href={queryHref("/statistics", { ...statisticsHrefQuery(query), entity_sort: metric, entity_direction: direction })}>{ENTITY_LABELS[metric]}{active ? query.entityDirection === "asc" ? <ArrowUp className="size-3.5" aria-hidden="true" /> : <ArrowDown className="size-3.5" aria-hidden="true" /> : null}</Link>{metric === "erv" ? <EntityErvHelp /> : null}</span></TableHead>;
+  })}</TableRow></TableHeader><TableBody>{rows.map((row) => <EntityRow key={row.institutionId} row={row} metrics={metrics} />)}</TableBody></Table></div></TooltipProvider>;
 }
 
 function EntityRow({ row, metrics }: { row: StatisticsEntity; metrics: readonly (keyof typeof ENTITY_LABELS)[] }) {
   const href = accountHref(row.accountId);
-  return <RowLink href={href} className="cursor-pointer hover:bg-muted/50"><TableCell className="text-muted-foreground">{row.rank}</TableCell><TableCell className="min-w-64 whitespace-normal"><Link href={href} className="font-semibold underline-offset-4 hover:underline" prefetch={false} title={row.canonicalName}>{row.shortName || row.canonicalName}</Link><div className="text-xs text-muted-foreground">{row.publicationCount} публикаций · для ERV: {row.ervSampleSize} с просмотрами</div></TableCell>{metrics.map((metric) => <TableCell key={metric}>{entityMetric(row, metric)}</TableCell>)}</RowLink>;
+  return <RowLink href={href} className="cursor-pointer hover:bg-muted/50"><TableCell className="text-muted-foreground">{row.rank}</TableCell><TableCell className="min-w-64 whitespace-normal"><Link href={href} className="font-semibold underline-offset-4 hover:underline" prefetch={false} title={row.canonicalName}>{row.shortName || row.canonicalName}</Link></TableCell>{metrics.map((metric) => <TableCell key={metric}>{metric === "erv" ? <EntityErvValue row={row} /> : entityMetric(row, metric)}</TableCell>)}</RowLink>;
 }
 
 function EntityCards({ rows, query }: { rows: StatisticsEntity[]; query: ParsedStatisticsQuery }) {
-  return <div className="grid gap-3 md:hidden" data-testid="statistics-entity-cards">{rows.map((row) => {
+  return <TooltipProvider><div className="grid gap-3 md:hidden" data-testid="statistics-entity-cards">{rows.map((row) => {
     const href = accountHref(row.accountId);
-    return <article key={row.institutionId} className="rounded-xl border bg-card p-4"><div className="flex justify-between gap-3"><div className="min-w-0"><span className="text-xs text-muted-foreground">#{row.rank}</span><h3 className="truncate font-semibold" title={row.canonicalName}>{row.shortName || row.canonicalName}</h3><p className="text-xs text-muted-foreground">Для ERV: {row.ervSampleSize} из {row.publicationCount} с просмотрами</p></div><div className="text-right"><strong className="font-heading text-xl">{entityMetric(row, query.entitySort)}</strong><p className="text-[11px] uppercase text-muted-foreground">{ENTITY_LABELS[query.entitySort]}</p></div></div><dl className="mt-3 grid grid-cols-3 gap-2"><MetricPair label="ERV" value={formatPercentage(row.erv)} /><MetricPair label="Медиана" value={formatMetric(row.medianInteractions, true)} /><MetricPair label="Публикации" value={formatMetric(row.publicationCount)} /></dl><Link className="mt-4 inline-flex min-h-9 w-full items-center justify-center rounded-md border px-3 text-sm font-medium" href={href} prefetch={false}>Открыть аккаунт</Link></article>;
-  })}</div>;
+    return <article key={row.institutionId} className="rounded-xl border bg-card p-4"><div className="flex justify-between gap-3"><div className="min-w-0"><span className="text-xs text-muted-foreground">#{row.rank}</span><h3 className="truncate font-semibold" title={row.canonicalName}>{row.shortName || row.canonicalName}</h3></div><div className="text-right">{query.entitySort === "erv" ? <EntityErvValue row={row} prominent /> : <strong className="font-heading text-xl">{entityMetric(row, query.entitySort)}</strong>}<p className="text-[11px] uppercase text-muted-foreground">{ENTITY_LABELS[query.entitySort]}</p></div></div><dl className="mt-3 grid grid-cols-3 gap-2"><MetricPair label="ERV" value={<EntityErvValue row={row} />} /><MetricPair label="Медиана" value={formatMetric(row.medianInteractions, true)} /><MetricPair label="Публикации" value={formatMetric(row.publicationCount)} /></dl><Link className="mt-4 inline-flex min-h-9 w-full items-center justify-center rounded-md border px-3 text-sm font-medium" href={href} prefetch={false}>Открыть аккаунт</Link></article>;
+  })}</div></TooltipProvider>;
 }
 
-function MetricPair({ label, value }: { label: string; value: string }) {
+function MetricPair({ label, value }: { label: string; value: ReactNode }) {
   return <div><dt className="text-[10px] uppercase text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>;
+}
+
+function EntityErvHelp() {
+  return <Tooltip><TooltipTrigger render={<button type="button" className="relative z-10 inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" aria-label="Как считается ERV вузов" />}><CircleHelp className="size-3.5" aria-hidden="true" /></TooltipTrigger><TooltipContent className="max-w-sm whitespace-normal leading-relaxed">ERV вуза — взвешенный показатель: сумма всех взаимодействий делится на сумму просмотров тех же публикаций. Учитываются до 20 последних публикаций за выбранный период; публикации без просмотров не участвуют, а отсутствующие комментарии или репосты дают +0.</TooltipContent></Tooltip>;
+}
+
+function EntityErvValue({ row, prominent = false }: { row: StatisticsEntity; prominent?: boolean }) {
+  const value = formatPercentage(row.erv);
+  return <Tooltip><TooltipTrigger render={<button type="button" className={`relative z-10 cursor-help border-b border-dotted border-current ${prominent ? "font-heading text-xl font-bold" : "font-medium"}`} aria-label={`ERV ${value}. Подробнее о расчёте`} />}>{value}</TooltipTrigger><TooltipContent className="max-w-sm whitespace-normal leading-relaxed">Взвешенный ERV: взаимодействия ÷ просмотры × 100%. В расчёт вошло {row.ervSampleSize} из {row.publicationCount} последних публикаций с просмотрами; это отношение сумм, а не среднее процентов.</TooltipContent></Tooltip>;
 }
 
 function publicationMetric(row: StatisticsPublication, metric: StatisticsPublicationSort): string {

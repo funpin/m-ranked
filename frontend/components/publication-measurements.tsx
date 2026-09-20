@@ -264,7 +264,7 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
           <b className="text-foreground flex items-center gap-1.5 text-sm">
             Масштаб по времени
             <MethodNote title="Масштаб по времени">
-              Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых сохранённых точек; при приближении детализация возвращается. Заштрихованы только подтверждённые разрывы в журнале успешных циклов аккаунта, а не длинные интервалы без изменения метрик.
+              Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых сохранённых точек; при приближении детализация возвращается. Красным отмечены только подтверждённые разрывы в журнале успешных циклов аккаунта, а не длинные интервалы без изменения метрик. Близкие разрывы на общем масштабе визуально объединяются; при приближении видны их реальные границы.
             </MethodNote>
           </b>
           <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} сохранённых точек` : "Нет сохранённых точек"}</span>
@@ -286,7 +286,7 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
         <div className="grid gap-2">
           <p data-testid="sparse-history-note" className="text-muted-foreground text-sm">Графики показывают сохранённые изменения метрик и контрольные снимки. Опросы без изменений обычно не записываются, поэтому длинный интервал между точками сам по себе не означает, что сборщик не работал.</p>
           {visibleGaps.length
-            ? <p data-testid="collector-gap-summary" className="text-destructive text-sm font-medium">Подтверждённые пропуски сбора в выбранном диапазоне: {visibleGaps.length}, суммарно {duration(missingSeconds)}. Они отмечены штриховкой на графиках.{coverageComplete ? "" : " Часть диапазона вне журнала: в ней наличие пропусков неизвестно."}</p>
+            ? <p data-testid="collector-gap-summary" className="text-destructive text-sm font-medium">Подтверждённые пропуски сбора в выбранном диапазоне: {visibleGaps.length}, суммарно {duration(missingSeconds)}. Они отмечены красным; близкие пропуски на текущем масштабе объединяются в общий блок.{coverageComplete ? "" : " Часть диапазона вне журнала: в ней наличие пропусков неизвестно."}</p>
             : coverageComplete
               ? <p data-testid="collector-gap-summary" className="text-muted-foreground text-sm">По журналу циклов аккаунта подтверждённых пропусков в выбранном диапазоне нет.</p>
               : <p data-testid="collector-gap-summary" className="text-muted-foreground text-sm">Журнал циклов покрывает выбранный диапазон не полностью — в непокрытой части наличие пропусков неизвестно.</p>}

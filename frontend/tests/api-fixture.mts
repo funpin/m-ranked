@@ -57,8 +57,8 @@ function statisticsEntity(id: number, platform: "telegram" | "vk" | "max" | "rut
 function statisticsPublication(id:number,platform:"telegram"|"vk"|"max"|"rutube"):Schema["StatisticsPublication"] {
   const type=platform==="telegram"?"posts":"platform_posts";
   return {rank:id,publicationId:uuid(7,id),platform,legacyId:id,legacyType:type,legacyRoute:`/${type}/${id}`,
-    institutionId:uuid(9,id),institutionLegacyId:id,institutionCanonicalName:`Университет ${String(id).padStart(3,"0")}`,
-    institutionShortName:null,accountId:uuid(2,id),accountLegacyId:id,accountUsername:`fixture_${id}`,
+    institutionId:uuid(9,id),institutionLegacyId:id,institutionCanonicalName:`Полное название университета ${String(id).padStart(3,"0")}`,
+    institutionShortName:`Вуз ${String(id).padStart(3,"0")}`,accountId:uuid(2,id),accountLegacyId:id,accountUsername:`fixture_${id}`,
     accountTitle:`Аккаунт ${id}`,accountExternalId:`external-${id}`,externalId:String(id),
     publicUrl:`https://example.test/${platform}/${id}`,publishedAt:"2026-07-01T00:00:00Z",deletedAt:null,
     joint:false,additionalAuthorCount:0,repost:false,views:id===2?0:id*100,reactions:id,comments:platform==="max"?null:0,
@@ -168,6 +168,11 @@ const server = createServer(async (request, response) => {
     const visibleRows=sourceRows.slice(-limit);
     const visibleOffset=sourceRows.length-visibleRows.length;
     const trueGap=p.legacyId===8 ? {from:historyAt(100+5/60),to:historyAt(100+55/60),missingSeconds:3000} : null;
+    const denseGaps=p.legacyId===98 ? Array.from({length:800},(_,index)=>{
+      const from=historyStart+index*(159*3600000/800);
+      const to=from+5*60_000;
+      return {from:new Date(from).toISOString(),to:new Date(to).toISOString(),missingSeconds:300};
+    }) : [];
     const items=visibleRows.map((row,index)=>{
       const previous=sourceRows[visibleOffset+index-1];
       const seconds=previous ? (Date.parse(row.observedAt)-Date.parse(previous.observedAt))/1000 : 0;
@@ -185,7 +190,7 @@ const server = createServer(async (request, response) => {
     }});
     const coverageFrom=visibleRows[0]?.observedAt??p.publishedAt;
     const coverageThrough=visibleRows.at(-1)?.observedAt??asOf;
-    const collectorCoverage:Schema["CollectorCoverage"]={availableFrom:sourceRows[0]?.observedAt??null,through:coverageThrough,expectedIntervalSeconds:p.platform==="rutube"?3600:300,successfulPolls:Math.max(0,Math.round((Date.parse(coverageThrough)-Date.parse(coverageFrom))/(p.platform==="rutube"?3600000:300000))-(trueGap?10:0)),failedPolls:0,gaps:trueGap&&Date.parse(trueGap.to)>Date.parse(coverageFrom)?[trueGap]:[]};
+    const collectorCoverage:Schema["CollectorCoverage"]={availableFrom:sourceRows[0]?.observedAt??null,through:coverageThrough,expectedIntervalSeconds:p.platform==="rutube"?3600:300,successfulPolls:Math.max(0,Math.round((Date.parse(coverageThrough)-Date.parse(coverageFrom))/(p.platform==="rutube"?3600000:300000))-(trueGap?10:0)),failedPolls:0,gaps:denseGaps.length?denseGaps:trueGap&&Date.parse(trueGap.to)>Date.parse(coverageFrom)?[trueGap]:[]};
     return json({publication:p,items,collectorCoverage,nextCursor:sourceRows.length>limit?"older":null,previousLegacyId:null,nextLegacyId:2,archivedText:"Сохранённый текст <script>без исполнения</script>",datasetRevision:revision,asOf} satisfies Schema["PublicationHistory"]);
   }
   const anomalyId=/^\/api\/v1\/publications\/(\d+)\/anomaly-analysis$/.exec(url.pathname);

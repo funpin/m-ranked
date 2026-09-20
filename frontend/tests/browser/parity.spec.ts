@@ -88,6 +88,13 @@ test("statistics concrete platform restores URL state, tabs, search and sorting"
   await expect(page.getByRole("tab", { name: "Публикации" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tab", { name: "Вузы" })).toBeVisible();
   await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
+  const publicationTarget=info.project.name==="mobile"
+    ? page.getByTestId("statistics-publication-cards").locator("article").first()
+    : page.getByTestId("statistics-publications-table").locator("tbody tr").first();
+  await expect(publicationTarget.getByText("Вуз 001",{exact:true})).toBeVisible();
+  await expect(publicationTarget.getByText("№1",{exact:true})).toBeVisible();
+  await expect(publicationTarget.getByText("Полное название университета 001",{exact:true})).toBeVisible();
+  await expect(publicationTarget).not.toContainText("Аккаунт 1");
   if (info.project.name === "mobile") {
     await expect(page.locator('select[name="publication_direction"]')).toHaveValue("asc");
   } else {
@@ -105,7 +112,17 @@ test("statistics concrete platform restores URL state, tabs, search and sorting"
   const entityTarget=info.project.name==="mobile"
     ? page.getByTestId("statistics-entity-cards").locator("article").first()
     : page.getByTestId("statistics-entities-table").locator("tbody tr").first();
-  await expect(entityTarget).toContainText(/для ERV: 20 (?:с|из 20 с) просмотрами/i);
+  await expect(entityTarget).not.toContainText(/выборка|для ERV/i);
+  await entityTarget.getByRole("button",{name:/ERV .*Подробнее о расчёте/}).first().hover();
+  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("Взвешенный ERV");
+  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("20 из 20");
+  await page.keyboard.press("Escape");
+  if(info.project.name==="desktop"){
+    await page.getByRole("button",{name:"Как считается ERV вузов"}).hover();
+    await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("сумма всех взаимодействий");
+    await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("до 20 последних публикаций");
+    await page.keyboard.press("Escape");
+  }
   await entityTarget.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/accounts\/00000002-0000-4000-8000-000000000001$/);
 });
