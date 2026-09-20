@@ -394,6 +394,7 @@ def statistics_entity(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "rank": row["rank"],
         "legacyRoute": row["legacy_route"],
+        "accountId": str(row["account_id"]),
         "institutionId": str(row["institution_id"]),
         "institutionLegacyId": row["institution_legacy_id"],
         "canonicalName": row["canonical_name"],

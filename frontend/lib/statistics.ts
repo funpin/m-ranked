@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 const PUBLICATION_SORTS = new Set<StatisticsPublicationSort>([
-  "erv", "views", "reactions", "interactions", "published_at",
+  "erv", "views", "interactions", "published_at",
 ]);
 const ENTITY_SORTS = new Set<StatisticsEntitySort>([
   "erv", "median_interactions", "interactions", "views", "publications",
@@ -31,7 +31,8 @@ export function normalizeStatisticsQuery(params: SearchParams): ParsedStatistics
   const platform = normalizePlatform(params.platform, "all");
   const suppliedView = first(params.view);
   const period = first(params.period)?.trim().toLowerCase();
-  const publicationSort = first(params.publication_sort) as StatisticsPublicationSort | undefined;
+  const requestedPublicationSort = first(params.publication_sort);
+  const publicationSort = (requestedPublicationSort === "reactions" ? "interactions" : requestedPublicationSort) as StatisticsPublicationSort | undefined;
   const entitySort = first(params.entity_sort) as StatisticsEntitySort | undefined;
   return {
     view: platform === "all" ? "publications" : suppliedView === "entities" ? "entities" : "publications",

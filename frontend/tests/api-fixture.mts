@@ -34,14 +34,22 @@ const aggregate = (value: number | null, size = 2): Schema["AggregateMetric"] =>
 const metric: Schema["OverviewMetric"] = { total: 12, median: 6, previousTotal: 10, previousMedian: 5, totalTrend: 2, medianTrend: 1,
   totalMetadata: aggregate(12), medianMetadata: aggregate(6), previousTotalMetadata: aggregate(10), previousMedianMetadata: aggregate(5) };
 function item(id: number, platform: Schema["PlatformValue"]): Schema["OverviewRow"] {
+  const accountKind = platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4;
+  const accounts:Schema["OverviewAccount"][] = platform === "all" ? [] : [{
+    accountId:uuid(accountKind,id),legacyId:id,legacyRoute:platform === "telegram" ? `/channels/${id}` : `/platform-accounts/${id}`,
+    platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Аккаунт ${id}`,
+    url:`https://example.test/${platform}/${id}`,accessMode:"public",enabled:true,subscriberCount:100,
+    subscriberDisplay:"100",subscriberObservedAt:asOf,latestPollStartedAt:asOf,latestPollCompletedAt:asOf,
+    latestPollStatus:"success",latestErrorCode:null,
+  }];
   return { entityId: platform === "telegram" ? uuid(1,id) : uuid(9,id), entityType: platform === "telegram" ? "channels" : "institutions", legacyId: id, legacyRoute: `/institutions/${id}`, institutionId: `institution-${id}`, institutionLegacyId: id,
-    canonicalName: names[id - 1]!, shortName: null, platform, period: "1d", accounts: [], accountCount: 1, enabledAccountCount: 1, connectedPlatformCount: 1,
+    canonicalName: names[id - 1]!, shortName: null, platform, period: "1d", accounts, accountCount: 1, enabledAccountCount: 1, connectedPlatformCount: 1,
     subscriberCount: 100, lastCheckedAt: asOf, lastErrorCode: null, statusCode: "connected", ratingRank: id, ratingScore: 90,
     ratingPeriod: "2026-Q2", ratingFetchedAt: asOf, totalPublicationCount: 2, activityPublicationCount: 2, newPublicationCount: 0,
     views: metric, reactions: metric, comments: { ...metric, total: 0, totalMetadata: aggregate(0, 1) }, shares: { ...metric, total: null, totalMetadata: aggregate(null, 0) }, asOf };
 }
 function statisticsEntity(id: number, platform: "telegram" | "vk" | "max" | "rutube"): Schema["StatisticsEntity"] {
-  return { rank:id, legacyRoute:`/institutions/${id}`, institutionId:uuid(9,id), institutionLegacyId:id,
+  return { rank:id, legacyRoute:`/institutions/${id}`, accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id), institutionId:uuid(9,id), institutionLegacyId:id,
     canonicalName:`Университет ${String(id).padStart(3,"0")}`,shortName:null,platform,publicationCount:20,
     interactionSampleSize:20,viewSampleSize:20,ervSampleSize:20,medianInteractions:id,
     interactions:id*20,views:id*200,erv:id===2?null:10 };

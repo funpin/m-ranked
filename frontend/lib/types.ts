@@ -66,7 +66,6 @@ export type StatisticsView = "publications" | "entities";
 export type StatisticsPublicationSort =
   | "erv"
   | "views"
-  | "reactions"
   | "interactions"
   | "published_at";
 export type StatisticsEntitySort =

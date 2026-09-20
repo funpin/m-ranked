@@ -198,12 +198,10 @@ function activityHref(item: OverviewItem): string {
   if (item.platform === "telegram") {
     return accountHref(item.entityId);
   }
-  if (item.accountCount === 1 && item.accounts[0]?.accountId) {
+  if (item.accounts[0]?.accountId) {
     return accountHref(item.accounts[0].accountId);
   }
-  return queryHref(item.legacyRoute || `/institutions/${item.institutionLegacyId}`, {
-    platform: item.platform,
-  });
+  return queryHref("/", { platform: item.platform });
 }
 
 const CARD = "bg-card text-card-foreground relative z-[1] flex min-h-[470px] min-w-0 flex-col rounded-xl border p-5 pt-6 shadow-sm transition-[transform,box-shadow] duration-200";

@@ -25,12 +25,13 @@ def test_capability_matrix_is_exhaustive_and_matches_collector_contracts() -> No
     assert PLATFORM_METRIC_CAPABILITIES["rutube"] == {"views", "reactions", "comments"}
 
 
-def test_interactions_distinguish_unsupported_missing_and_zero() -> None:
+def test_interactions_use_available_components_and_preserve_zero() -> None:
     assert interactions("telegram", 3, 2, None) == 5
     assert interactions("max", 3, None, None) == 3
-    assert interactions("vk", 3, 2, None) is None
-    assert interactions("rutube", None, 2, None) is None
+    assert interactions("vk", 3, 2, None) == 5
+    assert interactions("rutube", None, 2, None) == 2
     assert interactions("vk", 0, 0, 0) == 0
+    assert interactions("telegram", None, None, None) is None
 
 
 def test_publication_erv_requires_known_interactions_and_positive_views() -> None:
@@ -66,6 +67,12 @@ def test_statistics_query_and_cursor_include_every_result_dimension() -> None:
     assert "курсор" in (error.value.detail or "")
 
 
+def test_legacy_reactions_sort_is_merged_into_interactions() -> None:
+    query = statistics_query("publications", "vk", "30d", "", "reactions", "desc",
+                             "erv", "desc")
+    assert query.publication_sort == "interactions"
+
+
 def test_search_pattern_escapes_sql_wildcards_literally() -> None:
     assert _like_pattern(r"50%_\\") == r"%50\%\_\\\\%"
 
@@ -82,10 +89,12 @@ def test_sql_applies_search_before_caps_and_nulls_last_in_both_directions() -> N
     assert "ASC NULLS LAST" in normalized_publications
     assert "DESC NULLS LAST" in normalized_publications
     assert "PARTITION BY institution_id" in normalized_entities
+    assert "array_agg(account_id ORDER BY published_at DESC,publication_id DESC)" in normalized_entities
     assert "institution_position<=20" in normalized_entities
     assert "subscriber" not in normalized_entities.lower()
     assert "percentile_cont(0.5)" in normalized_entities
     assert "FILTER (WHERE interactions IS NOT NULL AND views>0)" in normalized_entities
+    assert "coalesce(reactions,0)" in normalized_publications
 
 
 def test_statistics_dto_preserves_zero_and_unknown() -> None:

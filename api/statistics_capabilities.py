@@ -1,8 +1,8 @@
 """Canonical metric capabilities used by publication statistics.
 
-The matrix follows the collector contracts: a structurally unsupported
-interaction component contributes zero, while a missing supported component
-makes the interaction total unknown.
+The matrix follows the collector contracts. Statistics keeps raw missing
+counters nullable, but engagement formulas use the available cumulative
+interaction counters and give every absent component a zero contribution.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def interactions(platform: str, reactions: int | None, comments: int | None,
                  shares: int | None) -> int | None:
     values = {"reactions": reactions, "comments": comments, "shares": shares}
     supported = PLATFORM_METRIC_CAPABILITIES[platform]
-    if any(values[metric] is None for metric in INTERACTION_COMPONENTS if metric in supported):
+    if all(values[metric] is None for metric in INTERACTION_COMPONENTS if metric in supported):
         return None
     return sum(values[metric] or 0 for metric in INTERACTION_COMPONENTS if metric in supported)
 

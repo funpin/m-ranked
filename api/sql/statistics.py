@@ -37,13 +37,13 @@ CASE WHEN latest.shares_quality IN ('invalid','suspected_reset')
 """
 
 INTERACTIONS_EXPRESSION = """
-CASE
-  WHEN reactions_supported AND reactions IS NULL THEN NULL
-  WHEN comments_supported AND comments IS NULL THEN NULL
-  WHEN shares_supported AND shares IS NULL THEN NULL
-  ELSE (CASE WHEN reactions_supported THEN reactions ELSE 0 END)
-     + (CASE WHEN comments_supported THEN comments ELSE 0 END)
-     + (CASE WHEN shares_supported THEN shares ELSE 0 END)
+CASE WHEN (NOT reactions_supported OR reactions IS NULL)
+       AND (NOT comments_supported OR comments IS NULL)
+       AND (NOT shares_supported OR shares IS NULL)
+  THEN NULL
+  ELSE (CASE WHEN reactions_supported THEN coalesce(reactions,0) ELSE 0 END)
+     + (CASE WHEN comments_supported THEN coalesce(comments,0) ELSE 0 END)
+     + (CASE WHEN shares_supported THEN coalesce(shares,0) ELSE 0 END)
 END::bigint
 """
 
@@ -122,7 +122,6 @@ WITH params AS (
 ), sortable AS (
     SELECT decorated.*,
            CASE %(publication_sort)s WHEN 'views' THEN views::numeric
-             WHEN 'reactions' THEN reactions::numeric
              WHEN 'interactions' THEN interactions::numeric
              WHEN 'published_at' THEN extract(epoch FROM published_at)::numeric
              ELSE erv END AS sort_value
@@ -146,7 +145,8 @@ WITH params AS (
              WHEN '1d' THEN interval '1 day' WHEN '7d' THEN interval '7 days'
              ELSE interval '30 days' END AS cutoff
 ), {CAPABILITIES}, filtered AS (
-    SELECT publication.id AS publication_id,publication.published_at,
+    SELECT publication.id AS publication_id,publication.primary_account_id AS account_id,
+           publication.published_at,
            account.platform::text AS platform,account.institution_id,
            institution.canonical_name,institution.short_name
       FROM ingest.visible_publication publication
@@ -174,7 +174,9 @@ WITH params AS (
     SELECT measured.*,{INTERACTIONS_EXPRESSION} AS interactions
       FROM measured
 ), aggregated AS (
-    SELECT institution_id,min(platform) AS platform,min(canonical_name) AS canonical_name,
+    SELECT institution_id,
+           (array_agg(account_id ORDER BY published_at DESC,publication_id DESC))[1] AS account_id,
+           min(platform) AS platform,min(canonical_name) AS canonical_name,
            min(short_name) AS short_name,count(*)::integer AS publication_count,
            count(interactions)::integer AS interaction_sample_size,
            count(views)::integer AS view_sample_size,

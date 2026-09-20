@@ -5,7 +5,7 @@ import { RowLink } from "@/components/row-link";
 import { NativeButton } from "@/components/native-field";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMetric, formatPercentage, PLATFORM_LONG_LABELS, publicationLabel } from "@/lib/format";
-import { publicationHref } from "@/lib/entity-routes";
+import { accountHref, publicationHref } from "@/lib/entity-routes";
 import { queryHref } from "@/lib/params";
 import { statisticsHrefQuery, type ParsedStatisticsQuery } from "@/lib/statistics";
 import type { StatisticsEntity, StatisticsPage, StatisticsPublication, StatisticsPublicationSort } from "@/lib/types";
@@ -15,7 +15,6 @@ import { useState } from "react";
 const PUBLICATION_LABELS: Record<StatisticsPublicationSort, string> = {
   erv: "ERV",
   views: "Просмотры",
-  reactions: "Реакции / лайки",
   interactions: "Взаимодействия",
   published_at: "Дата",
 };
@@ -73,7 +72,7 @@ function EmptyState({ searched }: { searched: boolean }) {
 }
 
 function publicationColumns(query: ParsedStatisticsQuery) {
-  const numeric: StatisticsPublicationSort[] = ["erv", "views", "reactions", "interactions"];
+  const numeric: StatisticsPublicationSort[] = ["erv", "views", "interactions"];
   return [query.publicationSort, ...numeric.filter((metric) => metric !== query.publicationSort), "published_at" as const]
     .filter((metric, index, values) => values.indexOf(metric) === index);
 }
@@ -138,14 +137,14 @@ function EntityTable({ rows, query }: { rows: StatisticsEntity[]; query: ParsedS
 }
 
 function EntityRow({ row, metrics }: { row: StatisticsEntity; metrics: readonly (keyof typeof ENTITY_LABELS)[] }) {
-  const href = row.legacyRoute || `/institutions/${row.institutionLegacyId}`;
-  return <RowLink href={href} className="cursor-pointer hover:bg-muted/50"><TableCell className="text-muted-foreground">{row.rank}</TableCell><TableCell className="min-w-64 whitespace-normal"><Link href={href} className="font-semibold underline-offset-4 hover:underline" prefetch={false} title={row.canonicalName}>{row.shortName || row.canonicalName}</Link><div className="text-xs text-muted-foreground">Выборка: {row.publicationCount}; ERV: {row.ervSampleSize}</div></TableCell>{metrics.map((metric) => <TableCell key={metric}>{entityMetric(row, metric)}</TableCell>)}</RowLink>;
+  const href = accountHref(row.accountId);
+  return <RowLink href={href} className="cursor-pointer hover:bg-muted/50"><TableCell className="text-muted-foreground">{row.rank}</TableCell><TableCell className="min-w-64 whitespace-normal"><Link href={href} className="font-semibold underline-offset-4 hover:underline" prefetch={false} title={row.canonicalName}>{row.shortName || row.canonicalName}</Link><div className="text-xs text-muted-foreground">{row.publicationCount} публикаций · для ERV: {row.ervSampleSize} с просмотрами</div></TableCell>{metrics.map((metric) => <TableCell key={metric}>{entityMetric(row, metric)}</TableCell>)}</RowLink>;
 }
 
 function EntityCards({ rows, query }: { rows: StatisticsEntity[]; query: ParsedStatisticsQuery }) {
   return <div className="grid gap-3 md:hidden" data-testid="statistics-entity-cards">{rows.map((row) => {
-    const href = row.legacyRoute || `/institutions/${row.institutionLegacyId}`;
-    return <article key={row.institutionId} className="rounded-xl border bg-card p-4"><div className="flex justify-between gap-3"><div className="min-w-0"><span className="text-xs text-muted-foreground">#{row.rank}</span><h3 className="truncate font-semibold" title={row.canonicalName}>{row.shortName || row.canonicalName}</h3></div><div className="text-right"><strong className="font-heading text-xl">{entityMetric(row, query.entitySort)}</strong><p className="text-[11px] uppercase text-muted-foreground">{ENTITY_LABELS[query.entitySort]}</p></div></div><dl className="mt-3 grid grid-cols-3 gap-2"><MetricPair label="ERV" value={formatPercentage(row.erv)} /><MetricPair label="Медиана" value={formatMetric(row.medianInteractions, true)} /><MetricPair label="Публикации" value={formatMetric(row.publicationCount)} /></dl><Link className="mt-4 inline-flex min-h-9 w-full items-center justify-center rounded-md border px-3 text-sm font-medium" href={href} prefetch={false}>Открыть вуз</Link></article>;
+    const href = accountHref(row.accountId);
+    return <article key={row.institutionId} className="rounded-xl border bg-card p-4"><div className="flex justify-between gap-3"><div className="min-w-0"><span className="text-xs text-muted-foreground">#{row.rank}</span><h3 className="truncate font-semibold" title={row.canonicalName}>{row.shortName || row.canonicalName}</h3><p className="text-xs text-muted-foreground">Для ERV: {row.ervSampleSize} из {row.publicationCount} с просмотрами</p></div><div className="text-right"><strong className="font-heading text-xl">{entityMetric(row, query.entitySort)}</strong><p className="text-[11px] uppercase text-muted-foreground">{ENTITY_LABELS[query.entitySort]}</p></div></div><dl className="mt-3 grid grid-cols-3 gap-2"><MetricPair label="ERV" value={formatPercentage(row.erv)} /><MetricPair label="Медиана" value={formatMetric(row.medianInteractions, true)} /><MetricPair label="Публикации" value={formatMetric(row.publicationCount)} /></dl><Link className="mt-4 inline-flex min-h-9 w-full items-center justify-center rounded-md border px-3 text-sm font-medium" href={href} prefetch={false}>Открыть аккаунт</Link></article>;
   })}</div>;
 }
 
@@ -156,7 +155,7 @@ function MetricPair({ label, value }: { label: string; value: string }) {
 function publicationMetric(row: StatisticsPublication, metric: StatisticsPublicationSort): string {
   if (metric === "erv") return formatPercentage(row.erv);
   if (metric === "published_at") return new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(row.publishedAt));
-  return formatMetric(metric === "views" ? row.views : metric === "reactions" ? row.reactions : row.interactions);
+  return formatMetric(metric === "views" ? row.views : row.interactions);
 }
 
 function entityMetric(row: StatisticsEntity, metric: keyof typeof ENTITY_LABELS): string {

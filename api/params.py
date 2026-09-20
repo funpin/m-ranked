@@ -24,7 +24,7 @@ SORTS_PLATFORM = frozenset({"name", "subscribers", "posts", "views", "reactions"
 
 STATISTICS_VIEWS = frozenset({"publications", "entities"})
 STATISTICS_PUBLICATION_SORTS = frozenset({
-    "erv", "views", "reactions", "interactions", "published_at",
+    "erv", "views", "interactions", "published_at",
 })
 STATISTICS_ENTITY_SORTS = frozenset({
     "erv", "median_interactions", "interactions", "views", "publications",
@@ -95,9 +95,12 @@ def statistics_query(view_value: str | None, platform_value: str | None,
     resolved_view = view_value if view_value in STATISTICS_VIEWS else "publications"
     if normalized_platform == "all":
         resolved_view = "publications"
+    normalized_publication_sort = (
+        "interactions" if publication_sort == "reactions" else publication_sort
+    )
     return StatisticsQuery(
         resolved_view, normalized_platform, normalized_period, text,
-        publication_sort if publication_sort in STATISTICS_PUBLICATION_SORTS else "erv",
+        normalized_publication_sort if normalized_publication_sort in STATISTICS_PUBLICATION_SORTS else "erv",
         publication_direction if publication_direction in ("asc", "desc") else "desc",
         entity_sort if entity_sort in STATISTICS_ENTITY_SORTS else "erv",
         entity_direction if entity_direction in ("asc", "desc") else "desc",

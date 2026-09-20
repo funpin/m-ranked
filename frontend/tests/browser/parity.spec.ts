@@ -102,6 +102,12 @@ test("statistics concrete platform restores URL state, tabs, search and sorting"
   await page.getByRole("tab", { name: "Вузы" }).click();
   await expect(page).toHaveURL(/view=entities/);
   await expect(page.getByTestId("statistics-entities-table").locator("tbody tr")).toHaveCount(20);
+  const entityTarget=info.project.name==="mobile"
+    ? page.getByTestId("statistics-entity-cards").locator("article").first()
+    : page.getByTestId("statistics-entities-table").locator("tbody tr").first();
+  await expect(entityTarget).toContainText(/для ERV: 20 (?:с|из 20 с) просмотрами/i);
+  await entityTarget.getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/accounts\/00000002-0000-4000-8000-000000000001$/);
 });
 
 test("statistics mobile uses cards and keeps zero distinct from unknown", async ({ page }) => {
@@ -168,7 +174,23 @@ for(const path of ["/posts/1","/platform-posts/1"]) {
 test("account list and institutional zero/one/many routes preserve identity",async({page}) => {
   await page.goto("/channels/1");await expect(page.locator("tbody tr")).toHaveCount(2);
   await page.goto("/institutions/1?platform=telegram");await expect(page).toHaveURL(/\/accounts\/00000001-0000-4000-8000-000000000001$/);
-  await page.goto("/institutions/3?platform=telegram");await expect(page.getByText("Telegram-каналы вуза не добавлены.")).toBeVisible();
-  await page.goto("/institutions/2?platform=telegram");await expect(page.getByTestId("platform-overview-card")).toHaveCount(2);
+  expect((await page.goto("/institutions/3?platform=telegram"))?.status()).toBe(404);
+  await page.goto("/institutions/2?platform=telegram");await expect(page).toHaveURL(/\/accounts\/00000001-0000-4000-8000-000000000001$/);
   await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/?platform=max");
+});
+
+test("overview and statistics share one-row desktop and wrapped mobile filters",async({page},info)=>{
+  for(const path of ["/?platform=telegram","/statistics?platform=telegram"]){
+    await page.goto(path);
+    const toolbar=page.getByTestId("filter-toolbar");
+    await expect(toolbar).toBeVisible();
+    const boxes=await toolbar.locator(":scope > :not(input[type=hidden]):not([role=status])").evaluateAll(elements=>elements.map(element=>{
+      const box=element.getBoundingClientRect();return {top:Math.round(box.top),bottom:Math.round(box.bottom)};
+    }));
+    if(info.project.name==="desktop") expect(new Set(boxes.map(box=>box.top)).size).toBe(1);
+    else {
+      expect(new Set(boxes.map(box=>box.top)).size).toBeGreaterThan(1);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBe(0);
+    }
+  }
 });

@@ -36,7 +36,7 @@ export function StatisticsFilterForm(props: ComponentProps<"form">) {
       }}
     >
       {props.children}
-      <span className="text-muted-foreground text-xs" role="status" hidden={!pending}>Обновляю…</span>
+      <span className="sr-only" role="status" hidden={!pending}>Обновляю…</span>
     </form>
   );
 }

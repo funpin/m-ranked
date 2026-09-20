@@ -422,7 +422,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [erv, views, reactions, interactions, published_at]
+            enum: [erv, views, interactions, published_at]
             default: erv
         - name: publication_direction
           in: query
@@ -3460,6 +3460,7 @@ components:
       required:
         - rank
         - legacyRoute
+        - accountId
         - institutionId
         - institutionLegacyId
         - canonicalName
@@ -3479,6 +3480,10 @@ components:
           minimum: 1
         legacyRoute:
           type: [string, 'null']
+        accountId:
+          type: string
+          format: uuid
+          description: Account to open for the selected platform; chosen from the newest publication in the cohort.
         institutionId:
           type: string
           format: uuid
@@ -3706,7 +3711,7 @@ components:
           maxLength: 200
         publicationSort:
           type: string
-          enum: [erv, views, reactions, interactions, published_at]
+          enum: [erv, views, interactions, published_at]
         publicationDirection:
           type: string
           enum: [asc, desc]

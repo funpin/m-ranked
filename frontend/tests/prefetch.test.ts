@@ -10,7 +10,6 @@ const linkSources = [
   "app/not-found.tsx",
   "app/statistics/page.tsx",
   "components/account-detail.tsx",
-  "components/institution-detail.tsx",
   "components/overview-card.tsx",
   "components/platform-pending.tsx",
   "components/publication-detail.tsx",

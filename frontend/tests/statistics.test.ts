@@ -15,6 +15,10 @@ test("all-platform mode normalizes entity view to publications", () => {
   assert.equal(normalizeStatisticsQuery({ platform: "vk", view: "entities" }).view, "entities");
 });
 
+test("legacy reactions sorting is merged into interactions", () => {
+  assert.equal(normalizeStatisticsQuery({ publication_sort: "reactions" }).publicationSort, "interactions");
+});
+
 test("statistics normalizes unknown values and trims bounded search", () => {
   const query = normalizeStatisticsQuery({
     platform: "unknown", period: "forever", q: "  @Университет  ",
