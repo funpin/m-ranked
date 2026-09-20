@@ -8,7 +8,7 @@ export interface PublicResponseCache {
   load(key: string[], tags: string[], produce: () => Promise<PublicRepresentation>): Promise<PublicRepresentation>;
 }
 
-const PUBLIC_DOMAINS = /^\/api\/v1\/(overview|rating|compare(?:\/candidates)?|institutions\/\d+(?:\/accounts)?|accounts\/\d+(?:\/publications)?|publications\/\d+(?:\/history)?)$/;
+const PUBLIC_DOMAINS = /^\/api\/v1\/(overview|statistics|compare(?:\/candidates)?|institutions\/\d+(?:\/accounts)?|accounts\/\d+(?:\/publications)?|publications\/\d+(?:\/history)?)$/;
 
 /**
  * Как долго один и тот же снимок обслуживает читателей.

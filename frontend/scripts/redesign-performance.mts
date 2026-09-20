@@ -12,8 +12,8 @@ const dist = process.env.NEXT_DIST_DIR ?? ".next-browser-tests";
 const buildId = (await readFile(`${dist}/BUILD_ID`, "utf8")).trim();
 const directory = "reports/redesign";
 await mkdir(directory, { recursive: true });
-const paths = ["/?platform=telegram", "/?platform=all", "/rating?platform=telegram", "/compare?platform=vk&period=336", "/publications/00000005-0000-4000-8000-000000000001"];
-const rows: {path:string; lcp:number; inp:number; cls:number; initialJsGzipBytes:number; scripts:{url:string;gzipBytes:number;sha256:string}[]; workload:{cards:number;rating:number;charts:number;legends:number}}[] = [];
+const paths = ["/?platform=telegram", "/?platform=all", "/statistics?platform=telegram", "/compare?platform=vk&period=336", "/publications/00000005-0000-4000-8000-000000000001"];
+const rows: {path:string; lcp:number; inp:number; cls:number; initialJsGzipBytes:number; scripts:{url:string;gzipBytes:number;sha256:string}[]; workload:{cards:number;statistics:number;charts:number;legends:number}}[] = [];
 const browser = await chromium.launch();
 const p75 = (values:number[]) => values.toSorted((a,b) => a-b)[Math.ceil(values.length*.75)-1]!;
 try {
@@ -38,9 +38,9 @@ try {
         await page.locator('[data-chart-ready="true"] svg.recharts-surface').nth(1).waitFor({timeout:120_000});
         await page.waitForTimeout(600);
       }
-      const workload = await page.evaluate(() => ({ cards:document.querySelectorAll('[data-testid="platform-overview-card"]').length,rating:document.querySelector('[data-testid="rating-table"]')?.querySelectorAll('tbody tr').length??0,charts:document.querySelectorAll('[data-chart-ready="true"] svg.recharts-surface').length,legends:document.querySelectorAll('[data-testid="comparison-legend-toggle"]').length }));
+      const workload = await page.evaluate(() => ({ cards:document.querySelectorAll('[data-testid="platform-overview-card"]').length,statistics:document.querySelector('[data-testid="statistics-publications-table"]')?.querySelectorAll('tbody tr').length??0,charts:document.querySelectorAll('[data-chart-ready="true"] svg.recharts-surface').length,legends:document.querySelectorAll('[data-testid="comparison-legend-toggle"]').length }));
       if (path.startsWith('/?')) assert.equal(workload.cards,50);
-      if (path.startsWith('/rating')) assert.equal(workload.rating,200);
+      if (path.startsWith('/statistics')) assert.equal(workload.statistics,20);
       if (path.startsWith('/compare')) { assert.equal(workload.charts,2);assert.equal(workload.legends,207); }
       const initialScripts = await Promise.all(scripts);
       // Theme chunks requested by the interaction are intentionally outside initial payload.
@@ -74,5 +74,5 @@ const summaries=paths.map(path=>{
   const samples=rows.filter(row=>row.path===path);
   return {path,samples:samples.length,lcpP75Ms:p75(samples.map(row=>row.lcp)),inpP75Ms:p75(samples.map(row=>row.inp)),clsP75:p75(samples.map(row=>row.cls)),initialJsGzipBytes:Math.max(...samples.map(row=>row.initialJsGzipBytes))};
 });
-await writeFile(`${directory}/calibration.json`,JSON.stringify({generatedAt:new Date().toISOString(),buildId,browser:browser.version(),cpu:cpus()[0]?.model,scope:"Frontend-only synthetic calibration: 50 overview cards, 200 rating entities, 207 comparison series × 337 hours in each of two SVG plots, 160 publication observations. API test double; no PostgreSQL, quiet-host or production acceptance claim. Initial payload includes dynamically loaded plots; theme menu loads on interaction.",productionAcceptance:false,throttling:{cpu:4,latencyMs:150,downloadBitsPerSecond:1600000},summaries,rows},null,2)+"\n");
+await writeFile(`${directory}/calibration.json`,JSON.stringify({generatedAt:new Date().toISOString(),buildId,browser:browser.version(),cpu:cpus()[0]?.model,scope:"Frontend-only synthetic calibration: 50 overview cards, 20 initially visible statistics publications, 207 comparison series × 337 hours in each of two SVG plots, 160 publication observations. API test double; no PostgreSQL, quiet-host or production acceptance claim. Initial payload includes dynamically loaded plots; theme menu loads on interaction.",productionAcceptance:false,throttling:{cpu:4,latencyMs:150,downloadBitsPerSecond:1600000},summaries,rows},null,2)+"\n");
 console.log(JSON.stringify(summaries,null,2));

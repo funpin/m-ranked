@@ -16,7 +16,7 @@ test("generic missing detail preserves legacy JSON and unavailable API stays wit
   const response = await legacyDetailError(url,"https://api.test",async () => new Response(null,{status:404}));
   assert.deepEqual(await response!.json(),{detail:"Публикация не найдена"});
   assert.equal(await legacyDetailError(url,"https://api.test",async () => new Response(null,{status:503})),null);
-  assert.equal(await legacyDetailError(new URL("https://site.test/rating"),"https://api.test",async () => {throw Error("must not fetch");}),null);
+  assert.equal(await legacyDetailError(new URL("https://site.test/statistics"),"https://api.test",async () => {throw Error("must not fetch");}),null);
 });
 
 test("old namespaces with the same number redirect to distinct UUIDs and retain query values", async () => {

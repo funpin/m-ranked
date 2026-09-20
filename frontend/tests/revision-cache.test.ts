@@ -18,7 +18,7 @@ test.beforeEach(() => forgetAuthoritativeState());
 test("public cache keys include full canonical query, origin, domain and revision; private routes excluded", () => {
   const url = new URL("https://api.test/api/v1/compare?platform=vk&institutions=9&institutions=1&period=1d");
   assert.deepEqual(publicCacheKey(url, 7), publicCacheKey(new URL("https://api.test/api/v1/compare?period=1d&institutions=9&institutions=1&platform=vk"), 7));
-  for (const changed of ["https://api.test/api/v1/compare?platform=max", "https://api.test/api/v1/rating?platform=vk", "https://other.test/api/v1/compare?platform=vk"]) {
+  for (const changed of ["https://api.test/api/v1/compare?platform=max", "https://api.test/api/v1/statistics?platform=vk", "https://other.test/api/v1/compare?platform=vk"]) {
     assert.notDeepEqual(publicCacheKey(url, 7), publicCacheKey(new URL(changed), 7));
   }
   assert.notDeepEqual(publicCacheKey(url, 7), publicCacheKey(url, 8));
@@ -44,7 +44,7 @@ test("внутри окна свежести снимок читается од�
 test("новое окно свежести берёт новый снимок", async () => {
   const { cache, entries } = memory();
   let revision = 1;
-  const url = new URL("https://api.test/api/v1/rating");
+  const url = new URL("https://api.test/api/v1/statistics");
   const fetchResponse = async () => Response.json({ datasetRevision: revision });
   await revisionCachedResponse(url, cache, fetchResponse, async () => revision);
   revision = 2;
@@ -61,7 +61,7 @@ test("параллельные запросы страницы делят одн
   const fetchResponse = async (url: URL) => Response.json({ datasetRevision: 5, path: url.pathname });
   await Promise.all([
     revisionCachedResponse(new URL("https://api.test/api/v1/overview"), cache, fetchResponse, readRevision),
-    revisionCachedResponse(new URL("https://api.test/api/v1/rating"), cache, fetchResponse, readRevision),
+    revisionCachedResponse(new URL("https://api.test/api/v1/statistics"), cache, fetchResponse, readRevision),
     revisionCachedResponse(new URL("https://api.test/api/v1/compare"), cache, fetchResponse, readRevision),
   ]);
   assert.equal(reads, 1, "три запроса — одно чтение");

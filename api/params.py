@@ -22,18 +22,13 @@ SORTS_ALL = frozenset({"name", "m_rating", "coverage", "accounts"})
 SORTS_PLATFORM = frozenset({"name", "subscribers", "posts", "views", "reactions",
                             "median_reactions", "m_rating"})
 
-RATING_CHANNEL_SORTS = {
-    "telegram": frozenset({"average", "total", "engagement", "subscribers"}),
-    "vk": frozenset({"average", "total", "engagement", "views", "subscribers"}),
-    "max": frozenset({"average", "total", "engagement", "views", "subscribers"}),
-    "rutube": frozenset({"average", "total", "engagement", "views", "subscribers"}),
-}
-RATING_POST_SORTS = {
-    "telegram": frozenset({"reactions", "subscriber_share", "view_share", "views"}),
-    "vk": frozenset({"reactions", "views", "comments", "shares", "interactions", "view_share"}),
-    "max": frozenset({"reactions", "views", "comments", "interactions", "view_share"}),
-    "rutube": frozenset({"reactions", "views", "comments", "interactions", "view_share"}),
-}
+STATISTICS_VIEWS = frozenset({"publications", "entities"})
+STATISTICS_PUBLICATION_SORTS = frozenset({
+    "erv", "views", "reactions", "interactions", "published_at",
+})
+STATISTICS_ENTITY_SORTS = frozenset({
+    "erv", "median_interactions", "interactions", "views", "publications",
+})
 
 
 def platform(value: str | None) -> str:
@@ -64,43 +59,49 @@ class OverviewQuery:
 
 
 @dataclass(frozen=True, slots=True)
-class RatingQuery:
+class StatisticsQuery:
+    view: str
     platform: str
     period: str
-    channel_sort: str
-    channel_direction: str
-    post_sort: str
-    post_direction: str
+    search: str
+    publication_sort: str
+    publication_direction: str
+    entity_sort: str
+    entity_direction: str
 
     @property
     def dimensions(self) -> str:
-        return ":".join((self.platform, self.period, self.channel_sort,
-                         self.channel_direction, self.post_sort, self.post_direction))
+        return ":".join((self.view, self.platform, self.period, self.search,
+                         self.publication_sort, self.publication_direction,
+                         self.entity_sort, self.entity_direction))
 
 
-def rating_query(platform_value: str | None, period_value: str | None,
-                 channel_sort: str | None, channel_direction: str | None,
-                 post_sort: str | None, post_direction: str | None) -> RatingQuery:
-    normalized_platform = (platform_value or "telegram").strip().lower()
+def statistics_query(view_value: str | None, platform_value: str | None,
+                     period_value: str | None, search_value: str | None,
+                     publication_sort: str | None, publication_direction: str | None,
+                     entity_sort: str | None, entity_direction: str | None) -> StatisticsQuery:
+    normalized_platform = (platform_value or "all").strip().lower()
     if normalized_platform == "tg":
         normalized_platform = "telegram"
-    if normalized_platform == "all":
-        raise BadRequest("рейтинг активности для этой платформы ещё не доступен")
-    if normalized_platform not in RATING_CHANNEL_SORTS:
-        normalized_platform = "telegram"
+    if normalized_platform not in PLATFORMS:
+        normalized_platform = "all"
 
     normalized_period = (period_value or "30d").strip().lower()
     if normalized_period not in PERIODS:
-        normalized_period = "1d"
-    resolved_channel_sort = (channel_sort if channel_sort in RATING_CHANNEL_SORTS[normalized_platform]
-                             else "engagement")
-    post_fallback = "reactions" if normalized_platform == "telegram" else "view_share"
-    resolved_post_sort = (post_sort if post_sort in RATING_POST_SORTS[normalized_platform]
-                          else post_fallback)
-    resolved_channel_direction = channel_direction if channel_direction in ("asc", "desc") else "desc"
-    resolved_post_direction = post_direction if post_direction in ("asc", "desc") else "desc"
-    return RatingQuery(normalized_platform, normalized_period, resolved_channel_sort,
-                       resolved_channel_direction, resolved_post_sort, resolved_post_direction)
+        normalized_period = "30d"
+    text = (search_value or "").strip()
+    if len(text) > 200:
+        raise BadRequest("поисковый фрагмент длиннее 200 символов")
+    resolved_view = view_value if view_value in STATISTICS_VIEWS else "publications"
+    if normalized_platform == "all":
+        resolved_view = "publications"
+    return StatisticsQuery(
+        resolved_view, normalized_platform, normalized_period, text,
+        publication_sort if publication_sort in STATISTICS_PUBLICATION_SORTS else "erv",
+        publication_direction if publication_direction in ("asc", "desc") else "desc",
+        entity_sort if entity_sort in STATISTICS_ENTITY_SORTS else "erv",
+        entity_direction if entity_direction in ("asc", "desc") else "desc",
+    )
 
 
 def overview_query(platform_value: str | None, period_value: str | None,

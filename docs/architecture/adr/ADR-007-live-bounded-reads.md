@@ -10,7 +10,7 @@ publisher/barrier, из-за которого свежие данные не б�
 
 ## Decision
 
-Overview, rating, history и compare читают канонические ingest-таблицы живыми
+Overview, statistics, history и compare читают канонические ingest-таблицы живыми
 SQL-запросами. Каждый запрос ограничен периодом, платформой, page size и
 месяцами партиций. Dataset revision фиксирует согласованный as-of.
 

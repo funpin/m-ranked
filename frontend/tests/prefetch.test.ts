@@ -8,7 +8,7 @@ const linkFreeSources = ["app/(overview)/page.tsx"];
 const linkSources = [
   "app/manage/page.tsx",
   "app/not-found.tsx",
-  "app/rating/page.tsx",
+  "app/statistics/page.tsx",
   "components/account-detail.tsx",
   "components/institution-detail.tsx",
   "components/overview-card.tsx",

@@ -55,7 +55,7 @@ const nextFirstLoads=await Promise.all(bundleRows.map(async(row)=>({route:row.ro
 const nextFirstLoad=(path:string)=>nextFirstLoads.find((row)=>new RegExp(`^${row.route.replace(/\[[^/]+\]/g,"[^/]+")}$`).test(new URL(path,origin).pathname))?.gzipBytes??null;
 const sampleCount = Number(process.env.PERFORMANCE_SAMPLES ?? 10);
 if (!Number.isSafeInteger(sampleCount) || sampleCount < 5) throw new Error("Use at least five independent cold samples per route");
-const paths = JSON.parse(process.env.PERFORMANCE_ROUTES ?? '["/?platform=telegram","/?platform=all","/rating?platform=telegram","/compare?platform=vk","/posts/1"]') as string[];
+const paths = JSON.parse(process.env.PERFORMANCE_ROUTES ?? '["/?platform=telegram","/?platform=all","/statistics?platform=telegram","/compare?platform=vk","/posts/1"]') as string[];
 const directory = resolve(process.env.PERFORMANCE_OUTPUT ?? "reports/mobile-performance");
 await mkdir(directory,{recursive:true});
 const producerSha256=createHash("sha256").update(await readFile(new URL(import.meta.url))).digest("hex");
@@ -100,7 +100,7 @@ try {
         deviceScaleFactor:window.devicePixelRatio,
         apiFailure:document.body.innerText.includes("Сервис временно недоступен"),
         overviewCards:document.querySelectorAll('[data-testid="platform-overview-card"]').length,
-        ratingEntities:document.querySelector('[data-testid="rating-table"]')?.querySelectorAll('tbody [data-testid="rating-entity-link"]').length??0,
+        statisticsPublications:document.querySelector('[data-testid="statistics-publication-cards"]')?.querySelectorAll('article').length??0,
         readyCharts:document.querySelectorAll('[data-chart-ready="true"]').length,
         comparisonCandidates:document.querySelectorAll('input[type="checkbox"][name="institutions"]').length,
         comparisonSelected:document.querySelectorAll('input[type="checkbox"][name="institutions"]:checked').length,
@@ -110,7 +110,7 @@ try {
       assert.equal(renderedContent.apiFailure,false,"API fallback cannot be measured as a successful page");
       const pageUrl=new URL(path,origin);
       if(pageUrl.pathname==="/")assert.equal(renderedContent.overviewCards,50,"Measure the complete initial overview page");
-      if(pageUrl.pathname==="/rating")assert.equal(renderedContent.ratingEntities,200,"Measure the complete initial rating page");
+      if(pageUrl.pathname==="/statistics")assert.equal(renderedContent.statisticsPublications,20,"Measure the initial statistics slice");
       if(pageUrl.pathname==="/compare"){
         assert.equal(renderedContent.readyCharts,2,"Both comparison charts must be rendered");
         assert.ok(renderedContent.comparisonCandidates>200,"The representative comparison must traverse more than 200 candidates");

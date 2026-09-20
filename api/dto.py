@@ -390,34 +390,31 @@ def collector_coverage(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def rating_entity(row: dict[str, Any]) -> dict[str, Any]:
+def statistics_entity(row: dict[str, Any]) -> dict[str, Any]:
     return {
-        "entityId": str(row["entity_id"]),
-        "entityType": row["entity_type"],
-        "legacyId": row["legacy_id"],
+        "rank": row["rank"],
         "legacyRoute": row["legacy_route"],
         "institutionId": str(row["institution_id"]),
         "institutionLegacyId": row["institution_legacy_id"],
         "canonicalName": row["canonical_name"],
         "shortName": row["short_name"],
-        "username": row["username"],
-        "title": row["title"],
+        "platform": row["platform"],
         "publicationCount": row["publication_count"],
-        "averageReactions": number(row["average_reactions"]),
-        "averageViews": number(row["average_views"]),
-        "totalReactions": row["total_reactions"],
-        "totalViews": row["total_views"],
-        "totalComments": row["total_comments"],
-        "totalShares": row["total_shares"],
-        "totalInteractions": row["total_interactions"],
-        "engagementRate": number(row["engagement_rate"]),
-        "subscriberCount": row["subscriber_count"],
+        "interactionSampleSize": row["interaction_sample_size"],
+        "viewSampleSize": row["view_sample_size"],
+        "ervSampleSize": row["erv_sample_size"],
+        "medianInteractions": number(row["median_interactions"]),
+        "interactions": row["interactions"],
+        "views": row["views"],
+        "erv": number(row["erv"]),
     }
 
 
-def rating_publication(row: dict[str, Any]) -> dict[str, Any]:
+def statistics_publication(row: dict[str, Any]) -> dict[str, Any]:
     return {
+        "rank": row["rank"],
         "publicationId": str(row["publication_id"]),
+        "platform": row["platform"],
         "legacyId": row["legacy_id"],
         "legacyType": row["legacy_type"],
         "legacyRoute": row["legacy_route"],
@@ -429,20 +426,22 @@ def rating_publication(row: dict[str, Any]) -> dict[str, Any]:
         "accountLegacyId": row["account_legacy_id"],
         "accountUsername": row["account_username"],
         "accountTitle": row["account_title"],
+        "accountExternalId": row["canonical_external_id"],
         "externalId": row["external_id"],
         "publicUrl": row["public_url"],
         "publishedAt": iso(row["published_at"]),
         "deletedAt": iso(row["deleted_at"]),
-        "joint": row["joint"],
+        "joint": row["additional_author_count"] > 0,
         "additionalAuthorCount": row["additional_author_count"],
-        "repost": row["repost"],
+        "repost": row["is_repost"],
         "views": row["views"],
         "reactions": row["reactions"],
         "comments": row["comments"],
         "shares": row["shares"],
         "interactions": row["interactions"],
-        "subscriberShare": number(row["subscriber_share"]),
-        "viewShare": number(row["view_share"]),
+        "erv": number(row["erv"]),
+        "interactionsAvailable": row["interactions"] is not None,
+        "ervEligible": row["erv"] is not None,
     }
 
 

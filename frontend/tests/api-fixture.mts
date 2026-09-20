@@ -40,10 +40,21 @@ function item(id: number, platform: Schema["PlatformValue"]): Schema["OverviewRo
     ratingPeriod: "2026-Q2", ratingFetchedAt: asOf, totalPublicationCount: 2, activityPublicationCount: 2, newPublicationCount: 0,
     views: metric, reactions: metric, comments: { ...metric, total: 0, totalMetadata: aggregate(0, 1) }, shares: { ...metric, total: null, totalMetadata: aggregate(null, 0) }, asOf };
 }
-function entity(id: number, platform: "telegram" | "vk" | "max" | "rutube"): Schema["ActivityRatingEntity"] {
-  return { entityId: platform === "telegram" ? uuid(1,id) : uuid(9,id), entityType: platform === "telegram" ? "channels" : "institutions", legacyId: id, legacyRoute: platform === "telegram" ? `/channels/${id}` : `/institutions/${id}`,
-    institutionId: `institution-${id}`, institutionLegacyId: id, canonicalName: `Университет ${String(id).padStart(3, "0")}`, shortName: null, username: `fixture_${id}`, title: `Университет ${String(id).padStart(3, "0")}`,
-    publicationCount: 1, averageReactions: id, averageViews: id * 10, totalReactions: id, totalViews: id * 10, totalComments: id % 2 ? 0 : null, totalShares: null, totalInteractions: id, engagementRate: 1, subscriberCount: 100 };
+function statisticsEntity(id: number, platform: "telegram" | "vk" | "max" | "rutube"): Schema["StatisticsEntity"] {
+  return { rank:id, legacyRoute:`/institutions/${id}`, institutionId:uuid(9,id), institutionLegacyId:id,
+    canonicalName:`Университет ${String(id).padStart(3,"0")}`,shortName:null,platform,publicationCount:20,
+    interactionSampleSize:20,viewSampleSize:20,ervSampleSize:20,medianInteractions:id,
+    interactions:id*20,views:id*200,erv:id===2?null:10 };
+}
+function statisticsPublication(id:number,platform:"telegram"|"vk"|"max"|"rutube"):Schema["StatisticsPublication"] {
+  const type=platform==="telegram"?"posts":"platform_posts";
+  return {rank:id,publicationId:uuid(7,id),platform,legacyId:id,legacyType:type,legacyRoute:`/${type}/${id}`,
+    institutionId:uuid(9,id),institutionLegacyId:id,institutionCanonicalName:`Университет ${String(id).padStart(3,"0")}`,
+    institutionShortName:null,accountId:uuid(2,id),accountLegacyId:id,accountUsername:`fixture_${id}`,
+    accountTitle:`Аккаунт ${id}`,accountExternalId:`external-${id}`,externalId:String(id),
+    publicUrl:`https://example.test/${platform}/${id}`,publishedAt:"2026-07-01T00:00:00Z",deletedAt:null,
+    joint:false,additionalAuthorCount:0,repost:false,views:id===2?0:id*100,reactions:id,comments:platform==="max"?null:0,
+    shares:platform==="vk"?0:null,interactions:id,erv:id===2?null:1,interactionsAvailable:true,ervEligible:id!==2};
 }
 const counter = (value:number|null):Schema["CounterMetric"] => ({value,observedAt:asOf,quality:value === null ? "unsupported" : "exact"});
 function account(id:number,legacyType:"channels"|"platform_accounts"="channels"):Schema["Account"] {
@@ -191,15 +202,18 @@ const server = createServer(async (request, response) => {
     return json({ cohortId: "fixture-cohort", nextSelectionCursor: null, platform: platform as "telegram", horizonHours: Number(url.searchParams.get("horizonHours") ?? 72) as 72, includePartial: url.searchParams.get("includePartial") === "true",
       metric: (url.searchParams.get("metric") ?? "reactions") as "reactions", aggregation: "median", selectionType: type, cohortSampleSize: 4, series, datasetRevision: revision, asOf } satisfies Schema["Comparison"]);
   }
-  if (url.pathname === "/api/v1/rating") {
-    const cursor = url.searchParams.get("entityCursor");
-    if (cursor && cursor !== "fixture-page-2") return json({ title: "Invalid cursor", detail: "Dataset changed", status: 400 }, 400);
-    const offset = cursor ? 200 : 0;
-    const ratingPlatform = platform as "telegram" | "vk" | "max" | "rutube";
-    const rows = Array.from({ length: cursor ? 5 : 200 }, (_, index) => entity(offset + index + 1, ratingPlatform));
-    return json({ platform: ratingPlatform, period: (url.searchParams.get("period") ?? "30d") as "30d", entityType: platform === "telegram" ? "channels" : "institutions", publicationLegacyType: platform === "telegram" ? "posts" : "platform_posts",
-      channelSort: url.searchParams.get("channel_sort") ?? "engagement", channelDirection: (url.searchParams.get("channel_direction") ?? "desc") as "desc", postSort: url.searchParams.get("post_sort") ?? "view_share", postDirection: (url.searchParams.get("post_direction") ?? "desc") as "desc",
-      entities: rows, publications: [], entityLimit: 200, entitiesTruncated: !cursor, entityOffset: offset, nextEntityCursor: cursor ? null : "fixture-page-2", datasetRevision: revision, asOf } satisfies Schema["Rating"]);
+  if (url.pathname === "/api/v1/statistics") {
+    const selectedPlatform=(url.searchParams.get("platform")??"all") as "all"|"telegram"|"vk"|"max"|"rutube";
+    const view=(selectedPlatform==="all"?"publications":url.searchParams.get("view")??"publications") as "publications"|"entities";
+    const query=url.searchParams.get("q")??"";
+    const platforms=(selectedPlatform==="all"?["telegram","vk","max","rutube"]:[selectedPlatform]) as ("telegram"|"vk"|"max"|"rutube")[];
+    const empty=query==="missing";
+    const sections=view==="publications"?platforms.map((value)=>({platform:value,capabilities:{reactions:true,comments:value!=="max",shares:value==="vk"},items:empty?[]:Array.from({length:50},(_,index)=>statisticsPublication(index+1,value)),total:empty?0:50,offset:0,hasMore:false,nextCursor:null})):[];
+    const entities=view==="entities"&&!empty?Array.from({length:50},(_,index)=>statisticsEntity(index+1,platforms[0]!)):[];
+    return json({view,platform:selectedPlatform,period:(url.searchParams.get("period")??"30d") as "30d",q:query,
+      publicationSort:(url.searchParams.get("publication_sort")??"erv") as "erv",publicationDirection:(url.searchParams.get("publication_direction")??"desc") as "desc",
+      entitySort:(url.searchParams.get("entity_sort")??"erv") as "erv",entityDirection:(url.searchParams.get("entity_direction")??"desc") as "desc",
+      sections,entities,limit:50,offset:0,hasMore:false,nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["Statistics"]);
   }
   return json({ title: "Not Found", status: 404, detail: "Unknown fixture route" }, 404);
 });

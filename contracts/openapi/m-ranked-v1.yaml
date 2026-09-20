@@ -382,75 +382,85 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
-  /api/v1/rating:
+  /api/v1/statistics:
     get:
       tags: [Query]
-      operationId: getRating
-      summary: Read the legacy activity rating for one platform and period
+      operationId: getStatistics
+      summary: Read bounded cumulative publication statistics
       description: >-
-        Returns activity entities plus the top 50 publications from one dataset revision. Telegram
-        ranks enabled channels and keeps channels without publications; VK, MAX and RUTUBE aggregate
-        institutions that have publications. Metrics come from each publication's coherent latest
-        non-synthetic cumulative snapshot. Entities use `entityLimit` and revision-bound `entityCursor` continuation;
-        `entitiesTruncated` reports when this target API cannot return the legacy page's unbounded
-        tail. Unknown period values accepted by the browser route fall back to `1d`; omission is
-        `30d`. This endpoint is separate from official rating observations and derived rating runs.
+        Selects publications by publication date, then uses their latest available cumulative
+        counters. Publication results apply global search before the newest-200 cap and rank the
+        resulting top 50 independently per platform. Entity results aggregate the newest 20
+        matching publications per institution on one platform. Unsupported interaction components
+        contribute zero; missing supported components make interactions and ERV unknown.
       security: []
       parameters:
+        - name: view
+          in: query
+          schema:
+            type: string
+            enum: [publications, entities]
+            default: publications
         - name: platform
           in: query
           schema:
             type: string
-            enum: [telegram, vk, max, rutube]
-            default: telegram
+            enum: [all, telegram, vk, max, rutube]
+            default: all
         - name: period
           in: query
           schema:
             $ref: '#/components/schemas/PeriodValue'
-          description: Omission selects 30d; the server retains the legacy invalid-value fallback to 1d.
-        - name: channel_sort
+          description: Omission and unknown values select 30d.
+        - name: q
           in: query
           schema:
             type: string
-            enum: [average, total, engagement, views, subscribers]
-            default: engagement
-        - name: channel_direction
+            maxLength: 200
+          description: Case-insensitive literal substring; leading @ is optional for usernames.
+        - name: publication_sort
           in: query
           schema:
             type: string
-            enum: [asc, desc]
-            default: desc
-        - name: post_sort
-          in: query
-          schema:
-            type: string
-            enum: [reactions, subscriber_share, view_share, views, comments, shares, interactions]
-            default: view_share
-        - name: post_direction
+            enum: [erv, views, reactions, interactions, published_at]
+            default: erv
+        - name: publication_direction
           in: query
           schema:
             type: string
             enum: [asc, desc]
             default: desc
-        - name: entityCursor
+        - name: entity_sort
           in: query
-          required: false
-          description: Continuation bound to the canonical query and dataset revision; stale cursors return 400 and require restarting pagination.
           schema:
             type: string
-            maxLength: 512
-        - name: entityLimit
+            enum: [erv, median_interactions, interactions, views, publications]
+            default: erv
+        - name: entity_direction
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: limit
           in: query
           schema:
             type: integer
             format: int32
             minimum: 1
-            maximum: 200
-            default: 200
+            maximum: 50
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          description: Revision- and query-bound continuation for a concrete platform.
+          schema:
+            type: string
+            maxLength: 512
         - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
-          description: A bounded, revision-pinned activity rating and top-publication result.
+          description: Revision-pinned statistics using latest cumulative counters.
           headers:
             ETag:
               $ref: '#/components/headers/ETag'
@@ -459,7 +469,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Rating'
+                $ref: '#/components/schemas/Statistics'
         '304':
           description: The supplied validator matches this representation.
           headers:
@@ -3444,43 +3454,31 @@ components:
           minimum: 0
         ambiguousAlbumReactions:
           type: boolean
-    ActivityRatingEntity:
+    StatisticsEntity:
       type: object
       additionalProperties: false
       required:
-        - entityId
-        - entityType
-        - legacyId
+        - rank
         - legacyRoute
         - institutionId
         - institutionLegacyId
         - canonicalName
         - shortName
-        - username
-        - title
+        - platform
         - publicationCount
-        - averageReactions
-        - averageViews
-        - totalReactions
-        - totalViews
-        - totalComments
-        - totalShares
-        - totalInteractions
-        - engagementRate
-        - subscriberCount
+        - interactionSampleSize
+        - viewSampleSize
+        - ervSampleSize
+        - medianInteractions
+        - interactions
+        - views
+        - erv
       properties:
-        entityId:
-          type: string
-          format: uuid
-        entityType:
-          type: string
-          enum: [channels, institutions]
-        legacyId:
+        rank:
           type: integer
-          format: int64
           minimum: 1
         legacyRoute:
-          type: string
+          type: [string, 'null']
         institutionId:
           type: string
           format: uuid
@@ -3491,49 +3489,44 @@ components:
           type: string
         shortName:
           type: [string, 'null']
-        username:
-          type: [string, 'null']
-        title:
-          type: [string, 'null']
+        platform:
+          type: string
+          enum: [telegram, vk, max, rutube]
         publicationCount:
           type: integer
           format: int32
           minimum: 0
-        averageReactions:
-          type: [number, 'null']
-        averageViews:
-          type: [number, 'null']
-        totalReactions:
+        interactionSampleSize:
           type: integer
-          format: int64
+          format: int32
           minimum: 0
-        totalViews:
-          type: [integer, 'null']
-          format: int64
+        viewSampleSize:
+          type: integer
+          format: int32
           minimum: 0
-        totalComments:
-          type: [integer, 'null']
-          format: int64
+        ervSampleSize:
+          type: integer
+          format: int32
           minimum: 0
-        totalShares:
-          type: [integer, 'null']
-          format: int64
-          minimum: 0
-        totalInteractions:
-          type: [integer, 'null']
-          format: int64
-          minimum: 0
-        engagementRate:
+        medianInteractions:
           type: [number, 'null']
-        subscriberCount:
+        interactions:
           type: [integer, 'null']
           format: int64
           minimum: 0
-    ActivityRatingPublication:
+        views:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+        erv:
+          type: [number, 'null']
+    StatisticsPublication:
       type: object
       additionalProperties: false
       required:
+        - rank
         - publicationId
+        - platform
         - legacyId
         - legacyType
         - legacyRoute
@@ -3545,6 +3538,7 @@ components:
         - accountLegacyId
         - accountUsername
         - accountTitle
+        - accountExternalId
         - externalId
         - publicUrl
         - publishedAt
@@ -3557,9 +3551,16 @@ components:
         - comments
         - shares
         - interactions
-        - subscriberShare
-        - viewShare
+        - erv
+        - interactionsAvailable
+        - ervEligible
       properties:
+        rank:
+          type: integer
+          minimum: 1
+        platform:
+          type: string
+          enum: [telegram, vk, max, rutube]
         publicationId:
           type: string
           format: uuid
@@ -3591,6 +3592,8 @@ components:
           type: [string, 'null']
         accountTitle:
           type: [string, 'null']
+        accountExternalId:
+          type: string
         externalId:
           type: [string, 'null']
         publicUrl:
@@ -3629,76 +3632,113 @@ components:
           type: [integer, 'null']
           format: int64
           minimum: 0
-        subscriberShare:
+        erv:
           type: [number, 'null']
-        viewShare:
-          type: [number, 'null']
-    Rating:
+        interactionsAvailable:
+          type: boolean
+        ervEligible:
+          type: boolean
+    StatisticsCapabilities:
       type: object
       additionalProperties: false
-      required:
-        - platform
-        - period
-        - entityType
-        - publicationLegacyType
-        - channelSort
-        - channelDirection
-        - postSort
-        - postDirection
-        - entities
-        - publications
-        - entityLimit
-        - entitiesTruncated
-        - nextEntityCursor
-        - entityOffset
-        - datasetRevision
-        - asOf
+      required: [reactions, comments, shares]
       properties:
-        entityOffset:
-          type: integer
-          minimum: 0
-          description: Zero-based number of entities preceding this page under the validated cursor.
-        nextEntityCursor:
-          type: [string, 'null']
-          description: Fetch the next entity page with the same query. Null after the final page.
+        reactions: {type: boolean}
+        comments: {type: boolean}
+        shares: {type: boolean}
+    StatisticsSection:
+      type: object
+      additionalProperties: false
+      required: [platform, capabilities, items, total, offset, hasMore, nextCursor]
+      properties:
         platform:
           type: string
           enum: [telegram, vk, max, rutube]
-        period:
-          $ref: '#/components/schemas/PeriodValue'
-        entityType:
-          type: string
-          enum: [channels, institutions]
-        publicationLegacyType:
-          type: string
-          enum: [posts, platform_posts]
-        channelSort:
-          type: string
-        channelDirection:
-          type: string
-          enum: [asc, desc]
-        postSort:
-          type: string
-        postDirection:
-          type: string
-          enum: [asc, desc]
-        entities:
-          type: array
-          maxItems: 200
-          items:
-            $ref: '#/components/schemas/ActivityRatingEntity'
-        publications:
+        capabilities:
+          $ref: '#/components/schemas/StatisticsCapabilities'
+        items:
           type: array
           maxItems: 50
           items:
-            $ref: '#/components/schemas/ActivityRatingPublication'
-        entityLimit:
+            $ref: '#/components/schemas/StatisticsPublication'
+        total:
+          type: integer
+          minimum: 0
+          maximum: 50
+        offset:
+          type: integer
+          minimum: 0
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: [string, 'null']
+    Statistics:
+      type: object
+      additionalProperties: false
+      required:
+        - view
+        - platform
+        - period
+        - q
+        - publicationSort
+        - publicationDirection
+        - entitySort
+        - entityDirection
+        - sections
+        - entities
+        - limit
+        - offset
+        - hasMore
+        - nextCursor
+        - datasetRevision
+        - asOf
+      properties:
+        view:
+          type: string
+          enum: [publications, entities]
+        platform:
+          type: string
+          enum: [all, telegram, vk, max, rutube]
+        period:
+          $ref: '#/components/schemas/PeriodValue'
+        q:
+          type: string
+          maxLength: 200
+        publicationSort:
+          type: string
+          enum: [erv, views, reactions, interactions, published_at]
+        publicationDirection:
+          type: string
+          enum: [asc, desc]
+        entitySort:
+          type: string
+          enum: [erv, median_interactions, interactions, views, publications]
+        entityDirection:
+          type: string
+          enum: [asc, desc]
+        sections:
+          type: array
+          minItems: 0
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/StatisticsSection'
+        entities:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/StatisticsEntity'
+        limit:
           type: integer
           format: int32
           minimum: 1
-          maximum: 200
-        entitiesTruncated:
+          maximum: 50
+        offset:
+          type: integer
+          minimum: 0
+        hasMore:
           type: boolean
+        nextCursor:
+          type: [string, 'null']
         datasetRevision:
           type: integer
           format: int64

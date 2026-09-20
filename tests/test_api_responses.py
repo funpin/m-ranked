@@ -15,17 +15,20 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
-from api.params import rating_query
+from api.params import statistics_query
 from conftest import requires_api_database as requires_database
 
 CONTRACT = pathlib.Path(__file__).resolve().parents[1] / "contracts/openapi/m-ranked-v1.yaml"
 
 
-def test_max_rating_query_uses_generic_platform_sorts() -> None:
-    query = rating_query("max", None, None, None, "shares", None)
+def test_statistics_query_normalizes_all_dimensions() -> None:
+    query = statistics_query("entities", "max", None, "  @Alpha  ", "bad", "asc", "views", None)
     assert query.platform == "max"
-    assert query.channel_sort == "engagement"
-    assert query.post_sort == "view_share"
+    assert query.view == "entities"
+    assert query.search == "@Alpha"
+    assert query.publication_sort == "erv"
+    assert query.publication_direction == "asc"
+    assert query.entity_sort == "views"
 
 
 @pytest.fixture(scope="module")
@@ -111,9 +114,9 @@ CASES = [
     ("/api/v1/overview", "get", "200", "/api/v1/overview?sort=views&direction=asc&limit=3"),
     ("/api/v1/overview", "get", "200", "/api/v1/overview?q=университет&limit=2"),
     ("/api/v1/overview", "get", "200", "/api/v1/overview?platform=telegram&period=30d&limit=4"),
-    ("/api/v1/rating", "get", "200", "/api/v1/rating?entityLimit=5"),
-    ("/api/v1/rating", "get", "200", "/api/v1/rating?platform=vk&period=7d&entityLimit=5"),
-    ("/api/v1/rating", "get", "200", "/api/v1/rating?platform=rutube&period=30d&entityLimit=5"),
+    ("/api/v1/statistics", "get", "200", "/api/v1/statistics?limit=5"),
+    ("/api/v1/statistics", "get", "200", "/api/v1/statistics?platform=vk&period=7d&limit=5"),
+    ("/api/v1/statistics", "get", "200", "/api/v1/statistics?view=entities&platform=rutube&period=30d&limit=5"),
     ("/api/v1/compare/candidates", "get", "200",
      "/api/v1/compare/candidates?platform=telegram&limit=5"),
     ("/api/v1/compare/candidates", "get", "200",
@@ -271,29 +274,29 @@ def test_detail_problems_match_contract(client, validator_for) -> None:
 
 
 @requires_database
-def test_rating_normalization_and_cursor(client) -> None:
+def test_statistics_normalization_and_cursor(client) -> None:
     normalized = client.get(
-        "/api/v1/rating?platform=nonsense&period=nonsense&channel_sort=nonsense&post_sort=nonsense&entityLimit=3")
+        "/api/v1/statistics?platform=nonsense&period=nonsense&publication_sort=nonsense&limit=3")
     defaulted = client.get(
-        "/api/v1/rating?platform=telegram&period=1d&channel_sort=engagement&post_sort=reactions&entityLimit=3")
+        "/api/v1/statistics?platform=all&period=30d&publication_sort=erv&limit=3")
     assert normalized.status_code == 200
     assert normalized.headers["etag"] == defaulted.headers["etag"]
 
-    first = client.get("/api/v1/rating?platform=vk&entityLimit=2").json()
-    assert first["nextEntityCursor"]
-    second = client.get("/api/v1/rating", params={
-        "platform": "vk", "entityLimit": 2, "entityCursor": first["nextEntityCursor"],
+    first = client.get("/api/v1/statistics?platform=vk&view=entities&limit=2").json()
+    assert first["nextCursor"]
+    second = client.get("/api/v1/statistics", params={
+        "platform": "vk", "view": "entities", "limit": 2, "cursor": first["nextCursor"],
     }).json()
-    assert not ({row["entityId"] for row in first["entities"]}
-                & {row["entityId"] for row in second["entities"]})
-    assert second["entityOffset"] == first["entityOffset"] + len(first["entities"])
+    assert not ({row["institutionId"] for row in first["entities"]}
+                & {row["institutionId"] for row in second["entities"]})
+    assert second["offset"] == first["offset"] + len(first["entities"])
 
-    max_rating = client.get("/api/v1/rating?platform=max&entityLimit=2")
-    assert max_rating.status_code == 200
-    assert max_rating.json()["platform"] == "max"
+    max_statistics = client.get("/api/v1/statistics?platform=max&limit=2")
+    assert max_statistics.status_code == 200
+    assert max_statistics.json()["platform"] == "max"
 
-    stale_dimensions = client.get("/api/v1/rating", params={
-        "platform": "rutube", "entityLimit": 2, "entityCursor": first["nextEntityCursor"],
+    stale_dimensions = client.get("/api/v1/statistics", params={
+        "platform": "rutube", "view": "entities", "limit": 2, "cursor": first["nextCursor"],
     })
     assert stale_dimensions.status_code == 400
 

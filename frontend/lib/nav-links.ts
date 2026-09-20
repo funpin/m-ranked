@@ -3,7 +3,7 @@
  *  передавать только компоненты, но не обычные значения. */
 export const NAV_LINKS = [
   { href: "/", label: "Обзор" },
-  { href: "/rating", label: "Рейтинг" },
+  { href: "/statistics", label: "Статистика" },
   { href: "/compare", label: "Сравнение" },
   { href: "/export/snapshots.csv", label: "Экспорт CSV" },
   { href: "/manage", label: "Управление" },

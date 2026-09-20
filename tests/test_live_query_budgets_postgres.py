@@ -15,7 +15,7 @@ from psycopg.rows import dict_row
 import pytest
 
 from api.config import Settings
-from api.sql import admin, analysis, compare, details, overview, rating
+from api.sql import admin, analysis, compare, details, overview, statistics
 from conftest import requires_api_database
 
 
@@ -124,13 +124,14 @@ def test_public_screen_query_budgets() -> None:
                 "period": "30d", "platform": "all", "sort": "median_reactions",
                 "direction": "desc", "search": "", "after_id": None, "fetch_limit": 51,
             }, DEFAULT_BUDGET),
-            ("rating-entities", rating.ENTITIES, common | {
-                "period": "30d", "platform": "telegram", "channel_sort": "engagement",
-                "channel_direction": "desc", "after_entity_id": None, "fetch_limit": 201,
+            ("statistics-entities", statistics.ENTITIES, common | {
+                "period": "30d", "platform": "vk", "q": "", "search_pattern": "%",
+                "username_pattern": "%", "entity_sort": "erv", "entity_direction": "desc",
             }, DEFAULT_BUDGET),
-            ("rating-publications", rating.PUBLICATIONS, common | {
-                "period": "30d", "platform": "telegram", "post_sort": "view_share",
-                "post_direction": "desc",
+            ("statistics-publications", statistics.PUBLICATIONS, common | {
+                "period": "30d", "platform": "all", "q": "", "search_pattern": "%",
+                "username_pattern": "%", "publication_sort": "erv",
+                "publication_direction": "desc",
             }, DEFAULT_BUDGET),
             ("compare-candidates", compare.CANDIDATES, common | {
                 "platform": "telegram", "after_id": None, "fetch_limit": 51,

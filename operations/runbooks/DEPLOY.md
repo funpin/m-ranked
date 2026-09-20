@@ -206,15 +206,18 @@ done
 Выкатка не закончена, пока всё это не ответило:
 
 ```bash
-systemctl is-active m-ranked-target-api m-ranked-target-web
-curl -fsS http://127.0.0.1:8080/api/v1/health/live
+systemctl is-active m-ranked-target-api-python m-ranked-target-web
+curl -fsS http://127.0.0.1:18080/api/v1/health/live
 curl -fsS http://127.0.0.1:8080/api/v1/health/ready
 curl -fsS http://127.0.0.1:8080/api/v1/health/freshness
 # публичные страницы и публичный API — снаружи, не с петли
-curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/rating?platform=telegram'
-curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/api/v1/rating?platform=telegram'
+curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/statistics?platform=telegram'
+curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/api/v1/statistics?platform=telegram'
+# старые namespace свободны для будущего рейтинга
+test "$(curl -sS -o /dev/null -w '%{http_code}' 'https://m.funpin.org/rating')" = 404
+test "$(curl -sS -o /dev/null -w '%{http_code}' 'https://m.funpin.org/api/v1/rating')" = 404
 curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/'
-journalctl -u m-ranked-target-api --since '-5 min' --no-pager | tail -30
+journalctl -u m-ranked-target-api-python --since '-5 min' --no-pager | tail -30
 ```
 
 Затем вход в админку целиком — он проверяет и сессии, и миграцию:

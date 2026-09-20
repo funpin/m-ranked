@@ -170,7 +170,7 @@ export function skeletonFor(href: string) {
   if (!href) return null;
   const path = href.split("?")[0] ?? "";
   if (path === "/" ) return <CardGridSkeleton />;
-  if (path.startsWith("/rating")) return <TableSkeleton />;
+  if (path.startsWith("/statistics")) return <TableSkeleton />;
   if (path.startsWith("/compare")) {
     return <TableSkeleton rows={8} chrome={false} />;
   }

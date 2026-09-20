@@ -93,7 +93,7 @@ including the renderers, is measured separately by the mobile runner.
 
 The frontend calibration in `scripts/redesign-performance.mts` uses the explicit
 `REDESIGN_PERFORMANCE_FIXTURE=true` API test double: 50 overview cards,
-200 rating entities, 207 comparison series × 337 hours on each of two charts,
+20 initially visible statistics publications, 207 comparison series × 337 hours on each of two charts,
 and 160 publication observations. It runs five cold mobile contexts per route
 with CPU 4×, 150 ms latency and 1.6 Mbps download. Its report is
 `reports/redesign/calibration.json`; this is frontend-only synthetic evidence,

@@ -91,7 +91,7 @@ DETAIL_GROUP = {
     ("/api/v1/publications/{legacyId}/history", "GET"),
 }
 
-RATING_GROUP = {("/api/v1/rating", "GET")}
+STATISTICS_GROUP = {("/api/v1/statistics", "GET")}
 
 COMPARE_GROUP = {
     ("/api/v1/compare/candidates", "GET"),
@@ -149,9 +149,10 @@ def test_entity_and_list_group_is_implemented(contract: dict, app) -> None:
     assert DETAIL_GROUP <= implemented
 
 
-def test_rating_group_is_implemented(contract: dict, app) -> None:
+def test_statistics_group_is_implemented(contract: dict, app) -> None:
     implemented = implemented_operations(app)
-    assert RATING_GROUP <= implemented
+    assert STATISTICS_GROUP <= implemented
+    assert ("/api/v1/rating", "GET") not in implemented
 
 
 def test_compare_group_is_implemented(contract: dict, app) -> None:

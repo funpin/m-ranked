@@ -68,25 +68,51 @@ test("legacy validation returns 422 and repeated scalar chooses last", async ({ 
   await expect(page.locator('input[name="platform"][value="telegram"]')).toBeChecked();
 });
 
-for (const platform of ["telegram", "vk", "max", "rutube"]) {
-  test(`${platform} rating exposes all 205 rows with stable global ranks`, async ({ page }) => {
-    await page.goto(`/rating?platform=${platform}`);
-    if (platform === "max") {
-      await expect(page.getByRole("heading", { level: 1, name: "Рейтинг · MAX" })).toBeVisible();
-      await expect(page.locator('input[name="platform"][value="max"]')).toBeChecked();
-      await expect(page.locator('input[name="platform"][value="all"]')).toHaveCount(0);
-    }
-    const first = await page.getByTestId("rating-table").first().getByTestId("rating-entity-link").allTextContents();
-    expect(first).toHaveLength(200);
-    await page.getByRole("link", { name: "Следующая страница рейтинга" }).click();
-    await expect(page).toHaveURL(/entityCursor=/);
-    const next = await page.getByTestId("rating-table").first().getByTestId("rating-entity-link").allTextContents();
-    expect(next).toHaveLength(5);
-    expect(new Set([...first, ...next]).size).toBe(205);
-    await expect(page.getByTestId("rating-table").first().locator("tbody tr td").first()).toHaveText("201");
-    await expect(page.getByRole("link", { name: "Следующая страница рейтинга" })).toHaveCount(0);
-  });
-}
+test("statistics all-platform mode has four independent publication slices", async ({ page, request }) => {
+  expect((await request.get("/rating")).status()).toBe(404);
+  await page.goto("/statistics?platform=all");
+  await expect(page.getByRole("heading", { level: 1, name: "Статистика публикаций" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Вузы" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Telegram", "ВКонтакте", "MAX", "Rutube"]);
+  const tables = page.getByTestId("statistics-publications-table");
+  await expect(tables).toHaveCount(4);
+  await expect(tables.nth(0).locator("tbody tr")).toHaveCount(10);
+  await expect(tables.nth(1).locator("tbody tr")).toHaveCount(10);
+  await page.getByRole("button", { name: /Показать ещё/ }).first().click();
+  await expect(tables.nth(0).locator("tbody tr")).toHaveCount(50);
+  await expect(tables.nth(1).locator("tbody tr")).toHaveCount(10);
+});
+
+test("statistics concrete platform restores URL state, tabs, search and sorting", async ({ page }, info) => {
+  await page.goto("/statistics?platform=vk&q=alpha&publication_sort=views&publication_direction=asc");
+  await expect(page.getByRole("tab", { name: "Публикации" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Вузы" })).toBeVisible();
+  await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
+  if (info.project.name === "mobile") {
+    await expect(page.locator('select[name="publication_direction"]')).toHaveValue("asc");
+  } else {
+    await expect(page.getByRole("columnheader", { name: /Просмотры/ })).toHaveAttribute("aria-sort", "ascending");
+  }
+  await page.locator('input[name="q"]').fill("missing");
+  await page.locator('input[name="q"]').press("Enter");
+  await expect(page).toHaveURL(/q=missing/);
+  await expect(page.getByText("Ничего не найдено")).toBeVisible();
+  await page.goBack();
+  await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
+  await page.getByRole("tab", { name: "Вузы" }).click();
+  await expect(page).toHaveURL(/view=entities/);
+  await expect(page.getByTestId("statistics-entities-table").locator("tbody tr")).toHaveCount(20);
+});
+
+test("statistics mobile uses cards and keeps zero distinct from unknown", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/statistics?platform=telegram");
+  await expect(page.getByTestId("statistics-publication-cards").locator("article")).toHaveCount(20);
+  await expect(page.getByTestId("statistics-publications-table")).toBeHidden();
+  const cards = page.getByTestId("statistics-publication-cards");
+  await expect(cards.getByText("—").first()).toBeVisible();
+  await expect(cards.getByText("1,00%").first()).toBeVisible();
+});
 
 test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

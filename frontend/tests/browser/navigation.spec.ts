@@ -23,8 +23,8 @@ test("переход по меню и открытие карточки не п�
   await page.goto("/?platform=telegram");
   await stamp(page);
 
-  await page.getByTestId("main-nav").getByRole("link", { name: "Рейтинг" }).click();
-  await expect(page).toHaveURL(/\/rating\?platform=telegram/);
+  await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
+  await expect(page).toHaveURL(/\/statistics\?platform=telegram/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   expect(await kept(page)).toBe("kept");
 
@@ -59,8 +59,8 @@ test.describe("без JavaScript", () => {
     await page.goto("/?platform=telegram");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-    await page.getByTestId("main-nav").getByRole("link", { name: "Рейтинг" }).click();
-    await expect(page).toHaveURL(/\/rating\?platform=telegram/);
+    await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
+    await expect(page).toHaveURL(/\/statistics\?platform=telegram/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
     await page.goto("/?platform=telegram");
@@ -76,22 +76,22 @@ test("заготовка при переходе принадлежит той �
   await page.goto("/?platform=telegram");
   // Ответ задерживается, чтобы заготовка успела показаться и её можно было
   // разглядеть: без задержки переход завершается за один кадр.
-  await page.route("**/rating**", async (route) => {
+  await page.route("**/statistics**", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1200));
     await route.continue();
   });
-  await page.getByTestId("main-nav").getByRole("link", { name: "Рейтинг" }).click();
-  // На экране заготовка таблицы рейтинга, а не сетка карточек обзора и не
+  await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
+  // На экране заготовка таблицы статистики, а не сетка карточек обзора и не
   // её заголовок с фильтрами.
   await expect(page.getByText("Загрузка таблицы")).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "Поиск вуза" })).toHaveCount(0);
-  await expect(page).toHaveURL(/\/rating/);
+  await expect(page).toHaveURL(/\/statistics/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
 test("локальные заготовки не дублируют постоянную шапку страницы", async ({ page }) => {
   await page.goto("/?platform=telegram");
-  await delayMatchingNavigation(page, (url) => ["/", "/rating"].includes(url.pathname) && url.searchParams.get("period") === "7d");
+  await delayMatchingNavigation(page, (url) => ["/", "/statistics"].includes(url.pathname) && url.searchParams.get("period") === "7d");
 
   await page.locator('select[name="period"]').selectOption("7d");
   await page.getByRole("button", { name: "Применить фильтры" }).click();
@@ -100,9 +100,8 @@ test("локальные заготовки не дублируют постоя
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
   await expect(page).toHaveURL(/period=7d/);
-  await page.goto("/rating?platform=telegram");
+  await page.goto("/statistics?platform=telegram");
   await page.locator('select[name="period"]').selectOption("7d");
-  await page.getByRole("button", { name: "Применить период" }).click();
 
   await expect(page.getByText("Загрузка таблицы")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
