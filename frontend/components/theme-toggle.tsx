@@ -8,6 +8,7 @@ import {
   applyTheme,
   readThemePreference,
   resolveTheme,
+  syncThemeFavicon,
   themeLabel,
 } from "@/lib/theme";
 
@@ -42,6 +43,7 @@ export function ThemeToggle() {
   }, [preference]);
 
   const next = resolved === "dark" ? "light" : "dark";
+  useEffect(() => syncThemeFavicon(resolved), [resolved]);
   return (
     <Button
       variant="ghost"

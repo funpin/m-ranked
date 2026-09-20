@@ -156,7 +156,13 @@ test("statistics mobile uses cards and keeps zero distinct from unknown", async 
 test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?platform=vk");
+  const brand = page.getByTestId("brand");
   const toggle = page.getByTestId("menu-toggle");
+  const actions = page.getByTestId("header-utility-actions");
+  const [brandBox, toggleBox, actionsBox] = await Promise.all([brand.boundingBox(), toggle.boundingBox(), actions.boundingBox()]);
+  expect(brandBox?.height).toBeLessThanOrEqual(32);
+  expect((toggleBox?.x ?? 0) + (toggleBox?.width ?? 0)).toBeGreaterThan(360);
+  expect((actionsBox?.x ?? 0) + (actionsBox?.width ?? 0)).toBeGreaterThan(360);
   await toggle.click();
   await page.keyboard.press("Escape");
   await expect(toggle).toBeFocused();
@@ -169,6 +175,55 @@ test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
+test("header follows the same horizontal grid as page content", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?platform=telegram");
+  const headerInner = page.getByTestId("header-inner");
+  const main = page.locator("#main-content");
+  const brand = page.getByTestId("brand");
+  const heading = page.getByRole("heading", { name: "Обзор каналов" });
+  const [headerBox, mainBox, brandBox, headingBox, actionsBox, paddings] = await Promise.all([
+    headerInner.boundingBox(),
+    main.boundingBox(),
+    brand.boundingBox(),
+    heading.boundingBox(),
+    page.getByTestId("header-utility-actions").boundingBox(),
+    Promise.all([headerInner, main].map((element) => element.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { left: style.paddingLeft, right: style.paddingRight };
+    }))),
+  ]);
+  expect(headerBox?.x).toBe(mainBox?.x);
+  expect(headerBox?.width).toBe(mainBox?.width);
+  expect(paddings[0]).toEqual(paddings[1]);
+  expect(brandBox?.x).toBe(headingBox?.x);
+  expect((actionsBox?.x ?? 0) + (actionsBox?.width ?? 0)).toBe((mainBox?.x ?? 0) + (mainBox?.width ?? 0) - 40);
+});
+
+test("brand and favicon follow viewport and explicit theme", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("m-ranked-theme", "light"));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?platform=telegram");
+  await expect(page.getByTestId("brand-logo-mark-light")).toBeVisible();
+  await expect(page.getByTestId("brand-logo-wordmark")).toBeHidden();
+  const favicon = page.locator('link[rel~="icon"][type="image/svg+xml"]');
+  await expect(favicon).toHaveCount(1);
+  await expect(favicon).toHaveAttribute("href", /logo-mark-light/);
+
+  await page.getByRole("button", { name: /Переключить на тёмную/ }).click();
+  await expect(page.getByTestId("brand-logo-mark-dark")).toBeVisible();
+  await expect(favicon).toHaveAttribute("href", /logo-mark-dark/);
+
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await expect(page.getByTestId("brand-logo-mark-dark")).toBeVisible();
+  await expect(page.getByTestId("brand-logo-wordmark")).toBeVisible();
+  await expect(page.getByTestId("brand-logo-wordmark")).toHaveText("m-ranked");
+  await page.getByRole("button", { name: /Переключить на светлую/ }).click();
+  await expect(page.getByTestId("brand-logo-mark-light")).toBeVisible();
+  await expect(page.getByTestId("brand-logo-wordmark")).toBeVisible();
+  await expect(favicon).toHaveAttribute("href", /logo-mark-light/);
 });
 
 for (const theme of ["dark", "light"]) {

@@ -19,7 +19,7 @@ function GithubMark() {
  */
 export function HeaderUtilityActions({ menuToggle }: { menuToggle?: ReactNode }) {
   return (
-    <div className="flex shrink-0 items-center gap-1">
+    <div data-testid="header-utility-actions" className="ml-auto flex shrink-0 items-center gap-1">
       <Separator orientation="vertical" className="mx-2 h-5 data-vertical:self-center" />
       <Button
         variant="ghost"

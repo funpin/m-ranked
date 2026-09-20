@@ -31,16 +31,25 @@ export function resolveTheme(preference: ThemePreference): ResolvedTheme {
  */
 export function applyTheme(preference: ThemePreference) {
   const root = document.documentElement;
+  const resolved = resolveTheme(preference);
   // A theme swap must not animate. Blended mid-transition colours look wrong
   // and dip below the contrast floor while they are running.
   root.dataset.themeSwitching = "";
-  root.dataset.theme = resolveTheme(preference);
+  root.dataset.theme = resolved;
+  syncThemeFavicon(resolved);
   requestAnimationFrame(() => requestAnimationFrame(() => { delete root.dataset.themeSwitching; }));
   try {
     localStorage.setItem(THEME_STORAGE_KEY, preference);
   } catch {
     // A blocked storage API must not prevent the visible change.
   }
+}
+
+export function syncThemeFavicon(theme: ResolvedTheme) {
+  const root = document.documentElement;
+  const href = theme === "light" ? root.dataset.faviconLight : root.dataset.faviconDark;
+  const icon = document.querySelector<HTMLLinkElement>('link[rel~="icon"][type="image/svg+xml"]');
+  if (icon && href) icon.href = href;
 }
 
 export function subscribeTheme(notify: () => void) {

@@ -3,7 +3,8 @@ import { api } from "@/lib/api";
 import type { Platform } from "@/lib/types";
 import type { Metadata, Viewport } from "next";
 import { Suspense, type ReactNode } from "react";
-import favicon from "../assets/favicon.png";
+import logoMarkDark from "../assets/logo-mark-dark.svg";
+import logoMarkLight from "../assets/logo-mark-light.svg";
 import { SiteHeader } from "@/components/site-header";
 import { publicOrigin } from "@/lib/deployment";
 import "./globals.css";
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
   },
   description: "Сравнение активности, охвата и качества данных официальных соцсетей российских вузов.",
   icons: {
-    icon: [{ url: favicon.src, type: "image/png" }],
+    icon: [{ url: logoMarkDark.src, type: "image/svg+xml" }],
   },
   openGraph: {
     type: "website",
@@ -56,10 +57,11 @@ const themeScript = `(() => {
   let stored = null;
   try { stored = localStorage.getItem("m-ranked-theme"); } catch (_) {}
   // Выбор пользователя сильнее системы; без выбора решает система.
-  document.documentElement.dataset.theme =
+  const theme =
     stored === "light" || stored === "dark" ? stored
     : matchMedia("(prefers-color-scheme: light)").matches ? "light"
     : "dark";
+  document.documentElement.dataset.theme = theme;
 })();`;
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -76,7 +78,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     } catch { /* The page owns unavailable/404 handling; header remains usable. */ }
   }
   return (
-    <html lang="ru" data-theme="dark" data-scroll-behavior="smooth" suppressHydrationWarning className={cn(sans.variable, heading.variable)}>
+    <html
+      lang="ru"
+      data-theme="dark"
+      data-favicon-dark={logoMarkDark.src}
+      data-favicon-light={logoMarkLight.src}
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+      className={cn(sans.variable, heading.variable)}
+    >
       <head><script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         {/* Набор контуров объявляется раз на страницу: значки ссылаются на
