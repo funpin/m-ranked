@@ -307,8 +307,22 @@ class _PostgresPhaseLease:
         if self._released:
             return False
         try:
-            row = self.connection.execute("SELECT 1").fetchone()
-            return row is not None
+            row = self.connection.execute(
+                """SELECT EXISTS (
+                       SELECT 1
+                         FROM pg_locks
+                        WHERE locktype='advisory'
+                          AND classid=((%s::bigint >> 32) & 4294967295)::oid
+                          AND objid=(%s::bigint & 4294967295)::oid
+                          AND objsubid=1
+                          AND pid=pg_backend_pid()
+                          AND granted
+                   )""",
+                (self.lock_id, self.lock_id),
+            ).fetchone()
+            return bool(
+                next(iter(row.values())) if isinstance(row, dict) else row[0]
+            )
         except BaseException:
             return False
 
@@ -358,6 +372,9 @@ class PostgresPhaseArbiter:
             raise ValueError("dsn or connection_factory is required")
         self._factory = connection_factory or self._psycopg_factory(str(dsn))
         self._lock_id = advisory_lock_key(GLOBAL_PHASE_LEASE_NAME)
+        self._connection: Any | None = None
+        self._lease_connection: Any | None = None
+        self._connection_lock = Lock()
 
     @staticmethod
     def _psycopg_factory(dsn: str) -> Callable[[], Any]:
@@ -370,24 +387,117 @@ class PostgresPhaseArbiter:
 
         return connect
 
-    def request(self, request: PhaseRequest) -> bool:
+    def _open_connection(self) -> Any:
         connection = self._factory()
         try:
             connection.execute("SET TIME ZONE 'UTC'")
             connection.execute("SET statement_timeout='5s'")
             connection.execute("SET lock_timeout='1s'")
-            value = {
-                "state": "requested",
-                "partition_key": request.partition_key,
-                "collector_version": request.collector_version,
-                "scheduled_at": request.scheduled_at.isoformat(),
-                "due_at": request.due_at.isoformat(),
-                "requested_at": request.requested_at.isoformat(),
-            }
-            checkpoint_id = uuid5(
-                CHECKPOINT_NAMESPACE,
-                f"{PHASE_CHECKPOINT_KEY}|platform|{request.scope_id}",
-            )
+            return connection
+        except BaseException:
+            connection.close()
+            raise
+
+    @staticmethod
+    def _is_connection_error(error: BaseException, connection: Any | None) -> bool:
+        if isinstance(error, (ConnectionError, OSError)):
+            return True
+        if connection is not None and bool(getattr(connection, "closed", False)):
+            return True
+        try:
+            import psycopg
+        except ImportError:  # pragma: no cover - optional dependency guard
+            return False
+        return isinstance(error, (psycopg.InterfaceError, psycopg.OperationalError))
+
+    @staticmethod
+    def _close_connection(connection: Any | None) -> None:
+        if connection is None:
+            return
+        try:
+            connection.close()
+        except BaseException:
+            pass
+
+    def _run_reusing(self, operation: Callable[[Any], Any]) -> Any:
+        with self._connection_lock:
+            for attempt in range(2):
+                connection = self._connection
+                try:
+                    if connection is None or bool(getattr(connection, "closed", False)):
+                        connection = self._open_connection()
+                        self._connection = connection
+                    return operation(connection)
+                except BaseException as error:
+                    connection_error = self._is_connection_error(error, connection)
+                    if connection_error:
+                        self._close_connection(connection)
+                        self._connection = None
+                    if not connection_error or attempt:
+                        raise
+        raise AssertionError("unreachable")
+
+    def close(self) -> None:
+        with self._connection_lock:
+            connection = self._connection
+            lease_connection = self._lease_connection
+            self._connection = None
+            self._lease_connection = None
+            self._close_connection(connection)
+            self._close_connection(lease_connection)
+
+    @staticmethod
+    def _contender(connection: Any, cutoff: datetime) -> Any:
+        return connection.execute(
+            """SELECT platform::text, scope_id,
+                      value->>'partition_key' AS partition_key,
+                      (value->>'scheduled_at')::timestamptz AS scheduled_at,
+                      (value->>'due_at')::timestamptz AS due_at
+                 FROM ops_and_admin.operational_checkpoint
+                WHERE checkpoint_key=%s AND scope_type='platform'
+                  AND value->>'state'='requested'
+                  AND updated_at >= %s
+                ORDER BY (value->>'due_at')::timestamptz,
+                         CASE platform
+                           WHEN 'telegram' THEN 0
+                           WHEN 'vk' THEN 1
+                           WHEN 'max' THEN 2
+                           WHEN 'rutube' THEN 3
+                           ELSE 99
+                         END,
+                         value->>'partition_key'
+                LIMIT 1""",
+            (PHASE_CHECKPOINT_KEY, cutoff),
+        ).fetchone()
+
+    @staticmethod
+    def _is_selected(contender: Any, request: PhaseRequest) -> bool:
+        return contender is not None and (
+            str(_row_value(contender, "platform", 0)) == request.platform.value
+            and _row_value(contender, "scope_id", 1) == request.scope_id
+            and str(_row_value(contender, "partition_key", 2))
+            == request.partition_key
+            and utc(_row_value(contender, "scheduled_at", 3), "scheduled_at")
+            == request.scheduled_at
+            and utc(_row_value(contender, "due_at", 4), "due_at")
+            == request.due_at
+        )
+
+    def request(self, request: PhaseRequest) -> bool:
+        value = {
+            "state": "requested",
+            "partition_key": request.partition_key,
+            "collector_version": request.collector_version,
+            "scheduled_at": request.scheduled_at.isoformat(),
+            "due_at": request.due_at.isoformat(),
+            "requested_at": request.requested_at.isoformat(),
+        }
+        checkpoint_id = uuid5(
+            CHECKPOINT_NAMESPACE,
+            f"{PHASE_CHECKPOINT_KEY}|platform|{request.scope_id}",
+        )
+
+        def write(connection: Any) -> bool:
             row = connection.execute(
                 """INSERT INTO ops_and_admin.operational_checkpoint(
                        id, checkpoint_key, scope_type, scope_id, platform, value,
@@ -413,91 +523,64 @@ class PostgresPhaseArbiter:
                 ),
             ).fetchone()
             return row is not None
-        finally:
-            connection.close()
+
+        return bool(self._run_reusing(write))
 
     def try_acquire(
         self, request: PhaseRequest, *, stale_after_seconds: int,
     ) -> _PostgresPhaseLease | None:
         if stale_after_seconds < 1:
             raise ValueError("stale_after_seconds must be positive")
-        connection = self._factory()
-        try:
-            connection.execute("SET TIME ZONE 'UTC'")
-            connection.execute("SET statement_timeout='5s'")
-            connection.execute("SET lock_timeout='1s'")
-            row = connection.execute(
-                "SELECT pg_try_advisory_lock(%s)", (self._lock_id,),
-            ).fetchone()
-            acquired = bool(
-                next(iter(row.values())) if isinstance(row, dict) else row[0]
-            )
-            if not acquired:
-                connection.close()
-                return None
-            cutoff = datetime.now(timezone.utc) - timedelta(
-                seconds=stale_after_seconds,
-            )
-            contender = connection.execute(
-                """SELECT platform::text, scope_id,
-                          value->>'partition_key' AS partition_key,
-                          (value->>'scheduled_at')::timestamptz AS scheduled_at,
-                          (value->>'due_at')::timestamptz AS due_at
-                     FROM ops_and_admin.operational_checkpoint
-                    WHERE checkpoint_key=%s AND scope_type='platform'
-                      AND value->>'state'='requested'
-                      AND updated_at >= %s
-                    ORDER BY (value->>'due_at')::timestamptz,
-                             CASE platform
-                               WHEN 'telegram' THEN 0
-                               WHEN 'vk' THEN 1
-                               WHEN 'max' THEN 2
-                               WHEN 'rutube' THEN 3
-                               ELSE 99
-                             END,
-                             value->>'partition_key'
-                    LIMIT 1""",
-                (PHASE_CHECKPOINT_KEY, cutoff),
-            ).fetchone()
-            selected = contender is not None and (
-                str(_row_value(contender, "platform", 0)) == request.platform.value
-                and _row_value(contender, "scope_id", 1) == request.scope_id
-                and str(_row_value(contender, "partition_key", 2))
-                == request.partition_key
-                and utc(_row_value(contender, "scheduled_at", 3), "scheduled_at")
-                == request.scheduled_at
-                and utc(_row_value(contender, "due_at", 4), "due_at")
-                == request.due_at
-            )
-            if not selected:
-                connection.execute(
-                    "SELECT pg_advisory_unlock(%s)", (self._lock_id,),
-                )
-                connection.close()
-                return None
-            active = {
-                "state": "active",
-                "claimed_at": datetime.now(timezone.utc).isoformat(),
-            }
-            connection.execute(
-                """UPDATE ops_and_admin.operational_checkpoint
-                      SET value=value || %s::jsonb,
-                          updated_at=transaction_timestamp()
-                    WHERE checkpoint_key=%s AND scope_type='platform'
-                      AND scope_id=%s AND platform=%s""",
-                (
-                    _json(active), PHASE_CHECKPOINT_KEY, request.scope_id,
-                    request.platform.value,
-                ),
-            )
-            return _PostgresPhaseLease(
-                connection, request, self._lock_id,
-            )
-        except BaseException:
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=stale_after_seconds)
+        contender = self._run_reusing(
+            lambda connection: self._contender(connection, cutoff)
+        )
+        if not self._is_selected(contender, request):
+            return None
+
+        for attempt in range(2):
+            connection = self._lease_connection
             try:
-                connection.close()
-            finally:
-                raise
+                if connection is None or bool(getattr(connection, "closed", False)):
+                    connection = self._open_connection()
+                    self._lease_connection = connection
+                row = connection.execute(
+                    "SELECT pg_try_advisory_lock(%s)", (self._lock_id,),
+                ).fetchone()
+                acquired = bool(
+                    next(iter(row.values())) if isinstance(row, dict) else row[0]
+                )
+                if not acquired:
+                    return None
+                contender = self._contender(connection, cutoff)
+                if not self._is_selected(contender, request):
+                    connection.execute(
+                        "SELECT pg_advisory_unlock(%s)", (self._lock_id,),
+                    )
+                    return None
+                active = {
+                    "state": "active",
+                    "claimed_at": datetime.now(timezone.utc).isoformat(),
+                }
+                connection.execute(
+                    """UPDATE ops_and_admin.operational_checkpoint
+                          SET value=value || %s::jsonb,
+                              updated_at=transaction_timestamp()
+                        WHERE checkpoint_key=%s AND scope_type='platform'
+                          AND scope_id=%s AND platform=%s""",
+                    (
+                        _json(active), PHASE_CHECKPOINT_KEY, request.scope_id,
+                        request.platform.value,
+                    ),
+                )
+                self._lease_connection = None
+                return _PostgresPhaseLease(connection, request, self._lock_id)
+            except BaseException as error:
+                self._close_connection(connection)
+                self._lease_connection = None
+                if not self._is_connection_error(error, connection) or attempt:
+                    raise
+        raise AssertionError("unreachable")
 
 
 class _MemoryPhaseLease:

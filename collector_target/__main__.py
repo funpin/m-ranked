@@ -36,6 +36,19 @@ from .tracking import validate_tracking_policy
 logger = logging.getLogger("collector_target")
 
 
+def _log_startup(
+    platform: Platform, partition: str, collector_version: str, schedule_mode: str,
+) -> None:
+    logger.info(
+        "collector started platform=%s partition=%s collector_version=%s "
+        "schedule_mode=%s",
+        platform.value,
+        partition,
+        collector_version,
+        schedule_mode,
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="M-Ranked target PostgreSQL collector",
@@ -250,6 +263,7 @@ async def _run(args: argparse.Namespace) -> int:
     platform = Platform(args.platform)
     adapter: Any | None = None
     repository: PostgresCollectorRepository | None = None
+    phase_arbiter: PostgresPhaseArbiter | None = None
     try:
         settings = Settings.load(args.env_file)
         settings = apply_platform_auth_file(
@@ -305,6 +319,8 @@ async def _run(args: argparse.Namespace) -> int:
             account_concurrency=account_concurrency,
             clock=clock,
         )
+        coordinator.metrics.schedule_mode(platform, schedule_mode)
+        _log_startup(platform, args.partition, collector_version, schedule_mode)
         offset = platform_offset(platform, interval_seconds)
         policy = PhasePolicy(
             platform,
@@ -312,8 +328,9 @@ async def _run(args: argparse.Namespace) -> int:
             offset,
             _cycle_deadline(platform, settings),
         )
+        phase_arbiter = PostgresPhaseArbiter(dsn)
         phase_scheduler = PhaseScheduler(
-            PostgresPhaseArbiter(dsn),
+            phase_arbiter,
             max_wait_seconds=settings.collector_phase_max_wait_seconds,
             retry_seconds=settings.collector_phase_retry_seconds,
             request_stale_seconds=settings.collector_phase_request_stale_seconds,
@@ -561,6 +578,8 @@ async def _run(args: argparse.Namespace) -> int:
     finally:
         if adapter is not None:
             await _close(adapter, platform)
+        if phase_arbiter is not None:
+            phase_arbiter.close()
         # Пул соединений держит собственные потоки: без явного закрытия выход
         # ждал бы их до таймаута systemd.
         if repository is not None:

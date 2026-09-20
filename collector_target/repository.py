@@ -702,6 +702,7 @@ class PostgresCollectorRepository:
             for publication in batch.publications
         )
         with self._connection() as connection, connection.transaction():
+            revision_id = self._begin_revision(connection, batch)
             for published_month in sorted({
                 publication.snapshot.published_month
                 for publication in batch.publications
@@ -815,9 +816,10 @@ class PostgresCollectorRepository:
             if result is None:
                 raise RuntimeError("collection account result was not started")
 
-            revision_id = (
-                self._record_revision(
+            if changed:
+                self._finalize_revision(
                     connection,
+                    revision_id,
                     batch,
                     discovered_count,
                     snapshot_count,
@@ -825,8 +827,16 @@ class PostgresCollectorRepository:
                     completed_at,
                     identity_receipt,
                 )
-                if changed else None
-            )
+            else:
+                finalized = connection.execute(
+                    """SELECT analytics.finalize_ingestion_dataset_revision(
+                           %s,%s,'{}'::jsonb,false
+                       )""",
+                    (revision_id, batch.context.run_id),
+                ).fetchone()
+                if finalized is None or not bool(_row_value(finalized, "finalize_ingestion_dataset_revision", 0)):
+                    raise RuntimeError("dataset revision was not discarded")
+                revision_id = None
         return IngestionResult(
             batch.context.run_id,
             batch.account.id,
@@ -2061,16 +2071,38 @@ class PostgresCollectorRepository:
         collected.extend(probe.observed_at for probe in batch.deletion_probes)
         return max(collected, default=batch.context.started_at)
 
-    def _record_revision(
+    def _begin_revision(
         self,
         connection: Any,
+        batch: CanonicalAccountBatch,
+    ) -> int:
+        row = connection.execute(
+            """INSERT INTO analytics.dataset_revision(
+                   cause, correlation_id, source_run_id, metadata
+               ) VALUES ('ingestion',%s,%s,'{}'::jsonb)
+               RETURNING id""",
+            (batch.context.correlation_id, batch.context.run_id),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("dataset revision was not created")
+        revision_id = int(_row_value(row, "id", 0))
+        connection.execute(
+            "SELECT set_config('mranked.dataset_revision_id', %s, true)",
+            (str(revision_id),),
+        )
+        return revision_id
+
+    def _finalize_revision(
+        self,
+        connection: Any,
+        revision_id: int,
         batch: CanonicalAccountBatch,
         discovered_count: int,
         snapshot_count: int,
         deletion_probe_count: int,
         completed_at: datetime,
         identity_receipt: str | None = None,
-    ) -> int:
+    ) -> None:
         metadata = sanitize_evidence({
             "platform": batch.context.platform,
             "partition_key": batch.context.partition_key,
@@ -2087,19 +2119,15 @@ class PostgresCollectorRepository:
             metadata["identity_source_receipt"] = identity_receipt
         metadata["identity_observation"] = batch.account_observation is not None
         row = connection.execute(
-            """INSERT INTO analytics.dataset_revision(
-                   cause, correlation_id, source_run_id, metadata
-               ) VALUES ('ingestion',%s,%s,%s::jsonb)
-               RETURNING id""",
-            (
-                batch.context.correlation_id,
-                batch.context.run_id,
-                _json(metadata),
-            ),
+            """SELECT analytics.finalize_ingestion_dataset_revision(
+                   %s,%s,%s::jsonb,true
+               )""",
+            (revision_id, batch.context.run_id, _json(metadata)),
         ).fetchone()
-        if row is None:
-            raise RuntimeError("dataset revision was not created")
-        revision_id = int(_row_value(row, "id", 0))
+        if row is None or not bool(
+            _row_value(row, "finalize_ingestion_dataset_revision", 0)
+        ):
+            raise RuntimeError("dataset revision was not finalized")
         payload = {
             "revision": revision_id,
             "run_id": batch.context.run_id,
@@ -2126,7 +2154,6 @@ class PostgresCollectorRepository:
                ) VALUES (%s,'source.account.updated','platform_account',%s,%s,%s::jsonb)""",
             (revision_id, str(batch.account.id), ["publications"], _json(payload)),
         )
-        return revision_id
 
     def record_account_failure(
         self,

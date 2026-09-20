@@ -21,6 +21,14 @@ configuration, scheduling, leases, cancellation, run lifecycle, normalization,
 atomic persistence, resume and observability.  Adapters own provider calls and
 provider-to-raw conversion; they never create revisions or write SQL.
 
+The phased scheduler keeps a reusable, lazily opened PostgreSQL control
+connection for checkpoint and queue work. A separate reusable candidate
+session attempts the global advisory lock and becomes the dedicated lease
+session only after winning. The winner is read before the lock attempt and
+rechecked after it, so a losing worker cannot transiently block the selected
+worker. Lease health is the presence of the current backend's exact 64-bit
+advisory key in `pg_locks`, not merely a successful `SELECT 1`.
+
 `collector_target.runtime_adapters` and `collector_target.adapters` remain
 compatibility import facades for existing tests and callers.  New construction
 goes through `collector_target.platforms.registry`; removing the facades is a
@@ -68,6 +76,13 @@ Characterization tests in `tests/test_target_collectors.py`, provider client
 tests and adapter-contract tests cover representative sanitised objects without
 calling live social networks.  PostgreSQL tests cover deterministic replay,
 atomic batches, quarantine, revisions and the global phase claim.
+
+An account transaction creates its dataset revision before snapshot inserts
+and exposes the id through transaction-local `mranked.dataset_revision_id`.
+The publication-latest trigger uses that id and falls back to the latest
+revision when an older collector has not set the GUC. Complete revision
+metadata and outbox events are written at the end of the same transaction; an
+unchanged replay removes its provisional revision before commit.
 
 ## Error boundaries
 

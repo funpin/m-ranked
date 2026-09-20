@@ -20,7 +20,7 @@ from collector_runtime.public_web import PublicChannel
 from collector_runtime.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from collector_runtime.vk import VkCommunity, VkPost
 from collector_target.__main__ import (
-    _parser, _poll_interval_seconds, _run, _scheduled_slot, next_delay,
+    _log_startup, _parser, _poll_interval_seconds, _run, _scheduled_slot, next_delay,
     platform_offset, slot_delay,
 )
 from collector_target.adapters import (
@@ -498,6 +498,18 @@ def test_cli_auth_failure_logs_only_a_safe_error_class(
     assert result == 1
     assert "code=PlatformAuthFileError" in caplog.text
     assert "do-not-leak" not in caplog.text
+
+
+def test_startup_log_contains_worker_identity_and_schedule_mode(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.INFO, logger="collector_target"):
+        _log_startup(Platform.VK, "default", "test-v1", "phased")
+
+    assert "platform=vk" in caplog.text
+    assert "partition=default" in caplog.text
+    assert "collector_version=test-v1" in caplog.text
+    assert "schedule_mode=phased" in caplog.text
 
 
 def _telegram_message(
@@ -1484,6 +1496,8 @@ class _ScriptedConnection:
             return _Cursor({"id": 20})
         if "INSERT INTO analytics.dataset_revision" in normalized:
             return _Cursor({"id": 30})
+        if "finalize_ingestion_dataset_revision" in normalized:
+            return _Cursor({"finalize_ingestion_dataset_revision": True})
         return _Cursor(None)
 
     def close(self) -> None:
@@ -1547,6 +1561,20 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     assert "cache.invalidated" in sql
     assert "dataset.revision.changed" not in sql
     assert "UPDATE ingest.collection_account_result" in sql
+    statements = [statement for statement, _params in connection.calls]
+    revision_index = next(
+        index for index, statement in enumerate(statements)
+        if "INSERT INTO analytics.dataset_revision" in statement
+    )
+    snapshot_index = next(
+        index for index, statement in enumerate(statements)
+        if "INSERT INTO ingest.publication_metric_snapshot(" in statement
+    )
+    assert revision_index < snapshot_index
+    assert any(
+        "set_config('mranked.dataset_revision_id'" in statement
+        for statement in statements[revision_index:snapshot_index]
+    )
     snapshot_call = next(
         params for statement, params in connection.calls
         if "INSERT INTO ingest.publication_metric_snapshot(" in statement

@@ -55,14 +55,20 @@ def test_postgres_phase_claim_is_global_fair_and_recovers_disconnect() -> None:
 
     recovered = right.try_acquire(second, stale_after_seconds=60)
     assert recovered is not None
+    assert recovered.alive()
     # Closing the dedicated session models a process crash: PostgreSQL drops
     # the advisory lock without requiring a cleanup transaction.
     recovered.connection.close()  # type: ignore[attr-defined]
+    assert not recovered.alive()
 
     resumed = _request(Platform.VK, partition, second.scheduled_at)
     assert left.request(resumed)
     after_crash = left.try_acquire(resumed, stale_after_seconds=60)
     assert after_crash is not None
     assert after_crash.alive()
+    assert after_crash.connection.execute(
+        "SELECT pg_advisory_unlock(%s)", (after_crash.lock_id,),
+    ).fetchone()[0]
+    assert not after_crash.alive()
     after_crash.finish("succeeded", now)
     after_crash.release()

@@ -17,7 +17,7 @@ def test_storage_retention_does_not_extend_post_tracking(monkeypatch, tmp_path):
     assert settings.collector_refresh_scan_limit == 400
     assert settings.publication_snapshot_heartbeat_hours == 24
     assert settings.max_request_timeout_seconds == 30.0
-    assert settings.collector_schedule_mode == "legacy"
+    assert settings.collector_schedule_mode == "phased"
     assert settings.collector_phase_max_wait_seconds == 900
 
 
@@ -32,3 +32,14 @@ def test_phase_configuration_is_strict(monkeypatch, tmp_path):
     settings = Settings.load(tmp_path / "missing.env")
     assert settings.collector_schedule_mode == "phased"
     assert settings.collector_phase_retry_seconds == 1.5
+
+
+def test_legacy_schedule_mode_is_an_explicit_rollback(monkeypatch, tmp_path):
+    monkeypatch.setenv("COLLECTOR_SCHEDULE_MODE", "legacy")
+    assert Settings.load(tmp_path / "missing.env").collector_schedule_mode == "legacy"
+
+
+def test_invalid_schedule_mode_has_a_clear_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("COLLECTOR_SCHEDULE_MODE", "surprise")
+    with pytest.raises(ValueError, match="must be legacy, phased or shadow"):
+        Settings.load(tmp_path / "missing.env")

@@ -32,6 +32,7 @@ class CollectorMetrics:
         self._request_timeouts=defaultdict(int)
         self._shutdowns=defaultdict(int)
         self._provider_errors=defaultdict(int)
+        self._schedule_modes: dict[str, str] = {}
 
     def account(self, platform: Platform, *, succeeded: bool, duration: float, snapshots: int = 0):
         if not math.isfinite(duration) or duration<0 or snapshots<0: raise ValueError('invalid metric observation')
@@ -61,6 +62,14 @@ class CollectorMetrics:
             self._phase_wait[name] += duration
             self._phase_attempts[name] += attempts
             self._phase_results[(name, result)] += 1
+            self._publish()
+
+    def schedule_mode(self, platform: Platform, mode: str) -> None:
+        normalized = mode.strip().lower()
+        if normalized not in {"legacy", "phased", "shadow"}:
+            raise ValueError("invalid collector schedule mode")
+        with self._lock:
+            self._schedule_modes[Platform(platform).value] = normalized
             self._publish()
 
     def cycle(
@@ -138,6 +147,9 @@ class CollectorMetrics:
         lines += ['# TYPE mranked_collector_phase_attempts_total counter']
         for platform,value in sorted(self._phase_attempts.items()):
             lines.append(f'mranked_collector_phase_attempts_total{{platform="{platform}"}} {value}')
+        lines += ['# TYPE mranked_collector_schedule_mode_info gauge']
+        for platform,mode in sorted(self._schedule_modes.items()):
+            lines.append(f'mranked_collector_schedule_mode_info{{platform="{platform}",mode="{mode}"}} 1')
         lines += ['# TYPE mranked_collector_cycle_duration_seconds gauge']
         for platform,value in sorted(self._cycle_duration.items()):
             lines.append(f'mranked_collector_cycle_duration_seconds{{platform="{platform}"}} {value:.9g}')

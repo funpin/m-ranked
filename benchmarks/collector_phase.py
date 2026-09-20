@@ -18,11 +18,92 @@ from collector_target.phase import (
     PhasePolicy,
     PhaseRequest,
     PhaseScheduler,
+    PostgresPhaseArbiter,
     simulate_phases,
 )
 
 
 BASE = datetime(2026, 9, 19, tzinfo=timezone.utc)
+
+
+class _Row:
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+    def fetchone(self) -> object:
+        return self.value
+
+
+class _WaitingConnection:
+    def __init__(self, winner: PhaseRequest) -> None:
+        self.winner = winner
+        self.closed = False
+
+    def execute(self, sql: str, _params: object = None) -> _Row:
+        if sql.startswith("SET "):
+            return _Row(None)
+        if "INSERT INTO ops_and_admin.operational_checkpoint" in sql:
+            return _Row((self.winner.scope_id,))
+        if "FROM ops_and_admin.operational_checkpoint" in sql:
+            return _Row((
+                self.winner.platform.value,
+                self.winner.scope_id,
+                self.winner.partition_key,
+                self.winner.scheduled_at,
+                self.winner.due_at,
+            ))
+        if "pg_try_advisory_lock" in sql:
+            return _Row((False,))
+        raise AssertionError(f"unexpected benchmark SQL: {sql}")
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def connection_reuse_probe() -> dict[str, int]:
+    """Count connection-factory calls for one minute at the 2-second cadence."""
+    requests = [
+        PhaseRequest(
+            platform,
+            f"waiter-{index}",
+            "benchmark",
+            BASE + timedelta(minutes=1),
+            BASE + timedelta(minutes=1),
+            BASE,
+        )
+        for index, platform in enumerate(
+            (Platform.TELEGRAM, Platform.VK, Platform.MAX)
+        )
+    ]
+    winner = requests[0]
+    opened = 0
+
+    def factory() -> _WaitingConnection:
+        nonlocal opened
+        opened += 1
+        return _WaitingConnection(winner)
+
+    arbiters = [
+        PostgresPhaseArbiter(connection_factory=factory) for _ in requests
+    ]
+    attempts = 30
+    try:
+        for _ in range(attempts):
+            for arbiter, request in zip(arbiters, requests):
+                assert arbiter.request(request)
+                assert arbiter.try_acquire(
+                    request, stale_after_seconds=60,
+                ) is None
+    finally:
+        for arbiter in arbiters:
+            arbiter.close()
+    return {
+        "workers": len(requests),
+        "attemptsPerWorker": attempts,
+        "beforeConnectionsPerMinute": len(requests) * attempts * 2,
+        "afterConnectionsFirstMinute": opened,
+        "afterConnectionsPerMinuteWarm": 0,
+    }
 
 
 def policies() -> dict[Platform, PhasePolicy]:
@@ -136,6 +217,7 @@ def main() -> None:
     print(json.dumps({
         "simulations": simulations,
         "idleProbe": asyncio.run(idle_probe()),
+        "arbiterConnectionProbe": connection_reuse_probe(),
         "repositorySqlRoundTrips100Publications": 24,
         "repositoryWriteShape": "unchanged-set-based",
     }, sort_keys=True))

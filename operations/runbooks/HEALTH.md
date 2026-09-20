@@ -24,9 +24,12 @@ snapshot timestamps because unchanged metrics are intentionally deduplicated.
 
 Troubleshooting phased workers:
 
+- confirm the startup log has `schedule_mode`, `platform`, `partition` and
+  `collector_version`; confirm `mranked_collector_schedule_mode_info` agrees;
 - repeated `phase=waiting`: inspect the active platform and phase wait metric;
 - lease appears stuck: verify the holder database session; terminating a dead
-  session releases the advisory lock automatically;
+  session releases the advisory lock automatically. A live lease probe must
+  find the exact key under the current `pg_backend_pid()` in `pg_locks`;
 - lag grows: compare total cycle time with the capacity table in ADR-009;
 - `GlobalPhaseLeaseLost`: investigate PostgreSQL connectivity; the cycle is
   cancelled to avoid unprotected overlap;

@@ -101,7 +101,7 @@ class Settings:
     collector_refresh_limit: int = 100
     collector_refresh_scan_limit: int = 400
     publication_snapshot_heartbeat_hours: int = 24
-    collector_schedule_mode: str = "legacy"
+    collector_schedule_mode: str = "phased"
     collector_phase_max_wait_seconds: int = 900
     collector_phase_retry_seconds: float = 2.0
     collector_phase_request_stale_seconds: int = 120
@@ -238,8 +238,8 @@ class Settings:
                 "PUBLICATION_SNAPSHOT_HEARTBEAT_HOURS", 24
             ),
             collector_schedule_mode=(
-                os.getenv("COLLECTOR_SCHEDULE_MODE", "legacy").strip().lower()
-                or "legacy"
+                os.getenv("COLLECTOR_SCHEDULE_MODE", "phased").strip().lower()
+                or "phased"
             ),
             collector_phase_max_wait_seconds=_int(
                 "COLLECTOR_PHASE_MAX_WAIT_SECONDS", 900
