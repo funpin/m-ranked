@@ -46,8 +46,20 @@ Transfer health is per `producer`:
 - `outbox_rows`/`outbox_bytes`, `batch_latency_seconds`, `retries_total`,
   `checksum_failures_total`, `duplicates_total`, `rejects_total`,
   `quarantines_total` and `unaccounted_records` localise delivery failures;
+- `attempt_window_exhausted_rows` counts batches that used their whole hourly
+  attempt budget without an ACK. The batch is safe and still pending; what needs
+  a human is the reason the consumer has been unreachable for a full window;
 - disk watermarks are 70% warn, 80% stop backfill and 90% pause low-priority
   collection. Never delete an unacknowledged row.
+
+On the receiving side (`transfer_ingest`, profile B only):
+
+- `mranked_transfer_ingest_accepted_total`, `duplicates_total` and
+  `rejects_total{reason=...}` account for every request;
+- `apply_seconds` and `last_accepted_unixtime` show whether applying keeps up;
+- any `rejects_total{reason="client_certificate_required"}` or
+  `{reason="producer_identity_mismatch"}` pages: both mean something reached the
+  ingest port that should not have.
 
 Transfer troubleshooting:
 
@@ -61,7 +73,17 @@ Transfer troubleshooting:
   `(producer_id,batch_id)` returns the same receipt and resumes idempotently. Compare
   the four accounting counters with `record_count` before intervention;
 - retention: purge only `state='acknowledged'` older than the audit/replay window.
-  `sealed` and `sent` are never retention-eligible, including under disk pressure.
+  `sealed` and `sent` are never retention-eligible, including under disk pressure;
+- exhausted attempt window: delivery pauses for the remainder of the hour by
+  design. Confirm the batch still holds its payload and is not `terminal`, fix the
+  link, then clear `available_at` to resume immediately instead of waiting;
+- client authentication refused: compare the client certificate common name with
+  the producer id the collector is configured to send. A certificate identifies a
+  host, and a producer id is `<host>/<partition>`, so only an exact match or a
+  whole leading segment authorises the write;
+- certificate rotation: issue the new certificate from the same CA and deploy it
+  while the old one is still valid. Both are accepted during the overlap, so the
+  window needs no coordinated restart.
 
 All health responses are `no-store`. Readiness does not wait for a projection
 publisher: public data is read directly from canonical tables. A configured

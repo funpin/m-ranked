@@ -6,6 +6,7 @@ from datetime import date, datetime, timezone
 import hashlib
 import json
 import math
+import random
 import re
 import ssl
 from typing import Any, Mapping, Protocol
@@ -42,6 +43,10 @@ MAX_NESTING = 16
 MAX_STRING_LENGTH = 262_144
 MAX_INTEGER = 9_223_372_036_854_775_807
 MAX_BATCH_AGE_SECONDS = 30
+RETRY_BASE_SECONDS = 1.0
+RETRY_MAX_SECONDS = 300.0
+RETRY_WINDOW_SECONDS = 3600
+RETRY_MAX_ATTEMPTS_PER_WINDOW = 20
 _HEX_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _PRODUCER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 
@@ -490,6 +495,22 @@ class HttpsMtlsTransport:
         return TransferAck(UUID(body["receiptId"]), envelope.batch_id, body["checksum"])
 
 
+def retry_delay_seconds(attempt: int, random_unit: float) -> float:
+    """Экспоненциальная задержка с полным jitter.
+
+    Полный jitter означает равномерный выбор из ``[0, ceiling]``, а не
+    отклонение вокруг него: именно это разводит одновременно осиротевшие батчи
+    по времени, вместо того чтобы отправить их одной пачкой при восстановлении
+    связи. ``attempt`` — номер уже выполненной попытки, начиная с единицы.
+    """
+    if attempt < 1:
+        raise ValueError("attempt must be positive")
+    if not 0.0 <= random_unit <= 1.0:
+        raise ValueError("random_unit must be within [0, 1]")
+    ceiling = min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * (2 ** (attempt - 1)))
+    return random_unit * ceiling
+
+
 def _row(row: Any, key: str, index: int) -> Any:
     return row[key] if isinstance(row, Mapping) else row[index]
 
@@ -649,10 +670,19 @@ class PostgresDataAdapter:
 class PostgresTransferProducer:
     """Oldest-first sender; an ACK is persisted before its watermark advances."""
 
-    def __init__(self, repository: Any, transport: Any, metrics: Any = None):
+    def __init__(
+        self,
+        repository: Any,
+        transport: Any,
+        metrics: Any = None,
+        *,
+        random_unit: Any = None,
+    ):
         self.repository = repository
         self.transport = transport
         self.metrics = metrics
+        # Инъецируемый источник, чтобы задержку можно было проверить точно.
+        self._random_unit = random_unit or random.random
 
     def deliver_pending(self, *, limit: int = 100) -> int:
         delivered = 0
@@ -661,9 +691,16 @@ class PostgresTransferProducer:
                 """SELECT cursor,batch_id,producer_id,schema_version,created_at,
                           record_count,uncompressed_bytes,payload_sha256,payload
                      FROM ops_and_admin.transfer_outbox
-                    WHERE state IN ('sealed','sent') AND available_at<=transaction_timestamp()
+                    WHERE state IN ('sealed','sent')
+                      AND available_at<=transaction_timestamp()
+                      AND (
+                        attempt_window_started_at IS NULL
+                        OR attempt_window_started_at
+                             <= transaction_timestamp()-%s*interval '1 second'
+                        OR attempt_window_count < %s
+                      )
                     ORDER BY cursor LIMIT %s""",
-                (limit,),
+                (RETRY_WINDOW_SECONDS, RETRY_MAX_ATTEMPTS_PER_WINDOW, limit),
             ).fetchall()
         for row in rows:
             envelope = TransferEnvelope(
@@ -674,26 +711,50 @@ class PostgresTransferProducer:
                 "zstd", str(_row(row, "payload_sha256", 7)), bytes(_row(row, "payload", 8)),
             )
             with self.repository._connection() as connection, connection.transaction():
-                connection.execute(
+                # Окно скользящее, поэтому счётчик сбрасывается той же записью,
+                # что и увеличивается: отдельный проход оставил бы дыру между
+                # проверкой и попыткой.
+                attempted = connection.execute(
                     """UPDATE ops_and_admin.transfer_outbox
                           SET state='sent',sent_at=transaction_timestamp(),
-                              publish_attempts=publish_attempts+1,last_error_code=NULL
-                        WHERE cursor=%s AND state IN ('sealed','sent')""",
-                    (envelope.first_cursor,),
-                )
+                              publish_attempts=publish_attempts+1,last_error_code=NULL,
+                              attempt_window_started_at=CASE
+                                  WHEN attempt_window_started_at IS NULL
+                                    OR attempt_window_started_at
+                                         <= transaction_timestamp()-%s*interval '1 second'
+                                  THEN transaction_timestamp()
+                                  ELSE attempt_window_started_at END,
+                              attempt_window_count=CASE
+                                  WHEN attempt_window_started_at IS NULL
+                                    OR attempt_window_started_at
+                                         <= transaction_timestamp()-%s*interval '1 second'
+                                  THEN 1
+                                  ELSE attempt_window_count+1 END
+                        WHERE cursor=%s AND state IN ('sealed','sent')
+                        RETURNING attempt_window_count""",
+                    (RETRY_WINDOW_SECONDS, RETRY_WINDOW_SECONDS, envelope.first_cursor),
+                ).fetchone()
+            if attempted is None:
+                continue
+            window_attempt = int(_row(attempted, "attempt_window_count", 0))
             try:
                 ack = self.transport.send(envelope)
                 if ack.batch_id != envelope.batch_id or ack.checksum != envelope.payload_sha256:
                     raise TransferRejected("invalid_ack")
             except Exception as error:
                 code = error.code if isinstance(error, TransferRejected) else "consumer_unavailable"
+                # Исчерпанное окно оставляет запись pending с сохранённым
+                # payload: недоступность потребителя не является неисправимой
+                # ошибкой и не переводит батч в terminal.
+                delay = retry_delay_seconds(window_attempt, float(self._random_unit()))
                 with self.repository._connection() as connection, connection.transaction():
                     connection.execute(
                         """UPDATE ops_and_admin.transfer_outbox
                               SET last_error_code=%s,
-                                  available_at=transaction_timestamp()+interval '1 second'
+                                  available_at=transaction_timestamp()
+                                               +%s*interval '1 second'
                             WHERE cursor=%s AND state='sent'""",
-                        (code, envelope.first_cursor),
+                        (code, delay, envelope.first_cursor),
                     )
                 continue
             with self.repository._connection() as connection, connection.transaction():
@@ -725,9 +786,16 @@ class PostgresTransferProducer:
                        FILTER (WHERE state IN ('sealed','sent')),0) AS oldest_age,
                      coalesce(extract(epoch FROM max(acknowledged_at-created_at)),0) AS latency,
                      coalesce(sum(greatest(publish_attempts-1,0)),0) AS retries,
-                     count(*) FILTER (WHERE last_error_code='checksum_mismatch') AS checksum_failures
+                     count(*) FILTER (WHERE last_error_code='checksum_mismatch') AS checksum_failures,
+                     count(*) FILTER (
+                       WHERE state IN ('sealed','sent')
+                         AND attempt_window_started_at IS NOT NULL
+                         AND attempt_window_started_at
+                               > transaction_timestamp()-%s*interval '1 second'
+                         AND attempt_window_count >= %s
+                     ) AS window_exhausted
                    FROM ops_and_admin.transfer_outbox WHERE producer_id=%s""",
-                (producer,),
+                (RETRY_WINDOW_SECONDS, RETRY_MAX_ATTEMPTS_PER_WINDOW, producer),
             ).fetchone()
             inbox = connection.execute(
                 """SELECT coalesce(max(applied_cursor),0) AS applied,
@@ -752,6 +820,7 @@ class PostgresTransferProducer:
             "batch_latency_seconds": _row(row, "latency", 7),
             "retries_total": _row(row, "retries", 8),
             "checksum_failures_total": _row(row, "checksum_failures", 9),
+            "attempt_window_exhausted_rows": _row(row, "window_exhausted", 10),
             "duplicates_total": _row(inbox, "duplicates", 1),
             "rejects_total": _row(inbox, "rejects", 2),
             "quarantines_total": _row(inbox, "quarantines", 3),

@@ -1,12 +1,25 @@
 # Raw data transfer protocol
 
-Дата: 2026-09-16, реализовано для профиля A 2026-09-21 · статус `P1 implemented`
+Дата: 2026-09-16, реализовано 2026-09-21 · статус `P1 и P2.1 implemented`
 
 > Протокол принят как основа транспорта в [ADR-010](adr/ADR-010-deployment-profiles.md).
 > Два уточнения относительно исходного черновика: envelope везёт **канонические**
 > батчи, а не сырые payload'ы провайдеров, и тот же envelope применяется
 > in-process в однослужебном профиле. Профиль A реализован в фазе P1
 > [плана перехода](two-server-migration-plan.md).
+
+## Что реализовано
+
+| Часть протокола | Состояние |
+|---|---|
+| envelope v1, детерминированный `batchId`, границы, карантин | реализовано (P1) |
+| transfer outbox/inbox, идемпотентное применение | реализовано (P1) |
+| транспорт in-process | реализовано (P1) |
+| приёмник `transfer_ingest`, HTTPS + mTLS, привязка `producer_id` к сертификату | реализовано (P2.1) |
+| экспоненциальный backoff с полным jitter, окно 20 попыток в час | реализовано (P2.1) |
+| ретенция после ACK, метрики и алерты обеих сторон | реализовано |
+| пороги диска 70/80/90 %, приостановка низкоприоритетного сбора | не реализовано, P2.2 |
+| replay в отдельное пространство имён outbox | не реализовано, P4 |
 
 ## Decision
 
@@ -74,8 +87,13 @@ duplicate no-op and discards its provisional dataset revision.
 
 - TLS 1.3; separate client certificate per producer; 30-day overlap rotation; S2 firewall
   accepts ingest only from S1/VPN CIDR.
-- Connect/read/write timeouts: 3/30/30 s. Retry exponential 1 s–5 min with full jitter;
-  max 20 attempts/hour per batch, then remain pending and alert (never discard).
+- Connect/read/write timeouts: 3/30/30 s on both sides. Retry exponential 1 s–5 min with
+  full jitter; max 20 attempts/hour per batch, then remain pending and alert (never
+  discard). Exhausting the window never sets `terminal`: that state means an unrecoverable
+  batch, not an unreachable peer.
+- The receiver refuses a connection carrying no client certificate before reading a byte.
+  `CERT_REQUIRED` alone is not sufficient: TLS 1.3 sends client authentication after the
+  server's Finished, so an unauthenticated client can otherwise reach the application.
 - SHA-256 verifies compressed payload and per-event semantic hash verifies decoded data.
 - Decompression ratio, nesting, string length, count and numeric bounds are enforced before
   database work. Unknown incompatible schema goes to quarantine without advancing apply cursor.

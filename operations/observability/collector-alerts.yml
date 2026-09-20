@@ -43,6 +43,22 @@ groups:
           severity: critical
         annotations:
           summary: Transfer cursor regressed for a producer.
+      - alert: MRankedTransferAttemptWindowExhausted
+        # The batch is safe and still pending; what needs a human is the reason
+        # the consumer has been unreachable for a whole retry window.
+        expr: mranked_transfer_attempt_window_exhausted_rows > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A transfer batch used its hourly attempt budget without an ACK.
+      - alert: MRankedTransferClientAuthRejected
+        expr: increase(mranked_transfer_ingest_rejects_total{reason="client_certificate_required"}[15m]) > 0 or increase(mranked_transfer_ingest_rejects_total{reason="producer_identity_mismatch"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Transfer ingest refused a client certificate or a producer identity.
       - alert: MRankedTransferBacklogOld
         expr: mranked_transfer_oldest_backlog_age_seconds > 1800
         for: 10m

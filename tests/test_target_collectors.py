@@ -504,12 +504,16 @@ def test_startup_log_contains_worker_identity_and_schedule_mode(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     with caplog.at_level(logging.INFO, logger="collector_target"):
-        _log_startup(Platform.VK, "default", "test-v1", "phased")
+        _log_startup(Platform.VK, "default", "test-v1", "phased", "b", "https-mtls")
 
     assert "platform=vk" in caplog.text
     assert "partition=default" in caplog.text
     assert "collector_version=test-v1" in caplog.text
     assert "schedule_mode=phased" in caplog.text
+    # Профиль и режим транспорта обязаны быть видны на старте: иначе
+    # непонятно, куда именно уходят собранные данные.
+    assert "deployment_profile=b" in caplog.text
+    assert "transfer_mode=https-mtls" in caplog.text
 
 
 def _telegram_message(

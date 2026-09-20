@@ -43,15 +43,22 @@ logger = logging.getLogger("collector_target")
 
 
 def _log_startup(
-    platform: Platform, partition: str, collector_version: str, schedule_mode: str,
+    platform: Platform,
+    partition: str,
+    collector_version: str,
+    schedule_mode: str,
+    deployment_profile: str,
+    transfer_mode: str,
 ) -> None:
     logger.info(
         "collector started platform=%s partition=%s collector_version=%s "
-        "schedule_mode=%s",
+        "schedule_mode=%s deployment_profile=%s transfer_mode=%s",
         platform.value,
         partition,
         collector_version,
         schedule_mode,
+        deployment_profile,
+        transfer_mode,
     )
 
 
@@ -308,6 +315,7 @@ async def _run(args: argparse.Namespace) -> int:
             or "target-v1"
         )
         clock = SystemUtcClock()
+        deployment_profile = settings.collector_deployment_profile.strip().lower()
         transfer_mode = settings.collector_transfer_mode.strip().lower()
         producer_id = (
             f"{settings.collector_transfer_producer_id}/{args.partition}"
@@ -348,7 +356,11 @@ async def _run(args: argparse.Namespace) -> int:
                 coordinator.metrics,
             ))
         coordinator.metrics.schedule_mode(platform, schedule_mode)
-        _log_startup(platform, args.partition, collector_version, schedule_mode)
+        coordinator.metrics.deployment_profile(platform, deployment_profile)
+        _log_startup(
+            platform, args.partition, collector_version, schedule_mode,
+            deployment_profile, transfer_mode,
+        )
         offset = platform_offset(platform, interval_seconds)
         policy = PhasePolicy(
             platform,

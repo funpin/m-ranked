@@ -110,6 +110,7 @@ class Settings:
     collector_vk_cycle_deadline_seconds: int = 600
     collector_max_cycle_deadline_seconds: int = 600
     collector_rutube_cycle_deadline_seconds: int = 1800
+    collector_deployment_profile: str = "a"
     collector_transfer_mode: str = "in-process"
     collector_transfer_producer_id: str = "local"
     collector_transfer_https_endpoint: str | None = None
@@ -124,11 +125,34 @@ class Settings:
             raise ValueError(
                 "COLLECTOR_SCHEDULE_MODE must be legacy, phased or shadow"
             )
-        if self.collector_transfer_mode.strip().lower() not in {
-            "disabled", "in-process", "https-mtls",
-        }:
+        profile = self.collector_deployment_profile.strip().lower()
+        if profile not in {"a", "b"}:
+            raise ValueError("COLLECTOR_DEPLOYMENT_PROFILE must be a or b")
+        mode = self.collector_transfer_mode.strip().lower()
+        if mode not in {"disabled", "in-process", "https-mtls"}:
             raise ValueError(
                 "COLLECTOR_TRANSFER_MODE must be disabled, in-process or https-mtls"
+            )
+        # Несогласованную пару ловим на старте. Иначе профиль B выяснит, что у
+        # него нет сертификата, в момент первой доставки — то есть уже собрав
+        # данные, которые некуда отдать.
+        if profile == "b":
+            if mode != "https-mtls":
+                raise ValueError(
+                    "profile b requires COLLECTOR_TRANSFER_MODE=https-mtls"
+                )
+            required = {
+                "COLLECTOR_TRANSFER_HTTPS_ENDPOINT": self.collector_transfer_https_endpoint,
+                "COLLECTOR_TRANSFER_CLIENT_CERTIFICATE": self.collector_transfer_client_certificate,
+                "COLLECTOR_TRANSFER_PRIVATE_KEY": self.collector_transfer_private_key,
+                "COLLECTOR_TRANSFER_CA_BUNDLE": self.collector_transfer_ca_bundle,
+            }
+            absent = [name for name, value in required.items() if not (value or "").strip()]
+            if absent:
+                raise ValueError(f"profile b requires {', '.join(sorted(absent))}")
+        elif mode == "https-mtls":
+            raise ValueError(
+                "COLLECTOR_TRANSFER_MODE=https-mtls requires COLLECTOR_DEPLOYMENT_PROFILE=b"
             )
         if not self.collector_transfer_producer_id.strip():
             raise ValueError("COLLECTOR_TRANSFER_PRODUCER_ID must not be blank")
@@ -278,6 +302,9 @@ class Settings:
             ),
             collector_rutube_cycle_deadline_seconds=_int(
                 "COLLECTOR_RUTUBE_CYCLE_DEADLINE_SECONDS", 1800
+            ),
+            collector_deployment_profile=(
+                os.getenv("COLLECTOR_DEPLOYMENT_PROFILE", "a").strip().lower() or "a"
             ),
             collector_transfer_mode=(
                 os.getenv("COLLECTOR_TRANSFER_MODE", "in-process").strip().lower()

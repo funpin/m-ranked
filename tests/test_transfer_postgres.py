@@ -487,3 +487,287 @@ def test_disabled_transfer_mode_seals_nothing() -> None:
     finally:
         repository.close()
         admin.close()
+
+
+def test_exhausted_attempt_window_pauses_delivery_without_discarding() -> None:
+    """A consumer that stays down must not be hammered, nor lose the batch.
+
+    The protocol caps attempts per rolling hour and then leaves the record
+    pending. `terminal` means an unrecoverable batch, not an unreachable peer,
+    so an outage must never reach that state.
+    """
+    psycopg = pytest.importorskip("psycopg")
+    from psycopg.rows import dict_row
+
+    from collector_target.transfer import (
+        RETRY_MAX_ATTEMPTS_PER_WINDOW, RETRY_MAX_SECONDS,
+    )
+
+    collector_dsn = _dsn("MRANKED_TEST_POSTGRES_DSN")
+    admin = psycopg.connect(_dsn("MRANKED_TEST_POSTGRES_ADMIN_DSN"),
+                            autocommit=True, row_factory=dict_row)
+    institution_id, account_id = uuid4(), uuid4()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    context = CollectionContext.create(
+        Platform.TELEGRAM, f"window-{uuid4()}", "transfer-test-v1", now, now,
+    )
+    account = AccountRef(
+        account_id, institution_id, Platform.TELEGRAM,
+        f"window_{account_id.hex}", "public_web",
+    )
+    batch = _one_publication_batch(context, account, now)
+    producer_id = f"server-1/{context.partition_key}"
+    repository = PostgresCollectorRepository(
+        collector_dsn, transfer_producer_id=producer_id,
+    )
+
+    class AlwaysDown:
+        def send(self, envelope):
+            raise ConnectionError("simulated outage")
+
+    # A fixed jitter source makes the stored delay exact instead of a range.
+    producer = PostgresTransferProducer(
+        repository, AlwaysDown(), random_unit=lambda: 1.0,
+    )
+    repository.configure_transfer_sender(producer)
+    try:
+        _reset_transfer(admin)
+        _seed_account(admin, institution_id, account_id, account.canonical_external_id)
+        repository.start_run(context)
+        assert repository.begin_account(context, account, now)
+        repository.persist_account_batch(batch)
+
+        def row():
+            return admin.execute(
+                """SELECT state,attempt_window_count,publish_attempts,payload,
+                          last_error_code,
+                          extract(epoch FROM available_at-transaction_timestamp())
+                              AS wait_seconds
+                     FROM ops_and_admin.transfer_outbox WHERE producer_id=%s""",
+                (producer_id,),
+            ).fetchone()
+
+        first = row()
+        assert first["attempt_window_count"] == 1
+        assert first["last_error_code"] == "consumer_unavailable"
+        # Full jitter at 1.0 gives exactly the ceiling for this attempt.
+        assert 0 < first["wait_seconds"] <= RETRY_MAX_SECONDS
+
+        # Drive the window to its cap. available_at is cleared each round so the
+        # cap, not the backoff, is what finally stops delivery.
+        for _ in range(RETRY_MAX_ATTEMPTS_PER_WINDOW - 1):
+            admin.execute(
+                """UPDATE ops_and_admin.transfer_outbox
+                      SET available_at=transaction_timestamp()
+                    WHERE producer_id=%s""",
+                (producer_id,),
+            )
+            producer.deliver_pending()
+        exhausted = row()
+        assert exhausted["attempt_window_count"] == RETRY_MAX_ATTEMPTS_PER_WINDOW
+
+        # The cap now holds even with available_at in the past.
+        admin.execute(
+            """UPDATE ops_and_admin.transfer_outbox
+                  SET available_at=transaction_timestamp()
+                WHERE producer_id=%s""",
+            (producer_id,),
+        )
+        assert producer.deliver_pending() == 0
+        paused = row()
+        assert paused["attempt_window_count"] == RETRY_MAX_ATTEMPTS_PER_WINDOW
+        assert paused["state"] == "sent"
+        assert paused["payload"] is not None
+
+        # Once the hour rolls over the batch is deliverable again and the
+        # window restarts rather than resuming where it stopped.
+        admin.execute(
+            """UPDATE ops_and_admin.transfer_outbox
+                  SET available_at=transaction_timestamp(),
+                      attempt_window_started_at=transaction_timestamp()
+                                                -interval '2 hours'
+                WHERE producer_id=%s""",
+            (producer_id,),
+        )
+        producer.deliver_pending()
+        resumed = row()
+        assert resumed["attempt_window_count"] == 1
+        assert resumed["state"] == "sent"
+        assert resumed["payload"] is not None
+    finally:
+        repository.close()
+        admin.close()
+
+
+def test_backoff_recorded_in_the_outbox_grows_between_attempts() -> None:
+    """Consecutive failures must wait longer, not re-try at a flat interval."""
+    psycopg = pytest.importorskip("psycopg")
+    from psycopg.rows import dict_row
+
+    collector_dsn = _dsn("MRANKED_TEST_POSTGRES_DSN")
+    admin = psycopg.connect(_dsn("MRANKED_TEST_POSTGRES_ADMIN_DSN"),
+                            autocommit=True, row_factory=dict_row)
+    institution_id, account_id = uuid4(), uuid4()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    context = CollectionContext.create(
+        Platform.TELEGRAM, f"backoff-{uuid4()}", "transfer-test-v1", now, now,
+    )
+    account = AccountRef(
+        account_id, institution_id, Platform.TELEGRAM,
+        f"backoff_{account_id.hex}", "public_web",
+    )
+    batch = _one_publication_batch(context, account, now)
+    producer_id = f"server-1/{context.partition_key}"
+    repository = PostgresCollectorRepository(
+        collector_dsn, transfer_producer_id=producer_id,
+    )
+
+    class AlwaysDown:
+        def send(self, envelope):
+            raise ConnectionError("simulated outage")
+
+    producer = PostgresTransferProducer(
+        repository, AlwaysDown(), random_unit=lambda: 1.0,
+    )
+    repository.configure_transfer_sender(producer)
+    try:
+        _reset_transfer(admin)
+        _seed_account(admin, institution_id, account_id, account.canonical_external_id)
+        repository.start_run(context)
+        assert repository.begin_account(context, account, now)
+        repository.persist_account_batch(batch)
+
+        waits = []
+        for _ in range(4):
+            waits.append(float(admin.execute(
+                """SELECT extract(epoch FROM available_at-transaction_timestamp())
+                          AS wait_seconds
+                     FROM ops_and_admin.transfer_outbox WHERE producer_id=%s""",
+                (producer_id,),
+            ).fetchone()["wait_seconds"]))
+            admin.execute(
+                """UPDATE ops_and_admin.transfer_outbox
+                      SET available_at=transaction_timestamp()
+                    WHERE producer_id=%s""",
+                (producer_id,),
+            )
+            producer.deliver_pending()
+        # 1, 2, 4, 8 seconds at full jitter, allowing for statement latency.
+        assert all(
+            waits[index] < waits[index + 1] for index in range(len(waits) - 1)
+        )
+        assert waits[0] <= 1.0 and waits[-1] > 4.0
+    finally:
+        repository.close()
+        admin.close()
+
+
+def test_profile_b_round_trip_over_real_mtls_reaches_the_same_database() -> None:
+    """Profile B end to end: HTTPS + mTLS in front of the real data adapter."""
+    psycopg = pytest.importorskip("psycopg")
+    pytest.importorskip("httpx")
+    from psycopg.rows import dict_row
+
+    import asyncio
+    import threading
+
+    from collector_target.transfer import HttpsMtlsTransport
+    from transfer_ingest.handler import IngestHandler
+    from transfer_ingest.server import IngestServer, build_ssl_context
+    from transfer_pki import build_pki
+
+    import tempfile
+    from pathlib import Path
+
+    collector_dsn = _dsn("MRANKED_TEST_POSTGRES_DSN")
+    admin = psycopg.connect(_dsn("MRANKED_TEST_POSTGRES_ADMIN_DSN"),
+                            autocommit=True, row_factory=dict_row)
+    institution_id, account_id = uuid4(), uuid4()
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    context = CollectionContext.create(
+        Platform.TELEGRAM, f"mtls-{uuid4()}", "transfer-test-v1", now, now,
+    )
+    account = AccountRef(
+        account_id, institution_id, Platform.TELEGRAM,
+        f"mtls_{account_id.hex}", "public_web",
+    )
+    batch = _one_publication_batch(context, account, now)
+    producer_id = f"server-1/{context.partition_key}"
+    repository = PostgresCollectorRepository(
+        collector_dsn, transfer_producer_id=producer_id,
+    )
+
+    workspace = tempfile.TemporaryDirectory()
+    pki = build_pki(Path(workspace.name) / "pki")
+    client = pki.issue("client", "server-1")
+
+    loop = asyncio.new_event_loop()
+    ready = threading.Event()
+    state: dict = {}
+
+    def serve() -> None:
+        asyncio.set_event_loop(loop)
+        server = IngestServer(
+            IngestHandler(PostgresDataAdapter(repository)),
+            allowed_producers=("server-1",),
+        )
+        listener = loop.run_until_complete(server.start(
+            "127.0.0.1", 0,
+            build_ssl_context(
+                str(pki.server.certificate), str(pki.server.private_key),
+                str(pki.ca_bundle),
+            ),
+        ))
+        state["port"] = listener.sockets[0].getsockname()[1]
+        state["listener"] = listener
+        ready.set()
+        loop.run_forever()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    assert ready.wait(timeout=30)
+
+    transport = HttpsMtlsTransport(
+        f"https://localhost:{state['port']}/transfer/v1/batches",
+        certificate=str(client.certificate),
+        private_key=str(client.private_key),
+        ca_bundle=str(pki.ca_bundle),
+    )
+    repository.configure_transfer_sender(
+        PostgresTransferProducer(repository, transport),
+    )
+    try:
+        _reset_transfer(admin)
+        _seed_account(admin, institution_id, account_id, account.canonical_external_id)
+        repository.start_run(context)
+        assert repository.begin_account(context, account, now)
+        repository.persist_account_batch(batch)
+
+        outbox = admin.execute(
+            """SELECT state,ack_receipt_id,ack_checksum,payload_sha256
+                 FROM ops_and_admin.transfer_outbox WHERE producer_id=%s""",
+            (producer_id,),
+        ).fetchone()
+        assert outbox["state"] == "acknowledged"
+        assert outbox["ack_checksum"] == outbox["payload_sha256"]
+
+        inbox = admin.execute(
+            """SELECT receipt_id,state,applied_cursor,duplicate_count
+                 FROM ops_and_admin.transfer_inbox WHERE producer_id=%s""",
+            (producer_id,),
+        ).fetchone()
+        # The batch crossed a real TLS connection and was applied by the very
+        # adapter production uses; the data is already there, so it is a
+        # duplicate rather than a second write.
+        assert inbox["state"] == "applied"
+        assert inbox["applied_cursor"] is not None
+        assert inbox["duplicate_count"] == 1
+        assert inbox["receipt_id"] == outbox["ack_receipt_id"]
+    finally:
+        loop.call_soon_threadsafe(state["listener"].close)
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=30)
+        loop.close()
+        workspace.cleanup()
+        repository.close()
+        admin.close()

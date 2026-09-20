@@ -33,6 +33,7 @@ class CollectorMetrics:
         self._shutdowns=defaultdict(int)
         self._provider_errors=defaultdict(int)
         self._schedule_modes: dict[str, str] = {}
+        self._deployment_profiles: dict[str, str] = {}
         self._transfer: dict[str, dict[str, float]] = {}
 
     def account(self, platform: Platform, *, succeeded: bool, duration: float, snapshots: int = 0):
@@ -63,6 +64,14 @@ class CollectorMetrics:
             self._phase_wait[name] += duration
             self._phase_attempts[name] += attempts
             self._phase_results[(name, result)] += 1
+            self._publish()
+
+    def deployment_profile(self, platform: Platform, profile: str) -> None:
+        normalized = str(profile).strip().lower()
+        if normalized not in {"a", "b"}:
+            raise ValueError('deployment profile must be a or b')
+        with self._lock:
+            self._deployment_profiles[Platform(platform).value] = normalized
             self._publish()
 
     def schedule_mode(self, platform: Platform, mode: str) -> None:
@@ -165,6 +174,9 @@ class CollectorMetrics:
         lines += ['# TYPE mranked_collector_schedule_mode_info gauge']
         for platform,mode in sorted(self._schedule_modes.items()):
             lines.append(f'mranked_collector_schedule_mode_info{{platform="{platform}",mode="{mode}"}} 1')
+        lines += ['# TYPE mranked_collector_deployment_profile_info gauge']
+        for platform,profile in sorted(self._deployment_profiles.items()):
+            lines.append(f'mranked_collector_deployment_profile_info{{platform="{platform}",profile="{profile}"}} 1')
         lines += ['# TYPE mranked_collector_cycle_duration_seconds gauge']
         for platform,value in sorted(self._cycle_duration.items()):
             lines.append(f'mranked_collector_cycle_duration_seconds{{platform="{platform}"}} {value:.9g}')
@@ -193,6 +205,7 @@ class CollectorMetrics:
             "backlog_bytes": "gauge", "oldest_backlog_age_seconds": "gauge",
             "batch_latency_seconds": "gauge", "retries_total": "counter",
             "checksum_failures_total": "counter", "duplicates_total": "counter",
+            "attempt_window_exhausted_rows": "gauge",
             "rejects_total": "counter", "quarantines_total": "counter",
             "unaccounted_records": "gauge",
         }
