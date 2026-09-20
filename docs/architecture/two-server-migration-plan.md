@@ -1,7 +1,7 @@
 # План перехода к двум профилям развёртывания
 
 - Дата: 2026-09-20 · ветка `alpha` · HEAD `fd5d00e`
-- Статус: **план принят, реализация не начата**
+- Статус: **P0 и P1 реализованы; P2–P4 не начаты**
 - Решения: [ADR-010](adr/ADR-010-deployment-profiles.md),
   [ADR-011](adr/ADR-011-shared-response-cache.md),
   [ADR-012](adr/ADR-012-collect-persist-phases.md),
@@ -102,7 +102,7 @@ PL/pgSQL function track_publication_latest() line 26
 
 - envelope v1 по [raw-data-transfer.md](raw-data-transfer.md) — канонические
   батчи, `batchId` как content-id, `producerId`, курсоры, `payloadSha256`;
-- producer поверх `ops_and_admin.outbox_event` и роли `outbox_worker`;
+- producer поверх отдельного `ops_and_admin.transfer_outbox` и роли `outbox_worker`;
 - inbox с durable commit до ACK;
 - DataAdapter — идемпотентное применение батча в полную схему;
 - транспортный слой с двумя реализациями: in-process и HTTPS+mTLS.

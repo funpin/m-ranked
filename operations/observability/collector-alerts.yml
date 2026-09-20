@@ -36,3 +36,59 @@ groups:
           severity: warning
         annotations:
           summary: Collector account p95 latency exceeds sixty seconds.
+      - alert: MRankedTransferCursorRegression
+        expr: (delta(mranked_transfer_last_produced_cursor[15m]) < 0) or (delta(mranked_transfer_last_acknowledged_cursor[15m]) < 0) or (delta(mranked_transfer_last_applied_cursor[15m]) < 0)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Transfer cursor regressed for a producer.
+      - alert: MRankedTransferBacklogOld
+        expr: mranked_transfer_oldest_backlog_age_seconds > 1800
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Oldest unacknowledged canonical batch exceeds thirty minutes.
+      - alert: MRankedTransferChecksumFailures
+        expr: increase(mranked_transfer_checksum_failures_total[15m]) >= 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Transfer checksum verification is failing repeatedly.
+      - alert: MRankedTransferSchemaMismatch
+        expr: increase(mranked_transfer_quarantines_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: DataAdapter quarantined an incompatible or invalid envelope.
+      - alert: MRankedTransferAccountingMismatch
+        expr: mranked_transfer_unaccounted_records > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Applied inbox records are not fully accounted.
+      - alert: MRankedTransferDiskWarning
+        expr: 100 * (1 - node_filesystem_avail_bytes{mountpoint="/var/lib/postgresql"} / node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"}) >= 70
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Transfer storage reached the 70 percent warning watermark.
+      - alert: MRankedTransferDiskThrottleBackfill
+        expr: 100 * (1 - node_filesystem_avail_bytes{mountpoint="/var/lib/postgresql"} / node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"}) >= 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pause transfer backfill at the 80 percent disk watermark.
+      - alert: MRankedTransferDiskPauseLowPriority
+        expr: 100 * (1 - node_filesystem_avail_bytes{mountpoint="/var/lib/postgresql"} / node_filesystem_size_bytes{mountpoint="/var/lib/postgresql"}) >= 90
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Pause low-priority collection; never purge unacknowledged batches.

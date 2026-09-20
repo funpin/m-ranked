@@ -3,7 +3,7 @@
 - Status: **Accepted**
 - Date: 2026-09-20
 - Дополняет: [ADR-001](ADR-001-modular-monolith.md), [ADR-007](ADR-007-live-bounded-reads.md)
-- Реализация: не начата; см. [план перехода](../two-server-migration-plan.md)
+- Реализация: P0–P1 завершены для профиля A; см. [план перехода](../two-server-migration-plan.md)
 
 ## Context
 
@@ -63,9 +63,10 @@ source-слепки — самая объёмная и бесполезная д
 envelope везёт **канонические батчи**, а не сырые payload'ы провайдеров.
 Валидация и карантин происходят у источника: негодные данные не путешествуют.
 
-Транспорт — envelope/outbox/inbox поверх HTTPS + mTLS, на базе существующей
-инфраструктуры `ops_and_admin.outbox_event` и роли `outbox_worker`
-(`publish_attempts`, `available_at`, terminal-состояние уже есть).
+Транспорт — envelope/outbox/inbox поверх HTTPS + mTLS. Durable payload хранится в
+отдельном `ops_and_admin.transfer_outbox`: `outbox_event` остаётся уведомлением
+инвалидации и не подходит для replay. Роль `outbox_worker` переиспользуется только
+для транспортных прав (`publish_attempts`, `available_at`, terminal-состояние).
 Подтверждением считается durable commit в inbox, а не приём запроса.
 
 ### Профили

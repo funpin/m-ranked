@@ -12,7 +12,10 @@ systemd m-ranked-target-collector@PLATFORM
   -> CanonicalNormalizer
   -> PollCycleCoordinator
   -> one transaction per account batch
-  -> PostgreSQL dataset revision/outbox/checkpoints
+  -> PostgreSQL dataset revision/checkpoints + sealed transfer outbox
+  -> in-process envelope delivery
+  -> durable transfer inbox ACK
+  -> DataAdapter reuses the repository path (duplicate no-op in profile A)
 ```
 
 Four systemd instances use the same executable and code.  Process isolation is
@@ -83,6 +86,14 @@ The publication-latest trigger uses that id and falls back to the latest
 revision when an older collector has not set the GUC. Complete revision
 metadata and outbox events are written at the end of the same transaction; an
 unchanged replay removes its provisional revision before commit.
+
+With `COLLECTOR_TRANSFER_MODE=in-process`, the account transaction also performs one
+set-based `transfer_outbox` statement. The payload is canonical JSONL over the already
+sanitised `CanonicalAccountBatch`, compressed with zstd. Delivery starts only after the
+account transaction commits. DataAdapter first commits the inbox receipt (the ACK
+boundary), then applies through the existing repository path while inbox accounting and
+`applied_cursor` share that transaction. `disabled` omits sealing and is the exact P1
+rollback path. `https-mtls` is a P2 sender skeleton; it is not enabled in profile A.
 
 ## Error boundaries
 

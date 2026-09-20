@@ -1,0 +1,40 @@
+{
+  "medianAfterMs": 20.855,
+  "medianBeforeMs": 21.434,
+  "roundTripsAfter": 27.0,
+  "roundTripsBefore": 26.0,
+  "samples": {
+    "after_ms": [
+      29.809,
+      21.027,
+      21.905,
+      20.684,
+      19.163,
+      20.445
+    ],
+    "after_round_trips": [
+      30,
+      27,
+      27,
+      27,
+      27,
+      27
+    ],
+    "before_ms": [
+      36.019,
+      22.016,
+      18.537,
+      19.207,
+      21.217,
+      21.652
+    ],
+    "before_round_trips": [
+      29,
+      26,
+      26,
+      26,
+      26,
+      26
+    ]
+  }
+}

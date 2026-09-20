@@ -33,6 +33,7 @@ class CollectorMetrics:
         self._shutdowns=defaultdict(int)
         self._provider_errors=defaultdict(int)
         self._schedule_modes: dict[str, str] = {}
+        self._transfer: dict[str, dict[str, float]] = {}
 
     def account(self, platform: Platform, *, succeeded: bool, duration: float, snapshots: int = 0):
         if not math.isfinite(duration) or duration<0 or snapshots<0: raise ValueError('invalid metric observation')
@@ -116,6 +117,20 @@ class CollectorMetrics:
             self._shutdowns[(Platform(platform).value, "forced" if forced else "graceful")] += 1
             self._publish()
 
+    def transfer(self, producer_id: str, values: dict[str, float | int]) -> None:
+        safe = "".join(
+            character for character in producer_id
+            if character.isalnum() or character in "._/-"
+        )[:128]
+        if safe != producer_id or not safe or any(
+            not math.isfinite(float(value)) or float(value) < 0
+            for value in values.values()
+        ):
+            raise ValueError("invalid transfer metric observation")
+        with self._lock:
+            self._transfer[safe] = {key: float(value) for key, value in values.items()}
+            self._publish()
+
     def render(self) -> str:
         with self._lock: return self._render()
 
@@ -171,6 +186,23 @@ class CollectorMetrics:
         lines += ['# TYPE mranked_collector_provider_errors_total counter']
         for (platform,error_class),value in sorted(self._provider_errors.items()):
             lines.append(f'mranked_collector_provider_errors_total{{platform="{platform}",error_class="{error_class}"}} {value}')
+        transfer_types = {
+            "last_produced_cursor": "gauge", "last_acknowledged_cursor": "gauge",
+            "last_applied_cursor": "gauge", "outbox_rows": "gauge",
+            "outbox_bytes": "gauge", "backlog_rows": "gauge",
+            "backlog_bytes": "gauge", "oldest_backlog_age_seconds": "gauge",
+            "batch_latency_seconds": "gauge", "retries_total": "counter",
+            "checksum_failures_total": "counter", "duplicates_total": "counter",
+            "rejects_total": "counter", "quarantines_total": "counter",
+            "unaccounted_records": "gauge",
+        }
+        for metric, metric_type in transfer_types.items():
+            lines.append(f'# TYPE mranked_transfer_{metric} {metric_type}')
+            for producer, values in sorted(self._transfer.items()):
+                if metric in values:
+                    lines.append(
+                        f'mranked_transfer_{metric}{{producer="{producer}"}} {values[metric]:.9g}'
+                    )
         return '\n'.join(lines)+'\n'
 
     def _publish(self):

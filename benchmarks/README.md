@@ -47,3 +47,18 @@ probe used four waiting coroutines in one process, so its 31.9 MiB RSS is not a
 four-process production RSS measurement; production cgroup RSS remains a
 rollout observation.  Persistence was not changed: the existing 100-publication
 fixture remains 24 SQL calls with one set-based statement per major entity.
+
+## Transfer sealing
+
+With disposable PostgreSQL and both test DSNs configured, run:
+
+```bash
+.venv/bin/python benchmarks/transfer_sealing.py
+```
+
+The probe excludes fixture setup and delivery, alternates six first-observation
+account batches with transfer disabled/enabled, and counts connection- and
+cursor-level SQL calls. Sealing adds exactly one round trip per account batch:
+26 before, 27 after. Results are stored beside the other probes, see
+`results/2026-09-21-transfer-sealing.json`; the wall-clock medians move inside
+run-to-run noise on a laptop and are not an acceptance criterion.

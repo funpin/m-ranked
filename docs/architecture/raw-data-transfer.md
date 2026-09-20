@@ -1,16 +1,16 @@
 # Raw data transfer protocol
 
-Дата: 2026-09-16, пересмотрено 2026-09-20 · статус `design draft; not implemented`
+Дата: 2026-09-16, реализовано для профиля A 2026-09-21 · статус `P1 implemented`
 
 > Протокол принят как основа транспорта в [ADR-010](adr/ADR-010-deployment-profiles.md).
 > Два уточнения относительно исходного черновика: envelope везёт **канонические**
 > батчи, а не сырые payload'ы провайдеров, и тот же envelope применяется
-> in-process в однослужебном профиле. Реализуется в фазе P1
+> in-process в однослужебном профиле. Профиль A реализован в фазе P1
 > [плана перехода](two-server-migration-plan.md).
 
 ## Decision
 
-Server 1 durably stores raw events and a transactional transfer outbox, then pushes
+Server 1 durably stores canonical events and a transactional transfer outbox, then pushes
 compressed batches over HTTPS/mTLS. Server 2 first durably stores the exact envelope in an
 inbox, verifies it, replies ACK, then DataAdapter applies it idempotently to ReadyDB.
 Acknowledgement means “durable inbox commit”, not “request received” and not “analysis done”.
@@ -29,7 +29,7 @@ Acknowledgement means “durable inbox commit”, not “request received” and
   "uncompressedBytes": 123456,
   "compression": "zstd",
   "payloadSha256": "64 lowercase hex",
-  "events": "compressed canonical JSONL or protobuf payload"
+  "events": "zstd-compressed canonical JSONL payload"
 }
 ```
 
@@ -37,6 +37,12 @@ Each event has stable `eventId`, platform/account scope, observed/collected time
 source schema version and raw evidence reference. Cursor is a monotonic outbox sequence,
 not provider timestamp. Batch limits start at 500 records, 8 MiB compressed, or 30 s age;
 tune from p95 bytes/latency. Reject envelopes above hard 16 MiB before allocation.
+
+P1 seals one `CanonicalAccountBatch` as one JSONL event. The reader accepts up to
+500 events so later aggregation does not change the envelope contract. `batchId` is
+UUIDv5 over the SHA-256 of the canonical compressed payload; retrying the same batch
+therefore produces the same ID. `eventId` is UUIDv5 over platform, account and the
+semantic hash of the canonical batch. Sanitisation happens before canonical JSON.
 
 ## State machines
 
@@ -52,6 +58,17 @@ duplicate, deferred, or rejected with bounded reason code.
 Ordering is guaranteed per producer partition. Cross-platform order is intentionally not
 defined. Late events are accepted by event ID/timestamp and produce a new dataset revision;
 they never move the transfer watermark backwards.
+
+`ops_and_admin.transfer_outbox` stores the payload itself and therefore is not the
+existing `outbox_event`: the latter is a small cache/domain notification tied to a
+non-null dataset revision and cannot support replay after Server 1 history is trimmed.
+`transfer_inbox` durably commits the exact compatible payload and receipt before ACK.
+An incompatible version stores only bounded metadata/checksum in quarantine because an
+unknown payload cannot be proven secret-free. Profile A
+then applies through `PostgresCollectorRepository.persist_account_batch_in_transaction`;
+the inbox accounting and applied cursor commit in the same transaction. Direct
+collector persistence remains enabled in P1, so local application is deliberately a
+duplicate no-op and discards its provisional dataset revision.
 
 ## Security and bounds
 
@@ -96,3 +113,14 @@ Consumer `N+1` must accept producer `N` and `N+1`; deploy consumer first. Produc
 only after compatibility smoke. Rollback producer while consumer remains backward compatible.
 Replay selects cursor range into a separate outbox namespace, never edits historical ACKs.
 
+## P1 implementation boundary
+
+Implemented: canonical JSONL/zstd envelope, deterministic IDs, hard pre-DB bounds,
+transactional outbox sealing, durable inbox/receipt, checksum and semantic hash checks,
+idempotent application through the one repository path, oldest-first retry, ACK
+deduplication, ACK-only retention, Profile A in-process transport, metrics and alerts.
+
+The HTTPS+mTLS sender validates its HTTPS endpoint, requires client certificate/key/CA,
+uses TLS verification and 3/30/30 second bounds. P2 still owns the HTTP receiver,
+certificate provisioning/rotation, firewall rules, full-jitter retry scheduler and the
+switch to a second host. P1 does not trim Server 1 history or remove direct persistence.

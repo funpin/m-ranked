@@ -30,6 +30,7 @@ from .model import (
 )
 from .normalize import canonical_json, sanitize_evidence, source_fingerprint
 from .evidence import ImmutableEvidenceStore
+from .transfer import TransferEnvelope, seal_batch, with_cursor
 
 
 _SHARD = re.compile(r"^(\d+)/(\d+)$")
@@ -81,6 +82,7 @@ class PostgresCollectorRepository:
         snapshot_heartbeat_hours: int = 24,
         evidence_store: ImmutableEvidenceStore | None = None,
         pool_size: int = 3,
+        transfer_producer_id: str | None = None,
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
@@ -111,6 +113,11 @@ class PostgresCollectorRepository:
         )
         self._metric_evidence_ids: dict[str, int] = {}
         self._metric_evidence_lock = threading.Lock()
+        self.transfer_producer_id = transfer_producer_id
+        self._transfer_sender: Any = None
+
+    def configure_transfer_sender(self, sender: Any) -> None:
+        self._transfer_sender = sender
 
     @staticmethod
     def _metric_evidence(snapshot: Any) -> dict[str, Any]:
@@ -688,6 +695,35 @@ class PostgresCollectorRepository:
         )
 
     def persist_account_batch(self, batch: CanonicalAccountBatch) -> IngestionResult:
+        """Persist and, when configured, seal in the same account transaction."""
+        metric_evidence_ids = tuple(
+            self._metric_evidence_id(self._metric_evidence(item.snapshot))
+            for item in batch.publications
+        )
+        with self._connection() as connection, connection.transaction():
+            result, _ = self.persist_account_batch_in_transaction(
+                connection, batch, metric_evidence_ids=metric_evidence_ids,
+                seal_transfer=self.transfer_producer_id is not None,
+            )
+        if self._transfer_sender is not None:
+            try:
+                self._transfer_sender.deliver_pending(limit=1)
+            except Exception:
+                # The durable outbox is the retry boundary. Consumer failure
+                # must not rewrite a successfully committed account result.
+                pass
+        return result
+
+    def persist_account_batch_in_transaction(
+        self,
+        connection: Any,
+        batch: CanonicalAccountBatch,
+        *,
+        metric_evidence_ids: Sequence[int] | None = None,
+        seal_transfer: bool = False,
+        transfer_replay: bool = False,
+    ) -> tuple[IngestionResult, TransferEnvelope | None]:
+        """The single ingest path, reusable by DataAdapter's inbox transaction."""
         if batch.account.platform != batch.context.platform:
             raise ValueError("account platform does not match collection context")
         discovered_count = 0
@@ -695,108 +731,93 @@ class PostgresCollectorRepository:
         deletion_probe_count = 0
         changed = False
         identity_receipt = None
-        metric_evidence_ids = tuple(
-            self._metric_evidence_id(
-                self._metric_evidence(publication.snapshot)
+        if metric_evidence_ids is None:
+            metric_evidence_ids = tuple(
+                self._metric_evidence_id(self._metric_evidence(item.snapshot))
+                for item in batch.publications
             )
-            for publication in batch.publications
+        revision_id = self._begin_revision(connection, batch)
+        for published_month in sorted({
+            publication.snapshot.published_month for publication in batch.publications
+        }):
+            connection.execute(
+                "SELECT ops_and_admin.ensure_publication_metric_partition(%s::date)",
+                (published_month,),
+            )
+        if batch.account_observation is not None:
+            identity_changed = self._persist_account_identity(
+                connection, batch, batch.account_observation,
+            )
+            account_changed = self._persist_account_observation(
+                connection, batch, batch.account_observation,
+            )
+            changed = changed or identity_changed or account_changed
+            if identity_changed:
+                original = batch.account_observation.sanitized_source
+                receipt = {
+                    "version": 1, "kind": "collector-account-identity",
+                    "accountId": str(batch.account.id), "platform": batch.context.platform.value,
+                    "sourceRunId": str(batch.context.run_id),
+                    "sourceFingerprint": batch.account_observation.source_fingerprint,
+                    "observedAt": original["observed_at"],
+                    "username": original.get("username"), "title": original.get("title"),
+                    "url": original.get("url"), "nativeId": original.get("native_external_id"),
+                }
+                identity_receipt = IdentityEvidenceStore(
+                    configured_root()/"collector"/batch.context.platform.value
+                ).put(receipt)
+
+        publication_results = self._persist_publications(
+            connection, batch, metric_evidence_ids,
+            detect_exact_replay=transfer_replay,
         )
-        with self._connection() as connection, connection.transaction():
-            revision_id = self._begin_revision(connection, batch)
-            for published_month in sorted({
-                publication.snapshot.published_month
-                for publication in batch.publications
-            }):
-                connection.execute(
-                    "SELECT ops_and_admin.ensure_publication_metric_partition(%s::date)",
-                    (published_month,),
-                )
-            if batch.account_observation is not None:
-                identity_changed = self._persist_account_identity(
-                    connection, batch, batch.account_observation,
-                )
-                account_changed = self._persist_account_observation(
-                    connection, batch, batch.account_observation,
-                )
-                changed = changed or identity_changed or account_changed
-                if identity_changed:
-                    # Source fields come from the already sanitized original
-                    # observation, before any database state is read as output.
-                    original = batch.account_observation.sanitized_source
-                    receipt = {
-                        "version": 1, "kind": "collector-account-identity",
-                        "accountId": str(batch.account.id), "platform": batch.context.platform.value,
-                        "sourceRunId": str(batch.context.run_id),
-                        "sourceFingerprint": batch.account_observation.source_fingerprint,
-                        "observedAt": original["observed_at"],
-                        "username": original.get("username"), "title": original.get("title"),
-                        "url": original.get("url"), "nativeId": original.get("native_external_id"),
-                    }
-                    identity_receipt = IdentityEvidenceStore(configured_root()/"collector"/batch.context.platform.value).put(receipt)
+        persisted_ids = {}
+        for publication, publication_result in zip(
+            batch.publications, publication_results, strict=True,
+        ):
+            publication_id, discovered, snapshot, publication_changed = publication_result
+            persisted_ids[publication.id] = publication_id
+            discovered_count += int(discovered)
+            snapshot_count += int(snapshot)
+            changed = changed or publication_changed
 
-            publication_results = self._persist_publications(
-                connection, batch, metric_evidence_ids,
+        explicit_probes = tuple(
+            replace(probe, publication_id=persisted_ids.get(
+                probe.publication_id, probe.publication_id,
+            ))
+            for probe in batch.deletion_probes
+        )
+        explicit_probe_ids = {probe.publication_id for probe in explicit_probes}
+        presence_by_id: dict[UUID, CanonicalDeletionProbe] = {}
+        for publication in batch.publications:
+            publication_id = persisted_ids[publication.id]
+            if publication_id in explicit_probe_ids or publication.snapshot.synthetic:
+                continue
+            candidate = CanonicalDeletionProbe(
+                publication_id, publication.snapshot.observed_at,
+                DeletionProbeOutcome.PRESENT,
+                f"{batch.context.platform.value}_publication_observed", 2,
             )
-            persisted_ids = {}
-            for publication, publication_result in zip(
-                batch.publications, publication_results, strict=True,
-            ):
-                publication_id, discovered, snapshot, publication_changed = (
-                    publication_result
-                )
-                persisted_ids[publication.id] = publication_id
-                discovered_count += int(discovered)
-                snapshot_count += int(snapshot)
-                changed = changed or publication_changed
+            previous = presence_by_id.get(publication_id)
+            if previous is None or previous.observed_at < candidate.observed_at:
+                presence_by_id[publication_id] = candidate
+        presence_changes = self._persist_presence_probes(
+            connection, batch, tuple(presence_by_id.values()),
+        )
+        deletion_probe_count += presence_changes
+        changed = changed or presence_changes > 0
+        for probe in explicit_probes:
+            probe_changed = self._persist_deletion_probe(connection, batch, probe)
+            deletion_probe_count += int(probe_changed)
+            changed = changed or probe_changed
 
-            # Imported publications retain their legacy UUID. Use the identity
-            # resolved while persisting, including when suppressing presence
-            # probes in favor of an explicit probe from the tracked record.
-            explicit_probes = tuple(
-                replace(probe, publication_id=persisted_ids.get(
-                    probe.publication_id, probe.publication_id,
-                ))
-                for probe in batch.deletion_probes
-            )
-            explicit_probe_ids = {probe.publication_id for probe in explicit_probes}
-            presence_by_id: dict[UUID, CanonicalDeletionProbe] = {}
-            for publication in batch.publications:
-                publication_id = persisted_ids[publication.id]
-                if (
-                    publication_id in explicit_probe_ids
-                    or publication.snapshot.synthetic
-                ):
-                    continue
-                candidate = CanonicalDeletionProbe(
-                    persisted_ids[publication.id],
-                    publication.snapshot.observed_at,
-                    DeletionProbeOutcome.PRESENT,
-                    f"{batch.context.platform.value}_publication_observed",
-                    2,
-                )
-                previous = presence_by_id.get(publication_id)
-                if previous is None or previous.observed_at < candidate.observed_at:
-                    presence_by_id[publication_id] = candidate
-            presence_probes = tuple(presence_by_id.values())
-            presence_changes = self._persist_presence_probes(
-                connection, batch, presence_probes,
-            )
-            deletion_probe_count += presence_changes
-            changed = changed or presence_changes > 0
-            for probe in explicit_probes:
-                probe_changed = self._persist_deletion_probe(
-                    connection, batch, probe,
-                )
-                deletion_probe_count += int(probe_changed)
-                changed = changed or probe_changed
+        if batch.cursor is not None:
+            self._persist_cursor(connection, batch)
+        if batch.refresh_cursor is not None:
+            self._persist_refresh_cursor(connection, batch)
 
-            if batch.cursor is not None:
-                self._persist_cursor(connection, batch)
-            if batch.refresh_cursor is not None:
-                self._persist_refresh_cursor(connection, batch)
-
-            completed_at = self._batch_completed_at(batch)
-            result = connection.execute(
+        completed_at = self._batch_completed_at(batch)
+        result = connection.execute(
                 """UPDATE ingest.collection_account_result
                       SET completed_at=%s,
                           status='succeeded',
@@ -812,38 +833,60 @@ class PostgresCollectorRepository:
                     batch.context.run_id,
                     batch.account.id,
                 ),
-            ).fetchone()
-            if result is None:
-                raise RuntimeError("collection account result was not started")
+        ).fetchone()
+        if result is None:
+            raise RuntimeError("collection account result was not started")
 
-            if changed:
-                self._finalize_revision(
-                    connection,
-                    revision_id,
-                    batch,
-                    discovered_count,
-                    snapshot_count,
-                    deletion_probe_count,
-                    completed_at,
-                    identity_receipt,
-                )
-            else:
-                finalized = connection.execute(
-                    """SELECT analytics.finalize_ingestion_dataset_revision(
-                           %s,%s,'{}'::jsonb,false
-                       )""",
-                    (revision_id, batch.context.run_id),
-                ).fetchone()
-                if finalized is None or not bool(_row_value(finalized, "finalize_ingestion_dataset_revision", 0)):
-                    raise RuntimeError("dataset revision was not discarded")
-                revision_id = None
-        return IngestionResult(
+        if changed:
+            self._finalize_revision(
+                connection, revision_id, batch, discovered_count, snapshot_count,
+                deletion_probe_count, completed_at, identity_receipt,
+            )
+        else:
+            finalized = connection.execute(
+                """SELECT analytics.finalize_ingestion_dataset_revision(
+                       %s,%s,'{}'::jsonb,false
+                   )""",
+                (revision_id, batch.context.run_id),
+            ).fetchone()
+            if finalized is None or not bool(
+                _row_value(finalized, "finalize_ingestion_dataset_revision", 0)
+            ):
+                raise RuntimeError("dataset revision was not discarded")
+            revision_id = None
+        envelope = self._seal_transfer(connection, batch) if seal_transfer else None
+        ingestion = IngestionResult(
             batch.context.run_id,
             batch.account.id,
             discovered_count,
             snapshot_count,
             revision_id,
         )
+        return ingestion, envelope
+
+    def _seal_transfer(
+        self, connection: Any, batch: CanonicalAccountBatch,
+    ) -> TransferEnvelope:
+        if self.transfer_producer_id is None:
+            raise RuntimeError("transfer producer is not configured")
+        envelope = seal_batch(batch, self.transfer_producer_id)
+        row = connection.execute(
+            """INSERT INTO ops_and_admin.transfer_outbox(
+                   batch_id,producer_id,schema_version,payload,payload_sha256,
+                   record_count,uncompressed_bytes,state,sealed_at
+               ) VALUES (%s,%s,%s,%s,%s,%s,%s,'sealed',transaction_timestamp())
+               ON CONFLICT (producer_id,batch_id) DO UPDATE
+                   SET available_at=ops_and_admin.transfer_outbox.available_at
+               RETURNING cursor""",
+            (
+                envelope.batch_id, envelope.producer_id, envelope.schema_version,
+                envelope.payload, envelope.payload_sha256, envelope.record_count,
+                envelope.uncompressed_bytes,
+            ),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("transfer batch was not sealed")
+        return with_cursor(envelope, int(_row_value(row, "cursor", 0)))
 
     def _persist_account_observation(
         self,
@@ -1060,6 +1103,8 @@ class PostgresCollectorRepository:
         connection: Any,
         batch: CanonicalAccountBatch,
         metric_evidence_ids: Sequence[int],
+        *,
+        detect_exact_replay: bool = False,
     ) -> tuple[tuple[UUID, bool, bool, bool], ...]:
         publications = batch.publications
         if not publications:
@@ -1367,6 +1412,39 @@ class PostgresCollectorRepository:
                 bool(_row_value(row, "synthetic", 2)),
             ): row for row in latest_rows
         }
+        exact_replays: set[tuple[Any, ...]] = set()
+        if detect_exact_replay:
+            exact_input = [{
+                "publication_id": resolved_ids[item.id],
+                "published_month": item.snapshot.published_month,
+                "sampling_bucket": item.snapshot.sampling_bucket,
+                "source_fingerprint": item.snapshot.source_fingerprint,
+            } for item in publications]
+            exact_rows = connection.execute(
+                """WITH input AS (
+                       SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
+                           publication_id uuid,published_month date,
+                           sampling_bucket bigint,source_fingerprint text
+                       )
+                   )
+                   SELECT input.publication_id,input.published_month,
+                          input.sampling_bucket,input.source_fingerprint
+                     FROM input JOIN ingest.publication_metric_snapshot snapshot
+                       ON snapshot.publication_id=input.publication_id
+                      AND snapshot.published_month=input.published_month
+                      AND snapshot.sampling_bucket=input.sampling_bucket
+                      AND snapshot.source_fingerprint=input.source_fingerprint""",
+                (_json(exact_input),),
+            ).fetchall()
+            exact_replays = {
+                (
+                    _row_value(row, "publication_id", 0),
+                    _row_value(row, "published_month", 1),
+                    int(_row_value(row, "sampling_bucket", 2)),
+                    str(_row_value(row, "source_fingerprint", 3)),
+                )
+                for row in exact_rows
+            }
         snapshots_to_insert = []
         snapshots_by_key: dict[tuple[Any, ...], CanonicalPublication] = {}
         virtual_latest = {
@@ -1382,6 +1460,11 @@ class PostgresCollectorRepository:
             snapshot_group = (
                 publication_id, snapshot.published_month, snapshot.synthetic,
             )
+            if (
+                publication_id, snapshot.published_month,
+                snapshot.sampling_bucket, snapshot.source_fingerprint,
+            ) in exact_replays:
+                continue
             latest_fingerprint, latest_observed_at = virtual_latest.get(
                 snapshot_group, (None, None),
             )

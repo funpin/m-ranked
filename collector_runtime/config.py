@@ -110,6 +110,12 @@ class Settings:
     collector_vk_cycle_deadline_seconds: int = 600
     collector_max_cycle_deadline_seconds: int = 600
     collector_rutube_cycle_deadline_seconds: int = 1800
+    collector_transfer_mode: str = "in-process"
+    collector_transfer_producer_id: str = "local"
+    collector_transfer_https_endpoint: str | None = None
+    collector_transfer_client_certificate: str | None = None
+    collector_transfer_private_key: str | None = None
+    collector_transfer_ca_bundle: str | None = None
 
     def __post_init__(self) -> None:
         if self.collector_schedule_mode.strip().lower() not in {
@@ -118,6 +124,14 @@ class Settings:
             raise ValueError(
                 "COLLECTOR_SCHEDULE_MODE must be legacy, phased or shadow"
             )
+        if self.collector_transfer_mode.strip().lower() not in {
+            "disabled", "in-process", "https-mtls",
+        }:
+            raise ValueError(
+                "COLLECTOR_TRANSFER_MODE must be disabled, in-process or https-mtls"
+            )
+        if not self.collector_transfer_producer_id.strip():
+            raise ValueError("COLLECTOR_TRANSFER_PRODUCER_ID must not be blank")
         positive = {
             "COLLECTOR_PHASE_MAX_WAIT_SECONDS": self.collector_phase_max_wait_seconds,
             "COLLECTOR_PHASE_RETRY_SECONDS": self.collector_phase_retry_seconds,
@@ -264,6 +278,26 @@ class Settings:
             ),
             collector_rutube_cycle_deadline_seconds=_int(
                 "COLLECTOR_RUTUBE_CYCLE_DEADLINE_SECONDS", 1800
+            ),
+            collector_transfer_mode=(
+                os.getenv("COLLECTOR_TRANSFER_MODE", "in-process").strip().lower()
+                or "in-process"
+            ),
+            collector_transfer_producer_id=(
+                os.getenv("COLLECTOR_TRANSFER_PRODUCER_ID", "local").strip()
+                or "local"
+            ),
+            collector_transfer_https_endpoint=(
+                os.getenv("COLLECTOR_TRANSFER_HTTPS_ENDPOINT", "").strip() or None
+            ),
+            collector_transfer_client_certificate=(
+                os.getenv("COLLECTOR_TRANSFER_CLIENT_CERTIFICATE", "").strip() or None
+            ),
+            collector_transfer_private_key=(
+                os.getenv("COLLECTOR_TRANSFER_PRIVATE_KEY", "").strip() or None
+            ),
+            collector_transfer_ca_bundle=(
+                os.getenv("COLLECTOR_TRANSFER_CA_BUNDLE", "").strip() or None
             ),
         )
 

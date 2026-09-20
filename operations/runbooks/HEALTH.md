@@ -37,6 +37,32 @@ Troubleshooting phased workers:
 - old `running` run: restart the same platform/version/partition to resume its
   deterministic `scheduled_at`.
 
+Transfer health is per `producer`:
+
+- `mranked_transfer_last_produced_cursor`, `last_acknowledged_cursor` and
+  `last_applied_cursor` must be monotonic;
+- `backlog_rows`, `backlog_bytes` and `oldest_backlog_age_seconds` describe only
+  unacknowledged work; the warning SLO is 30 minutes;
+- `outbox_rows`/`outbox_bytes`, `batch_latency_seconds`, `retries_total`,
+  `checksum_failures_total`, `duplicates_total`, `rejects_total`,
+  `quarantines_total` and `unaccounted_records` localise delivery failures;
+- disk watermarks are 70% warn, 80% stop backfill and 90% pause low-priority
+  collection. Never delete an unacknowledged row.
+
+Transfer troubleshooting:
+
+- growing backlog: compare produced/ACK cursors, inspect `last_error_code`, restore
+  the consumer/link, and drain oldest cursor first;
+- checksum error: compare stored `payload_sha256` with the exact compressed bytes and
+  resend the original row; repeated failures page;
+- incompatible schema quarantine: deploy a backward-compatible consumer first, then
+  explicitly replay the batch; quarantine never advances apply cursor;
+- stuck apply cursor: inspect `transfer_inbox.state`; a resent
+  `(producer_id,batch_id)` returns the same receipt and resumes idempotently. Compare
+  the four accounting counters with `record_count` before intervention;
+- retention: purge only `state='acknowledged'` older than the audit/replay window.
+  `sealed` and `sent` are never retention-eligible, including under disk pressure.
+
 All health responses are `no-store`. Readiness does not wait for a projection
 publisher: public data is read directly from canonical tables. A configured
 collector with no successful recent run makes freshness unhealthy, while an

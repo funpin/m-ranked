@@ -18,6 +18,15 @@ def test_prometheus_metrics_are_bounded_and_atomically_published(tmp_path: Path)
         coalesced_slots=1,resumed=True,
     )
     metrics.provider_error(Platform.VK,"TimeoutError")
+    metrics.transfer("server-1/default", {
+        "last_produced_cursor": 12, "last_acknowledged_cursor": 11,
+        "last_applied_cursor": 11, "outbox_rows": 2, "outbox_bytes": 512,
+        "backlog_rows": 1, "backlog_bytes": 256,
+        "oldest_backlog_age_seconds": 10, "batch_latency_seconds": .5,
+        "retries_total": 1, "checksum_failures_total": 0,
+        "duplicates_total": 2, "rejects_total": 0,
+        "quarantines_total": 0, "unaccounted_records": 0,
+    })
     text=target.read_text()
     assert text==metrics.render()
     assert 'mranked_collector_snapshots_total{platform="vk"} 3' in text
@@ -27,8 +36,10 @@ def test_prometheus_metrics_are_bounded_and_atomically_published(tmp_path: Path)
     assert 'mranked_collector_schedule_mode_info{platform="vk",mode="phased"} 1' in text
     assert 'mranked_collector_schedule_lag_seconds{platform="vk"} 12' in text
     assert 'mranked_collector_provider_errors_total{platform="vk",error_class="TimeoutError"} 1' in text
-    assert len([line for line in text.splitlines() if not line.startswith('#')])<=140
+    assert 'mranked_transfer_backlog_rows{producer="server-1/default"} 1' in text
+    assert len([line for line in text.splitlines() if not line.startswith('#')])<=160
     assert target.stat().st_mode & 0o777==0o640
     assert not list(tmp_path.glob('.collector.prom*'))
     with pytest.raises(ValueError): metrics.account('account-secret',succeeded=False,duration=1)
     with pytest.raises(ValueError): metrics.account(Platform.VK,succeeded=False,duration=float('nan'))
+    with pytest.raises(ValueError): metrics.transfer("token secret", {"backlog_rows": 1})

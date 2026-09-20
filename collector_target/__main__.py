@@ -31,6 +31,12 @@ from .phase import (
 from .platforms.registry import build_adapter
 from .repository import PostgresCollectorRepository
 from .tracking import validate_tracking_policy
+from .transfer import (
+    HttpsMtlsTransport,
+    InProcessTransport,
+    PostgresDataAdapter,
+    PostgresTransferProducer,
+)
 
 
 logger = logging.getLogger("collector_target")
@@ -302,9 +308,15 @@ async def _run(args: argparse.Namespace) -> int:
             or "target-v1"
         )
         clock = SystemUtcClock()
+        transfer_mode = settings.collector_transfer_mode.strip().lower()
+        producer_id = (
+            f"{settings.collector_transfer_producer_id}/{args.partition}"
+            if transfer_mode != "disabled" else None
+        )
         repository = PostgresCollectorRepository(
             dsn,
             snapshot_heartbeat_hours=settings.publication_snapshot_heartbeat_hours,
+            transfer_producer_id=producer_id,
         )
         repository.assert_schema_contract()
         lease_provider = PostgresAdvisoryLeaseProvider(dsn)
@@ -319,6 +331,22 @@ async def _run(args: argparse.Namespace) -> int:
             account_concurrency=account_concurrency,
             clock=clock,
         )
+        if transfer_mode == "in-process":
+            data_adapter = PostgresDataAdapter(repository)
+            repository.configure_transfer_sender(PostgresTransferProducer(
+                repository, InProcessTransport(data_adapter), coordinator.metrics,
+            ))
+        elif transfer_mode == "https-mtls":
+            repository.configure_transfer_sender(PostgresTransferProducer(
+                repository,
+                HttpsMtlsTransport(
+                    settings.collector_transfer_https_endpoint or "",
+                    certificate=settings.collector_transfer_client_certificate or "",
+                    private_key=settings.collector_transfer_private_key or "",
+                    ca_bundle=settings.collector_transfer_ca_bundle or "",
+                ),
+                coordinator.metrics,
+            ))
         coordinator.metrics.schedule_mode(platform, schedule_mode)
         _log_startup(platform, args.partition, collector_version, schedule_mode)
         offset = platform_offset(platform, interval_seconds)
