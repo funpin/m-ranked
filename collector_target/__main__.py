@@ -12,7 +12,11 @@ from typing import Any
 from collector_runtime.config import Settings
 
 from .auth import apply_platform_auth_file
-from .coordinator import PollCycleCoordinator, SystemUtcClock
+from .coordinator import (
+    PollCycleCoordinator,
+    SystemUtcClock,
+    ensure_runtime_release_available,
+)
 from .lease import PostgresAdvisoryLeaseProvider
 from .model import Platform, RunStatus, utc
 from .normalize import sanitize_error_code
@@ -324,6 +328,7 @@ async def _run(args: argparse.Namespace) -> int:
 
         if schedule_mode == "legacy":
             while not stop.is_set():
+                ensure_runtime_release_available()
                 began = time.monotonic()
                 scheduled_at = repository.resumable_scheduled_at(
                     platform, args.partition, collector_version,
@@ -366,6 +371,7 @@ async def _run(args: argparse.Namespace) -> int:
             datetime, int, datetime, datetime | None, datetime | None,
         ] | None = None
         while not stop.is_set():
+            ensure_runtime_release_available()
             now = utc(clock.now(), "clock.now")
             if pending_phase is not None:
                 (

@@ -26,6 +26,27 @@ from .ports import CollectorRepository, LeaseProvider, PlatformCollector, UtcClo
 logger = logging.getLogger(__name__)
 
 
+class RuntimeReleaseUnavailable(RuntimeError):
+    """The process is still running after its immutable release was removed."""
+
+
+def ensure_runtime_release_available() -> None:
+    """Fail the process so systemd can restart it against the current release.
+
+    Linux keeps a deleted working directory alive for a process that already
+    holds it.  Already imported modules then keep working, while a code path
+    first exercised by a newly added account can fail with ModuleNotFoundError.
+    ``getcwd`` is the reliable boundary: it raises once that directory has
+    been unlinked.
+    """
+    try:
+        os.getcwd()
+    except OSError as error:
+        raise RuntimeReleaseUnavailable(
+            "collector runtime release directory is unavailable"
+        ) from error
+
+
 @dataclass(frozen=True, slots=True)
 class SystemUtcClock:
     def now(self) -> datetime:
@@ -92,6 +113,10 @@ class PollCycleCoordinator:
 
             async def collect_account(account: AccountRef) -> None:
                 async with semaphore:
+                    # This check intentionally lives outside the per-account
+                    # error handler.  A deleted release is a process failure,
+                    # not a provider failure attributable to this account.
+                    ensure_runtime_release_available()
                     account_started = utc(self.clock.now(), "account.started_at")
                     if not self.repository.begin_account(
                         context, account, account_started,

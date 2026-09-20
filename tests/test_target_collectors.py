@@ -35,7 +35,12 @@ from collector_target.auth import (
     apply_platform_auth_file,
     parse_platform_auth_file,
 )
-from collector_target.coordinator import PlatformSupervisor, PollCycleCoordinator
+from collector_target.coordinator import (
+    PlatformSupervisor,
+    PollCycleCoordinator,
+    RuntimeReleaseUnavailable,
+    ensure_runtime_release_available,
+)
 from collector_target.lease import InMemoryLeaseProvider, advisory_lock_key, lease_name
 from collector_target.model import (
     AccountRef,
@@ -1255,6 +1260,49 @@ def test_coordinator_resumes_failed_accounts_without_replaying_successes() -> No
     assert adapter.attempts[second.id] == 2
 
 
+def test_deleted_runtime_release_is_fatal_before_account_collection(monkeypatch) -> None:
+    target = account(Platform.TELEGRAM)
+    repository = _MemoryRepository((target,))
+    adapter = _RetryAdapter(target.id)
+    coordinator = PollCycleCoordinator(
+        platform=Platform.TELEGRAM,
+        adapter=adapter,
+        repository=repository,
+        lease_provider=InMemoryLeaseProvider(),
+        collector_version="test-v1",
+        clock=_FixedClock(),
+    )
+
+    def unavailable() -> None:
+        raise RuntimeReleaseUnavailable("deleted release")
+
+    monkeypatch.setattr(
+        "collector_target.coordinator.ensure_runtime_release_available",
+        unavailable,
+    )
+
+    with pytest.raises(RuntimeReleaseUnavailable, match="deleted release"):
+        asyncio.run(coordinator.run(NOW))
+
+    assert adapter.attempts == {}
+    assert repository.states == {}
+
+
+def test_runtime_release_guard_classifies_a_deleted_working_directory(
+    monkeypatch,
+) -> None:
+    def missing_working_directory() -> str:
+        raise FileNotFoundError("release was removed")
+
+    monkeypatch.setattr(
+        "collector_target.coordinator.os.getcwd",
+        missing_working_directory,
+    )
+
+    with pytest.raises(RuntimeReleaseUnavailable, match="runtime release"):
+        ensure_runtime_release_available()
+
+
 class _OutcomeCoordinator:
     def __init__(self, platform: Platform, fails: bool = False) -> None:
         self.platform = platform
@@ -1513,6 +1561,59 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
         statement for statement, _ in connection.calls
         if "INSERT INTO ingest.publication_metric_snapshot(" in statement
     )
+
+
+def test_first_identity_change_uses_dependency_loaded_at_process_start(
+    monkeypatch, tmp_path,
+) -> None:
+    monkeypatch.setenv(
+        "MRANKED_IDENTITY_RECEIPT_DIR",
+        str(tmp_path / "identity-receipts"),
+    )
+    monkeypatch.setenv(
+        "COLLECTOR_RAW_EVIDENCE_DIR",
+        str(tmp_path / "raw-evidence"),
+    )
+    monkeypatch.setattr(
+        "collector_target.legacy_csv.persist_native_csv_batch",
+        _script_native_csv_batch,
+    )
+    connection = _ScriptedConnection()
+    repository = PostgresCollectorRepository(
+        connection_factory=lambda: connection,
+    )
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    raw = raw_batch(target, run_context)
+    raw = replace(
+        raw,
+        account_observation=replace(
+            raw.account_observation,
+            title="First provider title",
+        ),
+    )
+    canonical = CanonicalNormalizer().normalize(raw, run_context)
+    original_import = __import__
+
+    def import_without_release_source(
+        name: str, globals=None, locals=None, fromlist=(), level=0,
+    ):
+        if name.endswith("identity_evidence"):
+            raise ModuleNotFoundError(name)
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr("builtins.__import__", import_without_release_source)
+
+    result = repository.persist_account_batch(canonical)
+
+    assert result.discovered_count == 1
+    assert result.revision_id == 30
+    receipts = list(
+        (tmp_path / "identity-receipts" / "collector" / "telegram").glob(
+            "*.json"
+        )
+    )
+    assert len(receipts) == 1
 
 
 def test_quarantine_forces_rejected_evidence_when_routine_raw_storage_is_disabled(

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Sequence
 from uuid import UUID
 
+from .identity_evidence import IdentityEvidenceStore, configured_root
 from .model import (
     AccountRef,
     CanonicalAccountBatch,
@@ -718,7 +719,6 @@ class PostgresCollectorRepository:
                 )
                 changed = changed or identity_changed or account_changed
                 if identity_changed:
-                    from .identity_evidence import IdentityEvidenceStore, configured_root
                     # Source fields come from the already sanitized original
                     # observation, before any database state is read as output.
                     original = batch.account_observation.sanitized_source
