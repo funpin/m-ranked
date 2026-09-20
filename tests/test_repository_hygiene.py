@@ -108,7 +108,7 @@ def test_the_repository_root_stays_readable() -> None:
     """
     allowed = {
         ".dockerignore", ".editorconfig", ".env.example", ".gitignore",
-        ".gitleaksignore", "CONTRIBUTING.md", "Makefile", "README.md",
+        ".gitleaksignore", "AGENTS.md", "CONTRIBUTING.md", "Makefile", "README.md",
         "pyproject.toml", "requirements.txt",
     }
     present = {path for path in _tracked() if "/" not in path}
