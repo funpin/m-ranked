@@ -331,7 +331,6 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
                 boundary && "shadow-[inset_4px_0_var(--chart-4)]",
                 selected && "bg-chart-3/20 shadow-[inset_4px_0_var(--chart-3)]",
               )}
-              title={`${row.quality}${row.intervalUncertain ? " · интервал неопределён" : ""}${boundary?" · граница сигнала":""}`}
             ><td><button type="button" data-testid="snapshot-jump" className={cn("bg-transparent underline underline-offset-2", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground", boundary && "font-black decoration-double")} title="Показать эту точку на графике" onClick={() => jump(row.snapshotId)}>{legacyDate(row.observedAt)}{boundary?<span className="sr-only">, граница сигнала аномальной динамики</span>:null}</button></td><td className="tabular text-right">{elapsed === null ? signedDuration(elapsed) : <InlineHint testId="saved-point-interval" content="Интервал между сохранёнными изменениями. Это не простой: опросы без изменений не сохраняются.">{signedDuration(elapsed)}</InlineHint>}</td><CollectorIntervalCell row={row} coverage={collectorCoverage} /><td className="tabular text-right">{row.synthetic ? "момент публикации" : duration(row.ageHours*3600)}</td>
               {tableMetrics.map((metric) => <MetricCells key={metric.key} row={row} metric={metric} people={telegram && metric.key === "reactions"} />)}
               {showBreakdown ? <><td className="min-w-max"><Breakdown value={historyReactionEntries(row)} /></td><td className="min-w-max"><Breakdown value={historyReactionEntries(row,true)} delta /></td></> : null}</tr>;
@@ -361,5 +360,5 @@ function CollectorIntervalCell({ row, coverage }: { row: HistorySnapshot; covera
 
 function MetricCells({ row,metric,people }: {row:HistorySnapshot;metric:Metric;people:boolean}) {
   const delta = row[metric.delta];
-  return <><td className="tabular text-right" title={row[metric.key].quality ?? undefined}>{legacyNumber(row[metric.key].value)}</td><td className="tabular text-right">{delta === null ? "—" : `${delta >= 0 ? "+" : ""}${delta}`}</td>{people ? <td className="tabular text-right">{delta === null ? "—" : delta > 0 ? `≥${Math.ceil(delta/3)}` : "0"}</td> : null}</>;
+  return <><td className="tabular text-right">{legacyNumber(row[metric.key].value)}</td><td className="tabular text-right">{delta === null ? "—" : `${delta >= 0 ? "+" : ""}${delta}`}</td>{people ? <td className="tabular text-right">{delta === null ? "—" : delta > 0 ? `≥${Math.ceil(delta/3)}` : "0"}</td> : null}</>;
 }

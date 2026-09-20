@@ -105,6 +105,8 @@ test("a long interval between saved changes is spaced by time without claiming c
   const longInterval=page.getByTestId("saved-point-interval").filter({hasText:"+2 д 13 ч"});
   const longIntervalRow=longInterval.locator("..").locator("..");
   await expect(longInterval).toHaveText("+2 д 13 ч");
+  await expect(longIntervalRow).not.toHaveAttribute("title");
+  await expect(longIntervalRow.locator('[title="exact"]')).toHaveCount(0);
   await expect(longIntervalRow).not.toContainText("между точками");
   await expect(longIntervalRow).not.toContainText("Успешных циклов:");
   expect((await longIntervalRow.boundingBox())!.height).toBeLessThan(45);
