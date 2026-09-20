@@ -1,6 +1,7 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Clock, Eye, Heart, Hourglass, MessageCircle, Share2, Smile, Timer, Users, type LucideIcon } from "lucide-react";
@@ -12,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
@@ -58,16 +58,47 @@ function ColumnHead({ icon: Icon, label, delta = false, align = "text-center" }:
 
 function InlineHint({ children, content, testId }: { children: ReactNode; content: ReactNode; testId: string }) {
   const tooltipId = useId();
-  return <Tooltip>
-    <TooltipTrigger
-      closeOnClick={false}
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [position, setPosition] = useState<{ left: number; top: number; above: boolean }>();
+  const show = useCallback(() => {
+    const box = trigger.current?.getBoundingClientRect();
+    if (!box) return;
+    const above = box.bottom + 96 > window.innerHeight;
+    setPosition({
+      left: Math.max(16, Math.min(window.innerWidth - 336, box.left + box.width / 2 - 160)),
+      top: above ? box.top - 6 : box.bottom + 6,
+      above,
+    });
+  }, []);
+  useEffect(() => {
+    if (!position) return;
+    const reposition = () => show();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [position, show]);
+  return <>
+    <button
+      ref={trigger}
       type="button"
       data-testid={testId}
       aria-describedby={tooltipId}
+      onMouseEnter={show}
+      onMouseLeave={() => setPosition(undefined)}
+      onFocus={show}
+      onBlur={() => setPosition(undefined)}
       className="inline-flex cursor-help items-center border-0 bg-transparent p-0 font-inherit text-inherit outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2"
-    >{children}</TooltipTrigger>
-    <TooltipContent id={tooltipId} role="tooltip" className="max-w-80 whitespace-normal text-left leading-relaxed" sideOffset={6}>{content}</TooltipContent>
-  </Tooltip>;
+    >{children}</button>
+    {position ? createPortal(<span
+      id={tooltipId}
+      role="tooltip"
+      className="bg-popover text-popover-foreground pointer-events-none fixed z-50 w-[calc(100vw-2rem)] max-w-80 rounded-md border px-3 py-1.5 text-left text-xs leading-relaxed whitespace-normal shadow-md"
+      style={{ left: position.left, top: position.top, transform: position.above ? "translateY(-100%)" : undefined }}
+    >{content}</span>, document.body) : null}
+  </>;
 }
 
 const PublicationPlot = dynamic(() => import("./publication-plot"), {
@@ -272,7 +303,7 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
         {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       </CardHeader>
       <CardContent>
-        {rows.length ? <TooltipProvider delay={250}><div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
+        {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
           { icon: Clock, label: "Время сохранённой точки, МСК" },
           { icon: Timer, label: "Между сохранёнными точками" },
           { icon: Activity, label: "Работа сборщика в интервале" },
@@ -305,7 +336,7 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
               {tableMetrics.map((metric) => <MetricCells key={metric.key} row={row} metric={metric} people={telegram && metric.key === "reactions"} />)}
               {showBreakdown ? <><td className="min-w-max"><Breakdown value={historyReactionEntries(row)} /></td><td className="min-w-max"><Breakdown value={historyReactionEntries(row,true)} delta /></td></> : null}</tr>;
           })}
-        </tbody></table></div></TooltipProvider> : <p className="text-muted-foreground py-6 text-center">Сохранённых точек ещё нет.</p>}
+        </tbody></table></div> : <p className="text-muted-foreground py-6 text-center">Сохранённых точек ещё нет.</p>}
       </CardContent>
     </Card>
   </>;
