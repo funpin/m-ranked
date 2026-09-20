@@ -63,13 +63,13 @@ test("chart activation selects the exact row and reveals an old collapsed point"
   const id=await selected.getAttribute("id");
   expect(Number(id!.replace("snapshot-",""))).toBeLessThan(160);
   await expect(selected).toBeInViewport();
-  await expect(selected.locator("button")).toBeFocused();
+  await expect(selected.getByTestId("snapshot-jump")).toBeFocused();
   // Keyboard activation uses the same reveal-and-scroll path after collapsing.
   await page.getByRole("button",{name:"свернуть историю"}).click();
   await expect(page.locator("tbody tr")).toHaveCount(100);
   await total.focus();await page.keyboard.press("Home");await page.keyboard.press("Enter");
   await expect(page.locator("#snapshot-1")).toBeInViewport();
-  await expect(page.locator("#snapshot-1 button")).toBeFocused();
+  await expect(page.locator("#snapshot-1").getByTestId("snapshot-jump")).toBeFocused();
 });
 
 test("publication hides the analyzer panel but preserves boundary rows for future redesign",async({page})=>{
