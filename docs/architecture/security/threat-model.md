@@ -3,7 +3,6 @@
 - Status: **Proposed**
 - Scope: целевая архитектура M-Ranked
 - Method: STRIDE + отдельные риски качества публичных данных
-- Diagram: [trust boundaries](threat-boundaries.puml)
 
 ## Цели безопасности
 

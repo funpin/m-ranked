@@ -50,7 +50,7 @@ frontend-тестами.
 - [модель и страницы](docs/REFERENCE.md);
 - [эксплуатация](docs/OPERATIONS.md);
 - [архитектура и ADR](docs/architecture/README.md);
-- [аудит production 2026-09-16](docs/audit/current-state.md);
+- [план перехода к двум профилям](docs/architecture/two-server-migration-plan.md);
 - [single/two-server topology](docs/architecture/deployment-topologies.md);
 - [raw transfer protocol](docs/architecture/raw-data-transfer.md);
 - [развёртывание](operations/runbooks/DEPLOY.md);

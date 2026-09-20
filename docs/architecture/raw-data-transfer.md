@@ -1,6 +1,12 @@
 # Raw data transfer protocol
 
-Дата: 2026-09-16 · commit `b242378` · статус `design draft; not implemented`
+Дата: 2026-09-16, пересмотрено 2026-09-20 · статус `design draft; not implemented`
+
+> Протокол принят как основа транспорта в [ADR-010](adr/ADR-010-deployment-profiles.md).
+> Два уточнения относительно исходного черновика: envelope везёт **канонические**
+> батчи, а не сырые payload'ы провайдеров, и тот же envelope применяется
+> in-process в однослужебном профиле. Реализуется в фазе P1
+> [плана перехода](two-server-migration-plan.md).
 
 ## Decision
 

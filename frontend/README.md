@@ -67,8 +67,7 @@ and does not require a running legacy server. Use Node 24 and the pinned pnpm;
 install Chromium once with `pnpm exec playwright install chromium`.
 
 The required real PostgreSQL/Spring comparison runs separately through
-`migration.integration.run --semantic-only`; see the
-[integration instructions](../migration/integration/README.md). It compares all
+`migration.integration.run --semantic-only`. It compares all
 overview statuses and resolves legacy destinations to their current canonical
 identities. Pixel parity with the removed Python UI is no longer an acceptance gate.
 The old CSS migration layer and `test:visual` runner have been removed.

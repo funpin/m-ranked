@@ -3,8 +3,6 @@
 - Status: **Proposed**
 - Date: 2026-09-02
 - Owners: backend / operations
-- Related: [target ERD](../erd/target-postgresql.puml),
-  [replication and backup](../views/replication-backup.puml)
 
 ## Context
 

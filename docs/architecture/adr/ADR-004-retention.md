@@ -3,8 +3,6 @@
 - Status: **Proposed**
 - Date: 2026-09-02
 - Owners: product / data / operations
-- Related: [data lifecycle](../views/data-lifecycle.mmd),
-  [replication and backup](../views/replication-backup.puml)
 
 ## Context
 

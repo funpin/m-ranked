@@ -3,8 +3,7 @@
 - Status: **Proposed**
 - Date: 2026-09-02
 - Owners: product / analytics / legal review
-- Related: [threat model](../security/threat-model.md),
-  [analytics components](../c4/06-components-analytics.puml)
+- Related: [threat model](../security/threat-model.md)
 
 ## Context
 

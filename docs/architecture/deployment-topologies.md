@@ -1,6 +1,11 @@
 # Deployment topologies
 
-Дата: 2026-09-16 · commit `b242378` · статус `draft; production current state read-only validated`
+Дата: 2026-09-16, пересмотрено 2026-09-20 · статус `superseded by ADR-010`
+
+> Черновик сохранён как описание текущего состояния и исходных замеров.
+> Принятая целевая топология — [ADR-010](adr/ADR-010-deployment-profiles.md),
+> порядок работ — [план перехода](two-server-migration-plan.md).
+> Там, где этот текст расходится с ADR-010, верен ADR-010.
 
 ## Один сервер
 

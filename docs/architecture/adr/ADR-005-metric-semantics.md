@@ -3,8 +3,6 @@
 - Status: **Proposed**
 - Date: 2026-09-02
 - Owners: data / analytics / product
-- Related: [target ERD](../erd/target-postgresql.puml),
-  [formula engine](../c4/09-code-formula-engine.puml)
 
 ## Context
 
