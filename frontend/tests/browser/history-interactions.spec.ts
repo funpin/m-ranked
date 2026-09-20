@@ -102,7 +102,16 @@ test("a long interval between saved changes is spaced by time without claiming c
   await expect(page.getByTestId("collector-gap-summary")).toContainText("подтверждённых пропусков в выбранном диапазоне нет");
   await expect(page.locator(".collector-gap")).toHaveCount(0);
   await expect(page.getByTestId("collector-covered-badge").first()).toHaveText("Сбор шёл");
-  await expect(page.getByTestId("snapshot-history-table")).toContainText("Успешных циклов: 732");
+  const longInterval=page.getByTestId("saved-point-interval").filter({hasText:"+2 д 13 ч"});
+  const longIntervalRow=longInterval.locator("..").locator("..");
+  await expect(longInterval).toHaveText("+2 д 13 ч");
+  await expect(longIntervalRow).not.toContainText("между точками");
+  await expect(longIntervalRow).not.toContainText("Успешных циклов:");
+  expect((await longIntervalRow.boundingBox())!.height).toBeLessThan(45);
+  await longInterval.hover();
+  await expect(page.getByRole("tooltip").filter({hasText:"Это не простой: опросы без изменений не сохраняются"})).toBeVisible();
+  await longIntervalRow.getByTestId("collector-status-trigger").hover();
+  await expect(page.getByRole("tooltip").filter({hasText:"успешных циклов — 732, с ошибкой — 0"})).toBeVisible();
   await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
   // Neighbouring samples across the break are placed far apart, not side by
   // side: the plotted geometry leaves a wide horizontal stretch between two

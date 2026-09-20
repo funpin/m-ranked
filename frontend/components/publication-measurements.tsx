@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Clock, Eye, Heart, Hourglass, MessageCircle, Share2, Smile, Timer, Users, type LucideIcon } from "lucide-react";
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
@@ -53,6 +54,20 @@ function ColumnHead({ icon: Icon, label, delta = false, align = "text-center" }:
       </span>
     </th>
   );
+}
+
+function InlineHint({ children, content, testId }: { children: ReactNode; content: ReactNode; testId: string }) {
+  const tooltipId = useId();
+  return <Tooltip>
+    <TooltipTrigger
+      closeOnClick={false}
+      type="button"
+      data-testid={testId}
+      aria-describedby={tooltipId}
+      className="inline-flex cursor-help items-center border-0 bg-transparent p-0 font-inherit text-inherit outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2"
+    >{children}</TooltipTrigger>
+    <TooltipContent id={tooltipId} role="tooltip" className="max-w-80 whitespace-normal text-left leading-relaxed" sideOffset={6}>{content}</TooltipContent>
+  </Tooltip>;
 }
 
 const PublicationPlot = dynamic(() => import("./publication-plot"), {
@@ -257,7 +272,7 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
         {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       </CardHeader>
       <CardContent>
-        {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
+        {rows.length ? <TooltipProvider delay={250}><div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
           { icon: Clock, label: "Время сохранённой точки, МСК" },
           { icon: Timer, label: "Между сохранёнными точками" },
           { icon: Activity, label: "Работа сборщика в интервале" },
@@ -286,11 +301,11 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
                 selected && "bg-chart-3/20 shadow-[inset_4px_0_var(--chart-3)]",
               )}
               title={`${row.quality}${row.intervalUncertain ? " · интервал неопределён" : ""}${boundary?" · граница сигнала":""}`}
-            ><td><button type="button" data-testid="snapshot-jump" className={cn("bg-transparent underline underline-offset-2", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground", boundary && "font-black decoration-double")} title="Показать эту точку на графике" onClick={() => jump(row.snapshotId)}>{legacyDate(row.observedAt)}{boundary?<span className="sr-only">, граница сигнала аномальной динамики</span>:null}</button></td><td className="tabular text-right"><span className="block">{signedDuration(elapsed)}</span>{elapsed === null ? null : <span className="text-muted-foreground block text-[11px]">между точками</span>}</td><CollectorIntervalCell row={row} coverage={collectorCoverage} /><td className="tabular text-right">{row.synthetic ? "момент публикации" : duration(row.ageHours*3600)}</td>
+            ><td><button type="button" data-testid="snapshot-jump" className={cn("bg-transparent underline underline-offset-2", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground", boundary && "font-black decoration-double")} title="Показать эту точку на графике" onClick={() => jump(row.snapshotId)}>{legacyDate(row.observedAt)}{boundary?<span className="sr-only">, граница сигнала аномальной динамики</span>:null}</button></td><td className="tabular text-right">{elapsed === null ? signedDuration(elapsed) : <InlineHint testId="saved-point-interval" content="Интервал между сохранёнными изменениями. Это не простой: опросы без изменений не сохраняются.">{signedDuration(elapsed)}</InlineHint>}</td><CollectorIntervalCell row={row} coverage={collectorCoverage} /><td className="tabular text-right">{row.synthetic ? "момент публикации" : duration(row.ageHours*3600)}</td>
               {tableMetrics.map((metric) => <MetricCells key={metric.key} row={row} metric={metric} people={telegram && metric.key === "reactions"} />)}
               {showBreakdown ? <><td className="min-w-max"><Breakdown value={historyReactionEntries(row)} /></td><td className="min-w-max"><Breakdown value={historyReactionEntries(row,true)} delta /></td></> : null}</tr>;
           })}
-        </tbody></table></div> : <p className="text-muted-foreground py-6 text-center">Сохранённых точек ещё нет.</p>}
+        </tbody></table></div></TooltipProvider> : <p className="text-muted-foreground py-6 text-center">Сохранённых точек ещё нет.</p>}
       </CardContent>
     </Card>
   </>;
@@ -301,13 +316,16 @@ function CollectorIntervalCell({ row, coverage }: { row: HistorySnapshot; covera
   if (!interval) return <td className="text-muted-foreground min-w-44 !whitespace-normal">Нет предыдущей точки</td>;
   const state = collectorIntervalCoverage(coverage, interval.from, interval.to);
   if (state.kind === "unknown") return <td className="text-muted-foreground min-w-44 !whitespace-normal">Журнал циклов недоступен</td>;
-  return <td className="min-w-44 !whitespace-normal">
-    {state.kind === "gap"
+  const summary = state.kind === "gap"
+    ? `Подтверждённый пропуск: ${duration(state.missingSeconds)}. В остальное время сбор шёл.`
+    : "Сбор шёл; промежуточные опросы без изменений не сохранялись.";
+  return <td className="min-w-44 !whitespace-normal"><InlineHint
+    testId="collector-status-trigger"
+    content={`${summary} За интервал: успешных циклов — ${interval.successfulPolls}, с ошибкой — ${interval.failedPolls}.`}
+  >{state.kind === "gap"
       ? <Badge variant="destructive" data-testid="collector-gap-badge">Пропуск {duration(state.missingSeconds)}</Badge>
       : <Badge variant="secondary" data-testid="collector-covered-badge">Сбор шёл</Badge>}
-    <span className="text-muted-foreground mt-1 block text-[11px] tabular">Успешных циклов: {interval.successfulPolls}</span>
-    {interval.failedPolls ? <span className="text-destructive mt-0.5 block text-[11px] tabular">С ошибкой: {interval.failedPolls}</span> : null}
-  </td>;
+  </InlineHint></td>;
 }
 
 function MetricCells({ row,metric,people }: {row:HistorySnapshot;metric:Metric;people:boolean}) {
