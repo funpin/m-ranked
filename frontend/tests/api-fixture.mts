@@ -50,7 +50,7 @@ function item(id: number, platform: Schema["PlatformValue"]): Schema["OverviewRo
 }
 function statisticsEntity(id: number, platform: "telegram" | "vk" | "max" | "rutube"): Schema["StatisticsEntity"] {
   return { rank:id, legacyRoute:`/institutions/${id}`, accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id), institutionId:uuid(9,id), institutionLegacyId:id,
-    canonicalName:`Университет ${String(id).padStart(3,"0")}`,shortName:null,platform,publicationCount:20,
+    canonicalName:`Полное название университета ${String(id).padStart(3,"0")}`,shortName:`Вуз ${String(id).padStart(3,"0")}`,platform,publicationCount:20,
     interactionSampleSize:20,viewSampleSize:20,ervSampleSize:20,medianInteractions:id,
     interactions:id*20,views:id*200,erv:id===2?null:10 };
 }
@@ -59,7 +59,7 @@ function statisticsPublication(id:number,platform:"telegram"|"vk"|"max"|"rutube"
   return {rank:id,publicationId:uuid(7,id),platform,legacyId:id,legacyType:type,legacyRoute:`/${type}/${id}`,
     institutionId:uuid(9,id),institutionLegacyId:id,institutionCanonicalName:`Полное название университета ${String(id).padStart(3,"0")}`,
     institutionShortName:`Вуз ${String(id).padStart(3,"0")}`,accountId:uuid(2,id),accountLegacyId:id,accountUsername:`fixture_${id}`,
-    accountTitle:`Аккаунт ${id}`,accountExternalId:`external-${id}`,externalId:String(id),
+    accountTitle:`Аккаунт ${id}`,accountExternalId:`external-${id}`,externalId:platform==="vk"?`№${id}`:String(id),
     publicUrl:`https://example.test/${platform}/${id}`,publishedAt:"2026-07-01T00:00:00Z",deletedAt:null,
     joint:false,additionalAuthorCount:0,repost:false,views:id===2?0:id*100,reactions:id,comments:platform==="max"?null:0,
     shares:platform==="vk"?0:null,interactions:id,erv:id===2?null:1,interactionsAvailable:true,ervEligible:id!==2};
