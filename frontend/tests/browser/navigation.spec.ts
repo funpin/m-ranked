@@ -58,6 +58,8 @@ test.describe("без JavaScript", () => {
     test.skip(info.project.name === "mobile", "гамбургер требует скриптов; на узком экране меню недоступно без них");
     await page.goto("/?platform=telegram");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Исходный код на GitHub" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Тема:/ })).toBeVisible();
 
     await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
     await expect(page).toHaveURL(/\/statistics\?platform=telegram/);

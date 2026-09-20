@@ -3,6 +3,7 @@ import { queryHref } from "@/lib/params";
 import type { Platform } from "@/lib/types";
 import logo from "../assets/logo.png";
 import { NAV_LINKS } from "@/lib/nav-links";
+import { HeaderUtilityActions } from "@/components/header-utility-actions";
 
 /**
  * Серверная половина шапки.
@@ -39,6 +40,7 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
           </Link>
         ))}
       </div>
+      <HeaderUtilityActions />
     </nav>
   );
 }
