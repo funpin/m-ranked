@@ -27,7 +27,12 @@ export const metadata: Metadata = {
   },
   description: "Сравнение активности, охвата и качества данных официальных соцсетей российских вузов.",
   icons: {
-    icon: [{ url: logoMarkDark.src, type: "image/svg+xml" }],
+    icon: [
+      { url: logoMarkDark.src, type: "image/svg+xml" },
+      { url: "/icons/favicon-32.png?v=20260921", type: "image/png", sizes: "32x32" },
+    ],
+    shortcut: [{ url: "/icons/favicon-32.png?v=20260921", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png?v=20260921", type: "image/png", sizes: "180x180" }],
   },
   openGraph: {
     type: "website",
