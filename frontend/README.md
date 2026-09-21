@@ -14,8 +14,9 @@ Light, dark and system preferences share the existing `data-theme` contract.
 - `API_BASE_URL` is the server-only Spring origin (default `http://127.0.0.1:8080`).
 - `SITE_ORIGIN` controls absolute metadata and defaults to `https://m.funpin.org`; HTTPS origin only.
 - Public reads use the generated `openapi-fetch` transport. `pnpm generate:api` regenerates types from `contracts/openapi/m-ranked-v1.yaml`; `pnpm check:api` fails on any schema/hash/output drift.
-- Every public Next cache selection first reads `/api/v1/revision` with `no-store`. Cache keys include origin, endpoint, complete canonical query, published PG revision and API representation version. A revision race cannot populate the earlier cache key. This is authoritative revision validation; it does not claim delivery of a Pub/Sub invalidation event to Next.
-- `NEXT_PUBLIC_DATA_CACHE=disabled` bypasses the Next data cache and retains HTTP ETag revalidation. Admin/auth/exports are excluded from both public Next cache keys and SSR credentials.
+- Each public freshness window samples `/api/v1/revision` with `no-store`; concurrent reads share that authoritative state. Cache keys include origin, endpoint, complete canonical query, published PG revision and API representation version. A revision race cannot populate the earlier cache key. This is authoritative revision validation; it does not claim delivery of a Pub/Sub invalidation event to Next.
+- Public representations use a process-local TTL/LRU, not Next's persistent `unstable_cache`. Defaults are 10 seconds, 128 entries and 16 MiB; `NEXT_PUBLIC_DATA_CACHE_TTL_MS`, `NEXT_PUBLIC_DATA_CACHE_MAX_ENTRIES` and `NEXT_PUBLIC_DATA_CACHE_MAX_BYTES` may lower or raise those explicit bounds. Concurrent misses for one key are coalesced. Restart, deploy and rollback intentionally start cold.
+- `NEXT_PUBLIC_DATA_CACHE=disabled` bypasses the public response LRU and retains HTTP ETag revalidation. Admin/auth/exports are excluded from both public cache keys and SSR credentials.
 - `NEXT_DIST_DIR=.next-review-local` isolates a development server from the normal build/test directory. Production uses `output: standalone`; copy `.next/static` beside its server.
 
 ## Canonical detail routing
