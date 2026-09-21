@@ -2064,6 +2064,7 @@ components:
       - username
       - title
       - url
+      - archiveUrl
       - accessMode
       - enabled
       - rowVersion
@@ -3745,6 +3746,12 @@ components:
           - string
           - 'null'
           format: uri
+        archiveUrl:
+          type:
+          - string
+          - 'null'
+          format: uri
+          description: Public archive or analytics page for this account when one is available.
         accessMode:
           type: string
         enabled:

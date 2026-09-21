@@ -105,7 +105,8 @@ SELECT account.id AS account_id, canonical.legacy_id, canonical.entity_type,
        institution.id AS institution_id, institution_alias.legacy_id AS institution_legacy_id,
        institution.canonical_name, institution.short_name, account.platform::text AS platform,
        account.canonical_external_id, account.current_username, account.current_title,
-       account.current_url, account.access_mode::text AS access_mode, account.enabled,
+       account.current_url, native.external_id AS native_external_id,
+       account.access_mode::text AS access_mode, account.enabled,
        (SELECT count(*) FROM ingest.visible_publication publication
          WHERE publication.primary_account_id=account.id) AS publication_count,
        (SELECT snapshot.observed_at FROM ingest.account_metric_snapshot_active snapshot
@@ -126,6 +127,14 @@ SELECT account.id AS account_id, canonical.legacy_id, canonical.entity_type,
          AND alias.entity_type=CASE WHEN account.platform='telegram' THEN 'channels' ELSE 'platform_accounts' END
        ORDER BY alias.legacy_id LIMIT 1) canonical ON true
   LEFT JOIN aliases ON aliases.target_uuid=account.id
+  LEFT JOIN LATERAL (
+      SELECT identity.external_id
+        FROM catalog.account_external_identity identity
+       WHERE identity.platform_account_id=account.id
+         AND identity.identity_namespace=account.platform::text||':native_id'
+         AND identity.valid_to IS NULL
+       ORDER BY identity.verified_at DESC NULLS LAST,identity.id DESC
+       LIMIT 1) native ON true
 """
 
 
