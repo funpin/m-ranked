@@ -8,6 +8,12 @@ encrypted repository outside the primary failure domain, use separate
 archive/backup/restore SSH identities, pin host keys and deny interactive
 shells.
 
+Install `/etc/m-ranked/backup.env` and `restore-verify.env` from their examples;
+install `dump-backup.env` only for the fallback dump timer below. The two
+pgBackRest config credentials and every other credential format are inventoried
+in [`operations/env/CREDENTIALS.md`](../env/CREDENTIALS.md); never put repository
+keys or database passwords into these EnvironmentFile examples.
+
 PostgreSQL must archive WAL continuously with `archive_timeout=15min`.
 Enable daily, weekly and monthly backup timers plus daily restore verification:
 

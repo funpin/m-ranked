@@ -1,0 +1,4 @@
+[Service]
+# Render exact Server 1 hosts and/or the narrow managed VPN prefix. Keep the
+# base IPAddressDeny=any; never replace this with an entire private range.
+IPAddressAllow=192.0.2.10/32

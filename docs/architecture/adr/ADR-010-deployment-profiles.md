@@ -3,7 +3,7 @@
 - Status: **Accepted**
 - Date: 2026-09-20
 - Дополняет: [ADR-001](ADR-001-modular-monolith.md), [ADR-007](ADR-007-live-bounded-reads.md)
-- Реализация: P0–P1 завершены для профиля A; см. [план перехода](../two-server-migration-plan.md)
+- Реализация: P0–P2 завершены локально; production-переезд не выполнен; см. [план перехода](../two-server-migration-plan.md)
 
 ## Context
 

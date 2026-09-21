@@ -108,7 +108,7 @@ Transfer troubleshooting:
   `ERRCODE 55000`. A publication inside the tracking window therefore keeps all
   of its history, which is what `metric_ever_positive` needs.
 
-Response cache (profile B; local implementation and deployment only until P2.4):
+Response cache (profile B; units готовы, production activation всё ещё отдельный rollout):
 
 - `mranked_api_cache_requests_total{backend,worker,result="hit|miss|stale"}` is
   summed across the per-PID API textfiles. Alert when

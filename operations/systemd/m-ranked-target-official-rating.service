@@ -9,9 +9,16 @@ Type=oneshot
 User=m-ranked-api
 Group=m-ranked-api
 WorkingDirectory=/opt/m-ranked/current
-# Учётные данные базы лежат в том же файле окружения, что и у самого API:
-# отдельного пароля этому заданию не нужно.
-EnvironmentFile=/etc/m-ranked/api-python.env
+# Использует тот же API config и те же credential-файлы, не отдельную копию
+# секрета в EnvironmentFile.
+EnvironmentFile=/etc/m-ranked/api.env
+EnvironmentFile=-/etc/m-ranked/api-profile.env
+LoadCredential=api-read-db-password:/etc/m-ranked/credentials/api-read-db-password
+LoadCredential=api-write-admin-db-password:/etc/m-ranked/credentials/api-write-admin-db-password
+LoadCredential=outbox-worker-db-password:/etc/m-ranked/credentials/outbox-worker-db-password
+Environment=API_READ_DB_PASSWORD_FILE=%d/api-read-db-password
+Environment=API_WRITE_ADMIN_DB_PASSWORD_FILE=%d/api-write-admin-db-password
+Environment=OUTBOX_WORKER_DB_PASSWORD_FILE=%d/outbox-worker-db-password
 Environment=TZ=UTC
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/m-ranked/current/.venv/bin/python -m api.tools.refresh_official_rating

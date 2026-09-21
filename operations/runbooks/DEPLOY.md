@@ -8,6 +8,118 @@
 отдельных команд: почти каждый отказ выкатки — это правильная команда, сделанная
 не в свой момент.
 
+Этот документ описывает процедуру, но не разрешает её выполнять. Production
+backup/restore, выдача credentials и сертификатов, firewall, переключение
+транспорта или трафика и обрезка требуют отдельных разрешений владельцев.
+
+## Профили и один набор units
+
+- **A, один хост:** `m-ranked-target.target` — API, web, четыре collector
+  instance, slice, watchdog, cache GC, anomaly, maintenance, official rating и
+  overview metrics. Файлов `api-profile.env` и `collector-profile.env` нет;
+  остаются `API_DEPLOYMENT_PROFILE=a`, in-process LRU и transfer.
+- **B, Сервер 1:** `m-ranked-target-profile-b-server1.target` — четыре
+  collector instance, общий slice и watchdog. Установлен
+  `collector-profile.env` из `collector-profile-b.env.example`.
+- **B, Сервер 2:** `m-ranked-target-profile-b-server2.target` — API, web,
+  cache GC, transfer-ingest, cache warmer, Redis, anomaly, maintenance,
+  official rating и overview metrics. Установлен `api-profile.env` из
+  `api-profile-b.env.example`.
+
+Base service-файлы не копируются по профилям. Отличия B — два env overlay и
+drop-in из `operations/systemd/profile-b-server{1,2}`. Одновременно включать
+target A и target B на одном хосте нельзя.
+
+Перед установкой статически проверьте контракт:
+
+```bash
+operations/scripts/check-runtime-config.py
+operations/scripts/check-doc-links.py
+```
+
+Полный перечень файлов и форматов секретов находится в
+[`operations/env/CREDENTIALS.md`](../env/CREDENTIALS.md). Каждый
+`EnvironmentFile=` создаётся из одноимённого `.example`; placeholder заменяют
+на хосте, а сам пример не превращают в хранилище секрета.
+
+## Установка профиля A
+
+1. Создайте отдельных непривилегированных users из `User=`/`Group=` units и
+   каталоги состояния с владельцем конкретной службы. Node exporter textfile
+   directory доступен на запись только через группу `node-exporter`.
+2. Установите все базовые `operations/systemd/m-ranked-target-*`, без каталогов
+   `profile-b-*`. Установите scripts неизменяемо внутри release.
+3. Создайте `/etc/m-ranked/{api,web,web-cache-gc,collector-common,collector-telegram,collector-vk,collector-max,collector-rutube,collector-watchdog,anomaly-analysis,maintenance,overview-metrics}.env`
+   из примеров. Не создавайте profile overlays. Установите credentials API,
+   collectors, anomaly и maintenance из реестра.
+4. Проверьте `COLLECTOR_TRANSFER_MODE=in-process`, оба deployment profile `a`
+   и `COLLECTOR_WORKING_SET_RETENTION=off`.
+5. Выполните `systemctl daemon-reload`, затем
+   `systemctl enable --now m-ranked-target.target`. Backup/restore timers
+   включаются отдельно по `BACKUP_RESTORE.md`.
+
+## Установка профиля B
+
+### Общие сертификаты и сеть
+
+Выдайте отдельный client certificate каждому Серверу 1. CN должен совпадать с
+`COLLECTOR_TRANSFER_PRODUCER_ID` или его ведущим сегментом; server certificate
+содержит внутреннее DNS-имя/IP Сервера 2. Установите PEM через
+`LoadCredential`, с 30-дневным overlap при ротации. Private key никогда не
+кладётся в env.
+
+На Сервере 2 ingest слушает только внутренний/VPN адрес. Host firewall
+разрешает TCP 8443 только точным адресам Серверов 1 или узкой управляемой VPN
+подсети и отклоняет всё остальное. После firewall отрендерите
+`profile-b-server2/.../20-ingest-network.conf.example` теми же CIDR. Сначала
+проверьте правила из существующей административной сессии и только потом
+применяйте; не открывайте 8443 в public interface.
+
+Collector unit сохраняет запрет `10/8`, `172.16/12`, `192.168/16`, CGNAT,
+link-local и ULA. В профиле B отрендерите его drop-in с **точным** адресом
+Сервера 2 (`/32` или `/128`). Более длинный allow prefix выигрывает у общего
+private-range deny, не открывая collector'у остальную внутреннюю сеть.
+
+### Сервер 1
+
+1. Установите collector service, slice, watchdog service/timer и target B S1.
+2. Создайте обычные collector env, затем `/etc/m-ranked/collector-profile.env`
+   из `collector-profile-b.env.example`; retention оставьте `off`.
+3. Установите collector DB/platform credentials и три mTLS credentials. Скопируйте
+   отрендеренный drop-in в
+   `/etc/systemd/system/m-ranked-target-collector@.service.d/20-transfer-network.conf`.
+4. Выполните `systemctl daemon-reload` и пока не запускайте collectors до
+   готовности receiver, если это миграция с профиля A.
+
+### Сервер 2, Redis и presentation
+
+1. Установите Redis из доверенного пакетного репозитория, отключите vendor
+   service и используйте только `m-ranked-target-redis.service`. Скопируйте
+   `operations/redis/m-ranked.conf` в `/etc/m-ranked/redis.conf`. Он слушает
+   только loopback, не хранит persistence, ограничен 256 MiB data / 320 MiB
+   cgroup и перезапускается только при failure. Redis — воспроизводимый cache,
+   не источник данных.
+2. Создайте случайный пароль один раз; из шаблонов подготовьте `redis.acl` и
+   `redis-url` с одинаковым значением, mode 0600. ACL ограничена namespace
+   `mranked:response:v1:*` и минимальным набором команд.
+3. Создайте env API/web/cache GC/ingest/anomaly/maintenance/overview и
+   `/etc/m-ranked/api-profile.env`. В `transfer-ingest.env` замените
+   documentation IP на внутренний bind. Установите все credentials из реестра.
+4. Установите target B S2, новые Redis/receiver/warmer units, базовые units и
+   API Redis drop-in. Отрендерите ingest network drop-in. Создайте users
+   `m-ranked-redis`, `m-ranked-transfer-ingest`, `m-ranked-cache-warmup` и их
+   точные runtime/textfile directories.
+5. Запускайте по слоям: Redis; transfer-ingest; API; web; cache warmer; затем
+   analysis/timers. После каждой ступени проверяйте журнал и метрики. Итоговый
+   target можно включить только после этих smoke checks.
+
+API unit не содержит `After=` или `Requires=` Redis: target лишь `Wants=` cache.
+При падении Redis API остаётся active, считает Redis error и строит ответ из
+PostgreSQL. Cache warmer — один долгоживущий process с
+`API_CACHE_WARMUP_INTERVAL_SECONDS`; отдельного timer нет, поэтому два
+пересекающихся прогрева не возникают. Он обращается только к loopback API и не
+получает DB/Redis credentials.
+
 ## 0. Преflight на своей машине
 
 ```bash
@@ -230,6 +342,18 @@ for platform in telegram vk max rutube; do
 done
 ```
 
+Для `phased` после проверки режима допустим один одновременный вызов:
+
+```bash
+systemctl restart m-ranked-target-collector@telegram.service \
+  m-ranked-target-collector@vk.service m-ranked-target-collector@max.service \
+  m-ranked-target-collector@rutube.service
+```
+
+`TimeoutStopSec=60s` оставляет 45 секунд на
+`COLLECTOR_SHUTDOWN_GRACE_SECONDS` и ещё 15 секунд на закрытие соединений и
+textfile. Если grace меняется, stop timeout должен оставаться строго больше.
+
 Первое включение phased scheduler выполняется expand/contract:
 
 1. Установить `COLLECTOR_SCHEDULE_MODE=shadow` на одном instance и проверить
@@ -247,11 +371,11 @@ done
 Выкатка не закончена, пока всё это не ответило:
 
 ```bash
-systemctl is-active m-ranked-target-api-python m-ranked-target-web
+systemctl is-active m-ranked-target-api m-ranked-target-web
 systemctl is-active m-ranked-target-web-cache-gc.timer
 journalctl -u m-ranked-target-web-cache-gc.service -n 20 --no-pager
 du -sh /var/lib/m-ranked/web-cache
-curl -fsS http://127.0.0.1:18080/api/v1/health/live
+curl -fsS http://127.0.0.1:8080/api/v1/health/live
 curl -fsS http://127.0.0.1:8080/api/v1/health/ready
 curl -fsS http://127.0.0.1:8080/api/v1/health/freshness
 # публичные страницы и публичный API — снаружи, не с петли
@@ -261,7 +385,7 @@ curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/api/v1/statisti
 test "$(curl -sS -o /dev/null -w '%{http_code}' 'https://m.funpin.org/rating')" = 404
 test "$(curl -sS -o /dev/null -w '%{http_code}' 'https://m.funpin.org/api/v1/rating')" = 404
 curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/'
-journalctl -u m-ranked-target-api-python --since '-5 min' --no-pager | tail -30
+journalctl -u m-ranked-target-api --since '-5 min' --no-pager | tail -30
 ```
 
 Затем вход в админку целиком — он проверяет и сессии, и миграцию:
@@ -307,6 +431,119 @@ journalctl -u m-ranked-target-api -n 100 --no-pager
 Откат — переключение симлинка на предыдущий релиз и перезапуск тех же служб.
 Миграция при этом остаётся применённой: прямые изменения схемы пишутся
 совместимыми с предыдущим релизом именно ради этого.
+
+## 10. Живой переезд A → B
+
+Все значения курсоров, checksums, counts, время и operator identity сохраняются
+в change record. На всём пути до шага 10 retention остаётся `off`; Сервер 1
+остаётся полной и пригодной для чтения копией.
+
+1. **Проверить откат и Сервер 2.** Проверить свежую backup и изолированное
+   восстановление профиля A. Установить Сервер 2 как описано выше, но внешний
+   трафик и receiver пока не включать. Сверить schema contract и миграции.
+2. **Зафиксировать один DB snapshot и точный outbox cursor.** В первой psql
+   сессии на Сервере 1 открыть read-only transaction и не закрывать её до конца
+   `pg_dump`:
+
+   ```sql
+   BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
+   SELECT pg_export_snapshot() AS snapshot_id,
+          (SELECT coalesce(max(cursor), 0)
+             FROM ops_and_admin.transfer_outbox) AS snapshot_cursor
+   \gset migration_
+   \echo snapshot=:migration_snapshot_id cursor=:migration_snapshot_cursor
+   ```
+
+   Во второй сессии выполнить `pg_dump -Fc --snapshot=<snapshot_id>` и записать
+   SHA-256 dump. Только после успешного dump завершить первую transaction
+   `COMMIT`. Snapshot id и `snapshot_cursor` записать дословно; повторный dump —
+   это новый snapshot и новый cursor, их нельзя смешивать.
+3. **Восстановить Сервер 2.** Передать dump по утверждённому защищённому каналу,
+   проверить SHA-256, восстановить в пустую ReadyDB и сверить contract, row
+   counts, `dataset_revision`, outbox/inbox и snapshot cursor. Старый профиль A
+   продолжает собирать и обслуживать пользователей.
+4. **Открыть только transport.** Применить firewall, ingest systemd allowlist и
+   mTLS credentials. Запустить Redis и `m-ranked-target-transfer-ingest` на
+   Сервере 2. Проверить refusal без client cert, refusal чужого producer и
+   успешный совместимый smoke утверждённым client cert.
+5. **Остановить producer на короткую границу.** Отключить автозапуск target A,
+   затем остановить четыре collectors на Сервере 1: в legacy по одному с
+   паузой, в phased одновременно. API/web профиля A остаются живыми. Дождаться
+   bounded shutdown и записать `final_cursor=max(cursor)`, counts по state и
+   отсутствие незавершённой collect transaction.
+6. **Переоткрыть хвост после snapshot.** Строки `cursor <= snapshot_cursor` уже
+   находятся в восстановленной DB. В С1 сначала убедиться, что после границы
+   нет `terminal`; terminal batch блокирует миграцию. Затем в просмотренной
+   operator transaction вернуть только хвост в доставляемое состояние. Открыть
+   psql с `--set snapshot_cursor=<зафиксированный snapshot_cursor>`:
+
+   ```sql
+   BEGIN;
+   SELECT state, count(*), min(cursor), max(cursor)
+     FROM ops_and_admin.transfer_outbox
+    WHERE cursor > :'snapshot_cursor'
+    GROUP BY state ORDER BY state;
+   -- Продолжать только если terminal отсутствует и counts совпали с change record.
+   UPDATE ops_and_admin.transfer_outbox
+      SET state='sealed', sent_at=NULL, acknowledged_at=NULL,
+          ack_receipt_id=NULL, ack_checksum=NULL, last_error_code=NULL,
+          available_at=transaction_timestamp(),
+          attempt_window_started_at=NULL, attempt_window_count=0
+    WHERE cursor > :'snapshot_cursor' AND state <> 'terminal';
+   COMMIT;
+   ```
+
+   Это осознанный одноразовый replay границы: не редактировать строки до
+   snapshot и не менять payload, checksum, batch id, producer id или cursor.
+7. **Переключить collectors на HTTPS+mTLS.** Установить profile B overlay и
+   collector network/credential drop-in, retention всё ещё `off`. Запустить
+   target B S1. Дренаж идёт oldest-first; потерянный ACK безопасно повторяет тот
+   же batch, а DataAdapter дедуплицирует его.
+8. **Догнать хвост.** До переключения чтения должны одновременно выполняться:
+   S1 `last_acknowledged_cursor = final_cursor`, S2
+   `last_applied_cursor = final_cursor`, backlog равен нулю, quarantined и
+   unaccounted равны нулю, checksums/counts совпадают. Наблюдать ещё минимум
+   один обычный цикл каждой платформы.
+9. **Переключить presentation traffic.** Запустить и проверить API, web,
+   Redis/warmup, anomaly и timers на Сервере 2. Переключить upstream/DNS/nginx
+   на С2, проверить public, admin, freshness, p95 и DB load. Затем остановить
+   presentation units на С1, но не удалять их данные, env, release или cert.
+10. **Стабилизация и dry-run retention.** После согласованного окна наблюдения
+    поставить `COLLECTOR_WORKING_SET_RETENTION=dry-run`, перезапустить collectors
+    по правилам scheduler mode и сохранить список candidate/deferred months.
+    Сверить каждый candidate с ACK/applied cursor, tracking window, backup и
+    capacity; dry-run ничего не удаляет.
+
+    ```sql
+    SELECT months.published_month,
+           ops_and_admin.collector_working_set_month_releasable(
+               months.published_month, 960) AS releasable
+      FROM (SELECT DISTINCT published_month
+              FROM ingest.publication_metric_snapshot) AS months
+     ORDER BY months.published_month;
+    ```
+
+    Значение `960` должно буквально совпадать с просмотренным
+    `TRACK_POST_FOR_HOURS`, а вывод прикладывается к отдельному approval шага 11.
+11. **Отдельное необратимое подтверждение.** Только новым явным разрешением
+    владельца данных поставить retention `on`. Изменение конфигурации ещё можно
+    отменить; **первый фактически dropped monthly partition — единственная
+    точка невозврата**. После неё возврат profile A требует восстановления
+    полной истории из Сервера 2/backup, а не обратного переключения env.
+
+### Порядок production-разрешений
+
+Разрешения выдаются отдельно и в таком порядке: (1) backup и проверенное
+restore/provisioning; (2) выпуск и установка DB/Redis/mTLS credentials; (3)
+firewall и точные systemd IP allowlist; (4) snapshot/cursor и SQL переоткрытия
+хвоста; (5) transport switch; (6) traffic/DNS/nginx switch; (7) retention
+dry-run и review; (8) отдельное необратимое разрешение на `on` и первый drop.
+Предыдущее разрешение не подразумевает следующее.
+
+API master перед каждым стартом удаляет только
+`m-ranked-api-cache-*.prom` из provisioned textfile directory. Так PID-файлы
+погибших workers не удваивают cache counters после restart; security, warmup и
+чужие `.prom` не затрагиваются.
 
 ## Что ещё читать
 

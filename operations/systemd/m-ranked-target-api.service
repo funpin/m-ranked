@@ -8,8 +8,10 @@ Wants=network-online.target
 Type=simple
 User=m-ranked-api
 Group=m-ranked-api
+SupplementaryGroups=node-exporter
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/api.env
+EnvironmentFile=-/etc/m-ranked/api-profile.env
 LoadCredential=api-read-db-password:/etc/m-ranked/credentials/api-read-db-password
 LoadCredential=api-write-admin-db-password:/etc/m-ranked/credentials/api-write-admin-db-password
 LoadCredential=outbox-worker-db-password:/etc/m-ranked/credentials/outbox-worker-db-password
@@ -24,7 +26,10 @@ Environment=MRANKED_IDENTITY_RECEIPT_DIR=/var/lib/m-ranked/identity-receipts
 Environment=MRANKED_SECURITY_METRICS_FILE=/var/lib/node_exporter/textfile_collector/m-ranked-api-security.prom
 Environment=PYTHONUNBUFFERED=1
 Environment=TZ=UTC
-ExecStart=/opt/m-ranked/current/.venv/bin/python -m api
+# A crashed worker leaves a PID-named Prometheus textfile. The next API master
+# removes every stale worker file before it starts publishing a fresh set.
+ExecStartPre=/usr/bin/find /var/lib/node_exporter/textfile_collector -maxdepth 1 -type f -name m-ranked-api-cache-*.prom -delete
+ExecStart=/opt/m-ranked/current/operations/scripts/run-api.sh
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=90s

@@ -1,0 +1,11 @@
+[Service]
+# Render this example with the exact Server 2 host address. systemd chooses the
+# longest prefix, so /32 or /128 wins over the base private-range deny without
+# reopening the rest of RFC1918/ULA space.
+IPAddressAllow=192.0.2.20/32
+LoadCredential=transfer-client-certificate:/etc/m-ranked/credentials/transfer-client.crt
+LoadCredential=transfer-client-private-key:/etc/m-ranked/credentials/transfer-client.key
+LoadCredential=transfer-ca:/etc/m-ranked/credentials/transfer-ca.crt
+Environment=COLLECTOR_TRANSFER_CLIENT_CERTIFICATE=%d/transfer-client-certificate
+Environment=COLLECTOR_TRANSFER_PRIVATE_KEY=%d/transfer-client-private-key
+Environment=COLLECTOR_TRANSFER_CA_BUNDLE=%d/transfer-ca

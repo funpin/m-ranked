@@ -18,7 +18,7 @@
 | приёмник `transfer_ingest`, HTTPS + mTLS, привязка `producer_id` к сертификату | реализовано (P2.1) |
 | экспоненциальный backoff с полным jitter, окно 20 попыток в час | реализовано (P2.1) |
 | ретенция после ACK, метрики и алерты обеих сторон | реализовано |
-| пороги диска 70/80/90 %, приостановка низкоприоритетного сбора | не реализовано, P2.2 |
+| пороги диска 70/80/90 %, приостановка низкоприоритетного сбора | реализовано (P2.2) |
 | replay в отдельное пространство имён outbox | не реализовано, P4 |
 
 ## Decision
@@ -139,6 +139,7 @@ idempotent application through the one repository path, oldest-first retry, ACK
 deduplication, ACK-only retention, Profile A in-process transport, metrics and alerts.
 
 The HTTPS+mTLS sender validates its HTTPS endpoint, requires client certificate/key/CA,
-uses TLS verification and 3/30/30 second bounds. P2 still owns the HTTP receiver,
-certificate provisioning/rotation, firewall rules, full-jitter retry scheduler and the
-switch to a second host. P1 does not trim Server 1 history or remove direct persistence.
+uses TLS verification and 3/30/30 second bounds. P2.1 implemented the receiver and
+full-jitter scheduler; P2.2 implemented guarded working-set retention; P2.4 adds hardened
+units, credential boundaries, firewall procedure and the live switch runbook. Certificate
+issuance and the switch to a real second host remain explicit production operations.
