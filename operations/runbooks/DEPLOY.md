@@ -226,23 +226,52 @@ SECRET
 каталога релиза. `.venv` переносится с предыдущего релиза жёсткими ссылками, а
 не копируется.
 
-Три вещи, которых нет в `git archive` и без которых выкатка падает молча:
+Четыре вещи, которых нет в `git archive` и без которых выкатка падает молча:
 
-1. **`frontend/.next/cache` обязан существовать в релизе.** Контейнер web
+1. **Корень релиза обязан быть доступен runtime-пользователям.** Создавайте
+   `/opt/m-ranked/releases/<релиз>` как `root:m-ranked-release-readers` с
+   режимом `0750`; добавьте в эту системную группу существующих пользователей
+   API, collectors и maintenance до их перезапуска. Режим `0700`, который
+   оставляет `mktemp -d`, ломает поздние Python imports у ещё работающих
+   процессов и даёт `status=200/CHDIR` при следующем старте unit. Проверка:
+
+   ```bash
+   getent group m-ranked-release-readers >/dev/null || groupadd --system m-ranked-release-readers
+   for user in m-ranked-api m-ranked-maintenance \
+       m-ranked-collector-telegram m-ranked-collector-vk \
+       m-ranked-collector-max m-ranked-collector-rutube; do
+       usermod -a -G m-ranked-release-readers "$user"
+   done
+   chown root:m-ranked-release-readers /opt/m-ranked/releases/<релиз>
+   chmod 0750 /opt/m-ranked/releases/<релиз>
+   stat -c '%U:%G %a %n' /opt/m-ranked/releases/<релиз>
+   runuser -u m-ranked-collector-max -- test -r /opt/m-ranked/releases/<релиз>/collector_target/__main__.py
+   ```
+
+   Не добавляйте nginx в эту группу: `/_next/static/` проксируется в тот же
+   Next.js process, который отдал HTML, и не читает release tree напрямую.
+2. **`frontend/.next/cache` обязан существовать в релизе.** Контейнер web
    монтирует туда `/var/lib/m-ranked/web-cache`, а точку монтирования в
    read-only слое создать не может: docker падает с кодом 125 и сайт ложится.
    Сборка standalone этот каталог не создаёт — создайте руками.
-2. **`api/data/official-m-rating-channel-codes.json` под `.gitignore`**, но
+3. **`api/data/official-m-rating-channel-codes.json` под `.gitignore`**, но
    нужен ежедневному заданию официального рейтинга. Копируется отдельно.
-3. `.env`, сессии площадок, дампы и учётные данные в релиз не попадают.
+4. `.env`, сессии площадок, дампы и учётные данные в релиз не попадают.
 
 ## 5. Зависимости
 
 ```bash
 pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend build
+MRANKED_DEPLOYMENT_ID=<уникальный-id-релиза> pnpm --dir frontend build
 operations/scripts/finalize-web-release.sh "$PWD"
 ```
+
+`MRANKED_DEPLOYMENT_ID` обязателен для production-сборки и должен отличаться у
+каждого релиза (подходит имя каталога релиза: только буквы, цифры, `_` и `-`).
+Next.js добавляет его как `?dpl=<id>` к URL клиентских ассетов. Это не даёт
+браузеру переиспользовать `403/404`, ошибочно закэшированный старым nginx как
+`immutable`, и отделяет ассеты параллельных blue/green-релизов. После запуска
+проверьте наличие `?dpl=` в HTML публичной страницы.
 
 `finalize-web-release.sh` сохраняет standalone runtime и static, но удаляет из
 готового релиза полный `node_modules`, `.pnpm-store` и `.next/cache` сборщика.
