@@ -237,7 +237,7 @@ SECRET
 
    ```bash
    getent group m-ranked-release-readers >/dev/null || groupadd --system m-ranked-release-readers
-   for user in m-ranked-api m-ranked-maintenance \
+   for user in m-ranked-api m-ranked-web m-ranked-maintenance \
        m-ranked-collector-telegram m-ranked-collector-vk \
        m-ranked-collector-max m-ranked-collector-rutube; do
        usermod -a -G m-ranked-release-readers "$user"
