@@ -283,7 +283,7 @@ test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page
   })).toContain("blur");
 });
 
-test("standalone iOS paints screenshot branding inside the cutout and keeps controls in the safe area", async ({ page }) => {
+test("standalone iOS paints crisp branding below the cutout and keeps controls in the safe area", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?platform=telegram");
   const cutoutBrand = page.getByTestId("notch-screenshot-brand");
@@ -303,14 +303,15 @@ test("standalone iOS paints screenshot branding inside the cutout and keeps cont
     page.getByRole("navigation", { name: "Основная навигация" }).evaluate((node) => ({
       height: getComputedStyle(node).height,
       paddingTop: getComputedStyle(node).paddingTop,
+      backdropFilter: getComputedStyle(node).backdropFilter || getComputedStyle(node).getPropertyValue("-webkit-backdrop-filter"),
     })),
   ]);
   expect((brandBox?.x ?? 0) + (brandBox?.width ?? 0) / 2).toBe(195);
-  expect(brandBox?.y).toBe(11);
+  expect(brandBox?.y).toBe(33);
   expect(brandBox?.height).toBe(18);
   expect(headerBox?.height).toBe(103);
   expect(safeBrandBox?.y).toBeGreaterThanOrEqual(47);
-  expect(geometry).toEqual({ height: "103px", paddingTop: "47px" });
+  expect(geometry).toEqual({ height: "103px", paddingTop: "47px", backdropFilter: "none" });
 
   // A classic rectangular iPhone has only the 20px status bar. The capsule
   // collapses there instead of becoming visible to the person using it.

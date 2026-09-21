@@ -250,10 +250,11 @@
     -webkit-backdrop-filter: saturate(140%) blur(18px);
     backdrop-filter: saturate(140%) blur(18px);
   }
-  /* iOS screenshots contain the pixels that sit underneath the physical
-     notch/Dynamic Island. In a standalone PWA this compact mark is centered
-     in their common covered rectangle. A classic 20px status bar collapses
-     max-height to zero, so phones without a display cutout never see it. */
+  /* A physical notch/Dynamic Island obscures or softens pixels placed directly
+     underneath it. In a standalone PWA this compact mark sits in the visible
+     strip at the bottom of the top safe area instead. A classic 20px status
+     bar collapses max-height to zero, so phones without a display cutout never
+     see it. */
   .notch-screenshot-brand {
     display: none;
   }
@@ -261,10 +262,15 @@
     :root[data-display-mode="standalone"] .site-header-glass {
       min-height: calc(3.5rem + var(--safe-area-top));
       padding-top: var(--safe-area-top);
+      /* WebKit can composite descendants into the blurred backdrop layer and
+         soften the SVG mark. The installed PWA has an opaque header anyway. */
+      background: var(--background);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
     }
     :root[data-display-mode="standalone"] .notch-screenshot-brand {
       position: fixed;
-      top: 11px;
+      top: calc(var(--safe-area-top) - 14px);
       left: 50%;
       z-index: 300;
       display: flex;

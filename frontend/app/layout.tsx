@@ -141,9 +141,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        {/* Standalone iOS screenshots include pixels hidden by the physical
-            notch or Dynamic Island. This tiny brand sits inside that covered
-            centre strip; safe controls remain below the full top inset. */}
+        {/* The physical notch or Dynamic Island obscures its own centre strip.
+            This tiny brand sits immediately below it, at the visible bottom
+            edge of the top safe area; controls remain below the full inset. */}
         <div className="notch-screenshot-brand" data-testid="notch-screenshot-brand" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={logoMarkDark.src} alt="" />
