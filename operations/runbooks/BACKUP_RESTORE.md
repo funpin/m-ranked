@@ -38,9 +38,25 @@ back them up separately with distinct encryption and verify their inventory.
 ## Ночной снимок там, где нет pgBackRest
 
 `m-ranked-target-dump-backup.timer` снимает базу целиком каждую ночь
-(`pg_dump -Fc`), проверяет снятое чтением оглавления и оставляет на диске три
-последние копии в `/var/backups/m-ranked`. Проверка выполняется клиентом из
-образа самой базы, если на хосте нет `pg_restore`.
+(`pg_dump -Fc`), проверяет снятое чтением оглавления и оставляет на primary
+только последнюю копию в `/var/backups/m-ranked`. Незавершённые `.partial`
+старше суток удаляются перед следующим запуском. История резервных копий должна
+жить вне primary; локальный dump — только последняя страховочная точка.
+Проверка выполняется клиентом из образа самой базы, если на хосте нет
+`pg_restore`.
+
+Скрипт устанавливается вне immutable release, чтобы rollback не возвращал
+старую retention-политику:
+
+```bash
+install -D -o root -g root -m 0755 operations/scripts/dump-backup.sh \
+  /usr/local/libexec/m-ranked/dump-backup.sh
+install -o root -g root -m 0644 \
+  operations/systemd/m-ranked-target-dump-backup.service \
+  operations/systemd/m-ranked-target-dump-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now m-ranked-target-dump-backup.timer
+```
 
 Это не замена pgBackRest: восстановление возможно только на момент снимка, а
 не на произвольную точку — архива WAL здесь нет. Восстановление:

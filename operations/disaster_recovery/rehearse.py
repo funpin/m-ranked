@@ -94,7 +94,8 @@ class Rehearsal:
 
     def volume(self, suffix: str) -> str:
         name=self.prefix+'-'+suffix
-        self.run(['volume','create','--label',LABEL+'='+self.run_id,name])
+        self.run(['volume','create','--label',LABEL+'='+self.run_id,
+                  '--label','m-ranked.gc=ephemeral',name])
         self.volumes.append(name)
         return name
 

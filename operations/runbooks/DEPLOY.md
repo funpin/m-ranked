@@ -241,8 +241,14 @@ SECRET
 ```bash
 pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend build
-mkdir -p frontend/.next/cache
+operations/scripts/finalize-web-release.sh "$PWD"
 ```
+
+`finalize-web-release.sh` сохраняет standalone runtime и static, но удаляет из
+готового релиза полный `node_modules`, `.pnpm-store` и `.next/cache` сборщика.
+Точка `frontend/.next/cache` затем создаётся пустой для writable bind mount.
+Не переключайте `current`, если после финализации отсутствует
+`frontend/server.js` или не прошёл пробный запуск web-контейнера.
 
 Python на проде — 3.11, а `requirements/*.lock` собраны под 3.13. Целиком их
 поставить нельзя: пакет с колесом `cp313` (psycopg-binary, pydantic-core,
@@ -369,7 +375,32 @@ textfile. Если grace меняется, stop timeout должен остав�
 5. Не менять интервалы `300/300/300/3600` в том же rollout. Они остаются
    desired cadence; изменение production cadence требует отдельного решения.
 
-## 8. Проверка
+## 8. Ограничение накопления релизов и Docker-артефактов
+
+Host GC оставляет текущий релиз, один предыдущий для rollback и любой релиз,
+которым ещё пользуется host-процесс или Docker bind mount. Молодые каталоги
+младше суток не удаляются. Неиспользуемые containers, images, build cache и
+networks старше недели удаляются; volume удаляется только с явным label
+`m-ranked.gc=ephemeral`, поэтому остановленная база не может попасть под
+автоматическую очистку.
+
+Установите collector вне immutable release, сначала проверьте dry-run, затем
+включите еженедельный timer:
+
+```bash
+install -D -o root -g root -m 0755 operations/scripts/gc_host_storage.py \
+  /usr/local/libexec/m-ranked/gc_host_storage.py
+install -o root -g root -m 0644 \
+  operations/systemd/m-ranked-target-host-storage-gc.service \
+  operations/systemd/m-ranked-target-host-storage-gc.timer /etc/systemd/system/
+install -o root -g root -m 0600 operations/env/host-storage-gc.env.example \
+  /etc/m-ranked/host-storage-gc.env
+/usr/local/libexec/m-ranked/gc_host_storage.py
+systemctl daemon-reload
+systemctl enable --now m-ranked-target-host-storage-gc.timer
+```
+
+## 9. Проверка
 
 Выкатка не закончена, пока всё это не ответило:
 
@@ -412,7 +443,7 @@ rm -f "$jar"
 означает нехватку сериализованной ёмкости и не должен маскироваться повышением
 freshness threshold.
 
-## 9. Если API не отвечает
+## 10. Если API не отвечает
 
 Порядок разбора — от процесса к сети, а не наоборот:
 
