@@ -46,6 +46,20 @@ async function viewportLayout(page: Page) {
   });
 }
 
+test("PWA pages cannot pan into an empty strip at iPhone widths", async ({ page }) => {
+  for (const width of [375, 390, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const path of ["/?platform=telegram", "/statistics?platform=telegram", "/statistics?platform=telegram&view=entities", "/accounts/00000001-0000-4000-8000-000000000001"]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await settled(page);
+      await expect.poll(() => viewportLayout(page), {
+        message: `${path} must stay flush at ${width}px`,
+      }).toEqual({ overflow: 0, offenders: [] });
+    }
+  }
+});
+
 for (const theme of ["light", "dark"]) {
   test(`remaining screens fit the viewport and meet axe AA in ${theme} theme`, async ({ page }) => {
     await page.addInitScript((value) => localStorage.setItem("m-ranked-theme", value), theme);

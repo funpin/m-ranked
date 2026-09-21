@@ -230,11 +230,27 @@
   }
   html {
     @apply font-sans;
+    max-width: 100%;
+    overflow-x: clip;
   }
   body {
     /* 14px body keeps the density this dashboard needs while the rem spacing
        scale stays on the standard 16px root. */
     @apply bg-background text-foreground text-sm;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  /* Полупрозрачный слой оставляет карточки различимыми при прокрутке, но
+     достаточно плотный, чтобы текст меню не смешивался с содержимым. */
+  .site-header-glass {
+    background: var(--background);
+    background: color-mix(in oklab, var(--background) 72%, transparent);
+    -webkit-backdrop-filter: saturate(140%) blur(18px);
+    backdrop-filter: saturate(140%) blur(18px);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .site-header-glass { background: var(--background); }
   }
   /* Полоса-индикатор вырастает при появлении. Анимируется трансформация, а не
      ширина, поэтому раскладка не пересчитывается; тем, кто просил меньше
@@ -322,5 +338,26 @@
   :root[data-theme-switching] *::before,
   :root[data-theme-switching] *::after {
     transition: none !important;
+  }
+}
+
+@layer utilities {
+  /* В standalone-режиме iOS боковые safe-area появляются в альбомной
+     ориентации. Шапка и контент должны оставаться на одной сетке. */
+  .safe-page-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+  @media (min-width: 40rem) {
+    .safe-page-inset {
+      padding-left: max(1.5rem, env(safe-area-inset-left));
+      padding-right: max(1.5rem, env(safe-area-inset-right));
+    }
+  }
+  @media (min-width: 64rem) {
+    .safe-page-inset {
+      padding-left: max(2.5rem, env(safe-area-inset-left));
+      padding-right: max(2.5rem, env(safe-area-inset-right));
+    }
   }
 }

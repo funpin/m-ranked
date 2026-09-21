@@ -57,11 +57,11 @@ export function StatisticsResults({ page, query }: { page: StatisticsPage; query
 }
 
 function ResultSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="space-y-3"><h2 className="font-heading text-xl font-semibold">{title}</h2>{children}</section>;
+  return <section className="min-w-0 space-y-3"><h2 className="font-heading text-xl font-semibold">{title}</h2>{children}</section>;
 }
 
 function ResultPanel({ children }: { children: ReactNode }) {
-  return <div data-testid="statistics-results-panel" className="space-y-3 md:rounded-xl md:border md:bg-card md:p-5 md:text-card-foreground md:shadow-sm">{children}</div>;
+  return <div data-testid="statistics-results-panel" className="min-w-0 space-y-3 md:rounded-xl md:border md:bg-card md:p-5 md:text-card-foreground md:shadow-sm">{children}</div>;
 }
 
 function RevealButton({ shown, total, onClick }: { shown: number; total: number; onClick: () => void }) {
@@ -119,9 +119,9 @@ function PublicationRow({ row, columns }: { row: StatisticsPublication; columns:
 }
 
 function PublicationCards({ rows, query }: { rows: StatisticsPublication[]; query: ParsedStatisticsQuery }) {
-  return <div className="grid gap-3 md:hidden" data-testid="statistics-publication-cards">{rows.map((row) => {
+  return <div className="grid min-w-0 gap-3 md:hidden" data-testid="statistics-publication-cards">{rows.map((row) => {
     const href = publicationHref(row.publicationId);
-    return <article key={row.publicationId} className="rounded-xl border bg-card p-4 shadow-sm">
+    return <article key={row.publicationId} className="min-w-0 max-w-full rounded-xl border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><span className="text-xs font-semibold text-muted-foreground">#{row.rank}</span><PublicationIdentity row={row} href={href} /></div><div className="shrink-0 text-right"><strong className="font-heading text-xl">{publicationMetric(row, query.publicationSort)}</strong><p className="text-[11px] uppercase text-muted-foreground">{PUBLICATION_LABELS[query.publicationSort]}</p></div></div>
       <dl className="mt-3 grid grid-cols-3 gap-2 text-sm"><MetricPair label="ERV" value={formatPercentage(row.erv)} /><MetricPair label="Просмотры" value={formatMetric(row.views)} /><MetricPair label="Взаимодействия" value={formatMetric(row.interactions)} /></dl>
       <div className="mt-4 flex items-center gap-2"><Link className="inline-flex min-h-9 flex-1 items-center justify-center rounded-md border px-3 text-sm font-medium" href={href} prefetch={false}>Открыть карточку</Link>{row.publicUrl ? <a className="inline-flex size-9 items-center justify-center rounded-md border" href={row.publicUrl} target="_blank" rel="noopener noreferrer" aria-label={`Открыть оригинал ${PLATFORM_LONG_LABELS[row.platform]}`}><ExternalLink className="size-4" aria-hidden="true" /></a> : null}</div>
@@ -157,9 +157,9 @@ function EntityRow({ row, metrics }: { row: StatisticsEntity; metrics: readonly 
 }
 
 function EntityCards({ rows, query }: { rows: StatisticsEntity[]; query: ParsedStatisticsQuery }) {
-  return <TooltipProvider><div className="grid gap-3 md:hidden" data-testid="statistics-entity-cards">{rows.map((row) => {
+  return <TooltipProvider><div className="grid min-w-0 gap-3 md:hidden" data-testid="statistics-entity-cards">{rows.map((row) => {
     const href = accountHref(row.accountId);
-    return <article key={row.institutionId} className="rounded-xl border bg-card p-4"><div className="flex justify-between gap-3"><div className="min-w-0"><span className="text-xs text-muted-foreground">#{row.rank}</span><EntityIdentity row={row} href={href} heading /></div><div className="text-right">{query.entitySort === "erv" ? <EntityErvValue row={row} prominent /> : <strong className="font-heading text-xl">{entityMetric(row, query.entitySort)}</strong>}<p className="text-[11px] uppercase text-muted-foreground">{ENTITY_LABELS[query.entitySort]}</p></div></div><dl className="mt-3 grid grid-cols-3 gap-2"><MetricPair label="ERV" value={<EntityErvValue row={row} />} /><MetricPair label={<span className="inline-flex items-center gap-0.5">Медиана<EntityMedianHelp compact /></span>} value={formatMetric(row.medianInteractions, true)} /><MetricPair label="Публикации" value={formatMetric(row.publicationCount)} /></dl><Link className="mt-4 inline-flex min-h-9 w-full items-center justify-center rounded-md border px-3 text-sm font-medium" href={href} prefetch={false}>Открыть аккаунт</Link></article>;
+    return <article key={row.institutionId} className="min-w-0 max-w-full rounded-xl border bg-card p-4"><div className="flex min-w-0 justify-between gap-3"><div className="min-w-0 flex-1"><span className="text-xs text-muted-foreground">#{row.rank}</span><EntityIdentity row={row} href={href} heading /></div><div className="shrink-0 text-right">{query.entitySort === "erv" ? <EntityErvValue row={row} prominent /> : <strong className="font-heading text-xl">{entityMetric(row, query.entitySort)}</strong>}<p className="text-[11px] uppercase text-muted-foreground">{ENTITY_LABELS[query.entitySort]}</p></div></div><dl className="mt-3 grid min-w-0 grid-cols-3 gap-2"><MetricPair label="ERV" value={<EntityErvValue row={row} />} /><MetricPair label={<span className="inline-flex items-center gap-0.5">Медиана<EntityMedianHelp compact /></span>} value={formatMetric(row.medianInteractions, true)} /><MetricPair label="Публикации" value={formatMetric(row.publicationCount)} /></dl><Link className="mt-4 inline-flex min-h-9 w-full items-center justify-center rounded-md border px-3 text-sm font-medium" href={href} prefetch={false}>Открыть аккаунт</Link></article>;
   })}</div></TooltipProvider>;
 }
 
@@ -175,7 +175,7 @@ function EntityIdentity({ row, href, heading = false }: { row: StatisticsEntity;
 }
 
 function MetricPair({ label, value }: { label: ReactNode; value: ReactNode }) {
-  return <div><dt className="text-[10px] uppercase text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>;
+  return <div className="min-w-0"><dt className="break-words text-[10px] uppercase text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>;
 }
 
 function EntityErvHelp() {

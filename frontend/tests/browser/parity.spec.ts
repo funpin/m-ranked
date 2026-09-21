@@ -156,7 +156,13 @@ test("statistics mobile uses cards and keeps zero distinct from unknown", async 
 test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?platform=vk");
+  const brand = page.getByTestId("brand");
   const toggle = page.getByTestId("menu-toggle");
+  const actions = page.getByTestId("header-utility-actions");
+  const [brandBox, toggleBox, actionsBox] = await Promise.all([brand.boundingBox(), toggle.boundingBox(), actions.boundingBox()]);
+  expect(brandBox?.height).toBeLessThanOrEqual(32);
+  expect((toggleBox?.x ?? 0) + (toggleBox?.width ?? 0)).toBeGreaterThan(360);
+  expect((actionsBox?.x ?? 0) + (actionsBox?.width ?? 0)).toBeGreaterThan(360);
   await toggle.click();
   await page.keyboard.press("Escape");
   await expect(toggle).toBeFocused();
@@ -169,6 +175,117 @@ test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
+test("header follows the same horizontal grid as page content", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?platform=telegram");
+  const headerInner = page.getByTestId("header-inner");
+  const main = page.locator("#main-content");
+  const brand = page.getByTestId("brand");
+  const heading = page.getByRole("heading", { name: "Обзор каналов" });
+  const [headerBox, mainBox, brandBox, headingBox, actionsBox, paddings] = await Promise.all([
+    headerInner.boundingBox(),
+    main.boundingBox(),
+    brand.boundingBox(),
+    heading.boundingBox(),
+    page.getByTestId("header-utility-actions").boundingBox(),
+    Promise.all([headerInner, main].map((element) => element.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { left: style.paddingLeft, right: style.paddingRight };
+    }))),
+  ]);
+  expect(headerBox?.x).toBe(mainBox?.x);
+  expect(headerBox?.width).toBe(mainBox?.width);
+  expect(paddings[0]).toEqual(paddings[1]);
+  expect(brandBox?.x).toBe(headingBox?.x);
+  expect((actionsBox?.x ?? 0) + (actionsBox?.width ?? 0)).toBe((mainBox?.x ?? 0) + (mainBox?.width ?? 0) - 40);
+});
+
+test("brand and favicon follow viewport and explicit theme", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("m-ranked-theme", "light"));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?platform=telegram");
+  await expect(page.getByTestId("brand-logo-mark-light")).toBeVisible();
+  await expect(page.getByTestId("brand-logo-wordmark")).toBeHidden();
+  const favicon = page.locator('link[rel~="icon"][type="image/svg+xml"]');
+  await expect(favicon).toHaveCount(1);
+  await expect(favicon).toHaveAttribute("href", /logo-mark-light/);
+
+  await page.getByRole("button", { name: /Переключить на тёмную/ }).click();
+  await expect(page.getByTestId("brand-logo-mark-dark")).toBeVisible();
+  await expect(favicon).toHaveAttribute("href", /logo-mark-dark/);
+
+  await expect(page.locator('link[rel="icon"][type="image/png"][sizes="32x32"]')).toHaveAttribute("href", /\/icons\/favicon-32\.png\?v=20260921/);
+  await expect(page.locator('link[rel="apple-touch-icon"][sizes="180x180"]')).toHaveAttribute("href", "/apple-touch-icon.png");
+  await expect(page.locator('link[rel="apple-touch-icon-precomposed"][sizes="180x180"]')).toHaveAttribute("href", "/apple-touch-icon-precomposed.png");
+  const startupImages = page.locator('link[rel="apple-touch-startup-image"]');
+  await expect(startupImages).toHaveCount(24);
+  await expect(page.locator('link[rel="apple-touch-startup-image"][media*="device-width: 393px"][media*="orientation: portrait"]'))
+    .toHaveAttribute("href", "/splash/apple-splash-1179x2556.png");
+  await expect(page.locator('link[rel="apple-touch-startup-image"][media*="device-width: 393px"][media*="orientation: landscape"]'))
+    .toHaveAttribute("href", "/splash/apple-splash-2556x1179.png");
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
+
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await expect(page.getByTestId("brand-logo-mark-dark")).toBeVisible();
+  await expect(page.getByTestId("brand-logo-wordmark")).toBeVisible();
+  await expect(page.getByTestId("brand-logo-wordmark")).toHaveText("m-ranked");
+  await expect(page.getByTestId("brand-logo-wordmark")).toHaveCSS("white-space", "nowrap");
+  await page.getByRole("button", { name: /Переключить на светлую/ }).click();
+  await expect(page.getByTestId("brand-logo-mark-light")).toBeVisible();
+  await expect(page.getByTestId("brand-logo-wordmark")).toBeVisible();
+  await expect(favicon).toHaveAttribute("href", /logo-mark-light/);
+});
+
+test("web app manifest exposes current install icons", async ({ request }) => {
+  const response = await request.get("/manifest.webmanifest");
+  expect(response.ok()).toBeTruthy();
+  const manifest = await response.json();
+  expect(manifest.short_name).toBe("m-ranked");
+  expect(manifest.id).toBe("/");
+  expect(manifest.scope).toBe("/");
+  expect(manifest.icons).toEqual(expect.arrayContaining([
+    expect.objectContaining({ src: "/icons/app-icon-192.png?v=20260921", sizes: "192x192" }),
+    expect.objectContaining({ src: "/icons/app-icon-512.png?v=20260921", sizes: "512x512" }),
+  ]));
+  for (const icon of ["/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/icons/app-icon-192.png?v=20260921", "/icons/app-icon-512.png?v=20260921"]) {
+    const image = await request.get(icon);
+    expect(image.ok()).toBeTruthy();
+    expect(image.headers()["content-type"]).toBe("image/png");
+    expect((await image.body()).byteLength).toBeGreaterThan(400);
+  }
+  for (const [path, width, height] of [
+    ["/splash/apple-splash-1179x2556.png", 1179, 2556],
+    ["/splash/apple-splash-2556x1179.png", 2556, 1179],
+  ] as const) {
+    const image = await request.get(path);
+    expect(image.ok()).toBeTruthy();
+    expect(image.headers()["content-type"]).toBe("image/png");
+    const body = await image.body();
+    expect([body.readUInt32BE(16), body.readUInt32BE(20)]).toEqual([width, height]);
+  }
+});
+
+test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page }) => {
+  await page.goto("/?platform=telegram");
+  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
+  await expect(page.locator('meta[name="mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
+  await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "m-ranked");
+  await expect(page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')).toHaveAttribute("content", "default");
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", /viewport-fit=cover/);
+  const header = page.getByRole("navigation", { name: "Основная навигация" });
+  await expect(header).toHaveCSS("position", "sticky");
+  expect(await header.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return style.backdropFilter || style.getPropertyValue("-webkit-backdrop-filter");
+  })).toContain("blur");
+});
+
+test("retired export is absent from navigation and raw quality codes are absent from tables", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  await expect(page.getByTestId("main-nav").getByText("Экспорт CSV", { exact: true })).toHaveCount(0);
+  await expect(page.locator('[title="exact" i]')).toHaveCount(0);
 });
 
 for (const theme of ["dark", "light"]) {

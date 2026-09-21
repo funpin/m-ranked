@@ -1508,24 +1508,9 @@ class _ScriptedConnection:
         self.closed = True
 
 
-def _script_native_csv_batch(connection, observations):
-    # This unit isolates transaction orchestration. The real native serializer,
-    # privileges and round-trip bytes are covered by LegacyCsvPostgresIntegrationTest.
-    observations = list(observations)
-    connection.execute(
-        "SELECT ops_and_admin.ensure_publication_legacy_alias(%s)",
-        ([item[0] for item in observations],),
-    )
-    connection.execute(
-        "INSERT INTO analytics.legacy_native_export_lexeme VALUES (%s)",
-        ([item[2] for item in observations],),
-    )
-
-
 def test_repository_commits_observation_lineage_revision_and_outbox_atomically(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
-    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv_batch",_script_native_csv_batch)
     connection = _ScriptedConnection()
     repository = PostgresCollectorRepository(connection_factory=lambda: connection)
     target = account(Platform.TELEGRAM)
@@ -1555,7 +1540,7 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     assert "INSERT INTO ingest.raw_payload" in sql
     assert "INSERT INTO ingest.metric_evidence_dictionary" in sql
     assert "ensure_publication_legacy_alias" in sql
-    assert "INSERT INTO analytics.legacy_native_export_lexeme" in sql
+    assert "legacy_native_export_lexeme" not in sql
     assert "INSERT INTO ingest.publication_availability_state" in sql
     assert "INSERT INTO ingest.publication_availability_event" in sql
     assert "INSERT INTO catalog.account_identity_history" in sql
@@ -1605,10 +1590,6 @@ def test_first_identity_change_uses_dependency_loaded_at_process_start(
     monkeypatch.setenv(
         "COLLECTOR_RAW_EVIDENCE_DIR",
         str(tmp_path / "raw-evidence"),
-    )
-    monkeypatch.setattr(
-        "collector_target.legacy_csv.persist_native_csv_batch",
-        _script_native_csv_batch,
     )
     connection = _ScriptedConnection()
     repository = PostgresCollectorRepository(
@@ -1697,7 +1678,6 @@ def test_resumable_schedule_excludes_completed_partial_and_failed_runs() -> None
 def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
-    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv_batch",_script_native_csv_batch)
     connection = _ScriptedConnection(fail_on_outbox=True)
     repository = PostgresCollectorRepository(connection_factory=lambda: connection)
     target = account(Platform.TELEGRAM)
@@ -1715,7 +1695,6 @@ def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch, tmp_
 def test_repository_skips_unchanged_snapshot_before_heartbeat(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
-    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv_batch", _script_native_csv_batch)
     target = account(Platform.TELEGRAM)
     run_context = context()
     canonical = CanonicalNormalizer().normalize(
@@ -1742,7 +1721,6 @@ def test_repository_skips_unchanged_snapshot_before_heartbeat(monkeypatch, tmp_p
 def test_repository_persists_deterministic_unchanged_heartbeat(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
-    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv_batch", _script_native_csv_batch)
     target = account(Platform.TELEGRAM)
     run_context = context()
     canonical = CanonicalNormalizer().normalize(
@@ -1771,10 +1749,6 @@ def test_repository_bulk_writes_many_publications_and_reactions_once(
     monkeypatch, tmp_path,
 ) -> None:
     monkeypatch.setenv("COLLECTOR_PERSIST_RAW_EVIDENCE", "false")
-    monkeypatch.setattr(
-        "collector_target.legacy_csv.persist_native_csv_batch",
-        _script_native_csv_batch,
-    )
     target = account(Platform.TELEGRAM)
     run_context = context()
     raw = raw_batch(target, run_context)
@@ -1826,10 +1800,6 @@ def test_repository_bulk_path_keeps_synthetic_and_observed_snapshot_for_one_post
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("COLLECTOR_PERSIST_RAW_EVIDENCE", "false")
-    monkeypatch.setattr(
-        "collector_target.legacy_csv.persist_native_csv_batch",
-        _script_native_csv_batch,
-    )
     target = account(Platform.TELEGRAM)
     run_context = context()
     raw = raw_batch(target, run_context)
@@ -1875,10 +1845,6 @@ def test_repository_bulk_path_keeps_distinct_corrections_for_one_snapshot_slot(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("COLLECTOR_PERSIST_RAW_EVIDENCE", "false")
-    monkeypatch.setattr(
-        "collector_target.legacy_csv.persist_native_csv_batch",
-        _script_native_csv_batch,
-    )
     target = account(Platform.TELEGRAM)
     run_context = context()
     raw = raw_batch(target, run_context)

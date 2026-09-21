@@ -51,7 +51,6 @@
 | Admin command | identity, CSRF token, JSON | RBAC, optimistic lock, validation, audit | transaction + revision event |
 | Collection | platform response | allowlisted endpoint, size limits, normalization, quality flags | append-only observation |
 | Rating run | formula version + immutable input revision | validation, deterministic decimal calculation | result + component trace |
-| Export | bounded query | authorization where needed, row/size/time quota, CSV escaping | streamed file |
 | Backup | PostgreSQL pages/WAL | encryption, checksum, retention, restore drill | recoverable restore point |
 
 ## Реестр угроз
@@ -69,11 +68,10 @@
 | TM-06 | T | SQL injection или небезопасный dynamic order/filter | L/H | Bind parameters, enum allowlists, static SQL modules, no raw user fragments | SAST plus endpoint fuzzing |
 | TM-07 | T/R | Подмена, replay или дублирование platform response создает ложные snapshots | M/H | TLS, source fingerprint, idempotency constraints, collection_run lineage, append-only corrections | replay/duplicate contract tests |
 | TM-08 | T/R | Админ незаметно меняет опубликованную формулу или external mapping | M/H | Published formula immutable, four-eyes approval для publish, version/hash, append-only audit | audit reconciliation; mutation tests |
-| TM-09 | D | Дорогой compare/export истощает DB, heap или network | H/H | Pagination, statement timeout, bounded windows, async export quota, rate limit, cancellation, bounded live queries | load/soak tests and per-route budgets |
+| TM-09 | D | Дорогой compare истощает DB, heap или network | H/H | Pagination, statement timeout, bounded windows, rate limit, bounded live queries | load/soak tests and per-route budgets |
 | TM-10 | D | Рост snapshots/raw/WAL заполняет 30 GB и останавливает БД | H/H | Partition retention, raw TTL, WAL/archive monitoring, disk quotas, alerts at 70/85%, fail-safe purge | capacity forecast; forced-low-disk game day |
 | TM-11 | D | FloodWait/лимит/изменение API одной сети блокирует общий цикл | H/M | Independent units/leases, per-platform timeout/bulkhead, bounded retry+jitter, last-known-data UI | dependency failure injection |
 | TM-12 | T/I | Cache poisoning, устаревший ответ или попадание private response в public cache | M/H | Canonical keys, tag invalidation, `no-store` admin/auth, explicit Vary, payload schema/version, short TTL | cache isolation and lost-event tests |
-| TM-13 | I/T | CSV formula injection при открытии export в spreadsheet | M/M | Prefix dangerous leading cells, correct RFC 4180 quoting, content disposition, document behavior | malicious value fixture |
 | TM-14 | T/D | Ошибочный DELETE/DDL мгновенно повторяется на standby | M/H | Least privilege, DDL review, PITR backups independent of replica, delayed/immutable copy where feasible | restore to time before destructive event |
 | TM-15 | I | Backup или cold archive скопирован с DR-сервера | M/H | Encryption at rest with separate key, restricted Unix user, no public port, access log, key rotation | restore with rotated key; permission audit |
 | TM-16 | T | Supply-chain compromise Python dependency, npm или container | M/H | Lockfiles+hashes, pin git commit, dependency review, SBOM, signed releases, minimal build permissions | CI vulnerability/license scan; provenance check |
@@ -88,8 +86,6 @@
 
 - Клиент перебирает очень широкие интервалы или тысячи university IDs.
 - Клиент создает множество уникальных cache keys параметрами с тем же смыслом.
-- Бот параллельно формирует крупные экспорты и не скачивает результаты.
-- Внешнее название начинается с `=`, `+`, `-` или `@` и попадает в CSV.
 
 ### Админка
 
@@ -115,9 +111,9 @@
 - Ни PostgreSQL, ни административные health details не доступны из Internet.
 - Административная команда создает audit event с identity, correlation ID,
   target, outcome и безопасным before/after.
-- Публичные запросы имеют rate/row/time limits; экспорт выполняется потоково.
+- Публичные запросы имеют rate/row/time limits.
 - В CI есть dependency scanning, secret scanning, SAST и security integration
-  tests для RBAC/cache/SSRF/CSV.
+  tests для RBAC/cache/SSRF.
 - Backup считается существующим только после успешного автоматического restore;
   полный drill проводится не реже одного раза в квартал.
 - Тексты и API следуют ADR-006 и не утверждают намеренную искусственную

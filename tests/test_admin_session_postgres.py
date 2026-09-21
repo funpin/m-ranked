@@ -167,15 +167,13 @@ def test_concurrent_logins_with_one_code_leave_exactly_one_session(client: TestC
     assert set(statuses) == {201, 401}
 
 
-def test_replay_and_revocation_survive_a_restart(monkeypatch, clock, suffix, tmp_path) -> None:
+def test_replay_and_revocation_survive_a_restart(monkeypatch, clock, suffix) -> None:
     """Учёт кодов и отзыв живут в базе, поэтому перезапуск их не обнуляет."""
-    monkeypatch.setenv("MRANKED_EXPORTS_SPOOL_DIRECTORY", str(tmp_path/"first"))
     with build(monkeypatch, suffix, "admin", "editor", "viewer", clock=clock) as first:
         current = code(clock)
         assert login(first, suffix, otp=current).status_code == 201
         token = first.cookies["__Host-mranked-admin"]
 
-    monkeypatch.setenv("MRANKED_EXPORTS_SPOOL_DIRECTORY", str(tmp_path/"second"))
     with build(monkeypatch, suffix, "admin", "editor", "viewer", clock=clock) as restarted:
         restarted.cookies.set("__Host-mranked-admin", token)
         assert restarted.get("/api/v1/admin/csrf").status_code == 200
@@ -187,7 +185,6 @@ def test_replay_and_revocation_survive_a_restart(monkeypatch, clock, suffix, tmp
         assert restarted.request("DELETE", "/api/v1/admin/session",
                                  headers={"X-XSRF-TOKEN": csrf}).status_code == 200
 
-    monkeypatch.setenv("MRANKED_EXPORTS_SPOOL_DIRECTORY", str(tmp_path/"third"))
     with build(monkeypatch, suffix, "admin", "editor", "viewer", clock=clock) as third:
         third.cookies.set("__Host-mranked-admin", token)
         assert third.get("/api/v1/admin/csrf").status_code == 401
@@ -340,11 +337,9 @@ def test_parallel_reads_and_a_page_refresh_keep_the_session(suffix, client: Test
     assert [client.get(path).status_code for path in paths*3] == [200]*len(paths)*3
 
 
-def test_a_stand_without_a_second_factor_still_opens_sessions(monkeypatch, suffix,
-                                                              tmp_path) -> None:
+def test_a_stand_without_a_second_factor_still_opens_sessions(monkeypatch, suffix) -> None:
     """Выключенный второй фактор не должен делать вход одноразовым."""
     monkeypatch.setenv("ADMIN_REQUIRE_MFA", "false")
-    monkeypatch.setenv("MRANKED_EXPORTS_SPOOL_DIRECTORY", str(tmp_path/"stand"))
     users = json.dumps([{"username": f"admin-{suffix}", "passwordHash": HASH,
                          "roles": ["ADMIN"]}])
     monkeypatch.setenv("ADMIN_AUTH_USERS", users)

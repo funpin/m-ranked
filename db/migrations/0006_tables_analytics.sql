@@ -182,21 +182,6 @@ CREATE TABLE analytics.institution_period_metrics (
     CONSTRAINT institution_period_metrics_sample_size_check CHECK ((sample_size >= 0))
 );
 
--- analytics.legacy_native_export_lexeme
-CREATE TABLE analytics.legacy_native_export_lexeme (
-    published_month date NOT NULL,
-    snapshot_id bigint NOT NULL,
-    publication_id uuid NOT NULL,
-    fields jsonb NOT NULL,
-    public_fields jsonb NOT NULL,
-    evidence_sha256 text NOT NULL,
-    attribution text DEFAULT 'target-generated-v1'::text NOT NULL,
-    CONSTRAINT legacy_native_export_lexeme_attribution_check CHECK ((attribution = 'target-generated-v1'::text)),
-    CONSTRAINT legacy_native_export_lexeme_evidence_sha256_check CHECK ((evidence_sha256 ~ '^[0-9a-f]{64}$'::text)),
-    CONSTRAINT legacy_native_export_lexeme_fields_check CHECK ((jsonb_typeof(fields) = 'object'::text)),
-    CONSTRAINT legacy_native_export_lexeme_public_fields_check CHECK ((jsonb_typeof(public_fields) = 'object'::text))
-);
-
 -- analytics.legacy_overview_account
 CREATE TABLE analytics.legacy_overview_account (
     dataset_revision_id bigint NOT NULL,

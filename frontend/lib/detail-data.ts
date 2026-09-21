@@ -15,7 +15,7 @@ import type { LegacyAccountType, LegacyPublicationType, PublicationHistory } fro
 export async function loadAccountPublications(id: number | string, type?: LegacyAccountType, limit = 100, revision?: number, day?: string) {
   return api.accountPublications(id, type, limit, undefined, revision, day);
 }
-export type DetailHistory=PublicationHistory & {accountDisplayName?:string;previousDisplayId?:string;nextDisplayId?:string;accountId?:string;previousPublicationId?:string;nextPublicationId?:string};
+export type DetailHistory=PublicationHistory & {accountDisplayName?:string;accountArchiveUrl?:string;previousDisplayId?:string;nextDisplayId?:string;accountId?:string;previousPublicationId?:string;nextPublicationId?:string};
 export async function loadPublicationHistory(id: number | string, type?: LegacyPublicationType, limit = 100): Promise<DetailHistory> {
   const first=await api.publicationHistory(id, type, limit);
   const items = [...first.items].sort((a,b) => Date.parse(a.observedAt) - Date.parse(b.observedAt) || a.snapshotId.localeCompare(b.snapshotId, undefined, { numeric: true }));
@@ -38,5 +38,5 @@ export async function loadPublicationHistory(id: number | string, type?: LegacyP
     console.warn("Соседние публикации пришли по другой ревизии набора данных");
   }
   const [account,previous,next]=related;
-  return { ...first, items, accountId:account?.accountId, previousPublicationId:previous?.publicationId, nextPublicationId:next?.publicationId, accountDisplayName:publication.platform === "telegram" ? publication.accountName ?? undefined : account?.institutionShortName || account?.institutionName, previousDisplayId:previous?.displayExternalId ?? previous?.externalId ?? undefined,nextDisplayId:next?.displayExternalId ?? next?.externalId ?? undefined };
+  return { ...first, items, accountId:account?.accountId, accountArchiveUrl:account?.archiveUrl ?? undefined, previousPublicationId:previous?.publicationId, nextPublicationId:next?.publicationId, accountDisplayName:publication.platform === "telegram" ? publication.accountName ?? undefined : account?.institutionShortName || account?.institutionName, previousDisplayId:previous?.displayExternalId ?? previous?.externalId ?? undefined,nextDisplayId:next?.displayExternalId ?? next?.externalId ?? undefined };
 }

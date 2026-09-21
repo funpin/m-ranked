@@ -50,7 +50,8 @@ function item(id: number, platform: Schema["PlatformValue"]): Schema["OverviewRo
 }
 function statisticsEntity(id: number, platform: "telegram" | "vk" | "max" | "rutube"): Schema["StatisticsEntity"] {
   return { rank:id, legacyRoute:`/institutions/${id}`, accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id), institutionId:uuid(9,id), institutionLegacyId:id,
-    canonicalName:`Полное название университета ${String(id).padStart(3,"0")}`,shortName:`Вуз ${String(id).padStart(3,"0")}`,platform,publicationCount:20,
+    canonicalName:id===3?"Мариупольский государственный университет имени А.И. Куинджи":`Полное название университета ${String(id).padStart(3,"0")}`,
+    shortName:id===3?"МГУ им. А.И. Куинджи":`Вуз ${String(id).padStart(3,"0")}`,platform,publicationCount:20,
     interactionSampleSize:20,viewSampleSize:20,ervSampleSize:20,medianInteractions:id,
     interactions:id*20,views:id*200,erv:id===2?null:10 };
 }
@@ -67,7 +68,7 @@ function statisticsPublication(id:number,platform:"telegram"|"vk"|"max"|"rutube"
 const counter = (value:number|null):Schema["CounterMetric"] => ({value,observedAt:asOf,quality:value === null ? "unsupported" : "exact"});
 function account(id:number,legacyType:"channels"|"platform_accounts"="channels"):Schema["Account"] {
   const platform=legacyType === "channels" ? "telegram" : id === 3 ? "max" : id === 4 ? "rutube" : "vk";
-  return {accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id),legacyId:id,legacyType,channelLegacyId:platform === "telegram" ? id : null,platformAccountLegacyId:id,institutionId:`institution-${id}`,institutionLegacyId:id,institutionName:names[0]!,institutionShortName:null,platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Канал ${id}`,url:`https://example.test/account/${id}`,accessMode:"public",enabled:true,publicationCount:2,latestObservedAt:asOf,datasetRevision:revision,asOf,
+  return {accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id),legacyId:id,legacyType,channelLegacyId:platform === "telegram" ? id : null,platformAccountLegacyId:id,institutionId:`institution-${id}`,institutionLegacyId:id,institutionName:names[0]!,institutionShortName:null,platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Канал ${id}`,url:`https://example.test/account/${id}`,archiveUrl:platform === "max" ? "https://maxstat.ru/channel/-70908719079458/post" : null,accessMode:"public",enabled:true,publicationCount:2,latestObservedAt:asOf,datasetRevision:revision,asOf,
     stats:{retentionDays:70,postCount:2,monitored:1,medianReactions:aggregate(5),medianViews:aggregate(50),medianComments:aggregate(0),ratingRank:2,ratingPeriod:"2026-Q2",subscriberCount:100,lastError:null,lastCheckedAt:asOf,dailySeries:weekly(),
       previous:{postCount:1,monitored:1,medianReactions:4,medianViews:44,medianComments:0,
                 ratingRank:5,ratingPeriod:"2026-Q1"}}};

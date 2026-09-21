@@ -11,7 +11,7 @@
 FastAPI; прямого доступа к PostgreSQL у web нет.
 
 Server Components и SSR являются default. Client Components остаются для
-графиков, фильтров и интерактивных форм. Admin/auth/health/export responses не
+графиков, фильтров и интерактивных форм. Admin/auth/health responses не
 попадают в public cache. OpenAPI client генерируется из замороженного контракта.
 
 ## Budgets

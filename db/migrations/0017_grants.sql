@@ -169,7 +169,6 @@ GRANT SELECT,USAGE ON SEQUENCE analytics.institution_daily_metrics_id_seq TO col
 GRANT SELECT,USAGE ON SEQUENCE analytics.institution_metric_aggregate_id_seq TO collector_ingest;
 GRANT SELECT,USAGE ON SEQUENCE analytics.institution_monthly_metrics_id_seq TO collector_ingest;
 GRANT SELECT,USAGE ON SEQUENCE analytics.institution_period_metrics_id_seq TO collector_ingest;
-GRANT SELECT,INSERT ON TABLE analytics.legacy_native_export_lexeme TO collector_ingest;
 GRANT SELECT,INSERT ON TABLE catalog.account_external_identity TO collector_ingest;
 GRANT UPDATE(valid_to) ON TABLE catalog.account_external_identity TO collector_ingest;
 GRANT SELECT,USAGE ON SEQUENCE catalog.account_external_identity_id_seq TO collector_ingest;
@@ -241,7 +240,6 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE analytics.institution_monthly_metrics
 GRANT SELECT,USAGE ON SEQUENCE analytics.institution_monthly_metrics_id_seq TO maintenance;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE analytics.institution_period_metrics TO maintenance;
 GRANT SELECT,USAGE ON SEQUENCE analytics.institution_period_metrics_id_seq TO maintenance;
-GRANT SELECT ON TABLE analytics.legacy_native_export_lexeme TO maintenance;
 GRANT SELECT ON TABLE analytics.legacy_overview_account TO maintenance;
 GRANT SELECT ON TABLE analytics.legacy_overview_card TO maintenance;
 GRANT SELECT ON TABLE analytics.legacy_period_policy TO maintenance;

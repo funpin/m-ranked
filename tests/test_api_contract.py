@@ -98,9 +98,7 @@ COMPARE_GROUP = {
     ("/api/v1/compare", "GET"),
 }
 
-EXPORT_MEDIA_GROUP = {
-    ("/api/v1/exports/publications.csv", "GET"),
-    ("/api/v1/legacy-exports/{kind}.csv", "GET"),
+MEDIA_GROUP = {
     ("/api/v1/emoji/{emojiId}", "GET"),
 }
 
@@ -129,10 +127,6 @@ ADMIN_GROUP = {
     ("/api/v1/admin/jobs/{jobId}", "GET"),
     ("/api/v1/admin/platform-accounts/{accountId}", "GET"),
     ("/api/v1/admin/platform-accounts/{accountId}/enabled", "PUT"),
-    ("/api/v1/admin/exports", "POST"),
-    ("/api/v1/admin/exports/{id}", "GET"),
-    ("/api/v1/admin/exports/{id}", "DELETE"),
-    ("/api/v1/admin/exports/{id}/download", "GET"),
 }
 
 
@@ -160,9 +154,9 @@ def test_compare_group_is_implemented(contract: dict, app) -> None:
     assert COMPARE_GROUP <= implemented
 
 
-def test_export_and_media_group_is_implemented(contract: dict, app) -> None:
+def test_media_group_is_implemented(contract: dict, app) -> None:
     implemented = implemented_operations(app)
-    assert EXPORT_MEDIA_GROUP <= implemented
+    assert MEDIA_GROUP <= implemented
 
 
 def test_analysis_group_is_implemented(contract: dict, app) -> None:

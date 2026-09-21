@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -271,6 +272,11 @@ def account_stats(row: dict[str, Any], revision: int, as_of: Any,
 
 
 def account(row: dict[str, Any], revision: int, stats: dict[str, Any] | None = None) -> dict[str, Any]:
+    native_id = row.get("native_external_id")
+    archive_url = None
+    if (row["platform"] == "max" and isinstance(native_id, str)
+            and re.fullmatch(r"-?\d+", native_id.strip())):
+        archive_url = f"https://maxstat.ru/channel/{native_id.strip()}/post"
     return {
         "accountId": str(row["account_id"] if "account_id" in row else row["id"]),
         "legacyId": row["legacy_id"],
@@ -286,6 +292,7 @@ def account(row: dict[str, Any], revision: int, stats: dict[str, Any] | None = N
         "username": row["current_username"],
         "title": row["current_title"],
         "url": row["current_url"],
+        "archiveUrl": archive_url,
         "accessMode": row["access_mode"],
         "enabled": row["enabled"],
         "publicationCount": row["publication_count"],

@@ -37,9 +37,6 @@ CREATE INDEX institution_monthly_metrics_query_idx ON analytics.institution_mont
 -- analytics.institution_period_metrics_query_idx
 CREATE INDEX institution_period_metrics_query_idx ON analytics.institution_period_metrics USING btree (platform, period_key, metric_key, aggregation, as_of DESC, dataset_revision_id DESC, institution_id);
 
--- analytics.legacy_native_export_publication_idx
-CREATE INDEX legacy_native_export_publication_idx ON analytics.legacy_native_export_lexeme USING btree (publication_id, snapshot_id DESC);
-
 -- analytics.legacy_overview_account_revision_entity_idx
 CREATE INDEX legacy_overview_account_revision_entity_idx ON analytics.legacy_overview_account USING btree (dataset_revision_id, platform, entity_id, "position");
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=Bound active M-Ranked Next.js fetch cache every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+RandomizedDelaySec=2min
+AccuracySec=1min
+Unit=m-ranked-target-web-cache-gc.service
+
+[Install]
+WantedBy=timers.target

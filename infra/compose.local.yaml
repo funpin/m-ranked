@@ -38,7 +38,6 @@ services:
       # эта переменная не задаётся вовсе.
       ADMIN_REQUIRE_MFA: "false"
       MRANKED_IDENTITY_RECEIPT_DIR: /state/identity-receipts
-      MRANKED_EXPORTS_SPOOL_DIRECTORY: /state/exports
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -54,11 +53,16 @@ services:
       context: ..
       dockerfile: infra/local/web.Dockerfile
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m
     environment:
       API_BASE_URL: http://api:8080
       NEXT_PUBLIC_DATA_CACHE: disabled
     ports:
       - "127.0.0.1:3000:3000"
+    volumes:
+      - web_cache:/app/frontend/.next/cache
     depends_on:
       api:
         condition: service_started
@@ -71,3 +75,4 @@ services:
 
 volumes:
   api_state:
+  web_cache:

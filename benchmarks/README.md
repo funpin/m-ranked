@@ -59,7 +59,9 @@ With disposable PostgreSQL and both test DSNs configured, run:
 The probe excludes fixture setup and delivery, alternates six first-observation
 account batches with transfer disabled/enabled, and counts connection- and
 cursor-level SQL calls. Sealing adds exactly one round trip per account batch:
-26 before, 27 after. Results are stored beside the other probes, see
+22 before, 23 after. The absolute numbers dropped by four when the CSV
+materialization was retired; the sealing delta itself is unchanged. Results are
+stored beside the other probes, see
 `results/2026-09-21-transfer-sealing.json`; the wall-clock medians move inside
 run-to-run noise on a laptop and are not an acceptance criterion.
 

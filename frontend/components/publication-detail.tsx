@@ -1,7 +1,7 @@
 import { accountHref, publicationHref } from "@/lib/entity-routes";
 import Link from "@/components/native-link";
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
-import { legacyDate, PLATFORM_LONG_LABELS, postTypeLabel, publicationLabel } from "@/lib/format";
+import { deletedPublicationArchiveUrl, legacyDate, PLATFORM_LONG_LABELS, postTypeLabel, publicationLabel } from "@/lib/format";
 import type { DetailHistory } from "@/lib/detail-data";
 import { queryHref } from "@/lib/params";
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
@@ -55,8 +55,11 @@ function Neighbour({ href, id, platform, direction }: {
 
 export function PublicationDetail({history,historyLimit=100,analysis=null}:{history:DetailHistory;historyLimit?:number;analysis?:PublicationAnomalyAnalysis|null}) {
   const p=history.publication, telegram=p.platform === "telegram";
-  const url=telegram && p.deletedAt && p.accountUsername ? `https://tgstat.ru/channel/@${p.accountUsername}/${p.displayExternalId ?? p.externalId}` : p.publicUrl;
-  const label=`${publicationLabel(p.displayExternalId ?? p.externalId,p.platform)}${telegram && p.deletedAt ? " в TGStat" : ""}`;
+  const archiveUrl=deletedPublicationArchiveUrl(p.platform,p.deletedAt,p.displayExternalId ?? p.externalId,p.accountUsername,history.accountArchiveUrl);
+  const url=archiveUrl ?? p.publicUrl;
+  const archiveLabel=archiveUrl ? (telegram ? "TGStat" : "MAXSTAT") : null;
+  const label=`${publicationLabel(p.displayExternalId ?? p.externalId,p.platform)}${archiveLabel ? ` в ${archiveLabel}` : ""}`;
+  const maxstatDate=archiveLabel === "MAXSTAT" ? legacyDate(p.publishedAt).slice(0,10) : null;
   return <>
     <span data-active-platform={p.platform} hidden />
     <header className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -78,6 +81,7 @@ export function PublicationDetail({history,historyLimit=100,analysis=null}:{hist
           {p.ambiguousAlbumReactions ? <span className="text-warning font-medium">реакции элементов альбома различаются</span> : null}
           {p.joint ? <StatusPill tone="blue">+{p.additionalAuthorCount} авт.</StatusPill> : null}
         </p>
+        {maxstatDate ? <p className="text-muted-foreground mt-2 text-sm">В MAXSTAT выберите в фильтрах дату <b className="text-foreground font-semibold">{maxstatDate}</b>: сервис не сохраняет выбранный день в ссылке.</p> : null}
       </div>
       <nav className="flex shrink-0 gap-2" aria-label="Навигация по публикациям">
         <Neighbour direction="prev" platform={p.platform} id={history.previousDisplayId} href={history.previousPublicationId ? publicationHref(history.previousPublicationId) : undefined} />

@@ -38,7 +38,7 @@ readlink -f /opt/m-ranked/current
 systemctl is-active m-ranked-target-api m-ranked-target-web
 ```
 
-## 2. Миграции — до кода, не после
+## 2. Миграции — обычно до кода
 
 Приложения не мигрируют базу на старте. Сначала резервная копия и проверенное
 восстановление, потом по одному файлу:
@@ -55,6 +55,13 @@ bootstrap по населённой базе не проигрывается н�
 Релиз, которому нужны новые таблицы, до миграции держит `/api/v1/health/ready`
 в DOWN. Это не декорация: выкатка кода вперёд миграции — штатный способ получить
 отказ на ровном месте.
+
+Исключение — миграция `0033_remove_csv_exports.sql`: она удаляет таблицу,
+в которую старые collectors ещё пишут. Для неё сначала остановите все четыре
+`m-ranked-target-collector@*.service`, переключите API, web и collectors на
+релиз без CSV-экспорта, затем примените `0029` и запустите collectors. Не
+применяйте `0029` перед заменой кода и не оставляйте старый collector работающим
+во время удаления таблицы.
 
 ## 3. Учётные данные и переменные
 
@@ -156,6 +163,39 @@ python3 operations/scripts/generate_python_lock.py requirements/collector.txt \
   requirements/collector.lock --extra setuptools==80.9.0 wheel==0.46.2
 ```
 
+### Ограничение Next.js cache
+
+Глобальный Next.js `cacheHandler` здесь не используется: он подменяет все виды
+incremental cache (fetch, app page и route), зависит от внутренних форматов
+Next.js и связывает неизменяемые релизы общим persistent-форматом. Публичные
+API-представления вместо этого живут в process-local TTL/LRU: штатно 10 секунд,
+128 записей и 16 MiB. Одинаковые конкурентные misses используют один producer;
+перезапуск, deploy и rollback намеренно начинают с холодного кэша.
+
+Writable mount сохраняется для совместимости Next.js и старых релизов. Его
+активный `fetch-cache` ограничивает отдельный timer: файлы старше часа удаляются,
+а при превышении 128 MiB oldest-first проход уменьшает объём до 96 MiB. Перед
+unlink повторно сверяются inode, размер и mtime. Установите collector вне
+immutable release, чтобы rollback не убрал защиту:
+
+```bash
+install -D -o root -g root -m 0755 operations/scripts/gc-next-cache.mjs \
+  /usr/local/libexec/m-ranked/gc-next-cache.mjs
+install -o root -g root -m 0644 operations/systemd/m-ranked-target-web-cache-gc.service \
+  operations/systemd/m-ranked-target-web-cache-gc.timer /etc/systemd/system/
+install -o root -g root -m 0600 operations/env/web-cache-gc.env.example \
+  /etc/m-ranked/web-cache-gc.env
+```
+
+В `/etc/m-ranked/web-cache-gc.env` закрепите тот же проверенный Node image digest,
+что в `m-ranked-target-web.service`, и числовые uid:gid владельца
+`/var/lib/m-ranked/web-cache`. Collector работает без сети и capabilities, с
+read-only root; единственный writable bind — точный активный cache.
+
+`/var/lib/m-ranked/web-cache-b66ad66-retired-20260921` — сохранённое production-
+свидетельство. Не удаляйте, не переименовывайте, не монтируйте его как active и
+не меняйте без отдельного явного разрешения.
+
 ## 6. nginx
 
 Конфигурация проверяется до перезагрузки, а не после:
@@ -173,6 +213,7 @@ nginx -t && systemctl reload nginx
 
 ```bash
 systemctl daemon-reload                      # если менялись юниты
+systemctl enable --now m-ranked-target-web-cache-gc.timer
 systemctl restart m-ranked-target-api
 systemctl restart m-ranked-target-web
 ```
@@ -207,6 +248,9 @@ done
 
 ```bash
 systemctl is-active m-ranked-target-api-python m-ranked-target-web
+systemctl is-active m-ranked-target-web-cache-gc.timer
+journalctl -u m-ranked-target-web-cache-gc.service -n 20 --no-pager
+du -sh /var/lib/m-ranked/web-cache
 curl -fsS http://127.0.0.1:18080/api/v1/health/live
 curl -fsS http://127.0.0.1:8080/api/v1/health/ready
 curl -fsS http://127.0.0.1:8080/api/v1/health/freshness

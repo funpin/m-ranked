@@ -6,6 +6,7 @@ src=pathlib.Path(f'{S}/schema/live-dump-grants.sql').read_text().splitlines()
 PART=re.compile(r'_(?:19|20)\d{2}_\d{2}(?:\s|;)')
 DROPPED=('publication_hourly','comparison_publication_hourly','comparison_metric_point',
          'projection_state','rebuild_core_projections','rebuild_serving',
+         'legacy_native_export_lexeme',
          'intern_metric_evidence','compact_metric_evidence','latest_fully_published',
          'compact_new_metric_evidence','refresh_publication_content','flyway')
 # the stub overload was removed; _v21 stays — match the exact signature

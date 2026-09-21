@@ -3,7 +3,8 @@ import type { paths } from "../../contracts/openapi/m-ranked-v1-client";
 import { MAX_COMPARISON_INSTITUTIONS, COMPARISON_PAGE_SIZE } from "./types";
 import type { ApiProblem, ComparisonRequest, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection, StatisticsRequest } from "./types";
 import type { OverviewSort } from "./params";
-import { FRESHNESS_MS, revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
+import { revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
+import { publicResponseCacheFromEnv } from "./bounded-response-cache";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 interface CacheEntry { etag: string; body: string; headers: [string, string][] }
@@ -139,16 +140,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
   };
 }
 
-const nextPublicCache: PublicResponseCache = {
-  async load(key, tags, produce) {
-    const { unstable_cache } = await import("next/cache");
-    // Запись живёт ровно окно свежести: ключ включает снимок, который сам
-    // обновляется этим окном, поэтому более долгая запись всё равно никогда
-    // не будет прочитана — она лишь копилась бы на диске.
-    return unstable_cache(produce, key, { tags, revalidate: Math.ceil(FRESHNESS_MS / 1000) })();
-  },
-};
-export const api = createApiClient({ publicCache: process.env.NEXT_PUBLIC_DATA_CACHE === "disabled" ? undefined : nextPublicCache });
+const nextPublicCache = process.env.NEXT_PUBLIC_DATA_CACHE === "disabled" ? undefined : publicResponseCacheFromEnv();
+export const api = createApiClient({ publicCache: nextPublicCache });
 
 function normalizeComparisonIds(parameter: "channels" | "institutions", value: readonly number[] | undefined): readonly number[] | undefined {
   if (value === undefined) return undefined;

@@ -83,6 +83,14 @@ export function qualityLabel(value: string | null | undefined): string {
   }
 }
 
+/** Точные значения не требуют предупреждения. Для остальных состояний
+ *  возвращаем человекочитаемую подсказку и никогда не показываем сырой код. */
+export function qualityHint(value: string | null | undefined): string | undefined {
+  const normalized = (value ?? "").toLowerCase();
+  if (!normalized || normalized === "exact") return undefined;
+  return qualityLabel(value);
+}
+
 export function legacyDate(value: string | null | undefined, withZone = false): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -101,6 +109,26 @@ export function moscowDay(value: string | null | undefined): string | null {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   const get = (name: string) => parts.find((part) => part.type === name)?.value;
   return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** Ссылка на сохранённую копию удалённой публикации. MAXSTAT не принимает
+ * фильтр даты из URL, поэтому дата остаётся подсказкой интерфейса, а hash
+ * помогает перейти к карточке, если она уже загружена на странице канала. */
+export function deletedPublicationArchiveUrl(
+  platform: Platform,
+  deletedAt: string | null,
+  externalId: string | null,
+  accountUsername?: string | null,
+  accountArchiveUrl?: string | null,
+): string | null {
+  if (!deletedAt || !externalId) return null;
+  if (platform === "telegram" && accountUsername) {
+    return `https://tgstat.ru/channel/@${encodeURIComponent(accountUsername)}/${encodeURIComponent(externalId)}`;
+  }
+  if (platform === "max" && accountArchiveUrl?.startsWith("https://maxstat.ru/channel/")) {
+    return `${accountArchiveUrl}#${encodeURIComponent(externalId)}`;
+  }
+  return null;
 }
 export const PERIOD_SHORT = {"3h":"за 3 часа","1d":"за сутки","7d":"за неделю","30d":"за месяц"} as const;
 export function legacyNumber(value: MetricValue) { const n = metricNumber(value); return n === null ? "—" : String(n); }

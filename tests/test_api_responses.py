@@ -349,31 +349,6 @@ def test_compare_rejects_invalid_relevant_selection(client) -> None:
 
 
 @requires_database
-def test_publication_csv_headers_and_bytes(client) -> None:
-    response = client.get("/api/v1/exports/publications.csv?platform=telegram")
-    assert response.status_code == 200, response.text
-    assert response.headers["cache-control"] == "no-store"
-    assert response.headers["content-type"] == "text/csv; charset=utf-8"
-    assert response.headers["content-disposition"] == (
-        'attachment; filename="publications-telegram.csv"')
-    assert int(response.headers["x-dataset-revision"]) > 0
-    assert response.content.startswith(
-        b"platform,institution,publication_id,published_at,observed_at,views,")
-    assert b"\r\n" in response.content
-    assert not response.content.startswith(b"\xef\xbb\xbf")
-
-
-@requires_database
-def test_legacy_csv_fails_closed_without_lexemes(client, validator_for) -> None:
-    response = client.get("/api/v1/legacy-exports/posts.csv", params=[
-        ("platform", "vk"), ("platform", "tg"), ("ignored", "1")])
-    body = assert_contract_response(
-        response, validator_for, "/api/v1/legacy-exports/{kind}.csv", "409")
-    assert response.headers["cache-control"] == "no-store"
-    assert body["code"] == "LEXEMES_MISSING"
-
-
-@requires_database
 def test_emoji_validation_and_success_headers(client, validator_for, monkeypatch) -> None:
     from api.emoji_proxy import Asset
     from api.routes import emoji
@@ -446,9 +421,7 @@ def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) 
 
 
 @requires_database
-def test_admin_reads_and_background_export(client, validator_for, monkeypatch) -> None:
-    import time
-
+def test_admin_reads(client, validator_for, monkeypatch) -> None:
     unauthorized = client.get("/api/v1/admin/jobs")
     assert_contract_response(unauthorized, validator_for, "/api/v1/admin/jobs", "401")
 
@@ -481,29 +454,6 @@ def test_admin_reads_and_background_export(client, validator_for, monkeypatch) -
         job_id = jobs_page["items"][0]["jobId"]
         detail = client.get(f"/api/v1/admin/jobs/{job_id}?accountResultLimit=2")
         assert_contract_response(detail, validator_for, "/api/v1/admin/jobs/{jobId}")
-
-    created = client.post("/api/v1/admin/exports",
-                          headers={"X-XSRF-TOKEN": csrf["token"]}, json={"platform": "rutube"})
-    export = assert_contract_response(
-        created, validator_for, "/api/v1/admin/exports", "202", "post")
-    assert created.headers["location"].endswith(export["id"])
-    for _ in range(100):
-        current = client.get(f"/api/v1/admin/exports/{export['id']}")
-        export = assert_contract_response(
-            current, validator_for, "/api/v1/admin/exports/{id}")
-        if export["state"] not in ("queued", "running"):
-            break
-        time.sleep(0.02)
-    assert export["state"] == "succeeded", export
-    download = client.get(f"/api/v1/admin/exports/{export['id']}/download")
-    assert download.status_code == 200
-    assert download.headers["x-dataset-revision"] == str(export["datasetRevision"])
-    assert download.content.startswith(b"platform,institution,publication_id,")
-    cancelled = client.delete(f"/api/v1/admin/exports/{export['id']}",
-                              headers={"X-XSRF-TOKEN": csrf["token"]})
-    assert_contract_response(cancelled, validator_for, "/api/v1/admin/exports/{id}",
-                             method="delete")
-
 
 @requires_database
 def test_catalog_command_normalization_and_contract(client, validator_for, monkeypatch) -> None:

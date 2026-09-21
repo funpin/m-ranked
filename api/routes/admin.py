@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Header, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from psycopg import errors as pg_errors
 
@@ -704,11 +704,6 @@ class SetEnabled(BaseModel):
     expectedRowVersion: int = Field(ge=0)
 
 
-class CreateExport(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    platform: Literal["all", "telegram", "vk", "max", "rutube"]
-
-
 def _job(row: dict[str, Any]) -> dict[str, Any]:
     return {"jobId": str(row["id"]), "kind": "collection", "platform": row["platform"],
             "scheduledAt": dto.iso(row["scheduled_at"]), "startedAt": dto.iso(row["started_at"]),
@@ -823,37 +818,3 @@ async def set_platform_account_enabled(
                       "datasetRevision": revision, "correlationId": str(correlation),
                       "outcome": outcome}, correlation=correlation)
 
-
-@router.post("/api/v1/admin/exports")
-async def create_export(body: CreateExport, request: Request,
-                        user: Annotated[Principal, Depends(WRITE)],
-                        _: Annotated[None, Depends(require_csrf)]) -> Response:
-    job = await request.app.state.export_jobs.create(user.username, body.platform)
-    response = _no_store(job.view(), status=202)
-    response.headers["Location"] = f"/api/v1/admin/exports/{job.id}"
-    return response
-
-
-@router.get("/api/v1/admin/exports/{id}")
-async def export_status(id: uuid.UUID, request: Request,
-                        user: Annotated[Principal, Depends(WRITE)]) -> Response:
-    job = await request.app.state.export_jobs.status(user.username, id)
-    return _no_store(job.view())
-
-
-@router.delete("/api/v1/admin/exports/{id}")
-async def cancel_export(id: uuid.UUID, request: Request,
-                        user: Annotated[Principal, Depends(WRITE)],
-                        _: Annotated[None, Depends(require_csrf)]) -> Response:
-    job = await request.app.state.export_jobs.cancel(user.username, id)
-    return _no_store(job.view())
-
-
-@router.get("/api/v1/admin/exports/{id}/download")
-async def download_export(id: uuid.UUID, request: Request,
-                          user: Annotated[Principal, Depends(WRITE)]) -> Response:
-    job, path = await request.app.state.export_jobs.download(user.username, id)
-    return FileResponse(path, media_type="text/csv; charset=utf-8",
-                        filename=f"publications-{job.platform}.csv",
-                        headers={"Cache-Control": "no-store",
-                                 "X-Dataset-Revision": str(job.revision)})
