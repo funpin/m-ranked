@@ -2,6 +2,14 @@
 
 @/Users/funpin/.codex/RTK.md
 
+## Production access is not recorded here
+
+This repository is public. Host addresses, SSH ports, service endpoints and any
+other operational access details belong in the operator's local notes, never in
+a tracked file. A previous revision recorded them here and the history had to be
+rewritten; gitleaks does not catch an address, so nothing but this rule stands
+between the next such note and another public disclosure.
+
 ## Database decision: CSV export retired
 
 - Decision owner: `funpin`; recorded on 2026-09-21. CSV export, its API/frontend/admin routes, background jobs, spool configuration, and collector-side CSV materialization are retired product behavior.
