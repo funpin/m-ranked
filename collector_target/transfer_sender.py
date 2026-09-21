@@ -20,19 +20,26 @@ import os
 import signal
 import sys
 import threading
-import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from .repository import PostgresCollectorRepository
 from .transfer import HttpsMtlsTransport, InProcessTransport, PostgresDataAdapter
-from .transfer import PostgresTransferProducer
+from .transfer import PostgresTransferProducer, _row
 
 
 logger = logging.getLogger("transfer_sender")
 
 DEFAULT_INTERVAL_SECONDS = 15
 DEFAULT_BATCH_LIMIT = 50
+# Подтверждённый конверт хранит свою полезную нагрузку и после доставки.
+# Метод очистки в продюсере есть, но вызывать его было некому, и очередь росла
+# примерно на 600 МиБ в сутки — на тесном диске сборщика это две недели до
+# отказа. Окно нужно не ради места, а ради замены: если потребитель потеряет
+# данные, отдать их заново можно только пока конверт цел.
+DEFAULT_RETENTION_HOURS = 48
+DEFAULT_PURGE_LIMIT = 2000
 
 
 def _positive_int(name: str, default: int, low: int, high: int) -> int:
@@ -91,12 +98,18 @@ def publish_metrics(path: Path, delivered: int, backlog: int, failures: int) -> 
 
 
 def backlog_size(repository: PostgresCollectorRepository) -> int:
+    """Сколько конвертов ещё ждут отправки.
+
+    Строка читается через тот же помощник, что и везде в модуле переноса:
+    соединение репозитория отдаёт её отображением, а не кортежем, и обращение
+    по индексу здесь ломается.
+    """
     with repository._connection() as connection:
         row = connection.execute(
-            """SELECT count(*) FROM ops_and_admin.transfer_outbox
+            """SELECT count(*) AS backlog FROM ops_and_admin.transfer_outbox
                 WHERE state IN ('sealed','sent')"""
         ).fetchone()
-    return 0 if row is None else int(row[0])
+    return 0 if row is None else int(_row(row, "backlog", 0))
 
 
 def run() -> int:
@@ -112,6 +125,13 @@ def run() -> int:
         "COLLECTOR_TRANSFER_SENDER_BATCH_LIMIT", DEFAULT_BATCH_LIMIT, 1, 500,
     )
     producer_id = _required("COLLECTOR_TRANSFER_PRODUCER_ID")
+    retention_hours = _positive_int(
+        "COLLECTOR_TRANSFER_SENDER_RETENTION_HOURS",
+        DEFAULT_RETENTION_HOURS, 0, 24 * 90,
+    )
+    purge_limit = _positive_int(
+        "COLLECTOR_TRANSFER_SENDER_PURGE_LIMIT", DEFAULT_PURGE_LIMIT, 1, 50000,
+    )
     metrics_file = os.environ.get("COLLECTOR_TRANSFER_SENDER_METRICS_FILE", "").strip()
     metrics_path = Path(metrics_file) if metrics_file else None
 
@@ -124,6 +144,7 @@ def run() -> int:
         signal.signal(number, lambda *_: stop.set())
 
     delivered_total = 0
+    purged_total = 0
     failures_total = 0
     logger.info(
         "transfer sender started producer=%s interval=%ss limit=%s",
@@ -139,6 +160,16 @@ def run() -> int:
                     break
                 delivered_total += sent
                 logger.info("delivered=%s total=%s", sent, delivered_total)
+            # Очистка идёт после доставки и только по подтверждённым записям:
+            # неподтверждённое не удаляется никогда и ни при каком пороге.
+            if retention_hours:
+                horizon = datetime.now(timezone.utc) - timedelta(hours=retention_hours)
+                removed = producer.purge_acknowledged(
+                    before=horizon, limit=purge_limit,
+                )
+                if removed:
+                    purged_total += removed
+                    logger.info("purged=%s total=%s", removed, purged_total)
         except Exception as error:  # noqa: BLE001 — журнал важнее падения
             failures_total += 1
             logger.warning("delivery pass failed: %s", type(error).__name__)
@@ -151,7 +182,10 @@ def run() -> int:
             except Exception:  # noqa: BLE001 — метрики не должны ронять отправку
                 logger.debug("metrics publication failed", exc_info=True)
         stop.wait(interval)
-    logger.info("transfer sender stopped delivered=%s", delivered_total)
+    logger.info(
+        "transfer sender stopped delivered=%s purged=%s",
+        delivered_total, purged_total,
+    )
     return 0
 
 

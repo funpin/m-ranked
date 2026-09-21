@@ -256,6 +256,8 @@ def install_profile_b_server1(context: Context) -> list[str]:
     base_layout(context)
     collector_users(context)
     steps.ensure_user(context, "m-ranked-transfer-sender")
+    context.run("usermod", "-aG", "node-exporter", "m-ranked-transfer-sender",
+                check=False)
     secrets = database_secrets(context)
 
     rule("Перенос на Сервер 2")

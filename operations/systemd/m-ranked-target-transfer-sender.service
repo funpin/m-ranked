@@ -8,6 +8,9 @@ Wants=network-online.target
 Type=simple
 User=m-ranked-transfer-sender
 Group=m-ranked-transfer-sender
+# Каталог метрик принадлежит группе node-exporter и доступен ей на
+# запись; без членства служба пишет свою метрику в никуда.
+SupplementaryGroups=node-exporter
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/transfer-sender.env
 EnvironmentFile=-/etc/m-ranked/collector-profile.env
