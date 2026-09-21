@@ -1537,17 +1537,14 @@ class PostgresCollectorRepository:
             connection, batch.context.run_id, lineage_items,
         )
         if inserted_snapshots:
-            from .legacy_csv import persist_native_csv_batch
-            persist_native_csv_batch(connection, [
-                (
-                    snapshot_key[0],
-                    month,
-                    snapshot_id,
-                    snapshots_by_key[snapshot_key].snapshot.sanitized_source,
-                )
-                for snapshot_key, (month, snapshot_id)
-                in inserted_snapshots.items()
-            ])
+            # Numeric aliases remain part of the public URL compatibility
+            # contract; unlike the retired CSV materialization they are not
+            # duplicate observation storage.
+            connection.execute(
+                "SELECT ops_and_admin.ensure_publication_legacy_alias(publication_id) "
+                "FROM unnest(%s::uuid[]) AS publications(publication_id)",
+                (list(dict.fromkeys(key[0] for key in inserted_snapshots)),),
+            )
 
         discovered_ids: set[UUID] = set()
         results = []

@@ -5,6 +5,7 @@ kept=json.loads(pathlib.Path(f'{S}/schema/kept.json').read_text())
 
 DROP_TABLES={'analytics.publication_hourly','analytics.comparison_publication_hourly',
              'analytics.comparison_metric_point','analytics.projection_state',
+             'analytics.legacy_native_export_lexeme',
              'flyway.flyway_schema_history'}
 DROP_FUNCS={'analytics.rebuild_core_projections','analytics.rebuild_core_projections_v2',
             'analytics.rebuild_core_projections_v5','analytics.rebuild_core_projections_v6',

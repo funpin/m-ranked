@@ -69,10 +69,6 @@ ALTER TABLE analytics.institution_period_metrics
 ALTER TABLE analytics.institution_period_metrics
     ADD CONSTRAINT institution_period_metrics_pkey PRIMARY KEY (id);
 
--- analytics.legacy_native_export_lexeme legacy_native_export_lexeme_pkey
-ALTER TABLE analytics.legacy_native_export_lexeme
-    ADD CONSTRAINT legacy_native_export_lexeme_pkey PRIMARY KEY (published_month, snapshot_id);
-
 -- analytics.legacy_overview_account legacy_overview_account_pkey
 ALTER TABLE analytics.legacy_overview_account
     ADD CONSTRAINT legacy_overview_account_pkey PRIMARY KEY (platform, entity_id, account_id);

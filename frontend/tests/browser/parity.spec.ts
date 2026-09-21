@@ -264,7 +264,7 @@ test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page
   })).toContain("blur");
 });
 
-test("CSV export is absent from the navigation and raw quality codes are absent from tables", async ({ page }) => {
+test("retired export is absent from navigation and raw quality codes are absent from tables", async ({ page }) => {
   await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
   await expect(page.getByTestId("main-nav").getByText("Экспорт CSV", { exact: true })).toHaveCount(0);
   await expect(page.locator('[title="exact" i]')).toHaveCount(0);

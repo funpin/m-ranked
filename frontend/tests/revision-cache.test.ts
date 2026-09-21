@@ -22,7 +22,7 @@ test("public cache keys include full canonical query, origin, domain and revisio
     assert.notDeepEqual(publicCacheKey(url, 7), publicCacheKey(new URL(changed), 7));
   }
   assert.notDeepEqual(publicCacheKey(url, 7), publicCacheKey(url, 8));
-  for (const path of ["admin/jobs", "health/ready", "exports/publications.csv", "auth", "revision"]) assert.equal(publicCacheKey(new URL(`https://api.test/api/v1/${path}`), 7), null);
+  for (const path of ["admin/jobs", "health/ready", "auth", "revision"]) assert.equal(publicCacheKey(new URL(`https://api.test/api/v1/${path}`), 7), null);
 });
 
 test("внутри окна свежести снимок читается один раз, а ответ отдаётся из кэша", async () => {

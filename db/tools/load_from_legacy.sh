@@ -44,7 +44,8 @@ tables=$(src -At -c "
    WHERE c.relkind IN ('r','p') AND NOT c.relispartition
      AND n.nspname IN ('analytics','catalog','ingest','ops_and_admin','rating')
      AND c.relname NOT IN ('publication_hourly','comparison_publication_hourly',
-                           'comparison_metric_point','projection_state')
+                           'comparison_metric_point','projection_state',
+                           'legacy_native_export_lexeme')
    ORDER BY 1")
 
 for t in $tables; do

@@ -13,13 +13,12 @@ from .cache import InvalidationListener, ResponseCache
 from .config import Settings
 from .db import Database
 from .errors import ApiProblem, handle, handle_validation
-from .export_jobs import ExportJobs
 from .limits import BodyLimit
 from .outbox import OutboxMarker
 from .security import AuthConfig
 from .security_events import SecurityTelemetry
 from .sessions import SessionPolicy, SessionStore
-from .routes import admin, analysis, compare, emoji, exports, health, query, statistics
+from .routes import admin, analysis, compare, emoji, health, query, statistics
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +29,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     cache = ResponseCache(settings.cache_entries, settings.cache_ttl_seconds,
                           settings.cache_min_age_seconds,
                           settings.cache_stale_seconds)
-    export_jobs = ExportJobs(database)
     listener = InvalidationListener(settings.read_dsn, cache) if settings.read_dsn else None
     outbox = OutboxMarker(settings.outbox_dsn) if settings.outbox_dsn else None
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await database.open()
-        await export_jobs.start()
         if listener is not None:
             await listener.start()
         if outbox is not None:
@@ -49,7 +46,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await listener.stop()
             if outbox is not None:
                 await outbox.stop()
-            await export_jobs.close()
             await database.close()
 
     app = FastAPI(
@@ -85,11 +81,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.clock = time.time
     app.state.sessions = SessionStore(database, app.state.session_policy,
                                       lambda: app.state.clock())
-    app.state.export_jobs = export_jobs
     app.add_exception_handler(ApiProblem, handle)
     app.add_exception_handler(RequestValidationError, handle_validation)
 
-    for module in (health, query, statistics, compare, emoji, exports, analysis, admin):
+    for module in (health, query, statistics, compare, emoji, analysis, admin):
         app.include_router(module.router)
     app.add_middleware(BodyLimit, maximum=settings.max_body_bytes)
     return app

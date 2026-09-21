@@ -17,7 +17,11 @@ CREATE OR REPLACE FUNCTION analytics.finalize_ingestion_dataset_revision(
     SET search_path TO 'pg_catalog', 'analytics'
     AS $$
 BEGIN
-    IF session_user <> 'collector_ingest' THEN
+    -- Production uses per-platform login roles that are members of the
+    -- non-login collector_ingest capability role. Checking membership keeps
+    -- the function collector-only without rejecting those least-privilege
+    -- logins.
+    IF NOT pg_has_role(session_user, 'collector_ingest', 'member') THEN
         RAISE EXCEPTION 'finalize_ingestion_dataset_revision is collector-only';
     END IF;
     IF jsonb_typeof(p_metadata) IS DISTINCT FROM 'object' THEN
@@ -39,6 +43,13 @@ BEGIN
     RETURN FOUND;
 END
 $$;
+
+REVOKE ALL ON FUNCTION analytics.finalize_ingestion_dataset_revision(
+    bigint, uuid, jsonb, boolean
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION analytics.finalize_ingestion_dataset_revision(
+    bigint, uuid, jsonb, boolean
+) TO collector_ingest;
 
 CREATE OR REPLACE FUNCTION analytics.track_publication_latest() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER

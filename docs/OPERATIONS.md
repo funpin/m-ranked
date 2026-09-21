@@ -44,6 +44,14 @@ SQL. FastAPI держит небольшой LRU-кэш в памяти и сб�
 `LISTEN/NOTIFY`. Потеря уведомления не влияет на корректность: ключ включает
 ревизию набора, TTL ограничен.
 
+## CSV-экспорт
+
+CSV-экспорт удалён из рабочего контура. FastAPI не публикует public, legacy или
+admin export endpoints, Next.js не содержит совместимых `/export/*.csv`
+маршрутов, а collectors не создают `analytics.legacy_native_export_lexeme`.
+Миграция `0029_remove_csv_exports.sql` удаляет оставшуюся таблицу с production.
+Служебный cold archive Parquet относится к retention/DR и остаётся включённым.
+
 Подробные процедуры: [deploy](../operations/runbooks/DEPLOY.md),
 [backup/restore](../operations/runbooks/BACKUP_RESTORE.md),
 [аварийный откат приложения](../operations/runbooks/ROLLBACK.md).
