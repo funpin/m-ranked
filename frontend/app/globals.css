@@ -245,7 +245,7 @@
      достаточно плотный, чтобы текст меню не смешивался с содержимым. */
   .site-header-glass {
     background: var(--background);
-    background: color-mix(in oklab, var(--background) 78%, transparent);
+    background: color-mix(in oklab, var(--background) 72%, transparent);
     -webkit-backdrop-filter: saturate(140%) blur(18px);
     backdrop-filter: saturate(140%) blur(18px);
   }
