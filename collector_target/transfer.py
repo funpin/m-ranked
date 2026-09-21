@@ -515,6 +515,48 @@ def _row(row: Any, key: str, index: int) -> Any:
     return row[key] if isinstance(row, Mapping) else row[index]
 
 
+def _restore_provenance(connection: Any, batch: Any) -> None:
+    """Восстановить у потребителя происхождение пачки.
+
+    Запись пачки опирается на две строки, которые заводит сборщик до сбора:
+    прогон ``ingest.collection_run`` и результат по аккаунту
+    ``ingest.collection_account_result``. В конверт они не попадают, потому
+    что при in-process доставке уже существуют — обе базы там одна. При
+    настоящем переносе между двумя базами их у потребителя нет, и применение
+    падало: сначала на внешнем ключе ревизии, затем на отсутствующем
+    результате по аккаунту.
+
+    Контекст пачки несёт все нужные поля, так что обе строки
+    восстанавливаются без обращения к производителю. Статус ``running``
+    отражает состояние на момент запечатывания; завершение проставит сама
+    запись пачки.
+    """
+    context = batch.context
+    connection.execute(
+        """INSERT INTO ingest.collection_run(
+               id, platform, partition_key, collector_version, started_at,
+               scheduled_at, status, correlation_id
+           ) VALUES (%s,%s,%s,%s,%s,%s,'running',%s)
+           ON CONFLICT (id) DO NOTHING""",
+        (
+            context.run_id,
+            context.platform.value,
+            context.partition_key,
+            context.collector_version,
+            context.started_at,
+            context.scheduled_at,
+            context.correlation_id,
+        ),
+    )
+    connection.execute(
+        """INSERT INTO ingest.collection_account_result(
+               collection_run_id, platform_account_id, started_at, status
+           ) VALUES (%s,%s,%s,'running')
+           ON CONFLICT (collection_run_id, platform_account_id) DO NOTHING""",
+        (context.run_id, batch.account.id, context.started_at),
+    )
+
+
 class PostgresDataAdapter:
     """Durable inbox plus the existing collector repository write path."""
 
@@ -638,6 +680,7 @@ class PostgresDataAdapter:
             duplicate = 0
             outcomes: list[str] = []
             for batch, ids in zip(batches, evidence_ids, strict=True):
+                _restore_provenance(connection, batch)
                 result, _ = self.repository.persist_account_batch_in_transaction(
                     connection, batch, metric_evidence_ids=ids,
                     seal_transfer=False, transfer_replay=True,

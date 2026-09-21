@@ -10,7 +10,7 @@ User=root
 Group=root
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/dump-backup.env
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 ExecStart=/opt/m-ranked/current/operations/scripts/dump-backup.sh
 TimeoutStartSec=90min
 Nice=10

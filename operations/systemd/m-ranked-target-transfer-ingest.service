@@ -16,12 +16,23 @@ LoadCredential=pgpass:/etc/m-ranked/credentials/transfer-ingest-pgpass
 LoadCredential=server-certificate:/etc/m-ranked/credentials/transfer-server.crt
 LoadCredential=server-private-key:/etc/m-ranked/credentials/transfer-server.key
 LoadCredential=transfer-ca:/etc/m-ranked/credentials/transfer-ca.crt
-Environment=PGPASSFILE=%d/pgpass
+# systemd 252 отдаёт credential как 0400 во владении службы, а начиная с
+# 257 — как 0440 root:root с ACL. libpq молча игнорирует pgpass с
+# групповым доступом и уходит в "password authentication failed" при
+# верном пароле. Копия в приватный файл работает на обеих версиях.
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-transfer-ingest -g m-ranked-transfer-ingest %d/pgpass /run/m-ranked-transfer-ingest/pgpass
+Environment=PGPASSFILE=/run/m-ranked-transfer-ingest/pgpass
 Environment=TRANSFER_INGEST_CERTIFICATE=%d/server-certificate
 Environment=TRANSFER_INGEST_PRIVATE_KEY=%d/server-private-key
 Environment=TRANSFER_INGEST_CA_BUNDLE=%d/transfer-ca
+# Применяя пачку, приёмник проходит тот же путь записи, что и сборщик:
+# кладёт удостоверяющую квитанцию и сырое доказательство. Без этих
+# каталогов применение падает на EvidenceUnavailable уже после того,
+# как конверт принят и проверен.
+Environment=MRANKED_IDENTITY_RECEIPT_DIR=/var/lib/m-ranked/transfer-ingest/identity-receipts
+Environment=COLLECTOR_RAW_EVIDENCE_DIR=/var/lib/m-ranked/transfer-ingest/raw-evidence
 Environment=PYTHONUNBUFFERED=1
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 ExecStart=/opt/m-ranked/current/.venv/bin/python -m transfer_ingest
 Restart=on-failure
 RestartSec=10s
@@ -54,6 +65,7 @@ IPAddressDeny=any
 IPAddressAllow=localhost
 SystemCallArchitectures=native
 ReadWritePaths=-/var/lib/node_exporter/textfile_collector
+ReadWritePaths=/var/lib/m-ranked/transfer-ingest
 RuntimeDirectory=m-ranked-transfer-ingest
 RuntimeDirectoryMode=0700
 UMask=0077

@@ -10,7 +10,7 @@ User=root
 Group=root
 EnvironmentFile=-/etc/m-ranked/collector-watchdog.env
 ExecStart=/opt/m-ranked/current/operations/scripts/collector-watchdog.sh
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 NoNewPrivileges=true
 ProtectHome=true
 ProtectKernelTunables=true

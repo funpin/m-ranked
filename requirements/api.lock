@@ -55,3 +55,5 @@ watchfiles==1.2.0 \
     --hash=sha256:ca148d73dea36c9763aaa351e4d7a51780ec1584217c45276f4fe8239c768b71
 websockets==17.1 \
     --hash=sha256:c3241d684a76eaaef8b2dc789afde4343cd3aad55ea81e4e8ab3605b529bae51
+zstandard==0.25.0 \
+    --hash=sha256:8e735494da3db08694d26480f1493ad2cf86e99bdd53e8e9771b2752a5c0246a

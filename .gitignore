@@ -10,7 +10,11 @@
 *.pfx
 *.dump
 *.sql.gz
-data/
+# Каталоги рантайма, а не исходники. Правило было без якоря и потому
+# заодно прятало api/data/ — справочник кодов официального рейтинга,
+# который читает api/official_rating.py. Якорим на корень.
+/data/
+collector_target/data/
 logs/
 __pycache__/
 .venv

@@ -1,0 +1,22 @@
+# PostgreSQL для установки, где база приезжает готовым снимком, а не
+# создаётся миграциями с нуля.
+#
+# Отличие от compose.yaml одно и принципиальное: здесь не подключены init-скрипты.
+# Роли приезжают отдельным `pg_dumpall --roles-only`, схема и данные —
+# `pg_restore`. Если бы init-скрипты отработали, восстановление легло бы поверх
+# уже созданной схемы и упало на конфликтах.
+#
+# Накладывается поверх compose.yaml:
+#   docker compose -f compose.yaml -f compose.restore.yaml up -d
+name: mranked-target
+
+services:
+  postgres:
+    volumes: !override
+      - postgres_data:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: mranked
+      POSTGRES_USER: mranked_bootstrap
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_INITDB_ARGS: --data-checksums --auth-host=scram-sha-256
+      PGDATA: /var/lib/postgresql/18/docker

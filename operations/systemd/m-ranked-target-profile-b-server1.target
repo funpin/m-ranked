@@ -6,6 +6,7 @@ Wants=m-ranked-target-collector@telegram.service
 Wants=m-ranked-target-collector@vk.service
 Wants=m-ranked-target-collector@max.service
 Wants=m-ranked-target-collector@rutube.service
+Wants=m-ranked-target-transfer-sender.service
 Wants=m-ranked-target-collector-watchdog.timer
 Wants=m-ranked-target-collectors.slice
 After=network-online.target

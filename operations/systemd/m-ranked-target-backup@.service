@@ -13,7 +13,7 @@ WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/backup.env
 LoadCredential=pgbackrest.conf:/etc/m-ranked/credentials/pgbackrest-repository.conf
 Environment=PGBACKREST_CONFIG=%d/pgbackrest.conf
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 ExecStart=/opt/m-ranked/current/operations/scripts/backup.sh --tier %i
 TimeoutStartSec=6h
 Nice=10

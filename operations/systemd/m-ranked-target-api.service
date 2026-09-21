@@ -25,7 +25,7 @@ Environment=ADMIN_CSRF_SECRET_FILE=%d/admin-csrf-secret
 Environment=MRANKED_IDENTITY_RECEIPT_DIR=/var/lib/m-ranked/identity-receipts
 Environment=MRANKED_SECURITY_METRICS_FILE=/var/lib/node_exporter/textfile_collector/m-ranked-api-security.prom
 Environment=PYTHONUNBUFFERED=1
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 # A crashed worker leaves a PID-named Prometheus textfile. The next API master
 # removes every stale worker file before it starts publishing a fresh set.
 ExecStartPre=/usr/bin/find /var/lib/node_exporter/textfile_collector -maxdepth 1 -type f -name m-ranked-api-cache-*.prom -delete

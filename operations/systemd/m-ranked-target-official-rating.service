@@ -19,7 +19,7 @@ LoadCredential=outbox-worker-db-password:/etc/m-ranked/credentials/outbox-worker
 Environment=API_READ_DB_PASSWORD_FILE=%d/api-read-db-password
 Environment=API_WRITE_ADMIN_DB_PASSWORD_FILE=%d/api-write-admin-db-password
 Environment=OUTBOX_WORKER_DB_PASSWORD_FILE=%d/outbox-worker-db-password
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/m-ranked/current/.venv/bin/python -m api.tools.refresh_official_rating
 TimeoutStartSec=5min

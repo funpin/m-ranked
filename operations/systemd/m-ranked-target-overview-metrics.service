@@ -10,7 +10,7 @@ User=root
 Group=root
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/overview-metrics.env
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 ExecStart=/opt/m-ranked/current/operations/scripts/refresh-overview-metrics.sh
 TimeoutStartSec=12min
 NoNewPrivileges=true

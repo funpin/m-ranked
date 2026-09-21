@@ -15,6 +15,7 @@ belong in an EnvironmentFile, command line, journal, metric or repository.
 | `collector-<platform>-auth.env` | one collector | shell-free `NAME=value` lines: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `CHANNELS`, `VK_ACCESS_TOKEN`, or `MAX_USER_PHONE` as applicable |
 | `transfer-client.crt`, `transfer-client.key`, `transfer-ca.crt` | Profile B Server 1 collectors | PEM client chain, private key and issuing CA |
 | `transfer-ingest-pgpass` | transfer receiver | PostgreSQL `.pgpass` line |
+| `transfer-sender-pgpass` | transfer sender | PostgreSQL `.pgpass` line |
 | `transfer-server.crt`, `transfer-server.key`, `transfer-ca.crt` | Profile B Server 2 receiver | PEM server chain, private key and issuing CA |
 | `redis.acl` | Redis | copy `redis.acl.example`, replace its placeholder once |
 | `redis-url` | API | copy `redis-url.credential.example` with the same password |

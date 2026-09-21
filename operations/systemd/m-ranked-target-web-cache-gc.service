@@ -8,7 +8,7 @@ Requires=docker.service
 Type=oneshot
 User=root
 Group=root
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 Environment=DOCKER_CONFIG=/run/m-ranked-web-cache-gc
 EnvironmentFile=/etc/m-ranked/web-cache-gc.env
 ExecStartPre=-/bin/sh -c '/usr/bin/docker rm -f m-ranked-target-web-cache-gc >/dev/null 2>&1'

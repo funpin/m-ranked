@@ -18,7 +18,12 @@ EnvironmentFile=/etc/m-ranked/collector-common.env
 EnvironmentFile=/etc/m-ranked/collector-%i.env
 EnvironmentFile=-/etc/m-ranked/collector-profile.env
 LoadCredential=pgpass:/etc/m-ranked/credentials/collector-pgpass
-Environment=PGPASSFILE=%d/pgpass
+# systemd 252 отдаёт credential как 0400 во владении службы, а начиная с
+# 257 — как 0440 root:root с ACL. libpq молча игнорирует pgpass с
+# групповым доступом и уходит в "password authentication failed" при
+# верном пароле. Копия в приватный файл работает на обеих версиях.
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-collector-%i -g m-ranked-collector-%i %d/pgpass /run/m-ranked-collector-%i/pgpass
+Environment=PGPASSFILE=/run/m-ranked-collector-%i/pgpass
 Environment=COLLECTOR_PLATFORM_AUTH_FILE=%d/platform-auth
 Environment=TELEGRAM_SESSION_PATH=/var/lib/m-ranked/collectors/%i/telegram.session
 Environment=TELEGRAM_WEB_PROFILE_PATH=/var/lib/m-ranked/collectors/%i/telegram-web-profile
@@ -26,7 +31,7 @@ Environment=MAX_SESSION_PATH=/var/lib/m-ranked/collectors/%i/max.session.db
 Environment=COLLECTOR_METRICS_FILE=/var/lib/node_exporter/textfile_collector/m-ranked-collector-%i.prom
 Environment=COLLECTOR_RAW_EVIDENCE_DIR=/var/lib/m-ranked/collectors/%i/raw-evidence
 Environment=PYTHONUNBUFFERED=1
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 ExecStartPre=/opt/m-ranked/current/operations/scripts/collector-preflight.sh %i
 ExecStart=/opt/m-ranked/current/.venv/bin/python -m collector_target --platform %i --partition default
 Restart=on-failure
