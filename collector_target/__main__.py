@@ -56,6 +56,10 @@ def _log_startup(
     schedule_mode: str,
     deployment_profile: str,
     transfer_mode: str,
+    *,
+    interval_seconds: int | None = None,
+    cycle_deadline_seconds: int | None = None,
+    collect_concurrency: int | None = None,
 ) -> None:
     logger.info(
         "collector started platform=%s partition=%s collector_version=%s "
@@ -67,6 +71,31 @@ def _log_startup(
         deployment_profile,
         transfer_mode,
     )
+    # Две настройки умеют молча стоить замеров, поэтому о них говорится на
+    # старте, а не только в документации.
+    if (
+        interval_seconds is not None
+        and cycle_deadline_seconds is not None
+        and cycle_deadline_seconds > interval_seconds
+    ):
+        logger.warning(
+            "collector cycle deadline exceeds its interval platform=%s "
+            "interval_seconds=%s cycle_deadline_seconds=%s: медленный цикл "
+            "перешагнёт свой слот, и планировщик схлопнет пропущенные",
+            platform.value, interval_seconds, cycle_deadline_seconds,
+        )
+    if (
+        deployment_profile == "b"
+        and collect_concurrency is not None
+        and collect_concurrency < len(Platform)
+    ):
+        logger.warning(
+            "collector collect concurrency is below the platform count "
+            "platform=%s collect_concurrency=%s platforms=%s: сбор площадок "
+            "встанет в очередь, циклы перерастут слоты и ряд замеров получит "
+            "провалы",
+            platform.value, collect_concurrency, len(Platform),
+        )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -458,6 +487,9 @@ async def _run(args: argparse.Namespace) -> int:
         _log_startup(
             platform, args.partition, collector_version, schedule_mode,
             deployment_profile, transfer_mode,
+            interval_seconds=interval_seconds,
+            cycle_deadline_seconds=_cycle_deadline(platform, settings),
+            collect_concurrency=settings.collector_collect_concurrency,
         )
         offset = platform_offset(platform, interval_seconds)
         policy = PhasePolicy(
@@ -691,6 +723,20 @@ async def _run(args: argparse.Namespace) -> int:
                 coalesced_slots=coalesced_slots,
                 resumed=resumable is not None,
             )
+            if elapsed >= interval_seconds:
+                # Цикл, не уложившийся в свой интервал, стоит пропущенных
+                # замеров: планировщик схлопнет перешагнутые слоты в один, и в
+                # истории точек появится провал вместо ровного ряда. Раньше это
+                # было видно только полем overrun в INFO-строке, и разрыв
+                # находили уже на графике публикации, а не в журнале.
+                logger.warning(
+                    "collector cycle overran its interval platform=%s partition=%s "
+                    "scheduled_at=%s duration_seconds=%.3f interval_seconds=%s "
+                    "skipped_slots=%s collector_version=%s",
+                    platform.value, args.partition, scheduled_at.isoformat(),
+                    elapsed, interval_seconds,
+                    int(elapsed) // interval_seconds, collector_version,
+                )
             if forced_shutdown:
                 coordinator.metrics.shutdown(platform, forced=True)
             if summary is not None:

@@ -454,7 +454,7 @@ def questions(profile: str) -> dict[str, str]:
             "адрес приёмника",
             f"https://{answers['ingest_host']}:8443/transfer/v1/batches")
         answers["collect_concurrency"] = ask(
-            "одновременных фаз сбора (1–4; запись всё равно одна)", "2")
+            "одновременных фаз сбора (1–4; запись всё равно одна)", "4")
         answers["pki_source"] = ask(
             "каталог с сертификатами, скопированными с Сервера 2", "/root/pki")
     return answers
