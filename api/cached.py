@@ -10,9 +10,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 
-from .cache import ResponseCache
+from .cache import cache_call
 from .db import Database
 from .providers import public_representation_version
 
@@ -36,26 +36,15 @@ def _length_prefixed(digest: "hashlib._Hash", value: str) -> None:
     digest.update(encoded)
 
 
-def cache_key(namespace: str, pinned_revision: int | None, query: dict[str, Any]) -> str:
-    """Ключ живого ответа не зависит от номера ревизии.
-
-    Прежде ревизия стояла в ключе. На проде она меняется раз в 1.9 секунды —
-    её двигает каждая запись коллектора, — поэтому ключ обновлялся быстрее,
-    чем приходил второй читатель, и кэш не отдал ни одного ответа: каждый
-    просмотр страницы заново считал агрегаты. Свежесть держится сбросом по
-    тегам из outbox и нижней границей возраста записи, а не номером в ключе.
-
-    Закреплённый снимок — отдельный ответ и отдельный ключ: он намеренно
-    описывает прошлое состояние и не должен вытеснять живой.
-    """
+def cache_key(namespace: str, revision: int, query: dict[str, Any]) -> str:
+    """Revision-scoped opaque key shared by live requests and warmup."""
     digest = hashlib.sha256()
     _length_prefixed(digest, public_representation_version())
     _length_prefixed(digest, namespace)
     for name in sorted(query):
         _length_prefixed(digest, name)
         _length_prefixed(digest, "" if query[name] is None else str(query[name]))
-    scope = "live" if pinned_revision is None else f"r{pinned_revision}"
-    return f"{namespace}:{scope}:{digest.hexdigest()}"
+    return f"{namespace}:r{revision}:{digest.hexdigest()}"
 
 
 async def current_revision(db: Database) -> tuple[int, Any]:
@@ -63,7 +52,9 @@ async def current_revision(db: Database) -> tuple[int, Any]:
     return (int(row["id"]), row["committed_at"]) if row else (0, None)
 
 
-async def _resolve_revision(db: Database, pinned: int | None) -> tuple[int, Any]:
+async def _resolve_revision(
+    db: Database, cache: Any, pinned: int | None,
+) -> tuple[int, Any]:
     """Ревизия для ответа: закреплённая клиентом или текущая.
 
     Экран публикации собирается из четырёх запросов, а ревизия набора данных
@@ -77,7 +68,14 @@ async def _resolve_revision(db: Database, pinned: int | None) -> tuple[int, Any]
         row = await db.fetch_one(PINNED_REVISION_SQL, {"revision": pinned})
         if row is not None:
             return int(row["id"]), row["committed_at"]
-    return await current_revision(db)
+    else:
+        cached = await cache_call(cache.get_revision())
+        if cached is not None:
+            return cached
+    revision = await current_revision(db)
+    if pinned is None:
+        await cache_call(cache.set_revision(*revision))
+    return revision
 
 
 async def serve(request: Request, namespace: str, query: dict[str, Any],
@@ -86,23 +84,45 @@ async def serve(request: Request, namespace: str, query: dict[str, Any],
                 pinned_revision: int | None = None) -> Response:
     """Отдаёт ответ из кэша или строит его, соблюдая If-None-Match."""
     db: Database = request.app.state.db
-    cache: ResponseCache = request.app.state.cache
+    cache: Any = request.app.state.cache
 
-    # Номер ревизии нужен только для построения ответа, поэтому и читается
-    # только при промахе: на попадании это был лишний заход в базу на каждый
-    # запрос экрана.
-    key = cache_key(namespace, pinned_revision, query)
-    entry = cache.get(key)
+    revision, committed_at = await _resolve_revision(db, cache, pinned_revision)
+    key = cache_key(namespace, revision, query)
+    entry = await cache_call(cache.get(key))
     if entry is None:
-        payload, etag = await _rebuild(db, cache, key, tags, build, pinned_revision)
+        if await cache_call(cache.begin_refresh(key)):
+            try:
+                payload, etag = await _rebuild(
+                    cache, key, tags, build, revision, committed_at,
+                )
+            finally:
+                await cache_call(cache.end_refresh(key))
+        else:
+            # Another process is rebuilding this exact revision. Wait only up
+            # to the query budget, then fail open through the database.
+            deadline = time.monotonic() + min(
+                30.0,
+                max(1.0, request.app.state.settings.statement_timeout_ms / 1000 + 1),
+            )
+            while time.monotonic() < deadline:
+                await asyncio.sleep(0.02)
+                entry = await cache_call(cache.get(key))
+                if entry is not None:
+                    break
+            if entry is None:
+                payload, etag = await _rebuild(
+                    cache, key, tags, build, revision, committed_at,
+                )
+            else:
+                payload, etag = entry.value, entry.etag
     else:
         payload, etag = entry.value, entry.etag
         # Несвежий ответ отдаётся сразу, а пересчёт идёт фоном. Иначе ровно
         # один посетитель раз в окно ждал перестроения ответа: на проде это
         # 730–1024 мс против полутора миллисекунд у остальных.
-        if entry.is_stale(time.monotonic()) and cache.begin_refresh(key):
+        if await cache_call(cache.is_stale(entry)) and await cache_call(cache.begin_refresh(key)):
             task = asyncio.create_task(
-                _refresh(db, cache, key, tags, build, pinned_revision),
+                _refresh(cache, key, tags, build, revision, committed_at),
                 name=f"cache-refresh:{namespace}")
             _REFRESHING.add(task)
             task.add_done_callback(_REFRESHING.discard)
@@ -114,30 +134,29 @@ async def serve(request: Request, namespace: str, query: dict[str, Any],
                     headers={"ETag": etag, "Cache-Control": PUBLIC_CACHE})
 
 
-async def _rebuild(db: Database, cache: ResponseCache, key: str, tags: frozenset[str],
+async def _rebuild(cache: Any, key: str, tags: frozenset[str],
                    build: Callable[[int, Any], Awaitable[dict[str, Any]]],
-                   pinned_revision: int | None) -> tuple[str, str]:
+                   revision: int, committed_at: Any) -> tuple[str, str]:
     """Строит представление заново и кладёт его в кэш."""
-    revision, committed_at = await _resolve_revision(db, pinned_revision)
     body = await build(revision, committed_at)
     payload = json.dumps(body, ensure_ascii=False, separators=(",", ":"), default=str)
     etag = '"' + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32] + '"'
-    cache.put(key, payload, etag, tags)
+    await cache_call(cache.put(key, payload, etag, tags))
     return payload, etag
 
 
-async def _refresh(db: Database, cache: ResponseCache, key: str, tags: frozenset[str],
+async def _refresh(cache: Any, key: str, tags: frozenset[str],
                    build: Callable[[int, Any], Awaitable[dict[str, Any]]],
-                   pinned_revision: int | None) -> None:
+                   revision: int, committed_at: Any) -> None:
     """Фоновый пересчёт. Отказ оставляет прежнюю запись дожить свой срок."""
     try:
-        await _rebuild(db, cache, key, tags, build, pinned_revision)
+        await _rebuild(cache, key, tags, build, revision, committed_at)
     except asyncio.CancelledError:
         raise
     except Exception:
         logger.warning("фоновый пересчёт ответа не удался: %s", key, exc_info=True)
     finally:
-        cache.end_refresh(key)
+        await cache_call(cache.end_refresh(key))
 
 
 def _matches(header: str | None, etag: str) -> bool:

@@ -108,6 +108,38 @@ Transfer troubleshooting:
   `ERRCODE 55000`. A publication inside the tracking window therefore keeps all
   of its history, which is what `metric_ever_positive` needs.
 
+Response cache (profile B; local implementation and deployment only until P2.4):
+
+- `mranked_api_cache_requests_total{backend,worker,result="hit|miss|stale"}` is
+  summed across the per-PID API textfiles. Alert when
+  `miss / (hit + stale + miss)` exceeds 50% for 15 minutes after the normal
+  warmup window; ignore an idle service;
+- any increase of `mranked_api_cache_redis_errors_total` for 5 minutes warns.
+  The public API must remain available: Redis errors are misses followed by DB
+  reads, not 500 responses;
+- `mranked_api_cache_refresh_total{result="contended"}` confirms that concurrent
+  workers met the same distributed refresh lock. A growing contended rate with
+  no completed warmup indicates a slow or stuck rebuild;
+- `mranked_api_cache_warmup_requests_total{result="failure"}` must not increase.
+  `time() - mranked_api_cache_warmup_last_completed_unixtime` warns after two
+  configured intervals and pages after four;
+- `mranked_api_cache_sample_unixtime` older than 60 seconds means the API
+  metrics publisher or its provisioned directory is unhealthy, not Redis.
+
+Cache troubleshooting:
+
+- Redis unavailable: verify socket/connect latency and credentials, then compare
+  DB pool saturation. Do not restart PostgreSQL merely to recover the cache;
+  requests are already rebuilding through the normal bounded DB path;
+- hit rate fell: compare current dataset revision cadence, warmup target set,
+  TTL and `API_CACHE_ENTRIES`. A revision change correctly creates a new key;
+- warmup lags: run the worker once with the same env, inspect the failing public
+  URL and API query budget. One failed URL does not stop the remaining targets;
+- revision disagreement: compare `/api/v1/revision` with the response field
+  `datasetRevision`, then inspect LISTEN reconnects. Reconnect invalidates only
+  that process's revision trust and never flushes shared Redis. TTL remains the
+  final bound; deleting all Redis keys is not the first recovery action.
+
 All health responses are `no-store`. Readiness does not wait for a projection
 publisher: public data is read directly from canonical tables. A configured
 collector with no successful recent run makes freshness unhealthy, while an

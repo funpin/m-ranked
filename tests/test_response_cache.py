@@ -92,22 +92,18 @@ def test_negative_windows_are_rejected() -> None:
         ResponseCache(capacity=8, ttl_seconds=600, stale_seconds=-1)
 
 
-def test_live_key_does_not_depend_on_the_current_revision() -> None:
-    """Ревизия меняется раз в две секунды и не должна двигать ключ."""
+def test_same_revision_gets_the_same_key() -> None:
     query = {"platform": "telegram", "period": "1d"}
-    assert cache_key("overview", None, query) == cache_key("overview", None, query)
+    assert cache_key("overview", 4321, query) == cache_key("overview", 4321, query)
 
 
 def test_pinned_snapshot_gets_its_own_key() -> None:
     query = {"platform": "telegram", "period": "1d"}
-    live = cache_key("overview", None, query)
-    pinned = cache_key("overview", 4321, query)
-    assert live != pinned
-    assert pinned != cache_key("overview", 4322, query)
+    assert cache_key("overview", 4321, query) != cache_key("overview", 4322, query)
 
 
 def test_query_still_separates_keys() -> None:
-    assert cache_key("overview", None, {"period": "1d"}) != cache_key(
-        "overview", None, {"period": "7d"})
-    assert cache_key("overview", None, {"period": "1d"}) != cache_key(
-        "rating", None, {"period": "1d"})
+    assert cache_key("overview", 4321, {"period": "1d"}) != cache_key(
+        "overview", 4321, {"period": "7d"})
+    assert cache_key("overview", 4321, {"period": "1d"}) != cache_key(
+        "rating", 4321, {"period": "1d"})

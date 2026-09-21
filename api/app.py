@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 import time
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from .cache import InvalidationListener, ResponseCache
+from .cache import InvalidationListener, RedisResponseCache, ResponseCache, cache_call
+from .cache_metrics import CacheMetricsPublisher
 from .config import Settings
 from .db import Database
 from .errors import ApiProblem, handle, handle_validation
@@ -27,9 +29,28 @@ logger = logging.getLogger(__name__)
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     database = Database(settings)
-    cache = ResponseCache(settings.cache_entries, settings.cache_ttl_seconds,
-                          settings.cache_min_age_seconds,
-                          settings.cache_stale_seconds)
+    if settings.deployment_profile == "b":
+        cache = RedisResponseCache(
+            settings.redis_url,
+            capacity=settings.cache_entries,
+            ttl_seconds=settings.cache_ttl_seconds,
+            min_age_seconds=settings.cache_min_age_seconds,
+            stale_seconds=settings.cache_stale_seconds,
+            refresh_lock_seconds=settings.cache_refresh_lock_seconds,
+            timeout_ms=settings.redis_timeout_ms,
+        )
+    else:
+        cache = ResponseCache(
+            settings.cache_entries, settings.cache_ttl_seconds,
+            settings.cache_min_age_seconds, settings.cache_stale_seconds,
+        )
+    metrics_path = (
+        settings.cache_metrics_directory / f"m-ranked-api-cache-{os.getpid()}.prom"
+        if settings.cache_metrics_directory is not None else None
+    )
+    cache_metrics = CacheMetricsPublisher(
+        metrics_path, cache, "redis" if settings.deployment_profile == "b" else "memory",
+    )
     export_jobs = ExportJobs(database)
     listener = InvalidationListener(settings.read_dsn, cache) if settings.read_dsn else None
     outbox = OutboxMarker(settings.outbox_dsn) if settings.outbox_dsn else None
@@ -42,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await listener.start()
         if outbox is not None:
             await outbox.start()
+        await cache_metrics.start()
         try:
             yield
         finally:
@@ -49,7 +71,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await listener.stop()
             if outbox is not None:
                 await outbox.stop()
+            await cache_metrics.stop()
             await export_jobs.close()
+            await cache_call(cache.close())
             await database.close()
 
     app = FastAPI(
@@ -65,6 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.db = database
     app.state.cache = cache
+    app.state.cache_metrics = cache_metrics
     # Неверная настройка админки закрывает админку, а не весь API: публичное
     # чтение к учётным записям отношения не имеет, и ронять из-за них сайт
     # целиком — менять одну неприятность на другую, большую.

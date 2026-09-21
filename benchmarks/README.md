@@ -62,3 +62,22 @@ cursor-level SQL calls. Sealing adds exactly one round trip per account batch:
 26 before, 27 after. Results are stored beside the other probes, see
 `results/2026-09-21-transfer-sealing.json`; the wall-clock medians move inside
 run-to-run noise on a laptop and are not an acceptance criterion.
+
+## Shared response cache
+
+Run against a disposable real Redis (database 15 is flushed by the probe):
+
+```bash
+.venv/bin/python benchmarks/response_cache.py \
+  --redis-url redis://127.0.0.1:56379/15 \
+  --samples 500 --entries 256 --payload-bytes 4096
+```
+
+The 2026-09-21 Apple Silicon / Python 3.14.7 / Redis 8.10.0 run measured LRU
+versus Redis hit p50 at 0.000375 versus 0.541249 ms and miss+fill p50 at
+0.000666 versus 1.039813 ms. Warming one of four workers produced 25% first-wave
+hits with isolated LRUs and 100% with Redis. Allocation/server-memory estimates
+for 256 4-KiB values were 4,491,520 versus 1,452,256 bytes with four workers;
+at one worker LRU was both faster and smaller. Full methodology, p95 values and
+the decision are recorded in ADR-011. Output is intentionally not committed as
+a generated result artifact.
