@@ -1467,6 +1467,9 @@ class _ScriptedConnection:
                 "sampling_bucket": item["sampling_bucket"],
                 "source_fingerprint": item["source_fingerprint"],
                 "id": 10 + index,
+                # Назначается триггером базы; ненулевое значение означает, что
+                # бакет уже был занят и наблюдение легло как correction.
+                "correction_sequence": 0,
             } for index, item in enumerate(items)])
         if "FROM ingest.publication_identity" in normalized:
             return _Cursor(None)

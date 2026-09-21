@@ -52,6 +52,23 @@ Transfer health is per `producer`:
 - disk watermarks are 70% warn, 80% stop backfill and 90% pause low-priority
   collection. Never delete an unacknowledged row.
 
+Placement across collector hosts:
+
+- `mranked_collector_placement_owned` over `..._offered` shows what share of the
+  catalogue this host serves. With replication of one the shares across hosts
+  sum to the catalogue; with two they sum to twice it;
+- `mranked_collector_placement_replication` is the **effective** factor. Below
+  the configured one means the capability pool is smaller than the policy asked
+  for: some host is missing credentials for that platform;
+- `mranked_collector_diverged_observations_total` counts observations that
+  landed on an already-occupied bucket and became corrections. With replication
+  above one this is disagreement between hosts; with one it is an ordinary
+  re-read whose counters moved. Nothing is discarded either way — both
+  observations stay, linked by `supersedes_snapshot_id`;
+- a platform in the startup log as uncovered has no host that can serve it, and
+  its accounts are collected by nobody. That is a configuration error, not a
+  degraded state.
+
 Collect and persist phases:
 
 - `mranked_collector_persist_wait_seconds_total` over
@@ -115,6 +132,14 @@ Transfer troubleshooting:
   low-priority collection. **No watermark authorises deleting unacknowledged
   rows.** At 90% with a full outbox the correct action is to stop and page a
   human, or add disk — never to buy space with the only copy of a measurement;
+- accounts collected by nobody: compare `placement_owned` summed across hosts
+  with the catalogue size. A host missing from the membership takes its share
+  with it; a platform absent from every member's capability list is worse,
+  because nothing reports an error while the data simply stops arriving;
+- divergence rising with replication of one: hosts are not disagreeing, the
+  provider is changing its counters within one sampling bucket. Rising with
+  replication above one, on a platform where it used to be flat, means the
+  hosts genuinely see different values and that is worth investigating;
 - persist lock contention: compare the mean wait with cycle duration. The
   ceiling is a rollback of one, and dropping it to `1` restores the behaviour
   from before the split without a code change;

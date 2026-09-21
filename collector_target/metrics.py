@@ -36,6 +36,8 @@ class CollectorMetrics:
         self._deployment_profiles: dict[str, str] = {}
         self._working_set: dict[str, float] = {}
         self._persist_wait: list[float] = [0, 0.0, 0.0]
+        self._diverged=defaultdict(int)
+        self._placement: dict[str, float] = {}
         self._disk: dict[str, float] = {}
         self._transfer: dict[str, dict[str, float]] = {}
 
@@ -102,6 +104,26 @@ class CollectorMetrics:
             self._persist_wait[0] += 1
             self._persist_wait[1] += seconds
             self._persist_wait[2] = max(self._persist_wait[2], seconds)
+            self._publish()
+
+    def diverged(self, platform: Platform, count: int) -> None:
+        if count < 0:
+            raise ValueError('invalid divergence observation')
+        if not count:
+            return
+        with self._lock:
+            self._diverged[Platform(platform).value] += count
+            self._publish()
+
+    def placement(self, platform: Platform, *, owned: int, offered: int,
+                  effective_replication: int) -> None:
+        if owned < 0 or offered < 0 or effective_replication < 1:
+            raise ValueError('invalid placement observation')
+        with self._lock:
+            name = Platform(platform).value
+            self._placement[f'owned|{name}'] = float(owned)
+            self._placement[f'offered|{name}'] = float(offered)
+            self._placement[f'replication|{name}'] = float(effective_replication)
             self._publish()
 
     def disk(self, *, used_percent: float, free_bytes: int) -> None:
@@ -231,6 +253,16 @@ class CollectorMetrics:
                       f'mranked_collector_persist_waits_total {self._persist_wait[0]}',
                       '# TYPE mranked_collector_persist_wait_seconds_max gauge',
                       f'mranked_collector_persist_wait_seconds_max {self._persist_wait[2]:.9g}']
+        if self._diverged:
+            lines += ['# TYPE mranked_collector_diverged_observations_total counter']
+            for platform,count in sorted(self._diverged.items()):
+                lines.append(f'mranked_collector_diverged_observations_total{{platform="{platform}"}} {count}')
+        for metric in ('owned', 'offered', 'replication'):
+            selected = {k.split('|')[1]: v for k, v in self._placement.items() if k.startswith(metric + '|')}
+            if selected:
+                lines.append(f'# TYPE mranked_collector_placement_{metric} gauge')
+                for platform, value in sorted(selected.items()):
+                    lines.append(f'mranked_collector_placement_{metric}{{platform="{platform}"}} {value:.9g}')
         lines += ['# TYPE mranked_collector_deployment_profile_info gauge']
         for platform,profile in sorted(self._deployment_profiles.items()):
             lines.append(f'mranked_collector_deployment_profile_info{{platform="{platform}",profile="{profile}"}} 1')

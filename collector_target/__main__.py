@@ -29,6 +29,7 @@ from .phase import (
     PostgresPhaseArbiter,
     due_slot,
 )
+from .placement import Placement, parse_membership
 from .platforms.registry import build_adapter
 from .retention import (
     RetentionPolicy,
@@ -378,6 +379,34 @@ async def _run(args: argparse.Namespace) -> int:
         repository.assert_schema_contract()
         lease_provider = PostgresAdvisoryLeaseProvider(dsn)
         adapter = build_adapter(platform, settings, clock, repository)
+        # Размещение строится один раз при старте. Список участников приходит
+        # с Сервера 2 конфигурацией; при его отсутствии хост считает себя
+        # единственным и собирает всё, как раньше.
+        placement = (
+            Placement(
+                parse_membership(settings.collector_membership),
+                {
+                    Platform.TELEGRAM: settings.collector_replication_telegram,
+                    Platform.VK: settings.collector_replication_vk,
+                    Platform.MAX: settings.collector_replication_max,
+                    Platform.RUTUBE: settings.collector_replication_rutube,
+                },
+            )
+            if settings.collector_membership else None
+        )
+        if placement is not None:
+            for uncovered in placement.uncovered():
+                logger.warning(
+                    "collector placement leaves a platform uncovered platform=%s",
+                    uncovered.value,
+                )
+            for short in placement.underprovisioned():
+                logger.warning(
+                    "collector placement runs below its replication factor "
+                    "platform=%s effective=%s requested=%s",
+                    short.value, placement.effective_replication(short),
+                    placement.replication[short],
+                )
         persist_guard = (
             PostgresPersistGuard(
                 lambda: PostgresAdvisoryLeaseProvider(dsn)._factory(),
@@ -395,6 +424,8 @@ async def _run(args: argparse.Namespace) -> int:
             account_concurrency=account_concurrency,
             clock=clock,
             persist_guard=persist_guard,
+            placement=placement,
+            server_id=settings.collector_server_id if placement else None,
         )
         if transfer_mode == "in-process":
             data_adapter = PostgresDataAdapter(repository)

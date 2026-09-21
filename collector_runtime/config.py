@@ -111,6 +111,12 @@ class Settings:
     collector_max_cycle_deadline_seconds: int = 600
     collector_rutube_cycle_deadline_seconds: int = 1800
     collector_deployment_profile: str = "a"
+    collector_server_id: str = "server-1"
+    collector_membership: str = ""
+    collector_replication_telegram: int = 1
+    collector_replication_vk: int = 1
+    collector_replication_max: int = 1
+    collector_replication_rutube: int = 1
     collector_collect_concurrency: int = 1
     collector_persist_wait_seconds: float = 120.0
     collector_working_set_retention: str = "off"
@@ -144,6 +150,19 @@ class Settings:
             raise ValueError(
                 "COLLECTOR_WORKING_SET_RETENTION requires COLLECTOR_DEPLOYMENT_PROFILE=b"
             )
+        if not self.collector_server_id.strip():
+            raise ValueError("COLLECTOR_SERVER_ID must not be blank")
+        # Фактор репликации на площадку. Единица — чистый шардинг; больше
+        # единицы кратно умножает расход квот площадки, а у ВК это связывающее
+        # ограничение раньше, чем процессор.
+        for name, value in (
+            ("COLLECTOR_REPLICATION_TELEGRAM", self.collector_replication_telegram),
+            ("COLLECTOR_REPLICATION_VK", self.collector_replication_vk),
+            ("COLLECTOR_REPLICATION_MAX", self.collector_replication_max),
+            ("COLLECTOR_REPLICATION_RUTUBE", self.collector_replication_rutube),
+        ):
+            if value < 1:
+                raise ValueError(f"{name} must be positive")
         # Потолок одновременных фаз сбора. Единица — поведение до разделения
         # фаз: ровно один цикл на весь хост. Поднимать его до переезда нельзя,
         # он окупается только на разгруженном Сервере 1.
@@ -335,6 +354,15 @@ class Settings:
             collector_deployment_profile=(
                 os.getenv("COLLECTOR_DEPLOYMENT_PROFILE", "a").strip().lower() or "a"
             ),
+            collector_server_id=(
+                os.getenv("COLLECTOR_SERVER_ID", "server-1").strip().lower()
+                or "server-1"
+            ),
+            collector_membership=os.getenv("COLLECTOR_MEMBERSHIP", "").strip(),
+            collector_replication_telegram=_int("COLLECTOR_REPLICATION_TELEGRAM", 1),
+            collector_replication_vk=_int("COLLECTOR_REPLICATION_VK", 1),
+            collector_replication_max=_int("COLLECTOR_REPLICATION_MAX", 1),
+            collector_replication_rutube=_int("COLLECTOR_REPLICATION_RUTUBE", 1),
             collector_collect_concurrency=_int("COLLECTOR_COLLECT_CONCURRENCY", 1),
             collector_persist_wait_seconds=_float(
                 "COLLECTOR_PERSIST_WAIT_SECONDS", 120.0

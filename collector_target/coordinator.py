@@ -20,6 +20,7 @@ from .model import (
 )
 from .metrics import CollectorMetrics
 from .phase import NULL_PERSIST_GUARD
+from .placement import filter_accounts
 from .normalize import CanonicalNormalizer, sanitize_error_code
 from .ports import CollectorRepository, LeaseProvider, PlatformCollector, UtcClock
 
@@ -71,6 +72,8 @@ class PollCycleCoordinator:
         clock: UtcClock | None = None,
         metrics: CollectorMetrics | None = None,
         persist_guard: Any = None,
+        placement: Any = None,
+        server_id: str | None = None,
     ) -> None:
         if adapter.platform != platform:
             raise ValueError("adapter platform does not match coordinator platform")
@@ -88,6 +91,10 @@ class PollCycleCoordinator:
         # разделяет ровно эти две половины; по умолчанию он ничего не делает,
         # и тогда поведение совпадает с эксклюзивной фазой целиком.
         self.persist_guard = persist_guard or NULL_PERSIST_GUARD
+        # При одном хосте размещение отсутствует и фильтр не применяется:
+        # поведение ровно прежнее.
+        self.placement = placement
+        self.server_id = server_id
         self.clock = clock or SystemUtcClock()
         output = os.environ.get("COLLECTOR_METRICS_FILE")
         self.metrics = metrics or CollectorMetrics(Path(output) if output else None)
@@ -115,6 +122,30 @@ class PollCycleCoordinator:
             accounts = tuple(
                 self.repository.enabled_accounts(self.platform, self.partition_key)
             )
+            if self.placement is not None and self.server_id is not None:
+                offered = len(accounts)
+                accounts = filter_accounts(
+                    accounts, self.placement, self.server_id, self.platform,
+                )
+                try:
+                    self.metrics.placement(
+                        self.platform, owned=len(accounts), offered=offered,
+                        effective_replication=self.placement.effective_replication(
+                            self.platform,
+                        ),
+                    )
+                except Exception as metric_error:
+                    logger.warning(
+                        "collector metrics unavailable code=%s",
+                        sanitize_error_code(metric_error),
+                    )
+                logger.info(
+                    "collector placement platform=%s partition=%s server=%s "
+                    "owned=%s offered=%s replication=%s",
+                    self.platform.value, self.partition_key, self.server_id,
+                    len(accounts), offered,
+                    self.placement.effective_replication(self.platform),
+                )
             semaphore = asyncio.Semaphore(self.account_concurrency)
 
             async def collect_account(account: AccountRef) -> None:
@@ -161,6 +192,15 @@ class PollCycleCoordinator:
                                 sanitize_error_code(metric_error),
                             )
                         snapshots = getattr(result, "snapshot_count", 0)
+                        try:
+                            self.metrics.diverged(
+                                self.platform, getattr(result, "diverged_count", 0),
+                            )
+                        except Exception as metric_error:
+                            logger.warning(
+                                "collector metrics unavailable code=%s",
+                                sanitize_error_code(metric_error),
+                            )
                         succeeded = True
                     except asyncio.CancelledError:
                         self.repository.record_account_failure(

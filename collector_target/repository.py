@@ -774,7 +774,7 @@ class PostgresCollectorRepository:
                     configured_root()/"collector"/batch.context.platform.value
                 ).put(receipt)
 
-        publication_results = self._persist_publications(
+        publication_results, diverged_count = self._persist_publications(
             connection, batch, metric_evidence_ids,
             detect_exact_replay=transfer_replay,
         )
@@ -868,6 +868,7 @@ class PostgresCollectorRepository:
             discovered_count,
             snapshot_count,
             revision_id,
+            diverged_count,
         )
         return ingestion, envelope
 
@@ -1115,7 +1116,7 @@ class PostgresCollectorRepository:
     ) -> tuple[tuple[UUID, bool, bool, bool], ...]:
         publications = batch.publications
         if not publications:
-            return ()
+            return (), 0
         if any(item.account_id != batch.account.id for item in publications):
             raise ValueError("publication account does not match batch account")
         external_ids = list(dict.fromkeys(
@@ -1420,6 +1421,7 @@ class PostgresCollectorRepository:
             ): row for row in latest_rows
         }
         exact_replays: set[tuple[Any, ...]] = set()
+        diverged = 0
         if detect_exact_replay:
             exact_input = [{
                 "publication_id": resolved_ids[item.id],
@@ -1559,9 +1561,20 @@ class PostgresCollectorRepository:
                             metric_evidence_id
                        FROM input
                    RETURNING publication_id, published_month, synthetic,
-                             sampling_bucket, source_fingerprint, id""",
+                             sampling_bucket, source_fingerprint, id,
+                             correction_sequence""",
                 (_json(snapshots_to_insert),),
             ).fetchall()
+            # correction_sequence назначает триггер базы: ненулевое значение
+            # означает, что бакет уже был занят и наблюдение легло поверх, со
+            # ссылкой supersedes. При факторе репликации больше единицы это и
+            # есть расхождение между производителями, при единице — обычное
+            # повторное чтение, у которого изменились счётчики. Оба случая
+            # стоит видеть, и ни в одном ничего не выбрасывается.
+            diverged = sum(
+                1 for row in snapshot_rows
+                if int(_row_value(row, "correction_sequence", 6)) > 0
+            )
             inserted_snapshots = {
                 (
                     _row_value(row, "publication_id", 0),
@@ -1660,7 +1673,7 @@ class PostgresCollectorRepository:
                     or publication_id in identity_changed_ids
                     or snapshot_inserted,
             ))
-        return tuple(results)
+        return tuple(results), diverged
 
     def _persist_presence_probes(
         self,

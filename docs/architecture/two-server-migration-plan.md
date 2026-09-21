@@ -1,7 +1,7 @@
 # План перехода к двум профилям развёртывания
 
 - Дата: 2026-09-21 · ветка `alpha` · отправная точка P2.4 `b73ff6b`
-- Статус: **P0–P3 реализованы локально; production rollout P2–P3 требует отдельных разрешений; P4 не начат**
+- Статус: **P0–P4 реализованы локально; production rollout P2–P4 требует отдельных разрешений**
 - Решения: [ADR-010](adr/ADR-010-deployment-profiles.md),
   [ADR-011](adr/ADR-011-shared-response-cache.md),
   [ADR-012](adr/ADR-012-collect-persist-phases.md),
