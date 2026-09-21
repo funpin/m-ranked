@@ -9,10 +9,10 @@ Type=oneshot
 User=root
 Group=root
 Environment=TZ=UTC
+Environment=DOCKER_CONFIG=/run/m-ranked-web-cache-gc
 EnvironmentFile=/etc/m-ranked/web-cache-gc.env
-ExecStartPre=-/usr/bin/docker rm -f m-ranked-target-web-cache-gc
+ExecStartPre=-/bin/sh -c '/usr/bin/docker rm -f m-ranked-target-web-cache-gc >/dev/null 2>&1'
 ExecStart=/usr/bin/docker run --rm --name m-ranked-target-web-cache-gc --network none --user ${MRANKED_WEB_CACHE_GC_UID_GID} --read-only --cap-drop=ALL --security-opt=no-new-privileges:true --memory=64m --memory-swap=64m --pids-limit=32 --tmpfs=/tmp:rw,noexec,nosuid,size=8m --env=MRANKED_WEB_CACHE_ROOT=/cache --env=MRANKED_WEB_CACHE_MAX_AGE_SECONDS=3600 --env=MRANKED_WEB_CACHE_MAX_BYTES=134217728 --env=MRANKED_WEB_CACHE_TARGET_BYTES=100663296 -v /usr/local/libexec/m-ranked/gc-next-cache.mjs:/gc-next-cache.mjs:ro -v /var/lib/m-ranked/web-cache:/cache ${MRANKED_WEB_CACHE_GC_IMAGE} node /gc-next-cache.mjs
-ExecStop=-/usr/bin/docker stop --time 10 m-ranked-target-web-cache-gc
 TimeoutStartSec=5min
 TimeoutStopSec=15s
 NoNewPrivileges=true
@@ -39,6 +39,8 @@ SystemCallArchitectures=native
 UMask=0077
 LimitNOFILE=32768
 TasksMax=32
+RuntimeDirectory=m-ranked-web-cache-gc
+RuntimeDirectoryMode=0700
 
 [Install]
 WantedBy=multi-user.target
