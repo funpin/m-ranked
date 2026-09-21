@@ -83,3 +83,15 @@ for 256 4-KiB values were 4,491,520 versus 1,452,256 bytes with four workers;
 at one worker LRU was both faster and smaller. Full methodology, p95 values and
 the decision are recorded in ADR-011. Output is intentionally not committed as
 a generated result artifact.
+
+## Collect and persist ceilings
+
+```bash
+.venv/bin/python benchmarks/collect_persist_split.py
+```
+
+Pure simulation of a day: no database, no provider. It answers what raising
+`COLLECTOR_COLLECT_CONCURRENCY` buys in cadence and what it costs in waiting
+for the exclusive write lock. Results in
+`results/2026-09-22-collect-persist-split.json`; the write overlap is 1 at
+every ceiling, which is the invariant the split exists to preserve.

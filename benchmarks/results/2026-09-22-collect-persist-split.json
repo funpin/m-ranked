@@ -1,0 +1,85 @@
+{
+  "ceilings": {
+    "1": {
+      "counts": {
+        "max": 210,
+        "rutube": 25,
+        "telegram": 223,
+        "vk": 216
+      },
+      "maxCollectOverlap": 1,
+      "maxPersistOverlap": 1,
+      "persistWaitMaxSeconds": 0.0,
+      "persistWaitP50Seconds": 0.0,
+      "persistWaitP95Seconds": 0.0,
+      "phases": 674,
+      "servedFractionOfDesired": {
+        "max": 0.729,
+        "rutube": 1.042,
+        "telegram": 0.774,
+        "vk": 0.75
+      }
+    },
+    "2": {
+      "counts": {
+        "max": 261,
+        "rutube": 25,
+        "telegram": 261,
+        "vk": 263
+      },
+      "maxCollectOverlap": 2,
+      "maxPersistOverlap": 1,
+      "persistWaitMaxSeconds": 569.0,
+      "persistWaitP50Seconds": 0.0,
+      "persistWaitP95Seconds": 41.0,
+      "phases": 810,
+      "servedFractionOfDesired": {
+        "max": 0.906,
+        "rutube": 1.042,
+        "telegram": 0.906,
+        "vk": 0.913
+      }
+    },
+    "3": {
+      "counts": {
+        "max": 263,
+        "rutube": 25,
+        "telegram": 261,
+        "vk": 286
+      },
+      "maxCollectOverlap": 3,
+      "maxPersistOverlap": 1,
+      "persistWaitMaxSeconds": 619.0,
+      "persistWaitP50Seconds": 0.0,
+      "persistWaitP95Seconds": 428.0,
+      "phases": 835,
+      "servedFractionOfDesired": {
+        "max": 0.913,
+        "rutube": 1.042,
+        "telegram": 0.906,
+        "vk": 0.993
+      }
+    },
+    "4": {
+      "counts": {
+        "max": 286,
+        "rutube": 25,
+        "telegram": 263,
+        "vk": 286
+      },
+      "maxCollectOverlap": 4,
+      "maxPersistOverlap": 1,
+      "persistWaitMaxSeconds": 628.0,
+      "persistWaitP50Seconds": 0.0,
+      "persistWaitP95Seconds": 428.0,
+      "phases": 860,
+      "servedFractionOfDesired": {
+        "max": 0.993,
+        "rutube": 1.042,
+        "telegram": 0.913,
+        "vk": 0.993
+      }
+    }
+  },
+  "hours": 24
+}

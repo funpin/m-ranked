@@ -52,6 +52,18 @@ Transfer health is per `producer`:
 - disk watermarks are 70% warn, 80% stop backfill and 90% pause low-priority
   collection. Never delete an unacknowledged row.
 
+Collect and persist phases:
+
+- `mranked_collector_persist_wait_seconds_total` over
+  `mranked_collector_persist_waits_total` gives the mean wait for the exclusive
+  write lock; `..._max` gives the worst one seen;
+- a rising wait with unchanged cadence means the ceiling is too high for this
+  host: the collectors have stopped waiting on the network and started waiting
+  on each other. Lower `COLLECTOR_COLLECT_CONCURRENCY`;
+- the wait is bounded by `COLLECTOR_PERSIST_WAIT_SECONDS` inside PostgreSQL
+  itself. Exceeding it fails that one account, which is the intended outcome:
+  two overlapping writes are what the lock exists to prevent.
+
 Working set (profile B only):
 
 - `mranked_collector_working_set_released_months_total` counts observation months
@@ -103,6 +115,12 @@ Transfer troubleshooting:
   low-priority collection. **No watermark authorises deleting unacknowledged
   rows.** At 90% with a full outbox the correct action is to stop and page a
   human, or add disk — never to buy space with the only copy of a measurement;
+- persist lock contention: compare the mean wait with cycle duration. The
+  ceiling is a rollback of one, and dropping it to `1` restores the behaviour
+  from before the split without a code change;
+- raising the ceiling before the presentation stack has left this host makes
+  things worse, not better: parallel collect costs memory and CPU that profile
+  A does not have spare;
 - observations are append-only. Retention drops whole monthly partitions and
   never issues a `DELETE`: `ingest.observation_immutable` refuses one with
   `ERRCODE 55000`. A publication inside the tracking window therefore keeps all

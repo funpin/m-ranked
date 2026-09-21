@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Iterable
+from typing import Any, Iterable
 
 from .model import (
     AccountRef,
@@ -19,6 +19,7 @@ from .model import (
     utc,
 )
 from .metrics import CollectorMetrics
+from .phase import NULL_PERSIST_GUARD
 from .normalize import CanonicalNormalizer, sanitize_error_code
 from .ports import CollectorRepository, LeaseProvider, PlatformCollector, UtcClock
 
@@ -69,6 +70,7 @@ class PollCycleCoordinator:
         normalizer: CanonicalNormalizer | None = None,
         clock: UtcClock | None = None,
         metrics: CollectorMetrics | None = None,
+        persist_guard: Any = None,
     ) -> None:
         if adapter.platform != platform:
             raise ValueError("adapter platform does not match coordinator platform")
@@ -82,6 +84,10 @@ class PollCycleCoordinator:
         self.partition_key = partition_key
         self.account_concurrency = account_concurrency
         self.normalizer = normalizer or CanonicalNormalizer()
+        # Сбор может идти параллельно у разных площадок, запись — нет. Guard
+        # разделяет ровно эти две половины; по умолчанию он ничего не делает,
+        # и тогда поведение совпадает с эксклюзивной фазой целиком.
+        self.persist_guard = persist_guard or NULL_PERSIST_GUARD
         self.clock = clock or SystemUtcClock()
         output = os.environ.get("COLLECTOR_METRICS_FILE")
         self.metrics = metrics or CollectorMetrics(Path(output) if output else None)
@@ -132,7 +138,28 @@ class PollCycleCoordinator:
                         except Exception as rejected:
                             self.repository.quarantine_rejected_batch(raw, context, sanitize_error_code(rejected))
                             raise
-                        result = self.repository.persist_account_batch(batch)
+                        # Сеть уже отработала; дальше идёт дорогая часть, и
+                        # она одна на все площадки. Ожидание замка уходит в
+                        # поток вместе с самой записью: иначе оно заблокирует
+                        # event loop и остановит параллельный сбор остальных
+                        # аккаунтов этого же воркера.
+                        def persist() -> tuple[Any, float]:
+                            waiting = time.monotonic()
+                            with self.persist_guard:
+                                waited = time.monotonic() - waiting
+                                return (
+                                    self.repository.persist_account_batch(batch),
+                                    waited,
+                                )
+
+                        result, persist_waited = await asyncio.to_thread(persist)
+                        try:
+                            self.metrics.persist_wait(persist_waited)
+                        except Exception as metric_error:
+                            logger.warning(
+                                "collector metrics unavailable code=%s",
+                                sanitize_error_code(metric_error),
+                            )
                         snapshots = getattr(result, "snapshot_count", 0)
                         succeeded = True
                     except asyncio.CancelledError:

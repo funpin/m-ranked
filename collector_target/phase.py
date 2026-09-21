@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from threading import Lock
 import time
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, Sequence
 from uuid import UUID, uuid5
 
 from .lease import advisory_lock_key
@@ -22,6 +22,21 @@ from .model import CHECKPOINT_NAMESPACE, PARTITION_NAMESPACE, Platform, utc
 
 PHASE_CHECKPOINT_KEY = "collector.phase.v1"
 GLOBAL_PHASE_LEASE_NAME = "collector:global-phase:v1"
+PERSIST_LOCK_NAME = "collector:persist:v1"
+MAX_COLLECT_SLOTS = 4
+
+
+def collect_slot_name(slot: int) -> str:
+    """Name of one collect slot.
+
+    Slot zero keeps the original lease name, so a host running with a single
+    slot competes for exactly the lock it used before: upgrading or rolling
+    back the ceiling never leaves two workers holding different names for the
+    same exclusive window.
+    """
+    if slot < 0 or slot >= MAX_COLLECT_SLOTS:
+        raise ValueError("collect slot is out of range")
+    return GLOBAL_PHASE_LEASE_NAME if slot == 0 else f"{GLOBAL_PHASE_LEASE_NAME}#{slot}"
 _PLATFORM_ORDER = {platform: index for index, platform in enumerate(Platform)}
 
 
@@ -143,6 +158,118 @@ def due_slot(
         int((current - completed).total_seconds()) // policy.interval_seconds - 1,
     )
     return current, missed, current + timedelta(seconds=policy.interval_seconds)
+
+
+@dataclass(frozen=True, slots=True)
+class SimulatedSplitPhase:
+    platform: Platform
+    scheduled_at: datetime
+    collect_started: datetime
+    collect_finished: datetime
+    persist_started: datetime
+    persist_finished: datetime
+    coalesced_slots: int
+
+    @property
+    def persist_wait_seconds(self) -> float:
+        return (self.persist_started - self.collect_finished).total_seconds()
+
+
+def max_overlap(windows: Sequence[tuple[datetime, datetime]]) -> int:
+    """How many of these windows are ever open at the same instant."""
+    events: list[tuple[datetime, int]] = []
+    for began, ended in windows:
+        if ended <= began:
+            continue
+        events.append((began, 1))
+        events.append((ended, -1))
+    # Закрытие идёт раньше открытия в ту же секунду: окно [a,b] и [b,c]
+    # не пересекаются.
+    events.sort(key=lambda item: (item[0], item[1]))
+    current = peak = 0
+    for _moment, delta in events:
+        current += delta
+        peak = max(peak, current)
+    return peak
+
+
+def simulate_split_phases(
+    policies: dict[Platform, PhasePolicy],
+    collect_durations: dict[Platform, int],
+    persist_durations: dict[Platform, int],
+    *,
+    start: datetime,
+    hours: int = 24,
+    collect_slots: int = 1,
+) -> tuple[SimulatedSplitPhase, ...]:
+    """Model collect running in parallel while persist stays exclusive.
+
+    The collect slot is held for the whole cycle, exactly as the lease is in
+    production; the persist lock is taken only around the write. With one slot
+    this degenerates to the serial behaviour of :func:`simulate_phases`.
+    """
+    if set(policies) != set(Platform):
+        raise ValueError("simulation requires every platform")
+    if set(collect_durations) != set(Platform) or set(persist_durations) != set(Platform):
+        raise ValueError("simulation requires a duration for every platform")
+    if hours < 1:
+        raise ValueError("simulation hours must be positive")
+    if any(value < 1 for value in (*collect_durations.values(), *persist_durations.values())):
+        raise ValueError("simulation durations must be positive")
+    if not 1 <= collect_slots <= MAX_COLLECT_SLOTS:
+        raise ValueError("collect_slots is out of range")
+
+    now = utc(start, "start")
+    horizon = now + timedelta(hours=hours)
+    completed: dict[Platform, datetime | None] = {p: None for p in Platform}
+    busy: dict[Platform, datetime] = {}
+    persist_free = now
+    result: list[SimulatedSplitPhase] = []
+
+    while now < horizon:
+        for platform, release in list(busy.items()):
+            if release <= now:
+                del busy[platform]
+        ready: list[tuple[datetime, int, Platform, datetime, int]] = []
+        upcoming: list[datetime] = []
+        for platform, policy in policies.items():
+            if platform in busy:
+                continue
+            due, coalesced, next_due = due_slot(now, policy, completed[platform])
+            upcoming.append(next_due)
+            if due is not None:
+                since = (
+                    completed[platform] + timedelta(seconds=policy.interval_seconds)
+                    if completed[platform] is not None else due
+                )
+                ready.append((since, _PLATFORM_ORDER[platform], platform, due, coalesced))
+
+        free = collect_slots - len(busy)
+        if not ready or free <= 0:
+            # Ждём ближайшего события: освобождения слота или нового слота
+            # расписания. Без этого цикл крутился бы вхолостую.
+            candidates = [*busy.values(), *upcoming]
+            following = [item for item in candidates if item > now]
+            if not following:
+                break
+            now = min(following)
+            continue
+
+        ready.sort()
+        for since, _order, platform, scheduled, coalesced in ready[:free]:
+            collect_end = now + timedelta(seconds=collect_durations[platform])
+            persist_start = max(collect_end, persist_free)
+            persist_end = persist_start + timedelta(
+                seconds=persist_durations[platform],
+            )
+            persist_free = persist_end
+            result.append(SimulatedSplitPhase(
+                platform, scheduled, now, collect_end,
+                persist_start, persist_end, coalesced,
+            ))
+            completed[platform] = scheduled
+            busy[platform] = persist_end
+    return tuple(result)
 
 
 def simulate_phases(
@@ -367,11 +494,23 @@ class PostgresPhaseArbiter:
         dsn: str | None = None,
         *,
         connection_factory: Callable[[], Any] | None = None,
+        collect_slots: int = 1,
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
         self._factory = connection_factory or self._psycopg_factory(str(dsn))
-        self._lock_id = advisory_lock_key(GLOBAL_PHASE_LEASE_NAME)
+        if not 1 <= collect_slots <= MAX_COLLECT_SLOTS:
+            raise ValueError(
+                f"collect_slots must be between 1 and {MAX_COLLECT_SLOTS}"
+            )
+        self.collect_slots = collect_slots
+        # Слот ноль носит прежнее имя, поэтому потолок в единицу — это ровно
+        # тот эксклюзивный замок, что был до разделения фаз.
+        self._slot_ids = tuple(
+            advisory_lock_key(collect_slot_name(slot))
+            for slot in range(collect_slots)
+        )
+        self._lock_id = self._slot_ids[0]
         self._connection: Any | None = None
         self._lease_connection: Any | None = None
         self._connection_lock = Lock()
@@ -447,7 +586,7 @@ class PostgresPhaseArbiter:
             self._close_connection(lease_connection)
 
     @staticmethod
-    def _contender(connection: Any, cutoff: datetime) -> Any:
+    def _contenders(connection: Any, cutoff: datetime, limit: int) -> list[Any]:
         return connection.execute(
             """SELECT platform::text, scope_id,
                       value->>'partition_key' AS partition_key,
@@ -466,12 +605,26 @@ class PostgresPhaseArbiter:
                            ELSE 99
                          END,
                          value->>'partition_key'
-                LIMIT 1""",
-            (PHASE_CHECKPOINT_KEY, cutoff),
-        ).fetchone()
+                LIMIT %s""",
+            (PHASE_CHECKPOINT_KEY, cutoff, limit),
+        ).fetchall()
+
+    @classmethod
+    def _is_selected(cls, contenders: Any, request: PhaseRequest) -> bool:
+        """Whether this request is among the contenders a slot may serve.
+
+        With one slot this is the old question — am I first in line. With more
+        it becomes: am I in the first N, by the same deterministic order. The
+        order itself never changes, so raising the ceiling only widens who may
+        start, never who goes ahead of whom.
+        """
+        if contenders is None:
+            return False
+        items = contenders if isinstance(contenders, list) else [contenders]
+        return any(cls._matches(item, request) for item in items)
 
     @staticmethod
-    def _is_selected(contender: Any, request: PhaseRequest) -> bool:
+    def _matches(contender: Any, request: PhaseRequest) -> bool:
         return contender is not None and (
             str(_row_value(contender, "platform", 0)) == request.platform.value
             and _row_value(contender, "scope_id", 1) == request.scope_id
@@ -532,30 +685,40 @@ class PostgresPhaseArbiter:
         if stale_after_seconds < 1:
             raise ValueError("stale_after_seconds must be positive")
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=stale_after_seconds)
-        contender = self._run_reusing(
-            lambda connection: self._contender(connection, cutoff)
+        contenders = self._run_reusing(
+            lambda connection: self._contenders(
+                connection, cutoff, self.collect_slots,
+            )
         )
-        if not self._is_selected(contender, request):
+        if not self._is_selected(contenders, request):
             return None
 
         for attempt in range(2):
             connection = self._lease_connection
+            slot_id: int | None = None
             try:
                 if connection is None or bool(getattr(connection, "closed", False)):
                     connection = self._open_connection()
                     self._lease_connection = connection
-                row = connection.execute(
-                    "SELECT pg_try_advisory_lock(%s)", (self._lock_id,),
-                ).fetchone()
-                acquired = bool(
-                    next(iter(row.values())) if isinstance(row, dict) else row[0]
-                )
-                if not acquired:
+                # Любой свободный слот годится: они различаются только именем,
+                # а очерёдность задаёт порядок кандидатов, а не номер слота.
+                for candidate in self._slot_ids:
+                    row = connection.execute(
+                        "SELECT pg_try_advisory_lock(%s)", (candidate,),
+                    ).fetchone()
+                    if bool(
+                        next(iter(row.values())) if isinstance(row, dict) else row[0]
+                    ):
+                        slot_id = candidate
+                        break
+                if slot_id is None:
                     return None
-                contender = self._contender(connection, cutoff)
-                if not self._is_selected(contender, request):
+                contenders = self._contenders(
+                    connection, cutoff, self.collect_slots,
+                )
+                if not self._is_selected(contenders, request):
                     connection.execute(
-                        "SELECT pg_advisory_unlock(%s)", (self._lock_id,),
+                        "SELECT pg_advisory_unlock(%s)", (slot_id,),
                     )
                     return None
                 active = {
@@ -574,7 +737,7 @@ class PostgresPhaseArbiter:
                     ),
                 )
                 self._lease_connection = None
-                return _PostgresPhaseLease(connection, request, self._lock_id)
+                return _PostgresPhaseLease(connection, request, slot_id)
             except BaseException as error:
                 self._close_connection(connection)
                 self._lease_connection = None
@@ -657,3 +820,110 @@ class InMemoryPhaseArbiter:
             self.requests.pop((request.platform, request.partition_key), None)
             self.active = request
             return _MemoryPhaseLease(self, request)
+
+
+class PersistGuard(Protocol):
+    def __enter__(self) -> "PersistGuard":
+        ...
+
+    def __exit__(self, *exc: Any) -> None:
+        ...
+
+
+class _NullPersistGuard:
+    """Profile A and single-slot hosts need no extra serialisation."""
+
+    def __enter__(self) -> "_NullPersistGuard":
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        return None
+
+
+NULL_PERSIST_GUARD = _NullPersistGuard()
+
+
+class PostgresPersistGuard:
+    """Serialise the write half of a cycle across every collector process.
+
+    Collect may overlap because it is mostly waiting on a provider; persist may
+    not, because it is the part that actually costs CPU and I/O. The lock is
+    taken per account batch rather than per cycle, so a platform waiting on a
+    slow network never holds the write window shut for the others.
+
+    The wait is bounded and observable. Exceeding it is not a reason to write
+    anyway: two overlapping persist phases are exactly what this guard exists
+    to prevent, so a timeout raises and the account is recorded as failed.
+    """
+
+    def __init__(
+        self,
+        connection_factory: Callable[[], Any],
+        *,
+        wait_seconds: float,
+        metrics: Any = None,
+    ) -> None:
+        if wait_seconds <= 0:
+            raise ValueError("persist wait must be positive")
+        self._factory = connection_factory
+        self._wait_seconds = float(wait_seconds)
+        self._lock_id = advisory_lock_key(PERSIST_LOCK_NAME)
+        self._metrics = metrics
+        self._lock = Lock()
+        self._connection: Any = None
+        self._depth = 0
+
+    def _ensure(self) -> Any:
+        connection = self._connection
+        if connection is None or bool(getattr(connection, "closed", False)):
+            connection = self._factory()
+            connection.execute("SET TIME ZONE 'UTC'")
+            self._connection = connection
+        return connection
+
+    def __enter__(self) -> "PostgresPersistGuard":
+        self._lock.acquire()
+        began = time.monotonic()
+        try:
+            connection = self._ensure()
+            # lock_timeout bounds the wait inside PostgreSQL, so a stuck holder
+            # surfaces as an error here instead of an unbounded stall.
+            # SET не принимает bound-параметр: это не подготавливаемая
+            # команда. set_config принимает, и им же в репозитории
+            # выставляется statement_timeout.
+            connection.execute(
+                "SELECT set_config('lock_timeout', %s, false)",
+                (f"{int(self._wait_seconds * 1000)}ms",),
+            )
+            connection.execute("SELECT pg_advisory_lock(%s)", (self._lock_id,))
+        except BaseException:
+            self._lock.release()
+            raise
+        self._depth += 1
+        self._observe(time.monotonic() - began)
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        try:
+            self._depth -= 1
+            connection = self._connection
+            if connection is not None:
+                connection.execute("SELECT pg_advisory_unlock(%s)", (self._lock_id,))
+        finally:
+            self._lock.release()
+
+    def _observe(self, waited: float) -> None:
+        if self._metrics is None:
+            return
+        try:
+            self._metrics.persist_wait(waited)
+        except Exception:  # noqa: BLE001 - метрика не может ронять запись
+            pass
+
+    def close(self) -> None:
+        connection, self._connection = self._connection, None
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:  # noqa: BLE001
+                pass

@@ -164,6 +164,11 @@ class _Result:
     def fetchone(self) -> object:
         return self.row
 
+    def fetchall(self) -> list[object]:
+        # Кандидаты читаются пачкой с тех пор, как слотов сбора может быть
+        # больше одного: при потолке в единицу это список из одной строки.
+        return [] if self.row is None else [self.row]
+
 
 class _ScriptedConnection:
     def __init__(self, responses: list[object] | None = None) -> None:

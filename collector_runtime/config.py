@@ -111,6 +111,8 @@ class Settings:
     collector_max_cycle_deadline_seconds: int = 600
     collector_rutube_cycle_deadline_seconds: int = 1800
     collector_deployment_profile: str = "a"
+    collector_collect_concurrency: int = 1
+    collector_persist_wait_seconds: float = 120.0
     collector_working_set_retention: str = "off"
     collector_working_set_months_per_run: int = 1
     collector_disk_path: str = "/var/lib/m-ranked"
@@ -142,6 +144,15 @@ class Settings:
             raise ValueError(
                 "COLLECTOR_WORKING_SET_RETENTION requires COLLECTOR_DEPLOYMENT_PROFILE=b"
             )
+        # Потолок одновременных фаз сбора. Единица — поведение до разделения
+        # фаз: ровно один цикл на весь хост. Поднимать его до переезда нельзя,
+        # он окупается только на разгруженном Сервере 1.
+        if not 1 <= self.collector_collect_concurrency <= 4:
+            raise ValueError(
+                "COLLECTOR_COLLECT_CONCURRENCY must be between 1 and 4"
+            )
+        if self.collector_persist_wait_seconds <= 0:
+            raise ValueError("COLLECTOR_PERSIST_WAIT_SECONDS must be positive")
         if self.collector_working_set_months_per_run < 1:
             raise ValueError(
                 "COLLECTOR_WORKING_SET_MONTHS_PER_RUN must be positive"
@@ -323,6 +334,10 @@ class Settings:
             ),
             collector_deployment_profile=(
                 os.getenv("COLLECTOR_DEPLOYMENT_PROFILE", "a").strip().lower() or "a"
+            ),
+            collector_collect_concurrency=_int("COLLECTOR_COLLECT_CONCURRENCY", 1),
+            collector_persist_wait_seconds=_float(
+                "COLLECTOR_PERSIST_WAIT_SECONDS", 120.0
             ),
             collector_working_set_retention=(
                 os.getenv("COLLECTOR_WORKING_SET_RETENTION", "off").strip().lower()

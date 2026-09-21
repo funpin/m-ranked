@@ -33,6 +33,11 @@ class _Row:
     def fetchone(self) -> object:
         return self.value
 
+    def fetchall(self) -> list[object]:
+        # Контендеры читаются пачкой с тех пор, как слотов может быть больше
+        # одного; одиночная строка остаётся списком из неё самой.
+        return [] if self.value is None else [self.value]
+
 
 class _WaitingConnection:
     def __init__(self, winner: PhaseRequest) -> None:

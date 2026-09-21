@@ -25,6 +25,7 @@ from .phase import (
     PhasePolicy,
     PhaseRequest,
     PhaseScheduler,
+    PostgresPersistGuard,
     PostgresPhaseArbiter,
     due_slot,
 )
@@ -377,6 +378,13 @@ async def _run(args: argparse.Namespace) -> int:
         repository.assert_schema_contract()
         lease_provider = PostgresAdvisoryLeaseProvider(dsn)
         adapter = build_adapter(platform, settings, clock, repository)
+        persist_guard = (
+            PostgresPersistGuard(
+                lambda: PostgresAdvisoryLeaseProvider(dsn)._factory(),
+                wait_seconds=settings.collector_persist_wait_seconds,
+            )
+            if settings.collector_collect_concurrency > 1 else None
+        )
         coordinator = PollCycleCoordinator(
             platform=platform,
             adapter=adapter,
@@ -386,6 +394,7 @@ async def _run(args: argparse.Namespace) -> int:
             partition_key=args.partition,
             account_concurrency=account_concurrency,
             clock=clock,
+            persist_guard=persist_guard,
         )
         if transfer_mode == "in-process":
             data_adapter = PostgresDataAdapter(repository)
@@ -426,7 +435,9 @@ async def _run(args: argparse.Namespace) -> int:
             offset,
             _cycle_deadline(platform, settings),
         )
-        phase_arbiter = PostgresPhaseArbiter(dsn)
+        phase_arbiter = PostgresPhaseArbiter(
+            dsn, collect_slots=settings.collector_collect_concurrency,
+        )
         phase_scheduler = PhaseScheduler(
             phase_arbiter,
             max_wait_seconds=settings.collector_phase_max_wait_seconds,

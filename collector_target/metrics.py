@@ -35,6 +35,7 @@ class CollectorMetrics:
         self._schedule_modes: dict[str, str] = {}
         self._deployment_profiles: dict[str, str] = {}
         self._working_set: dict[str, float] = {}
+        self._persist_wait: list[float] = [0, 0.0, 0.0]
         self._disk: dict[str, float] = {}
         self._transfer: dict[str, dict[str, float]] = {}
 
@@ -92,6 +93,15 @@ class CollectorMetrics:
                     tzinfo=timezone.utc,
                 )
                 self._working_set['oldest_retained_unixtime'] = moment.timestamp()
+            self._publish()
+
+    def persist_wait(self, seconds: float) -> None:
+        if not math.isfinite(seconds) or seconds < 0:
+            raise ValueError('invalid persist wait observation')
+        with self._lock:
+            self._persist_wait[0] += 1
+            self._persist_wait[1] += seconds
+            self._persist_wait[2] = max(self._persist_wait[2], seconds)
             self._publish()
 
     def disk(self, *, used_percent: float, free_bytes: int) -> None:
@@ -214,6 +224,13 @@ class CollectorMetrics:
             if metric in self._disk:
                 lines += [f'# TYPE mranked_collector_disk_{metric} gauge',
                           f'mranked_collector_disk_{metric} {self._disk[metric]:.9g}']
+        if self._persist_wait[0]:
+            lines += ['# TYPE mranked_collector_persist_wait_seconds_total counter',
+                      f'mranked_collector_persist_wait_seconds_total {self._persist_wait[1]:.9g}',
+                      '# TYPE mranked_collector_persist_waits_total counter',
+                      f'mranked_collector_persist_waits_total {self._persist_wait[0]}',
+                      '# TYPE mranked_collector_persist_wait_seconds_max gauge',
+                      f'mranked_collector_persist_wait_seconds_max {self._persist_wait[2]:.9g}']
         lines += ['# TYPE mranked_collector_deployment_profile_info gauge']
         for platform,profile in sorted(self._deployment_profiles.items()):
             lines.append(f'mranked_collector_deployment_profile_info{{platform="{platform}",profile="{profile}"}} 1')
