@@ -83,9 +83,9 @@ test("заготовка при переходе принадлежит той �
     await route.continue();
   });
   await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
-  // На экране заготовка таблицы статистики, а не сетка карточек обзора и не
-  // её заголовок с фильтрами.
-  await expect(page.getByText("Загрузка таблицы")).toBeVisible();
+  // На экране адаптивная заготовка статистики, а не сетка карточек обзора и
+  // не её заголовок с фильтрами.
+  await expect(page.getByText("Загрузка статистики")).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "Поиск вуза" })).toHaveCount(0);
   await expect(page).toHaveURL(/\/statistics/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -105,7 +105,7 @@ test("локальные заготовки не дублируют постоя
   await page.goto("/statistics?platform=telegram");
   await page.locator('select[name="period"]').selectOption("7d");
 
-  await expect(page.getByText("Загрузка таблицы")).toBeVisible();
+  await expect(page.getByText("Загрузка статистики")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 });
 

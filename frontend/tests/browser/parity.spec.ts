@@ -217,7 +217,8 @@ test("brand and favicon follow viewport and explicit theme", async ({ page }) =>
   await expect(favicon).toHaveAttribute("href", /logo-mark-dark/);
 
   await expect(page.locator('link[rel="icon"][type="image/png"][sizes="32x32"]')).toHaveAttribute("href", /\/icons\/favicon-32\.png\?v=20260921/);
-  await expect(page.locator('link[rel="apple-touch-icon"][sizes="180x180"]')).toHaveAttribute("href", /\/icons\/apple-touch-icon\.png\?v=20260921/);
+  await expect(page.locator('link[rel="apple-touch-icon"][sizes="180x180"]')).toHaveAttribute("href", "/apple-touch-icon.png");
+  await expect(page.locator('link[rel="apple-touch-icon-precomposed"][sizes="180x180"]')).toHaveAttribute("href", "/apple-touch-icon-precomposed.png");
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
 
   await page.setViewportSize({ width: 1200, height: 800 });
@@ -242,7 +243,7 @@ test("web app manifest exposes current install icons", async ({ request }) => {
     expect.objectContaining({ src: "/icons/app-icon-192.png?v=20260921", sizes: "192x192" }),
     expect.objectContaining({ src: "/icons/app-icon-512.png?v=20260921", sizes: "512x512" }),
   ]));
-  for (const icon of ["/icons/apple-touch-icon.png?v=20260921", "/icons/app-icon-192.png?v=20260921", "/icons/app-icon-512.png?v=20260921"]) {
+  for (const icon of ["/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/icons/app-icon-192.png?v=20260921", "/icons/app-icon-512.png?v=20260921"]) {
     const image = await request.get(icon);
     expect(image.ok()).toBeTruthy();
     expect(image.headers()["content-type"]).toBe("image/png");

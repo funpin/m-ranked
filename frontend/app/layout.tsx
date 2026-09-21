@@ -41,7 +41,10 @@ export const metadata: Metadata = {
       { url: "/icons/favicon-32.png?v=20260921", type: "image/png", sizes: "32x32" },
     ],
     shortcut: [{ url: "/icons/favicon-32.png?v=20260921", type: "image/png" }],
-    apple: [{ url: "/icons/apple-touch-icon.png?v=20260921", type: "image/png", sizes: "180x180" }],
+    // Keep the Apple icon at the conventional root URL. iOS can request that
+    // path directly (without consulting the manifest) and may ignore query
+    // parameters while reusing an older home-screen icon.
+    apple: [{ url: "/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
   },
   openGraph: {
     type: "website",
@@ -102,7 +105,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       suppressHydrationWarning
       className={cn(sans.variable, heading.variable)}
     >
-      <head><script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
+      <head>
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" sizes="180x180" />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>
         {/* Набор контуров объявляется раз на страницу: значки ссылаются на
             него вместо того, чтобы возить свои контуры сотнями копий. */}

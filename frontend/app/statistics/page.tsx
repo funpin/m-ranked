@@ -12,7 +12,7 @@ import { first, queryHref, type SearchParams } from "@/lib/params";
 import { normalizeStatisticsQuery, statisticsHrefQuery } from "@/lib/statistics";
 import { PLATFORM_VALUES } from "@/lib/types";
 import { Search, X } from "lucide-react";
-import { TableSkeleton } from "@/components/skeletons";
+import { StatisticsSkeleton } from "@/components/skeletons";
 import {
   FILTER_CONTROL_CLASS,
   FILTER_PLATFORM_CLASS,
@@ -80,7 +80,7 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
       {(["publications", "entities"] as const).map((view) => <Link key={view} role="tab" aria-selected={query.view === view} className={`rounded px-4 py-2 text-sm font-medium ${query.view === view ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} href={queryHref("/statistics", { ...statisticsHrefQuery(query), view })} scroll={false} prefetch={false}>{view === "publications" ? "Публикации" : "Вузы"}</Link>)}
     </nav> : null}
 
-    <NavigationBoundary fallback={<TableSkeleton chrome={false} />}>
+    <NavigationBoundary fallback={<StatisticsSkeleton chrome={false} view={query.view} />}>
       {failed || !page ? <ApiFailureState retryHref={queryHref("/statistics", statisticsHrefQuery(query))} /> : <StatisticsResults key={selectionKey} page={page} query={query} />}
     </NavigationBoundary>
   </>;
