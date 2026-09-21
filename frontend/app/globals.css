@@ -13,6 +13,7 @@
    (37-66) and this product plots several distinct metrics on one axis. */
 :root {
   --radius: 0.625rem;
+  --safe-area-top: env(safe-area-inset-top, 0px);
 
   /* Полотно страницы на тон темнее карточек: иначе белая карточка на белом
      фоне держится только на тонкой рамке и перестаёт читаться как карточка. */
@@ -248,6 +249,47 @@
     background: color-mix(in oklab, var(--background) 72%, transparent);
     -webkit-backdrop-filter: saturate(140%) blur(18px);
     backdrop-filter: saturate(140%) blur(18px);
+  }
+  /* iOS screenshots contain the pixels that sit underneath the physical
+     notch/Dynamic Island. In a standalone PWA this compact mark is centered
+     in their common covered rectangle. A classic 20px status bar collapses
+     max-height to zero, so phones without a display cutout never see it. */
+  .notch-screenshot-brand {
+    display: none;
+  }
+  @media (orientation: portrait) {
+    :root[data-display-mode="standalone"] .site-header-glass {
+      min-height: calc(3.5rem + var(--safe-area-top));
+      padding-top: var(--safe-area-top);
+    }
+    :root[data-display-mode="standalone"] .notch-screenshot-brand {
+      position: fixed;
+      top: 11px;
+      left: 50%;
+      z-index: 300;
+      display: flex;
+      width: 108px;
+      height: 18px;
+      max-height: clamp(0px, calc(var(--safe-area-top) - 24px), 18px);
+      transform: translateX(-50%);
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #0082fe;
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      pointer-events: none;
+    }
+    :root[data-display-mode="standalone"] .notch-screenshot-brand img {
+      width: 21px;
+      height: 12px;
+      filter: brightness(0) invert(1);
+    }
   }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .site-header-glass { background: var(--background); }

@@ -268,10 +268,12 @@ test("web app manifest exposes current install icons", async ({ request }) => {
 });
 
 test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/?platform=telegram");
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
   await expect(page.locator('meta[name="mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "m-ranked");
+  await expect(page.locator('meta[name="apple-mobile-web-app-status-bar-style"]')).toHaveAttribute("content", "black-translucent");
   await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", /viewport-fit=cover/);
   const header = page.getByRole("navigation", { name: "Основная навигация" });
   await expect(header).toHaveCSS("position", "sticky");
@@ -279,6 +281,41 @@ test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page
     const style = getComputedStyle(node);
     return style.backdropFilter || style.getPropertyValue("-webkit-backdrop-filter");
   })).toContain("blur");
+});
+
+test("standalone iOS paints screenshot branding inside the cutout and keeps controls in the safe area", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?platform=telegram");
+  const cutoutBrand = page.getByTestId("notch-screenshot-brand");
+  await expect(cutoutBrand).toBeHidden();
+
+  await page.evaluate(() => {
+    document.documentElement.dataset.displayMode = "standalone";
+    document.documentElement.style.setProperty("--safe-area-top", "47px");
+  });
+
+  await expect(cutoutBrand).toBeVisible();
+  await expect(cutoutBrand).toContainText("m-ranked");
+  const [brandBox, headerBox, safeBrandBox, geometry] = await Promise.all([
+    cutoutBrand.boundingBox(),
+    page.getByRole("navigation", { name: "Основная навигация" }).boundingBox(),
+    page.getByTestId("brand").boundingBox(),
+    page.getByRole("navigation", { name: "Основная навигация" }).evaluate((node) => ({
+      height: getComputedStyle(node).height,
+      paddingTop: getComputedStyle(node).paddingTop,
+    })),
+  ]);
+  expect((brandBox?.x ?? 0) + (brandBox?.width ?? 0) / 2).toBe(195);
+  expect(brandBox?.y).toBe(11);
+  expect(brandBox?.height).toBe(18);
+  expect(headerBox?.height).toBe(103);
+  expect(safeBrandBox?.y).toBeGreaterThanOrEqual(47);
+  expect(geometry).toEqual({ height: "103px", paddingTop: "47px" });
+
+  // A classic rectangular iPhone has only the 20px status bar. The capsule
+  // collapses there instead of becoming visible to the person using it.
+  await page.evaluate(() => document.documentElement.style.setProperty("--safe-area-top", "20px"));
+  await expect(cutoutBrand).toBeHidden();
 });
 
 test("retired export is absent from navigation and raw quality codes are absent from tables", async ({ page }) => {

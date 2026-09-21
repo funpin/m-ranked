@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "m-ranked",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
   // Next 16 emits the standard mobile-web-app-capable tag. Keep the Apple
   // spelling too for iOS versions that still key off the legacy name.
@@ -80,6 +80,9 @@ const themeScript = `(() => {
     : matchMedia("(prefers-color-scheme: light)").matches ? "light"
     : "dark";
   document.documentElement.dataset.theme = theme;
+  if (navigator.standalone === true || matchMedia("(display-mode: standalone)").matches) {
+    document.documentElement.dataset.displayMode = "standalone";
+  }
 })();`;
 
 // iOS does not build a branded launch screen from the web app manifest.
@@ -138,6 +141,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
+        {/* Standalone iOS screenshots include pixels hidden by the physical
+            notch or Dynamic Island. This tiny brand sits inside that covered
+            centre strip; safe controls remain below the full top inset. */}
+        <div className="notch-screenshot-brand" data-testid="notch-screenshot-brand" aria-hidden="true">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={logoMarkDark.src} alt="" />
+          <strong>m-ranked</strong>
+        </div>
         {/* Набор контуров объявляется раз на страницу: значки ссылаются на
             него вместо того, чтобы возить свои контуры сотнями копий. */}
         <IconSprite />
