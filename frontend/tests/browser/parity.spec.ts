@@ -224,6 +224,7 @@ test("brand and favicon follow viewport and explicit theme", async ({ page }) =>
   await expect(page.getByTestId("brand-logo-mark-dark")).toBeVisible();
   await expect(page.getByTestId("brand-logo-wordmark")).toBeVisible();
   await expect(page.getByTestId("brand-logo-wordmark")).toHaveText("m-ranked");
+  await expect(page.getByTestId("brand-logo-wordmark")).toHaveCSS("white-space", "nowrap");
   await page.getByRole("button", { name: /Переключить на светлую/ }).click();
   await expect(page.getByTestId("brand-logo-mark-light")).toBeVisible();
   await expect(page.getByTestId("brand-logo-wordmark")).toBeVisible();
@@ -235,10 +236,38 @@ test("web app manifest exposes current install icons", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   const manifest = await response.json();
   expect(manifest.short_name).toBe("m-ranked");
+  expect(manifest.id).toBe("/");
+  expect(manifest.scope).toBe("/");
   expect(manifest.icons).toEqual(expect.arrayContaining([
     expect.objectContaining({ src: "/icons/app-icon-192.png?v=20260921", sizes: "192x192" }),
     expect.objectContaining({ src: "/icons/app-icon-512.png?v=20260921", sizes: "512x512" }),
   ]));
+  for (const icon of ["/icons/apple-touch-icon.png?v=20260921", "/icons/app-icon-192.png?v=20260921", "/icons/app-icon-512.png?v=20260921"]) {
+    const image = await request.get(icon);
+    expect(image.ok()).toBeTruthy();
+    expect(image.headers()["content-type"]).toBe("image/png");
+    expect((await image.body()).byteLength).toBeGreaterThan(400);
+  }
+});
+
+test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page }) => {
+  await page.goto("/?platform=telegram");
+  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
+  await expect(page.locator('meta[name="mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
+  await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "m-ranked");
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", /viewport-fit=cover/);
+  const header = page.getByRole("navigation", { name: "Основная навигация" });
+  await expect(header).toHaveCSS("position", "sticky");
+  expect(await header.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return style.backdropFilter || style.getPropertyValue("-webkit-backdrop-filter");
+  })).toContain("blur");
+});
+
+test("CSV export is absent from the navigation and raw quality codes are absent from tables", async ({ page }) => {
+  await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
+  await expect(page.getByTestId("main-nav").getByText("Экспорт CSV", { exact: true })).toHaveCount(0);
+  await expect(page.locator('[title="exact" i]')).toHaveCount(0);
 });
 
 for (const theme of ["dark", "light"]) {

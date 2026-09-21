@@ -8,12 +8,12 @@ import logoMarkLight from "../assets/logo-mark-light.svg";
  */
 export function BrandLogo() {
   return (
-    <span className="text-foreground inline-flex h-7 shrink-0 items-center gap-2" aria-hidden="true">
+    <span className="text-foreground inline-flex h-7 shrink-0 items-center gap-2 whitespace-nowrap" aria-hidden="true">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img data-testid="brand-logo-mark-light" src={logoMarkLight.src} alt="" className="size-7 object-contain dark:hidden" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img data-testid="brand-logo-mark-dark" src={logoMarkDark.src} alt="" className="hidden size-7 object-contain dark:block" />
-      <strong data-testid="brand-logo-wordmark" className="font-heading hidden text-base font-bold tracking-tight min-[781px]:inline">
+      <strong data-testid="brand-logo-wordmark" className="font-heading hidden text-base leading-none font-bold tracking-tight min-[781px]:inline">
         m-ranked
       </strong>
     </span>

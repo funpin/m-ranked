@@ -56,11 +56,9 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
   return (
     <nav
       aria-label="Основная навигация"
-      // Шапка непрозрачная: сквозь полупрозрачную просвечивали карточки, и
-      // строка меню читалась как случайное наложение поверх содержимого.
-      className="bg-background sticky top-0 z-[200] h-14 border-b"
+      className="site-header-glass sticky top-0 z-[200] h-14 border-b"
     >
-      <div data-testid="header-inner" className="relative mx-auto flex h-full w-full max-w-[1400px] items-center gap-6 px-4 sm:px-6 lg:px-10">
+      <div data-testid="header-inner" className="safe-page-inset relative mx-auto flex h-full w-full max-w-[1400px] items-center gap-6">
         <Link
           data-testid="brand"
           className="flex shrink-0 items-center no-underline"

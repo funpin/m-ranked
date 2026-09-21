@@ -26,6 +26,15 @@ export const metadata: Metadata = {
     template: "%s · m-ranked",
   },
   description: "Сравнение активности, охвата и качества данных официальных соцсетей российских вузов.",
+  applicationName: "m-ranked",
+  appleWebApp: {
+    capable: true,
+    title: "m-ranked",
+    statusBarStyle: "default",
+  },
+  // Next 16 emits the standard mobile-web-app-capable tag. Keep the Apple
+  // spelling too for iOS versions that still key off the legacy name.
+  other: { "apple-mobile-web-app-capable": "yes" },
   icons: {
     icon: [
       { url: logoMarkDark.src, type: "image/svg+xml" },
@@ -51,6 +60,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   colorScheme: "dark light",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#080c12" },
@@ -99,7 +109,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <IconSprite />
         <a className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[300] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring" href="#main-content">Перейти к содержимому</a>
         <Suspense fallback={<SiteHeaderFallback platform={activePlatform} />}><SiteHeader initialPlatform={activePlatform} /></Suspense>
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6 lg:px-10"><RouteBoundary>{children}</RouteBoundary></main>
+        <main id="main-content" tabIndex={-1} className="safe-page-inset mx-auto w-full max-w-[1400px] min-w-0 py-6"><RouteBoundary>{children}</RouteBoundary></main>
       </body>
     </html>
   );

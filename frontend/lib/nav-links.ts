@@ -5,6 +5,5 @@ export const NAV_LINKS = [
   { href: "/", label: "Обзор" },
   { href: "/statistics", label: "Статистика" },
   { href: "/compare", label: "Сравнение" },
-  { href: "/export/snapshots.csv", label: "Экспорт CSV" },
   { href: "/manage", label: "Управление" },
 ] as const;

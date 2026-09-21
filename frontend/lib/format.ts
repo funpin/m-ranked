@@ -83,6 +83,14 @@ export function qualityLabel(value: string | null | undefined): string {
   }
 }
 
+/** Точные значения не требуют предупреждения. Для остальных состояний
+ *  возвращаем человекочитаемую подсказку и никогда не показываем сырой код. */
+export function qualityHint(value: string | null | undefined): string | undefined {
+  const normalized = (value ?? "").toLowerCase();
+  if (!normalized || normalized === "exact") return undefined;
+  return qualityLabel(value);
+}
+
 export function legacyDate(value: string | null | undefined, withZone = false): string {
   if (!value) return "—";
   const date = new Date(value);
