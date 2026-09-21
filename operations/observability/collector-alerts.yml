@@ -43,6 +43,29 @@ groups:
           severity: critical
         annotations:
           summary: Transfer cursor regressed for a producer.
+      - alert: MRankedCollectorDiskPausesCollection
+        expr: mranked_collector_disk_used_percent >= 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Collector disk reached the pause watermark; never purge unacknowledged rows.
+      - alert: MRankedCollectorDiskStopsBackfill
+        expr: mranked_collector_disk_used_percent >= 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector disk reached the backfill stop watermark.
+      - alert: MRankedWorkingSetRetentionStalled
+        # Months pile up as deferred when Server 2 stops acknowledging: the data
+        # is safe, the link is not.
+        expr: mranked_collector_working_set_deferred_months > 2
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Working set months are held back waiting for acknowledgement.
       - alert: MRankedTransferAttemptWindowExhausted
         # The batch is safe and still pending; what needs a human is the reason
         # the consumer has been unreachable for a whole retry window.

@@ -34,6 +34,8 @@ class CollectorMetrics:
         self._provider_errors=defaultdict(int)
         self._schedule_modes: dict[str, str] = {}
         self._deployment_profiles: dict[str, str] = {}
+        self._working_set: dict[str, float] = {}
+        self._disk: dict[str, float] = {}
         self._transfer: dict[str, dict[str, float]] = {}
 
     def account(self, platform: Platform, *, succeeded: bool, duration: float, snapshots: int = 0):
@@ -72,6 +74,32 @@ class CollectorMetrics:
             raise ValueError('deployment profile must be a or b')
         with self._lock:
             self._deployment_profiles[Platform(platform).value] = normalized
+            self._publish()
+
+    def working_set(self, *, released_months: int, deferred_months: int,
+                    oldest_retained_month=None) -> None:
+        if released_months < 0 or deferred_months < 0:
+            raise ValueError('invalid working set observation')
+        with self._lock:
+            self._working_set['released_months_total'] = (
+                self._working_set.get('released_months_total', 0.0) + released_months
+            )
+            self._working_set['deferred_months'] = float(deferred_months)
+            if oldest_retained_month is not None:
+                from datetime import datetime, timezone
+                moment = datetime(
+                    oldest_retained_month.year, oldest_retained_month.month, 1,
+                    tzinfo=timezone.utc,
+                )
+                self._working_set['oldest_retained_unixtime'] = moment.timestamp()
+            self._publish()
+
+    def disk(self, *, used_percent: float, free_bytes: int) -> None:
+        if not 0 <= used_percent <= 100 or free_bytes < 0:
+            raise ValueError('invalid disk observation')
+        with self._lock:
+            self._disk['used_percent'] = float(used_percent)
+            self._disk['free_bytes'] = float(free_bytes)
             self._publish()
 
     def schedule_mode(self, platform: Platform, mode: str) -> None:
@@ -174,6 +202,18 @@ class CollectorMetrics:
         lines += ['# TYPE mranked_collector_schedule_mode_info gauge']
         for platform,mode in sorted(self._schedule_modes.items()):
             lines.append(f'mranked_collector_schedule_mode_info{{platform="{platform}",mode="{mode}"}} 1')
+        working_set_types = {
+            'released_months_total': 'counter', 'deferred_months': 'gauge',
+            'oldest_retained_unixtime': 'gauge',
+        }
+        for metric, metric_type in working_set_types.items():
+            if metric in self._working_set:
+                lines += [f'# TYPE mranked_collector_working_set_{metric} {metric_type}',
+                          f'mranked_collector_working_set_{metric} {self._working_set[metric]:.9g}']
+        for metric in ('used_percent', 'free_bytes'):
+            if metric in self._disk:
+                lines += [f'# TYPE mranked_collector_disk_{metric} gauge',
+                          f'mranked_collector_disk_{metric} {self._disk[metric]:.9g}']
         lines += ['# TYPE mranked_collector_deployment_profile_info gauge']
         for platform,profile in sorted(self._deployment_profiles.items()):
             lines.append(f'mranked_collector_deployment_profile_info{{platform="{platform}",profile="{profile}"}} 1')

@@ -1,16 +1,16 @@
 {
-  "medianAfterMs": 20.855,
-  "medianBeforeMs": 21.434,
+  "medianAfterMs": 71.68,
+  "medianBeforeMs": 69.352,
   "roundTripsAfter": 27.0,
   "roundTripsBefore": 26.0,
   "samples": {
     "after_ms": [
-      29.809,
-      21.027,
-      21.905,
-      20.684,
-      19.163,
-      20.445
+      83.383,
+      64.958,
+      72.691,
+      73.572,
+      70.668,
+      69.331
     ],
     "after_round_trips": [
       30,
@@ -21,12 +21,12 @@
       27
     ],
     "before_ms": [
-      36.019,
-      22.016,
-      18.537,
-      19.207,
-      21.217,
-      21.652
+      88.902,
+      77.971,
+      66.842,
+      71.861,
+      61.181,
+      64.741
     ],
     "before_round_trips": [
       29,

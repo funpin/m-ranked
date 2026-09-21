@@ -52,6 +52,17 @@ Transfer health is per `producer`:
 - disk watermarks are 70% warn, 80% stop backfill and 90% pause low-priority
   collection. Never delete an unacknowledged row.
 
+Working set (profile B only):
+
+- `mranked_collector_working_set_released_months_total` counts observation months
+  released after Server 2 acknowledged them;
+- `mranked_collector_working_set_deferred_months` counts months that are out of
+  the tracking window but still held. A steady non-zero value means delivery is
+  behind, not that retention is broken: the data is safe, the link is not;
+- `mranked_collector_working_set_oldest_retained_unixtime` is the oldest month
+  still on this host;
+- `mranked_collector_disk_used_percent` drives the 70/80/90 watermarks.
+
 On the receiving side (`transfer_ingest`, profile B only):
 
 - `mranked_transfer_ingest_accepted_total`, `duplicates_total` and
@@ -83,7 +94,19 @@ Transfer troubleshooting:
   whole leading segment authorises the write;
 - certificate rotation: issue the new certificate from the same CA and deploy it
   while the old one is still valid. Both are accepted during the overlap, so the
-  window needs no coordinated restart.
+  window needs no coordinated restart;
+- retention releases nothing: compare `deferred_months` with the outbox. A month
+  is held whenever any batch created at or after its newest row is still
+  unacknowledged. Restore delivery first; retention then catches up on its own.
+  Retention is also refused outright unless the profile is `b`;
+- disk watermark reached: 70% warns, 80% stops backfill, 90% pauses
+  low-priority collection. **No watermark authorises deleting unacknowledged
+  rows.** At 90% with a full outbox the correct action is to stop and page a
+  human, or add disk — never to buy space with the only copy of a measurement;
+- observations are append-only. Retention drops whole monthly partitions and
+  never issues a `DELETE`: `ingest.observation_immutable` refuses one with
+  `ERRCODE 55000`. A publication inside the tracking window therefore keeps all
+  of its history, which is what `metric_ever_positive` needs.
 
 All health responses are `no-store`. Readiness does not wait for a projection
 publisher: public data is read directly from canonical tables. A configured

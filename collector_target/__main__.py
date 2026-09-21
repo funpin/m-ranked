@@ -29,6 +29,11 @@ from .phase import (
     due_slot,
 )
 from .platforms.registry import build_adapter
+from .retention import (
+    RetentionPolicy,
+    WorkingSetRetention,
+    disk_state,
+)
 from .repository import PostgresCollectorRepository
 from .tracking import validate_tracking_policy
 from .transfer import (
@@ -258,6 +263,48 @@ async def _run_bounded_cycle(
         await asyncio.gather(stopping, lease_lost, return_exceptions=True)
 
 
+def _maintain_working_set(
+    retention: WorkingSetRetention,
+    metrics: Any,
+    disk_path: str,
+) -> None:
+    """Observe disk and release acknowledged months, outside any collect phase.
+
+    Retention runs between cycles on purpose: it takes ACCESS EXCLUSIVE on the
+    observation tables, and a collect phase holding the global lease must never
+    wait behind housekeeping.
+    """
+    try:
+        state = disk_state(disk_path)
+        metrics.disk(used_percent=state.used_percent, free_bytes=state.free_bytes)
+        if state.pauses_collection:
+            logger.error(
+                "collector disk watermark reached path=%s used_percent=%.1f "
+                "threshold=%s",
+                disk_path, state.used_percent, state.threshold,
+            )
+        elif state.warns:
+            logger.warning(
+                "collector disk watermark reached path=%s used_percent=%.1f "
+                "threshold=%s",
+                disk_path, state.used_percent, state.threshold,
+            )
+    except OSError as error:
+        logger.warning(
+            "collector disk probe failed code=%s", sanitize_error_code(error),
+        )
+    if not retention.policy.enabled:
+        return
+    try:
+        retention.run()
+    except Exception as error:
+        # Housekeeping must never take a collector down: the cycle that
+        # follows is worth more than the space this would have freed.
+        logger.error(
+            "working set retention skipped code=%s", sanitize_error_code(error),
+        )
+
+
 async def _close(adapter: Any, platform: Platform) -> None:
     close = getattr(adapter, "close", None)
     if not callable(close):
@@ -325,6 +372,7 @@ async def _run(args: argparse.Namespace) -> int:
             dsn,
             snapshot_heartbeat_hours=settings.publication_snapshot_heartbeat_hours,
             transfer_producer_id=producer_id,
+            deployment_profile=deployment_profile,
         )
         repository.assert_schema_contract()
         lease_provider = PostgresAdvisoryLeaseProvider(dsn)
@@ -355,6 +403,16 @@ async def _run(args: argparse.Namespace) -> int:
                 ),
                 coordinator.metrics,
             ))
+        retention = WorkingSetRetention(
+            repository,
+            RetentionPolicy(
+                mode=settings.collector_working_set_retention.strip().lower(),
+                track_post_for_hours=settings.track_post_for_hours,
+                months_per_run=settings.collector_working_set_months_per_run,
+            ),
+            clock=clock,
+            metrics=coordinator.metrics,
+        )
         coordinator.metrics.schedule_mode(platform, schedule_mode)
         coordinator.metrics.deployment_profile(platform, deployment_profile)
         _log_startup(
@@ -579,6 +637,9 @@ async def _run(args: argparse.Namespace) -> int:
             finally:
                 phase_lease.release()
                 pending_phase = None
+            _maintain_working_set(
+                retention, coordinator.metrics, settings.collector_disk_path,
+            )
             elapsed = time.monotonic() - began
             coordinator.metrics.cycle(
                 platform,

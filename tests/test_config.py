@@ -111,3 +111,26 @@ def test_profile_a_is_the_default_and_keeps_the_in_process_transport(
     settings = Settings.load()
     assert settings.collector_deployment_profile == "a"
     assert settings.collector_transfer_mode == "in-process"
+
+
+def test_retention_requires_profile_b(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Trimming in profile A would delete exactly what the API serves."""
+    monkeypatch.setenv("COLLECTOR_DEPLOYMENT_PROFILE", "a")
+    monkeypatch.setenv("COLLECTOR_WORKING_SET_RETENTION", "on")
+    with pytest.raises(ValueError, match="COLLECTOR_DEPLOYMENT_PROFILE=b"):
+        Settings.load()
+
+
+@pytest.mark.parametrize("mode", ["yes", "enabled", "true"])
+def test_unknown_retention_mode_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, mode: str,
+) -> None:
+    monkeypatch.setenv("COLLECTOR_WORKING_SET_RETENTION", mode)
+    with pytest.raises(ValueError, match="off, dry-run or on"):
+        Settings.load()
+
+
+def test_retention_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The one irreversible step in the plan must never start by accident."""
+    monkeypatch.delenv("COLLECTOR_WORKING_SET_RETENTION", raising=False)
+    assert Settings.load().collector_working_set_retention == "off"

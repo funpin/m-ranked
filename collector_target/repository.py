@@ -83,6 +83,7 @@ class PostgresCollectorRepository:
         evidence_store: ImmutableEvidenceStore | None = None,
         pool_size: int = 3,
         transfer_producer_id: str | None = None,
+        deployment_profile: str = "a",
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
@@ -114,6 +115,12 @@ class PostgresCollectorRepository:
         self._metric_evidence_ids: dict[str, int] = {}
         self._metric_evidence_lock = threading.Lock()
         self.transfer_producer_id = transfer_producer_id
+        profile = str(deployment_profile).strip().lower()
+        if profile not in {"a", "b"}:
+            raise ValueError("deployment_profile must be a or b")
+        # Профиль B не обслуживает чтение, поэтому ни витрина публикаций, ни
+        # события инвалидации кэша на этом хосте никому не нужны.
+        self.deployment_profile = profile
         self._transfer_sender: Any = None
 
     def configure_transfer_sender(self, sender: Any) -> None:
@@ -2169,9 +2176,12 @@ class PostgresCollectorRepository:
         if row is None:
             raise RuntimeError("dataset revision was not created")
         revision_id = int(_row_value(row, "id", 0))
+        # Оба параметра объявляются одним запросом: это горячий путь, и лишний
+        # round trip здесь стоит дороже, чем читается.
         connection.execute(
-            "SELECT set_config('mranked.dataset_revision_id', %s, true)",
-            (str(revision_id),),
+            """SELECT set_config('mranked.deployment_profile', %s, true),
+                      set_config('mranked.dataset_revision_id', %s, true)""",
+            (self.deployment_profile, str(revision_id)),
         )
         return revision_id
 
@@ -2211,6 +2221,10 @@ class PostgresCollectorRepository:
             _row_value(row, "finalize_ingestion_dataset_revision", 0)
         ):
             raise RuntimeError("dataset revision was not finalized")
+        if self.deployment_profile == "b":
+            # Инвалидировать нечего: API и кэш живут на Сервере 2 и узнают об
+            # изменениях из применённого им батча, а не из этой очереди.
+            return
         payload = {
             "revision": revision_id,
             "run_id": batch.context.run_id,

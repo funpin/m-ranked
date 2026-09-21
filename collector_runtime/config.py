@@ -111,6 +111,9 @@ class Settings:
     collector_max_cycle_deadline_seconds: int = 600
     collector_rutube_cycle_deadline_seconds: int = 1800
     collector_deployment_profile: str = "a"
+    collector_working_set_retention: str = "off"
+    collector_working_set_months_per_run: int = 1
+    collector_disk_path: str = "/var/lib/m-ranked"
     collector_transfer_mode: str = "in-process"
     collector_transfer_producer_id: str = "local"
     collector_transfer_https_endpoint: str | None = None
@@ -128,6 +131,21 @@ class Settings:
         profile = self.collector_deployment_profile.strip().lower()
         if profile not in {"a", "b"}:
             raise ValueError("COLLECTOR_DEPLOYMENT_PROFILE must be a or b")
+        retention = self.collector_working_set_retention.strip().lower()
+        if retention not in {"off", "dry-run", "on"}:
+            raise ValueError(
+                "COLLECTOR_WORKING_SET_RETENTION must be off, dry-run or on"
+            )
+        # В профиле A эта база и есть продукт: обрезать её значит удалить то,
+        # что отдаёт API, и ничего при этом не разгрузить.
+        if retention != "off" and profile != "b":
+            raise ValueError(
+                "COLLECTOR_WORKING_SET_RETENTION requires COLLECTOR_DEPLOYMENT_PROFILE=b"
+            )
+        if self.collector_working_set_months_per_run < 1:
+            raise ValueError(
+                "COLLECTOR_WORKING_SET_MONTHS_PER_RUN must be positive"
+            )
         mode = self.collector_transfer_mode.strip().lower()
         if mode not in {"disabled", "in-process", "https-mtls"}:
             raise ValueError(
@@ -305,6 +323,17 @@ class Settings:
             ),
             collector_deployment_profile=(
                 os.getenv("COLLECTOR_DEPLOYMENT_PROFILE", "a").strip().lower() or "a"
+            ),
+            collector_working_set_retention=(
+                os.getenv("COLLECTOR_WORKING_SET_RETENTION", "off").strip().lower()
+                or "off"
+            ),
+            collector_working_set_months_per_run=_int(
+                "COLLECTOR_WORKING_SET_MONTHS_PER_RUN", 1
+            ),
+            collector_disk_path=(
+                os.getenv("COLLECTOR_DISK_PATH", "/var/lib/m-ranked").strip()
+                or "/var/lib/m-ranked"
             ),
             collector_transfer_mode=(
                 os.getenv("COLLECTOR_TRANSFER_MODE", "in-process").strip().lower()
