@@ -82,6 +82,24 @@ const themeScript = `(() => {
   document.documentElement.dataset.theme = theme;
 })();`;
 
+// iOS does not build a branded launch screen from the web app manifest.
+// It selects an exact apple-touch-startup-image for the device instead.
+// Keep both orientations: this PWA deliberately allows any orientation.
+const appleStartupImages = [
+  ["640x1136", 320, 568, 2],
+  ["750x1334", 375, 667, 2],
+  ["1242x2208", 414, 736, 3],
+  ["1125x2436", 375, 812, 3],
+  ["828x1792", 414, 896, 2],
+  ["1242x2688", 414, 896, 3],
+  ["1170x2532", 390, 844, 3],
+  ["1284x2778", 428, 926, 3],
+  ["1179x2556", 393, 852, 3],
+  ["1290x2796", 430, 932, 3],
+  ["1206x2622", 402, 874, 3],
+  ["1320x2868", 440, 956, 3],
+] as const;
+
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const incoming = await headers();
   const path = incoming.get("x-mranked-path") ?? "/";
@@ -107,6 +125,16 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     >
       <head>
         <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" sizes="180x180" />
+        {appleStartupImages.flatMap(([portraitSize, width, height, pixelRatio]) => {
+          const [portraitWidth, portraitHeight] = portraitSize.split("x");
+          const media = `(device-width: ${width}px) and (device-height: ${height}px) and (-webkit-device-pixel-ratio: ${pixelRatio})`;
+          return [
+            <link key={`${portraitSize}-portrait`} rel="apple-touch-startup-image"
+              href={`/splash/apple-splash-${portraitSize}.png`} media={`${media} and (orientation: portrait)`} />,
+            <link key={`${portraitSize}-landscape`} rel="apple-touch-startup-image"
+              href={`/splash/apple-splash-${portraitHeight}x${portraitWidth}.png`} media={`${media} and (orientation: landscape)`} />,
+          ];
+        })}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>

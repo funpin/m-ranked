@@ -219,6 +219,12 @@ test("brand and favicon follow viewport and explicit theme", async ({ page }) =>
   await expect(page.locator('link[rel="icon"][type="image/png"][sizes="32x32"]')).toHaveAttribute("href", /\/icons\/favicon-32\.png\?v=20260921/);
   await expect(page.locator('link[rel="apple-touch-icon"][sizes="180x180"]')).toHaveAttribute("href", "/apple-touch-icon.png");
   await expect(page.locator('link[rel="apple-touch-icon-precomposed"][sizes="180x180"]')).toHaveAttribute("href", "/apple-touch-icon-precomposed.png");
+  const startupImages = page.locator('link[rel="apple-touch-startup-image"]');
+  await expect(startupImages).toHaveCount(24);
+  await expect(page.locator('link[rel="apple-touch-startup-image"][media*="device-width: 393px"][media*="orientation: portrait"]'))
+    .toHaveAttribute("href", "/splash/apple-splash-1179x2556.png");
+  await expect(page.locator('link[rel="apple-touch-startup-image"][media*="device-width: 393px"][media*="orientation: landscape"]'))
+    .toHaveAttribute("href", "/splash/apple-splash-2556x1179.png");
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
 
   await page.setViewportSize({ width: 1200, height: 800 });
@@ -248,6 +254,16 @@ test("web app manifest exposes current install icons", async ({ request }) => {
     expect(image.ok()).toBeTruthy();
     expect(image.headers()["content-type"]).toBe("image/png");
     expect((await image.body()).byteLength).toBeGreaterThan(400);
+  }
+  for (const [path, width, height] of [
+    ["/splash/apple-splash-1179x2556.png", 1179, 2556],
+    ["/splash/apple-splash-2556x1179.png", 2556, 1179],
+  ] as const) {
+    const image = await request.get(path);
+    expect(image.ok()).toBeTruthy();
+    expect(image.headers()["content-type"]).toBe("image/png");
+    const body = await image.body();
+    expect([body.readUInt32BE(16), body.readUInt32BE(20)]).toEqual([width, height]);
   }
 });
 
