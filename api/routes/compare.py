@@ -71,7 +71,8 @@ async def candidates(request: Request, platform: str = Query("telegram"),
 
     return await serve(request, "comparison-candidates", {
         "platform": resolved_platform, "limit": page_size, "cursor": cursor or "",
-    }, COMPARE_TAGS, build)
+    }, COMPARE_TAGS, build,
+        pinned_revision=normalize.cursor_revision(cursor))
 
 
 @router.get("/api/v1/compare")
@@ -160,4 +161,5 @@ async def comparison(
 
     return await serve(request, "comparison", {
         "dimensions": dimensions, "cursor": selectionCursor or "",
-    }, COMPARE_TAGS, build)
+    }, COMPARE_TAGS, build,
+        pinned_revision=normalize.cursor_revision(selectionCursor))

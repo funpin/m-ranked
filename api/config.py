@@ -87,16 +87,31 @@ class Settings:
     max_body_bytes: int = field(
         default_factory=lambda: _int("API_MAX_BODY_BYTES", 1_048_576, 4_096, 16_777_216))
 
+    # Записей — по одной на логический запрос. Прогрев профиля B держит весь
+    # каталог, около тысячи карточек аккаунтов и списков плюс свежие посты,
+    # поэтому там значение поднимается в окружении; в памяти одного процесса
+    # профиля A хватает прежних 512.
     cache_entries: int = field(default_factory=lambda: _int("API_CACHE_ENTRIES", 512, 0, 65536))
+    # Сколько живёт запись. Это же предел несвежести: старше неё ответ не
+    # отдаётся, и читатель ждёт пересборку.
     cache_ttl_seconds: int = field(default_factory=lambda: _int("API_CACHE_TTL_SECONDS", 600, 1, 86_400))
-    # Нижняя граница возраста записи кэша. Уведомление о записи не выбрасывает
-    # запись моложе неё, а укорачивает ей жизнь до этой отметки: на проде
-    # уведомления приходят чаще раза в секунду, и без границы кэш не доживает
-    # до второго читателя.
-    cache_min_age_seconds: int = field(default_factory=lambda: _int("API_CACHE_MIN_AGE_SECONDS", 10, 0, 600))
-    # Сколько ещё можно отдавать несвежий ответ, пока идёт фоновый пересчёт.
-    # Столько же обещает заголовку stale-while-revalidate.
-    cache_stale_seconds: int = field(default_factory=lambda: _int("API_CACHE_STALE_SECONDS", 60, 0, 3600))
+    # Сколько запись отдаётся без пересчёта. Старше — отдаётся сразу, а
+    # пересчёт идёт фоном.
+    cache_fresh_seconds: int = field(default_factory=lambda: _int("API_CACHE_FRESH_SECONDS", 60, 1, 3600))
+    # Нижняя граница возраста, раньше которой уведомление о записи не делает
+    # запись несвежей: на проде уведомления приходят чаще раза в секунду, и
+    # без границы ответ пересчитывался бы непрерывно.
+    cache_min_age_seconds: int = field(default_factory=lambda: _int("API_CACHE_MIN_AGE_SECONDS", 60, 0, 600))
+    # Сколько держится опубликованная ревизия набора данных. Пересчёты и
+    # /revision берут её, а не самую свежую, которая на проде меняется каждые
+    # полторы секунды.
+    cache_revision_hold_seconds: int = field(
+        default_factory=lambda: _int("API_CACHE_REVISION_HOLD_SECONDS", 60, 1, 3600)
+    )
+    # Сколько фоновых пересчётов процесс ведёт одновременно.
+    cache_refresh_concurrency: int = field(
+        default_factory=lambda: _int("API_CACHE_REFRESH_CONCURRENCY", 2, 1, 64)
+    )
     cache_refresh_lock_seconds: int = field(
         default_factory=lambda: _int("API_CACHE_REFRESH_LOCK_SECONDS", 150, 1, 3600)
     )
@@ -109,6 +124,24 @@ class Settings:
     cache_warmup_targets: tuple[str, ...] = field(default_factory=_warmup_targets)
     cache_warmup_interval_seconds: int = field(
         default_factory=lambda: _int("API_CACHE_WARMUP_INTERVAL_SECONDS", 300, 5, 86_400)
+    )
+    # Греть ли весь каталог: карточки аккаунтов и страницы свежих постов.
+    cache_warmup_catalog: bool = field(default_factory=lambda: os.environ.get(
+        "API_CACHE_WARMUP_CATALOG", "false").strip().lower() in {"1", "true", "yes", "on"})
+    # Посты не старше этого числа часов греются вместе с каталогом.
+    cache_warmup_recent_hours: int = field(
+        default_factory=lambda: _int("API_CACHE_WARMUP_RECENT_HOURS", 6, 0, 24 * 14)
+    )
+    # Ответ моложе этого возраста прогрев не пересобирает. Задаёт темп
+    # пересборки каталога, а значит и то, насколько он может отставать.
+    cache_warmup_max_age_seconds: int = field(
+        default_factory=lambda: _int("API_CACHE_WARMUP_MAX_AGE_SECONDS", 600, 1, 86_400)
+    )
+    # Пересборка каталога — сотни карточек по 0.2–2 с каждая. Один запрос за
+    # раз ограничивает прогрев одним ядром: второе остаётся посетителям и
+    # приёмнику переноса.
+    cache_warmup_concurrency: int = field(
+        default_factory=lambda: _int("API_CACHE_WARMUP_CONCURRENCY", 1, 1, 16)
     )
     cache_warmup_base_url: str = field(
         default_factory=lambda: os.environ.get(

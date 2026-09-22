@@ -721,11 +721,16 @@ WITH bounds AS (
            CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
                 THEN NULL ELSE snapshot.views_count END AS views_count
       FROM tracked
-     CROSS JOIN bounds
       JOIN ingest.publication_metric_snapshot_active snapshot
         ON snapshot.publication_id=tracked.id
        AND snapshot.published_month=tracked.published_month
-     WHERE snapshot.observed_at >= ((bounds.today - 7)::timestamp AT TIME ZONE 'Europe/Moscow')
+     -- Граница окна считается из параметра прямо здесь, а не берётся из
+     -- bounds. Значение из CTE планировщик применял уже после соединения —
+     -- фильтром, а не условием поиска по индексу, — занижал оценку в сотни
+     -- раз и выбирал параллельный проход по всем партициям снимков: на
+     -- крупном аккаунте 12 миллионов строк и 5 ГБ чтения на одну карточку.
+     WHERE snapshot.observed_at >= ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
+                                   AT TIME ZONE 'Europe/Moscow')
        AND snapshot.observed_at<=%(as_of)s::timestamptz
        AND snapshot.quality<>'invalid'
      ORDER BY tracked.id,

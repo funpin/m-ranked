@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 
 from .. import dto, params as normalize
-from ..cached import current_revision, serve
+from ..cached import serve
 from ..db import Database
 from ..errors import BadRequest
 from ..sql import statistics as sql
@@ -146,10 +146,9 @@ async def statistics(
             "asOf": committed_at.isoformat(),
         }
 
-    # Statistics cursors and cached representations are pinned to the same
-    # dataset revision; unlike the live overview cache, revision is an explicit
-    # dimension of this contract.
-    revision, _committed_at = await current_revision(request.app.state.db)
+    # Продолжение списка собирается по ревизии своего курсора: курсор входит в
+    # ключ и сам её несёт. Первая страница собирается по опубликованной
+    # ревизии — прежде её читали из базы на каждый запрос, даже на попадание.
     return await serve(request, "statistics", {
         "view": query.view,
         "platform": query.platform,
@@ -161,4 +160,4 @@ async def statistics(
         "entityDirection": query.entity_direction,
         "limit": page_size,
         "cursor": cursor or "",
-    }, STATISTICS_TAGS, build, pinned_revision=revision)
+    }, STATISTICS_TAGS, build, pinned_revision=normalize.cursor_revision(cursor))

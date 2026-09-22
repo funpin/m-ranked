@@ -34,14 +34,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             capacity=settings.cache_entries,
             ttl_seconds=settings.cache_ttl_seconds,
             min_age_seconds=settings.cache_min_age_seconds,
-            stale_seconds=settings.cache_stale_seconds,
+            fresh_seconds=settings.cache_fresh_seconds,
+            revision_hold_seconds=settings.cache_revision_hold_seconds,
             refresh_lock_seconds=settings.cache_refresh_lock_seconds,
             timeout_ms=settings.redis_timeout_ms,
         )
     else:
         cache = ResponseCache(
             settings.cache_entries, settings.cache_ttl_seconds,
-            settings.cache_min_age_seconds, settings.cache_stale_seconds,
+            settings.cache_min_age_seconds,
+            fresh_seconds=settings.cache_fresh_seconds,
+            revision_hold_seconds=settings.cache_revision_hold_seconds,
         )
     metrics_path = (
         settings.cache_metrics_directory / f"m-ranked-api-cache-{os.getpid()}.prom"

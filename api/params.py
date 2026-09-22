@@ -200,6 +200,25 @@ def scoped_cursor(value: str | None, revision: int, dimensions: str) -> str | No
     return identifier
 
 
+def cursor_revision(value: str | None) -> int | None:
+    """Ревизия, которую несёт курсор, без проверки остального.
+
+    Продолжение списка обязано собираться по тому же снимку, что и первая
+    страница, иначе scoped_cursor его отвергнет. Повреждённый курсор здесь
+    не ошибка: его отвергнет scoped_cursor с внятным сообщением.
+    """
+    if not value or len(value) > 512:
+        return None
+    try:
+        decoded = base64.b64decode(
+            (value + "=" * (-len(value) % 4)).encode("ascii"), altchars=b"-_", validate=True,
+        ).decode("ascii")
+        revision = int(decoded.split(":", 1)[0])
+    except (binascii.Error, UnicodeDecodeError, UnicodeEncodeError, ValueError):
+        return None
+    return revision if revision > 0 else None
+
+
 def encode_scoped_cursor(identifier: str | None, revision: int, dimensions: str) -> str | None:
     if identifier is None:
         return None

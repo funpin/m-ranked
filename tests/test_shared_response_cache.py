@@ -38,11 +38,12 @@ async def require_redis() -> None:
         await client.aclose()
 
 
-def shared_cache(*, ttl: float = 2, stale: float = 1,
+def shared_cache(*, ttl: float = 2, fresh: float | None = None, hold: float | None = None,
                  lock: float = 1, namespace: str | None = None) -> RedisResponseCache:
     return RedisResponseCache(
         REDIS_URL, capacity=32, ttl_seconds=ttl, min_age_seconds=0,
-        stale_seconds=stale, refresh_lock_seconds=lock, timeout_ms=100,
+        fresh_seconds=fresh, revision_hold_seconds=hold,
+        refresh_lock_seconds=lock, timeout_ms=100,
         namespace=namespace or f"test:cache:{uuid4().hex}",
     )
 
@@ -73,9 +74,9 @@ def test_cache_contract_hit_miss_ttl_and_tag_invalidation(backend: str) -> None:
     async def scenario() -> None:
         if backend == "redis":
             await require_redis()
-            cache = shared_cache(ttl=.08, stale=.04)
+            cache = shared_cache(ttl=.08)
         else:
-            cache = ResponseCache(32, .08, 0, .04)
+            cache = ResponseCache(32, .08, 0)
         try:
             assert await cache_call(cache.get("answer")) is None
             await cache_call(cache.put("answer", "value", '"etag"', TAGS))
@@ -108,7 +109,7 @@ def test_distributed_stale_refresh_has_one_owner_and_all_readers_return() -> Non
             return {"datasetRevision": revision, "fresh": True}
 
         try:
-            key = cache_key("overview", 7, {})
+            key = cache_key("overview", {})
             await caches[0].set_revision(7, datetime(2026, 1, 1, tzinfo=UTC))
             await caches[0].put(key, '{"stale":true}', '"old"', TAGS)
             await caches[0].invalidate(TAGS)
@@ -201,7 +202,7 @@ def test_warmed_key_serves_first_request_without_database_and_preserves_etag() -
 
         try:
             await cache.set_revision(7, committed)
-            await cache.put(cache_key("overview", 7, {}), '{"warmed":true}', '"warm"', TAGS)
+            await cache.put(cache_key("overview", {}), '{"warmed":true}', '"warm"', TAGS, 7)
             response = await serve(request(cache, db), "overview", {}, TAGS, must_not_build)
             unchanged = await serve(
                 request(cache, db, etag='"warm"'), "overview", {}, TAGS, must_not_build,
@@ -214,10 +215,12 @@ def test_warmed_key_serves_first_request_without_database_and_preserves_etag() -
     run(scenario())
 
 
-def test_revision_change_after_warmup_is_a_miss() -> None:
+def test_revision_change_serves_the_warm_answer_and_refreshes_it() -> None:
+    """Смена ревизии больше не промах: ключ её не содержит. Готовый ответ
+    отдаётся сразу, а устаревший по возрасту пересобирается фоном."""
     async def scenario() -> None:
         await require_redis()
-        cache = shared_cache()
+        cache = shared_cache(fresh=.01)
         db = FakeDB(revision=8)
         builds = 0
 
@@ -227,14 +230,34 @@ def test_revision_change_after_warmup_is_a_miss() -> None:
             return {"datasetRevision": revision}
 
         try:
-            await cache.set_revision(7, datetime(2026, 1, 1, tzinfo=UTC))
-            await cache.put(cache_key("overview", 7, {}), '{"datasetRevision":7}', '"old"', TAGS)
-            await cache.invalidate(TAGS)
+            key = cache_key("overview", {})
+            await cache.put(key, '{"datasetRevision":7}', '"old"', TAGS, 7)
+            await asyncio.sleep(.02)
             response = await serve(request(cache, db), "overview", {}, TAGS, build)
-            assert response.body == b'{"datasetRevision":8}'
-            assert db.calls == 1 and builds == 1
+            assert response.body == b'{"datasetRevision":7}'
+            await asyncio.sleep(.05)
+            assert builds == 1
+            assert (await cache.get(key)).revision == 8
         finally:
             await cache.close()
+    run(scenario())
+
+
+def test_published_revision_is_shared_by_every_worker() -> None:
+    async def scenario() -> None:
+        await require_redis()
+        namespace = f"test:cache:{uuid4().hex}"
+        first = shared_cache(namespace=namespace, hold=5)
+        second = shared_cache(namespace=namespace, hold=5)
+        try:
+            committed = datetime(2026, 1, 1, tzinfo=UTC)
+            assert (await first.set_revision(7, committed))[0] == 7
+            assert (await second.set_revision(8, committed))[0] == 7, "второй принимает первую"
+            await first.invalidate(TAGS)
+            assert (await second.get_revision())[0] == 7, "уведомление её не сбрасывает"
+        finally:
+            await first.close()
+            await second.close()
     run(scenario())
 
 
