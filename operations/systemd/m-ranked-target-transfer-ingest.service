@@ -31,6 +31,9 @@ Environment=TRANSFER_INGEST_CA_BUNDLE=%d/transfer-ca
 # как конверт принят и проверен.
 Environment=MRANKED_IDENTITY_RECEIPT_DIR=/var/lib/m-ranked/transfer-ingest/identity-receipts
 Environment=COLLECTOR_RAW_EVIDENCE_DIR=/var/lib/m-ranked/transfer-ingest/raw-evidence
+# Каталог объявлен, но по умолчанию не наполняется: сырые доказательства
+# выключены в transfer-ingest.env. Путь остаётся, чтобы включение не
+# требовало правки юнита.
 Environment=PYTHONUNBUFFERED=1
 Environment=TZ=Europe/Moscow
 ExecStart=/opt/m-ranked/current/.venv/bin/python -m transfer_ingest

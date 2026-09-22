@@ -22,6 +22,19 @@ class IngestSettings:
     database_url: str
     path: str = "/transfer/v1/batches"
     allowed_producers: tuple[str, ...] = ()
+    # Тело применённого конверта держится столько, сколько может
+    # понадобиться, чтобы разобрать применение вручную. Дальше оно только
+    # занимает место: данные уже в рабочих таблицах. Ноль отключает
+    # освобождение, и таблица растёт со скоростью поступления данных.
+    payload_retention_hours: int = 24
+    payload_release_interval_seconds: int = 300
+    payload_release_limit: int = 2000
+    # Уборка файлового склада идёт своим, много более редким шагом:
+    # каждый объект требует блокировки и запроса к базе, а удалять
+    # обычно нечего — у доказательств недельный срок. В одном шаге с
+    # освобождением тел она задерживала бы его на минуты.
+    evidence_purge_interval_seconds: int = 3600
+    evidence_purge_limit: int = 5000
 
     @classmethod
     def load(cls) -> "IngestSettings":
@@ -54,4 +67,19 @@ class IngestSettings:
             database_url=dsn,
             path=os.getenv("TRANSFER_INGEST_PATH", "/transfer/v1/batches").strip(),
             allowed_producers=producers,
+            payload_retention_hours=_int(
+                "TRANSFER_INGEST_PAYLOAD_RETENTION_HOURS", 24,
+            ),
+            payload_release_interval_seconds=_int(
+                "TRANSFER_INGEST_PAYLOAD_RELEASE_INTERVAL_SECONDS", 300,
+            ),
+            payload_release_limit=_int(
+                "TRANSFER_INGEST_PAYLOAD_RELEASE_LIMIT", 2000,
+            ),
+            evidence_purge_interval_seconds=_int(
+                "TRANSFER_INGEST_EVIDENCE_PURGE_INTERVAL_SECONDS", 3600,
+            ),
+            evidence_purge_limit=_int(
+                "TRANSFER_INGEST_EVIDENCE_PURGE_LIMIT", 5000,
+            ),
         )

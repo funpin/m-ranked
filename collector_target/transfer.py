@@ -709,6 +709,37 @@ class PostgresDataAdapter:
                     (outcome, receipt_id, index),
                 )
 
+    def release_applied_payloads(
+        self, *, before: datetime, limit: int = 1000,
+    ) -> int:
+        """Освободить тела применённых конвертов старше окна хранения.
+
+        Сама строка остаётся: по ней приёмник узнаёт повторную доставку и
+        возвращает ту же квитанцию вместо повторного применения. Уходит только
+        полезная нагрузка, которая после применения уже нигде не нужна — она и
+        составляет почти весь объём таблицы.
+
+        Карантинные конверты не трогаются ни при каком пороге: именно их тело
+        и нужно, чтобы разобрать, почему батч не применился.
+        """
+        with self.repository._connection() as connection, connection.transaction():
+            row = connection.execute(
+                """WITH victims AS (
+                       SELECT receipt_id FROM ops_and_admin.transfer_inbox
+                        WHERE state='applied' AND payload IS NOT NULL
+                          AND applied_at<%s
+                        ORDER BY applied_at LIMIT %s FOR UPDATE SKIP LOCKED
+                   ), released AS (
+                       UPDATE ops_and_admin.transfer_inbox current
+                          SET payload=NULL
+                         FROM victims
+                        WHERE current.receipt_id=victims.receipt_id
+                    RETURNING 1
+                   ) SELECT count(*) AS count FROM released""",
+                (utc(before, "inbox.retention.before"), limit),
+            ).fetchone()
+        return int(_row(row, "count", 0))
+
 
 class PostgresTransferProducer:
     """Oldest-first sender; an ACK is persisted before its watermark advances."""

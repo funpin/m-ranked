@@ -52,9 +52,22 @@ class OutboxMarker:
         backoff = 1.0
         while True:
             try:
+                # Автофиксация обязательна, хотя каждый шаг и так обёрнут в
+                # transaction(). Без неё psycopg открывает транзакцию на первом
+                # же операторе — на SET ниже, вне всяких блоков, — и больше её
+                # не закрывает: вложенный transaction() выпускает savepoint, а
+                # не commit. Соединение живёт сутками, а вместе с ним висит его
+                # backend_xmin, и очистка встаёт во всей базе: мёртвые строки
+                # не убираются нигде, таблицы растут, VACUUM FULL ничего не
+                # освобождает. На проде так набежало пятнадцать часов открытой
+                # транзакции.
                 async with await psycopg.AsyncConnection.connect(
-                    self.dsn, autocommit=False, row_factory=dict_row) as connection:
+                    self.dsn, autocommit=True, row_factory=dict_row) as connection:
                     await connection.execute("SET statement_timeout='15s'")
+                    # Страховка на случай, если шаг всё же оставит транзакцию
+                    # открытой: тридцати секунд простоя в ней не бывает.
+                    await connection.execute(
+                        "SET idle_in_transaction_session_timeout='30s'")
                     backoff = 1.0
                     while True:
                         async with connection.transaction():
