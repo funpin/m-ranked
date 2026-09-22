@@ -105,7 +105,8 @@ SELECT account.id AS account_id, canonical.legacy_id, canonical.entity_type,
        institution.id AS institution_id, institution_alias.legacy_id AS institution_legacy_id,
        institution.canonical_name, institution.short_name, account.platform::text AS platform,
        account.canonical_external_id, account.current_username, account.current_title,
-       account.current_url, account.access_mode::text AS access_mode, account.enabled,
+       account.current_url, native.external_id AS native_external_id,
+       account.access_mode::text AS access_mode, account.enabled,
        (SELECT count(*) FROM ingest.visible_publication publication
          WHERE publication.primary_account_id=account.id) AS publication_count,
        (SELECT snapshot.observed_at FROM ingest.account_metric_snapshot_active snapshot
@@ -126,12 +127,20 @@ SELECT account.id AS account_id, canonical.legacy_id, canonical.entity_type,
          AND alias.entity_type=CASE WHEN account.platform='telegram' THEN 'channels' ELSE 'platform_accounts' END
        ORDER BY alias.legacy_id LIMIT 1) canonical ON true
   LEFT JOIN aliases ON aliases.target_uuid=account.id
+  LEFT JOIN LATERAL (
+      SELECT identity.external_id
+        FROM catalog.account_external_identity identity
+       WHERE identity.platform_account_id=account.id
+         AND identity.identity_namespace=account.platform::text||':native_id'
+         AND identity.valid_to IS NULL
+       ORDER BY identity.verified_at DESC NULLS LAST,identity.id DESC
+       LIMIT 1) native ON true
 """
 
 
 ACCOUNT_STATS = """
 WITH publications AS (
-    SELECT publication.id, publication.history_completeness
+    SELECT publication.id, publication.history_completeness, publication.published_at
       FROM ingest.visible_publication publication
      WHERE publication.primary_account_id=%(account_id)s::uuid
        AND publication.published_at>=%(as_of)s::timestamptz-make_interval(days=>%(days)s)
@@ -171,13 +180,72 @@ WITH publications AS (
      WHERE result.platform_account_id=%(account_id)s::uuid
        AND result.started_at<=%(as_of)s::timestamptz
      ORDER BY result.started_at DESC,result.id DESC LIMIT 1
+), yesterday_edge AS (
+    -- Значение каждой публикации на границе вчерашних суток по Москве.
+    -- Отсюда берутся плашки «за сутки» у плиток: медиана вчера против
+    -- медианы сейчас. Одним проходом по диапазону, как в недельном ряду.
+    SELECT DISTINCT ON (publication.id) publication.id,
+           snapshot.views_count, snapshot.reactions_count, snapshot.comments_count,
+           snapshot.views_quality, snapshot.reactions_quality, snapshot.comments_quality
+      FROM publications publication
+      JOIN ingest.publication_metric_snapshot_active snapshot
+        ON snapshot.publication_id=publication.id
+       AND snapshot.published_month=date_trunc('month', publication.published_at)::date
+     WHERE snapshot.observed_at
+           < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+              AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.observed_at
+           >= (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 3)::timestamp
+              AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.quality<>'invalid'
+     ORDER BY publication.id, snapshot.observed_at DESC, snapshot.id DESC
+), yesterday_metric AS (
+    SELECT value.metric_key,
+           round(percentile_cont(0.5) WITHIN GROUP(ORDER BY value.metric_value)
+                 FILTER(WHERE value.metric_value IS NOT NULL)::numeric,0) AS median_value
+      FROM yesterday_edge edge
+     CROSS JOIN LATERAL (VALUES
+        ('views',CASE WHEN edge.views_quality IN ('invalid','suspected_reset')
+                      THEN NULL ELSE edge.views_count END),
+        ('reactions',CASE WHEN edge.reactions_quality IN ('invalid','suspected_reset')
+                          THEN NULL ELSE edge.reactions_count END),
+        ('comments',CASE WHEN edge.comments_quality IN ('invalid','suspected_reset')
+                         THEN NULL ELSE edge.comments_count END)
+     ) value(metric_key,metric_value)
+     GROUP BY value.metric_key
 ), official_rating AS (
     SELECT observation.rank,observation.period
       FROM rating.official_institution_rating_observation observation
      WHERE observation.institution_id=%(institution_id)s::uuid
        AND observation.fetched_at<=%(as_of)s::timestamptz
        AND observation.category=%(platform)s
-     ORDER BY observation.fetched_at DESC,observation.id DESC LIMIT 1
+     -- Порядок по самому периоду, а не по времени загрузки: всю
+     -- опубликованную историю мы забираем одним прогоном, и «загружен
+     -- позже» перестало означать «свежее». Название месяца переводится в
+     -- номер, год берётся из той же строки.
+     ORDER BY nullif(regexp_replace(observation.period,'[^0-9]','','g'),'')::int DESC NULLS LAST,
+              array_position(ARRAY['Январь','Февраль','Март','Апрель','Май','Июнь',
+                                        'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+                                  split_part(observation.period,' ',1)) DESC NULLS LAST,
+              observation.fetched_at DESC, observation.id DESC LIMIT 1
+), previous_rating AS (
+    -- Место в прошлом опубликованном периоде. Рейтинг выходит раз в месяц,
+    -- поэтому «предыдущий» здесь — предыдущий месяц, а не предыдущие сутки.
+    SELECT observation.rank, observation.period
+      FROM rating.official_institution_rating_observation observation
+     WHERE observation.institution_id=%(institution_id)s::uuid
+       AND observation.fetched_at<=%(as_of)s::timestamptz
+       AND observation.category=%(platform)s
+       AND observation.period<>(SELECT period FROM official_rating)
+     -- Порядок по самому периоду, а не по времени загрузки: всю
+     -- опубликованную историю мы забираем одним прогоном, и «загружен
+     -- позже» перестало означать «свежее». Название месяца переводится в
+     -- номер, год берётся из той же строки.
+     ORDER BY nullif(regexp_replace(observation.period,'[^0-9]','','g'),'')::int DESC NULLS LAST,
+              array_position(ARRAY['Январь','Февраль','Март','Апрель','Май','Июнь',
+                                        'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+                                  split_part(observation.period,' ',1)) DESC NULLS LAST,
+              observation.fetched_at DESC, observation.id DESC LIMIT 1
 )
 SELECT %(days)s::integer AS retention_days,
        (SELECT count(*) FROM publications)::bigint AS post_count,
@@ -188,12 +256,27 @@ SELECT %(days)s::integer AS retention_days,
                            ELSE sample_size::numeric/(SELECT count(*) FROM publications) END,
            'quality',analytics.observation_quality_from_rank(quality_rank)::text)) FROM metric),'{}'::jsonb) AS medians,
        official_rating.rank AS rating_rank, official_rating.period AS rating_period,
+       previous_rating.rank AS previous_rating_rank,
+       previous_rating.period AS previous_rating_period,
+       -- Вчерашние значения тех же плиток: по ним рисуется плашка «за сутки».
+       (SELECT count(*) FROM publications publication
+         WHERE publication.published_at
+               < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+                  AT TIME ZONE 'Europe/Moscow'))::bigint AS previous_post_count,
+       (SELECT count(*) FROM publications publication
+         WHERE publication.history_completeness='complete'
+           AND publication.published_at
+               < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+                  AT TIME ZONE 'Europe/Moscow'))::bigint AS previous_monitored,
+       coalesce((SELECT jsonb_object_agg(metric_key,median_value)
+                   FROM yesterday_metric),'{}'::jsonb) AS previous_medians,
        subscriber.subscriber_count,
        CASE WHEN collection.status IN ('failed','partial')
             THEN coalesce(collection.sanitized_error_code,'collection_failed') END AS last_error,
        greatest(collection.completed_at,collection.started_at) AS last_checked_at
   FROM (SELECT 1) singleton
   LEFT JOIN subscriber ON true LEFT JOIN collection ON true LEFT JOIN official_rating ON true
+  LEFT JOIN previous_rating ON true
 """
 
 
@@ -257,6 +340,38 @@ WITH page AS (
            (SELECT cursor.published_at,cursor.id FROM ingest.visible_publication cursor
              WHERE cursor.id=%(after_id)s::uuid AND cursor.primary_account_id=%(account_id)s::uuid))
      ORDER BY publication.published_at DESC,publication.id DESC LIMIT %(fetch_limit)s
+), growth_edges AS (
+    -- Последний валидный замер выбранного дня и предыдущего дня.
+    -- Партиция снимков фиксируется месяцем публикации.
+    SELECT DISTINCT ON (page.id, (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date)
+           page.id AS publication_id,
+           (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
+           CASE WHEN snapshot.reactions_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE snapshot.reactions_count END AS reactions_count,
+           CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE snapshot.views_count END AS views_count
+      FROM page
+      JOIN ingest.publication_metric_snapshot_active snapshot
+        ON snapshot.publication_id=page.id
+       AND snapshot.published_month=date_trunc('month',page.published_at)::date
+     WHERE %(growth_day)s::date IS NOT NULL
+       AND snapshot.observed_at >= (((%(growth_day)s::date - 1)::timestamp)
+                                    AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.observed_at < (((%(growth_day)s::date + 1)::timestamp)
+                                   AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.observed_at<=%(as_of)s::timestamptz
+       AND snapshot.quality<>'invalid'
+     ORDER BY page.id,
+              (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date,
+              snapshot.observed_at DESC,snapshot.id DESC
+), growth AS (
+    SELECT page.id AS publication_id,
+           max(edge.reactions_count) FILTER (WHERE edge.metric_day=%(growth_day)s::date) AS end_reactions,
+           max(edge.reactions_count) FILTER (WHERE edge.metric_day=%(growth_day)s::date-1) AS previous_reactions,
+           max(edge.views_count) FILTER (WHERE edge.metric_day=%(growth_day)s::date) AS end_views,
+           max(edge.views_count) FILTER (WHERE edge.metric_day=%(growth_day)s::date-1) AS previous_views
+      FROM page LEFT JOIN growth_edges edge ON edge.publication_id=page.id
+     GROUP BY page.id
 )
 SELECT page.id AS publication_id, alias.legacy_id, alias.entity_type, alias.legacy_route,
        identity.external_id, identity.public_url, page.published_at,page.publication_type,
@@ -267,7 +382,20 @@ SELECT page.id AS publication_id, alias.legacy_id, alias.entity_type, alias.lega
        latest.views_count,latest.views_observed_at,latest.views_quality::text AS views_quality,
        latest.reactions_count,latest.reactions_observed_at,latest.reactions_quality::text AS reactions_quality,
        latest.comments_count,latest.comments_observed_at,latest.comments_quality::text AS comments_quality,
-       latest.shares_count,latest.shares_observed_at,latest.shares_quality::text AS shares_quality
+       latest.shares_count,latest.shares_observed_at,latest.shares_quality::text AS shares_quality,
+       %(growth_day)s::date AS growth_day,
+       CASE WHEN growth.end_reactions IS NULL THEN NULL
+            WHEN growth.previous_reactions IS NOT NULL
+              THEN greatest(growth.end_reactions-growth.previous_reactions,0)
+            WHEN (page.published_at AT TIME ZONE 'Europe/Moscow')::date=%(growth_day)s::date
+              THEN greatest(growth.end_reactions,0)
+            ELSE NULL END AS day_reactions_gain,
+       CASE WHEN growth.end_views IS NULL THEN NULL
+            WHEN growth.previous_views IS NOT NULL
+              THEN greatest(growth.end_views-growth.previous_views,0)
+            WHEN (page.published_at AT TIME ZONE 'Europe/Moscow')::date=%(growth_day)s::date
+              THEN greatest(growth.end_views,0)
+            ELSE NULL END AS day_views_gain
   FROM page
   JOIN catalog.visible_platform_account account ON account.id=page.primary_account_id
   JOIN LATERAL (SELECT candidate.* FROM catalog.legacy_entity_alias candidate
@@ -279,6 +407,7 @@ SELECT page.id AS publication_id, alias.legacy_id, alias.entity_type, alias.lega
        ORDER BY candidate.id LIMIT 1) identity ON true
   LEFT JOIN analytics.publication_latest latest ON latest.publication_id=page.id
    AND latest.observed_at<=%(as_of)s::timestamptz AND NOT latest.synthetic AND latest.quality<>'invalid'
+  LEFT JOIN growth ON growth.publication_id=page.id
  ORDER BY page.published_at DESC,page.id DESC
 """
 
@@ -344,7 +473,11 @@ SELECT publication.id AS publication_id, alias.legacy_id,alias.entity_type,
 
 
 HISTORY = """
-WITH ranked AS MATERIALIZED (
+WITH account AS MATERIALIZED (
+    SELECT publication.primary_account_id
+      FROM ingest.visible_publication publication
+     WHERE publication.id=%(publication_id)s::uuid
+), ranked AS MATERIALIZED (
     SELECT snapshot.*,
            row_number() OVER (PARTITION BY snapshot.publication_id,snapshot.sampling_bucket
                               ORDER BY snapshot.correction_sequence DESC) AS correction_position
@@ -377,6 +510,7 @@ WITH ranked AS MATERIALIZED (
            lag(decorated.comments_count) OVER chronology AS previous_comments,
            lag(decorated.shares_count) OVER chronology AS previous_shares,
            lag(decorated.reaction_breakdown) OVER chronology AS previous_breakdown,
+           lag(decorated.observed_at) OVER chronology AS previous_observed_at,
            row_number() OVER (ORDER BY decorated.observed_at DESC,decorated.published_month DESC,decorated.id DESC) AS position
       FROM decorated
     WINDOW chronology AS (ORDER BY decorated.observed_at,decorated.published_month,decorated.id)
@@ -394,8 +528,25 @@ SELECT windowed.id AS snapshot_id,windowed.*,
          'reactionDetailsSource','canonical')) AS lineage,
        delta_reactions.breakdown AS delta_reaction_breakdown,
        coalesce(analytics.ordered_history_reactions(windowed.reaction_breakdown::text,false),'[]'::jsonb) AS reaction_entries,
-       delta_reactions.entries AS delta_reaction_entries
+       delta_reactions.entries AS delta_reaction_entries,
+       CASE WHEN windowed.previous_observed_at IS NULL THEN NULL
+            ELSE jsonb_build_object(
+              'from',windowed.previous_observed_at,
+              'to',windowed.observed_at,
+              'successfulPolls',coalesce(interval_results.successful_polls,0),
+              'failedPolls',coalesce(interval_results.failed_polls,0)
+            ) END AS collector_interval
   FROM windowed
+ CROSS JOIN account
+  LEFT JOIN LATERAL (
+    SELECT count(*) FILTER (WHERE result.status='succeeded')::integer AS successful_polls,
+           count(*) FILTER (WHERE result.status NOT IN ('running','succeeded'))::integer AS failed_polls
+      FROM ingest.collection_account_result result
+     WHERE result.platform_account_id=account.primary_account_id
+       AND result.started_at>windowed.previous_observed_at
+       AND result.started_at<=windowed.observed_at
+       AND result.completed_at<=%(as_of)s::timestamptz
+  ) interval_results ON windowed.previous_observed_at IS NOT NULL
  CROSS JOIN LATERAL (
     SELECT computed.entries,
            CASE WHEN computed.entries IS NULL THEN NULL
@@ -417,6 +568,85 @@ SELECT windowed.id AS snapshot_id,windowed.*,
 """
 
 
+COLLECTOR_COVERAGE = """
+WITH parameters AS (
+    SELECT %(publication_id)s::uuid AS publication_id,
+           %(from_at)s::timestamptz AS requested_from,
+           %(as_of)s::timestamptz AS through_at,
+           %(expected_interval_seconds)s::integer AS expected_seconds
+), account AS MATERIALIZED (
+    SELECT publication.primary_account_id
+      FROM ingest.visible_publication publication
+      JOIN parameters ON parameters.publication_id=publication.id
+), range_results AS MATERIALIZED (
+    SELECT result.started_at,result.completed_at,result.status::text AS status
+      FROM account
+      JOIN ingest.collection_account_result result
+        ON result.platform_account_id=account.primary_account_id
+     CROSS JOIN parameters
+     WHERE result.started_at>=parameters.requested_from
+       AND result.started_at<=parameters.through_at
+       AND (result.completed_at IS NULL OR result.completed_at<=parameters.through_at)
+), prior_success AS (
+    SELECT result.started_at
+      FROM account
+      JOIN ingest.collection_account_result result
+        ON result.platform_account_id=account.primary_account_id
+     CROSS JOIN parameters
+     WHERE result.status='succeeded'
+       AND result.completed_at<=parameters.through_at
+       AND result.started_at<parameters.requested_from
+     ORDER BY result.started_at DESC
+     LIMIT 1
+), success_points AS MATERIALIZED (
+    SELECT prior_success.started_at FROM prior_success
+    UNION ALL
+    SELECT result.started_at FROM range_results result WHERE result.status='succeeded'
+), success_windows AS (
+    SELECT success.started_at,
+           lead(success.started_at) OVER (ORDER BY success.started_at) AS next_started_at
+      FROM success_points success
+), gaps AS MATERIALIZED (
+    SELECT greatest(
+             success_window.started_at + make_interval(secs=>parameters.expected_seconds),
+             parameters.requested_from
+           ) AS gap_from,
+           coalesce(success_window.next_started_at,parameters.through_at) AS gap_to
+      FROM success_windows success_window
+     CROSS JOIN parameters
+     WHERE coalesce(success_window.next_started_at,parameters.through_at)-success_window.started_at
+             >= make_interval(secs=>parameters.expected_seconds*1.75)
+       AND coalesce(success_window.next_started_at,parameters.through_at)>parameters.requested_from
+), first_success AS (
+    SELECT result.started_at
+      FROM account
+      JOIN ingest.collection_account_result result
+        ON result.platform_account_id=account.primary_account_id
+     CROSS JOIN parameters
+     WHERE result.status='succeeded'
+       AND result.completed_at<=parameters.through_at
+     ORDER BY result.started_at
+     LIMIT 1
+)
+SELECT (SELECT started_at FROM first_success) AS available_from,
+       parameters.through_at,
+       parameters.expected_seconds AS expected_interval_seconds,
+       count(*) FILTER (WHERE range_results.status='succeeded')::integer AS successful_polls,
+       count(*) FILTER (WHERE range_results.status NOT IN ('running','succeeded'))::integer AS failed_polls,
+       coalesce((
+         SELECT jsonb_agg(jsonb_build_object(
+                  'from',gap.gap_from,
+                  'to',gap.gap_to,
+                  'missingSeconds',floor(extract(epoch FROM gap.gap_to-gap.gap_from))::bigint
+                ) ORDER BY gap.gap_from)
+           FROM gaps gap
+       ),'[]'::jsonb) AS gaps
+  FROM parameters
+  LEFT JOIN range_results ON true
+ GROUP BY parameters.through_at,parameters.expected_seconds
+"""
+
+
 NEIGHBOURS = """
 SELECT
   (SELECT alias.legacy_id FROM ingest.visible_publication neighbour
@@ -434,24 +664,30 @@ SELECT
 
 ACCOUNT_DAILY = """
 -- Недельная динамика аккаунта: сколько постов вышло в каждый из последних
--- семи дней и какими они оказались по медиане реакций и просмотров.
+-- семи дней, какими они оказались по медиане, и сколько за эти сутки набрали
+-- все отслеживаемые посты вместе.
 --
--- Считается живьём и стоит недорого: публикаций за неделю у канала десятки,
--- а их текущие значения лежат в витрине последних значений. Дни нарезаются по
--- московскому времени — так же, как подписаны все даты на экране.
-WITH days AS (
-    SELECT generate_series(
-        (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 6,
-        (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date,
-        interval '1 day')::date AS metric_day
+-- Медианы считаются по постам этого дня, а суммы — по всем постам площадки:
+-- это разные вопросы. Медиана отвечает «каким вышел типичный пост», сумма —
+-- «сколько площадка набрала за сутки», и второе совпадает с числом на
+-- карточке обзора.
+--
+-- Дни нарезаются по московскому времени — так же, как подписаны все даты на
+-- экране. Границей суток служит последний замер до полуночи, поэтому прирост
+-- за день — это разница двух границ, а не сумма отдельных наблюдений.
+WITH bounds AS (
+    SELECT (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date AS today
+), days AS (
+    SELECT generate_series(bounds.today - 6, bounds.today, interval '1 day')::date AS metric_day
+      FROM bounds
 ), published AS (
     SELECT (publication.published_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
            publication.id
       FROM ingest.visible_publication publication
+     CROSS JOIN bounds
      WHERE publication.primary_account_id=%(account_id)s::uuid
        AND publication.published_at<=%(as_of)s::timestamptz
-       AND (publication.published_at AT TIME ZONE 'Europe/Moscow')::date
-           >= (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 6
+       AND (publication.published_at AT TIME ZONE 'Europe/Moscow')::date >= bounds.today - 6
 ), valued AS (
     SELECT published.metric_day,
            CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset')
@@ -462,14 +698,79 @@ WITH days AS (
       LEFT JOIN analytics.publication_latest latest ON latest.publication_id=published.id
        AND latest.observed_at<=%(as_of)s::timestamptz
        AND NOT latest.synthetic AND latest.quality<>'invalid'
+), tracked AS (
+    -- Все посты площадки, а не только вышедшие на этой неделе: за сутки
+    -- набирают и старые. Месяц публикации передаётся явно — это ключ
+    -- партиционирования снимков.
+    SELECT publication.id,
+           (publication.published_at AT TIME ZONE 'Europe/Moscow')::date AS published_day,
+           date_trunc('month', publication.published_at)::date AS published_month
+      FROM ingest.visible_publication publication
+     WHERE publication.primary_account_id=%(account_id)s::uuid
+       AND publication.published_at<=%(as_of)s::timestamptz
+), edges AS (
+    -- Граница суток — последний замер публикации в эти сутки. Берётся одним
+    -- проходом по диапазону вместо восьми точечных поисков на публикацию:
+    -- на полутора сотнях постов это 800 мс против полусотни.
+    SELECT DISTINCT ON (tracked.id, (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date)
+           tracked.id,
+           tracked.published_day,
+           (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
+           CASE WHEN snapshot.reactions_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE snapshot.reactions_count END AS reactions_count,
+           CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
+                THEN NULL ELSE snapshot.views_count END AS views_count
+      FROM tracked
+      JOIN ingest.publication_metric_snapshot_active snapshot
+        ON snapshot.publication_id=tracked.id
+       AND snapshot.published_month=tracked.published_month
+     -- Граница окна считается из параметра прямо здесь, а не берётся из
+     -- bounds. Значение из CTE планировщик применял уже после соединения —
+     -- фильтром, а не условием поиска по индексу, — занижал оценку в сотни
+     -- раз и выбирал параллельный проход по всем партициям снимков: на
+     -- крупном аккаунте 12 миллионов строк и 5 ГБ чтения на одну карточку.
+     WHERE snapshot.observed_at >= ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
+                                   AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.observed_at<=%(as_of)s::timestamptz
+       AND snapshot.quality<>'invalid'
+     ORDER BY tracked.id,
+              (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date,
+              snapshot.observed_at DESC, snapshot.id DESC
+), growth_window AS (
+    -- Сохраняем не только значения, но и календарный день предыдущей границы.
+    -- Иначе lag() перенес бы многодневный прирост на один день при пропуске замера.
+    SELECT *, lag(metric_day) OVER pub AS previous_day,
+           lag(reactions_count) OVER pub AS previous_reactions,
+           lag(views_count) OVER pub AS previous_views
+      FROM edges
+    WINDOW pub AS (PARTITION BY id ORDER BY metric_day)
+), growth AS (
+    SELECT metric_day,
+           CASE WHEN previous_day=metric_day-1
+                  THEN greatest(reactions_count-previous_reactions,0)
+                WHEN published_day=metric_day THEN greatest(reactions_count,0)
+                ELSE NULL END AS reactions_gain,
+           CASE WHEN previous_day=metric_day-1
+                  THEN greatest(views_count-previous_views,0)
+                WHEN published_day=metric_day THEN greatest(views_count,0)
+                ELSE NULL END AS views_gain
+      FROM growth_window
+), daily_growth AS (
+    SELECT metric_day, sum(reactions_gain)::numeric AS total_reactions,
+           sum(views_gain)::numeric AS total_views
+      FROM growth GROUP BY metric_day
 )
 SELECT days.metric_day,
        count(valued.metric_day)::integer AS published_count,
        round(percentile_cont(0.5) WITHIN GROUP(ORDER BY valued.reactions)
              FILTER(WHERE valued.reactions IS NOT NULL)::numeric,0) AS median_reactions,
        round(percentile_cont(0.5) WITHIN GROUP(ORDER BY valued.views)
-             FILTER(WHERE valued.views IS NOT NULL)::numeric,0) AS median_views
-  FROM days LEFT JOIN valued ON valued.metric_day=days.metric_day
+             FILTER(WHERE valued.views IS NOT NULL)::numeric,0) AS median_views,
+       max(daily_growth.total_reactions) AS total_reactions,
+       max(daily_growth.total_views) AS total_views
+  FROM days
+  LEFT JOIN valued ON valued.metric_day=days.metric_day
+  LEFT JOIN daily_growth ON daily_growth.metric_day=days.metric_day
  GROUP BY days.metric_day
  ORDER BY days.metric_day
 """

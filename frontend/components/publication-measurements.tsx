@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Eye, Heart, Hourglass, MessageCircle, Share2, Smile, Timer, Users, type LucideIcon } from "lucide-react";
-import { observationGaps } from "@/lib/observation-gaps";
+import { Activity, Clock, Eye, Heart, Hourglass, MessageCircle, Share2, Smile, Timer, Users, type LucideIcon } from "lucide-react";
 import Link from "@/components/native-link";
 import { duration, legacyDate, legacyNumber } from "@/lib/format";
 import { useHistoryPreferences } from "@/lib/history-preferences";
@@ -15,7 +15,8 @@ import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
-import type { HistorySnapshot, Platform, PublicationAnomalyAnalysis } from "@/lib/types";
+import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
+import type { CollectorCoverage, HistorySnapshot, Platform, PublicationAnomalyAnalysis } from "@/lib/types";
 
 import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 
@@ -55,6 +56,51 @@ function ColumnHead({ icon: Icon, label, delta = false, align = "text-center" }:
   );
 }
 
+function InlineHint({ children, content, testId }: { children: ReactNode; content: ReactNode; testId: string }) {
+  const tooltipId = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [position, setPosition] = useState<{ left: number; top: number; above: boolean }>();
+  const show = useCallback(() => {
+    const box = trigger.current?.getBoundingClientRect();
+    if (!box) return;
+    const above = box.bottom + 96 > window.innerHeight;
+    setPosition({
+      left: Math.max(16, Math.min(window.innerWidth - 336, box.left + box.width / 2 - 160)),
+      top: above ? box.top - 6 : box.bottom + 6,
+      above,
+    });
+  }, []);
+  useEffect(() => {
+    if (!position) return;
+    const reposition = () => show();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [position, show]);
+  return <>
+    <button
+      ref={trigger}
+      type="button"
+      data-testid={testId}
+      aria-describedby={tooltipId}
+      onMouseEnter={show}
+      onMouseLeave={() => setPosition(undefined)}
+      onFocus={show}
+      onBlur={() => setPosition(undefined)}
+      className="inline-flex cursor-help items-center border-0 bg-transparent p-0 font-inherit text-inherit outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2"
+    >{children}</button>
+    {position ? createPortal(<span
+      id={tooltipId}
+      role="tooltip"
+      className="bg-popover text-popover-foreground pointer-events-none fixed z-50 w-[calc(100vw-2rem)] max-w-80 rounded-md border px-3 py-1.5 text-left text-xs leading-relaxed whitespace-normal shadow-md"
+      style={{ left: position.left, top: position.top, transform: position.above ? "translateY(-100%)" : undefined }}
+    >{content}</span>, document.body) : null}
+  </>;
+}
+
 const PublicationPlot = dynamic(() => import("./publication-plot"), {
   ssr: false,
   loading: () => <Skeleton className="h-[360px] w-full" role="status" aria-label="Загрузка графика" />,
@@ -62,7 +108,8 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
 
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>;
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>;
+  gaps: CollectorCoverage["gaps"];
 }) {
   const { metrics, platform, delta } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
@@ -136,7 +183,7 @@ function MetricChart(props: {
   </>;
 }
 
-export function PublicationMeasurements({ rows, platform, historyLimit, analysis=null, fullHistoryHref }: { rows: HistorySnapshot[];platform:Exclude<Platform,"all">;historyLimit:number;analysis?:PublicationAnomalyAnalysis|null;fullHistoryHref?:string }) {
+export function PublicationMeasurements({ rows, collectorCoverage, platform, publishedAt, historyLimit, analysis=null, fullHistoryHref }: { rows: HistorySnapshot[];collectorCoverage:CollectorCoverage;platform:Exclude<Platform,"all">;publishedAt:string;historyLimit:number;analysis?:PublicationAnomalyAnalysis|null;fullHistoryHref?:string }) {
   const [start,setStart] = useState(0), [end,setEnd] = useState(Math.max(0,rows.length-1));
   const [selectedId,setSelectedId] = useState<string>();
   const telegram = platform === "telegram";
@@ -166,8 +213,14 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
   const phrase=nouns.length<=1 ? nouns[0] ?? "метрик" : `${nouns.slice(0,-1).join(", ")} и ${nouns.at(-1)}`;
   const tableMetrics = useMemo(() => tabulatedHistoryMetrics(rows),[rows]);
   const showBreakdown = rows.some(row => (historyReactionEntries(row)?.length ?? 0)>0);
-  const gaps = useMemo(() => observationGaps(rows),[rows]);
-  const gapSeconds = gaps.reduce((total,gap) => total+(gap.to-gap.from)/1000,0);
+  const visibleGaps = useMemo(() => {
+    if (!rows.length) return [];
+    return collectorGapsInRange(collectorCoverage, rows[start]!.observedAt, rows[end]!.observedAt);
+  }, [collectorCoverage, rows, start, end]);
+  const coverageComplete = Boolean(rows.length && collectorCoverage.availableFrom
+    && Date.parse(collectorCoverage.availableFrom) <= Date.parse(rows[start]!.observedAt)
+    && Date.parse(collectorCoverage.through) >= Date.parse(rows[end]!.observedAt));
+  const missingSeconds = visibleGaps.reduce((total, gap) => total + gap.missingSeconds, 0);
   function jump(id: string) {
     const index = rows.findIndex((row) => row.snapshotId === id);
     if(index<0) return;
@@ -176,31 +229,31 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
   }
   const maximum = Math.max(0, rows.length - 1);
   return <>
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div data-testid="publication-chart-stack" className="grid gap-4">
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Накопление {phrase}
             <MethodNote title={`Накопление ${phrase}`}>
-              Линии построены по одним и тем же замерам и расставлены по времени замера, поэтому паузы в наблюдении видны как длинные пустые промежутки. Ромбами отмечены границы опубликованных сигналов; остальные замеры читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы опубликованных сигналов; остальные точки читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
-            Прирост между замерами
-            <MethodNote title="Прирост между замерами">
-              Сколько новых {phrase} появилось после предыдущего опроса. Столбец с обводкой отмечает границу сигнала, отрицательный столбец — исправление источника. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+            Прирост между сохранёнными точками
+            <MethodNote title="Прирост между сохранёнными точками">
+              Сколько новых {phrase} появилось между соседними сохранёнными изменениями или контрольными снимками. Это не обязательно прирост за один опрос: одинаковые результаты между точками обычно не сохраняются. Столбец с обводкой отмечает границу сигнала, отрицательный столбец — исправление источника. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} evidenceIds={evidenceIds} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
         </CardContent>
       </Card>
     </div>
@@ -211,10 +264,10 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
           <b className="text-foreground flex items-center gap-1.5 text-sm">
             Масштаб по времени
             <MethodNote title="Масштаб по времени">
-              Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых замеров; при приближении детализация возвращается. Пропуски в наблюдении показаны на графиках заштрихованными промежутками.
+              Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых сохранённых точек; при приближении детализация возвращается. Красным отмечены только подтверждённые разрывы в журнале успешных циклов аккаунта, а не длинные интервалы без изменения метрик. Близкие разрывы на общем масштабе визуально объединяются; при приближении видны их реальные границы.
             </MethodNote>
           </b>
-          <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} замеров` : "Нет замеров"}</span>
+          <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} сохранённых точек` : "Нет сохранённых точек"}</span>
         </div>
         <Slider
           className="my-4"
@@ -231,7 +284,13 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
           getAriaLabel={(index) => (index === 0 ? "Начало диапазона" : "Конец диапазона")}
         />
         <div className="grid gap-2">
-          {gaps.length ? <p data-observation-gaps={gaps.length} className="text-muted-foreground text-sm">Пропуски в наблюдении: {gaps.length}, суммарно {duration(gapSeconds)}.</p> : null}
+          <p data-testid="sparse-history-note" className="text-muted-foreground text-sm">Графики показывают сохранённые изменения метрик и контрольные снимки. Опросы без изменений обычно не записываются, поэтому длинный интервал между точками сам по себе не означает, что сборщик не работал.</p>
+          {visibleGaps.length
+            ? <p data-testid="collector-gap-summary" className="text-destructive text-sm font-medium">Подтверждённые пропуски сбора в выбранном диапазоне: {visibleGaps.length}, суммарно {duration(missingSeconds)}. Они отмечены красным; близкие пропуски на текущем масштабе объединяются в общий блок.{coverageComplete ? "" : " Часть диапазона вне журнала: в ней наличие пропусков неизвестно."}</p>
+            : coverageComplete
+              ? <p data-testid="collector-gap-summary" className="text-muted-foreground text-sm">По журналу циклов аккаунта подтверждённых пропусков в выбранном диапазоне нет.</p>
+              : <p data-testid="collector-gap-summary" className="text-muted-foreground text-sm">Журнал циклов покрывает выбранный диапазон не полностью — в непокрытой части наличие пропусков неизвестно.</p>}
+          <p className="text-muted-foreground text-xs">В журнале от первой показанной точки до текущего среза: успешных циклов — {collectorCoverage.successfulPolls}, с ошибкой — {collectorCoverage.failedPolls}. Ожидаемый шаг — {duration(collectorCoverage.expectedIntervalSeconds)}.</p>
           {end-start+1 > displayed.length ? <Badge variant="secondary" className="w-fit rounded-full font-semibold">Не отображено точек: {end-start+1-displayed.length}</Badge> : null}
         </div>
       </CardContent>
@@ -239,13 +298,15 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
 
     <Card className="mt-4 overflow-hidden">
       <CardHeader>
-        <CardTitle as="h2" className="font-heading text-lg">История замеров</CardTitle>
-        {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} замеров · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} замеров · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} замеров · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
+        <CardTitle as="h2" className="font-heading text-lg">История сохранённых точек</CardTitle>
+        <p data-testid="saved-history-note" className="text-muted-foreground mt-2 text-sm">Каждая строка — изменение метрик или контрольный снимок. Интервал до предыдущей строки не равен простою сборщика: между строками могли быть успешные опросы с теми же значениями.</p>
+        {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       </CardHeader>
       <CardContent>
         {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
-          { icon: Clock, label: "Время замера, МСК" },
-          { icon: Timer, label: "От прошлого замера" },
+          { icon: Clock, label: "Время сохранённой точки, МСК" },
+          { icon: Timer, label: "Между сохранёнными точками" },
+          { icon: Activity, label: "Работа сборщика в интервале" },
           { icon: Hourglass, label: "После публикации" },
           ...tableMetrics.flatMap((metric) => [
             { icon: COLUMN_ICONS[metric.key] ?? Heart, label: metricLabel(metric,platform) },
@@ -270,18 +331,34 @@ export function PublicationMeasurements({ rows, platform, historyLimit, analysis
                 boundary && "shadow-[inset_4px_0_var(--chart-4)]",
                 selected && "bg-chart-3/20 shadow-[inset_4px_0_var(--chart-3)]",
               )}
-              title={`${row.quality}${row.intervalUncertain ? " · интервал неопределён" : ""}${boundary?" · граница сигнала":""}`}
-            ><td><button type="button" data-testid="snapshot-jump" className={cn("bg-transparent underline underline-offset-2", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground", boundary && "font-black decoration-double")} title="Показать эту точку на графике" onClick={() => jump(row.snapshotId)}>{legacyDate(row.observedAt)}{boundary?<span className="sr-only">, граница сигнала аномальной динамики</span>:null}</button></td><td className="tabular text-right">{signedDuration(elapsed)}</td><td className="tabular text-right">{row.synthetic ? "момент публикации" : duration(row.ageHours*3600)}</td>
+            ><td><button type="button" data-testid="snapshot-jump" className={cn("bg-transparent underline underline-offset-2", selected ? "text-foreground" : "text-muted-foreground hover:text-foreground", boundary && "font-black decoration-double")} title="Показать эту точку на графике" onClick={() => jump(row.snapshotId)}>{legacyDate(row.observedAt)}{boundary?<span className="sr-only">, граница сигнала аномальной динамики</span>:null}</button></td><td className="tabular text-right">{elapsed === null ? signedDuration(elapsed) : <InlineHint testId="saved-point-interval" content="Интервал между сохранёнными изменениями. Это не простой: опросы без изменений не сохраняются.">{signedDuration(elapsed)}</InlineHint>}</td><CollectorIntervalCell row={row} coverage={collectorCoverage} /><td className="tabular text-right">{row.synthetic ? "момент публикации" : duration(row.ageHours*3600)}</td>
               {tableMetrics.map((metric) => <MetricCells key={metric.key} row={row} metric={metric} people={telegram && metric.key === "reactions"} />)}
               {showBreakdown ? <><td className="min-w-max"><Breakdown value={historyReactionEntries(row)} /></td><td className="min-w-max"><Breakdown value={historyReactionEntries(row,true)} delta /></td></> : null}</tr>;
           })}
-        </tbody></table></div> : <p className="text-muted-foreground py-6 text-center">Замеров ещё нет.</p>}
+        </tbody></table></div> : <p className="text-muted-foreground py-6 text-center">Сохранённых точек ещё нет.</p>}
       </CardContent>
     </Card>
   </>;
 }
 
+function CollectorIntervalCell({ row, coverage }: { row: HistorySnapshot; coverage: CollectorCoverage }) {
+  const interval = row.collectorInterval;
+  if (!interval) return <td className="text-muted-foreground min-w-44 !whitespace-normal">Нет предыдущей точки</td>;
+  const state = collectorIntervalCoverage(coverage, interval.from, interval.to);
+  if (state.kind === "unknown") return <td className="text-muted-foreground min-w-44 !whitespace-normal">Журнал циклов недоступен</td>;
+  const summary = state.kind === "gap"
+    ? `Подтверждённый пропуск: ${duration(state.missingSeconds)}. В остальное время сбор шёл.`
+    : "Сбор шёл; промежуточные опросы без изменений не сохранялись.";
+  return <td className="min-w-44 !whitespace-normal"><InlineHint
+    testId="collector-status-trigger"
+    content={`${summary} За интервал: успешных циклов — ${interval.successfulPolls}, с ошибкой — ${interval.failedPolls}.`}
+  >{state.kind === "gap"
+      ? <Badge variant="destructive" data-testid="collector-gap-badge">Пропуск {duration(state.missingSeconds)}</Badge>
+      : <Badge variant="secondary" data-testid="collector-covered-badge">Сбор шёл</Badge>}
+  </InlineHint></td>;
+}
+
 function MetricCells({ row,metric,people }: {row:HistorySnapshot;metric:Metric;people:boolean}) {
   const delta = row[metric.delta];
-  return <><td className="tabular text-right" title={row[metric.key].quality ?? undefined}>{legacyNumber(row[metric.key].value)}</td><td className="tabular text-right">{delta === null ? "—" : `${delta >= 0 ? "+" : ""}${delta}`}</td>{people ? <td className="tabular text-right">{delta === null ? "—" : delta > 0 ? `≥${Math.ceil(delta/3)}` : "0"}</td> : null}</>;
+  return <><td className="tabular text-right">{legacyNumber(row[metric.key].value)}</td><td className="tabular text-right">{delta === null ? "—" : `${delta >= 0 ? "+" : ""}${delta}`}</td>{people ? <td className="tabular text-right">{delta === null ? "—" : delta > 0 ? `≥${Math.ceil(delta/3)}` : "0"}</td> : null}</>;
 }

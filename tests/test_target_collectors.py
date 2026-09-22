@@ -4,6 +4,7 @@ import asyncio
 from contextlib import AbstractContextManager
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+import json
 import logging
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,7 +19,10 @@ from collector_runtime.max_api import MaxChannel, MaxPost
 from collector_runtime.public_web import PublicChannel
 from collector_runtime.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from collector_runtime.vk import VkCommunity, VkPost
-from collector_target.__main__ import _parser, _run, _scheduled_slot, next_delay
+from collector_target.__main__ import (
+    _log_startup, _parser, _poll_interval_seconds, _run, _scheduled_slot, next_delay,
+    platform_offset, slot_delay,
+)
 from collector_target.adapters import (
     max_batch,
     rutube_batch,
@@ -31,7 +35,12 @@ from collector_target.auth import (
     apply_platform_auth_file,
     parse_platform_auth_file,
 )
-from collector_target.coordinator import PlatformSupervisor, PollCycleCoordinator
+from collector_target.coordinator import (
+    PlatformSupervisor,
+    PollCycleCoordinator,
+    RuntimeReleaseUnavailable,
+    ensure_runtime_release_available,
+)
 from collector_target.lease import InMemoryLeaseProvider, advisory_lock_key, lease_name
 from collector_target.model import (
     AccountRef,
@@ -491,6 +500,22 @@ def test_cli_auth_failure_logs_only_a_safe_error_class(
     assert "do-not-leak" not in caplog.text
 
 
+def test_startup_log_contains_worker_identity_and_schedule_mode(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.INFO, logger="collector_target"):
+        _log_startup(Platform.VK, "default", "test-v1", "phased", "b", "https-mtls")
+
+    assert "platform=vk" in caplog.text
+    assert "partition=default" in caplog.text
+    assert "collector_version=test-v1" in caplog.text
+    assert "schedule_mode=phased" in caplog.text
+    # Профиль и режим транспорта обязаны быть видны на старте: иначе
+    # непонятно, куда именно уходят собранные данные.
+    assert "deployment_profile=b" in caplog.text
+    assert "transfer_mode=https-mtls" in caplog.text
+
+
 def _telegram_message(
     message_id: int,
     *,
@@ -658,7 +683,7 @@ def test_vk_joint_identity_and_positive_to_zero_reset_are_preserved() -> None:
         posts=(post,),
         observed_at=NOW,
         collected_at=NOW,
-        high_watermarks={"-123_77": {"reactions": 9}},
+        ever_positive={"-123_77": {"reactions": True}},
     )
     publication = batch.publications[0]
     assert publication.external_id == "-123_77"
@@ -978,9 +1003,9 @@ def test_vk_exact_lookup_omission_is_missing_but_auth_is_transient(
     tmp_path: Path,
 ) -> None:
     class History(_Tracking):
-        def metric_high_watermarks(
+        def metric_ever_positive(
             self, target: AccountRef, external_ids: list[str],
-        ) -> dict[str, dict[str, int | None]]:
+        ) -> dict[str, dict[str, bool]]:
             return {}
 
     class Client:
@@ -1148,6 +1173,14 @@ class _MemoryRepository:
     ) -> datetime | None:
         return None
 
+    def last_completed_scheduled_at(
+        self,
+        platform: Platform,
+        partition_key: str,
+        collector_version: str,
+    ) -> datetime | None:
+        return None
+
     def enabled_accounts(self, platform: Platform, partition_key: str) -> tuple[AccountRef, ...]:
         return self.accounts
 
@@ -1215,6 +1248,9 @@ class _RetryAdapter:
             raise RuntimeError("password=secret should never be persisted")
         return replace(raw_batch(target, run_context), publications=())
 
+    async def close(self) -> None:
+        return None
+
 
 def test_coordinator_resumes_failed_accounts_without_replaying_successes() -> None:
     first, second = account(Platform.TELEGRAM, 1), account(Platform.TELEGRAM, 2)
@@ -1238,6 +1274,49 @@ def test_coordinator_resumes_failed_accounts_without_replaying_successes() -> No
     assert first_run.run_id == second_run.run_id
     assert adapter.attempts[first.id] == 1
     assert adapter.attempts[second.id] == 2
+
+
+def test_deleted_runtime_release_is_fatal_before_account_collection(monkeypatch) -> None:
+    target = account(Platform.TELEGRAM)
+    repository = _MemoryRepository((target,))
+    adapter = _RetryAdapter(target.id)
+    coordinator = PollCycleCoordinator(
+        platform=Platform.TELEGRAM,
+        adapter=adapter,
+        repository=repository,
+        lease_provider=InMemoryLeaseProvider(),
+        collector_version="test-v1",
+        clock=_FixedClock(),
+    )
+
+    def unavailable() -> None:
+        raise RuntimeReleaseUnavailable("deleted release")
+
+    monkeypatch.setattr(
+        "collector_target.coordinator.ensure_runtime_release_available",
+        unavailable,
+    )
+
+    with pytest.raises(RuntimeReleaseUnavailable, match="deleted release"):
+        asyncio.run(coordinator.run(NOW))
+
+    assert adapter.attempts == {}
+    assert repository.states == {}
+
+
+def test_runtime_release_guard_classifies_a_deleted_working_directory(
+    monkeypatch,
+) -> None:
+    def missing_working_directory() -> str:
+        raise FileNotFoundError("release was removed")
+
+    monkeypatch.setattr(
+        "collector_target.coordinator.os.getcwd",
+        missing_working_directory,
+    )
+
+    with pytest.raises(RuntimeReleaseUnavailable, match="runtime release"):
+        ensure_runtime_release_available()
 
 
 class _OutcomeCoordinator:
@@ -1348,43 +1427,93 @@ class _ScriptedConnection:
             return _Cursor({"id": 7})
         if "INSERT INTO ingest.account_metric_snapshot" in normalized:
             return _Cursor({"id": 1})
+        if "SELECT external_id, publication_id FROM ingest.publication_identity" in normalized:
+            return _Cursor(rows=[])
+        if "INSERT INTO ingest.publication AS current" in normalized:
+            items = json.loads(params[0])
+            return _Cursor(rows=[{"id": UUID(item["id"])} for item in items])
+        if "INSERT INTO ingest.publication_identity" in normalized:
+            items = json.loads(params[0])
+            return _Cursor(rows=[
+                {"publication_id": UUID(item["publication_id"])} for item in items
+            ])
+        if "identity.publication_id IS DISTINCT FROM input.publication_id" in normalized:
+            return _Cursor(rows=[])
+        if "LEFT JOIN LATERAL" in normalized and "publication_metric_snapshot_active" in normalized:
+            items = json.loads(params[0])
+            return _Cursor(rows=[{
+                "publication_id": UUID(item["publication_id"]),
+                "published_month": datetime.fromisoformat(
+                    item["published_month"],
+                ).date(),
+                "synthetic": item["synthetic"],
+                "semantic_fingerprint": (
+                    self.latest_snapshot["semantic_fingerprint"]
+                    if self.latest_snapshot else None
+                ),
+                "observed_at": (
+                    self.latest_snapshot["observed_at"]
+                    if self.latest_snapshot else None
+                ),
+            } for item in items])
+        if "INSERT INTO ingest.publication_metric_snapshot" in normalized:
+            items = json.loads(params[0])
+            return _Cursor(rows=[{
+                "publication_id": UUID(item["publication_id"]),
+                "published_month": datetime.fromisoformat(
+                    item["published_month"],
+                ).date(),
+                "synthetic": item["synthetic"],
+                "sampling_bucket": item["sampling_bucket"],
+                "source_fingerprint": item["source_fingerprint"],
+                "id": 10 + index,
+                # Назначается триггером базы; ненулевое значение означает, что
+                # бакет уже был занят и наблюдение легло как correction.
+                "correction_sequence": 0,
+            } for index, item in enumerate(items)])
         if "FROM ingest.publication_identity" in normalized:
             return _Cursor(None)
-        if "INSERT INTO ingest.publication AS current" in normalized:
-            return _Cursor({"id": UUID("30000000-0000-4000-8000-000000000001")})
-        if "INSERT INTO ingest.publication_identity" in normalized:
-            return _Cursor({"publication_id": UUID("30000000-0000-4000-8000-000000000001")})
-        if "INSERT INTO ingest.publication_metric_snapshot" in normalized:
-            return _Cursor({"id": 10})
         if "SELECT semantic_fingerprint, observed_at" in normalized:
             return _Cursor(self.latest_snapshot)
+        if "SELECT publication.id, publication.deleted_at" in normalized:
+            return _Cursor(rows=[{
+                "id": publication_id,
+                "deleted_at": None,
+                "status": None,
+                "last_probe_outcome": None,
+                "last_checked_at": None,
+                "last_present_at": None,
+                "first_missing_at": None,
+                "consecutive_missing": None,
+                "reason_code": None,
+                "last_collection_run_id": None,
+            } for publication_id in params[1]])
         if "SELECT id, deleted_at FROM ingest.publication" in normalized:
             return _Cursor({"id": UUID("30000000-0000-4000-8000-000000000001"), "deleted_at": None})
         if "FROM ingest.publication_availability_state" in normalized:
             return _Cursor(None)
         if "INSERT INTO ingest.publication_availability_event" in normalized:
+            if "jsonb_to_recordset" in normalized:
+                items = json.loads(params[0])
+                return _Cursor(rows=[{
+                    "publication_id": UUID(item["publication_id"]),
+                } for item in items])
             return _Cursor({"publication_id": UUID("30000000-0000-4000-8000-000000000001")})
         if "UPDATE ingest.collection_account_result" in normalized:
             return _Cursor({"id": 20})
         if "INSERT INTO analytics.dataset_revision" in normalized:
             return _Cursor({"id": 30})
+        if "finalize_ingestion_dataset_revision" in normalized:
+            return _Cursor({"finalize_ingestion_dataset_revision": True})
         return _Cursor(None)
 
     def close(self) -> None:
         self.closed = True
 
 
-def _script_native_csv(connection,publication_id,month,snapshot_id,evidence):
-    # This unit isolates transaction orchestration. The real native serializer,
-    # privileges and round-trip bytes are covered by LegacyCsvPostgresIntegrationTest.
-    connection.execute("SELECT ops_and_admin.ensure_publication_legacy_alias(%s)",(publication_id,))
-    connection.execute("INSERT INTO analytics.legacy_native_export_lexeme VALUES (%s,%s)",(month,snapshot_id))
-
-
 def test_repository_commits_observation_lineage_revision_and_outbox_atomically(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
-    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv",_script_native_csv)
     connection = _ScriptedConnection()
     repository = PostgresCollectorRepository(connection_factory=lambda: connection)
     target = account(Platform.TELEGRAM)
@@ -1414,7 +1543,7 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     assert "INSERT INTO ingest.raw_payload" in sql
     assert "INSERT INTO ingest.metric_evidence_dictionary" in sql
     assert "ensure_publication_legacy_alias" in sql
-    assert "INSERT INTO analytics.legacy_native_export_lexeme" in sql
+    assert "legacy_native_export_lexeme" not in sql
     assert "INSERT INTO ingest.publication_availability_state" in sql
     assert "INSERT INTO ingest.publication_availability_event" in sql
     assert "INSERT INTO catalog.account_identity_history" in sql
@@ -1424,18 +1553,105 @@ def test_repository_commits_observation_lineage_revision_and_outbox_atomically(m
     assert "cache.invalidated" in sql
     assert "dataset.revision.changed" not in sql
     assert "UPDATE ingest.collection_account_result" in sql
+    statements = [statement for statement, _params in connection.calls]
+    revision_index = next(
+        index for index, statement in enumerate(statements)
+        if "INSERT INTO analytics.dataset_revision" in statement
+    )
+    snapshot_index = next(
+        index for index, statement in enumerate(statements)
+        if "INSERT INTO ingest.publication_metric_snapshot(" in statement
+    )
+    assert revision_index < snapshot_index
+    assert any(
+        "set_config('mranked.dataset_revision_id'" in statement
+        for statement in statements[revision_index:snapshot_index]
+    )
     snapshot_call = next(
         params for statement, params in connection.calls
         if "INSERT INTO ingest.publication_metric_snapshot(" in statement
     )
     # Отпечаток источника уходит в базу шестнадцатеричным текстом, семантический —
-    # байтами: колонка source_fingerprint объявлена text, semantic_fingerprint — bytea.
-    assert isinstance(snapshot_call[14], str) and len(snapshot_call[14]) == 64
-    assert snapshot_call[-1] == 7
-    assert "NULL,%s" in next(
+    # hex-строкой внутри bulk JSON; SQL декодирует semantic_fingerprint в bytea.
+    snapshot_payload = json.loads(snapshot_call[0])[0]
+    assert len(snapshot_payload["source_fingerprint"]) == 64
+    assert len(snapshot_payload["semantic_fingerprint"]) == 64
+    assert snapshot_payload["metric_evidence_id"] == 7
+    assert "NULL, metric_evidence_id" in next(
         statement for statement, _ in connection.calls
         if "INSERT INTO ingest.publication_metric_snapshot(" in statement
     )
+
+
+def test_first_identity_change_uses_dependency_loaded_at_process_start(
+    monkeypatch, tmp_path,
+) -> None:
+    monkeypatch.setenv(
+        "MRANKED_IDENTITY_RECEIPT_DIR",
+        str(tmp_path / "identity-receipts"),
+    )
+    monkeypatch.setenv(
+        "COLLECTOR_RAW_EVIDENCE_DIR",
+        str(tmp_path / "raw-evidence"),
+    )
+    connection = _ScriptedConnection()
+    repository = PostgresCollectorRepository(
+        connection_factory=lambda: connection,
+    )
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    raw = raw_batch(target, run_context)
+    raw = replace(
+        raw,
+        account_observation=replace(
+            raw.account_observation,
+            title="First provider title",
+        ),
+    )
+    canonical = CanonicalNormalizer().normalize(raw, run_context)
+    original_import = __import__
+
+    def import_without_release_source(
+        name: str, globals=None, locals=None, fromlist=(), level=0,
+    ):
+        if name.endswith("identity_evidence"):
+            raise ModuleNotFoundError(name)
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr("builtins.__import__", import_without_release_source)
+
+    result = repository.persist_account_batch(canonical)
+
+    assert result.discovered_count == 1
+    assert result.revision_id == 30
+    receipts = list(
+        (tmp_path / "identity-receipts" / "collector" / "telegram").glob(
+            "*.json"
+        )
+    )
+    assert len(receipts) == 1
+
+
+def test_quarantine_forces_rejected_evidence_when_routine_raw_storage_is_disabled(
+    monkeypatch, tmp_path,
+) -> None:
+    monkeypatch.setenv("COLLECTOR_PERSIST_RAW_EVIDENCE", "false")
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
+    connection = _ScriptedConnection()
+    repository = PostgresCollectorRepository(connection_factory=lambda: connection)
+    run_context = context()
+
+    repository.quarantine_rejected_batch(
+        raw_batch(account(Platform.RUTUBE), run_context),
+        run_context,
+        "ValueError",
+    )
+
+    sql = "\n".join(statement for statement, _ in connection.calls)
+    assert "INSERT INTO ingest.raw_payload" in sql
+    assert "INSERT INTO ingest.evidence_quarantine" in sql
+    assert connection.commits == 1
+    assert connection.rollbacks == 0
 
 
 def test_metric_evidence_dictionary_is_cached_per_process() -> None:
@@ -1465,7 +1681,6 @@ def test_resumable_schedule_excludes_completed_partial_and_failed_runs() -> None
 def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
-    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv",_script_native_csv)
     connection = _ScriptedConnection(fail_on_outbox=True)
     repository = PostgresCollectorRepository(connection_factory=lambda: connection)
     target = account(Platform.TELEGRAM)
@@ -1483,7 +1698,6 @@ def test_repository_rolls_back_whole_account_when_outbox_fails(monkeypatch, tmp_
 def test_repository_skips_unchanged_snapshot_before_heartbeat(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
-    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv", _script_native_csv)
     target = account(Platform.TELEGRAM)
     run_context = context()
     canonical = CanonicalNormalizer().normalize(
@@ -1510,7 +1724,6 @@ def test_repository_skips_unchanged_snapshot_before_heartbeat(monkeypatch, tmp_p
 def test_repository_persists_deterministic_unchanged_heartbeat(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
     monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
-    monkeypatch.setattr("collector_target.legacy_csv.persist_native_csv", _script_native_csv)
     target = account(Platform.TELEGRAM)
     run_context = context()
     canonical = CanonicalNormalizer().normalize(
@@ -1533,6 +1746,138 @@ def test_repository_persists_deterministic_unchanged_heartbeat(monkeypatch, tmp_
         "INSERT INTO ingest.publication_metric_snapshot(" in statement
         for statement, _params in connection.calls
     )
+
+
+def test_repository_bulk_writes_many_publications_and_reactions_once(
+    monkeypatch, tmp_path,
+) -> None:
+    monkeypatch.setenv("COLLECTOR_PERSIST_RAW_EVIDENCE", "false")
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    raw = raw_batch(target, run_context)
+    template = raw.publications[0]
+    raw = replace(
+        raw,
+        account_observation=None,
+        publications=tuple(
+            replace(
+                template,
+                external_id=f"post-{index}",
+                public_url=f"https://example.test/post-{index}",
+                reaction_breakdown={"like": index, "fire": 1},
+            )
+            for index in range(1, 101)
+        ),
+    )
+    canonical = CanonicalNormalizer().normalize(raw, run_context)
+    connection = _ScriptedConnection()
+    repository = PostgresCollectorRepository(connection_factory=lambda: connection)
+
+    result = repository.persist_account_batch(canonical)
+
+    assert result.discovered_count == 100
+    assert result.snapshot_count == 100
+    sql = [statement for statement, _params in connection.calls]
+    for fragment in (
+        "INSERT INTO ingest.publication AS current",
+        "INSERT INTO ingest.publication_identity",
+        "INSERT INTO ingest.publication_metric_snapshot(",
+        "INSERT INTO ingest.reaction_breakdown(",
+        "INSERT INTO ingest.publication_availability_state(",
+        "INSERT INTO ingest.publication_availability_event(",
+    ):
+        assert sum(fragment in statement for statement in sql) == 1
+    snapshot_params = next(
+        params for statement, params in connection.calls
+        if "INSERT INTO ingest.publication_metric_snapshot(" in statement
+    )
+    reaction_params = next(
+        params for statement, params in connection.calls
+        if "INSERT INTO ingest.reaction_breakdown(" in statement
+    )
+    assert len(json.loads(snapshot_params[0])) == 100
+    assert len(json.loads(reaction_params[0])) == 200
+
+
+def test_repository_bulk_path_keeps_synthetic_and_observed_snapshot_for_one_post(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("COLLECTOR_PERSIST_RAW_EVIDENCE", "false")
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    raw = raw_batch(target, run_context)
+    observed = raw.publications[0]
+    synthetic = replace(
+        observed,
+        observed_at=observed.published_at,
+        synthetic=True,
+        metrics={"views": 0, "reactions": 0, "comments": 0, "shares": None},
+    )
+    canonical = CanonicalNormalizer().normalize(
+        replace(raw, account_observation=None, publications=(synthetic, observed)),
+        run_context,
+    )
+    connection = _ScriptedConnection()
+    repository = PostgresCollectorRepository(connection_factory=lambda: connection)
+    evidence_ids = iter((7, 8))
+    monkeypatch.setattr(
+        repository, "_metric_evidence_id", lambda _evidence: next(evidence_ids),
+    )
+
+    result = repository.persist_account_batch(canonical)
+
+    assert result.discovered_count == 1
+    assert result.snapshot_count == 2
+    publication_params = next(
+        params for statement, params in connection.calls
+        if "INSERT INTO ingest.publication AS current" in statement
+    )
+    snapshot_params = next(
+        params for statement, params in connection.calls
+        if "INSERT INTO ingest.publication_metric_snapshot(" in statement
+    )
+    assert len(json.loads(publication_params[0])) == 1
+    snapshots = json.loads(snapshot_params[0])
+    assert {item["synthetic"] for item in snapshots} == {
+        False, True,
+    }
+    assert [item["metric_evidence_id"] for item in snapshots] == [7, 8]
+
+
+def test_repository_bulk_path_keeps_distinct_corrections_for_one_snapshot_slot(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("COLLECTOR_PERSIST_RAW_EVIDENCE", "false")
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    raw = raw_batch(target, run_context)
+    first = raw.publications[0]
+    corrected = replace(
+        first,
+        metrics={"views": 1, "reactions": None, "comments": 0, "shares": None},
+    )
+    canonical = CanonicalNormalizer().normalize(
+        replace(raw, account_observation=None, publications=(first, corrected)),
+        run_context,
+    )
+    connection = _ScriptedConnection()
+    repository = PostgresCollectorRepository(connection_factory=lambda: connection)
+
+    result = repository.persist_account_batch(canonical)
+
+    assert result.discovered_count == 1
+    assert result.snapshot_count == 2
+    snapshot_params = next(
+        params for statement, params in connection.calls
+        if "INSERT INTO ingest.publication_metric_snapshot(" in statement
+    )
+    snapshots = json.loads(snapshot_params[0])
+    assert len(snapshots) == 2
+    assert [item["views_count"] for item in snapshots] == [0, 1]
+    assert sum(
+        "INSERT INTO ingest.publication_availability_state(" in statement
+        for statement, _params in connection.calls
+    ) == 1
 
 
 def test_runtime_protocols_and_cli_contract_are_explicit() -> None:
@@ -1561,3 +1906,84 @@ def test_cycle_waits_until_the_next_slot_rather_than_a_full_interval() -> None:
     # Обход, не уложившийся в интервал, начинает следующий немедленно.
     assert next_delay(386.0, 300) == 0.0
     assert next_delay(611.0, 300) == 0.0
+
+
+def test_rutube_interval_cannot_be_overridden_by_the_legacy_common_value(
+    monkeypatch, tmp_path,
+) -> None:
+    monkeypatch.setenv("COLLECTOR_POLL_INTERVAL_SECONDS", "300")
+    monkeypatch.delenv("COLLECTOR_RUTUBE_POLL_INTERVAL_SECONDS", raising=False)
+    settings = Settings.load(tmp_path / "missing.env")
+
+    assert _poll_interval_seconds(Platform.TELEGRAM, settings) == 300
+    assert _poll_interval_seconds(Platform.RUTUBE, settings) == 3600
+
+    monkeypatch.setenv("COLLECTOR_RUTUBE_POLL_INTERVAL_SECONDS", "900")
+    assert _poll_interval_seconds(Platform.RUTUBE, settings) == 900
+    assert _poll_interval_seconds(Platform.RUTUBE, settings, 1200) == 1200
+
+    monkeypatch.setenv("COLLECTOR_RUTUBE_POLL_INTERVAL_SECONDS", "0")
+    with pytest.raises(ValueError, match="positive integer"):
+        _poll_interval_seconds(Platform.RUTUBE, settings)
+
+
+def test_platforms_get_different_slots_within_one_interval() -> None:
+    """Одновременный перезапуск не должен сводить площадки в одну фазу.
+
+    Слоты разложены по epoch и одинаковы для всех, поэтому после общей
+    выкатки телеграм и MAX начинали обход в одну и ту же секунду и делили
+    одно ядро вместо того, чтобы чередоваться: на проде это удваивало пик
+    при том же объёме работы.
+    """
+    offsets = {platform: platform_offset(platform, 300) for platform in Platform}
+    assert len(set(offsets.values())) == len(Platform), "у каждой площадки своя доля"
+    assert all(0 <= value < 300 for value in offsets.values())
+    # Смещение постоянно: оно выводится из имени, а не из момента запуска.
+    assert offsets == {platform: platform_offset(platform, 300) for platform in Platform}
+    # Доли разложены равномерно по интервалу.
+    assert sorted(offsets.values()) == [0, 75, 150, 225]
+
+
+def test_slot_delay_waits_only_to_the_platform_slot() -> None:
+    # Ровно на своём слоте ждать нечего.
+    assert slot_delay(600.0, 300, 0) == 0.0
+    assert slot_delay(750.0, 300, 150) == 0.0
+    # Между слотами — до ближайшего, а не полный круг.
+    assert slot_delay(610.0, 300, 0) == pytest.approx(290.0)
+    assert slot_delay(610.0, 300, 150) == pytest.approx(140.0)
+    # Смещение сдвигает сетку, а не растягивает её.
+    for offset in (0, 75, 150, 225):
+        assert slot_delay(1234.5, 300, offset) <= 300.0
+        assert slot_delay(1234.5, 300, offset) > 0.0
+
+
+def test_injected_connection_factory_still_opens_and_closes_per_call() -> None:
+    """Пул поднимается только для собственного DSN.
+
+    Подставленная фабрика соединений принадлежит вызывающему: держать её
+    соединения в пуле репозиторий не вправе, и тесты полагаются на то, что
+    каждое обращение открывает и закрывает своё.
+    """
+    opened: list[_ScriptedConnection] = []
+
+    def factory() -> _ScriptedConnection:
+        connection = _ScriptedConnection()
+        opened.append(connection)
+        return connection
+
+    repository = PostgresCollectorRepository(connection_factory=factory)
+    with repository._connection():
+        pass
+    with repository._connection():
+        pass
+    assert len(opened) == 2
+    assert all(connection.closed for connection in opened)
+    # Закрытие репозитория без собственного DSN безвредно и ничего не трогает.
+    repository.close()
+
+
+def test_pool_smaller_than_two_is_rejected() -> None:
+    # Словарь свидетельств берёт собственное соединение внутри уже открытого
+    # батча: на единственном соединении это встало бы намертво.
+    with pytest.raises(ValueError):
+        PostgresCollectorRepository("postgresql:///unused", pool_size=1)

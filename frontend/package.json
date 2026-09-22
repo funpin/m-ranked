@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
+    "@cyclonedx/cdxgen": "12.8.4",
     "@eslint/compat": "2.1.1",
     "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "4.3.3",

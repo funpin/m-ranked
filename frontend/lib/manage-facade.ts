@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 
-const COOKIE = "MRANKED-MANAGE-CSRF";
+const SESSION_COOKIE = "__Host-mranked-admin";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTION = /^\/manage\/(?:channels|institutions|platform-accounts|m-rating\/update|institutions\/[^/]+(?:\/accounts)?|channels\/[^/]+\/(?:enable|disable|delete)|platform-accounts\/[^/]+\/(?:enable|disable|delete|native-id))$/;
 // Native same-origin form navigations must retain their Origin. no-referrer
 // makes Chromium send Origin:null; same-origin still withholds cross-site URLs.
 const NO_STORE = { "Cache-Control": "no-store", "Referrer-Policy": "same-origin" };
+const JSON_HEADERS = { ...NO_STORE, "Content-Type": "application/json; charset=utf-8" };
 
 function requestOrigin(request: NextRequest): string | null {
   // NextURL normalizes 127.0.0.1 and [::1] to localhost. The browser's Host
@@ -28,45 +29,101 @@ function apiUrl(path: string): URL {
   return new URL(path, base);
 }
 
+/** Наружу уходит ровно одна кука сессии: ни заголовка Basic, ни чужих кук. */
 function forwardingHeaders(request: NextRequest): Headers {
   const result = new Headers({ Accept: "application/json" });
-  const authorization = request.headers.get("authorization");
-  if (authorization && authorization.length <= 16_384) result.set("Authorization", authorization);
-  const token = request.cookies.get(COOKIE)?.value;
-  if (token && /^[A-Za-z0-9_-]{1,4096}$/.test(token)) result.set("Cookie", `XSRF-TOKEN=${token}`);
+  const session = request.cookies.get(SESSION_COOKIE)?.value;
+  if (session && /^[A-Za-z0-9_-]{1,512}$/.test(session))
+    result.set("Cookie", `${SESSION_COOKIE}=${session}`);
   return result;
 }
 
-function failure(status: number, detail: string | object[], authenticate?: string | null): NextResponse {
-  const result = NextResponse.json({ detail }, { status, headers: NO_STORE });
-  if (status === 401) result.headers.set("WWW-Authenticate", authenticate ?? 'Basic realm="m-ranked"');
-  return result;
+function failure(status: number, detail: string | object[]): NextResponse {
+  // Никакого WWW-Authenticate: вход идёт формой на /manage, а не окном браузера.
+  return NextResponse.json({ detail }, { status, headers: JSON_HEADERS });
 }
 
-/** This only prepares SSR; Spring independently authenticates and authorizes every read/command. */
+type CommandError = "conflict" | "forbidden" | "invalid" | "not-found" | "unavailable" | "failed";
+
+function commandFailure(code: CommandError, correlation: string): NextResponse {
+  const query = new URLSearchParams({ command_error: code, correlation_id: correlation });
+  return new NextResponse(null, {
+    status: 303,
+    headers: { ...NO_STORE, Location: `/manage?${query.toString()}` },
+  });
+}
+
+/** This only prepares SSR; FastAPI independently authenticates and authorizes every read/command. */
 export async function prepareManage(request: NextRequest, requestHeaders: Headers): Promise<NextResponse> {
-  for (const key of ["x-mranked-csrf", "x-mranked-can-edit", "x-mranked-can-delete"]) requestHeaders.delete(key);
+  for (const key of ["x-mranked-csrf", "x-mranked-can-edit", "x-mranked-can-delete", "x-mranked-signed-in"]) requestHeaders.delete(key);
+  const anonymous = () => {
+    // Сессии нет — страница рисует форму входа, а не окно Basic-аутентификации.
+    requestHeaders.set("x-mranked-signed-in", "false");
+    const result = NextResponse.next({ request: { headers: requestHeaders } });
+    for (const [name, value] of Object.entries(NO_STORE)) result.headers.set(name, value);
+    return result;
+  };
   let upstream: Response;
   try {
     upstream = await fetch(apiUrl("/api/v1/admin/catalog/session"), {
       headers: forwardingHeaders(request), redirect: "error", cache: "no-store", signal: AbortSignal.timeout(5000),
     });
   } catch { return failure(503, "Сервис управления временно недоступен"); }
+  if (upstream.status === 401) { await upstream.body?.cancel(); return anonymous(); }
   if (!upstream.ok) {
     await upstream.body?.cancel();
-    return failure(upstream.status, upstream.status === 401 ? "Not authenticated" : "Доступ к управлению недоступен", upstream.headers.get("www-authenticate"));
+    return failure(upstream.status, "Доступ к управлению недоступен");
   }
   const session = await upstream.json().catch(() => null) as { headerName?: string; token?: string; canEdit?: boolean; canDelete?: boolean } | null;
   if (session?.headerName !== "X-XSRF-TOKEN" || !session.token || !/^[A-Za-z0-9_-]{1,4096}$/.test(session.token))
     return failure(502, "Некорректный ответ сервиса управления");
+  requestHeaders.set("x-mranked-signed-in", "true");
   requestHeaders.set("x-mranked-csrf", session.token);
   requestHeaders.set("x-mranked-can-edit", String(session.canEdit === true));
   requestHeaders.set("x-mranked-can-delete", String(session.canDelete === true));
   const result = NextResponse.next({ request: { headers: requestHeaders } });
   for (const [name, value] of Object.entries(NO_STORE)) result.headers.set(name, value);
-  result.cookies.set(COOKIE, session.token, {
-    httpOnly: true, sameSite: "strict", secure: request.nextUrl.protocol === "https:", path: "/manage",
+  return result;
+}
+
+/** Вход и выход браузера: форма ходит на свой origin, кука приходит от API. */
+export async function manageSession(request: NextRequest, fetcher: typeof fetch = fetch): Promise<NextResponse> {
+  const origin = request.headers.get("origin");
+  const site = (request.headers.get("sec-fetch-site") ?? "").toLowerCase();
+  if ((origin && origin !== requestOrigin(request)) || (site && site !== "same-origin" && site !== "none"))
+    return failure(403, "Недопустимый источник запроса");
+  const path = request.nextUrl.pathname;
+  if ((request.headers.get("content-type") ?? "").split(";", 1)[0].trim().toLowerCase() !== "application/x-www-form-urlencoded")
+    return failure(415, "Ожидается HTML-форма");
+  const raw = await request.text().catch(() => null);
+  if (raw === null || raw.length > 8192) return failure(400, "Не удалось прочитать форму");
+  const form = new URLSearchParams(raw);
+  let upstream: Response;
+  try {
+    upstream = path === "/manage/sign-in"
+      ? await fetcher(apiUrl("/api/v1/admin/session"), {
+        method: "POST", cache: "no-store", redirect: "error",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+        body: JSON.stringify({
+          username: (form.get("username") ?? "").slice(0, 200),
+          password: (form.get("password") ?? "").slice(0, 1024),
+          otp: (form.get("otp") ?? "").slice(0, 16),
+        }),
+      })
+      : await fetcher(apiUrl("/api/v1/admin/session"), {
+        method: "DELETE", cache: "no-store", redirect: "error",
+        headers: (() => { const headers = forwardingHeaders(request); headers.set("X-XSRF-TOKEN", (form.get("csrf_token") ?? "").slice(0, 4096)); return headers; })(),
+        signal: AbortSignal.timeout(10_000),
+      });
+  } catch { return failure(503, "Сервис управления временно недоступен"); }
+  await upstream.body?.cancel();
+  const result = new NextResponse(null, {
+    status: 303,
+    headers: { ...NO_STORE, Location: upstream.ok ? "/manage" : "/manage?sign_in=failed" },
   });
+  // Куку ставит API; наружу она уходит ровно такой, какой пришла.
+  for (const cookie of upstream.headers.getSetCookie()) result.headers.append("Set-Cookie", cookie);
   return result;
 }
 
@@ -76,22 +133,16 @@ const SAFE_DETAILS = new Set([
   "Не удалось определить сообщество ВКонтакте", "Telegram-каналы добавляются через основную форму мониторинга",
   "MAX chat_id должен быть числом", "Некорректная ссылка max", "Некорректная ссылка rutube",
   "Не удалось определить max", "Не удалось определить rutube", "Invalid Telegram channel username",
-  "Аккаунт должен использовать HTTP(S)-ссылку без учётных данных",
+  "Аккаунт должен использовать HTTPS-ссылку без учётных данных",
+  "Некорректная ссылка аккаунта", "Некорректная ссылка RUTUBE",
+  "Ссылка RUTUBE должна вести на https://rutube.ru без параметров",
+  "Ссылка RUTUBE должна вести на канал",
 ]);
 
 function integer(value: string): string | null {
   const stripped = value.trim();
   if (stripped.length > 4300 || !/^[+-]?\d(?:_?\d)*(?:\.0+)?$/.test(stripped)) return null;
   try { return BigInt(stripped.replaceAll("_", "").replace(/\.0+$/, "")).toString(); } catch { return null; }
-}
-
-function authDetail(request: NextRequest): string {
-  const authorization = request.headers.get("authorization") ?? "";
-  const [scheme, ...rest] = authorization.split(" ");
-  if (scheme.toLowerCase() !== "basic") return "Not authenticated";
-  const decoded = Buffer.from(rest.join(" "), "base64");
-  if (!decoded.includes(58) || decoded.some(byte => byte > 127)) return "Invalid authentication credentials";
-  return "Неверный логин или пароль";
 }
 
 async function boundedJson(response: Response): Promise<Record<string, unknown> | null> {
@@ -124,7 +175,7 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
   } catch { return failure(503, "Сервис управления временно недоступен"); }
   if (!authentication.ok) {
     await authentication.body?.cancel();
-    return failure(authentication.status, authentication.status === 401 ? authDetail(request) : "Доступ к управлению недоступен", "Basic");
+    return failure(authentication.status, authentication.status === 401 ? "Требуется вход администратора" : "Доступ к управлению недоступен");
   }
   const session = await boundedJson(authentication);
   if (session?.headerName !== "X-XSRF-TOKEN" || typeof session.token !== "string" || !/^[A-Za-z0-9_-]{1,4096}$/.test(session.token))
@@ -176,10 +227,10 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
     }
   }
   if (errors.length) return failure(422, errors);
-  const csrf = fields.csrf_token;
-  const cookie = request.cookies.get(COOKIE)?.value;
-  if (!csrf || !cookie || !/^[A-Za-z0-9_-]{1,4096}$/.test(csrf) || !/^[A-Za-z0-9_-]{1,4096}$/.test(cookie) || csrf.length !== cookie.length
-    || !timingSafeEqual(Buffer.from(csrf), Buffer.from(cookie)) || csrf !== session.token)
+  // Токен формы сверяется с тем, который API выдал именно этой сессии.
+  const csrf = fields.csrf_token, issued = session.token;
+  if (!csrf || !/^[A-Za-z0-9_-]{1,4096}$/.test(csrf) || csrf.length !== issued.length
+    || !timingSafeEqual(Buffer.from(csrf), Buffer.from(issued)))
     return failure(403, "Недействительный защитный токен");
   if (identifier && (BigInt(identifier) < 1n || BigInt(identifier) > 9223372036854775807n))
     return failure(404, segments[2] === "institutions" ? "Вуз не найден" : segments[2] === "channels" ? "Канал не найден" : "Аккаунт не найден");
@@ -197,15 +248,18 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
       method: "POST", headers, body: JSON.stringify({ path, fields }), cache: "no-store", redirect: "error",
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(900_000)]),
     });
-  } catch { return failure(503, "Не удалось получить результат команды. Повторите ту же форму: её идентификатор защищает от повторной записи."); }
+  } catch { return commandFailure("unavailable", correlation); }
   const payload = await boundedJson(upstream);
   if (!upstream.ok) {
-    if (upstream.status === 401) return failure(401, authDetail(request), "Basic");
-    if (upstream.status === 404) return failure(404, path.startsWith("/manage/channels/") ? "Канал не найден" : path.startsWith("/manage/platform-accounts/") ? "Аккаунт не найден" : "Вуз не найден");
-    if (upstream.status === 403) return failure(403, "Доступ к управлению недоступен");
-    if (upstream.status === 409) return failure(409, "Данные изменились. Обновите страницу и повторите действие.");
-    return failure(upstream.status, upstream.status === 400 && payload?.type === "urn:m-ranked:problem:legacy-form"
-      && typeof payload.detail === "string" && SAFE_DETAILS.has(payload.detail) ? payload.detail : "Не удалось выполнить команду");
+    if (upstream.status === 401) return new NextResponse(null, { status: 303, headers: { ...NO_STORE, Location: "/manage?sign_in=failed" } });
+    if (upstream.status === 404) return commandFailure("not-found", correlation);
+    if (upstream.status === 403) return commandFailure("forbidden", correlation);
+    if (upstream.status === 409) return commandFailure("conflict", correlation);
+    if (upstream.status === 400 && payload?.type === "urn:m-ranked:problem:legacy-form"
+      && typeof payload.detail === "string" && SAFE_DETAILS.has(payload.detail))
+      return commandFailure("invalid", correlation);
+    return commandFailure(upstream.status === 502 || upstream.status === 503 || upstream.status === 504
+      ? "unavailable" : "failed", correlation);
   }
   if (typeof payload?.location !== "string" || !/^\/manage(?:\?[A-Za-z0-9_=&-]*)?$/.test(payload.location))
     return failure(502, "Некорректный адрес результата команды");

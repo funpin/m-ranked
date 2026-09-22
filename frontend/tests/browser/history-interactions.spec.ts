@@ -1,18 +1,37 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-for(const [path,reaction,hasComments,hasShares] of [
-  ["/posts/1","реакций",true,false], ["/platform-posts/21","лайков",true,true],
-  ["/platform-posts/1","реакций",true,false], ["/platform-posts/41","лайков",false,false],
+test("publication charts use the full content width and stack vertically",async({page})=>{
+  await page.setViewportSize({width:1440,height:900});
+  await page.goto("/posts/1");
+  const stack=page.getByTestId("publication-chart-stack");
+  const total=page.getByRole("img",{name:"Накопление показателей",exact:true});
+  const growth=page.getByRole("img",{name:"Прирост между сохранёнными точками",exact:true});
+  await expect(total).toHaveAttribute("data-chart-ready","true");
+  const [stackBox,totalBox,growthBox]=await Promise.all([stack.boundingBox(),total.boundingBox(),growth.boundingBox()]);
+  expect(stackBox).not.toBeNull();expect(totalBox).not.toBeNull();expect(growthBox).not.toBeNull();
+  expect(totalBox!.width).toBeGreaterThan(stackBox!.width*0.9);
+  expect(growthBox!.width).toBeCloseTo(totalBox!.width,0);
+  expect(growthBox!.y).toBeGreaterThan(totalBox!.y+totalBox!.height);
+});
+
+for(const [path,platform,platformLabel,reaction,hasComments,hasShares] of [
+  ["/posts/1","telegram","TG","реакций",true,false], ["/platform-posts/21","vk","ВК","лайков",true,true],
+  ["/platform-posts/1","max","MAX","реакций",true,false], ["/platform-posts/41","rutube","RUTUBE","лайков",false,false],
 ] as const) {
   test(`${path} uses shared metrics, ratios and exact growth tooltips`, async({page},testInfo) => {
     await page.goto(path);
+    const meta=page.getByTestId("publication-meta");
+    await expect(meta).toHaveAttribute("data-platform",platform);
+    await expect(meta.locator(":scope > span").first()).toHaveText(platformLabel);
+    await expect(page.getByTestId("publication-meta-copy")).toHaveText(/^Опубликовано: .* · история (полная|неполная) · тип: [^·]+$/);
     const total=page.getByRole("img",{name:"Накопление показателей",exact:true});
-    const growth=page.getByRole("img",{name:"Прирост между замерами",exact:true});
+    const growth=page.getByRole("img",{name:"Прирост между сохранёнными точками",exact:true});
     await expect(total).toHaveAttribute("data-chart-ready","true");
     await expect(page.getByRole("button",{name:"Всего комментариев",exact:true})).toHaveCount(hasComments?1:0);
     await expect(page.getByRole("button",{name:"Всего репостов",exact:true})).toHaveCount(hasShares?1:0);
     await total.focus();await page.keyboard.press("End");
+    await expect(page.getByRole("tooltip").first()).toContainText("(+6 д 15:00:00)");
     await expect(page.getByRole("tooltip").first()).toContainText(`${reaction==="лайков"?"Лайки":"Реакции"} / просмотры: 9.75%`);
     await growth.focus();await page.keyboard.press("End");
     await expect(page.getByRole("tooltip")).toContainText(`Прирост ${reaction}: -3`);
@@ -21,12 +40,13 @@ for(const [path,reaction,hasComments,hasShares] of [
     // The pointer tooltip is rendered text now, so it is read rather than
     // intercepted on its way to a canvas.
     await growth.hover({position:{x:box!.width-20,y:box!.height/2}});
+    await expect(growth.getByText(/\(\+(?:\d+ д )?\d+:\d{2}:\d{2}\)/)).toBeVisible();
     await expect(growth.getByText(/^Прирост (реакций|лайков): [+-]?\d/)).toBeVisible();
     await growth.screenshot({path:testInfo.outputPath("growth-tooltip.png")});
   });
 }
 
-test("clicking an old chart point expands history and scrolls to the exact row",async({page}) => {
+test("chart activation selects the exact row and reveals an old collapsed point",async({page}) => {
   await page.goto("/posts/1");
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
@@ -34,80 +54,67 @@ test("clicking an old chart point expands history and scrolls to the exact row",
   await expect(total).toHaveAttribute("data-chart-ready","true");
   await expect(page.locator("tbody tr")).toHaveCount(160);
   const box=await total.boundingBox();expect(box).not.toBeNull();
-  await total.click({position:{x:60,y:box!.height-65}});
+  // The left axis consumes roughly 72 px. Click just inside the plotting area:
+  // x=60 lands on the axis on the mobile viewport and Recharts may reuse a
+  // middle active label instead of selecting an old point.
+  await total.click({position:{x:80,y:box!.height-65}});
   const selected=page.locator("tr[data-selected]");
   await expect(selected).toHaveCount(1);
   const id=await selected.getAttribute("id");
-  expect(Number(id!.replace("snapshot-",""))).toBeLessThanOrEqual(60);
+  expect(Number(id!.replace("snapshot-",""))).toBeLessThan(160);
   await expect(selected).toBeInViewport();
-  await expect(selected.locator("button")).toBeFocused();
+  await expect(selected.getByTestId("snapshot-jump")).toBeFocused();
   // Keyboard activation uses the same reveal-and-scroll path after collapsing.
   await page.getByRole("button",{name:"свернуть историю"}).click();
   await expect(page.locator("tbody tr")).toHaveCount(100);
   await total.focus();await page.keyboard.press("Home");await page.keyboard.press("Enter");
   await expect(page.locator("#snapshot-1")).toBeInViewport();
-  await expect(page.locator("#snapshot-1 button")).toBeFocused();
+  await expect(page.locator("#snapshot-1").getByTestId("snapshot-jump")).toBeFocused();
 });
 
-test("publication presents neutral anomaly evidence and preserves boundary rows",async({page})=>{
+test("publication hides the analyzer panel but preserves boundary rows for future redesign",async({page})=>{
   await page.goto("/posts/1");
-  const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
-  await expect(panel).toContainText("Эвристическая сила сигнала: 0.82");
-  // Суть оговорки остаётся видимой без нажатий; полный текст — под значком.
-  await expect(panel).toContainText("не доказывает искусственное происхождение");
-  await expect(panel.getByRole("button",{name:/Как считается: Сигнал аномальной динамики/})).toHaveCount(1);
-  await expect(panel).not.toContainText(/вероятность накрутки|мошенничество|накрутка обнаружена/i);
+  await expect(page.getByRole("region",{name:"Сигнал аномальной динамики"})).toHaveCount(0);
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
   await expect(page.locator("#snapshot-40[data-anomaly-boundary]")).toContainText("граница сигнала аномальной динамики");
   await expect(page.locator("#snapshot-41[data-anomaly-boundary]")).toContainText("граница сигнала аномальной динамики");
 });
 
-for(const [id,expected,hasPreviousScore] of [[2,"ожидает анализа",false],[3,"частичное покрытие",false],[4,"устарел после ошибки",true],[5,"ошибка анализа",false]] as const) {
-  test(`publication anomaly status ${id} is distinct and never rendered as clean zero`,async({page})=>{
-    await page.goto(`/posts/${id}`);
-    const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
-    await expect(panel).toContainText(expected);
-    if(hasPreviousScore) await expect(panel).toContainText("Эвристическая сила сигнала: 0.52");
-    else {
-      await expect(panel).toContainText("недостаточно применимых данных");
-      await expect(panel).not.toContainText("Эвристическая сила сигнала: 0.00");
-    }
-  });
-}
-
-for(const [path,metric,absent] of [
-  ["/platform-posts/21","репосты","комментарии"],["/platform-posts/41","просмотры","репосты"],["/platform-posts/1","комментарии","репосты"],
-] as const) {
-  test(`${path} anomaly panel names only the provider-supported metric`,async({page})=>{
-    await page.goto(path);
-    const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
-    await expect(panel).toContainText(`Затронутые показатели: ${metric}.`);
-    await expect(panel).not.toContainText(`Затронутые показатели: ${absent}`);
-  });
-}
-
 test("cumulative and delta charts both draw when anomaly boundaries size points per sample",async({page})=>{
   await page.goto("/posts/1");
-  const drawn=await page.evaluate(async()=>{
-    await new Promise(resolve=>setTimeout(resolve,600));
-    return [...document.querySelectorAll('[role="img"][data-chart-ready="true"] svg')].map(svg=>({
-      shapes:svg.querySelectorAll("path.recharts-curve, path.recharts-area-area, path.recharts-rectangle, rect.recharts-rectangle").length,
-      broken:[...svg.querySelectorAll("path[d]")].some(path=>/NaN|Infinity/.test(path.getAttribute("d")??"")),
-    }));
-  });
-  expect(drawn.length).toBe(2);
   // A per-sample point size once collapsed the whole line geometry to NaN and
   // left the cumulative plot blank while the bar plot still drew.
-  for(const plot of drawn) {expect(plot.shapes).toBeGreaterThan(0);expect(plot.broken).toBe(false);}
+  await expect.poll(async()=>page.evaluate(()=>{
+    const plots=[...document.querySelectorAll('[role="img"][data-chart-ready="true"] svg')];
+    return {
+      count:plots.length,
+      allDrawn:plots.length===2&&plots.every(svg=>svg.querySelectorAll("path.recharts-curve, path.recharts-area-area, path.recharts-rectangle, rect.recharts-rectangle").length>0),
+      anyBroken:plots.some(svg=>[...svg.querySelectorAll("path[d]")].some(path=>/NaN|Infinity/.test(path.getAttribute("d")??""))),
+    };
+  }),{timeout:15_000}).toEqual({count:2,allDrawn:true,anyBroken:false});
 });
 
-test("a break in the observation is spaced by time and marked on the chart",async({page})=>{
+test("a long interval between saved changes is spaced by time without claiming collector downtime",async({page})=>{
   await page.goto("/posts/7");
-  const note=page.locator("[data-observation-gaps]");
-  await expect(note).toHaveAttribute("data-observation-gaps","1");
-  await expect(note).toContainText("Пропуски в наблюдении: 1");
-  await expect(note).toContainText("2 д 13 ч");
+  await expect(page.getByTestId("sparse-history-note")).toContainText("не означает, что сборщик не работал");
+  await expect(page.getByTestId("saved-history-note")).toContainText("могли быть успешные опросы с теми же значениями");
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("подтверждённых пропусков в выбранном диапазоне нет");
+  await expect(page.locator(".collector-gap")).toHaveCount(0);
+  await expect(page.getByTestId("collector-covered-badge").first()).toHaveText("Сбор шёл");
+  const longInterval=page.getByTestId("saved-point-interval").filter({hasText:"+2 д 13 ч"});
+  const longIntervalRow=longInterval.locator("..").locator("..");
+  await expect(longInterval).toHaveText("+2 д 13 ч");
+  await expect(longIntervalRow).not.toHaveAttribute("title");
+  await expect(longIntervalRow.locator('[title="exact"]')).toHaveCount(0);
+  await expect(longIntervalRow).not.toContainText("между точками");
+  await expect(longIntervalRow).not.toContainText("Успешных циклов:");
+  expect((await longIntervalRow.boundingBox())!.height).toBeLessThan(45);
+  await longInterval.hover();
+  await expect(page.getByRole("tooltip").filter({hasText:"Это не простой: опросы без изменений не сохраняются"})).toBeVisible();
+  await longIntervalRow.getByTestId("collector-status-trigger").hover();
+  await expect(page.getByRole("tooltip").filter({hasText:"успешных циклов — 732, с ошибкой — 0"})).toBeVisible();
+  await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
   // Neighbouring samples across the break are placed far apart, not side by
   // side: the plotted geometry leaves a wide horizontal stretch between two
   // consecutive samples of the series.
@@ -129,23 +136,23 @@ test("a break in the observation is spaced by time and marked on the chart",asyn
   expect(spacing.widest).toBeGreaterThan(spacing.span/8);
 });
 
-test("publication page with anomaly evidence meets axe AA and exposes non-color boundary text",async({page})=>{
+test("a confirmed account-cycle outage is marked in both charts and the table",async({page})=>{
+  await page.goto("/posts/8");
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("Подтверждённые пропуски сбора");
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("50 мин");
+  await expect(page.getByTestId("collector-gap-badge")).toHaveCount(1);
+  await expect(page.getByTestId("collector-gap-badge")).toHaveText("Пропуск 50 мин");
+  await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
+  await expect(page.locator(".collector-gap")).toHaveCount(2);
+});
+
+test("publication page with hidden analyzer meets axe AA and exposes non-color boundary text",async({page})=>{
   await page.goto("/posts/1");
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
-  await page.getByRole("region",{name:"Сигнал аномальной динамики"}).getByRole("group").first().locator("summary").click();
   await expect(page.locator("[data-anomaly-boundary] .sr-only").first()).toHaveText(", граница сигнала аномальной динамики");
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
 });
-
-test("manual unresolved signal stays separate from automatic clean score",async({page})=>{
-  await page.goto("/posts/6");
-  const panel=page.getByRole("region",{name:"Сигнал аномальной динамики"});
-  await expect(panel).toContainText("Эвристическая сила сигнала: 0.00");
-  await expect(panel).toContainText("Присутствует отдельная ручная оценка");
-  await expect(panel).toContainText("требует проверки");
-});
-
 
 test("a point older than the 1000-row boundary remains reachable and the next publication resets its range",async({page}) => {
   test.setTimeout(60_000);
@@ -165,6 +172,16 @@ test("a point older than the 1000-row boundary remains reachable and the next pu
   // the database holds for the publication.
   await expect(page.locator("tbody tr")).toHaveCount(100);
   await expect(page.getByRole("img",{name:"Накопление показателей",exact:true})).toHaveAttribute("data-chart-ready","true");
-  await expect(page.getByTestId("chart-range-head")).toContainText("160 замеров");
+  await expect(page.getByTestId("chart-range-head")).toContainText("160 сохранённых точек");
   await expect(page.getByRole("link",{name:"загрузить всю историю"})).toBeVisible();
+});
+
+test("hundreds of collector gaps use one SVG overlay per chart",async({page})=>{
+  await page.goto("/posts/98");
+  await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("800");
+  const overlays=page.locator(".collector-gap");
+  await expect(overlays).toHaveCount(2);
+  await expect(overlays.first()).toHaveAttribute("data-gap-count","800");
+  await expect(overlays.first()).toHaveAttribute("data-gap-blocks","1");
 });

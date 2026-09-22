@@ -15,6 +15,11 @@ umask 077
 # остаётся с запасом: полный диск останавливает саму базу.
 : "${BACKUP_KEEP:=3}"
 : "${MRANKED_DB_CONTAINER:?MRANKED_DB_CONTAINER is required}"
+# Неудачный запуск намеренно оставляет .partial для разбора: по нему
+# видно, на чём дамп оборвался. Но разбирают его в тот же день, а файл
+# весит столько же, сколько готовый снимок, и следующий сбой добавляет
+# ещё один. Без срока годности они копятся молча.
+: "${BACKUP_PARTIAL_MAX_AGE_HOURS:=24}"
 
 if [[ ! "$BACKUP_KEEP" =~ ^[0-9]+$ ]] || (( BACKUP_KEEP < 1 || BACKUP_KEEP > 90 )); then
   echo "BACKUP_KEEP must be between 1 and 90" >&2
@@ -23,6 +28,16 @@ fi
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
+
+if [[ ! "$BACKUP_PARTIAL_MAX_AGE_HOURS" =~ ^[0-9]+$ ]] \
+   || (( BACKUP_PARTIAL_MAX_AGE_HOURS < 1 || BACKUP_PARTIAL_MAX_AGE_HOURS > 168 )); then
+  echo "BACKUP_PARTIAL_MAX_AGE_HOURS must be between 1 and 168" >&2
+  exit 64
+fi
+
+# Чистим до снятия нового снимка: место нужно именно сейчас.
+find "$BACKUP_DIR" -maxdepth 1 -type f -name 'mranked-*.dump.partial' \
+  -mmin "+$(( BACKUP_PARTIAL_MAX_AGE_HOURS * 60 ))" -delete
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 target="$BACKUP_DIR/mranked-$stamp.dump"

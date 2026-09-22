@@ -1,0 +1,17 @@
+[Unit]
+Description=M-Ranked profile B Server 2 presentation runtime
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+Conflicts=m-ranked-target.target m-ranked-target-profile-b-server1.target
+Requires=m-ranked-target-api.service m-ranked-target-web.service
+Requires=m-ranked-target-transfer-ingest.service
+Wants=m-ranked-target-redis.service
+Wants=m-ranked-target-cache-warmup.service
+Wants=m-ranked-target-web-cache-gc.timer
+Wants=m-ranked-target-anomaly-analysis.service
+Wants=m-ranked-target-maintenance.timer
+Wants=m-ranked-target-official-rating.timer
+Wants=m-ranked-target-overview-metrics.timer
+After=network-online.target m-ranked-target-api.service
+
+[Install]
+WantedBy=multi-user.target

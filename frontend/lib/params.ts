@@ -114,7 +114,11 @@ export function normalizePeriod(value: SearchValue, fallback: Period = "1d"): Pe
 export function normalizeSort(value: SearchValue, platform: Platform): OverviewSort {
   const normalized = first(value);
   const accepted: OverviewSort[] = platform === "all"
-    ? ["name", "m_rating", "coverage", "accounts"]
+    // Сортировки по числу площадок и аккаунтов убраны из набора: они
+    // расставляли вузы по величине, которая ничего не говорит об
+    // активности. Прежние ссылки на них не ломаются — значение не из
+    // списка приводится к сортировке по умолчанию ниже.
+    ? ["name", "m_rating"]
     : ["name", "median_reactions", "m_rating", "reactions", "views", "posts", "subscribers"];
   return accepted.includes(normalized as OverviewSort)
     ? (normalized as OverviewSort)

@@ -21,6 +21,25 @@ class CollectorMetrics:
         self._runs=defaultdict(int)
         self._snapshots=defaultdict(int)
         self._last_success=defaultdict(float)
+        self._phase_wait=defaultdict(float)
+        self._phase_attempts=defaultdict(int)
+        self._phase_results=defaultdict(int)
+        self._cycle_duration=defaultdict(float)
+        self._schedule_lag=defaultdict(float)
+        self._overruns=defaultdict(int)
+        self._coalesced=defaultdict(int)
+        self._resumes=defaultdict(int)
+        self._request_timeouts=defaultdict(int)
+        self._shutdowns=defaultdict(int)
+        self._provider_errors=defaultdict(int)
+        self._schedule_modes: dict[str, str] = {}
+        self._deployment_profiles: dict[str, str] = {}
+        self._working_set: dict[str, float] = {}
+        self._persist_wait: list[float] = [0, 0.0, 0.0]
+        self._diverged=defaultdict(int)
+        self._placement: dict[str, float] = {}
+        self._disk: dict[str, float] = {}
+        self._transfer: dict[str, dict[str, float]] = {}
 
     def account(self, platform: Platform, *, succeeded: bool, duration: float, snapshots: int = 0):
         if not math.isfinite(duration) or duration<0 or snapshots<0: raise ValueError('invalid metric observation')
@@ -38,6 +57,147 @@ class CollectorMetrics:
         with self._lock:
             self._runs[(Platform(platform).value,RunStatus(status).value)]+=1
             self._last_success.setdefault(Platform(platform).value,0.)
+            self._publish()
+
+    def phase_wait(
+        self, platform: Platform, *, result: str, duration: float, attempts: int,
+    ) -> None:
+        if not math.isfinite(duration) or duration < 0 or attempts < 0:
+            raise ValueError("invalid phase metric observation")
+        name = Platform(platform).value
+        with self._lock:
+            self._phase_wait[name] += duration
+            self._phase_attempts[name] += attempts
+            self._phase_results[(name, result)] += 1
+            self._publish()
+
+    def deployment_profile(self, platform: Platform, profile: str) -> None:
+        normalized = str(profile).strip().lower()
+        if normalized not in {"a", "b"}:
+            raise ValueError('deployment profile must be a or b')
+        with self._lock:
+            self._deployment_profiles[Platform(platform).value] = normalized
+            self._publish()
+
+    def working_set(self, *, released_months: int, deferred_months: int,
+                    oldest_retained_month=None) -> None:
+        if released_months < 0 or deferred_months < 0:
+            raise ValueError('invalid working set observation')
+        with self._lock:
+            self._working_set['released_months_total'] = (
+                self._working_set.get('released_months_total', 0.0) + released_months
+            )
+            self._working_set['deferred_months'] = float(deferred_months)
+            if oldest_retained_month is not None:
+                from datetime import datetime, timezone
+                moment = datetime(
+                    oldest_retained_month.year, oldest_retained_month.month, 1,
+                    tzinfo=timezone.utc,
+                )
+                self._working_set['oldest_retained_unixtime'] = moment.timestamp()
+            self._publish()
+
+    def persist_wait(self, seconds: float) -> None:
+        if not math.isfinite(seconds) or seconds < 0:
+            raise ValueError('invalid persist wait observation')
+        with self._lock:
+            self._persist_wait[0] += 1
+            self._persist_wait[1] += seconds
+            self._persist_wait[2] = max(self._persist_wait[2], seconds)
+            self._publish()
+
+    def diverged(self, platform: Platform, count: int) -> None:
+        if count < 0:
+            raise ValueError('invalid divergence observation')
+        if not count:
+            return
+        with self._lock:
+            self._diverged[Platform(platform).value] += count
+            self._publish()
+
+    def placement(self, platform: Platform, *, owned: int, offered: int,
+                  effective_replication: int) -> None:
+        if owned < 0 or offered < 0 or effective_replication < 1:
+            raise ValueError('invalid placement observation')
+        with self._lock:
+            name = Platform(platform).value
+            self._placement[f'owned|{name}'] = float(owned)
+            self._placement[f'offered|{name}'] = float(offered)
+            self._placement[f'replication|{name}'] = float(effective_replication)
+            self._publish()
+
+    def disk(self, *, used_percent: float, free_bytes: int) -> None:
+        if not 0 <= used_percent <= 100 or free_bytes < 0:
+            raise ValueError('invalid disk observation')
+        with self._lock:
+            self._disk['used_percent'] = float(used_percent)
+            self._disk['free_bytes'] = float(free_bytes)
+            self._publish()
+
+    def schedule_mode(self, platform: Platform, mode: str) -> None:
+        normalized = mode.strip().lower()
+        if normalized not in {"legacy", "phased", "shadow"}:
+            raise ValueError("invalid collector schedule mode")
+        with self._lock:
+            self._schedule_modes[Platform(platform).value] = normalized
+            self._publish()
+
+    def cycle(
+        self,
+        platform: Platform,
+        *,
+        duration: float,
+        schedule_lag: float,
+        overrun: bool,
+        coalesced_slots: int = 0,
+        resumed: bool = False,
+    ) -> None:
+        if (
+            not math.isfinite(duration) or duration < 0
+            or not math.isfinite(schedule_lag) or schedule_lag < 0
+            or coalesced_slots < 0
+        ):
+            raise ValueError("invalid cycle metric observation")
+        name = Platform(platform).value
+        with self._lock:
+            self._cycle_duration[name] = duration
+            self._schedule_lag[name] = schedule_lag
+            self._overruns[name] += int(overrun)
+            self._coalesced[name] += coalesced_slots
+            self._resumes[name] += int(resumed)
+            self._publish()
+
+    def request_timeout(self, platform: Platform) -> None:
+        with self._lock:
+            self._request_timeouts[Platform(platform).value] += 1
+            self._publish()
+
+    def provider_error(self, platform: Platform, error_class: str) -> None:
+        cleaned = "".join(
+            character for character in error_class
+            if character.isalnum() or character == "_"
+        )[:64] or "unknown"
+        with self._lock:
+            self._provider_errors[(Platform(platform).value, cleaned)] += 1
+            self._publish()
+
+    def shutdown(self, platform: Platform, *, forced: bool) -> None:
+        with self._lock:
+            self._shutdowns[(Platform(platform).value, "forced" if forced else "graceful")] += 1
+            self._publish()
+
+    def transfer(self, producer_id: str, values: dict[str, float | int]) -> None:
+        safe = "".join(
+            character for character in producer_id
+            if character.isalnum() or character in "._/-"
+        )[:128]
+        if safe != producer_id or not safe or any(
+            not math.isfinite(float(value)) or float(value) < 0
+            for value in values.values()
+        ):
+            raise ValueError("invalid transfer metric observation")
+        with self._lock:
+            self._transfer[safe] = {key: float(value) for key, value in values.items()}
             self._publish()
 
     def render(self) -> str:
@@ -62,6 +222,89 @@ class CollectorMetrics:
         lines += ['# TYPE mranked_collector_last_success_unixtime gauge']
         for platform,value in sorted(self._last_success.items()):
             lines.append(f'mranked_collector_last_success_unixtime{{platform="{platform}"}} {value:.6f}')
+        lines += ['# TYPE mranked_collector_phase_wait_seconds_total counter']
+        for platform,value in sorted(self._phase_wait.items()):
+            lines.append(f'mranked_collector_phase_wait_seconds_total{{platform="{platform}"}} {value:.9g}')
+        lines += ['# TYPE mranked_collector_phase_acquisitions_total counter']
+        for (platform,result),value in sorted(self._phase_results.items()):
+            lines.append(f'mranked_collector_phase_acquisitions_total{{platform="{platform}",result="{result}"}} {value}')
+        lines += ['# TYPE mranked_collector_phase_attempts_total counter']
+        for platform,value in sorted(self._phase_attempts.items()):
+            lines.append(f'mranked_collector_phase_attempts_total{{platform="{platform}"}} {value}')
+        lines += ['# TYPE mranked_collector_schedule_mode_info gauge']
+        for platform,mode in sorted(self._schedule_modes.items()):
+            lines.append(f'mranked_collector_schedule_mode_info{{platform="{platform}",mode="{mode}"}} 1')
+        working_set_types = {
+            'released_months_total': 'counter', 'deferred_months': 'gauge',
+            'oldest_retained_unixtime': 'gauge',
+        }
+        for metric, metric_type in working_set_types.items():
+            if metric in self._working_set:
+                lines += [f'# TYPE mranked_collector_working_set_{metric} {metric_type}',
+                          f'mranked_collector_working_set_{metric} {self._working_set[metric]:.9g}']
+        for metric in ('used_percent', 'free_bytes'):
+            if metric in self._disk:
+                lines += [f'# TYPE mranked_collector_disk_{metric} gauge',
+                          f'mranked_collector_disk_{metric} {self._disk[metric]:.9g}']
+        if self._persist_wait[0]:
+            lines += ['# TYPE mranked_collector_persist_wait_seconds_total counter',
+                      f'mranked_collector_persist_wait_seconds_total {self._persist_wait[1]:.9g}',
+                      '# TYPE mranked_collector_persist_waits_total counter',
+                      f'mranked_collector_persist_waits_total {self._persist_wait[0]}',
+                      '# TYPE mranked_collector_persist_wait_seconds_max gauge',
+                      f'mranked_collector_persist_wait_seconds_max {self._persist_wait[2]:.9g}']
+        if self._diverged:
+            lines += ['# TYPE mranked_collector_diverged_observations_total counter']
+            for platform,count in sorted(self._diverged.items()):
+                lines.append(f'mranked_collector_diverged_observations_total{{platform="{platform}"}} {count}')
+        for metric in ('owned', 'offered', 'replication'):
+            selected = {k.split('|')[1]: v for k, v in self._placement.items() if k.startswith(metric + '|')}
+            if selected:
+                lines.append(f'# TYPE mranked_collector_placement_{metric} gauge')
+                for platform, value in sorted(selected.items()):
+                    lines.append(f'mranked_collector_placement_{metric}{{platform="{platform}"}} {value:.9g}')
+        lines += ['# TYPE mranked_collector_deployment_profile_info gauge']
+        for platform,profile in sorted(self._deployment_profiles.items()):
+            lines.append(f'mranked_collector_deployment_profile_info{{platform="{platform}",profile="{profile}"}} 1')
+        lines += ['# TYPE mranked_collector_cycle_duration_seconds gauge']
+        for platform,value in sorted(self._cycle_duration.items()):
+            lines.append(f'mranked_collector_cycle_duration_seconds{{platform="{platform}"}} {value:.9g}')
+        lines += ['# TYPE mranked_collector_schedule_lag_seconds gauge']
+        for platform,value in sorted(self._schedule_lag.items()):
+            lines.append(f'mranked_collector_schedule_lag_seconds{{platform="{platform}"}} {value:.9g}')
+        for metric,values in (
+            ('cycle_overruns_total', self._overruns),
+            ('coalesced_slots_total', self._coalesced),
+            ('resumed_runs_total', self._resumes),
+            ('adapter_request_timeouts_total', self._request_timeouts),
+        ):
+            lines.append(f'# TYPE mranked_collector_{metric} counter')
+            for platform,value in sorted(values.items()):
+                lines.append(f'mranked_collector_{metric}{{platform="{platform}"}} {value}')
+        lines += ['# TYPE mranked_collector_shutdowns_total counter']
+        for (platform,outcome),value in sorted(self._shutdowns.items()):
+            lines.append(f'mranked_collector_shutdowns_total{{platform="{platform}",outcome="{outcome}"}} {value}')
+        lines += ['# TYPE mranked_collector_provider_errors_total counter']
+        for (platform,error_class),value in sorted(self._provider_errors.items()):
+            lines.append(f'mranked_collector_provider_errors_total{{platform="{platform}",error_class="{error_class}"}} {value}')
+        transfer_types = {
+            "last_produced_cursor": "gauge", "last_acknowledged_cursor": "gauge",
+            "last_applied_cursor": "gauge", "outbox_rows": "gauge",
+            "outbox_bytes": "gauge", "backlog_rows": "gauge",
+            "backlog_bytes": "gauge", "oldest_backlog_age_seconds": "gauge",
+            "batch_latency_seconds": "gauge", "retries_total": "counter",
+            "checksum_failures_total": "counter", "duplicates_total": "counter",
+            "attempt_window_exhausted_rows": "gauge",
+            "rejects_total": "counter", "quarantines_total": "counter",
+            "unaccounted_records": "gauge",
+        }
+        for metric, metric_type in transfer_types.items():
+            lines.append(f'# TYPE mranked_transfer_{metric} {metric_type}')
+            for producer, values in sorted(self._transfer.items()):
+                if metric in values:
+                    lines.append(
+                        f'mranked_transfer_{metric}{{producer="{producer}"}} {values[metric]:.9g}'
+                    )
         return '\n'.join(lines)+'\n'
 
     def _publish(self):

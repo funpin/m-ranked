@@ -12,7 +12,7 @@ Group=m-ranked-web
 WorkingDirectory=/opt/m-ranked/current/frontend
 EnvironmentFile=/etc/m-ranked/web.env
 Environment=NODE_ENV=production
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 Environment=HOSTNAME=127.0.0.1
 Environment=PORT=3000
 ExecStart=/usr/bin/node --max-old-space-size=128 /opt/m-ranked/current/frontend/server.js
@@ -48,6 +48,9 @@ RuntimeDirectoryMode=0750
 UMask=0077
 LimitNOFILE=32768
 TasksMax=256
+# Отдача страницы должна выигрывать у фонового сбора: ядро одно.
+CPUWeight=400
+IOWeight=200
 MemoryHigh=160M
 MemoryMax=192M
 MemorySwapMax=0

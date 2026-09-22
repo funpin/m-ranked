@@ -3,8 +3,6 @@
 - Status: **Proposed**
 - Date: 2026-09-02
 - Owners: product / data / operations
-- Related: [data lifecycle](../views/data-lifecycle.mmd),
-  [replication and backup](../views/replication-backup.puml)
 
 ## Context
 
@@ -108,11 +106,6 @@ backup шифруется отдельно, имеет отдельный клю
 ### Хранить все snapshots в PostgreSQL бессрочно
 
 Отклонено для 30 GB primary: indexes, WAL и backup будут расти вместе с данными.
-
-### Оставить отдельные CSV.GZ на каждый Telegram post
-
-Отклонено: создает много мелких файлов, не покрывает другие сети и неудобно для
-schema evolution/аналитического чтения.
 
 ### Удалять все детали после 40 дней без cold archive
 

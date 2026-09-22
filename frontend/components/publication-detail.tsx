@@ -1,18 +1,18 @@
 import { accountHref, publicationHref } from "@/lib/entity-routes";
 import Link from "@/components/native-link";
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
-import { legacyDate, PLATFORM_LONG_LABELS, postTypeLabel, publicationLabel } from "@/lib/format";
+import { deletedPublicationArchiveUrl, legacyDate, PLATFORM_LONG_LABELS, postTypeLabel, publicationLabel } from "@/lib/format";
 import type { DetailHistory } from "@/lib/detail-data";
 import { queryHref } from "@/lib/params";
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
 import type { PublicationAnomalyAnalysis } from "@/lib/types";
 import { PublicationMeasurements } from "./publication-measurements";
-import { AnomalyAnalysis } from "./anomaly-analysis";
 import { StatusPill } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { NavigationBoundary } from "@/components/navigation-boundary";
+import { PlatformChip } from "@/components/platform-chip";
 import { PublicationSkeleton } from "@/components/skeletons";
 
 /** Previous and next keep their rel hints and stay readable when unavailable,
@@ -53,10 +53,13 @@ function Neighbour({ href, id, platform, direction }: {
   );
 }
 
-export function PublicationDetail({history,historyLimit=100,analysis=null,analysisLoadFailed=false}:{history:DetailHistory;historyLimit?:number;analysis?:PublicationAnomalyAnalysis|null;analysisLoadFailed?:boolean}) {
+export function PublicationDetail({history,historyLimit=100,analysis=null}:{history:DetailHistory;historyLimit?:number;analysis?:PublicationAnomalyAnalysis|null}) {
   const p=history.publication, telegram=p.platform === "telegram";
-  const url=telegram && p.deletedAt && p.accountUsername ? `https://tgstat.ru/channel/@${p.accountUsername}/${p.displayExternalId ?? p.externalId}` : p.publicUrl;
-  const label=`${publicationLabel(p.displayExternalId ?? p.externalId,p.platform)}${telegram && p.deletedAt ? " в TGStat" : ""}`;
+  const archiveUrl=deletedPublicationArchiveUrl(p.platform,p.deletedAt,p.displayExternalId ?? p.externalId,p.accountUsername,history.accountArchiveUrl);
+  const url=archiveUrl ?? p.publicUrl;
+  const archiveLabel=archiveUrl ? (telegram ? "TGStat" : "MAXSTAT") : null;
+  const label=`${publicationLabel(p.displayExternalId ?? p.externalId,p.platform)}${archiveLabel ? ` в ${archiveLabel}` : ""}`;
+  const maxstatDate=archiveLabel === "MAXSTAT" ? legacyDate(p.publishedAt).slice(0,10) : null;
   return <>
     <span data-active-platform={p.platform} hidden />
     <header className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -70,13 +73,15 @@ export function PublicationDetail({history,historyLimit=100,analysis=null,analys
             ? <a className="text-chart-2 inline-flex items-center gap-1 hover:underline" href={url} target="_blank" rel="noopener noreferrer">{label}<ExternalLink className="size-4 shrink-0" aria-hidden="true" /></a>
             : label}
         </h1>
-        <p className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-2">
-          <span>Опубликовано: <b className="text-foreground font-semibold">{legacyDate(p.publishedAt,true)}</b> · история {p.historyCompleteness === "complete" ? "полная" : "неполная"} · тип: {postTypeLabel(p.publicationType)}{telegram ? "" : ` · ${PLATFORM_LONG_LABELS[p.platform]}`}</span>
+        <p data-testid="publication-meta" data-platform={p.platform} className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-2 gap-y-2">
+          <PlatformChip platform={p.platform} className="shrink-0 rounded-lg border border-current/30 px-2.5 py-1 text-xs tracking-wide" />
+          <span data-testid="publication-meta-copy">Опубликовано: <b className="text-foreground font-semibold">{legacyDate(p.publishedAt,true)}</b> · история {p.historyCompleteness === "complete" ? "полная" : "неполная"} · тип: {postTypeLabel(p.publicationType)}</span>
           {p.deletedAt ? <StatusPill tone="red">удалена из {PLATFORM_LONG_LABELS[p.platform]}</StatusPill> : null}
           {p.repost ? <StatusPill tone="neutral">репост</StatusPill> : null}
           {p.ambiguousAlbumReactions ? <span className="text-warning font-medium">реакции элементов альбома различаются</span> : null}
           {p.joint ? <StatusPill tone="blue">+{p.additionalAuthorCount} авт.</StatusPill> : null}
         </p>
+        {maxstatDate ? <p className="text-muted-foreground mt-2 text-sm">В MAXSTAT выберите в фильтрах дату <b className="text-foreground font-semibold">{maxstatDate}</b>: сервис не сохраняет выбранный день в ссылке.</p> : null}
       </div>
       <nav className="flex shrink-0 gap-2" aria-label="Навигация по публикациям">
         <Neighbour direction="prev" platform={p.platform} id={history.previousDisplayId} href={history.previousPublicationId ? publicationHref(history.previousPublicationId) : undefined} />
@@ -100,8 +105,7 @@ export function PublicationDetail({history,historyLimit=100,analysis=null,analys
       </Card>
     ) : null}
 
-    <AnomalyAnalysis analysis={analysis} loadFailed={analysisLoadFailed} historyRevision={history.datasetRevision} />
-    <PublicationMeasurements key={p.publicationId} rows={history.items} platform={p.platform} historyLimit={historyLimit} analysis={analysis}
+    <PublicationMeasurements key={p.publicationId} rows={history.items} collectorCoverage={history.collectorCoverage} platform={p.platform} publishedAt={p.publishedAt} historyLimit={historyLimit} analysis={analysis}
       fullHistoryHref={historyLimit < FULL_PUBLICATION_HISTORY_LIMIT ? queryHref(publicationHref(p.publicationId),{history_limit:FULL_PUBLICATION_HISTORY_LIMIT}) : undefined} />
     </NavigationBoundary>
   </>;

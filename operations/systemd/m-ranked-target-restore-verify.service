@@ -13,7 +13,7 @@ WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/restore-verify.env
 LoadCredential=pgbackrest.conf:/etc/m-ranked/credentials/pgbackrest-restore.conf
 Environment=PGBACKREST_CONFIG=%d/pgbackrest.conf
-Environment=TZ=UTC
+Environment=TZ=Europe/Moscow
 ExecStart=/opt/m-ranked/current/operations/scripts/restore-verify.sh --mode latest --repo 1
 TimeoutStartSec=2h
 Nice=10

@@ -3,13 +3,13 @@ import { notFound } from "next/navigation";
 import { AccountDetail } from "@/components/account-detail";
 import { ApiFailureState } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { loadAccountPublications } from "@/lib/detail-data";
+import { loadAccountPublications, reportDetailFailure } from "@/lib/detail-data";
 import { accountHref, UUID_PATTERN } from "@/lib/entity-routes";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import type { AccountView } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-type Props = { params: Promise<{ id: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ day?: string | string[]; trend?: string | string[] }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
@@ -26,26 +26,37 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function AccountPage({ params }: Props) {
-  const { id } = await params;
+export default async function AccountPage({ params, searchParams }: Props) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   if (!UUID_PATTERN.test(id)) notFound();
   let account;
   let posts;
-  try {
-    account = await api.account(id);
-    posts = await loadAccountPublications(id);
-    if (posts.datasetRevision !== account.datasetRevision) throw new Error("Revision changed");
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 404) notFound();
-    return <ApiFailureState retryHref={accountHref(id)} />;
-  }
-  // Соседние площадки того же вуза. Справочник отвечает быстро, а без него
-  // переход к другой сети требовал возврата в обзор и поиска карточки заново.
+  let selectedDay: string | undefined;
+  let selectedTrend: "median" | "total" | undefined;
   let siblings: AccountView[] = [];
   try {
-    if (account.institutionLegacyId !== null) {
-      siblings = [...(await api.institutionAccounts(account.institutionLegacyId, "all")).items];
-    }
-  } catch { /* Селектор необязателен: страница постов ценна и без него. */ }
-  return <AccountDetail account={account} posts={posts.items} truncated={Boolean(posts.nextCursor)} siblings={siblings} />;
+    account = await api.account(id);
+    const requestedDay = typeof query.day === "string" ? query.day : undefined;
+    selectedDay = account.stats?.dailySeries?.some(point => point.day === requestedDay)
+      ? requestedDay : undefined;
+    selectedTrend = query.trend === "total" ? "total" : "median";
+    // Остальное читается по той же ревизии и одновременно: последовательная
+    // цепочка из трёх запросов давала 345 мс вместо 160, а ревизия за это
+    // время успевала смениться — она меняется каждые две секунды.
+    const revision = account.datasetRevision;
+    const [loadedPosts, loadedSiblings] = await Promise.all([
+      loadAccountPublications(id, undefined, 100, revision, selectedTrend === "total" ? selectedDay : undefined),
+      account.institutionLegacyId !== null
+        // Селектор необязателен: страница постов ценна и без него.
+        ? api.institutionAccounts(account.institutionLegacyId, "all", 100, undefined, revision).catch(() => null)
+        : null,
+    ]);
+    posts = loadedPosts;
+    siblings = loadedSiblings ? [...loadedSiblings.items] : [];
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    reportDetailFailure(`account:${id}`, error);
+    return <ApiFailureState retryHref={accountHref(id)} />;
+  }
+  return <AccountDetail account={account} posts={posts.items} truncated={Boolean(posts.nextCursor)} siblings={siblings} selectedDay={selectedDay} selectedTrend={selectedTrend} />;
 }

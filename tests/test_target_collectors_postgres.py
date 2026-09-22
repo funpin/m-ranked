@@ -34,6 +34,14 @@ def _dsn(name: str) -> str:
     return value
 
 
+def _ensure_initial_revision(connection) -> None:
+    connection.execute(
+        """INSERT INTO analytics.dataset_revision(cause,correlation_id,metadata)
+           SELECT 'migration',gen_random_uuid(),'{"fixture":true}'::jsonb
+            WHERE NOT EXISTS (SELECT 1 FROM analytics.dataset_revision)"""
+    )
+
+
 @pytest.mark.parametrize("retained_legacy_baseline", [False, True])
 def test_real_postgres_telegram_public_baseline_is_idempotent_and_live_readable(retained_legacy_baseline: bool) -> None:
     psycopg = pytest.importorskip("psycopg")
@@ -94,7 +102,6 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_live_readable(
             "SELECT contract_id FROM ops_and_admin.schema_contract",
         ).fetchone()["contract_id"]
         assert contract == "live-read-2026-09-13-text-fingerprint"
-
         admin.execute(
             """INSERT INTO catalog.institution(id, canonical_name)
                VALUES (%s,%s)""",
@@ -200,6 +207,13 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_live_readable(
                  FROM analytics.dataset_revision WHERE source_run_id=%s""",
             (public_context.run_id,),
         ).fetchone()["count"] == 1
+        revision_metadata = admin.execute(
+            """SELECT metadata FROM analytics.dataset_revision WHERE id=%s""",
+            (first.revision_id,),
+        ).fetchone()["metadata"]
+        assert revision_metadata["discovered_count"] == 1
+        assert revision_metadata["snapshot_count"] == 2
+        assert revision_metadata["deletion_probe_count"] == 1
         public_events = admin.execute(
             """SELECT event.event_type, event.published_at
                  FROM ops_and_admin.outbox_event AS event
@@ -212,7 +226,8 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_live_readable(
         ]
 
         latest = admin.execute(
-            """SELECT views_count,reactions_count,comments_count
+            """SELECT views_count,reactions_count,comments_count,
+                      dataset_revision_id
                  FROM analytics.publication_latest WHERE publication_id=%s""",
             (public_id,),
         ).fetchone()
@@ -220,6 +235,7 @@ def test_real_postgres_telegram_public_baseline_is_idempotent_and_live_readable(
             "views_count": 370,
             "reactions_count": 173,
             "comments_count": 12,
+            "dataset_revision_id": first.revision_id,
         }
 
         forced_raw = RawCollectionBatch(
@@ -498,6 +514,7 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
 
     admin = connect(admin_dsn)
     try:
+        _ensure_initial_revision(admin)
         admin.execute(
             """INSERT INTO catalog.institution(id, canonical_name)
                VALUES (%s,%s)""",

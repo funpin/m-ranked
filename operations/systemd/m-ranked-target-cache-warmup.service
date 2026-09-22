@@ -1,0 +1,62 @@
+[Unit]
+Description=M-Ranked profile B shared response-cache warmer
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target m-ranked-target-api.service
+Wants=network-online.target m-ranked-target-api.service
+
+[Service]
+Type=simple
+User=m-ranked-cache-warmup
+Group=m-ranked-cache-warmup
+SupplementaryGroups=node-exporter
+WorkingDirectory=/opt/m-ranked/current
+# Собственный файл окружения, а не api.env. Прогрев ходит только по HTTP,
+# но api.Settings собирает DSN для каждой роли, у которой задан адрес, и
+# требует её пароль. Гасить адреса через Environment= нельзя: systemd
+# применяет EnvironmentFile позже и перекрывает их.
+EnvironmentFile=/etc/m-ranked/cache-warmup.env
+# Settings validates every optional DSN eagerly; the HTTP-only warmer needs no
+# database credential and must not inherit API database authority.
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Europe/Moscow
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m api.cache_warmup
+Restart=on-failure
+RestartSec=15s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+SystemCallArchitectures=native
+ReadWritePaths=-/var/lib/node_exporter/textfile_collector
+RuntimeDirectory=m-ranked-cache-warmup
+RuntimeDirectoryMode=0700
+UMask=0077
+LimitNOFILE=4096
+TasksMax=32
+MemoryHigh=128M
+MemoryMax=192M
+MemorySwapMax=0
+
+[Install]
+WantedBy=m-ranked-target-profile-b-server2.target

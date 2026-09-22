@@ -5,9 +5,9 @@ import { submitManage } from "../lib/manage-facade";
 
 const csrf = "unit-csrf";
 const correlation = "11111111-2222-4333-8444-555555555555";
-const authorization = `Basic ${Buffer.from("unit-user:unit-password").toString("base64")}`;
+const session = "session-token-value";
 function request(path = "/manage/institutions", body?: string, extra: HeadersInit = {}): NextRequest {
-  const headers = new Headers({ authorization, cookie: `MRANKED-MANAGE-CSRF=${csrf}`, "content-type": "application/x-www-form-urlencoded" });
+  const headers = new Headers({ cookie: `theme=dark; __Host-mranked-admin=${session}`, "content-type": "application/x-www-form-urlencoded" });
   new Headers(extra).forEach((value, key) => headers.set(key, value));
   return new NextRequest(`https://m-ranked.test${path}`, { method: "POST", headers, body });
 }
@@ -25,13 +25,16 @@ const missing = (key: string) => ({ type: "missing", loc: ["body", key], msg: "F
 const invalidInteger = (scope: string, key: string, input: string) => ({ type: "int_parsing", loc: [scope, key], msg: "Input should be a valid integer, unable to parse string as an integer", input });
 
 // Oracle: real FastAPI TestClient against a disposable SQLite database, 2026-09-05.
-test("anonymous and invalid credentials precede missing forms and CSRF without reading the body", async () => {
-  for (const [auth, detail] of [["", "Not authenticated"], ["Bearer secret", "Not authenticated"], ["Basic broken", "Invalid authentication credentials"], [authorization, "Неверный логин или пароль"]]) {
-    const incoming = request("/manage/institutions/not-an-id", "", { authorization: auth });
+test("a missing session precedes missing forms and CSRF without reading the body", async () => {
+  for (const cookie of ["", `__Host-mranked-admin=${session}`, "__Host-mranked-admin=<broken>"]) {
+    const incoming = request("/manage/institutions/not-an-id", "", cookie ? { cookie } : {});
     let calls = 0;
     const response = await submitManage(incoming, async () => { calls++; return Response.json({ detail: "upstream-secret" }, { status: 401 }); });
-    assert.equal(response.status, 401); assert.equal(response.headers.get("www-authenticate"), "Basic");
-    assert.deepEqual(await response.json(), { detail }); assert.equal(incoming.bodyUsed, false); assert.equal(calls, 1);
+    assert.equal(response.status, 401);
+    // Окно Basic-аутентификации больше не предлагается: вход идёт формой.
+    assert.equal(response.headers.get("www-authenticate"), null);
+    assert.deepEqual(await response.json(), { detail: "Требуется вход администратора" });
+    assert.equal(incoming.bodyUsed, false); assert.equal(calls, 1);
   }
 });
 
@@ -73,20 +76,25 @@ test("empty strings are present fields, then CSRF is checked without echoing tok
     const response = await submitManage(request("/manage/institutions/1", body), server().fetcher);
     assert.equal(response.status, 403); assert.deepEqual(await response.json(), { detail: "Недействительный защитный токен" });
   }
-  const response = await submitManage(request("/manage/institutions", `name=a&csrf_token=${csrf}`, { cookie: "MRANKED-MANAGE-CSRF=%F0%9F%98%80" }), server().fetcher);
-  assert.equal(response.status, 403);
+  // Токен формы сверяется с тем, что API выдал этой сессии, а не с отдельной кукой.
+  const other = await submitManage(request("/manage/institutions", `name=a&csrf_token=${csrf}`),
+    server(() => Response.json({ location: "/manage" }), { canEdit: true, canDelete: true }).fetcher);
+  assert.equal(other.status, 303);
+  const foreign = await submitManage(request("/manage/institutions", "name=a&csrf_token=another-token"), server().fetcher);
+  assert.equal(foreign.status, 403);
 });
 
 test("last duplicated scalar including CSRF and correlation wins; only form fields and trusted headers cross the boundary", async () => {
   const upstream = server(init => {
     const headers = new Headers(init.headers);
     assert.equal(headers.get("X-XSRF-TOKEN"), csrf); assert.equal(headers.get("X-Correlation-Id"), correlation);
-    assert.equal(headers.get("cookie"), `XSRF-TOKEN=${csrf}`); assert.equal(headers.get("authorization"), authorization);
+    // Наружу уходит только кука сессии: ни Basic, ни темы оформления.
+    assert.equal(headers.get("cookie"), `__Host-mranked-admin=${session}`); assert.equal(headers.get("authorization"), null);
     for (const key of ["x-mranked-can-edit", "x-mranked-can-delete", "host", "x-secret"]) assert.equal(headers.get(key), null);
     assert.deepEqual(JSON.parse(String(init.body)), { path: "/manage/institutions", fields: { name: "last", short_name: "", expected_row_version: "7", expected_account_versions: "{}" } });
     return Response.json({ location: "/manage?platform_status=institution-added&institution_id=123" });
   });
-  const incoming = request("/manage/institutions", `name=first&name=last&short_name=&csrf_token=wrong&csrf_token=${csrf}&correlation_id=bad&correlation_id=${correlation}&expected_row_version=7&expected_account_versions=%7B%7D&__proto__=bad&unknown_secret=hidden`, { cookie: `session=never-forward; MRANKED-MANAGE-CSRF=${csrf}`, "x-mranked-can-edit": "true", "x-secret": "never-forward" });
+  const incoming = request("/manage/institutions", `name=first&name=last&short_name=&csrf_token=wrong&csrf_token=${csrf}&correlation_id=bad&correlation_id=${correlation}&expected_row_version=7&expected_account_versions=%7B%7D&__proto__=bad&unknown_secret=hidden`, { cookie: `theme=never-forward; __Host-mranked-admin=${session}`, "x-mranked-can-edit": "true", "x-secret": "never-forward" });
   const response = await submitManage(incoming, upstream.fetcher);
   assert.equal(response.status, 303); assert.equal(response.headers.get("location"), "/manage?platform_status=institution-added&institution_id=123");
   assert.equal(response.headers.get("referrer-policy"), "same-origin");
@@ -162,17 +170,36 @@ test("unannounced oversized stream is cancelled and read errors are sanitized", 
 });
 
 test("upstream errors are fixed allowlisted values and never reveal exception details", async () => {
-  for (const [status, type, detail, expected] of [
-    [400, "urn:m-ranked:problem:legacy-form", "MAX chat_id должен быть числом", "MAX chat_id должен быть числом"],
-    [400, "urn:m-ranked:problem:legacy-form", "password=secret", "Не удалось выполнить команду"],
-    [400, "urn:m-ranked:problem:invalid-request", "Укажите название вуза", "Не удалось выполнить команду"],
-    [500, "urn:m-ranked:problem:internal-error", "database-password=secret", "Не удалось выполнить команду"],
-    [404, "anything", "database-secret", "Вуз не найден"],
-    [409, "anything", "database-secret", "Данные изменились. Обновите страницу и повторите действие."],
+  for (const [status, type, detail, code] of [
+    [400, "urn:m-ranked:problem:legacy-form", "MAX chat_id должен быть числом", "invalid"],
+    [400, "urn:m-ranked:problem:legacy-form", "password=secret", "failed"],
+    [400, "urn:m-ranked:problem:invalid-request", "Укажите название вуза", "failed"],
+    [500, "urn:m-ranked:problem:internal-error", "database-password=secret", "failed"],
+    [503, "urn:m-ranked:problem:internal-error", "database-password=secret", "unavailable"],
+    [404, "anything", "database-secret", "not-found"],
+    [409, "anything", "database-secret", "conflict"],
   ] as const) {
-    const response = await submitManage(request(undefined, `name=a&csrf_token=${csrf}`), server(() => Response.json({ type, detail }, { status })).fetcher);
-    assert.equal(response.status, status); assert.deepEqual(await response.json(), { detail: expected });
+    const response = await submitManage(request(undefined, `name=a&csrf_token=${csrf}&correlation_id=${correlation}`), server(() => Response.json({ type, detail }, { status })).fetcher);
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), `/manage?command_error=${code}&correlation_id=${correlation}`);
+    assert.doesNotMatch(response.headers.get("location")!, /secret/);
   }
+});
+
+test("JSON failures declare UTF-8 explicitly", async () => {
+  const response = await submitManage(request("/manage/institutions", "name=a&csrf_token=wrong"), server().fetcher);
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get("content-type"), "application/json; charset=utf-8");
+  assert.match(await response.text(), /Недействительный защитный токен/);
+});
+
+test("an uncertain command result returns to the console with its correlation ID", async () => {
+  const response = await submitManage(
+    request(undefined, `name=a&csrf_token=${csrf}&correlation_id=${correlation}`),
+    server(async () => { throw new Error("database-password=secret"); }).fetcher,
+  );
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), `/manage?command_error=unavailable&correlation_id=${correlation}`);
 });
 
 test("malformed/oversized session, fetch failure and open redirects fail closed", async () => {

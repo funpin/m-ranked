@@ -1,0 +1,82 @@
+[Unit]
+Description=M-Ranked profile B mTLS transfer receiver
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+AssertPathExists=/etc/m-ranked/transfer-ingest.env
+
+[Service]
+Type=simple
+User=m-ranked-transfer-ingest
+Group=m-ranked-transfer-ingest
+SupplementaryGroups=node-exporter
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/transfer-ingest.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/transfer-ingest-pgpass
+LoadCredential=server-certificate:/etc/m-ranked/credentials/transfer-server.crt
+LoadCredential=server-private-key:/etc/m-ranked/credentials/transfer-server.key
+LoadCredential=transfer-ca:/etc/m-ranked/credentials/transfer-ca.crt
+# systemd 252 отдаёт credential как 0400 во владении службы, а начиная с
+# 257 — как 0440 root:root с ACL. libpq молча игнорирует pgpass с
+# групповым доступом и уходит в "password authentication failed" при
+# верном пароле. Копия в приватный файл работает на обеих версиях.
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-transfer-ingest -g m-ranked-transfer-ingest %d/pgpass /run/m-ranked-transfer-ingest/pgpass
+Environment=PGPASSFILE=/run/m-ranked-transfer-ingest/pgpass
+Environment=TRANSFER_INGEST_CERTIFICATE=%d/server-certificate
+Environment=TRANSFER_INGEST_PRIVATE_KEY=%d/server-private-key
+Environment=TRANSFER_INGEST_CA_BUNDLE=%d/transfer-ca
+# Применяя пачку, приёмник проходит тот же путь записи, что и сборщик:
+# кладёт удостоверяющую квитанцию и сырое доказательство. Без этих
+# каталогов применение падает на EvidenceUnavailable уже после того,
+# как конверт принят и проверен.
+Environment=MRANKED_IDENTITY_RECEIPT_DIR=/var/lib/m-ranked/transfer-ingest/identity-receipts
+Environment=COLLECTOR_RAW_EVIDENCE_DIR=/var/lib/m-ranked/transfer-ingest/raw-evidence
+# Каталог объявлен, но по умолчанию не наполняется: сырые доказательства
+# выключены в transfer-ingest.env. Путь остаётся, чтобы включение не
+# требовало правки юнита.
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Europe/Moscow
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m transfer_ingest
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=30s
+TimeoutStopSec=45s
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Base policy accepts no network peer. The rendered Server 2 drop-in adds only
+# exact Server 1/VPN source prefixes; the host firewall enforces the same list.
+IPAddressDeny=any
+IPAddressAllow=localhost
+SystemCallArchitectures=native
+ReadWritePaths=-/var/lib/node_exporter/textfile_collector
+ReadWritePaths=/var/lib/m-ranked/transfer-ingest
+RuntimeDirectory=m-ranked-transfer-ingest
+RuntimeDirectoryMode=0700
+UMask=0077
+LimitNOFILE=8192
+TasksMax=64
+MemoryHigh=384M
+MemoryMax=512M
+MemorySwapMax=0
+
+[Install]
+WantedBy=m-ranked-target-profile-b-server2.target

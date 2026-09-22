@@ -1,0 +1,15 @@
+[Unit]
+Description=M-Ranked profile B Server 1 collector runtime
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+Conflicts=m-ranked-target.target m-ranked-target-profile-b-server2.target
+Wants=m-ranked-target-collector@telegram.service
+Wants=m-ranked-target-collector@vk.service
+Wants=m-ranked-target-collector@max.service
+Wants=m-ranked-target-collector@rutube.service
+Wants=m-ranked-target-transfer-sender.service
+Wants=m-ranked-target-collector-watchdog.timer
+Wants=m-ranked-target-collectors.slice
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target

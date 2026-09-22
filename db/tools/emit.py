@@ -8,7 +8,7 @@ DROPPED_OBJECTS = ('rebuild_core_projections','rebuild_serving_projections',
                    'compact_new_metric_evidence','intern_metric_evidence',
                    'compact_metric_evidence_batch','publication_hourly',
                    'comparison_publication_hourly','comparison_metric_point',
-                   'projection_state')
+                   'projection_state','legacy_native_export_lexeme')
 
 # ---------- transformations ----------
 def t_fingerprint(s):

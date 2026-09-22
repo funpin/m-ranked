@@ -9,13 +9,22 @@ function kept(page: Page) {
   return page.evaluate(() => (window as unknown as { __stamp?: string }).__stamp);
 }
 
+async function delayMatchingNavigation(page: Page, matches: (url: URL) => boolean) {
+  await page.route("**/*", async (route) => {
+    if (matches(new URL(route.request().url()))) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    await route.continue();
+  });
+}
+
 test("переход по меню и открытие карточки не перезагружают документ", async ({ page }, info) => {
   test.skip(info.project.name === "mobile", "меню спрятано за гамбургером; переходы проверяются на широком экране");
   await page.goto("/?platform=telegram");
   await stamp(page);
 
-  await page.getByTestId("main-nav").getByRole("link", { name: "Рейтинг" }).click();
-  await expect(page).toHaveURL(/\/rating\?platform=telegram/);
+  await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
+  await expect(page).toHaveURL(/\/statistics\?platform=telegram/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   expect(await kept(page)).toBe("kept");
 
@@ -49,9 +58,11 @@ test.describe("без JavaScript", () => {
     test.skip(info.project.name === "mobile", "гамбургер требует скриптов; на узком экране меню недоступно без них");
     await page.goto("/?platform=telegram");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Исходный код на GitHub" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Тема:/ })).toBeVisible();
 
-    await page.getByTestId("main-nav").getByRole("link", { name: "Рейтинг" }).click();
-    await expect(page).toHaveURL(/\/rating\?platform=telegram/);
+    await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
+    await expect(page).toHaveURL(/\/statistics\?platform=telegram/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
     await page.goto("/?platform=telegram");
@@ -60,4 +71,56 @@ test.describe("без JavaScript", () => {
     await expect(page).toHaveURL(/period=7d/);
     await expect(page.getByTestId("platform-overview-card").first()).toBeVisible();
   });
+});
+
+test("заготовка при переходе принадлежит той странице, куда идём", async ({ page }, info) => {
+  test.skip(info.project.name === "mobile", "меню спрятано за гамбургером; переходы проверяются на широком экране");
+  await page.goto("/?platform=telegram");
+  // Ответ задерживается, чтобы заготовка успела показаться и её можно было
+  // разглядеть: без задержки переход завершается за один кадр.
+  await page.route("**/statistics**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await route.continue();
+  });
+  await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
+  // На экране адаптивная заготовка статистики, а не сетка карточек обзора и
+  // не её заголовок с фильтрами.
+  await expect(page.getByText("Загрузка статистики")).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Поиск вуза" })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/statistics/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+});
+
+test("локальные заготовки не дублируют постоянную шапку страницы", async ({ page }) => {
+  await page.goto("/?platform=telegram");
+  await delayMatchingNavigation(page, (url) => ["/", "/statistics"].includes(url.pathname) && url.searchParams.get("period") === "7d");
+
+  await page.locator('select[name="period"]').selectOption("7d");
+  await page.getByRole("button", { name: "Применить фильтры" }).click();
+
+  await expect(page.getByText("Загрузка карточек")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+
+  await expect(page).toHaveURL(/period=7d/);
+  await page.goto("/statistics?platform=telegram");
+  await page.locator('select[name="period"]').selectOption("7d");
+
+  await expect(page.getByText("Загрузка статистики")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+});
+
+test("локальная заготовка карточки не повторяет название и переключатель", async ({ page }) => {
+  const currentId = "00000001-0000-4000-8000-000000000002";
+  const siblingId = "00000002-0000-4000-8000-000000000001";
+  await page.goto(`/accounts/${currentId}`);
+  await delayMatchingNavigation(page, (url) => url.pathname === `/accounts/${siblingId}`);
+
+  await page.getByRole("navigation", { name: "Площадки вуза" })
+    .getByRole("link", { name: /Канал 1/ }).click();
+
+  const loading = page.locator('[role="status"]').filter({ hasText: "Загрузка данных площадки" });
+  await expect(loading).toBeVisible();
+  await expect(loading.locator(':scope > [data-slot="skeleton"]')).toHaveCount(0);
+  await expect(loading.locator(":scope > .flex")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 });

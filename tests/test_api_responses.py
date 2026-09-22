@@ -15,9 +15,20 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
+from api.params import statistics_query
 from conftest import requires_api_database as requires_database
 
 CONTRACT = pathlib.Path(__file__).resolve().parents[1] / "contracts/openapi/m-ranked-v1.yaml"
+
+
+def test_statistics_query_normalizes_all_dimensions() -> None:
+    query = statistics_query("entities", "max", None, "  @Alpha  ", "bad", "asc", "views", None)
+    assert query.platform == "max"
+    assert query.view == "entities"
+    assert query.search == "@Alpha"
+    assert query.publication_sort == "erv"
+    assert query.publication_direction == "asc"
+    assert query.entity_sort == "views"
 
 
 @pytest.fixture(scope="module")
@@ -61,8 +72,36 @@ def client():
 
     # TestClient поднимает lifespan приложения, поэтому пул соединений и
     # слушатель инвалидации работают так же, как под uvicorn.
-    with TestClient(create_app(Settings())) as http:
+    # https в базовом адресе: иначе клиент не сохранит куку сессии,
+    # помеченную Secure, и ни один административный тест не пройдёт.
+    with TestClient(create_app(Settings()), base_url="https://testserver") as http:
         yield http
+
+
+
+TEST_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+TEST_PASSWORD = "admin-test-password"
+
+
+def sign_in(client, monkeypatch, username: str, *roles: str) -> str:
+    """Открыть настоящую сессию и вернуть привязанный к ней CSRF-токен."""
+    import base64
+    import bcrypt
+
+    from api.security import AuthConfig, AuthUser, totp_code
+
+    secret = base64.b32decode(TEST_TOTP_SECRET)
+    config = AuthConfig({username: AuthUser(
+        bcrypt.hashpw(TEST_PASSWORD.encode(), bcrypt.gensalt(rounds=10)),
+        frozenset(roles), secret)}, b"0123456789abcdef0123456789abcdef")
+    monkeypatch.setattr(client.app.state, "auth", config)
+    client.cookies.clear()
+    opened = client.post("/api/v1/admin/session", json={
+        "username": username, "password": TEST_PASSWORD,
+        "otp": totp_code(secret, int(client.app.state.clock()//30)),
+    })
+    assert opened.status_code == 201, opened.text
+    return opened.json()["token"]
 
 
 CASES = [
@@ -75,9 +114,9 @@ CASES = [
     ("/api/v1/overview", "get", "200", "/api/v1/overview?sort=views&direction=asc&limit=3"),
     ("/api/v1/overview", "get", "200", "/api/v1/overview?q=университет&limit=2"),
     ("/api/v1/overview", "get", "200", "/api/v1/overview?platform=telegram&period=30d&limit=4"),
-    ("/api/v1/rating", "get", "200", "/api/v1/rating?entityLimit=5"),
-    ("/api/v1/rating", "get", "200", "/api/v1/rating?platform=vk&period=7d&entityLimit=5"),
-    ("/api/v1/rating", "get", "200", "/api/v1/rating?platform=rutube&period=30d&entityLimit=5"),
+    ("/api/v1/statistics", "get", "200", "/api/v1/statistics?limit=5"),
+    ("/api/v1/statistics", "get", "200", "/api/v1/statistics?platform=vk&period=7d&limit=5"),
+    ("/api/v1/statistics", "get", "200", "/api/v1/statistics?view=entities&platform=rutube&period=30d&limit=5"),
     ("/api/v1/compare/candidates", "get", "200",
      "/api/v1/compare/candidates?platform=telegram&limit=5"),
     ("/api/v1/compare/candidates", "get", "200",
@@ -235,25 +274,29 @@ def test_detail_problems_match_contract(client, validator_for) -> None:
 
 
 @requires_database
-def test_rating_normalization_and_cursor(client) -> None:
+def test_statistics_normalization_and_cursor(client) -> None:
     normalized = client.get(
-        "/api/v1/rating?platform=nonsense&period=nonsense&channel_sort=nonsense&post_sort=nonsense&entityLimit=3")
+        "/api/v1/statistics?platform=nonsense&period=nonsense&publication_sort=nonsense&limit=3")
     defaulted = client.get(
-        "/api/v1/rating?platform=telegram&period=1d&channel_sort=engagement&post_sort=reactions&entityLimit=3")
+        "/api/v1/statistics?platform=all&period=30d&publication_sort=erv&limit=3")
     assert normalized.status_code == 200
     assert normalized.headers["etag"] == defaulted.headers["etag"]
 
-    first = client.get("/api/v1/rating?platform=vk&entityLimit=2").json()
-    assert first["nextEntityCursor"]
-    second = client.get("/api/v1/rating", params={
-        "platform": "vk", "entityLimit": 2, "entityCursor": first["nextEntityCursor"],
+    first = client.get("/api/v1/statistics?platform=vk&view=entities&limit=2").json()
+    assert first["nextCursor"]
+    second = client.get("/api/v1/statistics", params={
+        "platform": "vk", "view": "entities", "limit": 2, "cursor": first["nextCursor"],
     }).json()
-    assert not ({row["entityId"] for row in first["entities"]}
-                & {row["entityId"] for row in second["entities"]})
-    assert second["entityOffset"] == first["entityOffset"] + len(first["entities"])
+    assert not ({row["institutionId"] for row in first["entities"]}
+                & {row["institutionId"] for row in second["entities"]})
+    assert second["offset"] == first["offset"] + len(first["entities"])
 
-    stale_dimensions = client.get("/api/v1/rating", params={
-        "platform": "rutube", "entityLimit": 2, "entityCursor": first["nextEntityCursor"],
+    max_statistics = client.get("/api/v1/statistics?platform=max&limit=2")
+    assert max_statistics.status_code == 200
+    assert max_statistics.json()["platform"] == "max"
+
+    stale_dimensions = client.get("/api/v1/statistics", params={
+        "platform": "rutube", "view": "entities", "limit": 2, "cursor": first["nextCursor"],
     })
     assert stale_dimensions.status_code == 400
 
@@ -306,31 +349,6 @@ def test_compare_rejects_invalid_relevant_selection(client) -> None:
 
 
 @requires_database
-def test_publication_csv_headers_and_bytes(client) -> None:
-    response = client.get("/api/v1/exports/publications.csv?platform=telegram")
-    assert response.status_code == 200, response.text
-    assert response.headers["cache-control"] == "no-store"
-    assert response.headers["content-type"] == "text/csv; charset=utf-8"
-    assert response.headers["content-disposition"] == (
-        'attachment; filename="publications-telegram.csv"')
-    assert int(response.headers["x-dataset-revision"]) > 0
-    assert response.content.startswith(
-        b"platform,institution,publication_id,published_at,observed_at,views,")
-    assert b"\r\n" in response.content
-    assert not response.content.startswith(b"\xef\xbb\xbf")
-
-
-@requires_database
-def test_legacy_csv_fails_closed_without_lexemes(client, validator_for) -> None:
-    response = client.get("/api/v1/legacy-exports/posts.csv", params=[
-        ("platform", "vk"), ("platform", "tg"), ("ignored", "1")])
-    body = assert_contract_response(
-        response, validator_for, "/api/v1/legacy-exports/{kind}.csv", "409")
-    assert response.headers["cache-control"] == "no-store"
-    assert body["code"] == "LEXEMES_MISSING"
-
-
-@requires_database
 def test_emoji_validation_and_success_headers(client, validator_for, monkeypatch) -> None:
     from api.emoji_proxy import Asset
     from api.routes import emoji
@@ -353,10 +371,6 @@ def test_emoji_validation_and_success_headers(client, validator_for, monkeypatch
 
 @requires_database
 def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) -> None:
-    import bcrypt
-
-    from api.security import AuthConfig, issue_csrf
-
     publication = "99269506-1466-5e18-a215-a3db2688d786"
     analysis = assert_contract_response(
         client.get(f"/api/v1/publications/{publication}/anomaly-analysis?limit=1"),
@@ -374,21 +388,17 @@ def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) 
     assert_contract_response(
         unauthorized, validator_for,
         "/api/v1/admin/publications/{publicationId}/anomaly-signals", "401", "post")
-    assert unauthorized.headers["www-authenticate"].startswith("Basic")
+    assert "www-authenticate" not in unauthorized.headers
 
-    password_hash = bcrypt.hashpw(b"test-password", bcrypt.gensalt(rounds=4))
-    auth = AuthConfig({"analysis-admin": (password_hash, frozenset({"ADMIN"}))}, b"test-secret")
-    monkeypatch.setattr(client.app.state, "auth", auth)
 
     async def fake_create(_sql, values):
         assert values["actor"] == "analysis-admin"
         return {"result": {"findingId": str(uuid.uuid4()), "analysisRevision": 523}}
 
     import uuid
+    csrf = sign_in(client, monkeypatch, "analysis-admin", "ADMIN")
     monkeypatch.setattr(client.app.state.db, "admin_fetch_one", fake_create)
-    csrf = issue_csrf(auth)
-    client.cookies.set("XSRF-TOKEN", csrf, path="/api/v1/admin")
-    response = client.post(path, auth=("analysis-admin", "test-password"), headers={
+    response = client.post(path, headers={
         "X-XSRF-TOKEN": csrf, "Idempotency-Key": str(uuid.uuid4()),
     }, json={
         "metric": "views", "severity": "medium", "explanationCode": "manual_check",
@@ -400,7 +410,7 @@ def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) 
         "/api/v1/admin/publications/{publicationId}/anomaly-signals", method="post")
     assert response.headers["cache-control"] == "no-store"
 
-    missing_csrf = client.post(path, auth=("analysis-admin", "test-password"), headers={
+    missing_csrf = client.post(path, headers={
         "Idempotency-Key": str(uuid.uuid4()),
     }, json={
         "metric": "views", "severity": "medium", "explanationCode": "manual_check",
@@ -411,90 +421,49 @@ def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) 
 
 
 @requires_database
-def test_admin_reads_and_background_export(client, validator_for, monkeypatch) -> None:
-    import time
-    import bcrypt
-
-    from api.security import AuthConfig
-
-    password_hash = bcrypt.hashpw(b"admin-password", bcrypt.gensalt(rounds=4))
-    monkeypatch.setattr(client.app.state, "auth", AuthConfig({
-        "api-admin": (password_hash, frozenset({"ADMIN"})),
-    }, b"admin-test-secret"))
-    auth = ("api-admin", "admin-password")
-
+def test_admin_reads(client, validator_for, monkeypatch) -> None:
     unauthorized = client.get("/api/v1/admin/jobs")
     assert_contract_response(unauthorized, validator_for, "/api/v1/admin/jobs", "401")
 
-    csrf_response = client.get("/api/v1/admin/csrf", auth=auth)
+    sign_in(client, monkeypatch, "api-admin", "ADMIN")
+    csrf_response = client.get("/api/v1/admin/csrf")
     csrf = assert_contract_response(csrf_response, validator_for, "/api/v1/admin/csrf")
-    assert "XSRF-TOKEN=" in csrf_response.headers["set-cookie"]
-    session = client.get("/api/v1/admin/catalog/session", auth=auth)
+    session = client.get("/api/v1/admin/catalog/session")
     csrf = assert_contract_response(session, validator_for, "/api/v1/admin/catalog/session")
-    status = client.get("/api/v1/admin/catalog/status", auth=auth)
+    status = client.get("/api/v1/admin/catalog/status")
     assert_contract_response(status, validator_for, "/api/v1/admin/catalog/status")
 
-    institutions = client.get("/api/v1/admin/catalog/institutions?limit=2", auth=auth)
+    institutions = client.get("/api/v1/admin/catalog/institutions?limit=2")
     page = assert_contract_response(
         institutions, validator_for, "/api/v1/admin/catalog/institutions")
     assert page["items"]
     institution_id = page["items"][0]["id"]
     accounts = client.get(
-        f"/api/v1/admin/catalog/institutions/{institution_id}/accounts?limit=2", auth=auth)
+        f"/api/v1/admin/catalog/institutions/{institution_id}/accounts?limit=2")
     account_page = assert_contract_response(
         accounts, validator_for, "/api/v1/admin/catalog/institutions/{id}/accounts")
     if account_page["items"]:
         account_id = account_page["items"][0]["id"]
-        state = client.get(f"/api/v1/admin/platform-accounts/{account_id}", auth=auth)
+        state = client.get(f"/api/v1/admin/platform-accounts/{account_id}")
         assert_contract_response(
             state, validator_for, "/api/v1/admin/platform-accounts/{accountId}")
 
-    jobs = client.get("/api/v1/admin/jobs?limit=2", auth=auth)
+    jobs = client.get("/api/v1/admin/jobs?limit=2")
     jobs_page = assert_contract_response(jobs, validator_for, "/api/v1/admin/jobs")
     if jobs_page["items"]:
         job_id = jobs_page["items"][0]["jobId"]
-        detail = client.get(f"/api/v1/admin/jobs/{job_id}?accountResultLimit=2", auth=auth)
+        detail = client.get(f"/api/v1/admin/jobs/{job_id}?accountResultLimit=2")
         assert_contract_response(detail, validator_for, "/api/v1/admin/jobs/{jobId}")
 
-    created = client.post("/api/v1/admin/exports", auth=auth,
-                          headers={"X-XSRF-TOKEN": csrf["token"]}, json={"platform": "rutube"})
-    export = assert_contract_response(
-        created, validator_for, "/api/v1/admin/exports", "202", "post")
-    assert created.headers["location"].endswith(export["id"])
-    for _ in range(100):
-        current = client.get(f"/api/v1/admin/exports/{export['id']}", auth=auth)
-        export = assert_contract_response(
-            current, validator_for, "/api/v1/admin/exports/{id}")
-        if export["state"] not in ("queued", "running"):
-            break
-        time.sleep(0.02)
-    assert export["state"] == "succeeded", export
-    download = client.get(f"/api/v1/admin/exports/{export['id']}/download", auth=auth)
-    assert download.status_code == 200
-    assert download.headers["x-dataset-revision"] == str(export["datasetRevision"])
-    assert download.content.startswith(b"platform,institution,publication_id,")
-    cancelled = client.delete(f"/api/v1/admin/exports/{export['id']}", auth=auth,
-                              headers={"X-XSRF-TOKEN": csrf["token"]})
-    assert_contract_response(cancelled, validator_for, "/api/v1/admin/exports/{id}",
-                             method="delete")
-
-
+@requires_database
 def test_catalog_command_normalization_and_contract(client, validator_for, monkeypatch) -> None:
-    import bcrypt
     import uuid
 
     from api.routes import admin
-    from api.security import AuthConfig, issue_csrf
 
-    password_hash = bcrypt.hashpw(b"editor-password", bcrypt.gensalt(rounds=4))
-    config = AuthConfig({"api-editor": (password_hash, frozenset({"EDITOR"}))},
-                        b"catalog-test-secret")
-    monkeypatch.setattr(client.app.state, "auth", config)
+    token = sign_in(client, monkeypatch, "api-editor", "EDITOR")
     correlation = uuid.uuid4()
     target = uuid.uuid4()
-    token = issue_csrf(config)
-    client.cookies.clear()
-    client.cookies.set("XSRF-TOKEN", token, path="/api/v1/admin")
 
     async def fake_command(_request, action, command_target, expected, body, actor,
                            supplied_correlation, connection=None):
@@ -509,7 +478,7 @@ def test_catalog_command_normalization_and_contract(client, validator_for, monke
                 "correlationId": str(correlation)}
 
     monkeypatch.setattr(admin, "_catalog_command", fake_command)
-    response = client.post("/api/v1/admin/catalog/accounts", auth=("api-editor", "editor-password"),
+    response = client.post("/api/v1/admin/catalog/accounts",
                            headers={"X-XSRF-TOKEN": token,
                                     "X-Correlation-Id": str(correlation)}, json={
                                "institutionId": str(uuid.uuid4()), "platform": "telegram",
@@ -519,7 +488,6 @@ def test_catalog_command_normalization_and_contract(client, validator_for, monke
                              method="post")
     forbidden = client.delete(
         f"/api/v1/admin/catalog/accounts/{target}?expectedRowVersion=0",
-        auth=("api-editor", "editor-password"),
         headers={"X-XSRF-TOKEN": token, "X-Correlation-Id": str(correlation)})
     assert_contract_response(forbidden, validator_for,
                              "/api/v1/admin/catalog/accounts/{id}", "403", "delete")
@@ -571,3 +539,35 @@ def test_overview_normalizes_unsupported_sort(client) -> None:
     default = client.get("/api/v1/overview?platform=all&sort=m_rating&limit=3")
     assert fallback.status_code == 200
     assert fallback.headers["etag"] == default.headers["etag"]
+
+
+@requires_database
+def test_detail_routes_pin_the_requested_dataset_revision(client) -> None:
+    """Страница детали собирается из нескольких запросов по одному снимку.
+
+    Ревизия набора данных на проде меняется каждые две секунды — её двигает
+    каждая запись коллектора. Без закрепления примерно каждый тринадцатый
+    просмотр складывал страницу из двух снимков, и расхождение приводило к
+    экрану «Сервис временно недоступен».
+    """
+    overview = client.get("/api/v1/overview?platform=telegram&limit=1").json()
+    current = int(overview["datasetRevision"])
+    account_id = overview["items"][0]["accounts"][0]["accountId"]
+
+    pinned = current - 1
+    response = client.get(f"/api/v1/accounts/{account_id}?revision={pinned}")
+    assert response.status_code == 200
+    assert response.json()["datasetRevision"] == pinned
+
+    publications = client.get(
+        f"/api/v1/accounts/{account_id}/publications?limit=1&revision={pinned}")
+    assert publications.status_code == 200
+    assert publications.json()["datasetRevision"] == pinned
+
+    # Неизвестная ревизия не ошибка: ответ приходит по текущей, и клиент
+    # видит это в самом поле, а не получает отказ.
+    unknown = client.get(f"/api/v1/accounts/{account_id}?revision=999999999")
+    assert unknown.status_code == 200
+    assert unknown.json()["datasetRevision"] != 999999999
+
+    assert client.get(f"/api/v1/accounts/{account_id}?revision=0").status_code == 400

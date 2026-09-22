@@ -26,6 +26,9 @@ class PlatformCollector(Protocol):
     ) -> RawCollectionBatch:
         ...
 
+    async def close(self) -> None:
+        ...
+
 
 @runtime_checkable
 class CollectorRepository(Protocol):
@@ -36,6 +39,14 @@ class CollectorRepository(Protocol):
         ...
 
     def resumable_scheduled_at(
+        self,
+        platform: Platform,
+        partition_key: str,
+        collector_version: str,
+    ) -> datetime | None:
+        ...
+
+    def last_completed_scheduled_at(
         self,
         platform: Platform,
         partition_key: str,
@@ -80,11 +91,19 @@ class CollectorRepository(Protocol):
 
 @runtime_checkable
 class MetricHistoryReader(Protocol):
-    def metric_high_watermarks(
+    def metric_ever_positive(
         self,
         account: AccountRef,
         external_ids: Sequence[str],
-    ) -> Mapping[str, Mapping[str, int | None]]:
+    ) -> Mapping[str, Mapping[str, bool]]:
+        """Был ли показатель публикации хоть раз больше нуля.
+
+        Единственный потребитель — распознавание временных обнулений у ВК:
+        ноль считается настоящим, только если раньше нуля не было. Само
+        значение прежнего максимума при этом не используется, а вычисление
+        его по всей истории снимков стоило десятикратно дороже ответа на
+        вопрос «было ли хоть раз».
+        """
         ...
 
 

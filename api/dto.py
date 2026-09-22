@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -35,26 +36,42 @@ def aggregate(value: Any, as_of: Any, revision: int, samples: int,
     }
 
 
-def metric(total: Any, median: Any, as_of: Any, revision: int,
-           samples: int, denominator: int | None) -> dict[str, Any]:
-    """Предыдущее окно в этом режиме чтения не восстанавливается.
+def _trend(current: Any, previous: Any) -> Any:
+    """Насколько показатель изменился против предыдущего такого же окна.
 
-    Прежняя пересборка хранила исторические дельты в проекции. Проекций нет,
-    и считать предыдущее окно живым запросом означало бы удвоить стоимость
-    обзора ради значения, которого фронт не показывает без тренда.
+    Разница, а не отношение: на экране это плашка «+100» или «−100» рядом с
+    самим числом, и читателю нужна величина в тех же единицах. Пусто, когда
+    сравнивать не с чем — за месяц истории наблюдений пока не хватает.
     """
-    empty = aggregate(None, as_of, revision, 0, None)
+    left, right = number(current), number(previous)
+    if left is None or right is None:
+        return None
+    return left - right
+
+
+def metric(total: Any, median: Any, as_of: Any, revision: int,
+           samples: int, denominator: int | None,
+           previous_total: Any = None, previous_median: Any = None,
+           previous_samples: int = 0,
+           previous_denominator: int | None = None) -> dict[str, Any]:
+    """Показатель с оглядкой на предыдущее окно той же длины.
+
+    Предыдущее окно считает та же витрина, что и текущее: живым запросом это
+    удваивало стоимость обзора, а числа одинаковы для всех читателей.
+    """
     return {
         "total": number(total),
         "median": number(median),
-        "previousTotal": None,
-        "previousMedian": None,
-        "totalTrend": None,
-        "medianTrend": None,
+        "previousTotal": number(previous_total),
+        "previousMedian": number(previous_median),
+        "totalTrend": _trend(total, previous_total),
+        "medianTrend": _trend(median, previous_median),
         "totalMetadata": aggregate(total, as_of, revision, samples, denominator),
         "medianMetadata": aggregate(median, as_of, revision, samples, denominator),
-        "previousTotalMetadata": empty,
-        "previousMedianMetadata": empty,
+        "previousTotalMetadata": aggregate(previous_total, as_of, revision,
+                                           previous_samples, previous_denominator),
+        "previousMedianMetadata": aggregate(previous_median, as_of, revision,
+                                            previous_samples, previous_denominator),
     }
 
 
@@ -83,6 +100,9 @@ def overview_account(row: dict[str, Any]) -> dict[str, Any]:
 def overview_row(card: dict[str, Any], accounts: list[dict[str, Any]], revision: int) -> dict[str, Any]:
     as_of = card["as_of"]
     denominator = card["sample_denominator"]
+    # Знаменатель предыдущего окна отдельный: по нему видно, сравнимы ли
+    # периоды вообще, или прошлое окно просто пустое.
+    previous_denominator = card.get("previous_publication_count") or None
     return {
         "entityId": str(card["entity_id"]),
         "entityType": card["entity_type"],
@@ -110,13 +130,21 @@ def overview_row(card: dict[str, Any], accounts: list[dict[str, Any]], revision:
         "activityPublicationCount": card["activity_publication_count"] or 0,
         "newPublicationCount": card["new_publication_count"] or 0,
         "views": metric(card["total_views"], card["median_views"], as_of, revision,
-                        card["views_samples"], denominator),
+                        card["views_samples"], denominator,
+                        card["previous_total_views"], card["previous_median_views"],
+                        card["views_samples"], previous_denominator),
         "reactions": metric(card["total_reactions"], card["median_reactions"], as_of, revision,
-                            card["reactions_samples"], denominator),
+                            card["reactions_samples"], denominator,
+                            card["previous_total_reactions"], card["previous_median_reactions"],
+                            card["reactions_samples"], previous_denominator),
         "comments": metric(card["total_comments"], card["median_comments"], as_of, revision,
-                           card["comments_samples"], denominator),
+                           card["comments_samples"], denominator,
+                           card["previous_total_comments"], card["previous_median_comments"],
+                           card["comments_samples"], previous_denominator),
         "shares": metric(card["total_shares"], card["median_shares"], as_of, revision,
-                         card["shares_samples"], denominator),
+                         card["shares_samples"], denominator,
+                         card["previous_total_shares"], card["previous_median_shares"],
+                         card["shares_samples"], previous_denominator),
         "asOf": iso(as_of),
     }
 
@@ -190,6 +218,11 @@ def account_daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "publishedCount": int(row["published_count"]),
         "medianReactions": number(row["median_reactions"]),
         "medianViews": number(row["median_views"]),
+        # Прирост всех отслеживаемых постов за эти сутки — то же число, что
+        # на карточке обзора. Медиана отвечает «каким вышел типичный пост»,
+        # сумма — «сколько площадка набрала».
+        "totalReactions": number(row.get("total_reactions")),
+        "totalViews": number(row.get("total_views")),
     } for row in rows]
 
 
@@ -208,6 +241,8 @@ def account_stats(row: dict[str, Any], revision: int, as_of: Any,
             "quality": data.get("quality", "unknown"),
         }
 
+    previous = row.get("previous_medians") or {}
+
     return {
         "retentionDays": row["retention_days"],
         "postCount": row["post_count"],
@@ -221,10 +256,27 @@ def account_stats(row: dict[str, Any], revision: int, as_of: Any,
         "lastError": row["last_error"],
         "lastCheckedAt": iso(row["last_checked_at"]),
         "dailySeries": daily or [],
+        # Вчерашние значения тех же плиток: по ним рисуется плашка «за сутки».
+        # Место в рейтинге сравнивается с прошлым месяцем, а не с прошлыми
+        # сутками: рейтинг выходит раз в месяц.
+        "previous": {
+            "postCount": row.get("previous_post_count"),
+            "monitored": row.get("previous_monitored"),
+            "medianReactions": number(previous.get("reactions")),
+            "medianViews": number(previous.get("views")),
+            "medianComments": number(previous.get("comments")),
+            "ratingRank": row.get("previous_rating_rank"),
+            "ratingPeriod": row.get("previous_rating_period"),
+        },
     }
 
 
 def account(row: dict[str, Any], revision: int, stats: dict[str, Any] | None = None) -> dict[str, Any]:
+    native_id = row.get("native_external_id")
+    archive_url = None
+    if (row["platform"] == "max" and isinstance(native_id, str)
+            and re.fullmatch(r"-?\d+", native_id.strip())):
+        archive_url = f"https://maxstat.ru/channel/{native_id.strip()}/post"
     return {
         "accountId": str(row["account_id"] if "account_id" in row else row["id"]),
         "legacyId": row["legacy_id"],
@@ -240,6 +292,7 @@ def account(row: dict[str, Any], revision: int, stats: dict[str, Any] | None = N
         "username": row["current_username"],
         "title": row["current_title"],
         "url": row["current_url"],
+        "archiveUrl": archive_url,
         "accessMode": row["access_mode"],
         "enabled": row["enabled"],
         "publicationCount": row["publication_count"],
@@ -281,6 +334,7 @@ def publication(row: dict[str, Any], revision: int) -> dict[str, Any]:
 
 
 def publication_list_item(row: dict[str, Any]) -> dict[str, Any]:
+    growth_day = row.get("growth_day")
     return {
         "publicationId": str(row["publication_id"]),
         "legacyId": row["legacy_id"],
@@ -298,6 +352,11 @@ def publication_list_item(row: dict[str, Any]) -> dict[str, Any]:
         "shares": counter(row, "shares"),
         "title": None,
         "archivedText": None,
+        "dailyGrowth": None if growth_day is None else {
+            "day": growth_day.isoformat(),
+            "reactions": row.get("day_reactions_gain"),
+            "views": row.get("day_views_gain"),
+        },
         **_presentation(row),
     }
 
@@ -323,37 +382,47 @@ def history_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "intervalUncertain": row["interval_uncertain"],
         "quality": row["quality"],
         "rawEvidence": row["lineage"],
+        "collectorInterval": row["collector_interval"],
     }
 
 
-def rating_entity(row: dict[str, Any]) -> dict[str, Any]:
+def collector_coverage(row: dict[str, Any]) -> dict[str, Any]:
     return {
-        "entityId": str(row["entity_id"]),
-        "entityType": row["entity_type"],
-        "legacyId": row["legacy_id"],
+        "availableFrom": iso(row["available_from"]),
+        "through": iso(row["through_at"]),
+        "expectedIntervalSeconds": row["expected_interval_seconds"],
+        "successfulPolls": row["successful_polls"],
+        "failedPolls": row["failed_polls"],
+        "gaps": row["gaps"],
+    }
+
+
+def statistics_entity(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "rank": row["rank"],
         "legacyRoute": row["legacy_route"],
+        "accountId": str(row["account_id"]),
         "institutionId": str(row["institution_id"]),
         "institutionLegacyId": row["institution_legacy_id"],
         "canonicalName": row["canonical_name"],
         "shortName": row["short_name"],
-        "username": row["username"],
-        "title": row["title"],
+        "platform": row["platform"],
         "publicationCount": row["publication_count"],
-        "averageReactions": number(row["average_reactions"]),
-        "averageViews": number(row["average_views"]),
-        "totalReactions": row["total_reactions"],
-        "totalViews": row["total_views"],
-        "totalComments": row["total_comments"],
-        "totalShares": row["total_shares"],
-        "totalInteractions": row["total_interactions"],
-        "engagementRate": number(row["engagement_rate"]),
-        "subscriberCount": row["subscriber_count"],
+        "interactionSampleSize": row["interaction_sample_size"],
+        "viewSampleSize": row["view_sample_size"],
+        "ervSampleSize": row["erv_sample_size"],
+        "medianInteractions": number(row["median_interactions"]),
+        "interactions": row["interactions"],
+        "views": row["views"],
+        "erv": number(row["erv"]),
     }
 
 
-def rating_publication(row: dict[str, Any]) -> dict[str, Any]:
+def statistics_publication(row: dict[str, Any]) -> dict[str, Any]:
     return {
+        "rank": row["rank"],
         "publicationId": str(row["publication_id"]),
+        "platform": row["platform"],
         "legacyId": row["legacy_id"],
         "legacyType": row["legacy_type"],
         "legacyRoute": row["legacy_route"],
@@ -365,20 +434,22 @@ def rating_publication(row: dict[str, Any]) -> dict[str, Any]:
         "accountLegacyId": row["account_legacy_id"],
         "accountUsername": row["account_username"],
         "accountTitle": row["account_title"],
+        "accountExternalId": row["canonical_external_id"],
         "externalId": row["external_id"],
         "publicUrl": row["public_url"],
         "publishedAt": iso(row["published_at"]),
         "deletedAt": iso(row["deleted_at"]),
-        "joint": row["joint"],
+        "joint": row["additional_author_count"] > 0,
         "additionalAuthorCount": row["additional_author_count"],
-        "repost": row["repost"],
+        "repost": row["is_repost"],
         "views": row["views"],
         "reactions": row["reactions"],
         "comments": row["comments"],
         "shares": row["shares"],
         "interactions": row["interactions"],
-        "subscriberShare": number(row["subscriber_share"]),
-        "viewShare": number(row["view_share"]),
+        "erv": number(row["erv"]),
+        "interactionsAvailable": row["interactions"] is not None,
+        "ervEligible": row["erv"] is not None,
     }
 
 

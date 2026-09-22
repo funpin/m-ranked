@@ -53,18 +53,18 @@ sample queries. All generated Docker resources are removed, including on a
 failed run. Reports are still written on failure; `status=fail` is not acceptance.
 
 The historical pre-final-contract local run is recorded in
-[`local-v27-final-r1/dr-fc5064bf7d2c.json`](evidence/local-v27-final-r1/dr-fc5064bf7d2c.json).
+`evidence/local-v27-final-r1/dr-fc5064bf7d2c.json`.
 Its historical schema binding records the then-current database history and
 SQL checksums; it is evidence only and is not an installation source. Details are recorded in
-[`schema-binding.json`](evidence/local-v27-final-r1/schema-binding.json).
+`evidence/local-v27-final-r1/schema-binding.json`.
 The run restored 9,026 snapshots and 824 accounts at revision 30 from an actual
 3,952,473,791-byte source database. Local RTO was 5.5501 seconds for standby
 promotion, 16.4231 seconds for full restore, and 16.5255 seconds for PITR.
 Controlled standby RPO was zero; the PITR marker gap was 0.314674 seconds.
 All 12 integrity checks and owned-resource cleanup passed. The earlier passing
-[V26 run](evidence/local-v26-final-r2/dr-789ced5873f1.json) remains historical.
+V26 run (`evidence/local-v26-final-r2/dr-789ced5873f1.json`) remains historical.
 The earlier V26 failure
-is retained in [`local-v26-r1-failed`](evidence/local-v26-r1-failed/): SQL became
+is retained in `evidence/local-v26-r1-failed/`: SQL became
 available before recovery completed, so the verifier now checks the required
 recovery state before asserting the exact PITR marker boundary. The named-target
 boundary itself remains strict.

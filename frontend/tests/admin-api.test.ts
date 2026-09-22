@@ -10,13 +10,17 @@ const UUID = "11111111-1111-4111-8111-111111111111";
 const ACCOUNT_UUID = "22222222-2222-4222-8222-222222222222";
 
 function csrfResponse() {
-  return Response.json({ headerName: "X-XSRF-TOKEN", parameterName: "_csrf", token: "csrf-value" });
+  return Response.json({
+    headerName: "X-XSRF-TOKEN", parameterName: "_csrf", token: "csrf-value",
+    expiresAt: "2026-09-15T21:00:00Z", canEdit: true, canDelete: true,
+  });
 }
+
 
 test("admin session constructs bounded same-origin no-store requests", async () => {
   const seen: Array<{ url: string; init: RequestInit }> = [];
   const session = createAdminSession(
-    { username: "operator", password: "top-secret" },
+    { username: "operator", password: "top-secret", otp: "123456" },
     {
       origin: "https://m-ranked.example",
       fetcher: async (input, init) => {
@@ -32,7 +36,11 @@ test("admin session constructs bounded same-origin no-store requests", async () 
   await session.jobs({ platform: "telegram", status: "failed", limit: 999 });
   await session.job(UUID, 999);
 
-  assert.equal(seen[0]!.url, "https://m-ranked.example/api/v1/admin/csrf");
+  assert.equal(seen[0]!.url, "https://m-ranked.example/api/v1/admin/session");
+  assert.equal(seen[0]!.init.method, "POST");
+  assert.deepEqual(JSON.parse(String(seen[0]!.init.body)),
+    { username: "operator", password: "top-secret", otp: "123456" });
+  for (const later of seen.slice(1)) assert.equal(later.init.body, undefined);
   assert.equal(seen[1]!.url, "https://m-ranked.example/api/v1/admin/jobs?platform=telegram&status=failed&limit=100");
   assert.equal(seen[2]!.url, `https://m-ranked.example/api/v1/admin/jobs/${UUID}?accountResultLimit=200`);
   for (const request of seen) {
@@ -40,9 +48,11 @@ test("admin session constructs bounded same-origin no-store requests", async () 
     assert.equal(request.init.credentials, "same-origin");
     assert.equal(request.init.redirect, "error");
     assert.equal(request.init.referrerPolicy, "no-referrer");
-    assert.ok(new Headers(request.init.headers).get("Authorization")?.startsWith("Basic "));
+    // Ни имени, ни пароля, ни кода в заголовках: их несёт только тело входа.
+    assert.equal(new Headers(request.init.headers).get("Authorization"), null);
     assert.ok(!request.url.includes("operator"));
     assert.ok(!request.url.includes("top-secret"));
+    assert.ok(!request.url.includes("123456"));
   }
 });
 
@@ -54,7 +64,7 @@ test("admin credentials remain in a closable in-memory session and never touch w
   Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: forbidden });
   try {
     const session = createAdminSession(
-      { username: "operator", password: "top-secret" },
+      { username: "operator", password: "top-secret", otp: "123456" },
       { origin: "https://m-ranked.example", fetcher: async () => csrfResponse() },
     );
     await session.initialize();
@@ -75,7 +85,7 @@ test("admin credentials remain in a closable in-memory session and never touch w
 test("account mutation sends CSRF, correlation ID and required optimistic version", async () => {
   const seen: Array<{ url: string; init: RequestInit }> = [];
   const session = createAdminSession(
-    { username: "editor", password: "secret" },
+    { username: "editor", password: "secret", otp: "123456" },
     {
       origin: "https://m-ranked.example",
       randomUuid: () => UUID,
@@ -115,7 +125,7 @@ test("account lookup reads the minimal state through a same-origin no-store GET"
     updatedAt: "2026-09-03T10:00:00Z",
   };
   const session = createAdminSession(
-    { username: "viewer", password: "secret" },
+    { username: "viewer", password: "secret", otp: "123456" },
     {
       origin: "https://m-ranked.example",
       fetcher: async (input, init) => {
@@ -142,10 +152,10 @@ test("account lookup reads the minimal state through a same-origin no-store GET"
 
 test("account lookup rejects an unsafe or mismatched optimistic version response", async () => {
   const session = createAdminSession(
-    { username: "viewer", password: "secret" },
+    { username: "viewer", password: "secret", otp: "123456" },
     {
       origin: "https://m-ranked.example",
-      fetcher: async (input) => String(input).endsWith("/csrf")
+      fetcher: async (input) => /\/(?:csrf|session)$/.test(String(input))
         ? csrfResponse()
         : Response.json({
             accountId: UUID,
@@ -167,7 +177,7 @@ test("account lookup rejects an unsafe or mismatched optimistic version response
 test("account mutation fails closed until the CSRF contract is initialized", async () => {
   let calls = 0;
   const session = createAdminSession(
-    { username: "editor", password: "secret" },
+    { username: "editor", password: "secret", otp: "123456" },
     { origin: "https://m-ranked.example", fetcher: async () => { calls += 1; return Response.json({}); }, randomUuid: () => UUID },
   );
   await assert.rejects(
@@ -194,7 +204,7 @@ test("admin URL and numeric bounds reject identifier injection", async () => {
   let calls = 0;
   assert.throws(
     () => createAdminSession(
-      { username: "operator", password: "secret" },
+      { username: "operator", password: "secret", otp: "123456" },
       {
         origin: "https://m-ranked.example/path?ignored=no",
         fetcher: async () => { calls += 1; return csrfResponse(); },
@@ -205,7 +215,7 @@ test("admin URL and numeric bounds reject identifier injection", async () => {
   assert.equal(calls, 0);
 
   const validSession = createAdminSession(
-    { username: "operator", password: "secret" },
+    { username: "operator", password: "secret", otp: "123456" },
     { origin: "https://m-ranked.example", fetcher: async () => Response.json({}) },
   );
   await assert.rejects(() => validSession.job("../../overview"), AdminApiError);

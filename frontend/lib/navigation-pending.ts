@@ -12,16 +12,23 @@
  */
 let pending = false;
 let startedAt = "";
+let target = "";
 const listeners = new Set<() => void>();
 
 function publish() { for (const notify of listeners) notify(); }
 
-export function beginNavigation() {
+export function beginNavigation(href = "") {
   if (pending) return;
   pending = true;
   startedAt = location.href;
+  target = href;
   publish();
 }
+
+/** Куда уходим. Заготовку выбирает страница назначения, а не та, с которой
+ *  уходят: показывать при переходе на рейтинг сетку карточек обзора значит
+ *  обещать не то, что появится. */
+export function navigationTarget() { return target; }
 
 /** Адрес, с которого начали. Роутер меняет его только после того, как новое
  *  содержимое готово, поэтому расхождение и означает «приехали». */
@@ -50,6 +57,7 @@ export function watchHistory() {
 export function endNavigation() {
   if (!pending) return;
   pending = false;
+  target = "";
   publish();
 }
 

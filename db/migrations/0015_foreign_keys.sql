@@ -89,10 +89,6 @@ ALTER TABLE analytics.institution_period_metrics
 ALTER TABLE analytics.institution_period_metrics
     ADD CONSTRAINT institution_period_metrics_institution_id_fkey FOREIGN KEY (institution_id) REFERENCES catalog.institution(id);
 
--- analytics.legacy_native_export_lexeme legacy_native_export_lexeme_publication_id_fkey
-ALTER TABLE analytics.legacy_native_export_lexeme
-    ADD CONSTRAINT legacy_native_export_lexeme_publication_id_fkey FOREIGN KEY (publication_id) REFERENCES ingest.publication(id);
-
 -- analytics.legacy_overview_account legacy_overview_account_account_id_fkey
 ALTER TABLE analytics.legacy_overview_account
     ADD CONSTRAINT legacy_overview_account_account_id_fkey FOREIGN KEY (account_id) REFERENCES catalog.platform_account(id);

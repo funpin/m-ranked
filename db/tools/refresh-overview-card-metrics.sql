@@ -25,6 +25,11 @@ INSERT INTO analytics.overview_card_metrics (
     reactions_samples, total_reactions, median_reactions,
     comments_samples, total_comments, median_comments,
     shares_samples, total_shares, median_shares,
+    previous_publication_count,
+    previous_total_views, previous_median_views,
+    previous_total_reactions, previous_median_reactions,
+    previous_total_comments, previous_median_comments,
+    previous_total_shares, previous_median_shares,
     computed_as_of)
 WITH params AS (
     SELECT (SELECT max(committed_at) FROM analytics.dataset_revision) AS as_of
@@ -34,19 +39,69 @@ WITH params AS (
            ('7d', interval '7 days'),
            ('30d', interval '30 days')
 ), overview_growth AS MATERIALIZED (
+       -- Прирост за окно считается от значения на его границе. Если снимка
+       -- до начала окна нет, сравнивать не с чем, и весь накопленный за всю
+       -- жизнь публикации счётчик нельзя выдавать за прирост суток: так пост,
+       -- вышедший год назад и впервые измеренный сегодня, приносил в «за сутки»
+       -- миллионы просмотров. Исключение одно — публикация вышла внутри окна:
+       -- тогда всё, что она набрала, действительно набрано в этом окне.
 SELECT period.period,
        params.as_of,
        latest.platform_account_id,
        latest.institution_id,
        latest.platform::text AS platform,
        CASE WHEN latest.views_quality IN ('invalid','suspected_reset') THEN NULL
-            ELSE greatest(latest.views_count - coalesce(opening.views_count, 0), 0) END AS views_count,
+            WHEN opening.views_count IS NOT NULL
+              THEN greatest(latest.views_count - opening.views_count, 0)
+            WHEN publication.published_at >= params.as_of - period.duration
+              THEN greatest(latest.views_count, 0)
+            ELSE NULL END AS views_count,
        CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset') THEN NULL
-            ELSE greatest(latest.reactions_count - coalesce(opening.reactions_count, 0), 0) END AS reactions_count,
+            WHEN opening.reactions_count IS NOT NULL
+              THEN greatest(latest.reactions_count - opening.reactions_count, 0)
+            WHEN publication.published_at >= params.as_of - period.duration
+              THEN greatest(latest.reactions_count, 0)
+            ELSE NULL END AS reactions_count,
        CASE WHEN latest.comments_quality IN ('invalid','suspected_reset') THEN NULL
-            ELSE greatest(latest.comments_count - coalesce(opening.comments_count, 0), 0) END AS comments_count,
+            WHEN opening.comments_count IS NOT NULL
+              THEN greatest(latest.comments_count - opening.comments_count, 0)
+            WHEN publication.published_at >= params.as_of - period.duration
+              THEN greatest(latest.comments_count, 0)
+            ELSE NULL END AS comments_count,
        CASE WHEN latest.shares_quality IN ('invalid','suspected_reset') THEN NULL
-            ELSE greatest(latest.shares_count - coalesce(opening.shares_count, 0), 0) END AS shares_count
+            WHEN opening.shares_count IS NOT NULL
+              THEN greatest(latest.shares_count - opening.shares_count, 0)
+            WHEN publication.published_at >= params.as_of - period.duration
+              THEN greatest(latest.shares_count, 0)
+            ELSE NULL END AS shares_count,
+       -- Прошлое окно той же длины: от значения на два окна назад до значения
+       -- на границе текущего. Считать нечего, когда наблюдений на дальней
+       -- границе ещё нет — тогда сравнивать не с чем, и здесь пусто.
+       opening.observed_at IS NOT NULL AS has_previous,
+       CASE WHEN opening.views_count IS NULL THEN NULL
+            WHEN earlier.views_count IS NOT NULL
+              THEN greatest(opening.views_count - earlier.views_count, 0)
+            WHEN publication.published_at >= params.as_of - period.duration - period.duration
+              THEN greatest(opening.views_count, 0)
+            ELSE NULL END AS previous_views,
+       CASE WHEN opening.reactions_count IS NULL THEN NULL
+            WHEN earlier.reactions_count IS NOT NULL
+              THEN greatest(opening.reactions_count - earlier.reactions_count, 0)
+            WHEN publication.published_at >= params.as_of - period.duration - period.duration
+              THEN greatest(opening.reactions_count, 0)
+            ELSE NULL END AS previous_reactions,
+       CASE WHEN opening.comments_count IS NULL THEN NULL
+            WHEN earlier.comments_count IS NOT NULL
+              THEN greatest(opening.comments_count - earlier.comments_count, 0)
+            WHEN publication.published_at >= params.as_of - period.duration - period.duration
+              THEN greatest(opening.comments_count, 0)
+            ELSE NULL END AS previous_comments,
+       CASE WHEN opening.shares_count IS NULL THEN NULL
+            WHEN earlier.shares_count IS NOT NULL
+              THEN greatest(opening.shares_count - earlier.shares_count, 0)
+            WHEN publication.published_at >= params.as_of - period.duration - period.duration
+              THEN greatest(opening.shares_count, 0)
+            ELSE NULL END AS previous_shares
   FROM analytics.publication_latest latest
   JOIN catalog.visible_platform_account account ON account.id = latest.platform_account_id
   JOIN catalog.visible_institution institution ON institution.id = latest.institution_id
@@ -57,7 +112,7 @@ SELECT period.period,
   -- передаётся явно, иначе поиск пойдёт по всем партициям снимков.
   LEFT JOIN LATERAL (
       SELECT snapshot.views_count, snapshot.reactions_count,
-             snapshot.comments_count, snapshot.shares_count
+             snapshot.comments_count, snapshot.shares_count, snapshot.observed_at
         FROM ingest.publication_metric_snapshot snapshot
        WHERE snapshot.published_month = date_trunc('month', publication.published_at)::date
          AND snapshot.publication_id = latest.publication_id
@@ -67,6 +122,20 @@ SELECT period.period,
        ORDER BY snapshot.observed_at DESC, snapshot.id DESC
        LIMIT 1
   ) opening ON true
+  -- Дальняя граница прошлого окна. Поиск тот же и по тому же индексу, только
+  -- отступ вдвое больше.
+  LEFT JOIN LATERAL (
+      SELECT snapshot.views_count, snapshot.reactions_count,
+             snapshot.comments_count, snapshot.shares_count
+        FROM ingest.publication_metric_snapshot snapshot
+       WHERE snapshot.published_month = date_trunc('month', publication.published_at)::date
+         AND snapshot.publication_id = latest.publication_id
+         AND snapshot.observed_at <= params.as_of - period.duration - period.duration
+         AND NOT snapshot.synthetic
+         AND snapshot.quality <> 'invalid'
+       ORDER BY snapshot.observed_at DESC, snapshot.id DESC
+       LIMIT 1
+  ) earlier ON true
  WHERE latest.observed_at > params.as_of - period.duration
    AND latest.observed_at <= params.as_of
    AND NOT latest.synthetic
@@ -90,6 +159,19 @@ SELECT scope.scope_platform, scope.entity_id, growth.period,
        sum(growth.shares_count)::numeric,
        round(percentile_cont(0.5) WITHIN GROUP (ORDER BY growth.shares_count)
              FILTER (WHERE growth.shares_count IS NOT NULL)::numeric, 0),
+       count(*) FILTER (WHERE growth.has_previous)::bigint,
+       sum(growth.previous_views)::numeric,
+       round(percentile_cont(0.5) WITHIN GROUP (ORDER BY growth.previous_views)
+             FILTER (WHERE growth.previous_views IS NOT NULL)::numeric, 0),
+       sum(growth.previous_reactions)::numeric,
+       round(percentile_cont(0.5) WITHIN GROUP (ORDER BY growth.previous_reactions)
+             FILTER (WHERE growth.previous_reactions IS NOT NULL)::numeric, 0),
+       sum(growth.previous_comments)::numeric,
+       round(percentile_cont(0.5) WITHIN GROUP (ORDER BY growth.previous_comments)
+             FILTER (WHERE growth.previous_comments IS NOT NULL)::numeric, 0),
+       sum(growth.previous_shares)::numeric,
+       round(percentile_cont(0.5) WITHIN GROUP (ORDER BY growth.previous_shares)
+             FILTER (WHERE growth.previous_shares IS NOT NULL)::numeric, 0),
        max(growth.as_of)
   FROM overview_growth growth
   -- Телеграм на экране разбит по каналам, остальные площадки и общий

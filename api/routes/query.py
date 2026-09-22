@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse, Response
 
 from .. import params as normalize
-from ..cached import serve
+from ..cached import published_revision, serve
 from ..db import Database
 from .. import dto
 from ..dto import overview_account, overview_row
@@ -21,11 +23,11 @@ from ..sql import details
 router = APIRouter(prefix="/api/v1", tags=["Query"])
 
 NO_STORE = {"Cache-Control": "no-store"}
-REVISION_SQL = "SELECT id, committed_at FROM analytics.latest_dataset_revision()"
 
 # Обзор и списки затрагиваются записью публикаций и справочника.
 OVERVIEW_TAGS = frozenset({"publications", "overview"})
 DETAIL_TAGS = frozenset({"publications", "catalog"})
+COLLECTOR_INTERVAL_SECONDS = {"telegram": 300, "vk": 300, "max": 300, "rutube": 3600}
 
 
 def _iso(value: Any) -> Any:
@@ -45,13 +47,20 @@ def _entity_params(value: str, legacy_type: str) -> dict[str, Any]:
 
 @router.get("/revision")
 async def revision(request: Request) -> JSONResponse:
-    """Читается из базы на каждый запрос и никогда не кэшируется."""
-    db: Database = request.app.state.db
-    row = await db.fetch_one(REVISION_SQL)
+    """Опубликованная ревизия — та же, по которой собираются ответы кэша.
+
+    Next ключует свои ответы этим числом. Пока оно читалось из базы и
+    менялось каждые полторы секунды, ключ фронтенда не повторялся, и каждый
+    просмотр заново спрашивал у API и ревизию, и данные. Окно удержания
+    делает его устойчивым; сам ответ по-прежнему не кэшируется у клиента.
+    """
+    revision, committed_at = await published_revision(
+        request.app.state.db, request.app.state.cache,
+    )
     return JSONResponse(
         {
-            "datasetRevision": int(row["id"]) if row else 0,
-            "asOf": _iso(row["committed_at"]) if row else None,
+            "datasetRevision": revision,
+            "asOf": _iso(committed_at) if committed_at else None,
             "representationVersion": public_representation_version(),
         },
         headers=NO_STORE,
@@ -151,11 +160,31 @@ async def institution(
     }, DETAIL_TAGS, build)
 
 
+def _pinned_revision(value: int | None, cursor: str | None = None) -> int | None:
+    """Снимок, по которому собирать ответ, если его придётся собирать.
+
+    Продолжение списка по курсору обязано собираться по ревизии курсора,
+    иначе он будет отвергнут как устаревший. Явная ревизия нужна, чтобы
+    соседние запросы страницы собирались по одному снимку; готовый ответ
+    кэша при этом отдаётся и по другой ревизии — расхождение в минуту экран
+    не меняет.
+    """
+    from_cursor = normalize.cursor_revision(cursor)
+    if from_cursor is not None:
+        return from_cursor
+    if value is None:
+        return None
+    if value < 1:
+        raise BadRequest("ревизия набора данных должна быть положительной")
+    return value
+
+
 @router.get("/accounts/{legacyId}")
 async def account(
     legacyId: str,
     request: Request,
     legacyType: str = Query("platform_accounts"),
+    revision: int | None = Query(None),
 ) -> Response:
     resolved_type = _legacy_type(legacyType, ("channels", "platform_accounts"))
     identity = _entity_params(legacyId, resolved_type)
@@ -179,7 +208,23 @@ async def account(
 
     return await serve(request, "account", {
         "id": legacyId.lower(), "legacyType": resolved_type,
-    }, DETAIL_TAGS, build)
+    }, DETAIL_TAGS, build, _pinned_revision(revision), aliases=_account_aliases)
+
+
+def _account_aliases(body: dict[str, Any]) -> list[dict[str, Any]]:
+    """Все запросы, на которые годится эта карточка.
+
+    Тело каноническое и не зависит от того, по какому идентификатору её
+    спросили. Страница аккаунта спрашивает по UUID, страница поста — по legacy
+    id; без псевдонимов карточку, самую дорогую из ответов, собирали дважды.
+    """
+    aliases = [{"id": str(body["accountId"]).lower(), "legacyType": "platform_accounts"}]
+    if body.get("platformAccountLegacyId") is not None:
+        aliases.append({"id": str(body["platformAccountLegacyId"]),
+                        "legacyType": "platform_accounts"})
+    if body.get("channelLegacyId") is not None:
+        aliases.append({"id": str(body["channelLegacyId"]), "legacyType": "channels"})
+    return aliases
 
 
 @router.get("/publications/{legacyId}")
@@ -187,6 +232,7 @@ async def publication(
     legacyId: str,
     request: Request,
     legacyType: str = Query("posts"),
+    revision: int | None = Query(None),
 ) -> Response:
     resolved_type = _legacy_type(legacyType, ("posts", "platform_posts"))
     identity = _entity_params(legacyId, resolved_type)
@@ -200,7 +246,7 @@ async def publication(
 
     return await serve(request, "publication", {
         "id": legacyId.lower(), "legacyType": resolved_type,
-    }, DETAIL_TAGS, build)
+    }, DETAIL_TAGS, build, _pinned_revision(revision))
 
 
 @router.get("/institutions/{legacyId}/accounts")
@@ -210,6 +256,7 @@ async def institution_accounts(
     platform: str = Query("all"),
     limit: int = Query(50),
     cursor: str | None = Query(None),
+    revision: int | None = Query(None),
 ) -> Response:
     resolved_platform = normalize.platform(platform)
     page_size = normalize.limit(limit)
@@ -246,7 +293,7 @@ async def institution_accounts(
     return await serve(request, "institution-accounts", {
         "legacyId": legacy_id, "platform": resolved_platform,
         "limit": page_size, "cursor": cursor or "",
-    }, DETAIL_TAGS, build)
+    }, DETAIL_TAGS, build, _pinned_revision(revision, cursor))
 
 
 @router.get("/accounts/{legacyId}/publications")
@@ -256,6 +303,8 @@ async def account_publications(
     legacyType: str = Query("platform_accounts"),
     limit: int = Query(50),
     cursor: str | None = Query(None),
+    revision: int | None = Query(None),
+    day: date | None = Query(None),
 ) -> Response:
     resolved_type = _legacy_type(legacyType, ("channels", "platform_accounts"))
     page_size = normalize.limit(limit)
@@ -266,13 +315,17 @@ async def account_publications(
         account_row = await db.fetch_one(details.ACCOUNT, {**identity, "as_of": committed_at})
         if account_row is None:
             raise NotFound(f"аккаунт {legacyId} не найден")
-        dimensions = f"account-publications:{account_row['account_id']}"
+        today = committed_at.astimezone(ZoneInfo("Europe/Moscow")).date()
+        if day is not None and not today - timedelta(days=6) <= day <= today:
+            raise BadRequest("day должен входить в последние 7 московских суток")
+        dimensions = f"account-publications:{account_row['account_id']}:{day.isoformat() if day else '-'}"
         after_id = normalize.scoped_cursor(cursor, revision, dimensions)
         publication_type = "posts" if account_row["platform"] == "telegram" else "platform_posts"
         rows = await db.fetch_all(details.ACCOUNT_PUBLICATIONS, {
             "account_id": account_row["account_id"], "publication_legacy_type": publication_type,
             "after_id": after_id, "fetch_limit": page_size + 1,
             "days": request.app.state.settings.retention_days, "as_of": committed_at,
+            "growth_day": day,
         })
         has_more = len(rows) > page_size
         visible = rows[:page_size]
@@ -285,8 +338,8 @@ async def account_publications(
 
     return await serve(request, "account-publications", {
         "id": legacyId.lower(), "legacyType": resolved_type,
-        "limit": page_size, "cursor": cursor or "",
-    }, DETAIL_TAGS, build)
+        "limit": page_size, "cursor": cursor or "", "day": day.isoformat() if day else "",
+    }, DETAIL_TAGS, build, _pinned_revision(revision, cursor))
 
 
 @router.get("/publications/{legacyId}/history")
@@ -328,6 +381,13 @@ async def publication_history(
         })
         has_more = len(rows) > page_size
         visible = rows[:page_size]
+        coverage_from = visible[-1]["observed_at"] if visible else publication_row["published_at"]
+        coverage_row = await db.fetch_one(details.COLLECTOR_COVERAGE, {
+            "publication_id": publication_id,
+            "from_at": coverage_from,
+            "as_of": committed_at,
+            "expected_interval_seconds": COLLECTOR_INTERVAL_SECONDS[publication_row["platform"]],
+        })
         cursor_uuid = str(uuid.UUID(int=int(visible[-1]["snapshot_id"]))) if has_more and visible else None
         neighbours = await db.fetch_one(details.NEIGHBOURS, {
             "publication_id": publication_id, "legacy_type": canonical_type,
@@ -335,6 +395,7 @@ async def publication_history(
         return {
             "publication": dto.publication(publication_row, revision),
             "items": [dto.history_snapshot(row) for row in visible],
+            "collectorCoverage": dto.collector_coverage(coverage_row),
             "previousLegacyId": neighbours["previous"] if neighbours else None,
             "nextLegacyId": neighbours["next"] if neighbours else None,
             "archivedText": None,
@@ -345,4 +406,4 @@ async def publication_history(
     return await serve(request, "publication-history", {
         "id": legacyId.lower(), "legacyType": resolved_type,
         "limit": requested_size, "cursor": cursor or "",
-    }, DETAIL_TAGS, build)
+    }, DETAIL_TAGS, build, _pinned_revision(None, cursor))

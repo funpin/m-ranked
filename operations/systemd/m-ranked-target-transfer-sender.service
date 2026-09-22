@@ -1,0 +1,75 @@
+[Unit]
+Description=M-Ranked profile B transfer sender
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=m-ranked-transfer-sender
+Group=m-ranked-transfer-sender
+# Каталог метрик принадлежит группе node-exporter и доступен ей на
+# запись; без членства служба пишет свою метрику в никуда.
+SupplementaryGroups=node-exporter
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/transfer-sender.env
+EnvironmentFile=-/etc/m-ranked/collector-profile.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/transfer-sender-pgpass
+LoadCredential=transfer-client-certificate:/etc/m-ranked/credentials/transfer-client.crt
+LoadCredential=transfer-client-private-key:/etc/m-ranked/credentials/transfer-client.key
+LoadCredential=transfer-ca:/etc/m-ranked/credentials/transfer-ca.crt
+Environment=COLLECTOR_TRANSFER_CLIENT_CERTIFICATE=%d/transfer-client-certificate
+Environment=COLLECTOR_TRANSFER_PRIVATE_KEY=%d/transfer-client-private-key
+Environment=COLLECTOR_TRANSFER_CA_BUNDLE=%d/transfer-ca
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Europe/Moscow
+# libpq молча игнорирует pgpass с групповым доступом, а systemd кладёт
+# credential как 0440. Пароль переносится в приватный файл до запуска.
+RuntimeDirectory=m-ranked-transfer-sender
+RuntimeDirectoryMode=0700
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-transfer-sender -g m-ranked-transfer-sender %d/pgpass /run/m-ranked-transfer-sender/pgpass
+Environment=PGPASSFILE=/run/m-ranked-transfer-sender/pgpass
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m collector_target.transfer_sender
+Restart=always
+RestartSec=10s
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=-/var/lib/node_exporter/textfile_collector
+# Отправитель ходит только к локальной базе и к Серверу 2. Внутренние
+# диапазоны закрыты; конкретный адрес Сервера 2 открывает drop-in профиля B,
+# и systemd выбирает самый длинный префикс.
+IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10
+IPAddressDeny=169.254.0.0/16 fe80::/10 fc00::/7
+UMask=0077
+LimitNOFILE=8192
+TasksMax=64
+# Отправка не должна отбирать процессор у сбора и отдачи страниц.
+CPUWeight=100
+IOWeight=100
+MemoryHigh=192M
+MemoryMax=256M
+MemorySwapMax=0
+
+[Install]
+WantedBy=m-ranked-target-profile-b-server1.target

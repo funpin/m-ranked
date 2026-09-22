@@ -1,8 +1,9 @@
-"""Точка входа: один процесс uvicorn.
+"""Точка входа API для обоих deployment-профилей.
 
-Сервер держит одно ядро, поэтому воркер один: параллелизм даёт цикл событий,
-а не процессы. Второй воркер получил бы свой кэш в памяти — оба слушают
-NOTIFY, так что расхождения не будет, но и выигрыша на одном ядре тоже.
+Профиль A по умолчанию сохраняет один процесс: на исходном одноядерном хосте
+дополнительные процессы лишь дублируют LRU. Профиль B может задать несколько
+воркеров: публичный response cache у них общий в Redis, а число процессов
+ограничивается измеренной CPU/DB ёмкостью Сервера 2.
 """
 from __future__ import annotations
 
@@ -10,7 +11,6 @@ import logging
 
 import uvicorn
 
-from .app import create_app
 from .config import Settings
 
 
@@ -18,8 +18,11 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = Settings()
-    uvicorn.run(create_app(settings), host=settings.host, port=settings.port,
-                access_log=False, server_header=False, date_header=True)
+    uvicorn.run(
+        "api.app:create_app", factory=True,
+        host=settings.host, port=settings.port, workers=settings.workers,
+        access_log=False, server_header=False, date_header=True,
+    )
 
 
 if __name__ == "__main__":

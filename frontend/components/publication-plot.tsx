@@ -1,27 +1,63 @@
 "use client";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceArea, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis, usePlotArea, useXAxisScale } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
-import { duration, legacyDate } from "@/lib/format";
-import { observationGaps } from "@/lib/observation-gaps";
+import { axisNumber, duration, legacyDate } from "@/lib/format";
+import { elapsedSincePublication } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
-import type { HistorySnapshot } from "@/lib/types";
+import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
 /** Больше этого числа столбцов прироста на экране уже не различить: при
  *  ширине графика около девятисот точек каждый столбец становится тоньше
  *  волоса, и картинка перестаёт читаться. */
 const MAX_BARS = 56;
+const GAP_MERGE_DISTANCE_PX = 2;
 
-/** На оси значений место ограничено шириной колонки, а показатели доходят до
- *  миллионов. Полное число не влезает и наезжает на соседнее, поэтому крупные
- *  величины подписываются сокращённо — точные значения читаются в подсказке и
- *  в таблице. */
-const compactAxisNumber = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 });
-function axisNumber(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "";
-  return Math.abs(value) < 10_000 ? value.toLocaleString("ru-RU") : compactAxisNumber.format(value);
+/** Draw confirmed collector gaps as subpaths of one SVG element.
+ *
+ * A noisy account can have hundreds of short gaps. Rendering each one as a
+ * Recharts ReferenceArea created thousands of React/SVG nodes across the two
+ * plots and made the whole page expensive to paint while scrolling. Gaps whose
+ * visible separation is two pixels or less are merged at the current scale:
+ * zooming in separates them again. The textual count and duration remain exact.
+ * One path keeps the overlay at one DOM node per chart. */
+function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
+  const scale = useXAxisScale();
+  const plot = usePlotArea();
+  const overlay = useMemo(() => {
+    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0 };
+    const minX = plot.x;
+    const maxX = plot.x + plot.width;
+    const minY = plot.y;
+    const maxY = plot.y + plot.height;
+    const projected = gaps.flatMap((gap) => {
+      const from = scale(Date.parse(gap.from));
+      const to = scale(Date.parse(gap.to));
+      if (from === undefined || to === undefined) return [];
+      const left = Math.max(minX, Math.min(from, to));
+      const right = Math.min(maxX, Math.max(from, to));
+      if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return [];
+      return [{ left, right }];
+    }).sort((a,b) => a.left-b.left || a.right-b.right);
+    const blocks: {left:number;right:number}[] = [];
+    for (const range of projected) {
+      const previous = blocks.at(-1);
+      if (previous && range.left <= previous.right + GAP_MERGE_DISTANCE_PX) {
+        previous.right = Math.max(previous.right, range.right);
+      } else {
+        blocks.push({...range});
+      }
+    }
+    const path = blocks.map(({left,right}) =>
+      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${maxY.toFixed(2)}H${left.toFixed(2)}Z`,
+    ).join("");
+    return {path,blocks:blocks.length};
+  }, [gaps, plot, scale]);
+  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length}
+    d={overlay.path} fill="var(--destructive)" fillOpacity={0.13}
+    stroke="var(--destructive)" strokeOpacity={0.45} strokeWidth={1} pointerEvents="none" /> : null;
 }
 
 /** Evidence samples are drawn as a larger diamond, so a published signal
@@ -37,24 +73,26 @@ function SampleDot(props: { cx?: number; cy?: number; fill?: string; evidence?: 
 
 /** Two lines per tick: the wall clock of the sample and the age of the
  *  publication at that moment, exactly as the inherited axis read. */
-function TimeTick({ x, y, payload, rows }: {
+function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
   x?: number | string; y?: number | string; payload?: { value?: number }; rows: HistorySnapshot[];
+  index?: number; visibleTicksCount?: number;
 }) {
   const value = payload?.value;
   if (x === undefined || y === undefined || typeof value !== "number" || !rows.length) return null;
   const nearest = rows.reduce((best, row) =>
     Math.abs(Date.parse(row.observedAt) - value) < Math.abs(Date.parse(best.observedAt) - value) ? row : best, rows[0]!);
+  const anchor: "start" | "middle" | "end" = index === 0 ? "start" : index === (visibleTicksCount ?? 0) - 1 ? "end" : "middle";
   return (
-    <text x={x} y={y} textAnchor="middle" fill="var(--muted-foreground)" fontSize={11}>
+    <text x={x} y={y} textAnchor={anchor} fill="var(--muted-foreground)" fontSize={11}>
       <tspan x={x} dy="0.8em">{shortDate(new Date(value).toISOString())}</tspan>
       <tspan x={x} dy="1.1em">{nearest.synthetic ? "момент публикации" : `через ${duration(nearest.ageHours * 3600)}`}</tspan>
     </text>
   );
 }
 
-export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, evidenceIds, hidden, scale }: {
+export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
-  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto";
+  onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly CollectorGap[];
 }) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const active = useRef(0);
@@ -94,7 +132,6 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
     return grouped;
   }, [rows, metrics, delta, evidenceIds, at]);
 
-  const gaps = useMemo(() => observationGaps(rows), [rows]);
   const firstAt = rows.length ? at(rows[0]!) : 0;
   const lastAt = rows.length ? at(rows[rows.length - 1]!) : 1;
 
@@ -112,10 +149,10 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
     : delta ? `Прирост: ${commonTitle.toLowerCase()}` : commonTitle;
 
   const reading = useCallback((row: HistorySnapshot) => [
-    legacyDate(row.observedAt),
+    tooltipTime(row.observedAt,publishedAt,false),
     ...metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => historyMetricTooltip(row, metric, platform, delta)),
     !delta ? historyRatioTooltip(row, platform) : "",
-  ].filter(Boolean).join(" · "), [metrics, hidden, platform, delta]);
+  ].filter(Boolean).join(" · "), [metrics, hidden, platform, delta, publishedAt]);
 
   // Selecting a row elsewhere moves the chart's own cursor to that sample.
   useEffect(() => {
@@ -153,8 +190,8 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   // списке, и при двух показанных метриках левая шкала доставалась скрытой —
   // на экране оставалась только правая.
   const visible = metrics.filter((metric) => !hidden.has(metric.key)).slice(0, 2);
-  // Сетка, подсветка пропусков и линия выбранного замера привязываются к одной
-  // шкале — левой, а при общем масштабе к единственной.
+  // Сетка и линия выбранной точки привязываются к одной шкале — левой, а при
+  // общем масштабе к единственной.
   const primaryAxis = scale === "shared" ? "y" : visible[0]?.key ?? "y";
   // Скрытая метрика всё равно должна ссылаться на существующую шкалу.
   const axisFor = (metric: Metric) =>
@@ -186,23 +223,19 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
           её и рисует одну линию по краю. Цвет задан явно, иначе контейнер
           приглушает стандартный штрих вдвое и на тёмной теме его не видно. */}
       <CartesianGrid vertical={false} yAxisId={primaryAxis} stroke="var(--border)" />
-      {/* The renderer shades the stretches where no observation exists. */}
-      {gaps.map((gap) => (
-        <ReferenceArea key={`${gap.from}-${gap.to}`} x1={gap.from} x2={gap.to} yAxisId={primaryAxis}
-          fill="var(--muted-foreground)" fillOpacity={0.12} ifOverflow="hidden" />
-      ))}
+      <CollectorGapOverlay gaps={gaps} />
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}
         padding={delta ? { left: 18, right: 18 } : { left: 4, right: 4 }}
         scale="time" tickLine={false} axisLine={false} height={44} interval="preserveStartEnd"
         tick={(props) => <TimeTick {...props} rows={rows} />}
-        label={{ value: "Время замера и возраст публикации", position: "insideBottom", offset: -6, fill: "var(--muted-foreground)" }} />
+        label={{ value: "Время сохранённой точки и возраст публикации", position: "insideBottom", offset: -6, fill: "var(--muted-foreground)" }} />
       {axes}
       <ChartTooltip
         cursor={{ strokeDasharray: "4 4" }}
         content={(props) => (
-          <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} delta={delta} nearestRow={nearestRow} />
+          <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} publishedAt={publishedAt} delta={delta} nearestRow={nearestRow} />
         )}
       />
       {selectedAt ? (
@@ -217,7 +250,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       role="img"
       tabIndex={0}
       data-chart-ready={rows.length > 0}
-      aria-label={delta ? "Прирост между замерами" : "Накопление показателей"}
+      aria-label={delta ? "Прирост между сохранёнными точками" : "Накопление показателей"}
       aria-describedby={`${chartId}-instructions ${chartId}-tooltip`}
       className="focus-visible:ring-ring/50 h-[360px] w-full rounded-md outline-none focus-visible:ring-[3px]"
       onFocus={() => keyboard()}
@@ -271,7 +304,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
         )}
       </ChartContainer>
     </div>
-    <p id={`${chartId}-instructions`} className="sr-only">Стрелки влево и вправо выбирают замер; Home и End — первый и последний. Enter или пробел открывает соответствующую строку таблицы. Escape закрывает подсказку.</p>
+    <p id={`${chartId}-instructions`} className="sr-only">Стрелки влево и вправо выбирают сохранённую точку; Home и End — первую и последнюю. Enter или пробел открывает соответствующую строку таблицы. Escape закрывает подсказку.</p>
     <div id={`${chartId}-tooltip`} role="tooltip" aria-hidden={!tooltip} className={cn("text-muted-foreground text-sm", tooltip ? "py-2" : "sr-only")}>{tooltip}</div>
   </>;
 }
@@ -293,13 +326,27 @@ function groupedPoint(payload: unknown) {
   return { from: point.from, t: point.t, samples: point.samples, values };
 }
 
-function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, delta, nearestRow }: {
+function tooltipTime(observedAt:string,publishedAt:string,short=true) {
+  const elapsed=elapsedSincePublication(publishedAt,observedAt);
+  return `${short ? shortDate(observedAt) : legacyDate(observedAt)}${elapsed ? ` (${elapsed})` : ""}`;
+}
+
+function TooltipTime({ observedAt, publishedAt, rangeStart }: { observedAt:string;publishedAt:string;rangeStart?:string }) {
+  const elapsed=elapsedSincePublication(publishedAt,observedAt);
+  return <div className="flex items-baseline justify-between gap-3 whitespace-nowrap font-medium">
+    <span>{rangeStart ? `${shortDate(rangeStart)} — ` : ""}{shortDate(observedAt)}</span>
+    {elapsed ? <span className="text-muted-foreground tabular">({elapsed})</span> : null}
+  </div>;
+}
+
+function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, publishedAt, delta, nearestRow }: {
   active?: boolean;
   label?: unknown;
   payload?: unknown;
   metrics: Metric[];
   hidden: ReadonlySet<string>;
   platform: string;
+  publishedAt: string;
   delta: boolean;
   nearestRow: (instant: unknown) => HistorySnapshot | null;
 }) {
@@ -311,8 +358,8 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, de
   if (group) {
     return (
       <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
-        <div className="font-medium">{shortDate(new Date(group.from).toISOString())} — {shortDate(new Date(group.t).toISOString())}</div>
-        <div className="text-muted-foreground">Суммарно за {group.samples} замеров</div>
+        <TooltipTime observedAt={new Date(group.t).toISOString()} rangeStart={new Date(group.from).toISOString()} publishedAt={publishedAt} />
+        <div className="text-muted-foreground">Суммарно за {group.samples} сохранённых точек</div>
         {metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => {
           const value = group.values[metric.key];
           return (
@@ -332,7 +379,7 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, de
   const ratio = !delta ? historyRatioTooltip(row, platform) : "";
   return (
     <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
-      <div className="font-medium">{shortDate(row.observedAt)}</div>
+      <TooltipTime observedAt={row.observedAt} publishedAt={publishedAt} />
       {row.synthetic ? <div className="text-muted-foreground">Момент публикации · синтетическая точка</div> : null}
       {metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => (
         <div key={metric.key} className="flex items-center gap-2">
@@ -344,4 +391,3 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, de
     </div>
   );
 }
-

@@ -319,6 +319,10 @@ class IngestionResult:
     discovered_count: int
     snapshot_count: int
     revision_id: int | None
+    # Наблюдения, отброшенные потому, что их бакет уже занят записью другого
+    # производителя. Ноль при одном Сервере 1; систематический рост означает
+    # проблему сбора, а не нормальную работу репликации.
+    diverged_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)

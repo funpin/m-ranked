@@ -62,40 +62,38 @@ export type ComparisonSeries = components["schemas"]["ComparisonSeries"];
 
 export type ComparisonView = components["schemas"]["Comparison"];
 
-export type ActivityRatingPlatform = Exclude<Platform, "all" | "max">;
-export type ActivityRatingEntityType = "channels" | "institutions";
-export type ActivityRatingChannelSort =
-  | "average"
-  | "total"
-  | "engagement"
+export type StatisticsView = "publications" | "entities";
+export type StatisticsPublicationSort =
+  | "erv"
   | "views"
-  | "subscribers";
-export type ActivityRatingPostSort =
-  | "reactions"
-  | "subscriber_share"
-  | "view_share"
+  | "interactions"
+  | "published_at";
+export type StatisticsEntitySort =
+  | "erv"
+  | "median_interactions"
+  | "interactions"
   | "views"
-  | "comments"
-  | "shares"
-  | "interactions";
+  | "publications";
 export type SortDirection = "asc" | "desc";
 
-export interface ActivityRatingRequest {
-  platform: ActivityRatingPlatform;
+export interface StatisticsRequest {
+  view: StatisticsView;
+  platform: Platform;
   period: Period;
-  channelSort: ActivityRatingChannelSort;
-  channelDirection: SortDirection;
-  postSort: ActivityRatingPostSort;
-  postDirection: SortDirection;
-  entityLimit?: number;
-  entityCursor?: string;
+  q?: string;
+  publicationSort: StatisticsPublicationSort;
+  publicationDirection: SortDirection;
+  entitySort: StatisticsEntitySort;
+  entityDirection: SortDirection;
+  limit?: number;
+  cursor?: string;
 }
 
-export type ActivityRatingEntity = components["schemas"]["ActivityRatingEntity"];
+export type StatisticsEntity = components["schemas"]["StatisticsEntity"];
 
-export type ActivityRatingPublication = components["schemas"]["ActivityRatingPublication"];
+export type StatisticsPublication = components["schemas"]["StatisticsPublication"];
 
-export type RatingView = components["schemas"]["Rating"];
+export type StatisticsPage = components["schemas"]["Statistics"];
 
 export type PublicationView = components["schemas"]["Publication"];
 
@@ -104,5 +102,7 @@ export type ApiProblem = Partial<components["schemas"]["Problem"]>;
 export type PublicationListItem = components["schemas"]["PublicationListItem"];
 export type PublicationHistory = components["schemas"]["PublicationHistory"];
 export type HistorySnapshot = components["schemas"]["HistorySnapshot"];
+export type CollectorCoverage = components["schemas"]["CollectorCoverage"];
+export type CollectorGap = components["schemas"]["CollectorGap"];
 export type PublicationAnomalyAnalysis = components["schemas"]["PublicationAnomalyAnalysis"];
 export type AnomalyFinding = components["schemas"]["AnomalyFinding"];

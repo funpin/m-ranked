@@ -6,20 +6,24 @@ import hashlib
 import os
 import re
 import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Header, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from psycopg import errors as pg_errors
 
 from ..errors import ApiProblem, BadRequest, NotFound
 from .. import dto
 from ..identity_receipts import persist_admin_envelope
-from ..security import Principal, issue_csrf, require_csrf, require_roles
+from ..security import (SESSION_COOKIE, Principal, csrf_token, current_session,
+                        require_csrf, require_roles, same_origin, source_address,
+                        throttled, usable_auth)
+from ..sessions import SessionRecord
 from ..sql import admin as sql
 
 router = APIRouter(tags=["Admin"])
@@ -27,6 +31,12 @@ READ = require_roles("VIEWER", "EDITOR", "ADMIN")
 WRITE = require_roles("EDITOR", "ADMIN")
 ADMIN = require_roles("ADMIN")
 PLATFORMS = frozenset({"telegram", "vk", "max", "rutube"})
+RUTUBE_HOSTS = frozenset({"rutube.ru", "www.rutube.ru"})
+RUTUBE_PATHS = (
+    (re.compile(r"/video/person/(\d{1,20})/?"), "video/person"),
+    (re.compile(r"/channel/([A-Za-z0-9_-]{1,64})/?"), "channel"),
+    (re.compile(r"/u/([A-Za-z0-9_-]{1,64})/?"), "u"),
+)
 
 
 class InstitutionCreate(BaseModel):
@@ -92,9 +102,34 @@ def _nullable(value: str | None, maximum: int) -> str | None:
 
 
 def _web_url(value: str) -> None:
-    parsed = urlsplit(value)
-    if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname or parsed.username:
-        raise BadRequest("Аккаунт должен использовать HTTP(S)-ссылку без учётных данных")
+    try:
+        parsed, port = urlsplit(value), urlsplit(value).port
+    except ValueError:
+        raise BadRequest("Некорректная ссылка аккаунта") from None
+    if (parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username
+            or parsed.password or port not in (None, 443)):
+        raise BadRequest("Аккаунт должен использовать HTTPS-ссылку без учётных данных")
+
+
+def _rutube_url(value: str) -> str:
+    """Свести ссылку RUTUBE к каноничному виду; иначе запрос отклоняется.
+
+    Значение попадает в platform_account.current_url, а collector потом
+    выполняет по нему GET, поэтому произвольный хост здесь означал бы SSRF.
+    """
+    try:
+        parsed, port = urlsplit(value), urlsplit(value).port
+    except ValueError:
+        raise BadRequest("Некорректная ссылка RUTUBE") from None
+    if (parsed.scheme.lower() != "https" or (parsed.hostname or "").lower() not in RUTUBE_HOSTS
+            or parsed.username or parsed.password or port not in (None, 443)
+            or parsed.query or parsed.fragment):
+        raise BadRequest("Ссылка RUTUBE должна вести на https://rutube.ru без параметров")
+    for pattern, prefix in RUTUBE_PATHS:
+        match = pattern.fullmatch(parsed.path)
+        if match:
+            return f"https://rutube.ru/{prefix}/{match.group(1)}/"
+    raise BadRequest("Ссылка RUTUBE должна вести на канал")
 
 
 def _account_body(platform: str, reference: str, title: str | None,
@@ -128,6 +163,9 @@ def _account_body(platform: str, reference: str, title: str | None,
         key = path.rsplit("/", 1)[-1].lstrip("@")
         if not key or len(key) > 200:
             raise BadRequest("Не удалось определить аккаунт")
+        if platform == "rutube":
+            url = _rutube_url(url) if url else (
+                f"https://rutube.ru/channel/{key}/" if key.isdigit() else None)
     if url:
         _web_url(url)
     return {
@@ -193,25 +231,115 @@ def _no_store(body: Any, status: int = 200, correlation: uuid.UUID | None = None
     return JSONResponse(body, status_code=status, headers=headers)
 
 
-def _csrf_response(request: Request, body: dict[str, Any]) -> JSONResponse:
-    token = issue_csrf(request.app.state.auth)
-    body["token"] = token
-    response = _no_store(body)
-    response.set_cookie("XSRF-TOKEN", token, path="/api/v1/admin", httponly=False,
-                        samesite="lax")
+class LoginRequest(BaseModel):
+    """Пароль и код — разные поля. Склейка их в одну строку была бы подгонкой."""
+
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=1, max_length=1024)
+    otp: str = Field(default="", max_length=16)
+
+
+class RevokeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    subject: str = Field(min_length=1, max_length=200)
+
+
+def _csrf_response(request: Request, body: dict[str, Any],
+                   record: SessionRecord, status: int = 200) -> JSONResponse:
+    body["token"] = csrf_token(request.app.state.auth.csrf_secret, record.id)
+    body["expiresAt"] = record.absolute_expires_at.isoformat()
+    return _no_store(body, status)
+
+
+def _session_cookie(response: JSONResponse, token: str, seconds: int) -> JSONResponse:
+    # Префикс __Host- требует Secure, Path=/ и запрещает Domain, поэтому куку
+    # нельзя ни поставить с соседнего поддомена, ни сузить по пути.
+    response.set_cookie(SESSION_COOKIE, token, max_age=seconds, path="/",
+                        httponly=True, secure=True, samesite="strict")
     return response
 
 
+@router.post("/api/v1/admin/session")
+async def open_session(body: LoginRequest, request: Request) -> Response:
+    """Единственное место, где предъявляются пароль и одноразовый код."""
+    telemetry = request.app.state.security
+    configuration = usable_auth(request)
+    store = request.app.state.sessions
+    address = source_address(request)
+    if not same_origin(request):
+        telemetry.record("auth.failure", request, username=body.username, reason="origin")
+        raise ApiProblem(403, "Forbidden", "Недопустимый источник запроса",
+                         "urn:m-ranked:problem:forbidden")
+    wait = await store.retry_after(address)
+    if wait:
+        telemetry.record("auth.throttled", request, username=body.username,
+                         reason="address", retryAfter=wait)
+        raise throttled(wait)
+    moment = request.app.state.clock()
+    attempt = await configuration.verify(body.username, body.password, body.otp, moment)
+    opened = None
+    if attempt.accepted and attempt.counter is not None:
+        opened = await store.open(body.username, attempt.user.roles, attempt.counter, address)
+    elif attempt.accepted:
+        # Второй фактор выключен конфигурацией стенда: кода нет, тратить нечего.
+        opened = await store.open(body.username, attempt.user.roles, None, address)
+    if opened is None:
+        if attempt.reason == "otp" and attempt.user is not None:
+            await store.record_code_failure(body.username, int(moment//30))
+        await store.record_failure(address)
+        telemetry.record("auth.failure", request, username=body.username,
+                         reason=attempt.reason if attempt.reason != "none" else "otp-replay")
+        raise ApiProblem(401, "Unauthorized", "Неверные учётные данные",
+                         "urn:m-ranked:problem:unauthorized")
+    token, record = opened
+    await store.clear_failures(address)
+    await store.maybe_purge()
+    telemetry.record("auth.success", request, username=body.username)
+    telemetry.record("session.opened", request, username=body.username)
+    body_out = {"headerName": "X-XSRF-TOKEN", "parameterName": "_csrf",
+                "canEdit": bool(record.roles & {"EDITOR", "ADMIN"}),
+                "canDelete": "ADMIN" in record.roles}
+    response = _csrf_response(request, body_out, record, status=201)
+    return _session_cookie(response, token,
+                           request.app.state.session_policy.absolute_seconds)
+
+
+@router.delete("/api/v1/admin/session")
+async def close_session(request: Request, user: Annotated[Principal, Depends(READ)],
+                        _: Annotated[None, Depends(require_csrf)]) -> Response:
+    await request.app.state.sessions.revoke(user.session_id, "logout")
+    request.app.state.security.record("session.closed", request, username=user.username,
+                                      reason="logout")
+    response = _no_store({"outcome": "closed"})
+    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, secure=True,
+                           samesite="strict")
+    return response
+
+
+@router.delete("/api/v1/admin/sessions")
+async def revoke_sessions(body: RevokeRequest, request: Request,
+                          user: Annotated[Principal, Depends(ADMIN)],
+                          _: Annotated[None, Depends(require_csrf)]) -> Response:
+    revoked = await request.app.state.sessions.revoke_subject(body.subject, "admin")
+    request.app.state.security.record("session.revoked", request, username=body.subject,
+                                      reason="admin", revoked=revoked)
+    return _no_store({"outcome": "revoked", "sessions": revoked})
+
+
 @router.get("/api/v1/admin/csrf")
-async def csrf(request: Request, _: Annotated[Principal, Depends(READ)]) -> Response:
-    return _csrf_response(request, {"headerName": "X-XSRF-TOKEN", "parameterName": "_csrf"})
+async def csrf(request: Request, _: Annotated[Principal, Depends(READ)],
+               record: Annotated[SessionRecord, Depends(current_session)]) -> Response:
+    return _csrf_response(request, {"headerName": "X-XSRF-TOKEN",
+                                    "parameterName": "_csrf"}, record)
 
 
 @router.get("/api/v1/admin/catalog/session")
-async def catalog_session(request: Request, user: Annotated[Principal, Depends(READ)]) -> Response:
+async def catalog_session(request: Request, user: Annotated[Principal, Depends(READ)],
+                          record: Annotated[SessionRecord, Depends(current_session)]) -> Response:
     return _csrf_response(request, {"headerName": "X-XSRF-TOKEN",
                                     "canEdit": bool(user.roles & {"EDITOR", "ADMIN"}),
-                                    "canDelete": "ADMIN" in user.roles})
+                                    "canDelete": "ADMIN" in user.roles}, record)
 
 
 @router.get("/api/v1/admin/catalog/institutions")
@@ -236,6 +364,47 @@ async def catalog_accounts(id: uuid.UUID, request: Request,
                       if len(items) == limit else None})
 
 
+_PROJECT_SIZE: tuple[float, int | None] = (0.0, None)
+_PROJECT_SIZE_TTL = 300.0
+
+
+def _project_bytes() -> int | None:
+    """Размер дерева релиза. Пересчитывается не чаще раза в пять минут.
+
+    Поле возвращалось пустым, и панель писала «размер не предоставлен
+    сервером» — при том, что рядом размер базы показывался. Дерево релиза
+    неизменяемо, поэтому считать его на каждый запрос незачем, а обход сорока
+    тысяч файлов на одном ядре стоит заметно дороже самого ответа.
+    """
+    global _PROJECT_SIZE
+    cached_at, cached = _PROJECT_SIZE
+    now = time.monotonic()
+    if cached is not None and now - cached_at < _PROJECT_SIZE_TTL:
+        return cached
+    total = 0
+    try:
+        # После атомарного переключения current старый релиз могут удалить до
+        # перезапуска процесса. В таком процессе getcwd() возвращает ENOENT;
+        # необязательный размер проекта не должен из-за этого ронять весь
+        # endpoint состояния админки.
+        stack = [Path.cwd()]
+        while stack:
+            with os.scandir(stack.pop()) as entries:
+                for entry in entries:
+                    # По символическим ссылкам не идём: иначе счёт уйдёт за
+                    # пределы дерева, а то и закольцуется.
+                    if entry.is_symlink():
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append(Path(entry.path))
+                    elif entry.is_file(follow_symlinks=False):
+                        total += entry.stat(follow_symlinks=False).st_size
+    except OSError:
+        return cached
+    _PROJECT_SIZE = (now, total)
+    return total
+
+
 @router.get("/api/v1/admin/catalog/status")
 async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)]) -> Response:
     row = await request.app.state.db.admin_fetch_one(sql.CATALOG_STATUS)
@@ -244,7 +413,10 @@ async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)
         total, free = usage.total, usage.free
     except OSError:
         total = free = None
-    statuses = {platform: os.environ.get(f"MRANKED_INTEGRATIONS_{platform.upper()}", "unknown")
+    # Имя переменной то же, что читают api/providers.py и проверка готовности:
+    # админка одна искала MRANKED_INTEGRATIONS_*, которую никто не выставляет,
+    # и поэтому показывала «статус не получен» при настроенных площадках.
+    statuses = {platform: os.environ.get(f"INTEGRATION_{platform.upper()}", "unknown")
                 for platform in PLATFORMS}
     if any(value not in ("configured", "missing", "unknown") for value in statuses.values()):
         raise ApiProblem(500, "Internal Server Error", "Некорректный статус интеграции")
@@ -260,7 +432,8 @@ async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)
         "integrations": [{"platform": platform, "status": statuses[platform],
                           "detail": details[platform]}
                          for platform in ("telegram", "vk", "max", "rutube")],
-        "storage": {"diskTotalBytes": total, "diskFreeBytes": free, "projectBytes": None,
+        "storage": {"diskTotalBytes": total, "diskFreeBytes": free,
+                    "projectBytes": _project_bytes(),
                     "databaseBytes": row["database_bytes"]},
     })
 
@@ -531,11 +704,6 @@ class SetEnabled(BaseModel):
     expectedRowVersion: int = Field(ge=0)
 
 
-class CreateExport(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    platform: Literal["all", "telegram", "vk", "max", "rutube"]
-
-
 def _job(row: dict[str, Any]) -> dict[str, Any]:
     return {"jobId": str(row["id"]), "kind": "collection", "platform": row["platform"],
             "scheduledAt": dto.iso(row["scheduled_at"]), "startedAt": dto.iso(row["started_at"]),
@@ -650,37 +818,3 @@ async def set_platform_account_enabled(
                       "datasetRevision": revision, "correlationId": str(correlation),
                       "outcome": outcome}, correlation=correlation)
 
-
-@router.post("/api/v1/admin/exports")
-async def create_export(body: CreateExport, request: Request,
-                        user: Annotated[Principal, Depends(WRITE)],
-                        _: Annotated[None, Depends(require_csrf)]) -> Response:
-    job = await request.app.state.export_jobs.create(user.username, body.platform)
-    response = _no_store(job.view(), status=202)
-    response.headers["Location"] = f"/api/v1/admin/exports/{job.id}"
-    return response
-
-
-@router.get("/api/v1/admin/exports/{id}")
-async def export_status(id: uuid.UUID, request: Request,
-                        user: Annotated[Principal, Depends(WRITE)]) -> Response:
-    job = await request.app.state.export_jobs.status(user.username, id)
-    return _no_store(job.view())
-
-
-@router.delete("/api/v1/admin/exports/{id}")
-async def cancel_export(id: uuid.UUID, request: Request,
-                        user: Annotated[Principal, Depends(WRITE)],
-                        _: Annotated[None, Depends(require_csrf)]) -> Response:
-    job = await request.app.state.export_jobs.cancel(user.username, id)
-    return _no_store(job.view())
-
-
-@router.get("/api/v1/admin/exports/{id}/download")
-async def download_export(id: uuid.UUID, request: Request,
-                          user: Annotated[Principal, Depends(WRITE)]) -> Response:
-    job, path = await request.app.state.export_jobs.download(user.username, id)
-    return FileResponse(path, media_type="text/csv; charset=utf-8",
-                        filename=f"publications-{job.platform}.csv",
-                        headers={"Cache-Control": "no-store",
-                                 "X-Dataset-Revision": str(job.revision)})

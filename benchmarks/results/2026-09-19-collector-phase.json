@@ -1,0 +1,31 @@
+{
+  "idleProbe": {
+    "idleCpuPercentOneCore": 2.495,
+    "idleCpuSeconds": 0.012529,
+    "idleWallSeconds": 0.50212,
+    "processMaxRssBytes": 31899648,
+    "waitAttempts": 40
+  },
+  "repositorySqlRoundTrips100Publications": 24,
+  "repositoryWriteShape": "unchanged-set-based",
+  "simulations": {
+    "conservative": {
+      "coalescedSlots": 638,
+      "counts": {"max": 70, "rutube": 25, "telegram": 70, "vk": 70},
+      "maxOverlap": 0,
+      "phaseCount": 235,
+      "scheduleLagMaxSeconds": 2700.0,
+      "scheduleLagP50Seconds": 1022.0,
+      "scheduleLagP95Seconds": 1818.0
+    },
+    "p50": {
+      "coalescedSlots": 234,
+      "counts": {"max": 206, "rutube": 25, "telegram": 215, "vk": 208},
+      "maxOverlap": 0,
+      "phaseCount": 654,
+      "scheduleLagMaxSeconds": 2700.0,
+      "scheduleLagP50Seconds": 387.0,
+      "scheduleLagP95Seconds": 1185.0
+    }
+  }
+}

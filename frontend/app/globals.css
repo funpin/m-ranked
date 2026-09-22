@@ -230,11 +230,27 @@
   }
   html {
     @apply font-sans;
+    max-width: 100%;
+    overflow-x: clip;
   }
   body {
     /* 14px body keeps the density this dashboard needs while the rem spacing
        scale stays on the standard 16px root. */
     @apply bg-background text-foreground text-sm;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  /* Полупрозрачный слой оставляет карточки различимыми при прокрутке, но
+     достаточно плотный, чтобы текст меню не смешивался с содержимым. */
+  .site-header-glass {
+    background: var(--background);
+    background: color-mix(in oklab, var(--background) 72%, transparent);
+    -webkit-backdrop-filter: saturate(140%) blur(18px);
+    backdrop-filter: saturate(140%) blur(18px);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .site-header-glass { background: var(--background); }
   }
   /* Полоса-индикатор вырастает при появлении. Анимируется трансформация, а не
      ширина, поэтому раскладка не пересчитывается; тем, кто просил меньше
@@ -264,6 +280,54 @@
     [data-testid="platform-segments"] label > span { transition: none; }
     button:active:not(:disabled), [role="button"]:active { transform: none; }
   }
+  /* Список появляется не разом, а волной сверху вниз: так глаз успевает
+     заметить, что содержимое сменилось, и не воспринимает подмену как рывок.
+     Задержка маленькая — двадцать две миллисекунды на строку, — поэтому вся
+     волна укладывается в полсекунды даже на длинном списке. Дальше двадцатой
+     строки задержки нет: до неё ещё надо долистать. */
+  @keyframes reveal {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+  /* В таблице волна идёт по строкам, а не по секциям: иначе анимировалась бы
+     разом вся tbody, а шапка мигала бы вместе с ней. */
+  .reveal > *:not(thead):not(tbody),
+  .reveal > tbody > tr {
+    animation: reveal 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .reveal > *:not(thead):not(tbody):nth-child(1), .reveal > tbody > tr:nth-child(1) { animation-delay: 0ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(2), .reveal > tbody > tr:nth-child(2) { animation-delay: 22ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(3), .reveal > tbody > tr:nth-child(3) { animation-delay: 44ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(4), .reveal > tbody > tr:nth-child(4) { animation-delay: 66ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(5), .reveal > tbody > tr:nth-child(5) { animation-delay: 88ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(6), .reveal > tbody > tr:nth-child(6) { animation-delay: 110ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(7), .reveal > tbody > tr:nth-child(7) { animation-delay: 132ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(8), .reveal > tbody > tr:nth-child(8) { animation-delay: 154ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(9), .reveal > tbody > tr:nth-child(9) { animation-delay: 176ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(10), .reveal > tbody > tr:nth-child(10) { animation-delay: 198ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(11), .reveal > tbody > tr:nth-child(11) { animation-delay: 220ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(12), .reveal > tbody > tr:nth-child(12) { animation-delay: 242ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(13), .reveal > tbody > tr:nth-child(13) { animation-delay: 264ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(14), .reveal > tbody > tr:nth-child(14) { animation-delay: 286ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(15), .reveal > tbody > tr:nth-child(15) { animation-delay: 308ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(16), .reveal > tbody > tr:nth-child(16) { animation-delay: 330ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(17), .reveal > tbody > tr:nth-child(17) { animation-delay: 352ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(18), .reveal > tbody > tr:nth-child(18) { animation-delay: 374ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(19), .reveal > tbody > tr:nth-child(19) { animation-delay: 396ms; }
+  .reveal > *:not(thead):not(tbody):nth-child(20), .reveal > tbody > tr:nth-child(20) { animation-delay: 418ms; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal > *:not(thead):not(tbody),
+    .reveal > tbody > tr { animation: none; }
+  }
+  /* Общая обводка значков. Атрибутами на каждом значке это стоило по 95 байт
+     четыреста раз на страницу — и в разметке, и в служебной нагрузке. */
+  .icon {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
   /* Measurements, ranks and deltas must not jitter while a value animates. */
   .tabular {
     font-variant-numeric: tabular-nums;
@@ -274,5 +338,26 @@
   :root[data-theme-switching] *::before,
   :root[data-theme-switching] *::after {
     transition: none !important;
+  }
+}
+
+@layer utilities {
+  /* В standalone-режиме iOS боковые safe-area появляются в альбомной
+     ориентации. Шапка и контент должны оставаться на одной сетке. */
+  .safe-page-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+  @media (min-width: 40rem) {
+    .safe-page-inset {
+      padding-left: max(1.5rem, env(safe-area-inset-left));
+      padding-right: max(1.5rem, env(safe-area-inset-right));
+    }
+  }
+  @media (min-width: 64rem) {
+    .safe-page-inset {
+      padding-left: max(2.5rem, env(safe-area-inset-left));
+      padding-right: max(2.5rem, env(safe-area-inset-right));
+    }
   }
 }

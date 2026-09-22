@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Iterable
+from typing import Any, Iterable
 
 from .model import (
     AccountRef,
@@ -19,11 +19,34 @@ from .model import (
     utc,
 )
 from .metrics import CollectorMetrics
+from .phase import NULL_PERSIST_GUARD
+from .placement import filter_accounts
 from .normalize import CanonicalNormalizer, sanitize_error_code
 from .ports import CollectorRepository, LeaseProvider, PlatformCollector, UtcClock
 
 
 logger = logging.getLogger(__name__)
+
+
+class RuntimeReleaseUnavailable(RuntimeError):
+    """The process is still running after its immutable release was removed."""
+
+
+def ensure_runtime_release_available() -> None:
+    """Fail the process so systemd can restart it against the current release.
+
+    Linux keeps a deleted working directory alive for a process that already
+    holds it.  Already imported modules then keep working, while a code path
+    first exercised by a newly added account can fail with ModuleNotFoundError.
+    ``getcwd`` is the reliable boundary: it raises once that directory has
+    been unlinked.
+    """
+    try:
+        os.getcwd()
+    except OSError as error:
+        raise RuntimeReleaseUnavailable(
+            "collector runtime release directory is unavailable"
+        ) from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +71,9 @@ class PollCycleCoordinator:
         normalizer: CanonicalNormalizer | None = None,
         clock: UtcClock | None = None,
         metrics: CollectorMetrics | None = None,
+        persist_guard: Any = None,
+        placement: Any = None,
+        server_id: str | None = None,
     ) -> None:
         if adapter.platform != platform:
             raise ValueError("adapter platform does not match coordinator platform")
@@ -61,6 +87,14 @@ class PollCycleCoordinator:
         self.partition_key = partition_key
         self.account_concurrency = account_concurrency
         self.normalizer = normalizer or CanonicalNormalizer()
+        # Сбор может идти параллельно у разных площадок, запись — нет. Guard
+        # разделяет ровно эти две половины; по умолчанию он ничего не делает,
+        # и тогда поведение совпадает с эксклюзивной фазой целиком.
+        self.persist_guard = persist_guard or NULL_PERSIST_GUARD
+        # При одном хосте размещение отсутствует и фильтр не применяется:
+        # поведение ровно прежнее.
+        self.placement = placement
+        self.server_id = server_id
         self.clock = clock or SystemUtcClock()
         output = os.environ.get("COLLECTOR_METRICS_FILE")
         self.metrics = metrics or CollectorMetrics(Path(output) if output else None)
@@ -88,10 +122,38 @@ class PollCycleCoordinator:
             accounts = tuple(
                 self.repository.enabled_accounts(self.platform, self.partition_key)
             )
+            if self.placement is not None and self.server_id is not None:
+                offered = len(accounts)
+                accounts = filter_accounts(
+                    accounts, self.placement, self.server_id, self.platform,
+                )
+                try:
+                    self.metrics.placement(
+                        self.platform, owned=len(accounts), offered=offered,
+                        effective_replication=self.placement.effective_replication(
+                            self.platform,
+                        ),
+                    )
+                except Exception as metric_error:
+                    logger.warning(
+                        "collector metrics unavailable code=%s",
+                        sanitize_error_code(metric_error),
+                    )
+                logger.info(
+                    "collector placement platform=%s partition=%s server=%s "
+                    "owned=%s offered=%s replication=%s",
+                    self.platform.value, self.partition_key, self.server_id,
+                    len(accounts), offered,
+                    self.placement.effective_replication(self.platform),
+                )
             semaphore = asyncio.Semaphore(self.account_concurrency)
 
             async def collect_account(account: AccountRef) -> None:
                 async with semaphore:
+                    # This check intentionally lives outside the per-account
+                    # error handler.  A deleted release is a process failure,
+                    # not a provider failure attributable to this account.
+                    ensure_runtime_release_available()
                     account_started = utc(self.clock.now(), "account.started_at")
                     if not self.repository.begin_account(
                         context, account, account_started,
@@ -107,8 +169,38 @@ class PollCycleCoordinator:
                         except Exception as rejected:
                             self.repository.quarantine_rejected_batch(raw, context, sanitize_error_code(rejected))
                             raise
-                        result = self.repository.persist_account_batch(batch)
+                        # Сеть уже отработала; дальше идёт дорогая часть, и
+                        # она одна на все площадки. Ожидание замка уходит в
+                        # поток вместе с самой записью: иначе оно заблокирует
+                        # event loop и остановит параллельный сбор остальных
+                        # аккаунтов этого же воркера.
+                        def persist() -> tuple[Any, float]:
+                            waiting = time.monotonic()
+                            with self.persist_guard:
+                                waited = time.monotonic() - waiting
+                                return (
+                                    self.repository.persist_account_batch(batch),
+                                    waited,
+                                )
+
+                        result, persist_waited = await asyncio.to_thread(persist)
+                        try:
+                            self.metrics.persist_wait(persist_waited)
+                        except Exception as metric_error:
+                            logger.warning(
+                                "collector metrics unavailable code=%s",
+                                sanitize_error_code(metric_error),
+                            )
                         snapshots = getattr(result, "snapshot_count", 0)
+                        try:
+                            self.metrics.diverged(
+                                self.platform, getattr(result, "diverged_count", 0),
+                            )
+                        except Exception as metric_error:
+                            logger.warning(
+                                "collector metrics unavailable code=%s",
+                                sanitize_error_code(metric_error),
+                            )
                         succeeded = True
                     except asyncio.CancelledError:
                         self.repository.record_account_failure(
@@ -120,6 +212,15 @@ class PollCycleCoordinator:
                         raise
                     except Exception as error:
                         code = sanitize_error_code(error)
+                        try:
+                            self.metrics.provider_error(self.platform, code)
+                        except Exception:
+                            pass
+                        if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
+                            try:
+                                self.metrics.request_timeout(self.platform)
+                            except Exception:
+                                pass
                         self.repository.record_account_failure(
                             context,
                             account,
@@ -127,9 +228,15 @@ class PollCycleCoordinator:
                             code,
                         )
                         logger.error(
-                            "collector account failed platform=%s account=%s code=%s",
+                            "collector account failed platform=%s partition=%s run=%s "
+                            "scheduled_at=%s phase=collect status=failed account=%s "
+                            "collector_version=%s code=%s",
                             self.platform.value,
+                            self.partition_key,
+                            context.run_id,
+                            context.scheduled_at.isoformat(),
                             account.id,
+                            self.collector_version,
                             code,
                         )
                     finally:
@@ -180,8 +287,13 @@ class PollCycleCoordinator:
             )
         except Exception as error:
             logger.error(
-                "collector failed to finalize run platform=%s code=%s",
+                "collector failed to finalize run platform=%s partition=%s run=%s "
+                "scheduled_at=%s phase=finalize status=failed collector_version=%s code=%s",
                 self.platform.value,
+                self.partition_key,
+                context.run_id,
+                context.scheduled_at.isoformat(),
+                self.collector_version,
                 sanitize_error_code(error),
             )
 

@@ -33,6 +33,7 @@ export type SetEnabledResponse = components["schemas"]["AdminSetEnabledResponse"
 export interface AdminCredentials {
   username: string;
   password: string;
+  otp: string;
 }
 
 export interface JobsQuery {
@@ -43,6 +44,7 @@ export interface JobsQuery {
 
 export interface AdminSession {
   initialize(): Promise<void>;
+  signOut(): Promise<void>;
   jobs(query?: JobsQuery): Promise<AdminJobPage>;
   job(jobId: string, accountResultLimit?: number): Promise<AdminJobDetail>;
   account(accountId: string): Promise<PlatformAccountAdminState>;
@@ -67,6 +69,12 @@ interface CsrfResponse {
   token: string;
 }
 
+interface LoginBody {
+  username: string;
+  password: string;
+  otp?: string;
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXPECTED_CSRF_HEADER = "x-xsrf-token";
 const CONCRETE_ADMIN_PLATFORMS = new Set<Exclude<AdminPlatform, "">>([
@@ -88,27 +96,22 @@ export class AdminApiError extends Error {
   }
 }
 
-function requireCredentials(input: AdminCredentials): { username: string; password: string } {
+function requireCredentials(input: AdminCredentials): LoginBody {
   const username = input.username.trim();
   if (
     !username
     || username.length > 200
-    || username.includes(":")
     || Array.from(username).some((value) => /\p{Cc}/u.test(value))
   ) {
     throw new AdminApiError(0, "Введите корректное имя пользователя");
   }
-  if (!input.password || input.password.length > 4_096) {
+  if (!input.password || input.password.length > 1_024) {
     throw new AdminApiError(0, "Введите корректный пароль");
   }
-  return { username, password: input.password };
-}
-
-function base64Utf8(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
+  const otp = (input.otp ?? "").trim();
+  // Код никогда не дописывается к паролю: это разные поля и разные проверки.
+  if (otp && !/^\d{6}$/.test(otp)) throw new AdminApiError(0, "Код подтверждения — шесть цифр");
+  return otp ? { username, password: input.password, otp } : { username, password: input.password };
 }
 
 function resolvedOrigin(explicit?: string): string {
@@ -210,23 +213,27 @@ export function createAdminSession(
   const fetcher: Fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
   const timeoutMs = boundedInteger(options.timeoutMs, 8_000, 1_000, 30_000);
   const randomUuid = options.randomUuid ?? (() => crypto.randomUUID());
-  let authorization = `Basic ${base64Utf8(`${credentials.username}:${credentials.password}`)}`;
+  // Учётные данные живут ровно до первого запроса и дальше не хранятся:
+  // всё остальное носит кука сессии, которую скрипт прочитать не может.
+  let pending: LoginBody | null = credentials;
   let csrfToken = "";
   let closed = false;
 
   async function request<T>(
     path: string,
-    init: { method?: "GET" | "PUT"; body?: string; csrf?: boolean; correlationId?: string } = {},
+    init: {
+      method?: "GET" | "PUT" | "POST" | "DELETE";
+      body?: string;
+      csrf?: boolean;
+      correlationId?: string;
+    } = {},
   ): Promise<T> {
-    if (closed || !authorization) throw new AdminApiError(401, "Административная сессия завершена");
+    if (closed) throw new AdminApiError(401, "Административная сессия завершена");
     const url = new URL(path, origin);
-    if (url.origin !== origin || !url.pathname.startsWith("/api/v1/admin/")) {
+    if (url.origin !== origin || !/^\/api\/v1\/admin(\/|$)/.test(url.pathname)) {
       throw new AdminApiError(0, "Запрос вышел за границы административного API");
     }
-    const headers = new Headers({
-      Accept: "application/json, application/problem+json",
-      Authorization: authorization,
-    });
+    const headers = new Headers({ Accept: "application/json, application/problem+json" });
     if (init.body !== undefined) headers.set("Content-Type", "application/json");
     if (init.csrf) {
       if (!csrfToken) throw new AdminApiError(403, "CSRF-сессия не инициализирована");
@@ -258,7 +265,14 @@ export function createAdminSession(
 
   const session: AdminSession = {
     async initialize(): Promise<void> {
-      const response = await request<CsrfResponse>("/api/v1/admin/csrf");
+      // Пароль и код предъявляются один раз; дальше запросы носит только кука.
+      const body = pending;
+      pending = null;
+      const response = body === null
+        ? await request<CsrfResponse>("/api/v1/admin/csrf")
+        : await request<CsrfResponse>("/api/v1/admin/session", {
+          method: "POST", body: JSON.stringify(body),
+        });
       if (
         typeof response?.headerName !== "string"
         || response.headerName.toLowerCase() !== EXPECTED_CSRF_HEADER
@@ -311,8 +325,17 @@ export function createAdminSession(
       return { ...response, account: requireAccountState(response.account, accountId) };
     },
 
+    async signOut(): Promise<void> {
+      if (closed || !csrfToken) return;
+      try {
+        await request<unknown>("/api/v1/admin/session", { method: "DELETE", csrf: true });
+      } finally {
+        session.close();
+      }
+    },
+
     close(): void {
-      authorization = "";
+      pending = null;
       csrfToken = "";
       closed = true;
     },

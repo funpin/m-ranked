@@ -1,12 +1,6 @@
 -- 0014 — триггеры
 -- Порождается из каталога эталонной базы; см. db/README.md.
 
--- analytics.legacy_native_export_lexeme legacy_native_export_immutable
-CREATE TRIGGER legacy_native_export_immutable BEFORE DELETE OR UPDATE ON analytics.legacy_native_export_lexeme FOR EACH ROW EXECUTE FUNCTION ingest.reject_observation_mutation();
-
--- analytics.legacy_native_export_lexeme legacy_native_export_no_truncate
-CREATE TRIGGER legacy_native_export_no_truncate BEFORE TRUNCATE ON analytics.legacy_native_export_lexeme FOR EACH STATEMENT EXECUTE FUNCTION ingest.reject_observation_mutation();
-
 -- analytics.legacy_period_policy legacy_period_policy_immutable
 CREATE TRIGGER legacy_period_policy_immutable BEFORE DELETE OR UPDATE ON analytics.legacy_period_policy FOR EACH ROW EXECUTE FUNCTION ingest.reject_observation_mutation();
 

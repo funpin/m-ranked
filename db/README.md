@@ -27,6 +27,7 @@
 | `analytics.comparison_publication_hourly` (550 МБ) | то же |
 | `analytics.comparison_metric_point` (339 МБ) | то же |
 | `analytics.projection_state` | состояние пересборки проекций, которых больше нет |
+| `analytics.legacy_native_export_lexeme` (~6 ГБ на production) | дублировала каждый snapshot для отменённого CSV/reverse-sync; удалена миграцией `0029` |
 | `rebuild_core_projections` и шесть его версий v2/v5/v6/v9/v11/v13 | ~99 КБ исходников ради publisher |
 | `rebuild_serving_projections` | единственным вызывающим был `projection-publisher.sh` |
 | `latest_fully_published_dataset_revision` | см. ниже |

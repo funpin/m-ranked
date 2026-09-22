@@ -11,8 +11,13 @@ Group=m-ranked-maintenance
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/maintenance.env
 LoadCredential=pgpass:/etc/m-ranked/credentials/maintenance-pgpass
-Environment=PGPASSFILE=%d/pgpass
-Environment=TZ=UTC
+# systemd 252 отдаёт credential как 0400 во владении службы, а начиная с
+# 257 — как 0440 root:root с ACL. libpq молча игнорирует pgpass с
+# групповым доступом и уходит в "password authentication failed" при
+# верном пароле. Копия в приватный файл работает на обеих версиях.
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-maintenance -g m-ranked-maintenance %d/pgpass /run/m-ranked-maintenance/pgpass
+Environment=PGPASSFILE=/run/m-ranked-maintenance/pgpass
+Environment=TZ=Europe/Moscow
 ExecStart=/opt/m-ranked/current/operations/scripts/run-maintenance.sh
 TimeoutStartSec=20min
 NoNewPrivileges=true

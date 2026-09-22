@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState, type ReactNode } from "react";
-import { Info } from "lucide-react";
+import { Icon } from "@/components/icon-sprite";
 import { NOTE_TRIGGER } from "@/components/method-note-trigger";
 
 // Всплывающая часть приезжает по первому касанию: сам позиционер весит около
@@ -36,7 +36,7 @@ export function MethodNote({ title, children }: { title: string; children: React
         onPointerEnter={() => setActivation("preload")}
         onClick={() => setActivation("open")}
       >
-        <Info className="size-4" aria-hidden="true" />
+        <Icon name="info" className="size-4" />
       </button>
     );
   }

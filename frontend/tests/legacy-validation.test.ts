@@ -14,6 +14,7 @@ test("scalar query values select last occurrence just like Starlette", () => {
 test("oversized q validates before trim and uses unicode codepoint length", () => {
   assert.equal(legacyQueryErrors(new URL(`https://test/?q=${"a".repeat(201)}`)).length, 1);
   assert.equal(legacyQueryErrors(new URL(`https://test/?q=${"😀".repeat(200)}`)).length, 0);
+  assert.equal(legacyQueryErrors(new URL(`https://test/statistics?q=${"a".repeat(201)}`)).length, 1);
   assert.equal(legacyQueryErrors(new URL(`https://test/?q=${"%20".repeat(201)}`)).length, 1);
 });
 

@@ -38,14 +38,15 @@ WITH params AS (
            greatest(result.completed_at, result.started_at, metric.observed_at) AS last_checked_at
       FROM catalog.visible_platform_account account
      CROSS JOIN params
-      LEFT JOIN LATERAL (
-          SELECT alias.legacy_id, alias.legacy_route FROM catalog.legacy_entity_alias alias
-           WHERE alias.target_uuid=account.id AND alias.entity_type='channels'
-           ORDER BY alias.legacy_id LIMIT 1) channel_alias ON true
-      LEFT JOIN LATERAL (
-          SELECT alias.legacy_id, alias.legacy_route FROM catalog.legacy_entity_alias alias
-           WHERE alias.target_uuid=account.id AND alias.entity_type='platform_accounts'
-           ORDER BY alias.legacy_id LIMIT 1) platform_alias ON true
+      -- Пара «тип сущности и цель» уникальна по индексу, поэтому выбирать из
+      -- одной строки «первую по legacy_id» было нечего: сортировка и предел
+      -- заставляли планировщик обходить псевдонимы отдельным поиском на
+      -- каждый аккаунт. Обычное соединение даёт тот же результат одним
+      -- проходом по небольшой таблице.
+      LEFT JOIN catalog.legacy_entity_alias channel_alias
+        ON channel_alias.target_uuid=account.id AND channel_alias.entity_type='channels'
+      LEFT JOIN catalog.legacy_entity_alias platform_alias
+        ON platform_alias.target_uuid=account.id AND platform_alias.entity_type='platform_accounts'
       LEFT JOIN LATERAL (
           SELECT snapshot.subscriber_count, snapshot.subscriber_display, snapshot.observed_at
             FROM ingest.account_metric_snapshot_active snapshot
@@ -151,6 +152,14 @@ WITH params AS (
            metrics.total_reactions, metrics.median_reactions,
            metrics.total_comments, metrics.median_comments,
            metrics.total_shares, metrics.median_shares,
+           -- Предыдущее окно той же длины: из него берётся плашка прироста
+           -- под каждым числом карточки. Пусто, когда наблюдений на дальней
+           -- границе ещё нет — за месяц истории пока не хватает.
+           metrics.previous_total_views, metrics.previous_median_views,
+           metrics.previous_total_reactions, metrics.previous_median_reactions,
+           metrics.previous_total_comments, metrics.previous_median_comments,
+           metrics.previous_total_shares, metrics.previous_median_shares,
+           coalesce(metrics.previous_publication_count, 0) AS previous_publication_count,
            coalesce(metrics.views_samples,0) AS views_samples,
            coalesce(metrics.reactions_samples,0) AS reactions_samples,
            coalesce(metrics.comments_samples,0) AS comments_samples,
@@ -186,7 +195,14 @@ WITH params AS (
            WHERE observation.institution_id=dimension.institution_id
              AND observation.category=CASE dimension.scope_platform WHEN 'all' THEN 'social' ELSE dimension.scope_platform END
              AND observation.fetched_at<=params.as_of
-           ORDER BY observation.fetched_at DESC, observation.id DESC LIMIT 1) rating ON true
+           -- Порядок по самому периоду, а не по времени загрузки: всю
+           -- опубликованную историю мы забираем одним прогоном, и «загружен
+           -- позже» перестало означать «свежее».
+           ORDER BY nullif(regexp_replace(observation.period,'[^0-9]','','g'),'')::int DESC NULLS LAST,
+                    array_position(ARRAY['Январь','Февраль','Март','Апрель','Май','Июнь',
+                          'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+                    split_part(observation.period,' ',1)) DESC NULLS LAST,
+                    observation.fetched_at DESC, observation.id DESC LIMIT 1) rating ON true
 ), filtered AS (
     SELECT card.*, row_number() OVER(ORDER BY
         CASE WHEN %(sort)s='name' AND %(direction)s='asc' THEN card.sort_name END ASC NULLS LAST,
@@ -209,6 +225,18 @@ WITH params AS (
             WHEN 'views' THEN card.total_views
             WHEN 'reactions' THEN card.total_reactions
             ELSE card.median_reactions END END DESC NULLS LAST,
+        -- Равные значения раскладываются по размеру площадки, а не по
+        -- алфавиту. Медиана прироста за короткое окно у всех вузов равна
+        -- нулю: она считается по всем постам с наблюдением в окне, включая
+        -- давно остывшие, и таких больше половины. Сортировка «по убыванию»
+        -- при этом честно ставила первым вуз на букву А с пятнадцатью
+        -- реакциями, а вуз с двумя тысячами — двадцатым. То же было у
+        -- покрытия и числа аккаунтов, где различимых значений всего четыре.
+        -- Направление у запасного ключа всегда одно: при равенстве метрики
+        -- заметнее тот, кто крупнее.
+        card.total_reactions DESC NULLS LAST,
+        card.total_views DESC NULLS LAST,
+        card.subscriber_count DESC NULLS LAST,
         card.sort_name, card.entity_id) AS page_position
       FROM card_source card
      WHERE %(search)s='' OR card.search_text LIKE '%%'||lower(%(search)s)||'%%'

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Info } from "lucide-react";
+import { Icon } from "@/components/icon-sprite";
 import {
   Popover,
   PopoverContent,
@@ -22,7 +22,7 @@ export function MethodNotePopover({ title, defaultOpen, children }: {
   return (
     <Popover defaultOpen={defaultOpen}>
       <PopoverTrigger className={NOTE_TRIGGER} aria-label={`Как считается: ${title}`}>
-        <Info className="size-4" aria-hidden="true" />
+        <Icon name="info" className="size-4" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 leading-relaxed">
         <PopoverTitle className="sr-only">{title}</PopoverTitle>

@@ -53,5 +53,5 @@ export function LegacyFilterForm({ action = "/", ...props }: ComponentProps<"for
     if (field instanceof HTMLInputElement && field.name === "platform" && field.type === "radio") {
       event.currentTarget.requestSubmit();
     }
-  }}>{props.children}<span className="text-muted-foreground text-xs" role="status" hidden={!pending}>Обновляю…</span></form>;
+  }}>{props.children}<span className="sr-only" role="status" hidden={!pending}>Обновляю…</span></form>;
 }

@@ -237,6 +237,27 @@ def parse_public_page(html: str, username: str) -> list[PublicPost]:
     return _parse_public_page(BeautifulSoup(html, "html.parser"), username)
 
 
+def older_page_before(html: str) -> int | None:
+    """Номер сообщения, с которого начинается предыдущая страница канала.
+
+    Публичный предпросмотр отдаёт за раз лишь горсть сообщений — у активного
+    канала это два десятка, а если посты выходят альбомами, то и семь: альбом
+    занимает один блок, но съедает несколько номеров. Остальное лежит за
+    ссылкой «ещё», и без неё история канала обрывается на том, что попало на
+    первую страницу в день подключения.
+
+    Ссылок в разметке может быть две — назад и вперёд; нам нужна та, что ведёт
+    к более старым сообщениям, поэтому берём наименьший data-before.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    values: list[int] = []
+    for link in soup.select("a.tme_messages_more[data-before]"):
+        raw = link.get("data-before")
+        if isinstance(raw, str) and raw.isdigit():
+            values.append(int(raw))
+    return min(values) if values else None
+
+
 def parse_public_channel(html: str, username: str) -> PublicChannel:
     soup = BeautifulSoup(html, "html.parser")
     title_node = soup.select_one(".tgme_channel_info_header_title")

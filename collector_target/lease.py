@@ -84,7 +84,7 @@ class PostgresAdvisoryLeaseProvider:
                 import psycopg
             except ImportError as exc:  # pragma: no cover - packaging guard
                 raise RuntimeError("psycopg is required for PostgreSQL leases") from exc
-            return psycopg.connect(dsn, autocommit=True)
+            return psycopg.connect(dsn, autocommit=True, connect_timeout=5)
 
         return connect
 
@@ -94,6 +94,8 @@ class PostgresAdvisoryLeaseProvider:
         connection = self._factory()
         try:
             connection.execute("SET TIME ZONE 'UTC'")
+            connection.execute("SET statement_timeout='5s'")
+            connection.execute("SET lock_timeout='1s'")
             row = connection.execute(
                 "SELECT pg_try_advisory_lock(%s)", (lock_id,),
             ).fetchone()

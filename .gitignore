@@ -10,7 +10,11 @@
 *.pfx
 *.dump
 *.sql.gz
-data/
+# Каталоги рантайма, а не исходники. Правило было без якоря и потому
+# заодно прятало api/data/ — справочник кодов официального рейтинга,
+# который читает api/official_rating.py. Якорим на корень.
+/data/
+collector_target/data/
 logs/
 __pycache__/
 .venv
@@ -21,9 +25,15 @@ __pycache__/
 
 # Historical run artifacts are not part of the active frontend gate.
 evidence/
-# Keep only completed frontend calibration reports, never partial samples.
+# Отчёты фронтенд-гейтов — вывод скриптов, а не исходник: их пересоздаёт
+# `pnpm check`. В репозитории они только создавали конфликты на каждой сборке.
+frontend/reports/bundle-budget.json
+frontend/reports/redesign/calibration.json
 frontend/reports/redesign/calibration-progress.json
 test-results/
 
 # Локальные учётные данные стенда
 .env.test
+
+# Настройки IDE: у каждого свои, в общий репозиторий им не место.
+.idea/

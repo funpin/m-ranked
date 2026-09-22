@@ -111,6 +111,22 @@ test("account compatibility routes send the correct legacyType", async () => {
   assert.equal(seenUrls[1], "https://api.example.test/api/v1/accounts/27?legacyType=platform_accounts");
 });
 
+test("account publication query forwards the selected Moscow day", async () => {
+  let seenUrl = "";
+  const client = createApiClient({
+    baseUrl: "https://api.example.test",
+    fetcher: async (input) => {
+      seenUrl = String(input);
+      return Response.json({ items: [], nextCursor: null, datasetRevision: 17, asOf: "2026-09-18T12:00:00Z" });
+    },
+  });
+
+  await client.accountPublications(12, "channels", 100, undefined, 17, "2026-09-18");
+  const query = new URL(seenUrl).searchParams;
+  assert.equal(query.get("day"), "2026-09-18");
+  assert.equal(query.get("revision"), "17");
+});
+
 test("analysis client uses its independent endpoint and preserves nullable score", async () => {
   let seenUrl="";
   const client=createApiClient({baseUrl:"https://api.example.test",fetcher:async(input)=>{
@@ -267,35 +283,39 @@ test("comparison client rejects invalid or excess relevant IDs without substitut
   assert.equal(calls, 0);
 });
 
-test("rating client sends the bounded legacy-activity contract", async () => {
+test("statistics client sends every result dimension and bounds the limit", async () => {
   let seenUrl = "";
   const client = createApiClient({
     baseUrl: "https://api.example.test",
     fetcher: async (input) => {
       seenUrl = String(input);
-      return Response.json({ entities: [], publications: [], datasetRevision: 17, asOf: null });
+      return Response.json({ sections: [], entities: [], datasetRevision: 17, asOf: "2026-01-01T00:00:00Z" });
     },
   });
 
-  await client.rating({
+  await client.statistics({
+    view: "entities",
     platform: "vk",
     period: "7d",
-    channelSort: "views",
-    channelDirection: "asc",
-    postSort: "shares",
-    postDirection: "desc",
-    entityLimit: 500,
+    q: "  @alpha  ",
+    publicationSort: "interactions",
+    publicationDirection: "asc",
+    entitySort: "views",
+    entityDirection: "desc",
+    limit: 500,
   });
 
   const url = new URL(seenUrl);
-  assert.equal(url.pathname, "/api/v1/rating");
+  assert.equal(url.pathname, "/api/v1/statistics");
   assert.deepEqual(Object.fromEntries(url.searchParams), {
+    view: "entities",
     platform: "vk",
     period: "7d",
-    channel_sort: "views",
-    channel_direction: "asc",
-    post_sort: "shares",
-    post_direction: "desc",
-    entityLimit: "200",
+    q: "@alpha",
+    publication_sort: "interactions",
+    publication_direction: "asc",
+    entity_sort: "views",
+    entity_direction: "desc",
+    limit: "50",
   });
 });

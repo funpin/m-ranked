@@ -83,8 +83,14 @@ class Settings:
     max_user_first_name: str | None = None
     max_user_last_name: str | None = None
     max_session_path: Path = Path("data/max.session.db")
+    max_request_timeout_seconds: float = 30.0
     rutube_public_api_enabled: bool = True
     rutube_api_base: str = "https://rutube.ru/api"
+    # Сколько страниц публичного предпросмотра читать за обход. Единица —
+    # прежнее поведение: только самая свежая. Больше нужно ровно один раз,
+    # чтобы дочитать историю канала назад; в обычном цикле обход
+    # останавливается сам, как только упирается в уже известные посты.
+    telegram_history_pages: int = 1
     telegram_concurrency: int = 6
     vk_concurrency: int = 3
     vk_requests_per_second: float = 3.0
@@ -95,6 +101,122 @@ class Settings:
     collector_refresh_limit: int = 100
     collector_refresh_scan_limit: int = 400
     publication_snapshot_heartbeat_hours: int = 24
+    collector_schedule_mode: str = "phased"
+    collector_phase_max_wait_seconds: int = 900
+    collector_phase_retry_seconds: float = 2.0
+    collector_phase_request_stale_seconds: int = 120
+    collector_shutdown_grace_seconds: int = 45
+    collector_telegram_cycle_deadline_seconds: int = 900
+    collector_vk_cycle_deadline_seconds: int = 600
+    collector_max_cycle_deadline_seconds: int = 600
+    collector_rutube_cycle_deadline_seconds: int = 1800
+    collector_deployment_profile: str = "a"
+    collector_server_id: str = "server-1"
+    collector_membership: str = ""
+    collector_replication_telegram: int = 1
+    collector_replication_vk: int = 1
+    collector_replication_max: int = 1
+    collector_replication_rutube: int = 1
+    collector_collect_concurrency: int = 1
+    collector_persist_wait_seconds: float = 120.0
+    collector_working_set_retention: str = "off"
+    collector_working_set_months_per_run: int = 1
+    collector_disk_path: str = "/var/lib/m-ranked"
+    collector_transfer_mode: str = "in-process"
+    collector_transfer_producer_id: str = "local"
+    collector_transfer_https_endpoint: str | None = None
+    collector_transfer_client_certificate: str | None = None
+    collector_transfer_private_key: str | None = None
+    collector_transfer_ca_bundle: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.collector_schedule_mode.strip().lower() not in {
+            "legacy", "phased", "shadow",
+        }:
+            raise ValueError(
+                "COLLECTOR_SCHEDULE_MODE must be legacy, phased or shadow"
+            )
+        profile = self.collector_deployment_profile.strip().lower()
+        if profile not in {"a", "b"}:
+            raise ValueError("COLLECTOR_DEPLOYMENT_PROFILE must be a or b")
+        retention = self.collector_working_set_retention.strip().lower()
+        if retention not in {"off", "dry-run", "on"}:
+            raise ValueError(
+                "COLLECTOR_WORKING_SET_RETENTION must be off, dry-run or on"
+            )
+        # В профиле A эта база и есть продукт: обрезать её значит удалить то,
+        # что отдаёт API, и ничего при этом не разгрузить.
+        if retention != "off" and profile != "b":
+            raise ValueError(
+                "COLLECTOR_WORKING_SET_RETENTION requires COLLECTOR_DEPLOYMENT_PROFILE=b"
+            )
+        if not self.collector_server_id.strip():
+            raise ValueError("COLLECTOR_SERVER_ID must not be blank")
+        # Фактор репликации на площадку. Единица — чистый шардинг; больше
+        # единицы кратно умножает расход квот площадки, а у ВК это связывающее
+        # ограничение раньше, чем процессор.
+        for name, value in (
+            ("COLLECTOR_REPLICATION_TELEGRAM", self.collector_replication_telegram),
+            ("COLLECTOR_REPLICATION_VK", self.collector_replication_vk),
+            ("COLLECTOR_REPLICATION_MAX", self.collector_replication_max),
+            ("COLLECTOR_REPLICATION_RUTUBE", self.collector_replication_rutube),
+        ):
+            if value < 1:
+                raise ValueError(f"{name} must be positive")
+        # Потолок одновременных фаз сбора. Единица — поведение до разделения
+        # фаз: ровно один цикл на весь хост. Поднимать его до переезда нельзя,
+        # он окупается только на разгруженном Сервере 1.
+        if not 1 <= self.collector_collect_concurrency <= 4:
+            raise ValueError(
+                "COLLECTOR_COLLECT_CONCURRENCY must be between 1 and 4"
+            )
+        if self.collector_persist_wait_seconds <= 0:
+            raise ValueError("COLLECTOR_PERSIST_WAIT_SECONDS must be positive")
+        if self.collector_working_set_months_per_run < 1:
+            raise ValueError(
+                "COLLECTOR_WORKING_SET_MONTHS_PER_RUN must be positive"
+            )
+        mode = self.collector_transfer_mode.strip().lower()
+        if mode not in {"disabled", "in-process", "https-mtls"}:
+            raise ValueError(
+                "COLLECTOR_TRANSFER_MODE must be disabled, in-process or https-mtls"
+            )
+        # Несогласованную пару ловим на старте. Иначе профиль B выяснит, что у
+        # него нет сертификата, в момент первой доставки — то есть уже собрав
+        # данные, которые некуда отдать.
+        if profile == "b":
+            if mode != "https-mtls":
+                raise ValueError(
+                    "profile b requires COLLECTOR_TRANSFER_MODE=https-mtls"
+                )
+            required = {
+                "COLLECTOR_TRANSFER_HTTPS_ENDPOINT": self.collector_transfer_https_endpoint,
+                "COLLECTOR_TRANSFER_CLIENT_CERTIFICATE": self.collector_transfer_client_certificate,
+                "COLLECTOR_TRANSFER_PRIVATE_KEY": self.collector_transfer_private_key,
+                "COLLECTOR_TRANSFER_CA_BUNDLE": self.collector_transfer_ca_bundle,
+            }
+            absent = [name for name, value in required.items() if not (value or "").strip()]
+            if absent:
+                raise ValueError(f"profile b requires {', '.join(sorted(absent))}")
+        elif mode == "https-mtls":
+            raise ValueError(
+                "COLLECTOR_TRANSFER_MODE=https-mtls requires COLLECTOR_DEPLOYMENT_PROFILE=b"
+            )
+        if not self.collector_transfer_producer_id.strip():
+            raise ValueError("COLLECTOR_TRANSFER_PRODUCER_ID must not be blank")
+        positive = {
+            "COLLECTOR_PHASE_MAX_WAIT_SECONDS": self.collector_phase_max_wait_seconds,
+            "COLLECTOR_PHASE_RETRY_SECONDS": self.collector_phase_retry_seconds,
+            "COLLECTOR_PHASE_REQUEST_STALE_SECONDS": self.collector_phase_request_stale_seconds,
+            "COLLECTOR_SHUTDOWN_GRACE_SECONDS": self.collector_shutdown_grace_seconds,
+            "COLLECTOR_TELEGRAM_CYCLE_DEADLINE_SECONDS": self.collector_telegram_cycle_deadline_seconds,
+            "COLLECTOR_VK_CYCLE_DEADLINE_SECONDS": self.collector_vk_cycle_deadline_seconds,
+            "COLLECTOR_MAX_CYCLE_DEADLINE_SECONDS": self.collector_max_cycle_deadline_seconds,
+            "COLLECTOR_RUTUBE_CYCLE_DEADLINE_SECONDS": self.collector_rutube_cycle_deadline_seconds,
+        }
+        invalid = [name for name, value in positive.items() if value <= 0]
+        if invalid:
+            raise ValueError(f"{', '.join(invalid)} must be positive")
 
     @classmethod
     def load(cls, env_file: str | Path = ".env") -> "Settings":
@@ -112,6 +234,7 @@ class Settings:
             telegram_session_path=Path(os.getenv("TELEGRAM_SESSION_PATH", "data/telegram.session")),
             database_path=Path(os.getenv("DATABASE_PATH", "data/reactions.db")),
             initial_channels=channels,
+            telegram_history_pages=_int("TELEGRAM_HISTORY_PAGES", 1),
             poll_interval_minutes=_int("POLL_INTERVAL_MINUTES", 5),
             track_post_for_hours=_int("TRACK_POST_FOR_HOURS", 960),
             complete_history_max_first_age_minutes=_int(
@@ -176,6 +299,9 @@ class Settings:
             max_session_path=Path(
                 os.getenv("MAX_SESSION_PATH", "data/max.session.db")
             ),
+            max_request_timeout_seconds=_float(
+                "MAX_REQUEST_TIMEOUT_SECONDS", 30.0,
+            ),
             rutube_public_api_enabled=_bool("RUTUBE_PUBLIC_API_ENABLED", True),
             rutube_api_base=(
                 os.getenv("RUTUBE_API_BASE", "https://rutube.ru/api").strip()
@@ -196,6 +322,81 @@ class Settings:
             ),
             publication_snapshot_heartbeat_hours=_int(
                 "PUBLICATION_SNAPSHOT_HEARTBEAT_HOURS", 24
+            ),
+            collector_schedule_mode=(
+                os.getenv("COLLECTOR_SCHEDULE_MODE", "phased").strip().lower()
+                or "phased"
+            ),
+            collector_phase_max_wait_seconds=_int(
+                "COLLECTOR_PHASE_MAX_WAIT_SECONDS", 900
+            ),
+            collector_phase_retry_seconds=_float(
+                "COLLECTOR_PHASE_RETRY_SECONDS", 2.0
+            ),
+            collector_phase_request_stale_seconds=_int(
+                "COLLECTOR_PHASE_REQUEST_STALE_SECONDS", 120
+            ),
+            collector_shutdown_grace_seconds=_int(
+                "COLLECTOR_SHUTDOWN_GRACE_SECONDS", 45
+            ),
+            collector_telegram_cycle_deadline_seconds=_int(
+                "COLLECTOR_TELEGRAM_CYCLE_DEADLINE_SECONDS", 900
+            ),
+            collector_vk_cycle_deadline_seconds=_int(
+                "COLLECTOR_VK_CYCLE_DEADLINE_SECONDS", 600
+            ),
+            collector_max_cycle_deadline_seconds=_int(
+                "COLLECTOR_MAX_CYCLE_DEADLINE_SECONDS", 600
+            ),
+            collector_rutube_cycle_deadline_seconds=_int(
+                "COLLECTOR_RUTUBE_CYCLE_DEADLINE_SECONDS", 1800
+            ),
+            collector_deployment_profile=(
+                os.getenv("COLLECTOR_DEPLOYMENT_PROFILE", "a").strip().lower() or "a"
+            ),
+            collector_server_id=(
+                os.getenv("COLLECTOR_SERVER_ID", "server-1").strip().lower()
+                or "server-1"
+            ),
+            collector_membership=os.getenv("COLLECTOR_MEMBERSHIP", "").strip(),
+            collector_replication_telegram=_int("COLLECTOR_REPLICATION_TELEGRAM", 1),
+            collector_replication_vk=_int("COLLECTOR_REPLICATION_VK", 1),
+            collector_replication_max=_int("COLLECTOR_REPLICATION_MAX", 1),
+            collector_replication_rutube=_int("COLLECTOR_REPLICATION_RUTUBE", 1),
+            collector_collect_concurrency=_int("COLLECTOR_COLLECT_CONCURRENCY", 1),
+            collector_persist_wait_seconds=_float(
+                "COLLECTOR_PERSIST_WAIT_SECONDS", 120.0
+            ),
+            collector_working_set_retention=(
+                os.getenv("COLLECTOR_WORKING_SET_RETENTION", "off").strip().lower()
+                or "off"
+            ),
+            collector_working_set_months_per_run=_int(
+                "COLLECTOR_WORKING_SET_MONTHS_PER_RUN", 1
+            ),
+            collector_disk_path=(
+                os.getenv("COLLECTOR_DISK_PATH", "/var/lib/m-ranked").strip()
+                or "/var/lib/m-ranked"
+            ),
+            collector_transfer_mode=(
+                os.getenv("COLLECTOR_TRANSFER_MODE", "in-process").strip().lower()
+                or "in-process"
+            ),
+            collector_transfer_producer_id=(
+                os.getenv("COLLECTOR_TRANSFER_PRODUCER_ID", "local").strip()
+                or "local"
+            ),
+            collector_transfer_https_endpoint=(
+                os.getenv("COLLECTOR_TRANSFER_HTTPS_ENDPOINT", "").strip() or None
+            ),
+            collector_transfer_client_certificate=(
+                os.getenv("COLLECTOR_TRANSFER_CLIENT_CERTIFICATE", "").strip() or None
+            ),
+            collector_transfer_private_key=(
+                os.getenv("COLLECTOR_TRANSFER_PRIVATE_KEY", "").strip() or None
+            ),
+            collector_transfer_ca_bundle=(
+                os.getenv("COLLECTOR_TRANSFER_CA_BUNDLE", "").strip() or None
             ),
         )
 

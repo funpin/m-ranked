@@ -3,8 +3,7 @@
 - Status: **Proposed**
 - Date: 2026-09-02
 - Owners: product / analytics / legal review
-- Related: [threat model](../security/threat-model.md),
-  [analytics components](../c4/06-components-analytics.puml)
+- Related: [threat model](../security/threat-model.md)
 
 ## Context
 
@@ -78,7 +77,7 @@ device, referral и anti-fraud данные платформы.
   `dismissed`, но не устанавливает виновность.
 - Исправление данных создает новую dataset revision и сохраняет прежний signal
   с reason/link на superseding event.
-- Тексты проходят единый glossary/content test во frontend, API и export.
+- Тексты проходят единый glossary/content test во frontend и API.
 
 ### Rating criticism
 
@@ -144,4 +143,3 @@ inputs и сценарий. Формулировка «методика нече
 - разработана и внешне валидирована вероятностная модель;
 - юридическая/редакционная policy устанавливает дополнительные требования;
 - новый публичный источник позволяет подтвердить конкретный механизм активности.
-

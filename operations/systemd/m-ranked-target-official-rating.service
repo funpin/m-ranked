@@ -1,0 +1,49 @@
+[Unit]
+Description=M-Ranked official rating daily check
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target m-ranked-target-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-api
+Group=m-ranked-api
+WorkingDirectory=/opt/m-ranked/current
+# Использует тот же API config и те же credential-файлы, не отдельную копию
+# секрета в EnvironmentFile.
+EnvironmentFile=/etc/m-ranked/api.env
+EnvironmentFile=-/etc/m-ranked/api-profile.env
+LoadCredential=api-read-db-password:/etc/m-ranked/credentials/api-read-db-password
+LoadCredential=api-write-admin-db-password:/etc/m-ranked/credentials/api-write-admin-db-password
+LoadCredential=outbox-worker-db-password:/etc/m-ranked/credentials/outbox-worker-db-password
+Environment=API_READ_DB_PASSWORD_FILE=%d/api-read-db-password
+Environment=API_WRITE_ADMIN_DB_PASSWORD_FILE=%d/api-write-admin-db-password
+Environment=OUTBOX_WORKER_DB_PASSWORD_FILE=%d/outbox-worker-db-password
+Environment=TZ=Europe/Moscow
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m api.tools.refresh_official_rating
+TimeoutStartSec=5min
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+UMask=0077
+TasksMax=64
+# Проверка фоновая и никуда не спешит: пусть уступает и сбору, и отдаче страниц.
+CPUWeight=10
+IOWeight=30
+
+[Install]
+WantedBy=multi-user.target

@@ -1,9 +1,10 @@
 import createClient from "openapi-fetch";
 import type { paths } from "../../contracts/openapi/m-ranked-v1-client";
 import { MAX_COMPARISON_INSTITUTIONS, COMPARISON_PAGE_SIZE } from "./types";
-import type { ActivityRatingRequest, ApiProblem, ComparisonRequest, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection } from "./types";
+import type { ApiProblem, ComparisonRequest, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection, StatisticsRequest } from "./types";
 import type { OverviewSort } from "./params";
 import { revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
+import { publicResponseCacheFromEnv } from "./bounded-response-cache";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 interface CacheEntry { etag: string; body: string; headers: [string, string][] }
@@ -96,17 +97,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
     institution(legacyId: number, platform: Platform, period: Period) {
       return client.GET("/api/v1/institutions/{legacyId}", { params: { path: { legacyId }, query: { platform, period } } }).then(unwrap);
     },
-    publication(legacyId: number | string, legacyType?: LegacyPublicationType) {
-      return client.GET("/api/v1/publications/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
+    publication(legacyId: number | string, legacyType?: LegacyPublicationType, revision?: number) {
+      return client.GET("/api/v1/publications/{legacyId}", { params: { path: { legacyId }, query: { legacyType, revision } } }).then(unwrap);
     },
-    account(legacyId: number | string, legacyType?: LegacyAccountType) {
-      return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType } } }).then(unwrap);
+    account(legacyId: number | string, legacyType?: LegacyAccountType, revision?: number) {
+      return client.GET("/api/v1/accounts/{legacyId}", { params: { path: { legacyId }, query: { legacyType, revision } } }).then(unwrap);
     },
-    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, limit = 100, cursor?: string) {
-      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
+    accountPublications(legacyId: number | string, legacyType?: LegacyAccountType, limit = 100, cursor?: string, revision?: number, day?: string) {
+      return client.GET("/api/v1/accounts/{legacyId}/publications", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(200, Math.max(1, limit)), cursor, revision, day } } }).then(unwrap);
     },
-    institutionAccounts(legacyId: number, platform: Platform, limit = 100, cursor?: string) {
-      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
+    institutionAccounts(legacyId: number, platform: Platform, limit = 100, cursor?: string, revision?: number) {
+      return client.GET("/api/v1/institutions/{legacyId}/accounts", { params: { path: { legacyId }, query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor, revision } } }).then(unwrap);
     },
     publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, limit = 100, cursor?: string) {
       return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(3000, Math.max(1, limit)), cursor } } }).then(unwrap);
@@ -124,24 +125,23 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const institutions = input.platform === "telegram" ? undefined : normalizeComparisonIds("institutions", input.institutions);
       return client.GET("/api/v1/compare", { params: { query: { ...input, channels: channels && [...channels], institutions: institutions && [...institutions], institutionLimit: Math.min(COMPARISON_PAGE_SIZE, Math.max(1, input.institutionLimit ?? COMPARISON_PAGE_SIZE)) } } }).then(unwrap);
     },
-    rating(input: ActivityRatingRequest) {
-      return client.GET("/api/v1/rating", { params: { query: {
-        platform: input.platform, period: input.period, channel_sort: input.channelSort,
-        channel_direction: input.channelDirection, post_sort: input.postSort,
-        post_direction: input.postDirection, entityLimit: Math.min(200, Math.max(1, input.entityLimit ?? 200)),
-        ...(input.entityCursor ? { entityCursor: input.entityCursor } : {}),
+    statistics(input: StatisticsRequest) {
+      const q = (input.q ?? "").trim();
+      if ([...(input.q ?? "")].length > 200) throw new RangeError("q must contain at most 200 characters");
+      return client.GET("/api/v1/statistics", { params: { query: {
+        view: input.view, platform: input.platform, period: input.period, q: q || undefined,
+        publication_sort: input.publicationSort,
+        publication_direction: input.publicationDirection,
+        entity_sort: input.entitySort, entity_direction: input.entityDirection,
+        limit: Math.min(50, Math.max(1, input.limit ?? 50)),
+        ...(input.cursor ? { cursor: input.cursor } : {}),
       } } }).then(unwrap);
     },
   };
 }
 
-const nextPublicCache: PublicResponseCache = {
-  async load(key, tags, produce) {
-    const { unstable_cache } = await import("next/cache");
-    return unstable_cache(produce, key, { tags, revalidate: 300 })();
-  },
-};
-export const api = createApiClient({ publicCache: process.env.NEXT_PUBLIC_DATA_CACHE === "disabled" ? undefined : nextPublicCache });
+const nextPublicCache = process.env.NEXT_PUBLIC_DATA_CACHE === "disabled" ? undefined : publicResponseCacheFromEnv();
+export const api = createApiClient({ publicCache: nextPublicCache });
 
 function normalizeComparisonIds(parameter: "channels" | "institutions", value: readonly number[] | undefined): readonly number[] | undefined {
   if (value === undefined) return undefined;

@@ -3,16 +3,14 @@
 Фактический production-стек: Next.js, FastAPI, платформенные Python-сборщики,
 anomaly worker и PostgreSQL 18.
 
-## Представления
+## Описания
 
-- [System context](c4/01-system-context.puml);
-- [containers](c4/03-containers-target.puml);
-- [collectors](c4/05-components-collectors.puml);
-- [PostgreSQL ERD](erd/target-postgresql.puml);
-- [data lifecycle](views/data-lifecycle.mmd);
-- [deployment](views/deployment.puml);
-- [backup and replication](views/replication-backup.puml);
-- [threat model](security/threat-model.md).
+- [конвейер сборщиков](collector-pipeline.md);
+- [модуль анализа](analyze-module.md);
+- [профили развёртывания](deployment-topologies.md);
+- [протокол передачи](raw-data-transfer.md);
+- [модель угроз](security/threat-model.md);
+- [политика зависимостей](security/dependency-policy.md).
 
 ## Decisions
 
@@ -23,7 +21,16 @@ anomaly worker и PostgreSQL 18.
 - [ADR-005: metric semantics](adr/ADR-005-metric-semantics.md);
 - [ADR-006: anomaly terminology](adr/ADR-006-anomaly-terminology.md);
 - [ADR-007: live bounded reads](adr/ADR-007-live-bounded-reads.md);
-- [ADR-008: no Redis](adr/ADR-008-no-redis.md).
+- [ADR-008: no Redis](adr/ADR-008-no-redis.md) — отменён ADR-011;
+- [ADR-009: collector phase arbiter](adr/ADR-009-collector-phase-arbiter.md);
+- [ADR-010: профили развёртывания и граница raw/ready](adr/ADR-010-deployment-profiles.md);
+- [ADR-011: общий кэш ответов](adr/ADR-011-shared-response-cache.md);
+- [ADR-012: collect и persist как разные фазы](adr/ADR-012-collect-persist-phases.md);
+- [ADR-013: размещение сборщиков и слияние наблюдений](adr/ADR-013-collector-placement-and-merge.md).
+
+## Планы
+
+- [переход к двум профилям развёртывания](two-server-migration-plan.md) — принят, не реализован.
 
 M-Ranked хранит наблюдаемые публичные счётчики и качество измерений. Он не
 доказывает происхождение реакции/просмотра и не делает вывод о намеренной

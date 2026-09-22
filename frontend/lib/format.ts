@@ -83,6 +83,14 @@ export function qualityLabel(value: string | null | undefined): string {
   }
 }
 
+/** Точные значения не требуют предупреждения. Для остальных состояний
+ *  возвращаем человекочитаемую подсказку и никогда не показываем сырой код. */
+export function qualityHint(value: string | null | undefined): string | undefined {
+  const normalized = (value ?? "").toLowerCase();
+  if (!normalized || normalized === "exact") return undefined;
+  return qualityLabel(value);
+}
+
 export function legacyDate(value: string | null | undefined, withZone = false): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -90,6 +98,37 @@ export function legacyDate(value: string | null | undefined, withZone = false): 
   const parts = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false }).formatToParts(date);
   const get = (name: string) => parts.find((part) => part.type === name)?.value;
   return `${get("day")}.${get("month")}.${get("year")}, ${get("hour")}:${get("minute")}:${get("second")}${withZone ? " МСК" : ""}`;
+}
+/** Календарный день публикации по московскому времени: YYYY-MM-DD.
+ *  В этих же сутках API считает недельный ряд площадки, поэтому точка графика
+ *  и строка таблицы должны разделяться одинаково. */
+export function moscowDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const get = (name: string) => parts.find((part) => part.type === name)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** Ссылка на сохранённую копию удалённой публикации. MAXSTAT не принимает
+ * фильтр даты из URL, поэтому дата остаётся подсказкой интерфейса, а hash
+ * помогает перейти к карточке, если она уже загружена на странице канала. */
+export function deletedPublicationArchiveUrl(
+  platform: Platform,
+  deletedAt: string | null,
+  externalId: string | null,
+  accountUsername?: string | null,
+  accountArchiveUrl?: string | null,
+): string | null {
+  if (!deletedAt || !externalId) return null;
+  if (platform === "telegram" && accountUsername) {
+    return `https://tgstat.ru/channel/@${encodeURIComponent(accountUsername)}/${encodeURIComponent(externalId)}`;
+  }
+  if (platform === "max" && accountArchiveUrl?.startsWith("https://maxstat.ru/channel/")) {
+    return `${accountArchiveUrl}#${encodeURIComponent(externalId)}`;
+  }
+  return null;
 }
 export const PERIOD_SHORT = {"3h":"за 3 часа","1d":"за сутки","7d":"за неделю","30d":"за месяц"} as const;
 export function legacyNumber(value: MetricValue) { const n = metricNumber(value); return n === null ? "—" : String(n); }
@@ -111,3 +150,12 @@ export function publicationLabel(externalId: string | null, platform: Platform) 
   return externalId;
 }
 export function postTypeLabel(value: string) { return ({text:"текст",photo:"фото",video:"видео",album:"альбом",document:"документ",poll:"опрос",webpage:"веб-страница",contact:"контакт",geo:"геолокация",media:"медиа"} as Record<string,string>)[value] ?? value; }
+
+/** На оси значений место ограничено шириной колонки, а показатели доходят до
+ *  миллионов. Полное число не влезает и наезжает на соседнее, поэтому крупные
+ *  величины подписываются сокращённо — точные значения читаются в подсказке. */
+const compactAxisNumber = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 });
+export function axisNumber(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  return Math.abs(value) < 10_000 ? value.toLocaleString("ru-RU") : compactAxisNumber.format(value);
+}

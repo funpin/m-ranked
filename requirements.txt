@@ -1,16 +1,3 @@
-fastapi==0.121.3
-uvicorn[standard]==0.40.0
-psycopg[binary,pool]==3.3.5
-Jinja2==3.1.6
-Telethon==1.40.0
-python-dotenv==1.1.1
-python-multipart==0.0.20
-httpx==0.28.1
-beautifulsoup4==4.13.4
-bcrypt==4.3.0
-playwright==1.62.0
-pytest==8.4.1
-pyyaml==6.0.3
-jsonschema==4.26.0
-referencing==0.37.0
-git+https://github.com/MaxApiTeam/PyMax.git@53103f0c8df32f36110cbe0bcbfc3ad82173808a#egg=maxapi-python
+# Полный набор для разработки и CI. Продуктовые образы ставят не его, а
+# хеш-фиксированные requirements/*.lock: ни pytest, ни Playwright в них нет.
+-r requirements/dev.txt

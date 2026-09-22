@@ -29,6 +29,13 @@ API использует отдельные роли `api_read`, `api_write_admi
 Telegram поддерживает public web, Web K и MTProto; MAX и Telegram сохраняют
 свои session-файлы как отдельные зашифрованные runtime-секреты.
 
+В `phased` mode поверх platform lease действует один общий PostgreSQL advisory
+lease полного цикла. Durable request checkpoints задают fairness, а пропущенные
+UTC-слоты схлопываются в один запуск. `legacy` сохраняет прежние offsets как
+оперативный rollback, `shadow` проверяет решения scheduler без provider calls.
+Архитектура, capacity gate и rollout описаны в
+[ADR-009](architecture/adr/ADR-009-collector-phase-arbiter.md).
+
 ## База и кэш
 
 Схема создаётся из `db/migrations/*.sql`; текущий contract id —
@@ -36,6 +43,14 @@ Telegram поддерживает public web, Web K и MTProto; MAX и Telegram 
 SQL. FastAPI держит небольшой LRU-кэш в памяти и сбрасывает его по PostgreSQL
 `LISTEN/NOTIFY`. Потеря уведомления не влияет на корректность: ключ включает
 ревизию набора, TTL ограничен.
+
+## CSV-экспорт
+
+CSV-экспорт удалён из рабочего контура. FastAPI не публикует public, legacy или
+admin export endpoints, Next.js не содержит совместимых `/export/*.csv`
+маршрутов, а collectors не создают `analytics.legacy_native_export_lexeme`.
+Миграция `0033_remove_csv_exports.sql` удаляет оставшуюся таблицу с production.
+Служебный cold archive Parquet относится к retention/DR и остаётся включённым.
 
 Подробные процедуры: [deploy](../operations/runbooks/DEPLOY.md),
 [backup/restore](../operations/runbooks/BACKUP_RESTORE.md),

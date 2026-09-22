@@ -9,6 +9,12 @@ import { CardGridSkeleton } from "@/components/skeletons";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
 import { Search } from "lucide-react";
+import {
+  FILTER_CONTROL_CLASS,
+  FILTER_PLATFORM_CLASS,
+  FILTER_SEARCH_CLASS,
+  FILTER_TOOLBAR_CLASS,
+} from "@/components/filter-toolbar";
 import { api } from "@/lib/api";
 import { PERIOD_LABELS, PLATFORM_LABELS, PLATFORM_LONG_LABELS } from "@/lib/format";
 import {
@@ -79,33 +85,25 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
           : "Прирост показателей всех постов в базе за выбранный период, а не только новых."}
       />
 
-      {/* Панель фильтров без карточки и без подписей над полями: подписи
-          дублировали сами значения, а рамка панели спорила с рамками карточек
-          вузов. Имена для скринридера остались на самих полях. */}
-      <div className="mb-5">
-          <LegacyFilterForm key={`${platform}:${period}:${sort}:${direction}:${q}`} action="/" method="get" aria-label="Фильтры обзора">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="min-w-[15rem] flex-1">
+      <LegacyFilterForm key={`${platform}:${period}:${sort}:${direction}:${q}`} action="/" method="get"
+        aria-label="Фильтры обзора" data-testid="filter-toolbar" className={FILTER_TOOLBAR_CLASS}>
+              <div className={FILTER_SEARCH_CLASS}>
                 <NativeInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" />
+                <NativeButton type="submit" aria-label="Применить фильтры" title="Применить фильтры" className="size-9 min-h-9 shrink-0 px-0">
+                  <Search className="size-4" aria-hidden="true" />
+                </NativeButton>
               </div>
-              {/* Кнопка стоит рядом с полем, как в рейтинге: внутри поля она
-                  читалась как украшение, а не как способ применить фильтры. */}
-              <NativeButton type="submit" aria-label="Применить фильтры" title="Применить фильтры" className="size-9 min-h-9 shrink-0 px-0">
-                <Search className="size-4" aria-hidden="true" />
-              </NativeButton>
-              <div className="w-[9rem]">
+              <div className={FILTER_CONTROL_CLASS}>
                 <NativeSelect name="period" defaultValue={period} aria-label="Период" title="Период">
                   {Object.entries(PERIOD_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                 </NativeSelect>
               </div>
-              <div className="w-[14rem]">
+              <div className={FILTER_CONTROL_CLASS}>
                 <NativeSelect name="sort" defaultValue={sort} aria-label="Сортировка" title="Порядок карточек в списке">
                   <option value="name">Название вуза · алфавит</option>
                   {platform === "all" ? (
                     <>
                       <option value="m_rating">Общий М‑Рейтинг · место</option>
-                      <option value="coverage">Подключённые площадки</option>
-                      <option value="accounts">Количество аккаунтов</option>
                     </>
                   ) : (
                     <>
@@ -119,29 +117,27 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   )}
                 </NativeSelect>
               </div>
-              <div className="w-[10.5rem]">
+              <div className={FILTER_CONTROL_CLASS}>
                 <NativeSelect name="direction" defaultValue={direction} aria-label="Порядок" title="Порядок">
                   <option value="desc">По убыванию</option>
                   <option value="asc">По возрастанию</option>
                 </NativeSelect>
               </div>
-              <NativeSegments
-                name="platform"
-                legend="Площадка"
-                value={platform}
-                options={PLATFORM_VALUES.map((value) => ({ value, label: PLATFORM_LABELS[value] }))}
-                labelled={false}
-              />
-            </div>
-          </LegacyFilterForm>
-      </div>
+              <div className={FILTER_PLATFORM_CLASS}><NativeSegments
+                  name="platform"
+                  legend="Площадка"
+                  value={platform}
+                  options={PLATFORM_VALUES.map((value) => ({ value, label: PLATFORM_LABELS[value] }))}
+                  labelled={false}
+                /></div>
+      </LegacyFilterForm>
 
       {/* Заготовка стоит только вокруг списка: заголовок и фильтры остаются
           видимыми и рабочими, пока едет новая выборка. */}
-      <NavigationBoundary fallback={<CardGridSkeleton />}>
+      <NavigationBoundary fallback={<CardGridSkeleton chrome={false} />}>
         {platform === "all" ? <CoverageSummary items={items} /> : null}
 
-        <section className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
+        <section className="reveal grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
           items.map((item) => <OverviewCard item={item} integrationWarning={page.integrationWarning} key={item.entityId} />)
         ) : (
           <Card><CardContent className="text-muted-foreground py-6">{q ? `По запросу «${q}» вузы не найдены.` : platform === "telegram" ? "За выбранный период публикаций не найдено." : "Вузы ещё не добавлены."}</CardContent></Card>
