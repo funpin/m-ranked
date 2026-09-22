@@ -9,6 +9,7 @@ import math
 import random
 import re
 import ssl
+import threading
 from typing import Any, Mapping, Protocol
 from urllib.parse import urlsplit
 from uuid import UUID, uuid5
@@ -465,14 +466,42 @@ class HttpsMtlsTransport:
         self.certificate = certificate
         self.private_key = private_key
         self.ca_bundle = ca_bundle
+        self._client: Any = None
+        self._client_lock = threading.Lock()
+
+    def _http(self) -> Any:
+        """Один клиент с keep-alive на весь процесс.
+
+        Прежде каждый конверт заново читал сертификаты, строил TLS-контекст и
+        проходил рукопожатие: отправитель, разбирающий очередь по полсотни
+        конвертов, платил за это полсотни раз подряд на единственном ядре
+        Сервера 1. Сертификаты читаются при первом обращении, поэтому их
+        ротация по-прежнему вступает в силу с перезапуском службы.
+        """
+        if self._client is not None:
+            return self._client
+        with self._client_lock:
+            if self._client is None:
+                import httpx
+                context = ssl.create_default_context(cafile=self.ca_bundle)
+                context.minimum_version = ssl.TLSVersion.TLSv1_3
+                context.load_cert_chain(self.certificate, self.private_key)
+                self._client = httpx.Client(
+                    verify=context,
+                    timeout=httpx.Timeout(connect=3, read=30, write=30, pool=3),
+                    limits=httpx.Limits(max_connections=2, max_keepalive_connections=1),
+                )
+        return self._client
+
+    def close(self) -> None:
+        with self._client_lock:
+            client, self._client = self._client, None
+        if client is not None:
+            client.close()
 
     def send(self, envelope: TransferEnvelope) -> TransferAck:
         validate_envelope(envelope)
-        import httpx
-        context = ssl.create_default_context(cafile=self.ca_bundle)
-        context.minimum_version = ssl.TLSVersion.TLSv1_3
-        context.load_cert_chain(self.certificate, self.private_key)
-        response = httpx.post(
+        response = self._http().post(
             self.endpoint,
             content=envelope.payload,
             headers={
@@ -487,8 +516,6 @@ class HttpsMtlsTransport:
                 "x-mranked-uncompressed-bytes": str(envelope.uncompressed_bytes),
                 "x-mranked-payload-sha256": envelope.payload_sha256,
             },
-            verify=context,
-            timeout=httpx.Timeout(connect=3, read=30, write=30, pool=3),
         )
         response.raise_for_status()
         body = response.json()
@@ -856,8 +883,8 @@ class PostgresTransferProducer:
                      coalesce(sum(octet_length(payload)),0) AS outbox_bytes,
                      count(*) FILTER (WHERE state IN ('sealed','sent')) AS backlog_rows,
                      coalesce(sum(octet_length(payload)) FILTER (WHERE state IN ('sealed','sent')),0) AS backlog_bytes,
-                     coalesce(extract(epoch FROM transaction_timestamp()-min(created_at))
-                       FILTER (WHERE state IN ('sealed','sent')),0) AS oldest_age,
+                     coalesce(extract(epoch FROM transaction_timestamp()-min(created_at)
+                       FILTER (WHERE state IN ('sealed','sent'))),0) AS oldest_age,
                      coalesce(extract(epoch FROM max(acknowledged_at-created_at)),0) AS latency,
                      coalesce(sum(greatest(publish_attempts-1,0)),0) AS retries,
                      count(*) FILTER (WHERE last_error_code='checksum_mismatch') AS checksum_failures,

@@ -48,6 +48,27 @@ from .transfer import (
 
 logger = logging.getLogger("collector_target")
 
+TRANSIENT_BACKOFF_MIN_SECONDS = 2.0
+TRANSIENT_BACKOFF_MAX_SECONDS = 30.0
+
+
+def is_transient(error: BaseException) -> bool:
+    """Сбой, который проходит сам: база занята, перезапущена или недоступна.
+
+    Сюда же относится потеря глобальной аренды фазы: её держит соединение, и
+    обрыв соединения снимает замок. Всё остальное — ошибка кода или данных, и
+    её честнее отдать systemd, чем крутить цикл вхолостую.
+    """
+    if isinstance(error, (ConnectionError, TimeoutError)):
+        return True
+    if isinstance(error, RuntimeError) and str(error) == "GlobalPhaseLeaseLost":
+        return True
+    try:
+        import psycopg
+    except ImportError:  # pragma: no cover - packaging guard
+        return False
+    return isinstance(error, (psycopg.OperationalError, psycopg.InterfaceError))
+
 
 def _log_startup(
     platform: Platform,
@@ -462,16 +483,20 @@ async def _run(args: argparse.Namespace) -> int:
                 repository, InProcessTransport(data_adapter), coordinator.metrics,
             ))
         elif transfer_mode == "https-mtls":
-            repository.configure_transfer_sender(PostgresTransferProducer(
-                repository,
-                HttpsMtlsTransport(
-                    settings.collector_transfer_https_endpoint or "",
-                    certificate=settings.collector_transfer_client_certificate or "",
-                    private_key=settings.collector_transfer_private_key or "",
-                    ca_bundle=settings.collector_transfer_ca_bundle or "",
-                ),
-                coordinator.metrics,
-            ))
+            # Сборщик только запечатывает пачку в outbox той же транзакцией,
+            # что и запись, а доставляет её служба m-ranked-target-transfer-
+            # sender. Прежде конверт уходил отсюда же, сразу после записи и
+            # под общим замком записи: сетевой вызов на Сервер 2 с новым
+            # TLS-рукопожатием держал замок, три других сборщика ждали его по
+            # 5–14 секунд на аккаунт, и циклы перерастали свои слоты. Настройки
+            # транспорта всё равно проверяются на старте, чтобы ошибка в них
+            # была видна сразу, а не только в журнале отправителя.
+            HttpsMtlsTransport(
+                settings.collector_transfer_https_endpoint or "",
+                certificate=settings.collector_transfer_client_certificate or "",
+                private_key=settings.collector_transfer_private_key or "",
+                ca_bundle=settings.collector_transfer_ca_bundle or "",
+            )
         retention = WorkingSetRetention(
             repository,
             RetentionPolicy(
@@ -559,201 +584,227 @@ async def _run(args: argparse.Namespace) -> int:
         pending_phase: tuple[
             datetime, int, datetime, datetime | None, datetime | None,
         ] | None = None
+        backoff = TRANSIENT_BACKOFF_MIN_SECONDS
         while not stop.is_set():
-            ensure_runtime_release_available()
-            now = utc(clock.now(), "clock.now")
-            if pending_phase is not None:
-                (
-                    scheduled_at, coalesced_slots, next_due,
-                    resumable, last_completed,
-                ) = pending_phase
-            else:
-                resumable = repository.resumable_scheduled_at(
-                    platform, args.partition, collector_version,
-                )
-                last_completed = repository.last_completed_scheduled_at(
-                    platform, args.partition, collector_version,
-                )
-                if resumable is not None:
-                    scheduled_at = resumable
-                    coalesced_slots = 0
-                    next_due = scheduled_at + timedelta(seconds=interval_seconds)
+            try:
+                ensure_runtime_release_available()
+                now = utc(clock.now(), "clock.now")
+                if pending_phase is not None:
+                    (
+                        scheduled_at, coalesced_slots, next_due,
+                        resumable, last_completed,
+                    ) = pending_phase
                 else:
-                    scheduled_at, coalesced_slots, next_due = due_slot(
-                        now, policy, last_completed,
+                    resumable = repository.resumable_scheduled_at(
+                        platform, args.partition, collector_version,
                     )
-                    if scheduled_at is None:
-                        if await _wait_or_stop(
-                            stop, max(0.0, (next_due - now).total_seconds()),
-                        ):
-                            break
-                        continue
-                pending_phase = (
-                    scheduled_at, coalesced_slots, next_due,
-                    resumable, last_completed,
+                    last_completed = repository.last_completed_scheduled_at(
+                        platform, args.partition, collector_version,
+                    )
+                    if resumable is not None:
+                        scheduled_at = resumable
+                        coalesced_slots = 0
+                        next_due = scheduled_at + timedelta(seconds=interval_seconds)
+                    else:
+                        scheduled_at, coalesced_slots, next_due = due_slot(
+                            now, policy, last_completed,
+                        )
+                        if scheduled_at is None:
+                            if await _wait_or_stop(
+                                stop, max(0.0, (next_due - now).total_seconds()),
+                            ):
+                                break
+                            continue
+                    pending_phase = (
+                        scheduled_at, coalesced_slots, next_due,
+                        resumable, last_completed,
+                    )
+                schedule_lag = max(0.0, (now - scheduled_at).total_seconds())
+                logger.info(
+                    "collector phase requested platform=%s partition=%s run=pending "
+                    "scheduled_at=%s phase=requested status=due collector_version=%s "
+                    "schedule_lag_seconds=%.3f coalesced_slots=%s mode=%s",
+                    platform.value, args.partition, scheduled_at.isoformat(),
+                    collector_version, schedule_lag, coalesced_slots, schedule_mode,
                 )
-            schedule_lag = max(0.0, (now - scheduled_at).total_seconds())
-            logger.info(
-                "collector phase requested platform=%s partition=%s run=pending "
-                "scheduled_at=%s phase=requested status=due collector_version=%s "
-                "schedule_lag_seconds=%.3f coalesced_slots=%s mode=%s",
-                platform.value, args.partition, scheduled_at.isoformat(),
-                collector_version, schedule_lag, coalesced_slots, schedule_mode,
-            )
-            if schedule_mode == "shadow":
+                if schedule_mode == "shadow":
+                    coordinator.metrics.cycle(
+                        platform,
+                        duration=0.0,
+                        schedule_lag=schedule_lag,
+                        overrun=False,
+                        coalesced_slots=coalesced_slots,
+                        resumed=resumable is not None,
+                    )
+                    if args.once:
+                        return 0
+                    pending_phase = None
+                    if await _wait_or_stop(
+                        stop, max(0.0, (next_due - utc(clock.now(), "clock.now")).total_seconds()),
+                    ):
+                        break
+                    continue
+
+                request = PhaseRequest(
+                    platform,
+                    args.partition,
+                    collector_version,
+                    scheduled_at,
+                    (
+                        resumable
+                        if resumable is not None else
+                        last_completed + timedelta(seconds=interval_seconds)
+                        if last_completed is not None else
+                        scheduled_at
+                    ),
+                    now,
+                )
+                acquisition = await phase_scheduler.acquire(request, stop)
+                phase_result = (
+                    "cancelled" if acquisition.cancelled else
+                    "superseded" if acquisition.superseded else
+                    "acquired" if acquisition.lease is not None else
+                    "timeout"
+                )
+                coordinator.metrics.phase_wait(
+                    platform,
+                    result=phase_result,
+                    duration=acquisition.wait_seconds,
+                    attempts=acquisition.attempts,
+                )
+                if acquisition.lease is None:
+                    logger.info(
+                        "collector phase not acquired platform=%s partition=%s run=pending "
+                        "scheduled_at=%s phase=waiting status=%s collector_version=%s "
+                        "wait_seconds=%.3f attempts=%s",
+                        platform.value, args.partition, scheduled_at.isoformat(),
+                        phase_result, collector_version, acquisition.wait_seconds,
+                        acquisition.attempts,
+                    )
+                    if acquisition.cancelled or stop.is_set():
+                        break
+                    if acquisition.superseded:
+                        pending_phase = None
+                        if args.once:
+                            return 0
+                        continue
+                    if args.once:
+                        return 0
+                    await _wait_or_stop(stop, settings.collector_phase_retry_seconds)
+                    continue
+
+                phase_lease = acquisition.lease
+                began = time.monotonic()
+                summary = None
+                forced_shutdown = False
+                try:
+                    logger.info(
+                        "collector phase started platform=%s partition=%s run=pending "
+                        "scheduled_at=%s phase=active status=running collector_version=%s "
+                        "wait_seconds=%.3f schedule_lag_seconds=%.3f",
+                        platform.value, args.partition, scheduled_at.isoformat(),
+                        collector_version, acquisition.wait_seconds, schedule_lag,
+                    )
+                    summary, forced_shutdown = await _run_bounded_cycle(
+                        coordinator,
+                        scheduled_at,
+                        stop=stop,
+                        lease=phase_lease,
+                        deadline_seconds=policy.cycle_deadline_seconds,
+                        shutdown_grace_seconds=settings.collector_shutdown_grace_seconds,
+                        lease_probe_seconds=settings.collector_phase_retry_seconds,
+                    )
+                    phase_lease.finish(summary.status.value, clock.now())
+                except asyncio.CancelledError:
+                    forced_shutdown = True
+                    coordinator.metrics.shutdown(platform, forced=True)
+                    logger.warning(
+                        "collector phase cancelled platform=%s partition=%s run=pending "
+                        "scheduled_at=%s phase=shutdown status=cancelled collector_version=%s",
+                        platform.value, args.partition, scheduled_at.isoformat(),
+                        collector_version,
+                    )
+                    break
+                except TimeoutError as error:
+                    coordinator.metrics.request_timeout(platform)
+                    logger.error(
+                        "collector phase deadline platform=%s partition=%s run=pending "
+                        "scheduled_at=%s phase=active status=failed collector_version=%s code=%s",
+                        platform.value, args.partition, scheduled_at.isoformat(),
+                        collector_version, sanitize_error_code(error),
+                    )
+                    if args.once:
+                        return 1
+                finally:
+                    phase_lease.release()
+                    pending_phase = None
+                _maintain_working_set(
+                    retention, coordinator.metrics, settings.collector_disk_path,
+                )
+                elapsed = time.monotonic() - began
                 coordinator.metrics.cycle(
                     platform,
-                    duration=0.0,
+                    duration=elapsed,
                     schedule_lag=schedule_lag,
-                    overrun=False,
+                    overrun=elapsed >= interval_seconds,
                     coalesced_slots=coalesced_slots,
                     resumed=resumable is not None,
                 )
-                if args.once:
-                    return 0
-                pending_phase = None
-                if await _wait_or_stop(
-                    stop, max(0.0, (next_due - utc(clock.now(), "clock.now")).total_seconds()),
-                ):
-                    break
-                continue
-
-            request = PhaseRequest(
-                platform,
-                args.partition,
-                collector_version,
-                scheduled_at,
-                (
-                    resumable
-                    if resumable is not None else
-                    last_completed + timedelta(seconds=interval_seconds)
-                    if last_completed is not None else
-                    scheduled_at
-                ),
-                now,
-            )
-            acquisition = await phase_scheduler.acquire(request, stop)
-            phase_result = (
-                "cancelled" if acquisition.cancelled else
-                "superseded" if acquisition.superseded else
-                "acquired" if acquisition.lease is not None else
-                "timeout"
-            )
-            coordinator.metrics.phase_wait(
-                platform,
-                result=phase_result,
-                duration=acquisition.wait_seconds,
-                attempts=acquisition.attempts,
-            )
-            if acquisition.lease is None:
-                logger.info(
-                    "collector phase not acquired platform=%s partition=%s run=pending "
-                    "scheduled_at=%s phase=waiting status=%s collector_version=%s "
-                    "wait_seconds=%.3f attempts=%s",
-                    platform.value, args.partition, scheduled_at.isoformat(),
-                    phase_result, collector_version, acquisition.wait_seconds,
-                    acquisition.attempts,
-                )
-                if acquisition.cancelled or stop.is_set():
-                    break
-                if acquisition.superseded:
-                    pending_phase = None
+                if elapsed >= interval_seconds:
+                    # Цикл, не уложившийся в свой интервал, стоит пропущенных
+                    # замеров: планировщик схлопнет перешагнутые слоты в один, и в
+                    # истории точек появится провал вместо ровного ряда. Раньше это
+                    # было видно только полем overrun в INFO-строке, и разрыв
+                    # находили уже на графике публикации, а не в журнале.
+                    logger.warning(
+                        "collector cycle overran its interval platform=%s partition=%s "
+                        "scheduled_at=%s duration_seconds=%.3f interval_seconds=%s "
+                        "skipped_slots=%s collector_version=%s",
+                        platform.value, args.partition, scheduled_at.isoformat(),
+                        elapsed, interval_seconds,
+                        int(elapsed) // interval_seconds, collector_version,
+                    )
+                if forced_shutdown:
+                    coordinator.metrics.shutdown(platform, forced=True)
+                if summary is not None:
+                    logger.info(
+                        "collector phase completed platform=%s partition=%s run=%s "
+                        "scheduled_at=%s phase=completed status=%s collector_version=%s "
+                        "accounts=%s errors=%s duration_seconds=%.3f overrun=%s",
+                        platform.value, args.partition, summary.run_id,
+                        scheduled_at.isoformat(), summary.status.value,
+                        collector_version, summary.account_count, summary.error_count,
+                        elapsed, str(elapsed >= interval_seconds).lower(),
+                    )
                     if args.once:
-                        return 0
-                    continue
-                if args.once:
-                    return 0
-                await _wait_or_stop(stop, settings.collector_phase_retry_seconds)
-                continue
-
-            phase_lease = acquisition.lease
-            began = time.monotonic()
-            summary = None
-            forced_shutdown = False
-            try:
-                logger.info(
-                    "collector phase started platform=%s partition=%s run=pending "
-                    "scheduled_at=%s phase=active status=running collector_version=%s "
-                    "wait_seconds=%.3f schedule_lag_seconds=%.3f",
-                    platform.value, args.partition, scheduled_at.isoformat(),
-                    collector_version, acquisition.wait_seconds, schedule_lag,
-                )
-                summary, forced_shutdown = await _run_bounded_cycle(
-                    coordinator,
-                    scheduled_at,
-                    stop=stop,
-                    lease=phase_lease,
-                    deadline_seconds=policy.cycle_deadline_seconds,
-                    shutdown_grace_seconds=settings.collector_shutdown_grace_seconds,
-                    lease_probe_seconds=settings.collector_phase_retry_seconds,
-                )
-                phase_lease.finish(summary.status.value, clock.now())
+                        return 1 if summary.status == RunStatus.FAILED else 0
+                if stop.is_set():
+                    coordinator.metrics.shutdown(platform, forced=False)
+                    break
+                backoff = TRANSIENT_BACKOFF_MIN_SECONDS
             except asyncio.CancelledError:
-                forced_shutdown = True
-                coordinator.metrics.shutdown(platform, forced=True)
+                raise
+            except Exception as error:
+                if not is_transient(error):
+                    raise
+                # Сбой базы — не повод терять процесс. Перезапуск стоил
+                # замера: пока systemd выжидал паузу и поднимал интерпретатор,
+                # слот уходил, а при частых сбоях служба упиралась в
+                # StartLimitBurst и замолкала совсем. Цикл остаётся на месте:
+                # незавершённый прогон подхватит resumable_scheduled_at, а
+                # новый слот выдаст due_slot.
+                pending_phase = None
                 logger.warning(
-                    "collector phase cancelled platform=%s partition=%s run=pending "
-                    "scheduled_at=%s phase=shutdown status=cancelled collector_version=%s",
-                    platform.value, args.partition, scheduled_at.isoformat(),
-                    collector_version,
-                )
-                break
-            except TimeoutError as error:
-                coordinator.metrics.request_timeout(platform)
-                logger.error(
-                    "collector phase deadline platform=%s partition=%s run=pending "
-                    "scheduled_at=%s phase=active status=failed collector_version=%s code=%s",
-                    platform.value, args.partition, scheduled_at.isoformat(),
-                    collector_version, sanitize_error_code(error),
+                    "collector database unavailable platform=%s partition=%s "
+                    "code=%s retry_in_seconds=%.0f",
+                    platform.value, args.partition,
+                    sanitize_error_code(error), backoff,
                 )
                 if args.once:
                     return 1
-            finally:
-                phase_lease.release()
-                pending_phase = None
-            _maintain_working_set(
-                retention, coordinator.metrics, settings.collector_disk_path,
-            )
-            elapsed = time.monotonic() - began
-            coordinator.metrics.cycle(
-                platform,
-                duration=elapsed,
-                schedule_lag=schedule_lag,
-                overrun=elapsed >= interval_seconds,
-                coalesced_slots=coalesced_slots,
-                resumed=resumable is not None,
-            )
-            if elapsed >= interval_seconds:
-                # Цикл, не уложившийся в свой интервал, стоит пропущенных
-                # замеров: планировщик схлопнет перешагнутые слоты в один, и в
-                # истории точек появится провал вместо ровного ряда. Раньше это
-                # было видно только полем overrun в INFO-строке, и разрыв
-                # находили уже на графике публикации, а не в журнале.
-                logger.warning(
-                    "collector cycle overran its interval platform=%s partition=%s "
-                    "scheduled_at=%s duration_seconds=%.3f interval_seconds=%s "
-                    "skipped_slots=%s collector_version=%s",
-                    platform.value, args.partition, scheduled_at.isoformat(),
-                    elapsed, interval_seconds,
-                    int(elapsed) // interval_seconds, collector_version,
-                )
-            if forced_shutdown:
-                coordinator.metrics.shutdown(platform, forced=True)
-            if summary is not None:
-                logger.info(
-                    "collector phase completed platform=%s partition=%s run=%s "
-                    "scheduled_at=%s phase=completed status=%s collector_version=%s "
-                    "accounts=%s errors=%s duration_seconds=%.3f overrun=%s",
-                    platform.value, args.partition, summary.run_id,
-                    scheduled_at.isoformat(), summary.status.value,
-                    collector_version, summary.account_count, summary.error_count,
-                    elapsed, str(elapsed >= interval_seconds).lower(),
-                )
-                if args.once:
-                    return 1 if summary.status == RunStatus.FAILED else 0
-            if stop.is_set():
-                coordinator.metrics.shutdown(platform, forced=False)
-                break
+                if await _wait_or_stop(stop, backoff):
+                    break
+                backoff = min(backoff * 2, TRANSIENT_BACKOFF_MAX_SECONDS)
         return 0
     except asyncio.CancelledError:
         raise

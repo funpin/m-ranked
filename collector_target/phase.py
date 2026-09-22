@@ -511,8 +511,14 @@ class PostgresPhaseArbiter:
             for slot in range(collect_slots)
         )
         self._lock_id = self._slot_ids[0]
+        # Одно соединение на арбитра. Прежде их было два — управляющее для
+        # очереди и отдельное под будущую аренду, — и вместе с замком площадки,
+        # замком записи и пулом репозитория сборщик держал до семи соединений.
+        # Четыре сборщика на Сервере 1 упирались в max_connections=30 и
+        # падали с OperationalError посреди цикла, а каждый такой перезапуск
+        # стоил пропущенного замера. Теперь управляющее соединение само
+        # становится арендой, а следующая заявка открывает себе новое.
         self._connection: Any | None = None
-        self._lease_connection: Any | None = None
         self._connection_lock = Lock()
 
     @staticmethod
@@ -579,11 +585,8 @@ class PostgresPhaseArbiter:
     def close(self) -> None:
         with self._connection_lock:
             connection = self._connection
-            lease_connection = self._lease_connection
             self._connection = None
-            self._lease_connection = None
             self._close_connection(connection)
-            self._close_connection(lease_connection)
 
     @staticmethod
     def _contenders(connection: Any, cutoff: datetime, limit: int) -> list[Any]:
@@ -693,56 +696,61 @@ class PostgresPhaseArbiter:
         if not self._is_selected(contenders, request):
             return None
 
-        for attempt in range(2):
-            connection = self._lease_connection
-            slot_id: int | None = None
-            try:
-                if connection is None or bool(getattr(connection, "closed", False)):
-                    connection = self._open_connection()
-                    self._lease_connection = connection
-                # Любой свободный слот годится: они различаются только именем,
-                # а очерёдность задаёт порядок кандидатов, а не номер слота.
-                for candidate in self._slot_ids:
-                    row = connection.execute(
-                        "SELECT pg_try_advisory_lock(%s)", (candidate,),
-                    ).fetchone()
-                    if bool(
-                        next(iter(row.values())) if isinstance(row, dict) else row[0]
-                    ):
-                        slot_id = candidate
-                        break
-                if slot_id is None:
-                    return None
-                contenders = self._contenders(
-                    connection, cutoff, self.collect_slots,
-                )
-                if not self._is_selected(contenders, request):
-                    connection.execute(
-                        "SELECT pg_advisory_unlock(%s)", (slot_id,),
+        with self._connection_lock:
+            for attempt in range(2):
+                connection = self._connection
+                slot_id: int | None = None
+                try:
+                    if connection is None or bool(getattr(connection, "closed", False)):
+                        connection = self._open_connection()
+                        self._connection = connection
+                    # Любой свободный слот годится: они различаются только
+                    # именем, а очерёдность задаёт порядок кандидатов, а не
+                    # номер слота.
+                    for candidate in self._slot_ids:
+                        row = connection.execute(
+                            "SELECT pg_try_advisory_lock(%s)", (candidate,),
+                        ).fetchone()
+                        if bool(
+                            next(iter(row.values())) if isinstance(row, dict) else row[0]
+                        ):
+                            slot_id = candidate
+                            break
+                    if slot_id is None:
+                        return None
+                    contenders = self._contenders(
+                        connection, cutoff, self.collect_slots,
                     )
-                    return None
-                active = {
-                    "state": "active",
-                    "claimed_at": datetime.now(timezone.utc).isoformat(),
-                }
-                connection.execute(
-                    """UPDATE ops_and_admin.operational_checkpoint
-                          SET value=value || %s::jsonb,
-                              updated_at=transaction_timestamp()
-                        WHERE checkpoint_key=%s AND scope_type='platform'
-                          AND scope_id=%s AND platform=%s""",
-                    (
-                        _json(active), PHASE_CHECKPOINT_KEY, request.scope_id,
-                        request.platform.value,
-                    ),
-                )
-                self._lease_connection = None
-                return _PostgresPhaseLease(connection, request, slot_id)
-            except BaseException as error:
-                self._close_connection(connection)
-                self._lease_connection = None
-                if not self._is_connection_error(error, connection) or attempt:
-                    raise
+                    if not self._is_selected(contenders, request):
+                        connection.execute(
+                            "SELECT pg_advisory_unlock(%s)", (slot_id,),
+                        )
+                        return None
+                    active = {
+                        "state": "active",
+                        "claimed_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    connection.execute(
+                        """UPDATE ops_and_admin.operational_checkpoint
+                              SET value=value || %s::jsonb,
+                                  updated_at=transaction_timestamp()
+                            WHERE checkpoint_key=%s AND scope_type='platform'
+                              AND scope_id=%s AND platform=%s""",
+                        (
+                            _json(active), PHASE_CHECKPOINT_KEY, request.scope_id,
+                            request.platform.value,
+                        ),
+                    )
+                    # Сессионный замок живёт ровно столько, сколько его
+                    # соединение, поэтому оно уходит аренде целиком. Следующая
+                    # заявка откроет себе новое.
+                    self._connection = None
+                    return _PostgresPhaseLease(connection, request, slot_id)
+                except BaseException as error:
+                    self._close_connection(connection)
+                    self._connection = None
+                    if not self._is_connection_error(error, connection) or attempt:
+                        raise
         raise AssertionError("unreachable")
 
 

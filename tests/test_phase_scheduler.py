@@ -238,66 +238,84 @@ def test_postgres_arbiter_loser_never_attempts_global_lock() -> None:
     arbiter.close()
 
 
-def test_postgres_arbiter_reuses_unacquired_lease_connection_between_attempts() -> None:
+def test_postgres_arbiter_reuses_unacquired_connection_between_attempts() -> None:
     selected = request(Platform.TELEGRAM)
-    control = _ScriptedConnection([_contender(selected), _contender(selected)])
-    lease_connection = _ScriptedConnection([(False,), (False,)])
+    control = _ScriptedConnection([
+        _contender(selected), (False,), _contender(selected), (False,),
+    ])
     created: list[_ScriptedConnection] = []
-    connections = iter((control, lease_connection))
 
     def factory() -> _ScriptedConnection:
-        connection = next(connections)
-        created.append(connection)
-        return connection
+        created.append(control)
+        return control
 
     arbiter = PostgresPhaseArbiter(connection_factory=factory)
     assert arbiter.try_acquire(selected, stale_after_seconds=60) is None
     assert arbiter.try_acquire(selected, stale_after_seconds=60) is None
-    assert len(created) == 2
-    assert sum(
-        "pg_try_advisory_lock" in sql for sql in lease_connection.calls
-    ) == 2
+    assert len(created) == 1
+    assert sum("pg_try_advisory_lock" in sql for sql in control.calls) == 2
     arbiter.close()
+    assert control.closed
 
 
-def test_postgres_arbiter_reopens_broken_lease_connection_once() -> None:
+def test_postgres_arbiter_reopens_broken_connection_once() -> None:
     selected = request(Platform.TELEGRAM)
-    control = _ScriptedConnection([_contender(selected)])
-    broken = _ScriptedConnection([ConnectionError("connection lost")])
+    control = _ScriptedConnection([
+        _contender(selected), ConnectionError("connection lost"),
+    ])
     recovered = _ScriptedConnection([
         (True,),
         _contender(selected),
         None,
         (True,),
     ])
-    connections = iter((control, broken, recovered))
+    connections = iter((control, recovered))
     arbiter = PostgresPhaseArbiter(connection_factory=lambda: next(connections))
 
     lease = arbiter.try_acquire(selected, stale_after_seconds=60)
     assert lease is not None
-    assert broken.closed
+    assert control.closed
     lease.release()
     assert recovered.closed
     arbiter.close()
 
 
+def test_postgres_arbiter_hands_its_only_connection_to_the_lease() -> None:
+    """Арбитр не держит второго соединения: аренда забирает управляющее."""
+    selected = request(Platform.TELEGRAM)
+    control = _ScriptedConnection([
+        _contender(selected), (True,), _contender(selected), None,
+    ])
+    successor = _ScriptedConnection([(object(),)])
+    connections = iter((control, successor))
+    arbiter = PostgresPhaseArbiter(connection_factory=lambda: next(connections))
+
+    lease = arbiter.try_acquire(selected, stale_after_seconds=60)
+    assert lease is not None
+    assert lease.connection is control
+    assert arbiter.request(request(Platform.VK))
+    assert "INSERT INTO ops_and_admin.operational_checkpoint" in successor.calls[-1]
+    arbiter.close()
+    assert successor.closed
+    assert not control.closed
+
+
 def test_postgres_arbiter_rechecks_winner_after_taking_global_lock() -> None:
     selected = request(Platform.TELEGRAM)
     replacement = request(Platform.VK)
-    control = _ScriptedConnection([_contender(selected)])
-    lease_connection = _ScriptedConnection([
+    control = _ScriptedConnection([
+        _contender(selected),
         (True,),
         _contender(replacement),
         (True,),
     ])
-    connections = iter((control, lease_connection))
-    arbiter = PostgresPhaseArbiter(connection_factory=lambda: next(connections))
+    arbiter = PostgresPhaseArbiter(connection_factory=lambda: control)
 
     assert arbiter.try_acquire(selected, stale_after_seconds=60) is None
-    lease_sql = [sql for sql in lease_connection.calls if not sql.startswith("SET ")]
-    assert "pg_try_advisory_lock" in lease_sql[0]
-    assert "FROM ops_and_admin.operational_checkpoint" in lease_sql[1]
-    assert "pg_advisory_unlock" in lease_sql[2]
-    assert not lease_connection.closed
+    lease_sql = [sql for sql in control.calls if not sql.startswith("SET ")]
+    assert "pg_try_advisory_lock" in lease_sql[1]
+    assert "FROM ops_and_admin.operational_checkpoint" in lease_sql[2]
+    assert "pg_advisory_unlock" in lease_sql[3]
+    assert not control.closed
     arbiter.close()
-    assert lease_connection.closed
+    assert control.closed
