@@ -46,7 +46,7 @@ class RetentionRefused(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class RetentionPolicy:
     mode: str = "off"
-    track_post_for_hours: int = 960
+    track_post_for_hours: int = 720
     months_per_run: int = 1
 
     def __post_init__(self) -> None:

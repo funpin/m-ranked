@@ -236,7 +236,7 @@ class Settings:
             initial_channels=channels,
             telegram_history_pages=_int("TELEGRAM_HISTORY_PAGES", 1),
             poll_interval_minutes=_int("POLL_INTERVAL_MINUTES", 5),
-            track_post_for_hours=_int("TRACK_POST_FOR_HOURS", 960),
+            track_post_for_hours=_int("TRACK_POST_FOR_HOURS", 720),
             complete_history_max_first_age_minutes=_int(
                 "COMPLETE_HISTORY_MAX_FIRST_AGE_MINUTES", 6
             ),

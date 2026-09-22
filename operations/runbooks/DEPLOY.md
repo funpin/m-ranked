@@ -517,13 +517,13 @@ journalctl -u m-ranked-target-api -n 100 --no-pager
     ```sql
     SELECT months.published_month,
            ops_and_admin.collector_working_set_month_releasable(
-               months.published_month, 960) AS releasable
+               months.published_month, 720) AS releasable
       FROM (SELECT DISTINCT published_month
               FROM ingest.publication_metric_snapshot) AS months
      ORDER BY months.published_month;
     ```
 
-    Значение `960` должно буквально совпадать с просмотренным
+    Значение `720` должно буквально совпадать с просмотренным
     `TRACK_POST_FOR_HOURS`, а вывод прикладывается к отдельному approval шага 11.
 11. **Отдельное необратимое подтверждение.** Только новым явным разрешением
     владельца данных поставить retention `on`. Изменение конфигурации ещё можно
