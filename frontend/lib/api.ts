@@ -112,9 +112,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
     publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, limit = 100, cursor?: string) {
       return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(3000, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
-    publicationAnomalyAnalysis(legacyId: number | string, legacyType?: LegacyPublicationType, cursor?: string) {
+    publicationAnomalyAnalysis(legacyId: number | string, legacyType?: LegacyPublicationType) {
       return analysisClient.GET("/api/v1/publications/{legacyId}/anomaly-analysis", {
-        params: { path: { legacyId }, query: { legacyType, limit: 100, cursor } },
+        params: { path: { legacyId }, query: { legacyType } },
       }).then(unwrap);
     },
     comparisonCandidates(platform: Exclude<Platform, "all">, limit = 200, cursor?: string) {

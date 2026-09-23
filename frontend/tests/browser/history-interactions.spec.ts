@@ -72,13 +72,39 @@ test("chart activation selects the exact row and reveals an old collapsed point"
   await expect(page.locator("#snapshot-1").getByTestId("snapshot-jump")).toBeFocused();
 });
 
-test("publication hides the analyzer panel but preserves boundary rows for future redesign",async({page})=>{
+test("publication shows a collapsed analysis card that expands and marks signals on the charts",async({page})=>{
   await page.goto("/posts/1");
-  await expect(page.getByRole("region",{name:"Сигнал аномальной динамики"})).toHaveCount(0);
+  const card=page.getByTestId("anomaly-card");
+  const toggle=page.getByTestId("anomaly-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded","false");
+  await expect(toggle).toContainText("признаки искусственной активности");
+  await expect(toggle).toContainText("2 признака");
+  await expect(card.getByTestId("anomaly-signal")).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded","true");
+  await expect(card.getByTestId("anomaly-signal")).toHaveCount(2);
+  await expect(card.locator("code").first()).toContainText("Δпросмотры ≈ 10·t");
+  await expect(card).toContainText("пост долго показывался в рекомендациях");
+  await expect(card.getByLabel("Символы признаков")).toContainText("линейная подача");
+  // Символы признаков стоят на обоих основных графиках, по одному на признак.
+  await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
+  await expect(page.locator("g[data-signal-marker]")).toHaveCount(4);
+  await expect(page.locator("g[data-signal-marker] text").first()).toContainText(/[⟋⇅]/);
+  await card.getByRole("button",{name:"Показать на графике"}).first().click();
+  await expect(page.locator("g[data-signal-marker][data-highlighted]")).toHaveCount(2);
+  await expect(page.getByTestId("publication-chart-stack")).toBeInViewport();
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
   await expect(page.locator("#snapshot-40[data-anomaly-boundary]")).toContainText("граница сигнала аномальной динамики");
   await expect(page.locator("#snapshot-41[data-anomaly-boundary]")).toContainText("граница сигнала аномальной динамики");
+});
+
+test("a post without signals reads calmly and an unanalyzed post says so",async({page})=>{
+  await page.goto("/posts/3");
+  await expect(page.getByTestId("anomaly-toggle")).toContainText("Нет признаков");
+  await expect(page.getByTestId("anomaly-toggle").locator('[data-slot="badge"]')).toHaveCount(0);
+  await page.goto("/posts/2");
+  await expect(page.getByTestId("anomaly-toggle")).toContainText("Ещё не проанализирован");
 });
 
 test("cumulative and delta charts both draw when anomaly boundaries size points per sample",async({page})=>{
@@ -146,8 +172,10 @@ test("a confirmed account-cycle outage is marked in both charts and the table",a
   await expect(page.locator(".collector-gap")).toHaveCount(2);
 });
 
-test("publication page with hidden analyzer meets axe AA and exposes non-color boundary text",async({page})=>{
+test("publication page with the expanded analysis card meets axe AA and exposes non-color boundary text",async({page})=>{
   await page.goto("/posts/1");
+  await page.getByTestId("anomaly-toggle").click();
+  await expect(page.getByTestId("anomaly-signal")).toHaveCount(2);
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
   await expect(page.locator("[data-anomaly-boundary] .sr-only").first()).toHaveText(", граница сигнала аномальной динамики");

@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
 import type { CollectorCoverage, HistorySnapshot, Platform, PublicationAnomalyAnalysis } from "@/lib/types";
+import { boundarySnapshotIds, signalMarkers, type SignalMarker } from "@/lib/anomaly";
+import { AnomalyAnalysis } from "@/components/anomaly-analysis";
 
 import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 
@@ -109,7 +111,7 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>;
-  gaps: CollectorCoverage["gaps"];
+  gaps: CollectorCoverage["gaps"]; markers: readonly SignalMarker[]; highlight?: string;
 }) {
   const { metrics, platform, delta } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
@@ -183,7 +185,7 @@ function MetricChart(props: {
   </>;
 }
 
-export function PublicationMeasurements({ rows, collectorCoverage, platform, publishedAt, historyLimit, analysis=null, fullHistoryHref }: { rows: HistorySnapshot[];collectorCoverage:CollectorCoverage;platform:Exclude<Platform,"all">;publishedAt:string;historyLimit:number;analysis?:PublicationAnomalyAnalysis|null;fullHistoryHref?:string }) {
+export function PublicationMeasurements({ rows, collectorCoverage, platform, publishedAt, historyLimit, analysis=null, analysisFailed=false, showAnalysis=true, fullHistoryHref }: { rows: HistorySnapshot[];collectorCoverage:CollectorCoverage;platform:Exclude<Platform,"all">;publishedAt:string;historyLimit:number;analysis?:PublicationAnomalyAnalysis|null;analysisFailed?:boolean;showAnalysis?:boolean;fullHistoryHref?:string }) {
   const [start,setStart] = useState(0), [end,setEnd] = useState(Math.max(0,rows.length-1));
   const [selectedId,setSelectedId] = useState<string>();
   const telegram = platform === "telegram";
@@ -206,7 +208,16 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
     row?.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
   },[scrollRequest]);
   const sampledId = end-start+1 > 144 ? selectedId : undefined;
-  const evidenceIds = useMemo(()=>new Set(analysis?.findings.flatMap(finding=>[finding.startSnapshotId,finding.endSnapshotId].filter((id):id is string=>id!==null))??[]),[analysis]);
+  // В тихом режиме выкатки отчёт скрыт целиком — и карточка, и отметки на графиках.
+  const shownAnalysis = showAnalysis ? analysis : null;
+  const evidenceIds = useMemo(()=>boundarySnapshotIds(shownAnalysis,rows),[shownAnalysis,rows]);
+  const markers = useMemo(()=>signalMarkers(shownAnalysis),[shownAnalysis]);
+  const [highlight,setHighlight] = useState<string>();
+  const charts = useRef<HTMLDivElement>(null);
+  const showSignal = useCallback((id:string) => {
+    setHighlight(id);
+    charts.current?.scrollIntoView({block:"start",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
+  },[]);
   const displayed = useMemo(() => sampleHistory(rows,start,end,sampledId,[...evidenceIds]),[rows,start,end,sampledId,evidenceIds]);
   const tableRows = rows.slice(-Math.max(1,tableLimit));
   const nouns=metrics.map((metric)=>noun(metric,platform));
@@ -229,18 +240,19 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
   }
   const maximum = Math.max(0, rows.length - 1);
   return <>
-    <div data-testid="publication-chart-stack" className="grid gap-4">
+    {showAnalysis ? <AnomalyAnalysis analysis={analysis} loadFailed={analysisFailed} rows={rows} publishedAt={publishedAt} onShow={showSignal} /> : null}
+    <div ref={charts} data-testid="publication-chart-stack" className="grid scroll-mt-4 gap-4">
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Накопление {phrase}
             <MethodNote title={`Накопление ${phrase}`}>
-              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы опубликованных сигналов; остальные точки читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы признаков анализа, полупрозрачной полосой с символом — их интервалы; остальные точки читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} highlight={highlight} />
         </CardContent>
       </Card>
       <Card>
@@ -253,7 +265,7 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} highlight={highlight} />
         </CardContent>
       </Card>
     </div>

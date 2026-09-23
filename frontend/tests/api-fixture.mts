@@ -85,26 +85,26 @@ const historyStart=Date.parse("2026-07-01T00:00:00Z");
 const historyAt=(index:number)=>new Date(historyStart+index*3600000).toISOString();
 const historyRows:Schema["HistorySnapshot"][] = Array.from({length:160},(_,index) => ({snapshotId:String(index+1),observedAt:historyAt(index),ageHours:index,views:counter(index*10),reactions:counter(index === 159 ? 155 : index),comments:counter(0),shares:counter(null),deltaViews:index ? 10 : null,deltaReactions:index ? index === 159 ? -3 : 1 : null,deltaComments:index ? 0 : null,deltaShares:null,reactionsBreakdown:{"👍":index,"custom:123456":1},reactionsBreakdownEntries:[{reaction:"👍",count:index},{reaction:"custom:123456",count:1}],deltaReactionsBreakdown:index?{"👍":1}:null,deltaReactionsBreakdownEntries:index?[{reaction:"👍",count:1}]:null,synthetic:index === 0,intervalUncertain:index === 40,quality:"exact",rawEvidence:{fingerprint:`fixture-${index}`},collectorInterval:index?{from:historyAt(index-1),to:historyAt(index),successfulPolls:12,failedPolls:0}:null}));
 function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["PublicationAnomalyAnalysis"] {
-  const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,analysisRevision:3,sourceDatasetRevision:16,
-    analyzedAt:asOf,status:"ready",sourceRevisionAt:asOf,suspicionScore:0.82,overallSeverity:"high",
-    manualAssessmentPresent:false,affectedMetrics:["views"],activeFindingCount:1,nextCursor:null,
-    methodologyVersion:"anomaly-dynamics-v1",disclaimer:"Сигнал сам по себе не доказывает искусственное происхождение активности или действия университета.",
-    findings:[{id:uuid(8,id),origin:"automatic",metric:"views",detectorId:"delayed_spike_after_plateau",detectorVersion:"1.0.0",
-      suspicionScore:0.82,severity:"high",explanationCode:"large_rate_jump_after_plateau",
-      suspiciousStartAt:historyRows[39]!.observedAt,suspiciousEndAt:historyRows[40]!.observedAt,
-      startSnapshotId:"40",endSnapshotId:"41",evidence:{delta:500,rateRatio:12},qualityCodes:[],
-      alternativeExplanationCodes:["external_referral"],reviewState:"unreviewed"}]};
-  if(type!=="posts") {
-    // Provider capability differences: VK exposes reposts, Rutube and MAX do not
-    // get an unsupported metric invented for them.
-    const metric:Schema["AnomalyFinding"]["metric"]=id===21 ? "shares" : id===41 ? "views" : "comments";
-    return {...base,affectedMetrics:[metric],findings:base.findings.map(item=>({...item,metric}))};
-  }
-  if(id===2) return {...base,status:"pending",sourceDatasetRevision:null,analyzedAt:null,sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
-  if(id===3) return {...base,status:"partial",suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
-  if(id===4) return {...base,status:"stale",suspicionScore:0.52,overallSeverity:"medium",findings:base.findings.map(item=>({...item,suspicionScore:0.52,severity:"medium",reviewState:"explained"}))};
-  if(id===5) return {...base,status:"failed",sourceDatasetRevision:null,analyzedAt:null,sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
-  if(id===6) return {...base,suspicionScore:0,overallSeverity:"medium",manualAssessmentPresent:true,affectedMetrics:["comments"],findings:[{...base.findings[0]!,id:uuid(8,6),origin:"manual",metric:"comments",detectorId:null,detectorVersion:null,suspicionScore:null,severity:"medium",explanationCode:"operator_context",reviewState:"unresolved"}]};
+  const signal=(pattern:1|6,metric:"views"|"reactions",from:number,to:number):Schema["AnomalySignal"] => ({
+    pattern,symbol:pattern===1?"⟋":"⇅",title:pattern===1?"Линейная подача":"Реакции раньше просмотров",
+    family:pattern===1?"velocity":"cross_metric",metric,strength:pattern===1?0.94:0.88,
+    startAt:historyRows[from]!.observedAt,endAt:historyRows[to]!.observedAt,scaleSeconds:3600,
+    formula:pattern===1?"Δпросмотры ≈ 10·t (t в часах), R² = 0.999, t ∈ [1д15ч; 1д16ч], масштаб 1 ч":"Δреакции = +40 при Δпросмотры = +2 за 2ч (ожидалось ≤ 1)",
+    render:pattern===1?{kind:"linear",startAge:from*3600,endAge:to*3600,slope:10,intercept:from*10,r2:0.999}:{kind:"lead",startAge:from*3600,endAge:to*3600,reactionsDelta:40,viewsDelta:2},
+    alternatives:[{code:"recommendation_feed",text:"пост долго показывался в рекомендациях с ровным притоком"}],normConfidence:null,
+  });
+  const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,
+    status:"analyzed",level:3,levelLabel:"признаки искусственной активности",levelSymbol:"●",
+    signals:[signal(1,"views",39,40),signal(6,"reactions",36,38)],
+    quality:{coverage:1,summary:"замеры полные, покрытие 100%",codes:[],unanalyzable:[]},
+    analyzedAt:asOf,lagSeconds:40,normVersion:3,detectorVersions:{linear_feed:"2.0.0",reactions_before_views:"2.0.0"},
+    reviewStatus:"unreviewed",methodologyVersion:"anomaly-dynamics-v2",
+    disclaimer:"Сигнал аномальной динамики носит информационный характер и сам по себе не доказывает искусственное происхождение активности или действия университета."};
+  // Провайдерские различия метрик: у ВК есть репосты, у RuTube и MAX их не выдумываем.
+  if(type!=="posts") return {...base,signals:base.signals.map(item=>({...item,metric:id===21 ? "shares" : id===41 ? "views" : "comments"}))};
+  if(id===2) return {...base,status:"pending",level:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{}};
+  if(id===3) return {...base,level:0,levelLabel:"нет признаков",levelSymbol:"○",signals:[]};
+  if(id===4) return {...base,level:1,levelLabel:"слабый сигнал",levelSymbol:"◔",signals:[{...base.signals[0]!,strength:0.5,normConfidence:0.3}]};
   return base;
 }
 const server = createServer(async (request, response) => {

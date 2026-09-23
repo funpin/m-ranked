@@ -74,7 +74,7 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
         обзоре и при переходе между постами. */}
     <NavigationBoundary fallback={<AccountSkeleton chrome={false} />}>
     <div className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
-      {stats ? <><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{telegram ? `Данные ниже — по всем публикациям, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Метки скачков временно отключены; реакции и просмотры продолжают накапливаться для настройки алгоритма.` : `Данные ниже — по всем публикациям ${PLATFORM_LONG_LABELS[account.platform]}, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Недоступные площадке метрики показываются прочерком.`}</p>
+      {stats ? <><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{telegram ? `Данные ниже — по всем публикациям, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней.` : `Данные ниже — по всем публикациям ${PLATFORM_LONG_LABELS[account.platform]}, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Недоступные площадке метрики показываются прочерком.`}</p>
       {/* Слева шесть чисел, справа один график за неделю. Линии внутри плиток
           соперничали с самими числами и ничего толком не показывали: на ста
           пикселях ширины форма недели не читается. */}

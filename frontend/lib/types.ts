@@ -105,4 +105,4 @@ export type HistorySnapshot = components["schemas"]["HistorySnapshot"];
 export type CollectorCoverage = components["schemas"]["CollectorCoverage"];
 export type CollectorGap = components["schemas"]["CollectorGap"];
 export type PublicationAnomalyAnalysis = components["schemas"]["PublicationAnomalyAnalysis"];
-export type AnomalyFinding = components["schemas"]["AnomalyFinding"];
+export type AnomalySignal = components["schemas"]["AnomalySignal"];

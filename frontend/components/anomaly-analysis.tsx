@@ -1,79 +1,119 @@
-import { legacyDate } from "@/lib/format";
-import type { PublicationAnomalyAnalysis } from "@/lib/types";
+"use client";
+import dynamic from "next/dynamic";
+import { ChevronRight, LocateFixed } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatusPill } from "@/components/ui";
-import { MethodNote } from "@/components/method-note";
-import { ChevronRight } from "lucide-react";
+import { legacyDate } from "@/lib/format";
+import { FAMILY_NAMES, METRIC_NAMES, SIGNAL_LEGEND, intervalText, markerId, miniChart, scaleText, summaryLine } from "@/lib/anomaly";
+import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-const SOURCE_REVISION_FLOOR=1_000_000_000_000;
-const statusLabels = { pending:"ожидает анализа",ready:"готов",partial:"частичное покрытие",stale:"устарел после ошибки",failed:"ошибка анализа" } as const;
-const statusTones = { pending:"neutral",ready:"green",partial:"amber",stale:"amber",failed:"red" } as const;
-const severityLabels = { low:"низкая",medium:"средняя",high:"высокая" } as const;
-const reviewLabels = { unreviewed:"не проверен",explained:"объяснён",unresolved:"требует проверки",data_error:"ошибка данных",dismissed:"отклонён" } as const;
-const metricLabels = { views:"просмотры",reactions:"реакции",comments:"комментарии",shares:"репосты" } as const;
+const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
+  ssr: false,
+  loading: () => <Skeleton className="h-36 w-full" role="status" aria-label="Загрузка мини-графика" />,
+});
 
-function Warning({ children }: { children: React.ReactNode }) {
-  return <p className="border-l-chart-3 bg-chart-3/8 text-foreground rounded-r-md border-l-[3px] px-3 py-2.5">{children}</p>;
+const REVIEW_NAMES = {
+  unreviewed: "не проверен", explained: "объяснён", unresolved: "требует проверки",
+  data_error: "ошибка данных", dismissed: "отклонён",
+} as const;
+
+function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
+  const line = summaryLine(analysis);
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      <span aria-hidden="true" className={cn("text-base leading-none", line.calm ? "text-muted-foreground" : line.tone === "red" ? "text-destructive" : "text-chart-3")}>{line.symbol}</span>
+      <b className="font-semibold">{line.calm ? line.label.replace(/^./, (letter) => letter.toUpperCase()) : <StatusPill tone={line.tone === "red" ? "red" : "amber"}>{line.label}</StatusPill>}</b>
+      {line.count ? <span className="text-muted-foreground">· {line.count}</span> : null}
+      {line.analyzedAt ? <span className="text-muted-foreground text-xs">· анализ {legacyDate(line.analyzedAt)}</span> : null}
+    </span>
+  );
 }
 
-export function AnomalyAnalysis({analysis,loadFailed,historyRevision}:{analysis:PublicationAnomalyAnalysis|null;loadFailed:boolean;historyRevision:number}) {
-  if(loadFailed) return (
-    <section className="bg-muted/40 border-border my-4 rounded-xl border p-4" aria-labelledby="anomaly-title">
-      <h2 id="anomaly-title" className="font-heading text-sm font-semibold">Сигнал аномальной динамики</h2>
-      <div className="mt-3 text-sm"><Warning>Результат анализа временно недоступен. Это техническая ошибка, а не чистый результат.</Warning></div>
-    </section>
-  );
-  if(!analysis) return null;
-  // Source-backed revisions are epoch-millis watermarks (DatasetRevision.SOURCE_ID_FLOOR),
-  // not comparable with the projection revision the worker pinned.
-  const comparableRevision=historyRevision<SOURCE_REVISION_FLOOR;
-  const staleEvidence=comparableRevision && analysis.sourceDatasetRevision!==null && analysis.sourceDatasetRevision<historyRevision;
+function Signal({ signal, index, rows, publishedAt, onShow }: {
+  signal: AnomalySignal; index: number; rows: readonly HistorySnapshot[]; publishedAt: string; onShow?: (id: string) => void;
+}) {
+  const title = `${signal.symbol} ${signal.title}`;
   return (
-    // Блок вспомогательный: он не главный на странице, но и не примечание.
-    // Поэтому подложка приглушённая, а не карточная, заголовок мельче
-    // заголовков графиков, а длинная оговорка убрана под значок.
-    <section className="bg-muted/40 border-border my-4 rounded-xl border p-4" aria-labelledby="anomaly-title">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="anomaly-title" className="font-heading flex items-center gap-1.5 text-sm font-semibold">
-          Сигнал аномальной динамики
-          <MethodNote title="Сигнал аномальной динамики">
-            {analysis.disclaimer} Балл является версионированной эвристической оценкой силы сигнала, а не вероятностью.
-          </MethodNote>
+    <li className="border-border grid gap-2 rounded-lg border p-3" data-testid="anomaly-signal" data-pattern={signal.pattern}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="font-semibold"><span aria-hidden="true" className="text-chart-3 mr-1.5">{signal.symbol}</span>{signal.title}</span>
+        <span className="text-muted-foreground text-xs">{METRIC_NAMES[signal.metric]} · {FAMILY_NAMES[signal.family]} · сила {signal.strength.toFixed(2)}</span>
+      </div>
+      <code className="bg-muted/60 block rounded-md px-2 py-1.5 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap">{signal.formula}</code>
+      <p className="text-muted-foreground text-xs">{intervalText(signal, publishedAt)} · масштаб {scaleText(signal.scaleSeconds)}
+        {signal.normConfidence !== null && signal.normConfidence < 0.5 ? " · норма молодая, признак не сильнее слабого сигнала" : ""}</p>
+      <MiniChart chart={miniChart(signal, rows, publishedAt)} label={title} />
+      {signal.alternatives.length ? (
+        <p className="text-sm">Возможные объяснения: {signal.alternatives.map((item) => item.text).join("; ")}.</p>
+      ) : null}
+      {onShow ? (
+        <button type="button" onClick={() => onShow(markerId(signal, index))}
+          className="text-foreground hover:bg-accent focus-visible:ring-ring/50 inline-flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium focus-visible:ring-[3px] focus-visible:outline-none">
+          <LocateFixed className="size-3.5" aria-hidden="true" />Показать на графике
+        </button>
+      ) : null}
+    </li>
+  );
+}
+
+/** Карточка анализа на странице поста — свёрнута по умолчанию: одна строка с
+ *  уровнем, числом признаков и временем анализа. Развёрнутая объясняет каждый
+ *  признак формулой, мини-графиком и честными альтернативами. */
+export function AnomalyAnalysis({ analysis, loadFailed = false, rows, publishedAt, onShow }: {
+  analysis: PublicationAnomalyAnalysis | null; loadFailed?: boolean; rows: readonly HistorySnapshot[];
+  publishedAt: string; onShow?: (id: string) => void;
+}) {
+  if (loadFailed) {
+    return (
+      <section className="bg-muted/40 border-border mb-4 rounded-xl border px-4 py-3 text-sm" aria-labelledby="anomaly-title">
+        <h2 id="anomaly-title" className="font-heading font-semibold">Анализ динамики</h2>
+        <p className="text-muted-foreground mt-1">Результат анализа временно недоступен. Это техническая ошибка, а не отсутствие признаков.</p>
+      </section>
+    );
+  }
+  if (!analysis) return null;
+  return (
+    <section className="bg-muted/40 border-border mb-4 rounded-xl border text-sm" aria-labelledby="anomaly-title" data-testid="anomaly-card">
+      <Collapsible>
+        {/* Кнопка внутри заголовка, а не наоборот: так раскрывающийся блок
+            читается скринридером как заголовок раздела с состоянием. */}
+        <h2 id="anomaly-title" className="m-0">
+          <CollapsibleTrigger data-testid="anomaly-toggle" className="group focus-visible:ring-ring/50 flex w-full items-center gap-2 rounded-xl px-4 py-3 text-left focus-visible:ring-[3px] focus-visible:outline-none">
+            <ChevronRight className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-90" aria-hidden="true" />
+            <span className="font-heading shrink-0 font-semibold">Анализ динамики</span>
+            <Summary analysis={analysis} />
+          </CollapsibleTrigger>
         </h2>
-        <StatusPill tone={statusTones[analysis.status]}>{statusLabels[analysis.status]}</StatusPill>
-      </div>
-      <div className="mt-3 grid gap-2 text-sm">
-        <p>{analysis.suspicionScore===null ? "Автоматическая оценка: недостаточно применимых данных" : <>Эвристическая сила сигнала: <b className="tabular font-semibold">{Number(analysis.suspicionScore).toFixed(2)}</b>{analysis.overallSeverity ? ` · выраженность: ${severityLabels[analysis.overallSeverity]}` : ""}</>}</p>
-        {analysis.affectedMetrics.length ? <p>Затронутые показатели: {analysis.affectedMetrics.map(metric=>metricLabels[metric]).join(", ")}.</p> : null}
-        {analysis.manualAssessmentPresent ? <p><b className="font-semibold">Присутствует отдельная ручная оценка.</b> Она не включена в автоматический числовой балл.</p> : null}
-        {analysis.status==="pending" ? <p className="text-muted-foreground">Исторические наблюдения ещё не были обработаны анализатором.</p> : null}
-        {analysis.status==="stale"||analysis.status==="failed" ? <Warning>Последняя попытка завершилась технической ошибкой{analysis.status==="stale" ? "; показан предыдущий успешный результат" : ""}.</Warning> : null}
-        {staleEvidence ? <Warning>Сигналы рассчитаны по более ранней ревизии данных. Интервалы показаны по исходным временным границам и не привязываются к ближайшим новым точкам.</Warning> : null}
-        {analysis.analyzedAt ? <p className="text-muted-foreground text-sm">Проанализировано: {legacyDate(analysis.analyzedAt,true)} · ревизия анализа {analysis.analysisRevision} · источник {analysis.sourceDatasetRevision ?? "—"}</p> : null}
-        {analysis.findings.length ? (
-          <div className="grid gap-2">
-            {analysis.findings.map(finding => (
-              <details key={finding.id} className="border-border bg-muted/40 group rounded-lg border px-3 py-2.5">
-                <summary className="flex cursor-pointer items-center gap-2 marker:content-none">
-                  <ChevronRight className="size-4 shrink-0 transition-transform group-open:rotate-90" aria-hidden="true" />
-                  <span><b className="font-semibold">{metricLabels[finding.metric]}</b> · {severityLabels[finding.severity]} · {reviewLabels[finding.reviewState]}</span>
-                </summary>
-                <dl className="my-3 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1.5 text-sm">
-                  <dt className="text-muted-foreground">Интервал наблюдения</dt>
-                  <dd className="m-0 tabular">{legacyDate(finding.suspiciousStartAt,true)} — {legacyDate(finding.suspiciousEndAt,true)}</dd>
-                  <dt className="text-muted-foreground">Основание</dt>
-                  <dd className="m-0">{finding.explanationCode}</dd>
-                </dl>
-                {finding.qualityCodes.length ? <p className="text-sm">Ограничения качества: {finding.qualityCodes.join(", ")}.</p> : null}
-                {finding.alternativeExplanationCodes.length ? <p className="text-sm">Возможные альтернативные объяснения: {finding.alternativeExplanationCodes.join(", ")}.</p> : null}
-              </details>
-            ))}
+        <CollapsibleContent className="grid gap-3 px-4 pb-4">
+          {analysis.signals.length ? (
+            <ol className="grid gap-2" aria-label="Признаки">
+              {analysis.signals.map((signal, index) => (
+                <Signal key={markerId(signal, index)} signal={signal} index={index} rows={rows} publishedAt={publishedAt} onShow={onShow} />
+              ))}
+            </ol>
+          ) : (
+            <p className="text-muted-foreground">{analysis.status === "pending" ? "Пост ещё не проанализирован: анализ идёт по расписанию после первых замеров." : "Признаков аномальной динамики не найдено."}</p>
+          )}
+          {analysis.quality ? <p className="text-muted-foreground" data-testid="anomaly-quality">Качество данных: {analysis.quality.summary}.</p> : null}
+          <div aria-label="Символы признаков" className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">
+            {SIGNAL_LEGEND.map((item) => <span key={item.pattern}><span aria-hidden="true" className="text-chart-3 mr-1">{item.symbol}</span>{item.title}</span>)}
           </div>
-        ) : <p className="text-muted-foreground">Активных сигналов нет.</p>}
-        {/* Полная оговорка уехала под значок, но её суть остаётся на виду:
-            прятать за нажатие утверждение о том, чем сигнал НЕ является,
-            нельзя — иначе экран читается как обвинение. */}
-        <p className="text-muted-foreground text-xs">Информационный сигнал: сам по себе не доказывает искусственное происхождение активности.</p>
-      </div>
+          <Collapsible>
+            <CollapsibleTrigger className="group text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 inline-flex w-fit items-center gap-1 rounded-md text-xs font-medium focus-visible:ring-[3px] focus-visible:outline-none">
+              <ChevronRight className="size-3.5 transition-transform group-data-[panel-open]:rotate-90" aria-hidden="true" />Методика
+            </CollapsibleTrigger>
+            <CollapsibleContent className="text-muted-foreground mt-2 grid gap-1 text-xs">
+              <p>Уровень складывается из согласия независимых семейств методов: один сильный признак — выраженная аномалия, сильные признаки двух разных семейств — признаки искусственной активности. Признаки относительно нормы при молодой норме не сильнее слабого сигнала.</p>
+              <p>Методика {analysis.methodologyVersion} · норма {analysis.normVersion ?? "ещё не построена"} · ревизия данных {analysis.datasetRevision}
+                {analysis.lagSeconds !== null ? ` · отставание анализа ${Math.round(analysis.lagSeconds / 60)} мин` : ""} · статус проверки: {REVIEW_NAMES[analysis.reviewStatus]}</p>
+              {Object.keys(analysis.detectorVersions).length ? <p>Детекторы: {Object.entries(analysis.detectorVersions).map(([name, version]) => `${name} ${version}`).join(", ")}.</p> : null}
+            </CollapsibleContent>
+          </Collapsible>
+          <p className="text-muted-foreground text-xs">{analysis.disclaimer}</p>
+        </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }

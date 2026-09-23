@@ -10,3 +10,6 @@
 /.next-public-*/
 /.next-performance-*/
 /.next-compact-*/
+# Пишет `next dev`: правила для ИИ-агентов, пересоздаются при каждом запуске.
+/AGENTS.md
+/CLAUDE.md

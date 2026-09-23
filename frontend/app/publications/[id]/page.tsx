@@ -10,6 +10,12 @@ import { normalizeHistoryLimit, queryHref, type SearchParams } from "@/lib/param
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+/** Флаг первой выкатки: в тихом режиме отчёт анализа скрыт, пока работник
+ *  догоняет очередь и строит первую норму. По умолчанию отчёт показан. */
+function anomalyReportVisible() {
+  return (process.env.ANOMALY_REPORT_VISIBLE ?? "true").trim().toLowerCase() !== "false";
+}
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<SearchParams> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -31,22 +37,19 @@ export default async function PublicationPage({ params, searchParams }: Props) {
   if (!UUID_PATTERN.test(id)) notFound();
   const historyLimit = normalizeHistoryLimit(query.history_limit);
   let history;
-  let analysis = null;
+  let analysis;
   try {
     const loaded = await Promise.all([
       loadPublicationHistory(id, undefined, FULL_PUBLICATION_HISTORY_LIMIT),
-      api.publicationAnomalyAnalysis(id)
-        .catch(() => null),
+      // Сбой анализа не роняет страницу: карточка честно скажет, что результата нет.
+      api.publicationAnomalyAnalysis(id).then((value) => ({ value, failed: false }), () => ({ value: null, failed: true })),
     ]);
     history = loaded[0];
     analysis = loaded[1];
-    if (analysis?.sourceDatasetRevision && analysis.sourceDatasetRevision > history.datasetRevision) {
-      history = await loadPublicationHistory(id, undefined, FULL_PUBLICATION_HISTORY_LIMIT);
-    }
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     reportDetailFailure(`publication:${id}`, error);
     return <ApiFailureState retryHref={queryHref(publicationHref(id), { history_limit: historyLimit })} />;
   }
-  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={analysis} />;
+  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={analysis.value} analysisFailed={analysis.failed} showAnalysis={anomalyReportVisible()} />;
 }

@@ -127,18 +127,17 @@ test("account publication query forwards the selected Moscow day", async () => {
   assert.equal(query.get("revision"), "17");
 });
 
-test("analysis client uses its independent endpoint and preserves nullable score", async () => {
+test("analysis client uses its independent endpoint and keeps an unanalyzed post a 200 body", async () => {
   let seenUrl="";
   const client=createApiClient({baseUrl:"https://api.example.test",fetcher:async(input)=>{
     seenUrl=String(input);return Response.json({publicationId:"10000000-0000-4000-8000-000000000001",
-      datasetRevision:17,analysisRevision:2,sourceDatasetRevision:16,analyzedAt:null,status:"partial",
-      sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,manualAssessmentPresent:false,
-      affectedMetrics:[],activeFindingCount:0,findings:[],nextCursor:null,
-      methodologyVersion:"anomaly-dynamics-v1",disclaimer:"informational"},{headers:{ETag:'"analysis-2"'}});
+      datasetRevision:17,status:"pending",level:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",
+      signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{},
+      reviewStatus:"unreviewed",methodologyVersion:"anomaly-dynamics-v2",disclaimer:"informational"},{headers:{ETag:'"analysis-2"'}});
   }});
   const value=await client.publicationAnomalyAnalysis("10000000-0000-4000-8000-000000000001");
-  assert.equal(value.suspicionScore,null);
-  assert.match(seenUrl,/\/api\/v1\/publications\/10000000-0000-4000-8000-000000000001\/anomaly-analysis/);
+  assert.equal(value.level,null);
+  assert.match(seenUrl,/\/api\/v1\/publications\/10000000-0000-4000-8000-000000000001\/anomaly-analysis$/);
 });
 
 test("comparison client sends the fixed-cohort contract without camel-case drift", async () => {

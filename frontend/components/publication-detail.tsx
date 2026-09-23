@@ -53,7 +53,7 @@ function Neighbour({ href, id, platform, direction }: {
   );
 }
 
-export function PublicationDetail({history,historyLimit=100,analysis=null}:{history:DetailHistory;historyLimit?:number;analysis?:PublicationAnomalyAnalysis|null}) {
+export function PublicationDetail({history,historyLimit=100,analysis=null,analysisFailed=false,showAnalysis=true}:{history:DetailHistory;historyLimit?:number;analysis?:PublicationAnomalyAnalysis|null;analysisFailed?:boolean;showAnalysis?:boolean}) {
   const p=history.publication, telegram=p.platform === "telegram";
   const archiveUrl=deletedPublicationArchiveUrl(p.platform,p.deletedAt,p.displayExternalId ?? p.externalId,p.accountUsername,history.accountArchiveUrl);
   const url=archiveUrl ?? p.publicUrl;
@@ -105,7 +105,7 @@ export function PublicationDetail({history,historyLimit=100,analysis=null}:{hist
       </Card>
     ) : null}
 
-    <PublicationMeasurements key={p.publicationId} rows={history.items} collectorCoverage={history.collectorCoverage} platform={p.platform} publishedAt={p.publishedAt} historyLimit={historyLimit} analysis={analysis}
+    <PublicationMeasurements key={p.publicationId} rows={history.items} collectorCoverage={history.collectorCoverage} platform={p.platform} publishedAt={p.publishedAt} historyLimit={historyLimit} analysis={analysis} analysisFailed={analysisFailed} showAnalysis={showAnalysis}
       fullHistoryHref={historyLimit < FULL_PUBLICATION_HISTORY_LIMIT ? queryHref(publicationHref(p.publicationId),{history_limit:FULL_PUBLICATION_HISTORY_LIMIT}) : undefined} />
     </NavigationBoundary>
   </>;
