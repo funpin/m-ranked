@@ -135,9 +135,12 @@ def test_runtime_configuration_contract() -> None:
 
 
 def test_anomaly_units_keep_the_server_two_budget() -> None:
-    for name in ("m-ranked-target-anomaly-analysis.service", "m-ranked-target-anomaly-norms.service"):
+    # Работнику — 384 МиБ круглосуточно; ночному заданию норм — 768: оно держит
+    # ряды всех аккаунтов площадки и на реальных данных упёрлось в 384.
+    for name, memory in (("m-ranked-target-anomaly-analysis.service", "MemoryMax=384M"),
+                         ("m-ranked-target-anomaly-norms.service", "MemoryMax=768M")):
         unit = text(name)
-        for directive in ("CPUQuota=50%", "MemoryMax=384M", "Nice=10"):
+        for directive in ("CPUQuota=50%", memory, "Nice=10"):
             assert directive in unit, (name, directive)
     assert "python -m anomaly_analysis.norms_job" in text("m-ranked-target-anomaly-norms.service")
     # Каталог выполнения удаляется при остановке юнита: у задания он свой.
