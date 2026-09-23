@@ -1,11 +1,12 @@
 "use client";
 import dynamic from "next/dynamic";
+import { use } from "react";
 import { ChevronRight, LocateFixed } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusPill } from "@/components/ui";
 import { legacyDate } from "@/lib/format";
-import { FAMILY_NAMES, METRIC_NAMES, SIGNAL_LEGEND, intervalText, markerId, miniChart, scaleText, summaryLine } from "@/lib/anomaly";
+import { FAMILY_NAMES, METRIC_NAMES, SIGNAL_LEGEND, intervalText, markerId, miniChart, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
 import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,28 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
       ) : null}
     </li>
   );
+}
+
+/** Строка карточки, пока ответ анализа ещё в пути. Страница поста его не ждёт:
+ *  история и графики приходят первыми, а карточка дорисовывается следом. */
+export function AnomalyAnalysisSkeleton() {
+  return (
+    <section className="bg-muted/40 border-border mb-4 rounded-xl border px-4 py-3 text-sm" aria-busy="true" aria-label="Анализ динамики загружается" data-testid="anomaly-card-skeleton">
+      <div className="flex items-center gap-2">
+        <Skeleton className="size-4 shrink-0" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-48 max-w-[40%]" />
+      </div>
+    </section>
+  );
+}
+
+/** Карточка из обещания, которое страница запустила, не дожидаясь его. */
+export function DeferredAnomalyAnalysis({ load, ...props }: {
+  load: Promise<AnalysisLoad>; rows: readonly HistorySnapshot[]; publishedAt: string; onShow?: (id: string) => void;
+}) {
+  const { value, failed } = use(load);
+  return <AnomalyAnalysis analysis={value} loadFailed={failed} {...props} />;
 }
 
 /** Карточка анализа на странице поста — свёрнута по умолчанию: одна строка с

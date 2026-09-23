@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PublicationDetail } from "@/components/publication-detail";
 import { ApiFailureState } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
+import type { AnalysisLoad } from "@/lib/anomaly";
 import { loadPublicationHistory, reportDetailFailure } from "@/lib/detail-data";
 import { publicationHref, UUID_PATTERN } from "@/lib/entity-routes";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
@@ -36,20 +37,20 @@ export default async function PublicationPage({ params, searchParams }: Props) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   if (!UUID_PATTERN.test(id)) notFound();
   const historyLimit = normalizeHistoryLimit(query.history_limit);
+  // Анализ запускается сразу, но страница его не ждёт: история и графики
+  // уходят клиенту первыми, а карточка анализа догружается следом под
+  // скелетоном. Сбой анализа не роняет страницу — карточка скажет, что
+  // результата нет.
+  const analysis: Promise<AnalysisLoad> | null = anomalyReportVisible()
+    ? api.publicationAnomalyAnalysis(id).then((value) => ({ value, failed: false }), () => ({ value: null, failed: true }))
+    : null;
   let history;
-  let analysis;
   try {
-    const loaded = await Promise.all([
-      loadPublicationHistory(id, undefined, FULL_PUBLICATION_HISTORY_LIMIT),
-      // Сбой анализа не роняет страницу: карточка честно скажет, что результата нет.
-      api.publicationAnomalyAnalysis(id).then((value) => ({ value, failed: false }), () => ({ value: null, failed: true })),
-    ]);
-    history = loaded[0];
-    analysis = loaded[1];
+    history = await loadPublicationHistory(id, undefined, FULL_PUBLICATION_HISTORY_LIMIT);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     reportDetailFailure(`publication:${id}`, error);
     return <ApiFailureState retryHref={queryHref(publicationHref(id), { history_limit: historyLimit })} />;
   }
-  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={analysis.value} analysisFailed={analysis.failed} showAnalysis={anomalyReportVisible()} />;
+  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={analysis} />;
 }

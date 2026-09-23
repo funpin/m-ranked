@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,9 +16,9 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
-import type { CollectorCoverage, HistorySnapshot, Platform, PublicationAnomalyAnalysis } from "@/lib/types";
-import { boundarySnapshotIds, signalMarkers, type SignalMarker } from "@/lib/anomaly";
-import { AnomalyAnalysis } from "@/components/anomaly-analysis";
+import type { CollectorCoverage, HistorySnapshot, Platform } from "@/lib/types";
+import { boundarySnapshotIds, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
+import { AnomalyAnalysisSkeleton, DeferredAnomalyAnalysis } from "@/components/anomaly-analysis";
 
 import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 
@@ -185,7 +185,21 @@ function MetricChart(props: {
   </>;
 }
 
-export function PublicationMeasurements({ rows, collectorCoverage, platform, publishedAt, historyLimit, analysis=null, analysisFailed=false, showAnalysis=true, fullHistoryHref }: { rows: HistorySnapshot[];collectorCoverage:CollectorCoverage;platform:Exclude<Platform,"all">;publishedAt:string;historyLimit:number;analysis?:PublicationAnomalyAnalysis|null;analysisFailed?:boolean;showAnalysis?:boolean;fullHistoryHref?:string }) {
+/** Значение обещания, когда оно выполнится, — без Suspense. Графики не должны
+ *  пересоздаваться при приходе анализа: иначе пропало бы всё, что пользователь
+ *  успел в них переключить. */
+function useSettled<T>(promise: Promise<T> | null | undefined): T | undefined {
+  const [settled, setSettled] = useState<{ promise: Promise<T>; value: T }>();
+  useEffect(() => {
+    if (!promise) return;
+    let live = true;
+    void promise.then((value) => { if (live) setSettled({ promise, value }); });
+    return () => { live = false; };
+  }, [promise]);
+  return settled && settled.promise === promise ? settled.value : undefined;
+}
+
+export function PublicationMeasurements({ rows, collectorCoverage, platform, publishedAt, historyLimit, analysis=null, fullHistoryHref }: { rows: HistorySnapshot[];collectorCoverage:CollectorCoverage;platform:Exclude<Platform,"all">;publishedAt:string;historyLimit:number;analysis?:Promise<AnalysisLoad>|null;fullHistoryHref?:string }) {
   const [start,setStart] = useState(0), [end,setEnd] = useState(Math.max(0,rows.length-1));
   const [selectedId,setSelectedId] = useState<string>();
   const telegram = platform === "telegram";
@@ -208,8 +222,10 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
     row?.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
   },[scrollRequest]);
   const sampledId = end-start+1 > 144 ? selectedId : undefined;
-  // В тихом режиме выкатки отчёт скрыт целиком — и карточка, и отметки на графиках.
-  const shownAnalysis = showAnalysis ? analysis : null;
+  // Анализ приходит отдельно и страницу не задерживает: графики рисуются сразу,
+  // отметки признаков появляются, когда ответ придёт. Без обещания (тихий режим
+  // выкатки) отчёта нет вовсе — ни карточки, ни отметок.
+  const shownAnalysis = useSettled(analysis)?.value ?? null;
   const evidenceIds = useMemo(()=>boundarySnapshotIds(shownAnalysis,rows),[shownAnalysis,rows]);
   const markers = useMemo(()=>signalMarkers(shownAnalysis),[shownAnalysis]);
   const [highlight,setHighlight] = useState<string>();
@@ -240,7 +256,11 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
   }
   const maximum = Math.max(0, rows.length - 1);
   return <>
-    {showAnalysis ? <AnomalyAnalysis analysis={analysis} loadFailed={analysisFailed} rows={rows} publishedAt={publishedAt} onShow={showSignal} /> : null}
+    {analysis ? (
+      <Suspense fallback={<AnomalyAnalysisSkeleton />}>
+        <DeferredAnomalyAnalysis load={analysis} rows={rows} publishedAt={publishedAt} onShow={showSignal} />
+      </Suspense>
+    ) : null}
     <div ref={charts} data-testid="publication-chart-stack" className="grid scroll-mt-4 gap-4">
       <Card>
         <CardHeader>

@@ -1,6 +1,10 @@
 import { duration } from "./format";
 import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "./types";
 
+/** Результат загрузки анализа. Сбой — не отсутствие признаков: карточка
+ *  честно скажет, что результата нет. */
+export type AnalysisLoad = { value: PublicationAnomalyAnalysis | null; failed: boolean };
+
 /** Символы признаков — те же, что пишет анализ; легенда нужна и тогда, когда
  *  признаков на посте нет, поэтому список полный и живёт здесь. */
 export const SIGNAL_LEGEND = [
