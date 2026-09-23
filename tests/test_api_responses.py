@@ -566,3 +566,17 @@ def test_detail_routes_pin_the_requested_dataset_revision(client) -> None:
     assert unknown.json()["datasetRevision"] != 999999999
 
     assert client.get(f"/api/v1/accounts/{account_id}?revision=0").status_code == 400
+
+
+def test_latest_metrics_are_not_cut_by_the_page_revision():
+    # В publication_latest одна строка на пост: отсечка по as_of не даёт
+    # прежнее значение, а выбрасывает пост. Ревизия страницы берётся из
+    # кэшированной карточки и отстаёт на минуты — свежие посты показывались
+    # «ожидает замера» и выпадали из медиан.
+    import re
+    from api.sql import details
+
+    text = "\n".join(value for name, value in vars(details).items() if name.isupper() and isinstance(value, str))
+    joins = re.findall(r"JOIN analytics\.publication_latest latest ON[^\n]*\n[^\n]*", text)
+    assert joins
+    assert not [join for join in joins if "as_of" in join]
