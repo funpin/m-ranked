@@ -206,3 +206,16 @@ def test_backfill_finds_old_synchrony_with_whole_window_activity(monkeypatch):
     (write,) = written
     assert write.reason == "backfill" and write.verdict is not None
     assert any(sign.pattern == synchronous_rise.PATTERN for sign in write.verdict.signs)
+
+
+def test_early_pack_before_the_first_grid_edge_is_found():
+    """СКФУ №16769: 5 реакций на 2,5 минуте, 52 на 7,5 — раньше первой границы сетки."""
+    points = [(2.5, 43, 5), (7.5, 79, 52)]
+    points += [(minute, 79 + int((minute - 7.5) * 1.3), 52 + int((minute - 7.5) // 90))
+               for minute in every(12.5, 4 * 60, 5)]
+    subject = series(points, platform="telegram", collected=every(2.5, 4 * 60, 5))
+    prepared = prepare(subject, PUBLISHED + timedelta(hours=4), CollectionCadence())
+    signs = [sign for sign in burst_plateau.detect(prepared, DetectorContext("telegram"))
+             if sign.metric is Metric.REACTIONS]
+    assert signs and signs[0].render["mode"] == "early_plateau"
+    assert signs[0].interval.start == PUBLISHED

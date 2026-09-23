@@ -20,7 +20,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "burst_plateau"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 PATTERN = 9
 FAMILY = Family.SHAPE
 NEEDS_NORM = False
@@ -93,22 +93,25 @@ def _early(prepared: PreparedSeries) -> Sign | None:
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
     if reactions is None or views is None or views.source_counter:
         return None
-    r_grid, v_grid = reactions.grids.get(EARLY_SCALE), views.grids.get(EARLY_SCALE)
-    if r_grid is None or v_grid is None or r_grid.rates.size < EARLY_AFTER + 2:
+    # Своя сетка от момента публикации, когда оба счётчика — ноль: пачка часто
+    # приходит в первые минуты, до первой границы общей сетки (СКФУ №16769 —
+    # 5 реакций на 2,5 минуте и 52 на 7,5). Первая ячейка годится, только если
+    # первый замер пришёл в пределах её ширины.
+    width = EARLY_SCALE.total_seconds()
+    last = min(float(reactions.ages[-1]), float(views.ages[-1]))
+    edges = np.arange(0.0, np.floor(last / width) * width + width / 2, width)
+    if edges.size < EARLY_AFTER + 3:
         return None
-    # Сетки двух метрик строятся по одним и тем же замерам; выравнивание по
-    # общим границам на случай, если у одной из них нет первых точек.
-    common = np.intersect1d(r_grid.edges, v_grid.edges)
-    if common.size < EARLY_AFTER + 3:
-        return None
-    r_cum = np.interp(common, r_grid.edges, r_grid.cumulative)
-    v_cum = np.interp(common, v_grid.edges, v_grid.cumulative)
-    usable = (np.interp(common[:-1], r_grid.edges[:-1], r_grid.usable.astype(float)) > 0.5) & \
-             (np.interp(common[:-1], v_grid.edges[:-1], v_grid.usable.astype(float)) > 0.5)
+    r_cum = np.interp(edges, *_from_zero(reactions))
+    v_cum = np.interp(edges, *_from_zero(views))
+    usable = ~(_touches_gap(edges, reactions) | _touches_gap(edges, views))
+    first = max(float(reactions.ages[0]), float(views.ages[0]))
+    usable &= edges[1:] >= first - width if first <= width else edges[:-1] >= first
     r_rate, v_rate = np.diff(r_cum), np.diff(v_cum)
-    early = np.flatnonzero((common[:-1] < MIN_ONSET_AGE) & usable)
+    early = np.flatnonzero((edges[:-1] < MIN_ONSET_AGE) & usable)
     if not early.size:
         return None
+    common = edges
     peak_at = int(early[np.argmax(r_rate[early])])
     peak = float(r_rate[peak_at])
     if peak <= 0:
@@ -185,3 +188,18 @@ def _judge(prepared, metric, grid, rates, usable, begin, end, floor):
                      {"kind": "plateau", "burst": round(burst), "peakRate": round(peak, 1),
                       "tailRate": round(tail, 2), "backgroundRate": round(floor, 2)},
                      ("counter_frozen",))
+
+
+def _from_zero(data) -> tuple[np.ndarray, np.ndarray]:
+    """Точки метрики с нулём в момент публикации, если первого замера там нет."""
+    if data.ages.size and data.ages[0] > 0:
+        return np.concatenate(([0.0], data.ages)), np.concatenate(([0.0], data.values))
+    return data.ages, data.values
+
+
+def _touches_gap(edges: np.ndarray, data) -> np.ndarray:
+    """Ячейки, задевающие пробел в замерах метрики."""
+    touched = np.zeros(edges.size - 1, dtype=bool)
+    for gap in data.gaps:
+        touched |= (edges[:-1] < gap.end_age) & (edges[1:] > gap.start_age)
+    return touched
