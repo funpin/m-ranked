@@ -1,11 +1,11 @@
 [Unit]
-Description=M-Ranked publication anomaly analysis worker (v2)
+Description=M-Ranked nightly anomaly norm rebuild (v2)
 Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=oneshot
 User=m-ranked-anomaly
 Group=m-ranked-anomaly
 SupplementaryGroups=node-exporter
@@ -16,13 +16,12 @@ LoadCredential=pgpass:/etc/m-ranked/credentials/anomaly-pgpass
 # 257 — как 0440 root:root с ACL. libpq молча игнорирует pgpass с
 # групповым доступом и уходит в "password authentication failed" при
 # верном пароле. Копия в приватный файл работает на обеих версиях.
-ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-anomaly -g m-ranked-anomaly %d/pgpass /run/m-ranked-anomaly/pgpass
-Environment=PGPASSFILE=/run/m-ranked-anomaly/pgpass
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-anomaly -g m-ranked-anomaly %d/pgpass /run/m-ranked-anomaly-norms/pgpass
+Environment=PGPASSFILE=/run/m-ranked-anomaly-norms/pgpass
 Environment=TZ=Europe/Moscow
-ExecStart=/opt/m-ranked/current/.venv/bin/python -m anomaly_analysis
-Restart=on-failure
-RestartSec=10s
-TimeoutStartSec=30s
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m anomaly_analysis.norms_job
+# Задание короткое, но читает ряды шестидесяти суток: полчаса с запасом.
+TimeoutStartSec=30min
 TimeoutStopSec=30s
 KillSignal=SIGINT
 NoNewPrivileges=true
@@ -47,17 +46,15 @@ AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallArchitectures=native
 ReadWritePaths=/var/lib/node_exporter/textfile_collector
-RuntimeDirectory=m-ranked-anomaly
+# Свой каталог: systemd удаляет RuntimeDirectory при остановке юнита, и общий
+# с работником каталог унёс бы его pgpass после каждого ночного запуска.
+RuntimeDirectory=m-ranked-anomaly-norms
 RuntimeDirectoryMode=0700
 UMask=0077
-# Бюджет Сервера 2 (план, раздел 11): ~17 000 анализов в час укладываются в
-# 0.2 ядра в среднем; половина ядра — потолок на догонку после простоя.
-# Работник уступает процессор API и базе и не держит больше 384 МБ.
+# Те же лимиты, что у работника: нормы строятся потоком по аккаунтам, и ряды
+# одного аккаунта отпускаются до чтения следующего.
 CPUQuota=50%
 Nice=10
 MemoryMax=384M
 LimitNOFILE=4096
 TasksMax=32
-
-[Install]
-WantedBy=m-ranked-target.target

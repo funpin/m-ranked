@@ -1,0 +1,14 @@
+[Unit]
+Description=Rebuild M-Ranked anomaly norms nightly
+
+[Timer]
+# Ночь по Москве, когда трафик API минимален; разброс — чтобы не совпасть с
+# резервным копированием и обслуживанием базы.
+OnCalendar=*-*-* 03:30:00 Europe/Moscow
+RandomizedDelaySec=45min
+Persistent=true
+AccuracySec=1min
+Unit=m-ranked-target-anomaly-norms.service
+
+[Install]
+WantedBy=timers.target
