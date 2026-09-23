@@ -134,7 +134,7 @@ CASES = [
     ("/api/v1/compare", "get", "200",
      "/api/v1/compare?platform=rutube&horizonHours=24&institutionLimit=2"),
     ("/api/v1/publications/{legacyId}/anomaly-analysis", "get", "200",
-     "/api/v1/publications/99269506-1466-5e18-a215-a3db2688d786/anomaly-analysis?limit=5"),
+     "/api/v1/publications/99269506-1466-5e18-a215-a3db2688d786/anomaly-analysis"),
 ]
 
 
@@ -373,15 +373,10 @@ def test_emoji_validation_and_success_headers(client, validator_for, monkeypatch
 def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) -> None:
     publication = "99269506-1466-5e18-a215-a3db2688d786"
     analysis = assert_contract_response(
-        client.get(f"/api/v1/publications/{publication}/anomaly-analysis?limit=1"),
+        client.get(f"/api/v1/publications/{publication}/anomaly-analysis"),
         validator_for, "/api/v1/publications/{legacyId}/anomaly-analysis")
-    if analysis["nextCursor"]:
-        page = client.get(f"/api/v1/publications/{publication}/anomaly-analysis", params={
-            "limit": 1, "cursor": analysis["nextCursor"],
-        })
-        assert page.status_code == 200
-        assert not ({item["id"] for item in analysis["findings"]}
-                    & {item["id"] for item in page.json()["findings"]})
+    # Ответ v2 — одна строка на пост: страниц и курсора больше нет.
+    assert "nextCursor" not in analysis and len(analysis["signals"]) <= 6
 
     path = f"/api/v1/admin/publications/{publication}/anomaly-signals"
     unauthorized = client.post(path, json={})

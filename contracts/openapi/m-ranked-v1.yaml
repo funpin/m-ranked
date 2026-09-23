@@ -335,10 +335,12 @@ paths:
     get:
       tags: [Query]
       operationId: getPublicationAnomalyAnalysis
-      summary: Read independently published anomaly-dynamics signals
+      summary: Read the current anomaly-dynamics verdict of a publication
       description: >-
-        Reads only a complete persisted analysis publication. suspicionScore is a
-        versioned heuristic strength score, not a probability or proof of artificial activity.
+        One row per publication, written by the v2 analysis worker. The level (0-3) comes from
+        agreement of independent method families; strength is a heuristic detector statistic,
+        not a probability or proof of artificial activity. A publication not analyzed yet is a
+        200 response with level null and status pending, not a 404.
       security: []
       parameters:
         - $ref: '#/components/parameters/EntityId'
@@ -348,22 +350,10 @@ paths:
             type: string
             enum: [posts, platform_posts]
             default: posts
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 25
-        - name: cursor
-          in: query
-          schema:
-            type: string
-            maxLength: 512
         - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
-          description: Persisted publication analysis and bounded active findings.
+          description: Current publication verdict with worded signals and data quality.
           headers:
             ETag:
               $ref: '#/components/headers/ETag'
@@ -4014,9 +4004,6 @@ components:
         outcome:
           type: string
           enum: [updated, idempotent]
-    AnomalyStatus:
-      type: string
-      enum: [pending, ready, partial, stale, failed]
     AnomalySeverity:
       type: string
       enum: [low, medium, high]
@@ -4028,68 +4015,95 @@ components:
       additionalProperties:
         type: [string, number, integer, boolean, 'null']
       maxProperties: 32
-    AnomalyFinding:
+    AnomalySignal:
       type: object
       additionalProperties: false
-      required: [id, origin, metric, detectorId, detectorVersion, suspicionScore, severity,
-        explanationCode, suspiciousStartAt, suspiciousEndAt, startSnapshotId, endSnapshotId,
-        evidence, qualityCodes, alternativeExplanationCodes, reviewState]
+      required: [pattern, symbol, title, family, metric, strength, startAt, endAt, scaleSeconds,
+        formula, render, alternatives, normConfidence]
       properties:
-        id: { type: string, format: uuid }
-        origin: { type: string, enum: [automatic, manual] }
+        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10] }
+        symbol: { type: string, maxLength: 4 }
+        title: { type: string, maxLength: 120 }
+        family: { type: string, enum: [velocity, shape, cross_metric, synchrony] }
         metric: { type: string, enum: [views, reactions, comments, shares] }
-        detectorId: { type: [string, 'null'] }
-        detectorVersion: { type: [string, 'null'] }
-        suspicionScore: { type: [number, 'null'], minimum: 0, maximum: 1 }
-        severity: { $ref: '#/components/schemas/AnomalySeverity' }
-        explanationCode: { type: string }
-        suspiciousStartAt: { type: string, format: date-time }
-        suspiciousEndAt: { type: string, format: date-time }
-        startSnapshotId: { type: [string, 'null'] }
-        endSnapshotId: { type: [string, 'null'] }
-        evidence: { $ref: '#/components/schemas/AnomalyEvidence' }
-        qualityCodes:
+        strength: { type: number, minimum: 0, maximum: 1 }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        scaleSeconds: { type: integer, minimum: 1 }
+        formula: { type: string, maxLength: 400 }
+        render:
+          description: Mini-chart parameters; kind selects the chart, the rest depends on it.
+          type: object
+          required: [kind, startAge, endAge]
+          properties:
+            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, expected, gap, ratio, erv] }
+            startAge: { type: integer }
+            endAge: { type: integer }
+          additionalProperties:
+            type: [string, number, integer, boolean, 'null', array]
+        alternatives:
+          type: array
+          maxItems: 8
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, text]
+            properties:
+              code: { type: string, pattern: '^[a-z0-9_]{1,80}$' }
+              text: { type: string, maxLength: 300 }
+        normConfidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
+    AnomalyQuality:
+      type: object
+      additionalProperties: false
+      required: [coverage, summary, codes, unanalyzable]
+      properties:
+        coverage: { type: number, minimum: 0, maximum: 1 }
+        summary: { type: string, maxLength: 600 }
+        codes:
           type: array
           maxItems: 16
           items: { type: string }
-        alternativeExplanationCodes:
+        unanalyzable:
+          description: Intervals where incomplete measurements make any conclusion impossible.
           type: array
-          maxItems: 16
-          items: { type: string }
-        reviewState: { $ref: '#/components/schemas/AnomalyReviewState' }
+          maxItems: 64
+          items:
+            type: object
+            additionalProperties: false
+            required: [startAt, endAt]
+            properties:
+              startAt: { type: string, format: date-time }
+              endAt: { type: string, format: date-time }
     PublicationAnomalyAnalysis:
       type: object
       additionalProperties: false
-      required: [publicationId, datasetRevision, analysisRevision, sourceDatasetRevision,
-        analyzedAt, status, sourceRevisionAt, suspicionScore, overallSeverity,
-        manualAssessmentPresent, affectedMetrics, activeFindingCount, findings, nextCursor,
+      required: [publicationId, datasetRevision, status, level, levelLabel, levelSymbol, signals,
+        quality, analyzedAt, lagSeconds, normVersion, detectorVersions, reviewStatus,
         methodologyVersion, disclaimer]
       properties:
         publicationId: { type: string, format: uuid }
         datasetRevision: { type: integer, format: int64, minimum: 0 }
-        analysisRevision: { type: integer, format: int64, minimum: 0 }
-        sourceDatasetRevision: { type: [integer, 'null'], format: int64, minimum: 1 }
-        analyzedAt: { type: [string, 'null'], format: date-time }
-        status: { $ref: '#/components/schemas/AnomalyStatus' }
-        sourceRevisionAt: { type: [string, 'null'], format: date-time }
-        suspicionScore: { type: [number, 'null'], minimum: 0, maximum: 1 }
-        overallSeverity:
+        status: { type: string, enum: [analyzed, pending] }
+        level: { type: [integer, 'null'], minimum: 0, maximum: 3 }
+        levelLabel: { type: string }
+        levelSymbol: { type: string, maxLength: 4 }
+        signals:
+          type: array
+          maxItems: 6
+          items: { $ref: '#/components/schemas/AnomalySignal' }
+        quality:
           oneOf:
-            - $ref: '#/components/schemas/AnomalySeverity'
+            - $ref: '#/components/schemas/AnomalyQuality'
             - type: 'null'
-        manualAssessmentPresent: { type: boolean }
-        affectedMetrics:
-          type: array
-          maxItems: 4
-          uniqueItems: true
-          items: { type: string, enum: [views, reactions, comments, shares] }
-        activeFindingCount: { type: integer, minimum: 0 }
-        findings:
-          type: array
-          maxItems: 100
-          items: { $ref: '#/components/schemas/AnomalyFinding' }
-        nextCursor: { type: [string, 'null'], maxLength: 512 }
-        methodologyVersion: { type: string, const: anomaly-dynamics-v1 }
+        analyzedAt: { type: [string, 'null'], format: date-time }
+        lagSeconds: { type: [integer, 'null'], minimum: 0 }
+        normVersion: { type: [integer, 'null'], format: int64, minimum: 1 }
+        detectorVersions:
+          type: object
+          maxProperties: 16
+          additionalProperties: { type: string }
+        reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
+        methodologyVersion: { type: string, const: anomaly-dynamics-v2 }
         disclaimer: { type: string }
     CreateManualAnomalySignalRequest:
       type: object

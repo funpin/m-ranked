@@ -103,7 +103,7 @@ def test_catalog_warmup_follows_the_requests_pages_make() -> None:
             "/api/v1/institutions/28/accounts?platform=all&limit=100",
             "/api/v1/publications/post-new",
             "/api/v1/publications/post-new/history?limit=3000",
-            "/api/v1/publications/post-new/anomaly-analysis?limit=100",
+            "/api/v1/publications/post-new/anomaly-analysis",
             "/api/v1/accounts/109?legacyType=platform_accounts",
             "/api/v1/publications/41?legacyType=posts",
         }, "старые посты не греются, а связанные запросы страницы поста — греются"
