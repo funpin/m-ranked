@@ -37,7 +37,7 @@ function analysis(overrides: Partial<PublicationAnomalyAnalysis> = {}): Publicat
 
 test("collapsed line names the level, counts signals and stays calm without them", () => {
   const strong = summaryLine(analysis({ signals: [signal(), signal({ pattern: 6 })] }));
-  assert.deepEqual([strong.symbol, strong.label, strong.count, strong.calm, strong.tone], ["◑", "выраженная аномалия", "2 признака", false, "amber"]);
+  assert.deepEqual([strong.level, strong.label, strong.count, strong.calm, strong.tone], [2, "выраженная аномалия", "2 признака", false, "amber"]);
   assert.equal(summaryLine(analysis({ level: 3 })).tone, "red");
   const none = summaryLine(analysis({ level: 0, signals: [], levelLabel: "нет признаков", levelSymbol: "○" }));
   assert.equal(none.calm, true);
@@ -52,13 +52,13 @@ test("russian plurals and scales read naturally", () => {
   assert.equal(intervalText(signal(), PUBLISHED), "1 д 16 ч 0 мин — 2 д 16 ч 0 мин после публикации");
 });
 
-test("interval boundaries become the nearest saved points and markers keep their symbols", () => {
+test("interval boundaries become the nearest saved points and markers keep their patterns", () => {
   assert.deepEqual([...boundarySnapshotIds(analysis(), rows)], ["41", "65"]);
   assert.equal(boundarySnapshotIds(null, rows).size, 0);
   const [marker] = signalMarkers(analysis());
-  assert.equal(marker!.symbol, "⟋");
+  assert.equal(marker!.pattern, 1);
   assert.equal(marker!.to - marker!.from, 24 * 3600_000);
-  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.symbol)).size, 9);
+  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 9);
 });
 
 test("linear signal draws its fitted line only inside the interval", () => {

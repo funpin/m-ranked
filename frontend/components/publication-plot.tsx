@@ -8,6 +8,7 @@ import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLa
 import { cn } from "@/lib/utils";
 import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 import type { SignalMarker } from "@/lib/anomaly";
+import { PatternIcon } from "@/components/anomaly-icons";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
 /** Больше этого числа столбцов прироста на экране уже не различить: при
@@ -61,7 +62,7 @@ function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
     stroke="var(--destructive)" strokeOpacity={0.45} strokeWidth={1} pointerEvents="none" /> : null;
 }
 
-/** Интервалы признаков: полупрозрачная полоса под линиями и символ признака
+/** Интервалы признаков: полупрозрачная полоса под линиями и значок признака
  *  над ней. Полоса бледнее ромбов границ и под ними, поэтому ромб остаётся
  *  читаемой отметкой точки, а полоса — отметкой промежутка. Выбранный в
  *  карточке признак подсвечивается ярче и обводится пунктиром. */
@@ -80,9 +81,10 @@ function SignalOverlay({ markers, highlight }: { markers: readonly SignalMarker[
       return <g key={marker.id} data-signal-marker={marker.pattern} data-highlighted={active || undefined}>
         <rect x={left} y={plot.y} width={right - left} height={plot.height} fill="var(--chart-3)"
           fillOpacity={active ? 0.2 : 0.08} stroke={active ? "var(--chart-3)" : "none"} strokeDasharray="4 3" strokeWidth={1.5} />
-        <text x={left + 3} y={plot.y + 14} fontSize={13} fill="var(--foreground)" fillOpacity={0.85}>
-          {marker.symbol}<title>{marker.title}</title>
-        </text>
+        <g opacity={0.85}>
+          <title>{marker.title}</title>
+          <PatternIcon pattern={marker.pattern} x={left + 3} y={plot.y + 3} size={14} color="var(--foreground)" />
+        </g>
       </g>;
     })}
   </g>;

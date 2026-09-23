@@ -20,8 +20,8 @@ const MethodNotePopover = dynamic(
  * экрана. Текст никуда не делся: он открывается по значку рядом с заголовком.
  */
 export function MethodNote({ title, children }: { title: string; children: ReactNode }) {
-  // «none», пока не пришёл указатель или нажатие; нажатие сразу открывает
-  // заметку, как только код доедет, поэтому одно нажатие остаётся одним.
+  // «none», пока не пришёл указатель или нажатие. Наведение мышью и нажатие
+  // открывают заметку, как только код доедет: одно действие остаётся одним.
   const [activation, setActivation] = useState<"none" | "preload" | "open">("none");
 
   // Переход фокусом не должен подменять кнопку под самим фокусом, поэтому
@@ -33,7 +33,7 @@ export function MethodNote({ title, children }: { title: string; children: React
         className={NOTE_TRIGGER}
         aria-label={`Как считается: ${title}`}
         aria-haspopup="dialog"
-        onPointerEnter={() => setActivation("preload")}
+        onPointerEnter={(event) => setActivation(event.pointerType === "mouse" ? "open" : "preload")}
         onClick={() => setActivation("open")}
       >
         <Icon name="info" className="size-4" />

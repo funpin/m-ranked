@@ -129,6 +129,34 @@ async def publication_analysis(legacyId: str, request: Request, legacyType: str 
     }, ANALYSIS_TAGS, build)
 
 
+# Столько постов аккаунта вмещает окно отслеживания с запасом; таблица
+# аккаунта показывает первые сто.
+ACCOUNT_LEVELS_LIMIT = 1000
+
+
+@router.get("/api/v1/accounts/{accountId}/anomaly-levels", tags=["Query"])
+async def account_levels(accountId: str, request: Request) -> Response:
+    account = _uuid(accountId, "accountId")
+
+    async def build(dataset_revision: int, committed_at: Any) -> dict[str, Any]:
+        rows = await request.app.state.db.fetch_all(sql.ACCOUNT_LEVELS, {
+            "account": account, "limit": ACCOUNT_LEVELS_LIMIT,
+        })
+        return levels_body(str(account), dataset_revision, rows)
+
+    return await serve(request, "account-anomaly-levels", {"id": str(account)}, ANALYSIS_TAGS, build)
+
+
+def levels_body(account_id: str, dataset_revision: int, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Только уровень: признаки и качество читает страница поста."""
+    return {
+        "accountId": account_id, "datasetRevision": dataset_revision,
+        "items": [{"publicationId": str(row["publication_id"]), "level": int(row["level"]),
+                   "levelLabel": LEVEL_LABELS[int(row["level"])],
+                   "levelSymbol": LEVEL_SYMBOLS[int(row["level"])]} for row in rows],
+    }
+
+
 def analysis_body(publication_id: str, dataset_revision: int, row: dict[str, Any] | None) -> dict[str, Any]:
     """Тело ответа. Пост без анализа — не ошибка, а «ещё не проанализирован»."""
     analyzed = row is not None and row["analyzed_at"] is not None

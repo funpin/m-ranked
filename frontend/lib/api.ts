@@ -117,6 +117,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
         params: { path: { legacyId }, query: { legacyType } },
       }).then(unwrap);
     },
+    accountAnomalyLevels(accountId: string) {
+      return analysisClient.GET("/api/v1/accounts/{accountId}/anomaly-levels", {
+        params: { path: { accountId } },
+      }).then(unwrap);
+    },
     comparisonCandidates(platform: Exclude<Platform, "all">, limit = 200, cursor?: string) {
       return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
     },

@@ -19,9 +19,9 @@ CONTRACT = yaml.safe_load((pathlib.Path(__file__).resolve().parents[1]
 FORBIDDEN = ("накрут", "мошен", "фальсиф", "нечестн", "доказанн")
 
 
-def _validate(body: dict) -> None:
+def _validate(body: dict, name: str = "PublicationAnomalyAnalysis") -> None:
     registry = Registry().with_resource("urn:contract", Resource.from_contents(CONTRACT, default_specification=DRAFT202012))
-    schema = {"$ref": "urn:contract#/components/schemas/PublicationAnomalyAnalysis"}
+    schema = {"$ref": f"urn:contract#/components/schemas/{name}"}
     errors = list(Draft202012Validator(schema, registry=registry).iter_errors(body))
     assert not errors, [f"{list(error.path)}: {error.message}" for error in errors]
 
@@ -61,3 +61,13 @@ def test_api_level_words_match_the_analysis_module_and_the_glossary():
 
 def test_analysis_cache_is_not_invalidated_by_ingestion():
     assert analysis.ANALYSIS_TAGS == frozenset({"analysis"})
+
+
+def test_account_levels_carry_only_the_level_words():
+    body = analysis.levels_body("99269506-1466-5e18-a215-a3db2688d786", 12, [
+        {"publication_id": "0f0cb3a4-7b1e-5c43-9d44-1d5d0b1f5a01", "level": 3},
+        {"publication_id": "0f0cb3a4-7b1e-5c43-9d44-1d5d0b1f5a02", "level": 0},
+    ])
+    _validate(body, "AccountAnomalyLevels")
+    assert [item["levelLabel"] for item in body["items"]] == [
+        "признаки искусственной активности", "нет признаков"]

@@ -109,7 +109,7 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
 }
 const server = createServer(async (request, response) => {
   const url = new URL(request.url!, "http://127.0.0.1");
-  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis))?$/.exec(url.pathname);
+  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis|anomaly-levels))?$/.exec(url.pathname);
   if (canonical) {
     const id = Number(canonical[2]!.slice(-12));
     const kind = Number(canonical[2]!.slice(0,8));
@@ -154,6 +154,9 @@ const server = createServer(async (request, response) => {
   const pubId=/^\/api\/v1\/publications\/(\d+)$/.exec(url.pathname);
   if(pubId) return json(publication(Number(pubId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts"));
   if(/^\/api\/v1\/accounts\/\d+\/publications$/.test(url.pathname)) {const day=url.searchParams.get("day");return json({items:[postItem(1,url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts",day),postItem(2,"posts",day)],nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);}
+  // Уровни аккаунта: первый пост с выраженной аномалией, второй ещё не проанализирован.
+  const levelsId=/^\/api\/v1\/accounts\/(\d+)\/anomaly-levels$/.exec(url.pathname);
+  if(levelsId) {const type=url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts";return json({accountId:uuid(1,Number(levelsId[1])),datasetRevision:revision,items:[{publicationId:publication(1,type).publicationId,level:2,levelLabel:"выраженная аномалия",levelSymbol:"◑"}]} satisfies Schema["AccountAnomalyLevels"]);}
   const historyId=/^\/api\/v1\/publications\/(\d+)\/history$/.exec(url.pathname);
   if(historyId) {
     const p=publication(Number(historyId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts");

@@ -9,14 +9,10 @@ import { publicationHref, UUID_PATTERN } from "@/lib/entity-routes";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { normalizeHistoryLimit, queryHref, type SearchParams } from "@/lib/params";
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
+import { anomalyReportVisible } from "@/lib/anomaly-visibility";
 
 export const dynamic = "force-dynamic";
 
-/** Флаг первой выкатки: в тихом режиме отчёт анализа скрыт, пока работник
- *  догоняет очередь и строит первую норму. По умолчанию отчёт показан. */
-function anomalyReportVisible() {
-  return (process.env.ANOMALY_REPORT_VISIBLE ?? "true").trim().toLowerCase() !== "false";
-}
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<SearchParams> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

@@ -23,6 +23,17 @@ SELECT state.level, state.signals, state.quality, state.analyzed_at, state.lag_s
  WHERE state.publication_id=%(publication)s
 """
 
+# Уровни постов аккаунта для колонки в таблице публикаций: по индексу
+# (аккаунт, дата публикации) и первичному ключу состояния, без признаков.
+ACCOUNT_LEVELS = """
+SELECT publication.id AS publication_id, state.level
+  FROM ingest.publication publication
+  JOIN analytics.post_anomaly_state state ON state.publication_id=publication.id
+ WHERE publication.primary_account_id=%(account)s::uuid AND state.analyzed_at IS NOT NULL
+ ORDER BY publication.published_at DESC, publication.id DESC
+ LIMIT %(limit)s
+"""
+
 CREATE_MANUAL = """
 SELECT analytics.create_manual_anomaly_signal(
   %(publication)s,%(metric)s,%(severity)s,%(explanation)s,%(start_at)s,%(end_at)s,

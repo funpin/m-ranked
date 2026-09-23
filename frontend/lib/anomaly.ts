@@ -1,22 +1,26 @@
 import { duration } from "./format";
-import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "./types";
+import type { AccountAnomalyLevels, AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "./types";
 
 /** Результат загрузки анализа. Сбой — не отсутствие признаков: карточка
  *  честно скажет, что результата нет. */
 export type AnalysisLoad = { value: PublicationAnomalyAnalysis | null; failed: boolean };
 
-/** Символы признаков — те же, что пишет анализ; легенда нужна и тогда, когда
- *  признаков на посте нет, поэтому список полный и живёт здесь. */
+/** Уровни постов аккаунта по id публикации; null — ответ анализа не пришёл. */
+export type AccountLevel = AccountAnomalyLevels["items"][number];
+export type AccountLevelsLoad = ReadonlyMap<string, AccountLevel> | null;
+
+/** Названия признаков для легенды; значки — в components/anomaly-icons.
+ *  Легенда нужна и тогда, когда признаков на посте нет, поэтому список полный. */
 export const SIGNAL_LEGEND = [
-  { pattern: 1, symbol: "⟋", title: "линейная подача" },
-  { pattern: 2, symbol: "⚡", title: "поздний скачок" },
-  { pattern: 4, symbol: "⋯", title: "прирост за пробел в замерах" },
-  { pattern: 5, symbol: "≈", title: "реакции догоняют просмотры" },
-  { pattern: 6, symbol: "⇅", title: "реакции раньше просмотров" },
-  { pattern: 7, symbol: "≫", title: "реакций больше просмотров" },
-  { pattern: 8, symbol: "⫴", title: "синхронный подъём постов аккаунта" },
-  { pattern: 9, symbol: "▭", title: "рывок, обрывающийся в плато" },
-  { pattern: 10, symbol: "◇", title: "ERV вне нормы" },
+  { pattern: 1, title: "линейная подача" },
+  { pattern: 2, title: "поздний скачок" },
+  { pattern: 4, title: "прирост за пробел в замерах" },
+  { pattern: 5, title: "реакции догоняют просмотры" },
+  { pattern: 6, title: "реакции раньше просмотров" },
+  { pattern: 7, title: "реакций больше просмотров" },
+  { pattern: 8, title: "синхронный подъём постов аккаунта" },
+  { pattern: 9, title: "рывок, обрывающийся в плато" },
+  { pattern: 10, title: "ERV вне нормы" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;
@@ -33,7 +37,7 @@ export function summaryLine(analysis: PublicationAnomalyAnalysis) {
   const calm = analysis.level === null || analysis.level === 0;
   const tone: Tone = calm ? "neutral" : analysis.level === 3 ? "red" : "amber";
   return {
-    symbol: analysis.levelSymbol,
+    level: analysis.level,
     label: analysis.levelLabel,
     count: calm ? null : signalCount(count),
     analyzedAt: analysis.analyzedAt,
@@ -82,11 +86,11 @@ export function boundarySnapshotIds(analysis: PublicationAnomalyAnalysis | null,
   return ids;
 }
 
-export type SignalMarker = { id: string; pattern: number; symbol: string; title: string; from: number; to: number };
+export type SignalMarker = { id: string; pattern: number; title: string; from: number; to: number };
 
 export function signalMarkers(analysis: PublicationAnomalyAnalysis | null): SignalMarker[] {
   return (analysis?.signals ?? []).map((signal, index) => ({
-    id: markerId(signal, index), pattern: signal.pattern, symbol: signal.symbol, title: signal.title,
+    id: markerId(signal, index), pattern: signal.pattern, title: signal.title,
     from: Date.parse(signal.startAt), to: Date.parse(signal.endAt),
   }));
 }

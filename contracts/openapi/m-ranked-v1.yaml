@@ -371,6 +371,39 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/accounts/{accountId}/anomaly-levels:
+    get:
+      tags: [Query]
+      operationId: getAccountAnomalyLevels
+      summary: Read the anomaly-dynamics levels of an account's analyzed publications
+      description: >-
+        Level only, newest publications first, at most 1000. Publications not analyzed yet are
+        absent. Signals and data quality are served per publication by anomaly-analysis.
+      security: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Levels of the account's analyzed publications.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAnomalyLevels'
+        '304':
+          description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/statistics:
     get:
       tags: [Query]
@@ -4105,6 +4138,25 @@ components:
         reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
         methodologyVersion: { type: string, const: anomaly-dynamics-v2 }
         disclaimer: { type: string }
+    AccountAnomalyLevels:
+      type: object
+      additionalProperties: false
+      required: [accountId, datasetRevision, items]
+      properties:
+        accountId: { type: string, format: uuid }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        items:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            additionalProperties: false
+            required: [publicationId, level, levelLabel, levelSymbol]
+            properties:
+              publicationId: { type: string, format: uuid }
+              level: { type: integer, minimum: 0, maximum: 3 }
+              levelLabel: { type: string }
+              levelSymbol: { type: string, maxLength: 4 }
     CreateManualAnomalySignalRequest:
       type: object
       additionalProperties: false

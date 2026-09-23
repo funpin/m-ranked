@@ -85,11 +85,16 @@ test("publication shows a collapsed analysis card that expands and marks signals
   await expect(card.getByTestId("anomaly-signal")).toHaveCount(2);
   await expect(card.locator("code").first()).toContainText("Δпросмотры ≈ 10·t");
   await expect(card).toContainText("пост долго показывался в рекомендациях");
-  await expect(card.getByLabel("Символы признаков")).toContainText("линейная подача");
-  // Символы признаков стоят на обоих основных графиках, по одному на признак.
+  // Справка — под значком «i», а не в теле карточки.
+  await expect(card.getByTestId("anomaly-quality")).toHaveCount(0);
+  await card.getByTestId("anomaly-note").getByRole("button").hover();
+  await expect(page.getByLabel("Значки признаков")).toContainText("линейная подача");
+  await expect(page.getByTestId("anomaly-quality")).toBeVisible();
+  await page.mouse.move(0,0);
+  // Значки признаков стоят на обоих основных графиках, по одному на признак.
   await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
   await expect(page.locator("g[data-signal-marker]")).toHaveCount(4);
-  await expect(page.locator("g[data-signal-marker] text").first()).toContainText(/[⟋⇅]/);
+  await expect(page.locator("g[data-signal-marker] svg.lucide").first()).toBeAttached();
   await card.getByRole("button",{name:"Показать на графике"}).first().click();
   await expect(page.locator("g[data-signal-marker][data-highlighted]")).toHaveCount(2);
   await expect(page.getByTestId("publication-chart-stack")).toBeInViewport();
@@ -97,6 +102,16 @@ test("publication shows a collapsed analysis card that expands and marks signals
   await expect(page).toHaveURL(/history_limit=3000$/);
   await expect(page.locator("#snapshot-40[data-anomaly-boundary]")).toContainText("граница сигнала аномальной динамики");
   await expect(page.locator("#snapshot-41[data-anomaly-boundary]")).toContainText("граница сигнала аномальной динамики");
+});
+
+test("account table shows the analysis level without waiting for it",async({page})=>{
+  await page.goto("/channels/1");
+  await expect(page.getByRole("columnheader",{name:"Анализ динамики"})).toBeVisible();
+  const cells=page.getByTestId("anomaly-level-cell");
+  await expect(cells).toHaveCount(2);
+  await expect(cells.nth(0)).toContainText("выраженная аномалия");
+  await expect(cells.nth(0).locator("svg.lucide")).toHaveCount(1);
+  await expect(cells.nth(1)).toContainText("ожидает");
 });
 
 test("a post without signals reads calmly and an unanalyzed post says so",async({page})=>{
@@ -112,7 +127,7 @@ test("cumulative and delta charts both draw when anomaly boundaries size points 
   // A per-sample point size once collapsed the whole line geometry to NaN and
   // left the cumulative plot blank while the bar plot still drew.
   await expect.poll(async()=>page.evaluate(()=>{
-    const plots=[...document.querySelectorAll('[role="img"][data-chart-ready="true"] svg')];
+    const plots=[...document.querySelectorAll('[role="img"][data-chart-ready="true"] svg.recharts-surface')];
     return {
       count:plots.length,
       allDrawn:plots.length===2&&plots.every(svg=>svg.querySelectorAll("path.recharts-curve, path.recharts-area-area, path.recharts-rectangle, rect.recharts-rectangle").length>0),

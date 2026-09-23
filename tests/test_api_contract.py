@@ -104,6 +104,7 @@ MEDIA_GROUP = {
 
 ANALYSIS_GROUP = {
     ("/api/v1/publications/{legacyId}/anomaly-analysis", "GET"),
+    ("/api/v1/accounts/{accountId}/anomaly-levels", "GET"),
     ("/api/v1/admin/publications/{publicationId}/anomaly-signals", "POST"),
     ("/api/v1/admin/anomaly-signals/{findingId}/reviews", "POST"),
 }
