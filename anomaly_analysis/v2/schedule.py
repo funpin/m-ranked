@@ -40,6 +40,10 @@ class ScheduleConfig:
     min_new_points: int = 3
     # Окно отслеживания — тот же TRACK_POST_FOR_HOURS, что у сборщиков.
     track_post_for_hours: int = 720
+    # Окно постановки в очередь шире окна отслеживания: сайт показывает посты
+    # за 70 суток, и каждый из них должен иметь вывод. Пост старше окна
+    # отслеживания получает один финальный анализ и замораживается.
+    seed_window_hours: int = 75 * 24
     # Деградация: при отставании очереди интервалы 7–30 суток растягиваются
     # до вчетверо; свежие посты не страдают никогда.
     max_stretch: float = 4.0
@@ -76,6 +80,10 @@ class ScheduleConfig:
     @property
     def track_seconds(self) -> float:
         return self.track_post_for_hours * HOUR
+
+    @property
+    def seed_seconds(self) -> float:
+        return max(self.seed_window_hours, self.track_post_for_hours) * HOUR
 
 
 @dataclass(frozen=True, slots=True)

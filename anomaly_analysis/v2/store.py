@@ -68,19 +68,55 @@ WITH posts AS (
      WHERE publication.primary_account_id = ANY(%(accounts)s::uuid[])
        AND publication.published_at >= %(published_since)s
        AND publication.deleted_at IS NULL
+), observed AS (
+    SELECT posts.primary_account_id, posts.id AS publication_id, posts.published_at,
+           floor(extract(epoch FROM snapshot.observed_at) / 3600)::bigint AS hour,
+           snapshot.reactions_count, snapshot.views_count
+      FROM posts
+      JOIN ingest.publication_metric_snapshot_active snapshot
+        ON snapshot.publication_id = posts.id AND snapshot.published_month = posts.published_month
+     WHERE snapshot.published_month = ANY(%(months)s::date[])
+       AND snapshot.observed_at >= %(since)s AND snapshot.observed_at < %(until)s
+       AND NOT snapshot.synthetic
+    UNION ALL
+    -- Уровень на начало окна: у тихого старого поста последний замер бывает
+    -- раньше окна (сборщик пишет только изменения), и без него ряд начинался
+    -- бы с «нет данных».
+    SELECT posts.primary_account_id, posts.id, posts.published_at,
+           floor(extract(epoch FROM %(since)s::timestamptz) / 3600)::bigint,
+           before.reactions_count, before.views_count
+      FROM posts
+      JOIN LATERAL (
+          SELECT snapshot.reactions_count, snapshot.views_count
+            FROM ingest.publication_metric_snapshot_active snapshot
+           WHERE snapshot.publication_id = posts.id AND snapshot.published_month = posts.published_month
+             AND snapshot.observed_at < %(since)s AND NOT snapshot.synthetic
+           ORDER BY snapshot.observed_at DESC
+           LIMIT 1
+      ) before ON true
 )
-SELECT posts.primary_account_id, posts.id AS publication_id, posts.published_at,
-       floor(extract(epoch FROM snapshot.observed_at) / 3600)::bigint AS hour,
-       max(snapshot.reactions_count) AS reactions, max(snapshot.views_count) AS views
-  FROM posts
-  JOIN ingest.publication_metric_snapshot_active snapshot
-    ON snapshot.publication_id = posts.id AND snapshot.published_month = posts.published_month
- WHERE snapshot.published_month = ANY(%(months)s::date[])
-   AND snapshot.observed_at >= %(since)s AND snapshot.observed_at < %(until)s
-   AND NOT snapshot.synthetic
+SELECT primary_account_id, publication_id, published_at, hour,
+       max(reactions_count) AS reactions, max(views_count) AS views
+  FROM observed
  GROUP BY 1, 2, 3, 4
  ORDER BY 1, 2, 4
 """
+
+
+# Успешные циклы сбора аккаунтов: по ним «не менялось» отличается от «нет
+# данных» (сборщик пишет замер только при изменении). Читается одна колонка по
+# индексу (аккаунт, начало цикла).
+COLLECTED = """
+SELECT result.platform_account_id, result.started_at
+  FROM ingest.collection_account_result result
+ WHERE result.platform_account_id = ANY(%(accounts)s::uuid[])
+   AND result.status = 'succeeded'
+   AND result.started_at > %(since)s AND result.started_at <= %(until)s
+ ORDER BY result.platform_account_id, result.started_at
+"""
+# Журнал сбора держится в памяти процесса на столько назад: окно отслеживания
+# и запас на финальный анализ. Дальше пост анализируется без журнала.
+COLLECTED_HORIZON = timedelta(days=45)
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,8 +161,11 @@ class StateWrite:
             raise ValueError("a state write carries either a verdict or an error code")
 
 
-def series_from_rows(rows: Sequence[Mapping[str, Any]]) -> PostSeries:
-    """Ряд поста из строк замеров одного поста, упорядоченных по времени."""
+def series_from_rows(rows: Sequence[Mapping[str, Any]],
+                     collected: Sequence[datetime] = ()) -> PostSeries:
+    """Ряд поста из строк замеров одного поста, упорядоченных по времени.
+
+    `collected` — начала успешных циклов сбора аккаунта."""
     first = rows[0]
     values: dict[Metric, tuple[int | None, ...]] = {}
     for metric in Metric:
@@ -137,7 +176,8 @@ def series_from_rows(rows: Sequence[Mapping[str, Any]]) -> PostSeries:
             values[metric] = column
     return PostSeries(first["id"], first["primary_account_id"], first["platform"],
                       first["published_at"], bool(first["is_repost"]),
-                      tuple(row["observed_at"] for row in rows), values)
+                      tuple(row["observed_at"] for row in rows), values,
+                      tuple(item for item in collected if item >= first["published_at"]))
 
 
 def change_kind(previous: StoredState | None, level: int,
@@ -187,6 +227,10 @@ class PostgresAnomalyStore:
     def __init__(self, dsn: str, *, connection_factory=None) -> None:
         self._dsn = dsn
         self._factory = connection_factory or self._connect
+        # Журнал сбора по аккаунтам: (начала циклов, до какого момента прочитан).
+        # Дочитывается только хвост — догонка по десяткам тысяч постов иначе
+        # перечитывала бы один и тот же журнал на каждой пачке.
+        self._collected: dict[UUID, tuple[list[datetime], datetime]] = {}
 
     def _connect(self):
         import psycopg
@@ -207,8 +251,37 @@ class PostgresAnomalyStore:
                 grouped: dict[UUID, list[Mapping[str, Any]]] = {}
                 for row in rows:
                     grouped.setdefault(row["id"], []).append(row)
-                result.update({key: series_from_rows(items) for key, items in grouped.items()})
+                collected = self._read_collected(connection, {items[0]["primary_account_id"]
+                                                              for items in grouped.values()})
+                result.update({key: series_from_rows(items, collected.get(items[0]["primary_account_id"], ()))
+                               for key, items in grouped.items()})
         return result
+
+    def read_collected(self, accounts: Sequence[UUID]) -> dict[UUID, Sequence[datetime]]:
+        with self._factory() as connection:
+            return self._read_collected(connection, set(accounts))
+
+    def _read_collected(self, connection: Any, accounts: set[UUID]) -> dict[UUID, Sequence[datetime]]:
+        """Начала успешных циклов сбора аккаунтов за горизонт, с дочитыванием хвоста."""
+        if not accounts:
+            return {}
+        now = datetime.now(timezone.utc)
+        horizon = now - COLLECTED_HORIZON
+        # Аккаунты группируются по моменту, с которого дочитывать: новые — с
+        # горизонта, известные — с последнего прочитанного.
+        groups: dict[datetime, list[UUID]] = {}
+        for account in accounts:
+            known = self._collected.get(account)
+            groups.setdefault(known[1] if known else horizon, []).append(account)
+        for since, members in groups.items():
+            fresh: dict[UUID, list[datetime]] = {account: [] for account in members}
+            for row in connection.execute(COLLECTED, {"accounts": members, "since": since, "until": now}):
+                fresh[row["platform_account_id"]].append(row["started_at"])
+            for account, items in fresh.items():
+                previous = self._collected.get(account, ([], horizon))[0]
+                merged = [item for item in previous if item > horizon] + items
+                self._collected[account] = (merged, now)
+        return {account: self._collected[account][0] for account in accounts}
 
     def write_states(self, writes: Sequence[StateWrite]) -> int:
         """Записать итоги пачкой; вернуть число записей журнала."""
@@ -304,6 +377,34 @@ class PostgresAnomalyStore:
                 {"now": now, "since": now - timedelta(seconds=window_seconds), "limit": limit}).fetchall()
         return len(rows)
 
+    def backfill_accounts(self, since: datetime) -> list[UUID]:
+        """Аккаунты с постами окна — единица разовой перепроверки."""
+        with self._factory() as connection:
+            rows = connection.execute(
+                """SELECT DISTINCT publication.primary_account_id AS account
+                     FROM ingest.visible_publication publication
+                    WHERE publication.published_at >= %s AND publication.deleted_at IS NULL
+                    ORDER BY 1""", (since,)).fetchall()
+        return [row["account"] for row in rows]
+
+    def backfill_targets(self, account: UUID, since: datetime) -> list[DueRow]:
+        """Посты аккаунта за окно с их текущим состоянием (если оно есть)."""
+        with self._factory() as connection:
+            rows = connection.execute(
+                """SELECT publication.id AS publication_id, publication.published_at,
+                          coalesce(state.next_due_at, %(now)s) AS next_due_at, state.analyzed_at,
+                          state.last_point_observed_at, state.norm_version_id,
+                          coalesce(state.attempts, 0) AS attempts, coalesce(state.signals, '[]'::jsonb) AS signals
+                     FROM ingest.visible_publication publication
+                     LEFT JOIN analytics.post_anomaly_state state ON state.publication_id = publication.id
+                    WHERE publication.primary_account_id = %(account)s AND publication.published_at >= %(since)s
+                      AND publication.deleted_at IS NULL
+                    ORDER BY publication.published_at DESC""",
+                {"account": account, "since": since, "now": datetime.now(timezone.utc)}).fetchall()
+        return [DueRow(row["publication_id"], row["published_at"], row["next_due_at"], row["analyzed_at"],
+                       row["last_point_observed_at"], row["norm_version_id"], int(row["attempts"]),
+                       tuple(row["signals"] or ())) for row in rows]
+
     def claim_due(self, now: datetime, limit: int) -> list[DueRow]:
         """Просроченные незамороженные посты, свежие первыми."""
         with self._factory() as connection:
@@ -351,12 +452,14 @@ class PostgresAnomalyStore:
                 # Час до окна нужен, чтобы посчитать прирост первого часа.
                 "since": datetime.fromtimestamp((first - 1) * 3600, tz=timezone.utc), "until": until,
             }).fetchall()
+            collected = self._read_collected(connection, set(accounts))
         grouped: dict[UUID, list[Mapping[str, Any]]] = {}
         for row in rows:
             grouped.setdefault(row["primary_account_id"], []).append(row)
         result = {}
         for account, items in grouped.items():
-            activity = SiblingActivity.from_hourly(items, first, last)
+            hours = {int(item.timestamp() // 3600) for item in collected.get(account, ())}
+            activity = SiblingActivity.from_hourly(items, first, last, hours)
             if activity is not None:
                 result[account] = activity
         return result

@@ -15,7 +15,7 @@ import numpy as np
 
 from .domain import Metric, PostSeries
 
-PREPARATION_VERSION = "2.0.0"
+PREPARATION_VERSION = "2.1.0"
 
 MINUTE, HOUR, DAY = 60, 3600, 86400
 
@@ -164,12 +164,17 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
     instants = np.fromiter((item.timestamp() for item in series.observed_at),
                            dtype=np.float64, count=len(series.observed_at))
     keep = instants <= analyzed_at.timestamp()
-    ages = _frozen(instants[keep] - published)
+    columns = {metric: np.asarray(column, dtype=np.float64)[keep] for metric, column in series.values.items()}
+    collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64,
+                            count=len(series.collected))
+    collected = collected[collected <= analyzed_at.timestamp()] - published
+    raw_ages, rows, covered = confirm_unchanged(instants[keep] - published, collected, cadence, series.platform)
+    ages = _frozen(raw_ages)
     steps = _frozen(cadence.expected_step_seconds(series.platform, ages))
     metrics: dict[Metric, MetricSeries] = {}
-    for metric, column in series.values.items():
-        raw = np.asarray(column, dtype=np.float64)[keep]
-        prepared = _metric(metric, ages, raw, series, cadence, scales)
+    for metric, column in columns.items():
+        raw = column[rows]
+        prepared = _metric(metric, ages, raw, series, cadence, scales, covered)
         if prepared is not None:
             metrics[metric] = prepared
     first_step = cadence.expected_step_seconds(series.platform, np.zeros(1))[0]
@@ -182,12 +187,78 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
     )
 
 
+def confirm_unchanged(ages: np.ndarray, collected: np.ndarray, cadence: CollectionCadence,
+                      platform: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Отличить «не менялось» от «нет данных» по журналу сбора аккаунта.
+
+    Сборщик пишет замер, только когда значения изменились, поэтому плато —
+    именно тот участок, где замеров нет. Без журнала такой участок выглядел
+    пробелом, и рывок, обрывающийся в плато, не судился вовсе.
+
+    Интервал между замерами подтверждён, если успешные циклы сбора шли по
+    нему без разрыва длиннее трёх ожидаемых шагов. Цикл опрашивает пост, как
+    только тот должен по своему шагу, поэтому значение не менялось как минимум
+    до «последний цикл минус шаг»: там ставится перенесённая точка с прежним
+    значением. Прирост остаётся на последнем шаге перед новым замером, а не
+    размазывается по всему интервалу. Цикл, оборвавшийся на простое, делит
+    интервал: до простоя — подтверждено, дальше — пробел. После последнего
+    замера так же продлевается хвост до последнего цикла.
+
+    Возвращает возрасты точек, индекс исходной строки для каждой (перенесённая
+    точка берёт значения предыдущей) и `covered[k]` — участок от точки k−1 до
+    k подтверждён журналом.
+    """
+    size = ages.size
+    rows = np.arange(size)
+    covered = np.zeros(size, dtype=bool)
+    if size == 0 or not collected.size:
+        return ages, rows, covered
+    collected = np.sort(collected[collected > ages[0]])
+
+    def chain(start: float, stop: float, limit: float) -> float:
+        """Последний цикл непрерывной цепочки от start, не дальше stop."""
+        left, right = np.searchsorted(collected, (start, stop), side="right")
+        inside = collected[left:right]
+        if not inside.size:
+            return start
+        broken = np.flatnonzero(np.diff(np.concatenate(([start], inside))) > limit)
+        return float(inside[broken[0] - 1]) if broken.size else float(inside[-1])
+
+    steps = np.maximum(cadence.expected_step_seconds(platform, ages[:-1]),
+                       cadence.expected_step_seconds(platform, ages[1:]))
+    limits = GAP_FACTOR * steps
+    covered[1:] = np.diff(ages) <= limits
+    # Перенесённые точки: (позиция вставки, возраст, строка-источник).
+    inserts: list[tuple[int, float, int]] = []
+    for index in np.flatnonzero(~covered[1:]):
+        start, stop, step = float(ages[index]), float(ages[index + 1]), float(steps[index])
+        last = chain(start, stop, limits[index])
+        covered[index + 1] = stop - last <= limits[index]
+        if last - step > start + step / 2:
+            inserts.append((index + 1, last - step, index))
+    tail = float(ages[-1])
+    step = float(cadence.expected_step_seconds(platform, np.array((tail,)))[0])
+    last = chain(tail, np.inf, GAP_FACTOR * step)
+    if last - step > tail + step / 2:
+        inserts.append((size, last - step, size - 1))
+    if not inserts:
+        return ages, rows, covered
+    where = np.array([item[0] for item in inserts])
+    return (np.insert(ages, where, [item[1] for item in inserts]),
+            np.insert(rows, where, [item[2] for item in inserts]),
+            # Участок до перенесённой точки подтверждён; следующий за ней
+            # наследует прежний признак исходного интервала.
+            np.insert(covered, where, True))
+
+
 def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostSeries,
-            cadence: CollectionCadence, scales: tuple[timedelta, ...]) -> MetricSeries | None:
+            cadence: CollectionCadence, scales: tuple[timedelta, ...],
+            covered: np.ndarray | None = None) -> MetricSeries | None:
     present = ~np.isnan(raw)
     # Столбец без единого значения — площадка метрику не отдаёт, это не ноль.
     if not present.any():
         return None
+    positions = np.flatnonzero(present)
     ages, values = all_ages[present], raw[present]
     flags = np.zeros(values.size, dtype=np.uint8)
     if not present.all():
@@ -201,6 +272,11 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
     expected = np.maximum(cadence.expected_step_seconds(series.platform, ages[:-1]),
                           cadence.expected_step_seconds(series.platform, ages[1:]))
     gap = elapsed > GAP_FACTOR * expected
+    if covered is not None and covered.size == all_ages.size:
+        # Подтверждение журналом годится только для соседних точек: метрика,
+        # пропавшая в замерах между ними, — это отсутствие данных именно по ней.
+        direct = np.diff(positions) == 1
+        gap &= ~(direct & covered[positions[1:]])
     flags[1:][negative] |= np.uint8(PointFlag.NEGATIVE_DELTA)
     flags[1:][reset] |= np.uint8(PointFlag.COUNTER_RESET)
     flags[1:][gap] |= np.uint8(PointFlag.AFTER_GAP)

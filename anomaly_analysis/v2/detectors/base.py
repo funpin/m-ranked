@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Collection, Mapping, Protocol, Sequence
 from uuid import UUID
 
 import numpy as np
 
 from ..domain import Family, Interval, Metric, PostSeries, Sign
 from ..norms import DECAY_EXPONENT_BOUNDS, DecayFit, Norm, fit_decay
-from ..series import DAY, HOUR, PreparedSeries
+from ..series import DAY, HOUR, CollectionCadence, PreparedSeries, confirm_unchanged
 
 # Счётчики площадок обновляются с задержкой; реакция может «обогнать»
 # просмотр на эту величину без всякой аномалии. Telegram обновляет
@@ -66,16 +66,29 @@ class SiblingActivity:
         rows = {Metric.REACTIONS: [], Metric.VIEWS: []}
         ages = []
         for series in siblings:
+            published = series.published_at.timestamp()
             instants = np.fromiter((item.timestamp() for item in series.observed_at), dtype=np.float64)
-            ages.append(edges[:-1] - series.published_at.timestamp())
+            collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64)
+            # Те же подтверждённые журналом участки «без изменений», что и в
+            # подготовке ряда: тихий час — ноль прироста, а не «нет данных».
+            ages_, source, covered = confirm_unchanged(instants - published, collected - published,
+                                                      CollectionCadence(), series.platform)
+            ages.append(edges[:-1] - published)
             for metric, bucket in rows.items():
-                bucket.append(_hourly(instants, series.values.get(metric), edges))
+                column = series.values.get(metric)
+                values = None if column is None else np.asarray(column, dtype=np.float64)[source]
+                bucket.append(_hourly(ages_ + published, values, edges, covered))
         return cls(edges[:-1] / HOUR, np.vstack(rows[Metric.REACTIONS]), np.vstack(rows[Metric.VIEWS]),
                    np.vstack(ages), tuple(item.publication_id for item in siblings))
 
     @classmethod
-    def from_hourly(cls, rows: Sequence[Mapping[str, Any]], first_hour: int, last_hour: int) -> "SiblingActivity | None":
-        """Из почасовых максимумов счётчиков: прирост часа — разность с предыдущим часом."""
+    def from_hourly(cls, rows: Sequence[Mapping[str, Any]], first_hour: int, last_hour: int,
+                    collected_hours: Collection[int] = ()) -> "SiblingActivity | None":
+        """Из почасовых максимумов счётчиков: прирост часа — разность с предыдущим часом.
+
+        `collected_hours` — часы с успешным циклом сбора аккаунта. Сборщик пишет
+        замер только при изменении, поэтому такой час без замера несёт прежний
+        уровень поста; час без цикла остаётся «нет данных» и рвёт перенос."""
         posts: dict[UUID, list[Mapping[str, Any]]] = {}
         for row in rows:
             posts.setdefault(row["publication_id"], []).append(row)
@@ -92,6 +105,14 @@ class SiblingActivity:
                     position = int(row["hour"]) - first_hour + 1
                     if 0 <= position <= hours.size and row[key] is not None:
                         level[position] = float(row[key])
+                carry = np.nan
+                for position in range(level.size):
+                    if not np.isnan(level[position]):
+                        carry = level[position]
+                    elif first_hour - 1 + position in collected_hours:
+                        level[position] = carry
+                    else:
+                        carry = np.nan
                 target[index] = np.diff(level)
         return cls(hours, reactions, views, ages, tuple(posts))
 
@@ -103,12 +124,18 @@ class SiblingActivity:
                                tuple(self.publications[index] for index in keep))
 
 
-def _hourly(instants: np.ndarray, column, edges: np.ndarray) -> np.ndarray:
+def _hourly(instants: np.ndarray, column, edges: np.ndarray,
+            covered: np.ndarray | None = None) -> np.ndarray:
     result = np.full(edges.size - 1, np.nan)
     if column is None:
         return result
     values = np.asarray(column, dtype=np.float64)
     keep = ~np.isnan(values)
+    # Подтверждение журналом годится только для соседних точек (как в series).
+    confirmed = None
+    if covered is not None:
+        positions = np.flatnonzero(keep)
+        confirmed = (np.diff(positions) == 1) & covered[positions[1:]]
     instants, values = instants[keep], values[keep]
     if values.size < 2:
         return result
@@ -118,7 +145,8 @@ def _hourly(instants: np.ndarray, column, edges: np.ndarray) -> np.ndarray:
     spacing = np.diff(instants)
     left = np.clip(np.searchsorted(instants, edges[:-1], side="right") - 1, 0, spacing.size - 1)
     right = np.clip(np.searchsorted(instants, edges[1:], side="left") - 1, 0, spacing.size - 1)
-    covered = np.maximum(spacing[left], spacing[right]) <= 3 * HOUR
+    short = spacing <= 3 * HOUR if confirmed is None else (spacing <= 3 * HOUR) | confirmed
+    covered = short[left] & short[right]
     delta = np.diff(cumulative)
     result[inside & covered] = delta[inside & covered]
     return result

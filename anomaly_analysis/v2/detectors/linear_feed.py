@@ -17,7 +17,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 PATTERN = 1
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -38,6 +38,13 @@ MAX_DRIFT = 1.4
 # Участок начинается ступенькой: скорость втрое выше фона шести часов до него.
 STEP_UP = 3.0
 BACKGROUND_WINDOW = 6 * HOUR
+# Фон берётся только из дневных часов: ночью аудитория спит, и утреннее
+# оживление поста — суточный ритм, а не ступенька подачи. Пока пустые ночные
+# часы считались пробелом, фона не было и признак не выставлялся; с журналом
+# сбора они видны, и без этого правила каждое утро давало бы «подачу».
+NIGHT_HOURS_MSK = range(0, 7)
+BACKGROUND_LOOKBACK = 18 * HOUR
+MSK_OFFSET = 3 * HOUR
 # Незначимый по объёму участок не признак: минимум 20 % значения на начало.
 MIN_SHARE = 0.2
 MIN_DELTA = {Metric.VIEWS: 100, Metric.REACTIONS: 30}
@@ -105,6 +112,22 @@ def _refine(rates: np.ndarray, valid: np.ndarray, begin: int, end: int) -> tuple
     return (left, right) if right - left >= 2 else (begin, end)
 
 
+def _daytime_background(prepared, grid, rates, valid, begin) -> np.ndarray:
+    """Скорости дневных пригодных ячеек до участка: не больше шести часов, не дальше 18."""
+    width = grid.scale.total_seconds()
+    wanted = max(1, int(BACKGROUND_WINDOW / width))
+    earliest = max(0, begin - max(1, int(BACKGROUND_LOOKBACK / width)))
+    published = prepared.series.published_at.timestamp()
+    picked: list[float] = []
+    for cell in range(begin - 1, earliest - 1, -1):
+        clock = int((published + grid.edges[cell] + MSK_OFFSET) // HOUR) % 24
+        if valid[cell] and clock not in NIGHT_HOURS_MSK:
+            picked.append(float(rates[cell]))
+            if len(picked) >= wanted:
+                break
+    return np.asarray(picked)
+
+
 def _judge(prepared, metric, data, grid, rates, valid, begin, end):
     width = grid.scale.total_seconds()
     start_age, end_age = float(grid.edges[begin]), float(grid.edges[end])
@@ -116,9 +139,7 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end):
     cv = float(segment.std() / mean) if mean > 0 else np.inf
     third = max(1, segment.size // 3)
     drift = float(segment[-third:].mean() / max(segment[:third].mean(), 1e-9))
-    background_cells = max(1, int(BACKGROUND_WINDOW / width))
-    before = slice(max(0, begin - background_cells), begin)
-    background = rates[before][valid[before]]
+    background = _daytime_background(prepared, grid, rates, valid, begin)
     if cv > MAX_CV or not 1 / MAX_DRIFT <= drift <= MAX_DRIFT or not background.size:
         return None
     if float(np.median(background)) * STEP_UP > mean:

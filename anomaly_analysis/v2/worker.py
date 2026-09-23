@@ -120,7 +120,7 @@ class Worker:
     def run_once(self) -> int:
         started = time.monotonic()
         now = self.clock()
-        self.metrics.seeded += self.store.seed_new(now, self.schedule.track_seconds, self.config.seed_limit)
+        self.metrics.seeded += self.store.seed_new(now, self.schedule.seed_seconds, self.config.seed_limit)
         self._refresh_norms(now)
         lag, backlog = self.store.queue_state(now)
         stretch = stretch_for_lag(self.schedule, lag)

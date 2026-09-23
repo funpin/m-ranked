@@ -150,7 +150,7 @@ def test_norm_set_rows_cover_platform_and_accounts():
     assert norm_from_rows([row for row in rows if row["account_id"] is None]).basis == "platform"
 
 
-REMOVAL = Path(__file__).resolve().parents[1] / "db/migrations/pending/0038_remove_anomaly_analysis_v1.sql"
+REMOVAL = Path(__file__).resolve().parents[1] / "db/migrations/pending/0039_remove_anomaly_analysis_v1.sql"
 V1_TABLES = OLD_ANALYSIS_TABLES + ("anomaly_analysis_candidate", "anomaly_command_receipt")
 # Админские команды ручных пометок v1 по решению не развиваются и уходят тем же
 # релизом, что применяет удаление; до тех пор это единственные вызовы v1.
@@ -159,7 +159,7 @@ V1_ADMIN_CALLS = {"api/sql/analysis.py": ("create_manual_anomaly_signal", "appen
 
 def test_removal_of_v1_waits_outside_the_applied_migrations():
     root = REMOVAL.parents[1]
-    assert not list(root.glob("0038_*.sql")), "удаление v1 не должно применяться обычным прогоном"
+    assert not list(root.glob("0039_*.sql")), "удаление v1 не должно применяться обычным прогоном"
     text = REMOVAL.read_text(encoding="utf-8")
     assert "ПРИМЕНЯТЬ ТОЛЬКО ПОСЛЕ ПРОВЕРКИ V2 НА РЕАЛЬНЫХ ДАННЫХ" in text
     code = re.sub(r"--[^\n]*", "", text)

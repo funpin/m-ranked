@@ -67,6 +67,11 @@ class PostSeries:
     is_repost: bool
     observed_at: tuple[datetime, ...]
     values: Mapping[Metric, tuple[int | None, ...]]
+    # Начала успешных циклов сбора аккаунта. Сборщик пишет замер, только когда
+    # значения изменились (и контрольный — раз в сутки), поэтому долгое
+    # отсутствие замеров при идущем сборе значит «не менялось», а не «нет
+    # данных». Пусто — журнал сбора неизвестен, и такой интервал — пробел.
+    collected: tuple[datetime, ...] = ()
 
     def __post_init__(self) -> None:
         if self.platform not in PLATFORMS:
@@ -85,6 +90,8 @@ class PostSeries:
                 raise ValueError("cumulative counters must be non-negative")
             copied[Metric(metric)] = column
         object.__setattr__(self, "values", MappingProxyType(copied))
+        object.__setattr__(self, "collected",
+                           tuple(sorted(_utc(item, "collected") for item in self.collected)))
 
 
 @dataclass(frozen=True, slots=True)

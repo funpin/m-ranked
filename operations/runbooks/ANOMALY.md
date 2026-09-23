@@ -27,7 +27,7 @@
    psql -v ON_ERROR_STOP=1 -f db/migrations/0036_anomaly_analysis_v2.sql
    ```
    Миграция только создаёт объекты — ни блокировок горячих таблиц, ни
-   перезаписи данных. Миграцию удаления старой модели (`0038`) **не
+   перезаписи данных. Миграцию удаления старой модели (`0039`) **не
    применять**: она ждёт проверки v2 на реальных данных (шаг 8).
 3. **Релиз с тихим режимом.** В `/etc/m-ranked/web.env`
    `ANOMALY_REPORT_VISIBLE=false`, в `/etc/m-ranked/anomaly-analysis.env` —
@@ -65,7 +65,7 @@
    свежих постов тем же ключом кэша, что и страница.
 8. **Удаление старой модели** — не раньше, чем v2 проработает на реальных
    данных и эталон из шага 6 будет зелёным: миграция
-   `db/migrations/pending/0038_remove_anomaly_analysis_v1.sql` удаляет восемь
+   `db/migrations/pending/0039_remove_anomaly_analysis_v1.sql` удаляет восемь
    таблиц, функции и триггер старой очереди. Она лежит в `pending/`, чтобы её
    не применил обычный прогон `db/migrations/*.sql`; тем же релизом, что
    переносит её в `db/migrations/`, убираются админские маршруты ручных
@@ -87,6 +87,26 @@
 Версия на разборе дрейфа (`drift_review`) не применяется: анализ остаётся на
 прежней принятой. Принять её после разбора — `UPDATE analytics.anomaly_norm_version
 SET status='accepted', decided_at=now() WHERE id=…` от имени владельца миграций.
+
+## Перепроверка после смены методики
+
+Работник держит агрегаты аккаунта за трое суток, поэтому синхронный подъём
+недельной давности после смены детекторов сам не найдёт. Разовая
+перепроверка идёт аккаунт за аккаунтом с агрегатами на всё окно:
+
+1. `systemctl stop m-ranked-target-anomaly-analysis` — иначе работник может
+   перезаписать пост выводом без найденного признака.
+2. Разовый запуск с ограничениями (память — на один аккаунт):
+   `systemd-run --wait --collect -p User=m-ranked-anomaly -p CPUQuota=100% -p Nice=10
+   -p MemoryMax=1G -p EnvironmentFile=/etc/m-ranked/anomaly-analysis.env
+   -p LoadCredential=pgpass:/etc/m-ranked/credentials/anomaly-pgpass
+   -E PGPASSFILE=%d/pgpass --working-directory=/opt/m-ranked/current
+   /opt/m-ranked/current/.venv/bin/python -m anomaly_analysis.backfill --days 35`.
+3. `systemctl start m-ranked-target-anomaly-analysis`: посты старше окна он
+   поставит в очередь и проанализирует сам, найденные признаки синхронности
+   переносит из прежнего вывода.
+
+Сбор, перенос и API при этом не трогаются.
 
 ## Откат
 
