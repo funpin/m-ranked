@@ -156,3 +156,27 @@ def test_payload_round_trip_and_determinism():
     assert payload == norm_to_payload(second.for_account(UUID(int=1)))
     assert norm_to_payload(norm_from_payload(payload)) == payload
     assert norm_to_payload(norm_from_payload(norm_to_payload(first.platform))) == norm_to_payload(first.platform)
+
+
+def test_age_band_stays_inside_the_schedule_table():
+    """Ячейка сетки чуть раньше публикации — первый интервал, а не «−1»:
+    строку с таким интервалом отвергает ограничение таблицы норм."""
+    from anomaly_analysis.v2.series import age_band
+
+    assert age_band(np.array([-600.0, 0.0, DAY - 1, 31 * DAY])).tolist() == [0, 0, 0, 4]
+
+
+@pytest.mark.parametrize("platform", ["telegram", "vk", "max", "rutube"])
+def test_platform_norm_cells_fit_the_table_without_numpy_warnings(platform):
+    import warnings
+
+    from anomaly_analysis.v2.reference import background
+
+    posts = {account: [prepare(item, item.observed_at[-1], CADENCE) for item in items]
+             for account, items in background(platform).items()}
+    with warnings.catch_warnings():
+        # Пустые выборки давали «Mean of empty slice» и медиану nan.
+        warnings.simplefilter("error", RuntimeWarning)
+        norms = build_norms(platform, posts, final_age=7 * DAY)
+    for norm in (norms.platform, *norms.accounts.values()):
+        assert all(0 <= band <= 4 for _, band in norm.cells), norm.cells.keys()

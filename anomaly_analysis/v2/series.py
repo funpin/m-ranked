@@ -149,7 +149,13 @@ class PreparedSeries:
 
 
 def age_band(ages: np.ndarray) -> np.ndarray:
-    return np.searchsorted(AGE_BAND_EDGES, ages, side="right") - 1
+    """Возрастной интервал таблицы периодичности, 0–4.
+
+    Сетка выравнивается по границам масштаба и может начинаться чуть раньше
+    публикации; такая ячейка — первый интервал, а не несуществующий «−1».
+    """
+    bands = np.searchsorted(AGE_BAND_EDGES, ages, side="right") - 1
+    return np.clip(bands, 0, AGE_BAND_EDGES.size - 1)
 
 
 def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadence,

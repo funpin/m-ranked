@@ -27,7 +27,7 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from .domain import Level, Metric, PostSeries
-from .series import AGE_BAND_EDGES, DAY, HOUR, PreparedSeries
+from .series import AGE_BAND_EDGES, DAY, HOUR, PreparedSeries, age_band
 
 NORM_MODEL_VERSION = "2.0.0"
 
@@ -207,13 +207,17 @@ def _collect(posts: Sequence[PreparedSeries], excluded: frozenset[UUID], final_a
                 continue
             grid = data.grids.get(timedelta(seconds=RATE_GRID))
             if grid is not None and grid.rates.size:
-                keep = grid.usable & (grid.rates > 0)
+                # Ячейки до момента публикации — артефакт выравнивания сетки
+                # по границам часа; скорости «до поста» в норме нет.
+                keep = grid.usable & (grid.rates > 0) & (grid.edges[:-1] >= 0)
+                if not keep.any():
+                    continue
                 hours = (grid.edges[:-1][keep] + RATE_GRID / 2) / HOUR
                 # Доля значения в сутки, приходящая за час: сравнима между постами разного охвата.
                 logs = np.log(grid.rates[keep] * HOUR / base)
                 samples.rate_hours.setdefault(metric.value, []).append(hours)
                 samples.rate_logs.setdefault(metric.value, []).append(logs)
-                for band in np.unique(np.searchsorted(AGE_BAND_EDGES, hours * HOUR, side="right") - 1):
+                for band in np.unique(age_band(hours * HOUR)):
                     samples.contributors.setdefault((metric.value, int(band)), set()).add(index)
             if data.ages[-1] >= final_age:
                 final = float(np.interp(final_age, data.ages, data.values))
@@ -244,6 +248,8 @@ def _account_norm(platform: str, account_id: UUID | None, samples: _Samples) -> 
     for metric, hour_chunks in samples.rate_hours.items():
         hours = np.concatenate(hour_chunks)
         logs = np.concatenate(samples.rate_logs[metric])
+        if not hours.size:
+            continue
         # Медиана по постам в каждом часе возраста: один выброс не тянет кривую.
         bins = np.floor(hours).astype(np.int64)
         order = np.argsort(bins, kind="stable")
@@ -252,7 +258,7 @@ def _account_norm(platform: str, account_id: UUID | None, samples: _Samples) -> 
         fit = fit_decay(unique + 0.5, np.exp(medians))
         if fit is not None:
             decay[metric] = fit
-        bands = np.searchsorted(AGE_BAND_EDGES, hours * HOUR, side="right") - 1
+        bands = age_band(hours * HOUR)
         for band in np.unique(bands):
             key = (metric, int(band))
             cells[key] = NormCell(metric, int(band), len(samples.contributors.get(key, ())),
