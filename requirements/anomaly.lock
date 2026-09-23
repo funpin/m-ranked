@@ -1,7 +1,11 @@
 # Создано operations/scripts/generate_python_lock.py из requirements/anomaly.txt.
 # Платформа: linux x86_64, CPython 3.13. Правится только пересозданием.
 # Установка: pip install --require-hashes --no-deps --no-build-isolation -r <этот файл>
+numpy==2.4.6 \
+    --hash=sha256:a7830bab239b79cda9c08c2da014761cafb48da6150e1da17ac06283f43b6089
 psycopg==3.3.5 \
     --hash=sha256:ce5aa5cdb4f9379f00f487590e5890bfa7df9a164648c969ffa628505e21af4e
 psycopg-binary==3.3.5 \
     --hash=sha256:cb3b3bffebfe07110730626e76238161124f35ac87b748d663316a28d22f58b0
+scipy==1.17.1 \
+    --hash=sha256:581b2264fc0aa555f3f435a5944da7504ea3a065d7029ad60e7c3d1ae09c5464

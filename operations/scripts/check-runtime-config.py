@@ -40,6 +40,9 @@ CREDENTIAL_ONLY = {
     "MAX_USER_PHONE", "TRANSFER_INGEST_CERTIFICATE",
     "TRANSFER_INGEST_PRIVATE_KEY", "TRANSFER_INGEST_CA_BUNDLE",
 }
+# One-off operator tools read these from the operator's shell: no unit injects
+# them and a DSN carries a password, so no example exists either.
+OPERATOR_TOOL_ONLY = {"ANOMALY_REFERENCE_DATABASE_URL"}
 
 
 def example_values() -> dict[str, tuple[str, Path]]:
@@ -124,7 +127,7 @@ def main() -> int:
     examples = example_values()
     code = environment_readers()
     injected = unit_environment()
-    covered = set(examples) | injected | CREDENTIAL_ONLY | DEPRECATED
+    covered = set(examples) | injected | CREDENTIAL_ONLY | DEPRECATED | OPERATOR_TOOL_ONLY
 
     for name in sorted(code - covered):
         errors.append(f"runtime variable has no example/unit/credential: {name}")

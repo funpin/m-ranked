@@ -1,6 +1,7 @@
 # Разработка и CI: среды выполнения плюс инструменты проверки.
 # Образы ставят не эти файлы, а requirements/*.lock с хешами.
 -r api.txt
+-r anomaly.txt
 -r collector.txt
 -r pymax.txt
 -r telegram-web.txt
