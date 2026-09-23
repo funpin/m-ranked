@@ -36,9 +36,7 @@ BASELINE_HOURS = 24
 EMPTY_BASELINE = 0.5
 # Подъём — пуассоновский z от шести над медианой собственного хвоста за сутки.
 MIN_Z = 6.0
-# Минимальный прирост часа по метрике: просмотров в каждом посте на порядок больше.
-MIN_RISE = {Metric.REACTIONS: 20, Metric.VIEWS: 150}
-NAMES = {Metric.REACTIONS: "реакции", Metric.VIEWS: "просмотры"}
+MIN_RISE = 20
 # Соседний пост считается синхронным, если подъём у него в пределах часа.
 TOLERANCE_HOURS = 1
 MIN_SYNCHRONOUS_SIBLINGS = 2
@@ -58,13 +56,16 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         return ()
     subject_ages = own.ages[0]
     signs = []
-    for metric, own_rows, sibling_rows in ((Metric.REACTIONS, own.reactions, siblings.reactions),
-                                           (Metric.VIEWS, own.views, siblings.views)):
-        if metric not in prepared.metrics or (metric is Metric.VIEWS and prepared.metrics[metric].source_counter):
+    # Только реакции. Одновременный подъём просмотров старых постов органичен:
+    # новый пост приводит людей в канал или на стену, и просмотры листаемых
+    # старых постов растут разом. Проверка по просмотрам дала 834 поста с
+    # признаком на тридцати пяти сутках — почти все такие.
+    for metric, own_rows, sibling_rows in ((Metric.REACTIONS, own.reactions, siblings.reactions),):
+        if metric not in prepared.metrics:
             continue
         subject = own_rows[0]
         taken: list[int] = []
-        for hour in np.flatnonzero(_rises(subject, MIN_RISE[metric]) & (subject_ages >= MIN_AGE)):
+        for hour in np.flatnonzero(_rises(subject, MIN_RISE) & (subject_ages >= MIN_AGE)):
             if any(abs(hour - other) <= TOLERANCE_HOURS for other in taken):
                 continue
             synchronous, eligible = 0, 0
@@ -73,7 +74,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
                 if siblings.ages[index, hour] < MIN_AGE or np.isnan(sibling_rows[index, window]).all():
                     continue
                 eligible += 1
-                synchronous += bool(_rises(sibling_rows[index], MIN_RISE[metric])[window].any())
+                synchronous += bool(_rises(sibling_rows[index], MIN_RISE)[window].any())
             if synchronous < MIN_SYNCHRONOUS_SIBLINGS:
                 continue
             start_age = float(own.hours[hour] * HOUR - published)
@@ -83,7 +84,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
             taken.append(int(hour))
             clock = datetime.fromtimestamp(own.hours[hour] * HOUR, tz=timezone.utc)
             strength = min(1.0, 0.4 + 0.15 * synchronous)
-            formula = (f"{NAMES[metric]} подросли одновременно у {synchronous + 1} постов аккаунта "
+            formula = (f"реакции подросли одновременно у {synchronous + 1} постов аккаунта "
                        f"(+{number(subject[hour])} у этого) в час {clock:%d.%m %H:00} UTC; "
                        f"у {eligible - synchronous} других постов старше 12 ч — нет")
             signs.append(make_sign(PATTERN, FAMILY, prepared, metric, strength, start_age,
