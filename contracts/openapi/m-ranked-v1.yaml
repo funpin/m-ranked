@@ -535,6 +535,40 @@ paths:
                 $ref: '#/components/schemas/ComparisonCandidatePage'
         '400':
           $ref: '#/components/responses/InvalidRequest'
+  /api/v1/compare/dashboard:
+    get:
+      tags: [Query]
+      operationId: getComparisonDashboard
+      summary: Read the all-institution comparison dashboard
+      description: >-
+        Every institution at once, without a selection limit. Medians are values at the 24th
+        hour after publication (a like-for-like age); totals come from the latest observation.
+        Anomaly levels come from the v2 analysis. Rows with a null institutionId are platform
+        or overall aggregates; platform "all" merges the four networks.
+      security: []
+      parameters:
+        - name: period
+          in: query
+          schema: { type: string, enum: ['7d', '30d'], default: '30d' }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Comparison dataset for the period.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonDashboard'
+        '304':
+          description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/compare:
     get:
       tags: [Query]
@@ -4138,6 +4172,124 @@ components:
         reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
         methodologyVersion: { type: string, const: anomaly-dynamics-v2 }
         disclaimer: { type: string }
+    ComparisonDashboard:
+      type: object
+      additionalProperties: false
+      required: [period, hours, datasetRevision, asOf, institutions, stats, curves, daily, timing, types]
+      properties:
+        period: { type: string, enum: ['7d', '30d'] }
+        hours:
+          type: array
+          items: { type: integer, minimum: 1 }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        asOf: { type: string, format: date-time }
+        institutions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [institutionId, legacyId, name, shortName, platforms, subscribers]
+            properties:
+              institutionId: { type: string, format: uuid }
+              legacyId: { type: [integer, 'null'], format: int64 }
+              name: { type: string }
+              shortName: { type: [string, 'null'] }
+              platforms:
+                type: array
+                items: { $ref: '#/components/schemas/PlatformValue' }
+              subscribers:
+                type: object
+                additionalProperties: false
+                required: [telegram, vk, max, rutube]
+                properties:
+                  telegram: { type: integer, format: int64, minimum: 0 }
+                  vk: { type: integer, format: int64, minimum: 0 }
+                  max: { type: integer, format: int64, minimum: 0 }
+                  rutube: { type: integer, format: int64, minimum: 0 }
+        stats:
+          type: array
+          items: { $ref: '#/components/schemas/ComparisonDashboardStat' }
+        curves:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [institutionId, platform, samples, views, reactions]
+            properties:
+              institutionId: { type: [string, 'null'], format: uuid }
+              platform: { $ref: '#/components/schemas/PlatformValue' }
+              samples:
+                type: array
+                items: { type: integer, minimum: 0 }
+              views:
+                type: array
+                items: { type: [number, 'null'] }
+              reactions:
+                type: array
+                items: { type: [number, 'null'] }
+        daily:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [platform, day, posts, viewsTotal, reactionsTotal, analyzed, anomalous]
+            properties:
+              platform: { $ref: '#/components/schemas/PlatformValue' }
+              day: { type: string, format: date }
+              posts: { type: integer, minimum: 0 }
+              viewsTotal: { type: [integer, 'null'], format: int64 }
+              reactionsTotal: { type: [integer, 'null'], format: int64 }
+              analyzed: { type: integer, minimum: 0 }
+              anomalous: { type: integer, minimum: 0 }
+        timing:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [platform, weekday, hour, posts, views24]
+            properties:
+              platform: { $ref: '#/components/schemas/PlatformValue' }
+              weekday: { type: integer, minimum: 0, maximum: 6 }
+              hour: { type: integer, minimum: 0, maximum: 23 }
+              posts: { type: integer, minimum: 0 }
+              views24: { type: [number, 'null'] }
+        types:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [platform, type, posts, views24, engagement24]
+            properties:
+              platform: { $ref: '#/components/schemas/PlatformValue' }
+              type: { type: string }
+              posts: { type: integer, minimum: 0 }
+              views24: { type: [number, 'null'] }
+              engagement24: { type: [number, 'null'] }
+    ComparisonDashboardStat:
+      type: object
+      additionalProperties: false
+      required: [institutionId, platform, posts, viewsTotal, reactionsTotal, commentsTotal, sharesTotal,
+        sample24, views24, reactions24, comments24, shares24, engagement24, analyzed, levels]
+      properties:
+        institutionId: { type: [string, 'null'], format: uuid }
+        platform: { $ref: '#/components/schemas/PlatformValue' }
+        posts: { type: integer, minimum: 0 }
+        viewsTotal: { type: [integer, 'null'], format: int64 }
+        reactionsTotal: { type: [integer, 'null'], format: int64 }
+        commentsTotal: { type: [integer, 'null'], format: int64 }
+        sharesTotal: { type: [integer, 'null'], format: int64 }
+        sample24: { type: integer, minimum: 0 }
+        views24: { type: [number, 'null'] }
+        reactions24: { type: [number, 'null'] }
+        comments24: { type: [number, 'null'] }
+        shares24: { type: [number, 'null'] }
+        engagement24: { type: [number, 'null'] }
+        analyzed: { type: integer, minimum: 0 }
+        levels:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: integer, minimum: 0 }
     AccountAnomalyLevels:
       type: object
       additionalProperties: false

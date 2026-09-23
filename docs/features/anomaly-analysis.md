@@ -38,7 +38,7 @@
 - `POST /api/v1/admin/publications/{id}/anomaly-signals` и
   `POST /api/v1/admin/anomaly-signals/{findingId}/reviews` — команды ручных
   пометок модели v1 на её таблицах. Они не развиваются и уходят вместе с
-  удалением v1 (`db/migrations/pending/0037…`).
+  удалением v1 (`db/migrations/pending/0038…`).
 
 ## Как работает
 

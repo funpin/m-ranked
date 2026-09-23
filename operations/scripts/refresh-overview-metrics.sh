@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Пересчёт витрины карточек обзора.
+# Пересчёт витрины карточек обзора и значений постов для сравнения.
 #
 # Один прогон считает прирост по всем публикациям с наблюдением внутри окна
 # для всех четырёх периодов и раскладывает по пяти разрезам площадок. Живым
@@ -15,10 +15,15 @@ umask 077
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$root/db/tools/refresh-overview-card-metrics.sql"
-if [[ ! -r "$script" ]]; then
-  echo "refresh script is missing: $script" >&2
-  exit 66
-fi
+# Значения постов на фиксированных часах для страницы сравнения: тот же
+# ритм и та же роль, прогон дописывает только новые часы.
+checkpoints="$root/db/tools/refresh-publication-checkpoints.sql"
+for file in "$script" "$checkpoints"; do
+  if [[ ! -r "$file" ]]; then
+    echo "refresh script is missing: $file" >&2
+    exit 66
+  fi
+done
 
 if [[ -n "${MRANKED_DB_CONTAINER:-}" ]]; then
   # Пароль уходит по имени переменной: значение в аргументах было бы видно
@@ -34,3 +39,8 @@ started=$(date -u +%s)
 "${runner[@]}" --no-psqlrc --quiet --set ON_ERROR_STOP=1 \
   --dbname "$MAINTENANCE_DATABASE_URL" --file - < "$script" >/dev/null
 echo "overview card metrics refreshed in $(( $(date -u +%s) - started ))s"
+
+started=$(date -u +%s)
+"${runner[@]}" --no-psqlrc --quiet --set ON_ERROR_STOP=1 \
+  --dbname "$MAINTENANCE_DATABASE_URL" --file - < "$checkpoints" >/dev/null
+echo "publication checkpoints refreshed in $(( $(date -u +%s) - started ))s"

@@ -96,6 +96,7 @@ STATISTICS_GROUP = {("/api/v1/statistics", "GET")}
 COMPARE_GROUP = {
     ("/api/v1/compare/candidates", "GET"),
     ("/api/v1/compare", "GET"),
+    ("/api/v1/compare/dashboard", "GET"),
 }
 
 MEDIA_GROUP = {
