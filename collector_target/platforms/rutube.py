@@ -166,6 +166,13 @@ class RutubeGatewayCollector:
             self.client.videos(native_id, min(self.settings.discovery_limit, 100)),
             self.client.subscriber_count(native_id, account.current_url),
         )
+        # Отложенная публикация (премьера) приходит в выдаче канала с временем
+        # выхода в будущем. Нормализатор справедливо отвергает «обнаружено
+        # раньше, чем опубликовано», но отвергает весь пакет аккаунта: такой
+        # канал падал каждый час, пока премьера не выходила, — отсюда пропуски
+        # сбора по 2–6 часов. Видео ещё не вышло; его подберёт обход после выхода.
+        now = utc(self.clock.now(), "gateway.discovered_at")
+        videos = [video for video in videos if video.published_at <= now]
 
         async def metrics(video_id: str) -> RutubeVideoMetrics:
             async with self._request_semaphore:

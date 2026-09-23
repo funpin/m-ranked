@@ -788,6 +788,40 @@ def test_rutube_gateway_keeps_other_videos_when_one_metric_request_fails() -> No
     assert by_id["failed"].metrics["reactions"] is None
 
 
+def test_rutube_scheduled_premiere_does_not_reject_the_account_batch() -> None:
+    """Премьера с временем выхода в будущем пропускается, а не роняет весь аккаунт."""
+    class Client:
+        async def resolve_channel(self, reference: str, url: str | None) -> int:
+            return 5
+
+        async def videos(self, channel_id: int, limit: int):
+            channel = RutubeChannel(5, "RUTUBE", "https://rutube.ru/channel/5/")
+            return channel, [
+                RutubeVideo("live", "Live", NOW - timedelta(hours=2), 10,
+                            "https://rutube.ru/video/live/", {}),
+                RutubeVideo("premiere", "Premiere", NOW + timedelta(minutes=36), 0,
+                            "https://rutube.ru/video/premiere/", {}),
+            ]
+
+        async def subscriber_count(self, channel_id: int, url: str | None) -> int:
+            return 4
+
+        async def video_metrics(self, video_id: str) -> RutubeVideoMetrics:
+            return RutubeVideoMetrics(2, 1, {"likes": 2, "comments": 1})
+
+        async def close(self) -> None:
+            return None
+
+    settings = SimpleNamespace(
+        rutube_api_base="https://rutube.ru/api", rutube_request_concurrency=2, discovery_limit=100,
+        rutube_first_three_days_poll_interval_minutes=60, complete_history_max_first_age_minutes=6,
+    )
+    adapter = RutubeGatewayCollector(settings, _FixedClock(), Client())  # type: ignore[arg-type]
+    raw = asyncio.run(adapter.collect(account(Platform.RUTUBE), context(Platform.RUTUBE)))
+    assert [publication.external_id for publication in raw.publications] == ["live"]
+    CanonicalNormalizer().normalize(raw, context(Platform.RUTUBE))
+
+
 class _FixedClock:
     def now(self) -> datetime:
         return NOW
