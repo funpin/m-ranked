@@ -28,7 +28,11 @@ ProtectHostname=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
-CapabilityBoundingSet=
+# Защита занятых релизов читает /proc/<pid>/cwd и exe процессов других
+# пользователей (API, web, анализ). Без этих двух прав root такие ссылки не
+# прочитает, и очистка честно отказывается работать каждую ночь — проверено
+# на Сервере 2 24.09. Удалению они не нужны: каталоги релизов принадлежат root.
+CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX
 SystemCallArchitectures=native
