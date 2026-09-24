@@ -1,5 +1,5 @@
 [Unit]
-Description=Prune old M-Ranked releases and unused Docker artifacts
+Description=Collect reviewed M-Ranked releases
 Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
 After=docker.service
 Requires=docker.service
@@ -10,7 +10,7 @@ User=root
 Group=root
 Environment=TZ=UTC
 EnvironmentFile=-/etc/m-ranked/host-storage-gc.env
-ExecStart=/usr/local/libexec/m-ranked/gc_host_storage.py --apply
+ExecStart=/usr/bin/flock -n /run/lock/m-ranked-release.lock /usr/local/libexec/m-ranked/gc_host_storage.py --apply
 TimeoutStartSec=30min
 Nice=10
 IOSchedulingClass=idle

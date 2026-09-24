@@ -1,0 +1,8 @@
+[Unit]
+Description=M-Ranked bounded disk observations
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=20s
+[Install]
+WantedBy=timers.target

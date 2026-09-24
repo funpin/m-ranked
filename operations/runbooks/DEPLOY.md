@@ -171,7 +171,7 @@ bootstrap по населённой базе не проигрывается н�
 Исключение — миграция `0033_remove_csv_exports.sql`: она удаляет таблицу,
 в которую старые collectors ещё пишут. Для неё сначала остановите все четыре
 `m-ranked-target-collector@*.service`, переключите API, web и collectors на
-релиз без CSV-экспорта, затем примените `0029` и запустите collectors. Не
+релиз без CSV-экспорта, затем примените `0033` и запустите collectors. Не
 применяйте `0029` перед заменой кода и не оставляйте старый collector работающим
 во время удаления таблицы.
 
@@ -406,12 +406,13 @@ textfile. Если grace меняется, stop timeout должен остав�
 
 ## 8. Ограничение накопления релизов и Docker-артефактов
 
-Host GC оставляет текущий релиз, один предыдущий для rollback и любой релиз,
-которым ещё пользуется host-процесс или Docker bind mount. Молодые каталоги
-младше суток не удаляются. Неиспользуемые containers, images, build cache и
-networks старше недели удаляются; volume удаляется только с явным label
-`m-ranked.gc=ephemeral`, поэтому остановленная база не может попасть под
-автоматическую очистку.
+Host GC сохраняет current, один предыдущий rollback, реально используемые cwd/exe,
+mounts всех containers и ссылки systemd для следующего запуска. Молодые каталоги
+младше суток сохраняются. Удаление требует явного списка согласованных basenames
+в `MRANKED_APPROVED_RELEASE_REMOVALS`; forensic и дополнительные rollback задаются
+в `MRANKED_PROTECTED_RELEASES`. Blanket Docker prune отключён: images/containers
+удаляются только по отдельно проверенным IDs без force; volumes не удаляются.
+GC и deployment используют общий lock `/run/lock/m-ranked-release.lock`.
 
 Установите collector вне immutable release, сначала проверьте dry-run, затем
 включите еженедельный timer:
@@ -613,3 +614,10 @@ API master перед каждым стартом удаляет только
 - `HEALTH.md` — что означает каждый health-endpoint;
 - `BACKUP_RESTORE.md` — резервные копии и проверка восстановления;
 - `docs/architecture/security/dependency-policy.md` — пороги выпуска по CVE.
+
+## Storage rollout gate
+
+Перед изменением retention, backup или GC используйте
+[STORAGE_BUDGET.md](STORAGE_BUDGET.md). Подготовленный код не подтверждает
+production rollout. Host GC больше не выполняет blanket Docker prune;
+release deletion ограничено согласованным списком и проверками занятости.

@@ -24,6 +24,9 @@ def configure(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
     monkeypatch.setenv("MRANKED_RELEASE_KEEP_ROLLBACKS", "1")
     monkeypatch.setenv("MRANKED_RELEASE_MIN_AGE_HOURS", "1")
     monkeypatch.setenv("MRANKED_DOCKER_PRUNE_ENABLED", "0")
+    monkeypatch.setenv("MRANKED_APPROVED_RELEASE_REMOVALS", "old-release")
+    monkeypatch.setattr(gc_host_storage, "docker_mount_releases", lambda root: set())
+    monkeypatch.setattr(gc_host_storage, "systemd_releases", lambda root: set())
     return releases, proc
 
 
@@ -67,3 +70,35 @@ def test_collect_protects_release_used_by_process(monkeypatch, tmp_path, capsys)
 
     assert active_old.is_dir()
     assert "keep release=active-old reason=in-use" in capsys.readouterr().out
+
+
+def test_stopped_service_release_and_forensic_are_preserved(monkeypatch, tmp_path):
+    releases, _ = configure(monkeypatch, tmp_path)
+    for name in ['rollback', 'future-unit', 'forensic']:
+        (releases/name).mkdir()
+        age(releases/name, 4)
+    monkeypatch.setattr(gc_host_storage, 'systemd_releases', lambda root: {root/'future-unit'})
+    monkeypatch.setenv('MRANKED_PROTECTED_RELEASES', 'forensic')
+    monkeypatch.setenv('MRANKED_APPROVED_RELEASE_REMOVALS', 'future-unit,forensic')
+    gc_host_storage.collect(apply=True)
+    assert (releases/'future-unit').is_dir()
+    assert (releases/'forensic').is_dir()
+
+
+def test_docker_gc_never_prunes(monkeypatch):
+    monkeypatch.setattr(gc_host_storage.subprocess, 'run', lambda *a, **k: (_ for _ in ()).throw(AssertionError('must not execute prune')))
+    gc_host_storage.run_docker_gc(1, True)
+
+
+def test_gc_refuses_when_process_references_cannot_be_read(monkeypatch,tmp_path):
+    import pytest
+    releases,proc=configure(monkeypatch,tmp_path)
+    (proc/'123').mkdir()
+    original=Path.resolve
+    def resolve(path,*args,**kwargs):
+        if path == proc/'123'/'cwd':
+            raise PermissionError('restricted proc')
+        return original(path,*args,**kwargs)
+    monkeypatch.setattr(Path,'resolve',resolve)
+    with pytest.raises(RuntimeError,match='GC refused'):
+        gc_host_storage.collect(apply=True)

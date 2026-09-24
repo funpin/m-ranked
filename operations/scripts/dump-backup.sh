@@ -11,9 +11,10 @@ umask 077
 : "${BACKUP_DATABASE:?BACKUP_DATABASE is required}"
 : "${BACKUP_DB_USER:?BACKUP_DB_USER is required}"
 : "${BACKUP_DIR:=/var/backups/m-ranked}"
-# Три копии по гигабайту — потолок, при котором диск на боевой машине
-# остаётся с запасом: полный диск останавливает саму базу.
-: "${BACKUP_KEEP:=3}"
+# Approved deployment may select one; previous restore-verified copy is pinned.
+: "${BACKUP_KEEP:=1}"
+: "${BACKUP_MAX_DUMP_BYTES:=5000000000}"
+: "${BACKUP_RESERVE_BYTES:=11000000000}"
 : "${MRANKED_DB_CONTAINER:?MRANKED_DB_CONTAINER is required}"
 # Неудачный запуск намеренно оставляет .partial для разбора: по нему
 # видно, на чём дамп оборвался. Но разбирают его в тот же день, а файл
@@ -28,6 +29,9 @@ fi
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
+exec 9>"$BACKUP_DIR/.backup.lock"
+flock -n 9 || { echo "backup already running" >&2; exit 75; }
+script_dir="$(cd "$(dirname "$0")" && pwd)"
 
 if [[ ! "$BACKUP_PARTIAL_MAX_AGE_HOURS" =~ ^[0-9]+$ ]] \
    || (( BACKUP_PARTIAL_MAX_AGE_HOURS < 1 || BACKUP_PARTIAL_MAX_AGE_HOURS > 168 )); then
@@ -38,6 +42,9 @@ fi
 # Чистим до снятия нового снимка: место нужно именно сейчас.
 find "$BACKUP_DIR" -maxdepth 1 -type f -name 'mranked-*.dump.partial' \
   -mmin "+$(( BACKUP_PARTIAL_MAX_AGE_HOURS * 60 ))" -delete
+
+python3 "$script_dir/storage_guard.py" check --path "$BACKUP_DIR" \
+  --peak-bytes "$BACKUP_MAX_DUMP_BYTES" --reserve-bytes "$BACKUP_RESERVE_BYTES"
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 target="$BACKUP_DIR/mranked-$stamp.dump"
@@ -50,31 +57,24 @@ export PGPASSWORD
 # Снимок пишется во временное имя: недоснятый файл не должен выглядеть готовым.
 docker exec -i -e PGPASSWORD "$MRANKED_DB_CONTAINER" \
   nice -n 10 pg_dump -h 127.0.0.1 -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" \
-  -Fc --no-password > "$partial"
+  -Fc --no-password | python3 "$script_dir/backup-stream.py" \
+    "$partial" "$BACKUP_MAX_DUMP_BYTES" "$BACKUP_RESERVE_BYTES"
 
-# Проверка: оглавление читается, значит файл не оборван и заголовок цел.
-#
-# Формат с оглавлением требует файла, по которому можно перемещаться, поэтому
-# поток через стандартный ввод здесь не годится. Если клиента на хосте нет,
-# проверку делает разовый контейнер того же образа, что и сама база, — так
-# версия клиента заведомо совпадает с версией формата.
-if ! command -v pg_restore > /dev/null 2>&1 || ! pg_restore --list "$partial" > /dev/null 2>&1; then
-  image="$(docker inspect --format '{{.Config.Image}}' "$MRANKED_DB_CONTAINER")"
-  if ! docker run --rm -v "$BACKUP_DIR:/backups:ro" "$image" \
-       pg_restore --list "/backups/$(basename "$partial")" > /dev/null; then
-    echo "dump failed verification, keeping it as $partial" >&2
-    exit 65
-  fi
-fi
-
-mv -f "$partial" "$target"
-size=$(stat -c %s "$target")
+# Decode every archive member; TOC alone does not detect truncated payload.
+# This is integrity verification, not an actual database restore.
+image="$(docker inspect --format '{{.Image}}' "$MRANKED_DB_CONTAINER")"
+docker run --rm --network none --memory 256m --cpus 0.5 \
+  -v "$BACKUP_DIR:/backups:ro" "$image" \
+  pg_restore --file=/dev/null "/backups/$(basename "$partial")"
+size=$(stat -c %s "$partial")
 if (( size < 1048576 )); then
   echo "dump looks too small: $size bytes" >&2
   exit 65
 fi
-
-# Ротация: на диске остаётся ровно BACKUP_KEEP последних снимков.
-ls -1t "$BACKUP_DIR"/mranked-*.dump 2>/dev/null | tail -n +$(( BACKUP_KEEP + 1 )) | xargs -r rm -f
+mv "$partial" "$target"
+# Verification receipts contain SHA256 and basename, written only after a real
+# isolated restore. Preserve every attested copy until a newer attested copy
+# exists. No backup deletion based just on age, filename, or TOC.
+python3 "$script_dir/rotate-dumps.py" "$BACKUP_DIR" "$BACKUP_KEEP"
 
 echo "backup $target ($(numfmt --to=iec "$size")) in $(( $(date -u +%s) - started ))s; kept $(ls -1 "$BACKUP_DIR"/mranked-*.dump | wc -l)"

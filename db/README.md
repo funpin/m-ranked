@@ -31,7 +31,7 @@
 | `analytics.comparison_publication_hourly` (550 МБ) | то же |
 | `analytics.comparison_metric_point` (339 МБ) | то же |
 | `analytics.projection_state` | состояние пересборки проекций, которых больше нет |
-| `analytics.legacy_native_export_lexeme` (~6 ГБ на production) | дублировала каждый snapshot для отменённого CSV/reverse-sync; удалена миграцией `0029` |
+| `analytics.legacy_native_export_lexeme` (~6 ГБ на production) | дублировала каждый snapshot для отменённого CSV/reverse-sync; удалена миграцией `0033` |
 | `rebuild_core_projections` и шесть его версий v2/v5/v6/v9/v11/v13 | ~99 КБ исходников ради publisher |
 | `rebuild_serving_projections` | единственным вызывающим был `projection-publisher.sh` |
 | `latest_fully_published_dataset_revision` | см. ниже |
@@ -58,9 +58,10 @@
 
 ## Отпечаток источника
 
-`source_fingerprint` был `text` и хранил sha256 в виде 64 hex-символов — 65 байт в
-куче и 65 байт в ключе индекса `publication_snapshot_exact_replay`. Стал `bytea` с
-`CHECK (octet_length(...) = 32)`. Наружу контракт отдаёт прежний hex: `encode(source_fingerprint,'hex')`.
+В production на 24.09.2026 `source_fingerprint` — **text**; runtime contract
+`live-read-2026-09-13-text-fingerprint`. Прежнее описание bytea отражало
+эксперимент, не текущую схему. Переход на 32 байта требует совместимой миграции
+ключей, клиентов и replay; нельзя просто перекодировать активную таблицу.
 
 ## Индексы на ingest.publication_metric_snapshot
 

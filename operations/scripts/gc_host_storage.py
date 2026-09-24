@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 from pathlib import Path
 import shutil
@@ -33,6 +34,8 @@ def process_releases(root: Path, proc_root: Path) -> set[Path]:
         for name in ("cwd", "exe"):
             try:
                 target = release_for((process / name).resolve(strict=True), root)
+            except PermissionError as error:
+                raise RuntimeError("cannot inspect process release references; GC refused") from error
             except OSError:
                 continue
             if target is not None and target.is_dir():
@@ -42,7 +45,7 @@ def process_releases(root: Path, proc_root: Path) -> set[Path]:
 
 def docker_mount_releases(root: Path) -> set[Path]:
     identifiers = subprocess.run(
-        ["docker", "ps", "-q"], check=True, text=True, capture_output=True
+        ["docker", "ps", "-aq"], check=True, text=True, capture_output=True
     ).stdout.split()
     if not identifiers:
         return set()
@@ -62,19 +65,27 @@ def docker_mount_releases(root: Path) -> set[Path]:
 
 
 def run_docker_gc(age_hours: int, apply: bool) -> None:
-    if not apply:
-        print(f"would-prune docker-unused-older-than={age_hours}h")
-        print("would-prune docker-volume-label=m-ranked.gc=ephemeral")
-        return
-    commands = (
-        ["docker", "container", "prune", "--force", "--filter", f"until={age_hours}h"],
-        ["docker", "image", "prune", "--all", "--force", "--filter", f"until={age_hours}h"],
-        ["docker", "builder", "prune", "--all", "--force", "--filter", f"until={age_hours}h"],
-        ["docker", "network", "prune", "--force", "--filter", f"until={age_hours}h"],
-        ["docker", "volume", "prune", "--all", "--force", "--filter", "label=m-ranked.gc=ephemeral"],
-    )
-    for command in commands:
-        subprocess.run(command, check=True)
+    # Docker cannot tell whether a stopped service's next ExecStart or an
+    # operator's rollback needs an image. Age/unused status is not authorization.
+    print("docker-gc disabled: review exact image/container IDs; no blanket prune")
+
+
+def systemd_releases(root: Path) -> set[Path]:
+    if not shutil.which("systemctl"):
+        return set()
+    units = subprocess.run(
+        ["systemctl", "list-unit-files", "--no-legend", "--no-pager", "m-ranked*"],
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+    names = [line.split()[0] for line in units if line.strip()]
+    if not names:
+        return set()
+    output = subprocess.run(
+        ["systemctl", "show", *names, "-p", "ExecStart", "-p", "ExecStartPre",
+         "-p", "ExecStartPost", "-p", "WorkingDirectory"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    return {root / name for name in re.findall(re.escape(str(root)) + r"/([^/\s;{}]+)", output)}
 
 
 def collect(apply: bool) -> int:
@@ -87,7 +98,7 @@ def collect(apply: bool) -> int:
     keep_rollbacks = positive("MRANKED_RELEASE_KEEP_ROLLBACKS", 1)
     min_age_hours = positive("MRANKED_RELEASE_MIN_AGE_HOURS", 24)
     docker_age_hours = positive("MRANKED_DOCKER_PRUNE_AGE_HOURS", 168)
-    docker_enabled = os.environ.get("MRANKED_DOCKER_PRUNE_ENABLED", "1")
+    docker_enabled = os.environ.get("MRANKED_DOCKER_PRUNE_ENABLED", "0")
     if docker_enabled not in {"0", "1"}:
         raise ValueError("MRANKED_DOCKER_PRUNE_ENABLED must be 0 or 1")
     if not root.is_dir() or current.parent != root:
@@ -103,10 +114,18 @@ def collect(apply: bool) -> int:
         if sum(reason == "rollback" for reason in protected.values()) >= keep_rollbacks:
             break
         protected[release] = "rollback"
+    for release in systemd_releases(root):
+        protected[release] = "unit-reference"
+    for name in os.environ.get("MRANKED_PROTECTED_RELEASES", "").split(","):
+        if name.strip():
+            if Path(name.strip()).name != name.strip():
+                raise ValueError("protected releases must be basenames")
+            protected[root / name.strip()] = "explicit-rollback-or-forensic"
     for release in process_releases(root, proc_root):
         protected[release] = "in-use"
 
-    if docker_enabled == "1" and shutil.which("docker"):
+    # Mount protection is independent of whether Docker cleanup is enabled.
+    if shutil.which("docker"):
         for release in docker_mount_releases(root):
             protected[release] = "in-use"
 
@@ -119,7 +138,10 @@ def collect(apply: bool) -> int:
             print(f"keep release={release.name} reason=young")
         else:
             candidates += 1
-            if apply:
+            approved = os.environ.get("MRANKED_APPROVED_RELEASE_REMOVALS", "").split(",")
+            if apply and release.name not in approved:
+                print(f"keep release={release.name} reason=needs-explicit-review")
+            elif apply:
                 shutil.rmtree(release)
                 print(f"removed release={release.name}")
             else:

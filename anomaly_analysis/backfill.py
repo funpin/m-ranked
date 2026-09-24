@@ -17,6 +17,7 @@ import argparse
 from datetime import datetime, timedelta, timezone
 import logging
 import os
+import shutil
 import time
 
 from .v2.levels import assess
@@ -38,6 +39,19 @@ def main() -> None:
     dsn = os.environ.get("ANOMALY_DATABASE_URL", "").strip()
     if not dsn:
         raise SystemExit("ANOMALY_DATABASE_URL is required")
+    disk_path = os.environ.get("MRANKED_STORAGE_PATH", "/var/lib/m-ranked")
+    peak_bytes = int(os.environ.get("MRANKED_BACKFILL_PEAK_BYTES", "1000000000"))
+    def require_space():
+        if peak_bytes < 1:
+            raise SystemExit("positive backfill disk budget required")
+        try:
+            usage = shutil.disk_usage(disk_path)
+            fs = os.statvfs(disk_path)
+        except OSError:
+            raise SystemExit("backfill stopped: disk probe unavailable") from None
+        if usage.free < usage.total // 5 + peak_bytes or (fs.f_files and fs.f_favail <= fs.f_files // 10):
+            raise SystemExit("backfill stopped: insufficient disk reserve")
+    require_space()
     store = PostgresAnomalyStore(dsn)
     schedule = ScheduleConfig.from_environment(os.environ)
     cadence = CollectionCadence.from_environment(os.environ)
@@ -49,6 +63,7 @@ def main() -> None:
     log.info("backfill started accounts=%d days=%d norm_version=%s", len(accounts), arguments.days, version)
     analyzed = failed = 0
     for position, account in enumerate(accounts, 1):
+        require_space()
         started = time.monotonic()
         rows = store.backfill_targets(account, since)
         # Агрегаты — с суток до самого старого поста: базе подъёма нужен хвост.
@@ -56,6 +71,7 @@ def main() -> None:
                                        since - timedelta(days=1)).get(account)
         subscribers = store.read_subscribers([account], since - timedelta(days=1), now).get(account) or ()
         for start in range(0, len(rows), SERIES_BATCH):
+            require_space()
             chunk = rows[start:start + SERIES_BATCH]
             series = store.read_series([SeriesTarget(row.publication_id, row.published_at) for row in chunk])
             writes: list[StateWrite] = []

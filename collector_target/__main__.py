@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from collector_runtime.config import Settings
+from collector_runtime.storage import CollectionDiskGate
 
 from .auth import apply_platform_auth_file
 from .coordinator import (
@@ -117,19 +118,6 @@ def _log_startup(
             "провалы",
             platform.value, collect_concurrency, len(Platform),
         )
-
-
-def _log_startup(
-    platform: Platform, partition: str, collector_version: str, schedule_mode: str,
-) -> None:
-    logger.info(
-        "collector started platform=%s partition=%s collector_version=%s "
-        "schedule_mode=%s",
-        platform.value,
-        partition,
-        collector_version,
-        schedule_mode,
-    )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -370,6 +358,18 @@ def _maintain_working_set(
         )
 
 
+async def _disk_admission(gate: CollectionDiskGate, stop: asyncio.Event, *, once: bool) -> bool:
+    # Called before acquiring any phase/global lease. Existing persistence and
+    # the independent sender finish normally; no transaction is held here.
+    while not stop.is_set():
+        if gate.allows_cycle():
+            return True
+        logger.error("collector paused by disk admission path=%s", gate.path)
+        if once or await _wait_or_stop(stop, 30):
+            return False
+    return False
+
+
 async def _close(adapter: Any, platform: Platform) -> None:
     close = getattr(adapter, "close", None)
     if not callable(close):
@@ -545,22 +545,6 @@ async def _run(args: argparse.Namespace) -> int:
             retry_seconds=settings.collector_phase_retry_seconds,
             request_stale_seconds=settings.collector_phase_request_stale_seconds,
         )
-        coordinator.metrics.schedule_mode(platform, schedule_mode)
-        _log_startup(platform, args.partition, collector_version, schedule_mode)
-        offset = platform_offset(platform, interval_seconds)
-        policy = PhasePolicy(
-            platform,
-            interval_seconds,
-            offset,
-            _cycle_deadline(platform, settings),
-        )
-        phase_arbiter = PostgresPhaseArbiter(dsn)
-        phase_scheduler = PhaseScheduler(
-            phase_arbiter,
-            max_wait_seconds=settings.collector_phase_max_wait_seconds,
-            retry_seconds=settings.collector_phase_retry_seconds,
-            request_stale_seconds=settings.collector_phase_request_stale_seconds,
-        )
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for signum in (signal.SIGINT, signal.SIGTERM):
@@ -569,9 +553,17 @@ async def _run(args: argparse.Namespace) -> int:
             except (NotImplementedError, RuntimeError):  # pragma: no cover - platform guard
                 pass
 
+        disk_gate = CollectionDiskGate(
+            settings.collector_disk_path,
+            int(os.environ.get("COLLECTOR_DISK_PAUSE_FREE_BYTES", "2000000000")),
+            int(os.environ.get("COLLECTOR_DISK_RESUME_FREE_BYTES", "3000000000")),
+            paused=True,
+        )
         if schedule_mode == "legacy":
             while not stop.is_set():
                 ensure_runtime_release_available()
+                if not await _disk_admission(disk_gate, stop, once=args.once):
+                    return 75 if args.once else 0
                 began = time.monotonic()
                 scheduled_at = repository.resumable_scheduled_at(
                     platform, args.partition, collector_version,
@@ -617,6 +609,8 @@ async def _run(args: argparse.Namespace) -> int:
         while not stop.is_set():
             try:
                 ensure_runtime_release_available()
+                if not await _disk_admission(disk_gate, stop, once=args.once):
+                    return 75 if args.once else 0
                 now = utc(clock.now(), "clock.now")
                 if pending_phase is not None:
                     (
@@ -723,6 +717,10 @@ async def _run(args: argparse.Namespace) -> int:
                     continue
 
                 phase_lease = acquisition.lease
+                if not disk_gate.allows_cycle():
+                    phase_lease.release()
+                    pending_phase = None
+                    continue
                 began = time.monotonic()
                 summary = None
                 forced_shutdown = False

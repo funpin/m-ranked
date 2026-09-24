@@ -147,15 +147,6 @@ async def serve(request: Request, namespace: str, query: dict[str, Any],
         )
     else:
         payload, etag = entry.value, entry.etag
-        # Несвежий ответ отдаётся сразу, а пересчёт идёт фоном. Иначе ровно
-        # один посетитель раз в окно ждал перестроения ответа: на проде это
-        # 730–1024 мс против полутора миллисекунд у остальных.
-        if entry.is_stale(time.monotonic()) and cache.begin_refresh(key):
-            task = asyncio.create_task(
-                _refresh(db, cache, key, tags, build, pinned_revision),
-                name=f"cache-refresh:{namespace}")
-            _REFRESHING.add(task)
-            task.add_done_callback(_REFRESHING.discard)
 
     if _matches(request.headers.get("if-none-match"), etag):
         return Response(status_code=304, headers={"ETag": etag, "Cache-Control": PUBLIC_CACHE})

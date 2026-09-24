@@ -199,6 +199,7 @@ def test_backfill_finds_old_synchrony_with_whole_window_activity(monkeypatch):
         def write_states(self, writes):
             written.extend(writes)
 
+    monkeypatch.setenv("MRANKED_STORAGE_PATH", "/private/tmp" if sys.platform == "darwin" else "/tmp")
     monkeypatch.setattr(backfill, "PostgresAnomalyStore", Store)
     monkeypatch.setenv("ANOMALY_DATABASE_URL", "postgresql://example.invalid/x")
     monkeypatch.setattr(sys, "argv", ["backfill", "--days", "35"])
