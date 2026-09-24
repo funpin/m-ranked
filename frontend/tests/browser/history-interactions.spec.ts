@@ -228,3 +228,11 @@ test("hundreds of collector gaps use one SVG overlay per chart",async({page})=>{
   await expect(overlays.first()).toHaveAttribute("data-gap-count","800");
   await expect(overlays.first()).toHaveAttribute("data-gap-blocks","1");
 });
+
+test("hidden labels deep in the history table do not stretch the page below it",async({page})=>{
+  await page.goto("/posts/1?history_limit=3000");
+  await expect(page.locator("#snapshot-40[data-anomaly-boundary]")).toHaveCount(1);
+  const gap=await page.evaluate(()=>document.documentElement.scrollHeight-(document.querySelector("main")!.getBoundingClientRect().bottom+window.scrollY));
+  // Под main — только подвал; тысяч пикселей пустоты быть не должно.
+  expect(gap).toBeLessThan(200);
+});

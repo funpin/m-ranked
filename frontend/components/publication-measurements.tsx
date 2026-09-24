@@ -335,7 +335,11 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
         {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       </CardHeader>
       <CardContent>
-        {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
+        {/* relative обязателен: скрытые для глаз подписи (sr-only) — абсолютные, и
+            без собственного блока позиционирования строка глубоко в таблице
+            выходила из-под прокрутки и растягивала страницу на всю высоту
+            таблицы — под постами с анализом оставались тысячи пикселей пустоты. */}
+        {rows.length ? <div className="relative max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
           { icon: Clock, label: "Время сохранённой точки, МСК" },
           { icon: Timer, label: "Между сохранёнными точками" },
           { icon: Activity, label: "Работа сборщика в интервале" },
