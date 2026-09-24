@@ -1,17 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  comparePeriod,
-  comparisonPlatformIsPending,
-  comparisonSelectionIsExplicit,
-  defaultComparisonSelection,
   legacyPlatformDecision,
   normalizeHistoryLimit,
   normalizePeriod,
   normalizePlatform,
   normalizeSort,
-  parseComparisonSelection,
-  parseComparisonQuerySelection,
   parsePositiveLegacyId,
   queryHref,
 } from "../lib/params";
@@ -33,83 +27,6 @@ test("overview sort keys normalize per platform before the API request", () => {
   assert.equal(normalizeSort("coverage", "telegram"), "median_reactions");
   assert.equal(normalizeSort("subscribers", "vk"), "subscribers");
   assert.equal(normalizeSort("subscribers", "all"), "m_rating");
-});
-
-test("comparison horizons map explicitly to bounded API periods", () => {
-  assert.deepEqual(comparePeriod("24"), { hours: 24, apiPeriod: "1d" });
-  assert.deepEqual(comparePeriod("72"), { hours: 72, apiPeriod: "7d" });
-  assert.deepEqual(comparePeriod("336"), { hours: 336, apiPeriod: "30d" });
-  assert.deepEqual(comparePeriod("bad"), { hours: 72, apiPeriod: "7d" });
-  assert.deepEqual(comparePeriod(undefined), { hours: 72, apiPeriod: "7d" });
-});
-
-test("comparison selection preserves order and reports invalid bounded input", () => {
-  assert.deepEqual(parseComparisonSelection(["91", "7", "34"]), {
-    ids: [91, 7, 34],
-    issue: null,
-  });
-  assert.deepEqual(parseComparisonSelection(["7", "7", "9"]), {
-    ids: [7, 9],
-    issue: null,
-  });
-  assert.equal(parseComparisonSelection(["0"]).issue, "invalid");
-  assert.equal(parseComparisonSelection(["not-a-number"]).issue, "invalid");
-  assert.deepEqual(
-    parseComparisonSelection(Array.from({ length: 21 }, (_, index) => String(index + 1))).issue,
-    "too_many",
-  );
-  assert.deepEqual(
-    defaultComparisonSelection(Array.from({ length: 75 }, (_, index) => index + 1)),
-    Array.from({ length: 20 }, (_, index) => index + 1),
-  );
-});
-
-test("legacy comparison selection is applied only when submitted is true", () => {
-  assert.equal(comparisonSelectionIsExplicit(undefined), false);
-  assert.equal(comparisonSelectionIsExplicit("false"), false);
-  assert.equal(comparisonSelectionIsExplicit("true"), true);
-  assert.deepEqual(
-    parseComparisonQuerySelection(
-      "telegram", "false", ["920002"], ["910001"],
-    ),
-    { explicit: false, type: "channels", ids: [], issue: null },
-  );
-  assert.deepEqual(
-    parseComparisonQuerySelection("telegram", undefined, ["920002"], undefined),
-    { explicit: false, type: "channels", ids: [], issue: null },
-  );
-});
-
-test("legacy comparison leaves MAX and all-platform requests on the pending branch", () => {
-  assert.equal(comparisonPlatformIsPending("max"), true);
-  assert.equal(comparisonPlatformIsPending("all"), true);
-  assert.equal(comparisonPlatformIsPending("telegram"), false);
-  assert.equal(comparisonPlatformIsPending("vk"), false);
-  assert.equal(comparisonPlatformIsPending("rutube"), false);
-  assert.equal(comparisonPlatformIsPending(normalizePlatform("unknown")), false);
-});
-
-test("comparison parameters use only the legacy namespace for the selected platform", () => {
-  assert.deepEqual(
-    parseComparisonQuerySelection("telegram", "true", ["920002", "920001"], undefined),
-    { explicit: true, type: "channels", ids: [920002, 920001], issue: null },
-  );
-  assert.deepEqual(
-    parseComparisonQuerySelection("telegram", "true", undefined, ["910001"]),
-    { explicit: true, type: "channels", ids: [], issue: null },
-  );
-  assert.deepEqual(
-    parseComparisonQuerySelection("vk", "true", ["920001"], undefined),
-    { explicit: true, type: "institutions", ids: [], issue: null },
-  );
-  assert.deepEqual(
-    parseComparisonQuerySelection("rutube", "true", ["920001"], ["910001"]),
-    { explicit: true, type: "institutions", ids: [910001], issue: null },
-  );
-  assert.equal(
-    parseComparisonQuerySelection("telegram", "true", ["bad"], ["also-bad"]).issue,
-    "invalid",
-  );
 });
 
 test("queryHref preserves repeated values and omits empty fields", () => {

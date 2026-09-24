@@ -94,16 +94,19 @@ for (const path of ["/compare?platform=vk", "/posts/1"]) {
     });
     try {
       await page.goto(path, { waitUntil: "domcontentloaded" });
-      const control = path.startsWith("/compare")
-        ? page.getByTestId("comparison-legend-toggle").first()
+      const compare = path.startsWith("/compare");
+      const control = compare
+        ? page.getByTestId("platform-tabs").getByRole("tab", { name: "Telegram" })
         : page.getByRole("button", { name: "Авто", exact: true }).first();
+      const state = compare ? "aria-selected" : "aria-pressed";
       await control.click();
-      await expect(control).toHaveAttribute("aria-pressed", path.startsWith("/compare") ? "false" : "true");
+      await expect(control).toHaveAttribute(state, "true");
       await expect.poll(() => delayed).toBe(true);
       await expect(page.locator("svg.recharts-surface")).toHaveCount(0);
       release!();
-      await expect(page.locator('[data-chart-ready="true"] svg.recharts-surface')).toHaveCount(2);
-      await expect(control).toHaveAttribute("aria-pressed", path.startsWith("/compare") ? "false" : "true");
+      if (compare) await expect(page.locator('[data-slot="chart"] svg.recharts-surface').first()).toBeVisible();
+      else await expect(page.locator('[data-chart-ready="true"] svg.recharts-surface')).toHaveCount(2);
+      await expect(control).toHaveAttribute(state, "true");
     } finally { release?.(); }
   });
 }

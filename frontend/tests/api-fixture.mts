@@ -107,6 +107,68 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
   if(id===4) return {...base,level:1,levelLabel:"слабый сигнал",levelSymbol:"◔",signals:[{...base.signals[0]!,strength:0.5,normConfidence:0.3}]};
   return base;
 }
+
+// Панель сравнения: детерминированные данные на все вузы фикстуры (в замере
+// производительности — 207) и четыре площадки. Числа различаются так, чтобы
+// рейтинг, карта и выделение имели что показывать.
+function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
+  const networks = ["telegram", "vk", "max", "rutube"] as const;
+  const count = Math.max(12, names.length);
+  const institutions = Array.from({ length: count }, (_, index) => ({
+    institutionId: uuid(9, index + 1), legacyId: index + 1,
+    name: names[index] ?? `Университет ${index + 1}`, shortName: index < 2 ? ["Альфа", "Бета"][index]! : null,
+    platforms: index % 5 === 4 ? ["telegram", "vk"] : [...networks],
+    subscribers: { telegram: 1000 + index * 350, vk: 2000 + index * 500, max: 300 + index * 40, rutube: index % 3 ? 150 + index * 10 : 0 },
+  })) as Schema["ComparisonDashboard"]["institutions"];
+  const stat = (institutionId: string | null, platform: string, seed: number): Schema["ComparisonDashboardStat"] => {
+    const posts = 20 + (seed * 7) % 60;
+    const analyzed = posts - 2;
+    const level3 = seed % 9 === 0 ? 3 : 0, level2 = seed % 4 === 0 ? 2 : 0, level1 = seed % 3;
+    return { institutionId, platform: platform as Schema["PlatformValue"], posts, viewsTotal: posts * (300 + seed * 11),
+      reactionsTotal: posts * (10 + seed % 17), commentsTotal: posts, sharesTotal: platform === "vk" ? posts * 2 : null,
+      sample24: posts - 4, views24: 150 + (seed * 37) % 900, reactions24: 5 + (seed * 13) % 60, comments24: seed % 4,
+      shares24: platform === "vk" ? seed % 6 : null, engagement24: 1 + ((seed * 7) % 90) / 10, analyzed,
+      levels: [analyzed - level1 - level2 - level3, level1, level2, level3] };
+  };
+  const stats: Schema["ComparisonDashboardStat"][] = [];
+  institutions.forEach((institution, index) => {
+    for (const [offset, network] of networks.entries()) {
+      if (institution.platforms.includes(network)) stats.push(stat(institution.institutionId, network, index * 4 + offset + 1));
+    }
+    stats.push(stat(institution.institutionId, "all", index * 4 + 5));
+  });
+  for (const [offset, network] of networks.entries()) stats.push(stat(null, network, 100 + offset));
+  stats.push(stat(null, "all", 200));
+  const hours = [1, 3, 6, 12, 24, 48, 72, 168];
+  const curve = (institutionId: string | null, platform: string, scale: number) => ({
+    institutionId, platform: platform as Schema["PlatformValue"], samples: hours.map(() => 12),
+    views: hours.map((hour) => Math.round(scale * Math.log2(hour + 1) * 40)),
+    reactions: hours.map((hour) => Math.round(scale * Math.log2(hour + 1) * 2)),
+  });
+  const curves = [
+    ...institutions.flatMap((institution, index) => networks.filter((n) => institution.platforms.includes(n))
+      .map((network) => curve(institution.institutionId, network, 0.5 + (index % 7) / 3))),
+    ...networks.map((network) => curve(null, network, 1.2)),
+  ];
+  const days = period === "7d" ? 7 : 30;
+  const daily = Array.from({ length: days }, (_, index) => {
+    const day = new Date(Date.UTC(2026, 6, 3 + index)).toISOString().slice(0, 10);
+    return [...networks, "all"].map((platform, offset) => ({ platform: platform as Schema["PlatformValue"], day,
+      posts: 10 + (index * 3 + offset * 5) % 25, viewsTotal: 5000 + index * 120 + offset * 700,
+      reactionsTotal: 200 + index * 7, analyzed: 9 + (index + offset) % 20, anomalous: (index + offset) % 4 }));
+  }).flat();
+  const timing: Schema["ComparisonDashboard"]["timing"] = [];
+  for (const platform of [...networks, "all"]) {
+    for (let weekday = 0; weekday < 7; weekday += 1) for (let hour = 0; hour < 24; hour += 1) {
+      const posts = hour < 7 ? 0 : (weekday + hour) % 6;
+      if (posts) timing.push({ platform: platform as Schema["PlatformValue"], weekday, hour, posts, views24: 200 + hour * 20 });
+    }
+    for (let hour = 7; hour < 24; hour += 1) timing.push({ platform: platform as Schema["PlatformValue"], weekday: null, hour, posts: 10 + hour, views24: 300 + hour * 15 });
+  }
+  const types = [...networks, "all"].flatMap((platform) => ["photo", "album", "video", "text"].map((type, index) => ({
+    platform: platform as Schema["PlatformValue"], type, posts: 40 - index * 8, views24: 500 + index * 150, engagement24: 3 + index })));
+  return { period, hours, datasetRevision: revision, asOf, institutions, stats, curves, daily, timing, types };
+}
 const server = createServer(async (request, response) => {
   const url = new URL(request.url!, "http://127.0.0.1");
   const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis|anomaly-levels))?$/.exec(url.pathname);
@@ -204,6 +266,7 @@ const server = createServer(async (request, response) => {
   const accountsId=/^\/api\/v1\/institutions\/(\d+)\/accounts$/.exec(url.pathname);
   if(accountsId) {const ids=accountsId[1] === "3" ? [] : accountsId[1] === "2" ? [1,2] : [1];return json({items:ids.map((id) => account(id,platform === "telegram" ? "channels" : "platform_accounts")),legacyTotalAccountCount:ids.length,nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["InstitutionAccountsPage"]);}
   if (url.pathname === "/api/v1/overview") return json({ items: url.searchParams.get("q") ? [] : (performanceFixture ? selectionIds.slice(0,50).map(id => item(id,platform)) : [item(1, platform), item(2, platform)]), nextCursor: null, datasetRevision: revision, asOf, integrationStatus: "unknown", integrationWarning: null } satisfies Schema["OverviewPage"]);
+  if (url.pathname === "/api/v1/compare/dashboard") return json(dashboard(url.searchParams.get("period") === "7d" ? "7d" : "30d"));
   if (url.pathname === "/api/v1/compare/candidates") return json({
     items: selectionIds.map((id) => ({ selectionId: `selection-${id}`, selectionType: platform === "telegram" ? "channels" : "institutions",
       selectionLegacyId: id, selectionLabel: names[id - 1]!, selectionDescription: names[id - 1]!, institutionId: `institution-${id}`, canonicalName: names[id - 1]! })),

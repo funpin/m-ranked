@@ -102,9 +102,8 @@ try {
         overviewCards:document.querySelectorAll('[data-testid="platform-overview-card"]').length,
         statisticsPublications:document.querySelector('[data-testid="statistics-publication-cards"]')?.querySelectorAll('article').length??0,
         readyCharts:document.querySelectorAll('[data-chart-ready="true"]').length,
-        comparisonCandidates:document.querySelectorAll('input[type="checkbox"][name="institutions"]').length,
-        comparisonSelected:document.querySelectorAll('input[type="checkbox"][name="institutions"]:checked').length,
-        comparisonLegends:document.querySelectorAll('[data-testid="comparison-legend-toggle"]').length,
+        comparisonRows:document.querySelectorAll('[data-testid="compare-table"] tbody tr').length,
+        comparisonRanking:document.querySelectorAll('[data-testid="ranking-chart"] .recharts-bar-rectangle').length,
         historyRows:document.querySelectorAll('[data-testid="snapshot-history-table"] tbody tr').length,
       }));
       assert.equal(renderedContent.apiFailure,false,"API fallback cannot be measured as a successful page");
@@ -112,10 +111,8 @@ try {
       if(pageUrl.pathname==="/")assert.equal(renderedContent.overviewCards,50,"Measure the complete initial overview page");
       if(pageUrl.pathname==="/statistics")assert.equal(renderedContent.statisticsPublications,20,"Measure the initial statistics slice");
       if(pageUrl.pathname==="/compare"){
-        assert.equal(renderedContent.readyCharts,2,"Both comparison charts must be rendered");
-        assert.ok(renderedContent.comparisonCandidates>200,"The representative comparison must traverse more than 200 candidates");
-        assert.equal(renderedContent.comparisonSelected,renderedContent.comparisonCandidates,"Default comparison must select every candidate");
-        assert.equal(renderedContent.comparisonLegends,renderedContent.comparisonCandidates,"Every selected series must be present");
+        assert.ok(renderedContent.comparisonRows>200,"The dashboard must list every institution without a limit");
+        assert.ok(renderedContent.comparisonRanking>200,"The ranking must draw a bar for every institution");
       }
       if(/\/(posts|publications|platform-posts)\//.test(pageUrl.pathname)){
         assert.equal(renderedContent.readyCharts,2,"Both publication charts must be rendered");

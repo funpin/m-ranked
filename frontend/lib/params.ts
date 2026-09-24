@@ -1,7 +1,6 @@
 import {
   PERIOD_VALUES,
   PLATFORM_VALUES,
-  MAX_COMPARISON_INSTITUTIONS,
   type Period,
   type Platform,
 } from "./types";
@@ -30,68 +29,8 @@ export function many(value: SearchValue): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
-export function comparisonSelectionIsExplicit(submitted: SearchValue): boolean {
-  return legacyBoolean(submitted);
-}
-
 export function legacyBoolean(value: SearchValue): boolean {
   return ["true", "1", "yes", "on", "t", "y"].includes((first(value) ?? "").toLowerCase());
-}
-
-export type ComparisonSelectionIssue =
-  | "invalid"
-  | "too_many";
-
-export interface ParsedComparisonSelection {
-  ids: number[];
-  issue: ComparisonSelectionIssue | null;
-}
-
-export interface ParsedComparisonQuerySelection extends ParsedComparisonSelection {
-  explicit: boolean;
-  type: "channels" | "institutions";
-}
-
-export function comparisonPlatformIsPending(
-  platform: Platform,
-): platform is Extract<Platform, "max" | "all"> {
-  return platform === "max" || platform === "all";
-}
-
-export function parseComparisonQuerySelection(
-  platform: Platform,
-  submitted: SearchValue,
-  channels: SearchValue,
-  institutions: SearchValue,
-): ParsedComparisonQuerySelection {
-  const type = platform === "telegram" ? "channels" : "institutions";
-  const explicit = comparisonSelectionIsExplicit(submitted);
-  if (!explicit) return { explicit, type, ids: [], issue: null };
-  const parsed = parseComparisonSelection(many(
-    type === "channels" ? channels : institutions,
-  ));
-  return { explicit, type, ...parsed };
-}
-
-export function parseComparisonSelection(values: readonly string[]): ParsedComparisonSelection {
-  if (values.length > MAX_COMPARISON_INSTITUTIONS) {
-    return { ids: [], issue: "too_many" };
-  }
-  const ids: number[] = [];
-  const unique = new Set<number>();
-  for (const value of values) {
-    const legacyId = parsePositiveLegacyId(value);
-    if (legacyId === null) return { ids: [], issue: "invalid" };
-    if (!unique.has(legacyId)) {
-      unique.add(legacyId);
-      ids.push(legacyId);
-    }
-  }
-  return { ids, issue: null };
-}
-
-export function defaultComparisonSelection(ids: readonly number[]): number[] {
-  return ids.slice(0, MAX_COMPARISON_INSTITUTIONS);
 }
 
 export function parsePositiveLegacyId(value: string): number | null {
@@ -157,18 +96,6 @@ export function metricNumber(value: number | string | null | undefined): number 
   if (value === null || value === undefined || value === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-export function comparePeriod(value: SearchValue): {
-  hours: 24 | 48 | 72 | 168 | 336;
-  apiPeriod: Period;
-} {
-  const parsed = Number(first(value));
-  const hours = ([24, 48, 72, 168, 336] as const).includes(parsed as never)
-    ? (parsed as 24 | 48 | 72 | 168 | 336)
-    : 72;
-  const apiPeriod: Period = hours === 24 ? "1d" : hours <= 168 ? "7d" : "30d";
-  return { hours, apiPeriod };
 }
 
 type QueryValue = string | number | readonly (string | number)[] | undefined;
