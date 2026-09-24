@@ -333,3 +333,33 @@ keeping unlimited user-visible full history requires storage that grows with it.
 
 No production backup/retention cycle or 24h post-rollout observation exists yet.
 No claim of stable operation or reclaimed PostgreSQL filesystem bytes is made.
+
+## Follow-up preflight — 04:00 UTC
+
+A1 remains the only executed production cleanup. A fresh S2 filesystem probe
+shows 77% used and 12.440 GB available; a provider panel still showing 80% is not
+the authoritative filesystem measurement. S1 shows 81% used and 6.132 GB available.
+The former 5.7G → 5.8G display change is consistent with the small S1 log reclaim.
+
+The next private review package expands the S1 candidate set to four inactive
+releases, with 1,178,886,144 combined exclusive file/symlink blocks (directory
+blocks excluded). Fresh process cwd/exe/FD, container mounts and unit references
+do not use them. Current and the running collector/sender release remain protected.
+S2 has 227 candidate Docker images after preserving runtime images, an explicit
+Backspace 1.4.0 rollback, and their ancestor image IDs. Four stopped build
+containers have no mounts. The former 5.920 GB exclusive-layer estimate is still
+an estimate, not additional measured reclaimed bytes. Download caches add about
+0.092 GB on S1 and 0.301 GB on S2. These are candidates awaiting the new package
+approval, not permission to delete by category.
+
+Preflight found and fixed two deployment defects before rollout:
+- Uninstantiated systemd templates cause `systemctl show` to fail. Release GC now
+  reads unit fragments and drop-ins with `systemctl cat`, preserving next-start
+  references and permitting safe dry-run on the actual S1 unit inventory.
+- Atomic observer output inherited mode 0600. Exporter metrics now use 0644 so
+  the separate node-exporter account can read them; private history remains 0600.
+
+Nine focused GC/observer/backup tests pass. The observer test exercises two real
+atomic writes and verifies permissions; S1 release-GC dry-run completed without
+mutating production. No application rollout, new backup policy, SQL purge or
+additional file/image deletion has occurred at this point.

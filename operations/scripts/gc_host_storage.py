@@ -80,9 +80,10 @@ def systemd_releases(root: Path) -> set[Path]:
     names = [line.split()[0] for line in units if line.strip()]
     if not names:
         return set()
+    # show rejects uninstantiated templates (e.g. collector@.service). Read
+    # their fragments/drop-ins too: a stopped template can pin the next release.
     output = subprocess.run(
-        ["systemctl", "show", *names, "-p", "ExecStart", "-p", "ExecStartPre",
-         "-p", "ExecStartPost", "-p", "WorkingDirectory"],
+        ["systemctl", "cat", *names],
         check=True, capture_output=True, text=True,
     ).stdout
     return {root / name for name in re.findall(re.escape(str(root)) + r"/([^/\s;{}]+)", output)}

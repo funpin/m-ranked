@@ -102,3 +102,19 @@ def test_gc_refuses_when_process_references_cannot_be_read(monkeypatch,tmp_path)
     monkeypatch.setattr(Path,'resolve',resolve)
     with pytest.raises(RuntimeError,match='GC refused'):
         gc_host_storage.collect(apply=True)
+
+
+def test_systemd_template_and_dropin_keep_next_start_releases(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    root = tmp_path / 'releases'
+    monkeypatch.setattr(gc_host_storage.shutil, 'which', lambda name: '/bin/systemctl')
+    def run(args, **kwargs):
+        if args[1] == 'list-unit-files':
+            return SimpleNamespace(stdout='m-ranked-collector@.service disabled\nm-ranked-api.service enabled\n')
+        assert args[1] == 'cat'  # show refuses collector@.service on production systemd
+        return SimpleNamespace(stdout=(
+            f'# template\nWorkingDirectory={root}/collector-rollback\n'
+            f'# drop-in\nExecStart={root}/api-rollback/.venv/bin/python -m api\n'
+        ))
+    monkeypatch.setattr(gc_host_storage.subprocess, 'run', run)
+    assert gc_host_storage.systemd_releases(root) == {root/'collector-rollback', root/'api-rollback'}

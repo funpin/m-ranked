@@ -11,12 +11,13 @@ import tempfile
 import time
 
 
-def atomic(path: Path, data: str):
+def atomic(path: Path, data: str, mode: int = 0o600):
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix=".storage-", dir=path.parent)
     try:
         with os.fdopen(fd, 'w') as stream:
             stream.write(data)
+            os.fchmod(stream.fileno(), mode)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(name, path)
@@ -85,7 +86,8 @@ def main():
     metrics['mranked_storage_backup_allocated_bytes'] = sum(st.st_blocks * 512 for st in sizes)
     metrics['mranked_storage_backup_files'] = len(sizes)
     metrics['mranked_storage_backup_last_complete_unixtime'] = max((st.st_mtime for st in sizes), default=0)
-    atomic(args.metrics, ''.join(f'{key} {value}\n' for key,value in metrics.items()))
+    # node-exporter reads this as a separate, unprivileged service account.
+    atomic(args.metrics, ''.join(f'{key} {value}\n' for key,value in metrics.items()), 0o644)
     return 0
 
 if __name__ == '__main__':
