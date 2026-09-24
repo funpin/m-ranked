@@ -14,7 +14,7 @@ import pytest
 from anomaly_analysis.v2.domain import (
     DataQuality, Family, Interval, Level, Metric, PostVerdict, Sign,
 )
-from anomaly_analysis.v2.store import PostgresAnomalyStore, SeriesTarget, StateWrite
+from anomaly_analysis.v2.store import DueRow, PostgresAnomalyStore, SeriesTarget, StateWrite
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg.rows import dict_row  # noqa: E402 — только после importorskip
@@ -116,6 +116,24 @@ def test_batched_series_equal_single_reads(databases):
     series = batched[targets[0].publication_id]
     assert series.platform == "vk" and len(series.observed_at) == 12
     assert series.values[Metric.VIEWS][:3] == (100, 200, 300)
+
+
+def test_progress_matches_the_series_it_stands_in_for(databases):
+    base = datetime.now(timezone.utc) - timedelta(hours=6)
+    targets = [_publication(databases["admin"], base + timedelta(minutes=index), 8 + index) for index in range(2)]
+    store = PostgresAnomalyStore(databases["worker"])
+    series = store.read_series(targets)
+    rows = []
+    for target, back in zip(targets, (1, 4)):
+        points = series[target.publication_id].observed_at
+        rows.append(DueRow(target.publication_id, target.published_at, base, base, points[-back], None, 0, ()))
+    progress = store.read_progress(rows)
+    for row in rows:
+        points = series[row.publication_id].observed_at
+        new = [at for at in points if at > row.last_point_observed_at]
+        item = progress[row.publication_id]
+        assert (item.platform, item.new_points, item.first_new_at, item.last_observed_at) == (
+            series[row.publication_id].platform, len(new), new[0] if new else None, points[-1])
 
 
 def test_log_is_written_only_when_the_verdict_changes(databases):
