@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+import { Settings } from "lucide-react";
+import Link from "@/components/native-link";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -17,9 +20,25 @@ function GithubMark() {
  * Правая часть шапки общая для живого варианта и серверной заготовки.
  * Иначе при медленной гидратации пользователь видит прежнюю урезанную шапку.
  */
-export function HeaderUtilityActions({ menuToggle }: { menuToggle?: ReactNode }) {
+export function HeaderUtilityActions({ menuToggle, manageHref, manageActive = false }: {
+  menuToggle?: ReactNode; manageHref: string; manageActive?: boolean;
+}) {
   return (
     <div data-testid="header-utility-actions" className="ml-auto flex shrink-0 items-center gap-1">
+      <Separator orientation="vertical" className="mx-2 h-5 data-vertical:self-center max-[780px]:hidden" />
+      {/* Управление — служебный раздел: значок рядом с GitHub и темой, а не
+          пункт основного меню. В мобильном меню он остаётся текстом. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn(HEADER_BUTTON, "max-[780px]:hidden", manageActive && "bg-foreground/[0.07] dark:bg-foreground/10")}
+        render={
+          <Link href={manageHref} prefetch={false} data-testid="manage-link" aria-label="Управление" title="Управление"
+            aria-current={manageActive ? "page" : undefined}>
+            <Settings className="size-[1.15rem]" aria-hidden="true" />
+          </Link>
+        }
+      />
       <Separator orientation="vertical" className="mx-2 h-5 data-vertical:self-center" />
       <Button
         variant="ghost"

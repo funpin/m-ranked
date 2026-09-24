@@ -320,3 +320,20 @@ test("шапка таблицы не участвует в волне", async ({
   const row = page.locator("table.reveal > tbody > tr").first();
   expect(await row.evaluate((node) => getComputedStyle(node).animationName)).toBe("reveal");
 });
+
+test("управление — значок справа на широком экране и текст в мобильном меню", async ({ page }) => {
+  await page.goto("/?platform=vk");
+  const width = page.viewportSize()!.width;
+  const icon = page.getByTestId("manage-link");
+  const textLink = page.getByTestId("main-nav").getByRole("link", { name: "Управление" });
+  if (width > 780) {
+    await expect(icon).toBeVisible();
+    await expect(icon).toHaveAttribute("href", "/manage?platform=vk");
+    await expect(icon.locator("svg.lucide-settings")).toHaveCount(1);
+    await expect(textLink).toBeHidden();
+  } else {
+    await expect(icon).toBeHidden();
+    await page.getByTestId("menu-toggle").click();
+    await expect(textLink).toBeVisible();
+  }
+});
