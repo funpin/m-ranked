@@ -2,11 +2,18 @@
 
 ## Status and authority
 
-**Prepared locally; not deployed. Production data removed: 0 bytes.** The owner
-requested implementation plus push to `fixin`, but explicitly reserved approval
-for production deletion, partition drop, deployment, restart and product retention.
-A local copy of the existing production dump for restore was separately approved.
-A passed test or this document is not production authorization.
+**Stage A1 executed after owner approval; application changes remain undeployed.**
+At 03:50 UTC, the validated abandoned log follower on S1 was stopped and the old
+migration dump inside the S2 database container was removed. Released object
+allocations total **1,617,346,560 bytes across two hosts**. The verified nightly
+backup remains. No database rows, partitions or nightly backups were deleted.
+
+The owner's latest approval answers the package's first two actions (A1).
+Release/image rollback assets (A2), backup-count reduction (B), application rollout
+and restarts (C), first partition drop and product retention remain separate
+approval boundaries. The original request authorizes local implementation and
+push to `fixin`. Copying the existing dump for local restore was separately
+approved. A passed test or this document is not production authorization.
 
 Start here when continuing storage work. The private evidence/approval package is
 outside Git. Host addresses, access paths and raw output belong there. Refresh
@@ -20,10 +27,37 @@ merges remote `fixin` history for fast-forward publication, and preserves the th
 local storage/cache/access fixes. Duplicate legacy migration and old analyzer
 resurrected by the merge were removed. The original local worktree is preserved.
 
-## Measured budget (decimal GB)
+## Executed stage A1 — 03:50 UTC
 
-Limited read-only refresh at 03:02 UTC; files/FD candidates rechecked 03:14–03:15.
-No full snapshot MIN/MAX, VACUUM FULL, DB rewrite, production restart or deletion.
+| Measurement (bytes) | S1 | S2 |
+|---|---:|---:|
+| Released object allocation | 138,108,928 | 1,479,237,632 |
+| Filesystem available immediately before | 6,004,211,712 | 10,963,927,040 |
+| Filesystem available immediately after | 6,142,324,736 | 12,443,164,672 |
+| Observed available-space increase | 138,113,024 | 1,479,237,632 |
+| Available share of filesystem | 19.43% | 23.64% |
+
+The S1 extra 4,096 bytes in the filesystem delta are not attributed to the log.
+Its two open file descriptors referenced one deleted inode, counted once; the
+exact validated reader process exited after TERM. On S2, size/inode/mtime and
+absence of open file descriptors were rechecked immediately before removing only
+the old migration dump. The newer full dump that passed local restore remained
+present. No PostgreSQL internal page reuse is included in these figures.
+
+Before/after checks found healthy database containers and no database lock
+waiters. Collectors, sender, receiver and serving processes remained running.
+The latest-row freshness probe was about 4s on S1 and 14s on S2 after cleanup;
+it is a limited probe, not a full ingestion SLA measurement. S1 outstanding
+transport envelopes changed from 7 to 14 while ingestion continued; S2's 40 old
+restored transfer rows were unchanged and are not its receiver backlog.
+The pre-existing failed S1 storage-guard unit remains unresolved until rollout.
+S1 is still below the 20% available-space target; A1 alone does not bound growth.
+
+## Baseline and conditional budget (decimal GB)
+
+Read-only baseline at 03:02 UTC, before A1; candidates rechecked 03:14–03:15.
+The measured post-A1 values above supersede this baseline for current free space.
+No full snapshot MIN/MAX, VACUUM FULL, DB rewrite or production restart.
 
 | Item | S1 | S2 |
 |---|---:|---:|
@@ -214,9 +248,10 @@ flag was introduced; the last-24 logic remains intact.
 
 ## Approval and rollout sequence
 
-1. Review private exact candidate list and commands. First reclaim only approved
-   migration dump, helper log follower and exact obsolete images/releases; retain
-   running unrelated services and one agreed rollback. Measure `df` after each.
+1. A1 is complete: migration dump and helper log follower removed after approval
+   and fresh checks. Do not replay historical PID/path commands. For A2, review
+   current exact obsolete image/release candidates and agree rollback assets
+   before deletion; preserve unrelated services. Measure `df` after each action.
 2. Verify the full dump on an isolated destination with enough space, including
    roles/ACL, schema contract, indexes/constraints, representative API queries and
    receipts/identity inventory. Approve reduction of completed dump count only
@@ -294,7 +329,7 @@ keeping unlimited user-visible full history requires storage that grows with it.
   observed WAL delta ~75.4 MB. The proposed 0.25 GB index/staging allowance is
   provisional for slower production disks; create one at a time and stop on
   pressure. One rollback-only 1000-row purge took 0.010s locally. No production
-  purge, index build or filesystem reclaim occurred.
+  SQL purge or index build occurred; artifact filesystem reclaim is recorded in A1 above.
 
 No production backup/retention cycle or 24h post-rollout observation exists yet.
 No claim of stable operation or reclaimed PostgreSQL filesystem bytes is made.
