@@ -4249,7 +4249,7 @@ components:
             required: [platform, weekday, hour, posts, views24]
             properties:
               platform: { $ref: '#/components/schemas/PlatformValue' }
-              weekday: { type: integer, minimum: 0, maximum: 6 }
+              weekday: { type: [integer, 'null'], minimum: 0, maximum: 6, description: 'Null aggregates every weekday.' }
               hour: { type: integer, minimum: 0, maximum: 23 }
               posts: { type: integer, minimum: 0 }
               views24: { type: [number, 'null'] }
