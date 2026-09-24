@@ -118,3 +118,43 @@ def test_systemd_template_and_dropin_keep_next_start_releases(monkeypatch, tmp_p
         ))
     monkeypatch.setattr(gc_host_storage.subprocess, 'run', run)
     assert gc_host_storage.systemd_releases(root) == {root/'collector-rollback', root/'api-rollback'}
+
+
+def test_auto_remove_collects_unapproved_old_releases_but_keeps_protected(monkeypatch, tmp_path):
+    releases, _ = configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("MRANKED_RELEASE_KEEP_ROLLBACKS", "2")
+    monkeypatch.setenv("MRANKED_RELEASE_AUTO_REMOVE", "1")
+    monkeypatch.setenv("MRANKED_APPROVED_RELEASE_REMOVALS", "")
+    monkeypatch.setattr(gc_host_storage, "docker_reclaimable_bytes", lambda: 7_000_000_000)
+    metrics = tmp_path / "gc.prom"
+    monkeypatch.setenv("MRANKED_HOST_GC_METRICS_FILE", str(metrics))
+    for hours, name in ((3, "rollback-1"), (4, "rollback-2"), (5, "old-a"), (6, "old-b")):
+        (releases / name).mkdir()
+        age(releases / name, hours)
+    (releases / "young").mkdir()
+    age(releases / "current-release", 2)
+    monkeypatch.setenv("MRANKED_RELEASE_MIN_AGE_HOURS", "1")
+    gc_host_storage.collect(apply=True)
+    remaining = sorted(item.name for item in releases.iterdir())
+    # Откаты — два самых свежих после текущего: «young» и «rollback-1».
+    assert remaining == ["current-release", "rollback-1", "young"]
+    text = metrics.read_text()
+    assert "mranked_host_gc_releases_removed 3" in text and "mranked_host_docker_reclaimable_bytes 7000000000" in text
+
+
+def test_docker_reclaimable_is_parsed_from_system_df(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(gc_host_storage.shutil, "which", lambda name: "/usr/bin/docker")
+    output = '{"Type":"Images","Reclaimable":"1.332GB (74%)"}\n{"Type":"Build Cache","Reclaimable":"9.676MB"}\n'
+    monkeypatch.setattr(gc_host_storage.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout=output))
+    assert gc_host_storage.docker_reclaimable_bytes() == 1_332_000_000 + 9_676_000
+
+
+def test_without_auto_remove_only_approved_names_go(monkeypatch, tmp_path):
+    releases, _ = configure(monkeypatch, tmp_path)
+    monkeypatch.setattr(gc_host_storage, "docker_reclaimable_bytes", lambda: None)
+    for hours, name in ((3, "rollback"), (4, "old-release"), (5, "other-old")):
+        (releases / name).mkdir()
+        age(releases / name, hours)
+    gc_host_storage.collect(apply=True)
+    assert not (releases / "old-release").exists() and (releases / "other-old").is_dir()

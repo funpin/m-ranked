@@ -1,5 +1,5 @@
 [Unit]
-Description=Collect reviewed M-Ranked releases
+Description=Collect old M-Ranked releases
 Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
 After=docker.service
 Requires=docker.service
