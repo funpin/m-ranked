@@ -2,18 +2,18 @@
 
 ## Status and authority
 
-**Stage A1 executed after owner approval; application changes remain undeployed.**
-At 03:50 UTC, the validated abandoned log follower on S1 was stopped and the old
-migration dump inside the S2 database container was removed. Released object
-allocations total **1,617,346,560 bytes across two hosts**. The verified nightly
-backup remains. No database rows, partitions or nightly backups were deleted.
+**A1 and S2 stages A2+B executed after owner approval; application storage changes
+remain undeployed.** A1 released 1,617,346,560 allocated bytes across two hosts.
+The subsequently approved exact S2 image/container/cache cleanup and removal of
+two older dumps increased available space by another **11,051,851,776 bytes**
+before the control backup. The restored September 23 dump remains pinned.
+The guarded backup policy is installed; its control-cycle result is recorded below.
 
-The owner's latest approval answers the package's first two actions (A1).
-Release/image rollback assets (A2), backup-count reduction (B), application rollout
-and restarts (C), first partition drop and product retention remain separate
-approval boundaries. The original request authorizes local implementation and
-push to `fixin`. Copying the existing dump for local restore was separately
-approved. A passed test or this document is not production authorization.
+The latest owner approval covers the reviewed A2+B package, including one control
+backup. Application rollout/restarts (C), first partition drop and product
+retention remain separate approval boundaries. The original request authorizes
+local implementation and push to `fixin`; local restore was separately approved.
+A passed test or this document is not production authorization.
 
 Start here when continuing storage work. The private evidence/approval package is
 outside Git. Host addresses, access paths and raw output belong there. Refresh
@@ -50,13 +50,82 @@ The latest-row freshness probe was about 4s on S1 and 14s on S2 after cleanup;
 it is a limited probe, not a full ingestion SLA measurement. S1 outstanding
 transport envelopes changed from 7 to 14 while ingestion continued; S2's 40 old
 restored transfer rows were unchanged and are not its receiver backlog.
-The pre-existing failed S1 storage-guard unit remains unresolved until rollout.
-S1 is still below the 20% available-space target; A1 alone does not bound growth.
+At the end of A1 the pre-existing failed S1 storage-guard unit was unresolved.
+S1 was still below the 20% available-space target after A1 alone. Later concurrent
+S1 work supersedes that state; see the A2+B execution record.
+
+## Executed A2+B — 11:12–11:15 UTC
+
+Fresh S1 checks found the approved release/cache candidates already removed by
+another active owner-authorized task, which also consolidated its current release
+and removed the broken storage-guard unit. Our cleanup stopped before mutation.
+Do not replay the old allowlist or attribute that task's savings to this task.
+S1 had 7,933,526,016 available bytes at 11:32 UTC (75% used in `df`). Refresh process/unit references
+before any subsequent application rollout; the earlier source layout is stale.
+
+On S2 the unchanged reviewed manifest passed fresh checks. Exact deletion removed
+227 obsolete image IDs, four stopped build containers and download caches.
+The 57 protected image records, including active services and the agreed Backspace
+rollback, remain. No volume, live bind mount or product history was deleted.
+
+| S2 measurement (bytes) | Available before | Available after | Observed increase |
+|---|---:|---:|---:|
+| Images, stopped build containers, caches | 12,178,571,264 | 18,605,867,008 | 6,427,295,744 |
+| Two older completed dumps | 18,603,618,304 | 23,228,174,336 | 4,624,556,032 |
+
+These are immediate filesystem deltas, not additive Docker virtual sizes. The
+two deleted dumps had 4,624,936,960 allocated bytes; concurrent writes explain
+why their filesystem delta differs. A new backup consumes some of the recovered
+space, so the table is gross cleanup before that backup, not final free space.
+
+The September 23 dump's full local restore and SHA256 receipt were checked before
+removing only the September 21/22 dumps. The existing nightly unit now uses
+versioned helpers from commit 8c77968, `BACKUP_KEEP=1`, a 5,000,000,000-byte new-dump
+cap and an 11,000,000,000-byte free reserve. Its timer was restored active. Previous
+configuration is saved privately for rollback. No application service restarted.
+
+KEEP=1 retains the newest completed dump **plus** the last restore-verified pinned
+copy until a successor passes restore. Thus two completed dumps can remain and
+the next run can temporarily need three files. New dumps use an exclusive partial
+file, bounded streaming and complete archive decoding before rename/rotation;
+archive decoding is not a replacement for a full restore drill.
+
+The one authorized control backup started at 11:15:49 UTC and was deliberately
+stopped at 11:28:44 UTC after delivery freshness worsened from roughly 35–60s to
+159s, while S1 pending envelopes rose from 39 to 106 (oldest 147s). CPU was nearly
+saturated. This temporal association justified stopping the operation; it does
+not by itself prove backup was the only cause. API readiness remained HTTP 200
+and no database lock waiters were observed. No second daytime run was started.
+
+Stopping the host unit did **not** stop its container-side `pg_dump`. The remaining
+client was subsequently validated by exact command, container identity and start
+time, then terminated individually. Both the PostgreSQL server and applications
+remained running. On interruption always verify the actual client and database
+session have exited; do not use a historical PID or restart the DB container.
+The service records the intentional interruption as `Result=signal`, status 15.
+Do not reset that failure merely to make the status green.
+
+At 11:31 UTC S2 had **21,896,286,208 available bytes (41.61%)**, including an
+unfinished partial of 1,302,331,392 logical / 1,302,335,488 allocated bytes.
+The partial is not a backup; it remains for diagnosis and is subject to the
+existing 24-hour partial expiry under the backup lock. The restored September 23
+copy and its receipt remain intact. The nightly timer remains active. The next
+5 GB dump still leaves about 16.90 GB before ongoing growth, above the 11 GB
+reserve, even while the partial remains. The control cycle did **not** complete:
+no successful new-policy cycle or sustainable daytime load has been established.
+Before another manual run, assess load and fix container-client cancellation;
+any changed helper deployment must be reviewed separately.
+
+At 11:34 UTC the backup client and its DB session were absent, API readiness was
+HTTP 200 in 10 ms and there were no lock waiters. S1 still had 98 pending envelopes
+(oldest 178s), and the S2 latest-row probe was 180s old. The queue continues to
+advance, but return to the pre-backup freshness baseline is **not** verified;
+other daytime CPU load remains. Investigate that load before another manual run.
 
 ## Baseline and conditional budget (decimal GB)
 
 Read-only baseline at 03:02 UTC, before A1; candidates rechecked 03:14–03:15.
-The measured post-A1 values above supersede this baseline for current free space.
+The later executed-stage measurements supersede this historical baseline.
 No full snapshot MIN/MAX, VACUUM FULL, DB rewrite or production restart.
 
 | Item | S1 | S2 |
@@ -195,7 +264,7 @@ parent/child/shared file layers. Proposed ceilings are alerts/admission budgets,
 | Projections/availability/anomaly state / analytics | latest .095 / .196; availability .024 / .750; anomaly S2 .097 | derived but may encode review decisions | unchanged writes already suppressed in several paths; no VACUUM FULL | 1.5 GB combined S2 alert |
 | Aggregates/rating / analytics | institutional .081 / .032 + other tables | source window/method version governs reproducibility | no approved historic aggregate cutoff | .25 GB alert |
 | Quarantine / receiver | not separately measured | diagnose/resolve before expiration | no automated deletion proposed | .10 GB alert; operator review |
-| Full dumps / DR owner | 0 / 8.331 | proposed KEEP=1 + pinned verified copy | bounded stream/rotation prepared; real restore required | 5 GB per new dump, peak with old/new and possible pinned copy |
+| Full dumps / DR owner | 0 / 3.706 pinned, plus interrupted control partial | KEEP=1 + pinned verified copy | S2 bounded stream/rotation installed; September 23 full restore passed | 5 GB per new dump, peak with old/new and possible pinned copy |
 | Releases/images / operator | ~2.18 +1.37 / .559 + images | current, next-start refs, one agreed rollback, protected forensic | one reviewed host GC; no blanket Docker pruning | release budget 1.2 GB S1 after cleanup, Docker explicitly inventoried |
 | Logs / operator | .126 / .086 at audit | journald 7d/128MiB S1; 14d/256MiB S2 | existing rotation; Docker 10MiB×3 per active container | existing caps |
 | Disk metrics / operator | tiny | host ≤600 samples (~49h), DB 31d | atomic bounded JSON/textfile; existing DB observation purge | <1 MB host history; <20 MB DB observations |
@@ -248,14 +317,12 @@ flag was introduced; the last-24 logic remains intact.
 
 ## Approval and rollout sequence
 
-1. A1 is complete: migration dump and helper log follower removed after approval
-   and fresh checks. Do not replay historical PID/path commands. For A2, review
-   current exact obsolete image/release candidates and agree rollback assets
-   before deletion; preserve unrelated services. Measure `df` after each action.
-2. Verify the full dump on an isolated destination with enough space, including
-   roles/ACL, schema contract, indexes/constraints, representative API queries and
-   receipts/identity inventory. Approve reduction of completed dump count only
-   after that evidence. Pin the known-good copy until its successor passes restore.
+1. A1 and S2 A2 are complete. S1 A2 candidates were already handled by another
+   task. Do not replay historical PID/path/image commands. Refresh exact inventory
+   and process/unit references for any further cleanup.
+2. B is installed following the approved isolated full restore, roles/ACL/schema
+   and representative API checks. Keep the known-good copy pinned until its
+   successor passes restore; do not confuse archive decoding with restore.
 3. Approve code rollout: deploy one coherent release; point current and all
    ExecStart/WorkingDirectory/drop-ins at it; restart one layer at a time, keep
    sender/receiver delivery available. Preserve every still-active old release.
@@ -282,6 +349,10 @@ journalctl -u m-ranked-target-maintenance -u m-ranked-target-dump-backup --since
 Before installing the observation unit, create its state/textfile directories.
 Before release GC, set explicit protected/approved basenames in its env and
 recheck units and container mounts. GC is not a deployment tool.
+The prepared GC unit's empty capability set still needs validation against
+cross-UID `/proc` reads: a successful root-shell dry-run does not prove the
+sandboxed service can inspect every process. It must fail closed on unreadable
+references; resolve and test the unit sandbox before deploying it.
 
 The minimal unresolved product concession is a finite S2 detailed-observation
 horizon or finite total collection volume. At .43–1.47 GB/day even a 30d extension
@@ -329,14 +400,16 @@ keeping unlimited user-visible full history requires storage that grows with it.
   observed WAL delta ~75.4 MB. The proposed 0.25 GB index/staging allowance is
   provisional for slower production disks; create one at a time and stop on
   pressure. One rollback-only 1000-row purge took 0.010s locally. No production
-  SQL purge or index build occurred; artifact filesystem reclaim is recorded in A1 above.
+  SQL purge or index build occurred in this task; artifact filesystem reclaim is
+  recorded in the executed stages above. Concurrent S1 work is separately owned.
 
-No production backup/retention cycle or 24h post-rollout observation exists yet.
+No successful new-policy backup cycle, production retention cycle or 24h
+post-rollout observation exists yet.
 No claim of stable operation or reclaimed PostgreSQL filesystem bytes is made.
 
-## Follow-up preflight — 04:00 UTC
+## Historical follow-up preflight — 04:00 UTC (superseded by A2+B)
 
-A1 remains the only executed production cleanup. A fresh S2 filesystem probe
+At that time A1 was the only executed production cleanup. The S2 filesystem probe
 shows 77% used and 12.440 GB available; a provider panel still showing 80% is not
 the authoritative filesystem measurement. S1 shows 81% used and 6.132 GB available.
 The former 5.7G → 5.8G display change is consistent with the small S1 log reclaim.
@@ -362,4 +435,4 @@ Preflight found and fixed two deployment defects before rollout:
 Nine focused GC/observer/backup tests pass. The observer test exercises two real
 atomic writes and verifies permissions; S1 release-GC dry-run completed without
 mutating production. No application rollout, new backup policy, SQL purge or
-additional file/image deletion has occurred at this point.
+additional file/image deletion had occurred at that point.
