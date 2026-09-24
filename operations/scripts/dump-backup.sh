@@ -79,6 +79,10 @@ cleanup() {
   docker exec "$MRANKED_DB_CONTAINER" psql -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" -At -c \
     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = '$dumper'" \
     >/dev/null 2>&1 || true
+  # Недоснятый файл этого запуска не нужен никому: иначе каждая прерванная
+  # попытка оставляла бы на диске до суток по гигабайту. Удачный снимок к
+  # этому моменту уже переименован, и под этим именем файла нет.
+  rm -f -- "$partial"
   exit "$status"
 }
 trap cleanup EXIT

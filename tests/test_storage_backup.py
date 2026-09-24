@@ -60,7 +60,7 @@ def test_dump_runs_in_a_named_container_that_the_exit_trap_stops():
     assert '"$BACKUP_MAX_BYTES_PER_SECOND" &' in script and 'wait $!' in script
 
 def test_stopping_the_backup_stops_the_dump_container(tmp_path):
-    """SIGTERM посреди потока: контейнер дампа убит, сессия снята, готового файла нет."""
+    """SIGTERM посреди потока: контейнер дампа убит, сессия снята, ни готового, ни частичного файла."""
     import os, signal, time
     bindir = tmp_path/'bin'; bindir.mkdir()
     # macOS lacks flock; the lock itself is not what this test checks.
@@ -97,3 +97,5 @@ esac
     assert 'kill mranked-backup-' in calls
     assert "application_name = 'mranked-backup-" in calls
     assert not list(backups.glob('mranked-*.dump'))
+    # Недоснятый файл этого запуска тоже убран, а не ждёт суток на диске.
+    assert not list(backups.glob('mranked-*.dump.partial'))
