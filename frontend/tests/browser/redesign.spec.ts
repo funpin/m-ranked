@@ -170,9 +170,13 @@ test("в режиме медианы нажатие выделяет публи�
   await expect(banner).toContainText("публикации этого дня");
   await expect(banner).toContainText("1.07");
   await expect(page).toHaveURL(/day=2026-07-01&trend=median/);
-  await expect(rows.first()).toHaveCSS("opacity", "1");
-  await expect(rows.nth(1)).toHaveCSS("opacity", "0.45");
+  await expect(rows.first().locator("td").first()).toHaveCSS("opacity", "1");
+  await expect(rows.nth(1).locator("td").first()).toHaveCSS("opacity", "0.45");
   await expect(rows.first()).not.toContainText("+50");
+  // Проведение мышью по списку не «проявляет» другие дни.
+  await rows.nth(1).hover();
+  await rows.first().hover();
+  await expect(rows.nth(1).locator("td").last()).toHaveCSS("opacity", "0.45");
 
   await banner.getByRole("link", { name: "показать все" }).click();
   await expect(page.getByRole("status")).toHaveCount(0);
@@ -197,7 +201,7 @@ test("в режиме всего нажатие показывает суточ�
   const rows = page.locator("tbody tr[data-published-day]");
   await expect(rows.first()).toContainText("+50");
   await expect(rows.nth(1)).toContainText("+40");
-  await expect(rows.nth(1)).toHaveCSS("opacity", "1");
+  await expect(rows.nth(1).locator("td").first()).toHaveCSS("opacity", "1");
 });
 
 test("значки ссылаются на общий набор, а не возят свои контуры", async ({ page }) => {
