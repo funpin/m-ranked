@@ -119,6 +119,19 @@ def _log_startup(
         )
 
 
+def _log_startup(
+    platform: Platform, partition: str, collector_version: str, schedule_mode: str,
+) -> None:
+    logger.info(
+        "collector started platform=%s partition=%s collector_version=%s "
+        "schedule_mode=%s",
+        platform.value,
+        partition,
+        collector_version,
+        schedule_mode,
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="M-Ranked target PostgreSQL collector",
@@ -526,6 +539,22 @@ async def _run(args: argparse.Namespace) -> int:
         phase_arbiter = PostgresPhaseArbiter(
             dsn, collect_slots=settings.collector_collect_concurrency,
         )
+        phase_scheduler = PhaseScheduler(
+            phase_arbiter,
+            max_wait_seconds=settings.collector_phase_max_wait_seconds,
+            retry_seconds=settings.collector_phase_retry_seconds,
+            request_stale_seconds=settings.collector_phase_request_stale_seconds,
+        )
+        coordinator.metrics.schedule_mode(platform, schedule_mode)
+        _log_startup(platform, args.partition, collector_version, schedule_mode)
+        offset = platform_offset(platform, interval_seconds)
+        policy = PhasePolicy(
+            platform,
+            interval_seconds,
+            offset,
+            _cycle_deadline(platform, settings),
+        )
+        phase_arbiter = PostgresPhaseArbiter(dsn)
         phase_scheduler = PhaseScheduler(
             phase_arbiter,
             max_wait_seconds=settings.collector_phase_max_wait_seconds,
