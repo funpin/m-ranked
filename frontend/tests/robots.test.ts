@@ -14,12 +14,14 @@ test("robots.txt закрывает сайт для ИИ-роботов и ос�
   assert.ok([everyone?.disallow].flat().includes("/*?*history_limit="));
 });
 
-test("nginx отказывает тем же ИИ-роботам, что перечислены в robots.txt", () => {
-  const config = readFileSync(new URL("../../operations/nginx/m-ranked.conf", import.meta.url), "utf8");
-  const map = /map \$http_user_agent \$m_ranked_ai_crawler \{[^}]*"~\*\(([^)]*)\)"/.exec(config);
-  assert.ok(map, "в m-ranked.conf нет карты ИИ-роботов");
-  const patterns = map[1]!.split("|").map((item) => item.toLowerCase());
+test("nginx узнаёт тех же ИИ-роботов, что перечислены в robots.txt", () => {
+  const config = readFileSync(new URL("../../operations/nginx/traffic.conf", import.meta.url), "utf8");
+  const map = /map \$http_user_agent \$m_ranked_agent_class \{([^}]*)\}/.exec(config);
+  assert.ok(map, "в traffic.conf нет карты классов клиентов");
+  // Все шаблоны ИИ-классов карты: запросы по просьбе человека, поиск, обучение.
+  const patterns = [...map[1]!.matchAll(/"~\*\(([^)]*)\)" (ai_\w+);/g)]
+    .flatMap((item) => item[1]!.split("|")).map((item) => item.toLowerCase());
   for (const agent of AI_CRAWLERS) {
-    assert.ok(patterns.some((pattern) => agent.toLowerCase().includes(pattern)), `${agent} не закрыт в nginx`);
+    assert.ok(patterns.some((pattern) => agent.toLowerCase().includes(pattern)), `${agent} не распознаётся в nginx`);
   }
 });
