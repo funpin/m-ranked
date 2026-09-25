@@ -74,6 +74,8 @@ RuntimeDirectoryMode=0700
 UMask=0077
 LimitNOFILE=8192
 TasksMax=64
+# Обычно около 20% ядра; потолок — на случай догонки после простоя.
+CPUQuota=60%
 MemoryHigh=384M
 MemoryMax=512M
 MemorySwapMax=0
