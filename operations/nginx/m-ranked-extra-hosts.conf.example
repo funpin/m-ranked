@@ -6,8 +6,9 @@
 # который их покрывает.
 #
 # upstream, зоны и шлюз рендера объявлены в m-ranked.conf и traffic.conf —
-# здесь только server; location общие, из site.conf.
-# Файл кладётся в /etc/nginx/conf.d/ рядом с ним.
+# здесь только server; location общие, из site.conf. Файл кладётся в
+# /etc/m-ranked/nginx/extra-hosts/: m-ranked.conf подключает его после
+# traffic.conf. В conf.d он мог бы прочитаться раньше и сломать nginx -t.
 
 server {
     listen 80;
