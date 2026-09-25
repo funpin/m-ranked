@@ -573,6 +573,31 @@ SELECT windowed.id AS snapshot_id,windowed.*,
 """
 
 
+# Отпечаток истории поста: число снимков и наибольший номер. Читается по
+# индексу месяца публикации, без самих строк — дешевле любой части HISTORY.
+# Поправка добавляет снимок с большим номером, удаление уменьшает число.
+HISTORY_FINGERPRINT = """
+SELECT count(*)::integer AS snapshot_count, coalesce(max(snapshot.id),0)::bigint AS max_snapshot_id
+  FROM ingest.publication_metric_snapshot snapshot
+ WHERE snapshot.published_month=%(published_month)s::date
+   AND snapshot.publication_id=%(publication_id)s::uuid
+"""
+
+# Готовая выдача HISTORY для поста с законченным сбором (миграция 0043) —
+# только если отпечаток совпадает с текущим. Иначе ответ строится заново.
+STORED_HISTORY = """
+SELECT page.payload, page.items_count
+  FROM analytics.publication_history_page page
+ WHERE page.publication_id=%(publication_id)s::uuid
+   AND page.published_month=%(published_month)s::date
+   AND (page.snapshot_count, page.max_snapshot_id) = (
+       SELECT count(*)::integer, coalesce(max(snapshot.id),0)::bigint
+         FROM ingest.publication_metric_snapshot snapshot
+        WHERE snapshot.published_month=%(published_month)s::date
+          AND snapshot.publication_id=%(publication_id)s::uuid)
+"""
+
+
 COLLECTOR_COVERAGE = """
 WITH parameters AS (
     SELECT %(publication_id)s::uuid AS publication_id,

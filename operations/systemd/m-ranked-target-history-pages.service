@@ -1,0 +1,56 @@
+[Unit]
+Description=M-Ranked ready history pages for posts with finished collection
+Documentation=file:/opt/m-ranked/current/operations/runbooks/TRAFFIC.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-maintenance
+Group=m-ranked-maintenance
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/maintenance.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/maintenance-pgpass
+# systemd 252 отдаёт credential как 0400 во владении службы, а начиная с
+# 257 — как 0440 root:root с ACL. libpq молча игнорирует pgpass с
+# групповым доступом и уходит в "password authentication failed" при
+# верном пароле. Копия в приватный файл работает на обеих версиях.
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-maintenance -g m-ranked-maintenance %d/pgpass /run/m-ranked-history-pages/pgpass
+Environment=PGPASSFILE=/run/m-ranked-history-pages/pgpass
+Environment=TZ=Europe/Moscow
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m api.tools.history_pages
+# Прогон сам ограничен HISTORY_PAGES_MAX_SECONDS; это — страховка.
+TimeoutStartSec=10min
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+RuntimeDirectory=m-ranked-history-pages
+RuntimeDirectoryMode=0700
+UMask=0077
+LimitNOFILE=8192
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target
