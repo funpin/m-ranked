@@ -197,6 +197,31 @@ test("publication page with the expanded analysis card meets axe AA and exposes 
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
 });
 
+test("a long history arrives as a preview and loads the rest on the first zoom",async({page,request})=>{
+  test.setTimeout(60_000);
+  // В проде /api/v1 отдаёт nginx; у стенда API — отдельный процесс фикстуры.
+  await page.route("**/api/v1/**",(route)=>route.continue({url:route.request().url().replace(/^http:\/\/[^/]+/,"http://127.0.0.1:18091")}));
+  const preview=await (await request.get("/posts/99")).text();
+  const full=await (await request.get("/posts/99?history_limit=3000")).text();
+  // Сервер рисует двадцать строк таблицы и отдаёт выборку, а не 1205 точек.
+  expect(preview.match(/<tr id="snapshot-/g)?.length).toBe(20);
+  expect(preview.length).toBeLessThan(full.length*0.4);
+  expect(preview).not.toContain("fixture-");
+  await page.goto("/posts/99");
+  const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
+  await expect(chart).toHaveAttribute("data-chart-ready","true",{timeout:30_000});
+  await expect(page.locator("tbody tr")).toHaveCount(100);
+  await expect(page.getByTestId("chart-range-head")).toContainText("1205 сохранённых точек");
+  const loaded=page.waitForRequest(/\/api\/v1\/publications\/[0-9a-f-]{36}\/history\?limit=3000$/);
+  await page.getByRole("slider",{name:"Начало диапазона"}).focus();
+  await page.keyboard.press("End");
+  await loaded;
+  await expect(page.getByTestId("full-history-loading")).toHaveCount(0);
+  await expect(page.getByTestId("chart-range-head")).not.toContainText("1205 сохранённых точек");
+  await expect(chart).toHaveAttribute("data-chart-ready","true");
+  await expect(page.locator("tbody tr")).toHaveCount(100);
+});
+
 test("a point older than the 1000-row boundary remains reachable and the next publication resets its range",async({page}) => {
   test.setTimeout(60_000);
   await page.goto("/posts/99");

@@ -10,6 +10,7 @@ import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { normalizeHistoryLimit, queryHref, type SearchParams } from "@/lib/params";
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
 import { anomalyReportVisible } from "@/lib/anomaly-visibility";
+import { previewHistory } from "@/lib/history-data";
 
 export const dynamic = "force-dynamic";
 
@@ -48,5 +49,8 @@ export default async function PublicationPage({ params, searchParams }: Props) {
     reportDetailFailure(`publication:${id}`, error);
     return <ApiFailureState retryHref={queryHref(publicationHref(id), { history_limit: historyLimit })} />;
   }
-  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={analysis} />;
+  // В первый ответ — только то, что видно сразу; остальное браузер догрузит.
+  const preview = previewHistory(history.items, historyLimit);
+  return <PublicationDetail history={{ ...history, items: preview.rows }} historyLimit={historyLimit} analysis={analysis}
+    sampledIds={preview.sampledIds} totalPoints={preview.totalPoints} />;
 }
