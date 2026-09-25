@@ -13,7 +13,7 @@ umask 077
 : "${BACKUP_DIR:=/var/backups/m-ranked}"
 # Approved deployment may select one; previous restore-verified copy is pinned.
 : "${BACKUP_KEEP:=1}"
-: "${BACKUP_MAX_DUMP_BYTES:=5000000000}"
+: "${BACKUP_MAX_DUMP_BYTES:=7000000000}"
 : "${BACKUP_RESERVE_BYTES:=11000000000}"
 : "${MRANKED_DB_CONTAINER:?MRANKED_DB_CONTAINER is required}"
 # Потолок скорости потока. Дамп читается медленнее — pg_dump ждёт записи, и
@@ -21,6 +21,9 @@ umask 077
 # 24.09 занял процессор, а доставка данных отстала с 40 до 159 секунд.
 : "${BACKUP_MAX_BYTES_PER_SECOND:=10000000}"
 : "${BACKUP_CPUS:=0.5}"
+# Сжатие архива. zstd:3 на снимках замеров на ~20% меньше gzip:6 по умолчанию
+# и не медленнее; pg_restore той же версии читает его без флагов.
+: "${BACKUP_COMPRESSION:=zstd:3}"
 : "${BACKUP_METRICS_FILE:=}"
 # Неудачный запуск намеренно оставляет .partial для разбора: по нему
 # видно, на чём дамп оборвался. Но разбирают его в тот же день, а файл
@@ -41,6 +44,10 @@ script_dir="$(cd "$(dirname "$0")" && pwd)"
 
 if [[ ! "$BACKUP_MAX_BYTES_PER_SECOND" =~ ^[1-9][0-9]*$ ]] || (( BACKUP_MAX_BYTES_PER_SECOND < 1000000 )); then
   echo "BACKUP_MAX_BYTES_PER_SECOND must be at least 1000000" >&2
+  exit 64
+fi
+if [[ ! "$BACKUP_COMPRESSION" =~ ^(gzip|lz4|zstd):[0-9]{1,2}$ ]]; then
+  echo "BACKUP_COMPRESSION must look like zstd:3" >&2
   exit 64
 fi
 if [[ ! "$BACKUP_CPUS" =~ ^(0\.[1-9][0-9]?|[1-2](\.[0-9]+)?)$ ]]; then
@@ -95,7 +102,7 @@ export PGPASSWORD
 docker run --rm -i --name "$dumper" --network "container:$MRANKED_DB_CONTAINER" \
   --cpus "$BACKUP_CPUS" --memory 512m --pids-limit 64 \
   -e PGPASSWORD -e PGAPPNAME="$dumper" "$image" \
-  pg_dump -h 127.0.0.1 -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" -Fc --no-password \
+  pg_dump -h 127.0.0.1 -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" -Fc --compress="$BACKUP_COMPRESSION" --no-password \
   | python3 "$script_dir/backup-stream.py" \
     "$partial" "$BACKUP_MAX_DUMP_BYTES" "$BACKUP_RESERVE_BYTES" "$BACKUP_MAX_BYTES_PER_SECOND" &
 wait $!

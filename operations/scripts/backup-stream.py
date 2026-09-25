@@ -21,8 +21,12 @@ started = time.monotonic()
 # Exclusive create, never follow/overwrite an existing partial or symlink.
 with path.open('xb') as output:
     while block := sys.stdin.buffer.read(1024 * 1024):
+        # Две разные причины — два разных сообщения: 25.09 общий текст про
+        # резерв диска скрыл, что дамп просто перерос потолок размера.
+        if written + len(block) > maximum:
+            raise SystemExit(f'dump stopped at the size cap: {maximum} bytes')
         usage = shutil.disk_usage(path.parent)
-        if written + len(block) > maximum or usage.free < max(reserve, usage.total // 5) + len(block):
+        if usage.free < max(reserve, usage.total // 5) + len(block):
             raise SystemExit('dump stopped before consuming reserved disk space')
         output.write(block)
         written += len(block)
