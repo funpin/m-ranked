@@ -1,0 +1,39 @@
+[Unit]
+Description=M-Ranked alerts to Telegram (backup, disk, load, traffic, units)
+Documentation=file:/opt/m-ranked/current/operations/runbooks/TRAFFIC.md
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Environment=TZ=Europe/Moscow
+EnvironmentFile=-/etc/m-ranked/alerts.env
+ExecStart=/usr/bin/python3 /usr/local/libexec/m-ranked/alerts.py
+StateDirectory=m-ranked/alerts
+StateDirectoryMode=0700
+TimeoutStartSec=45s
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Журнал nginx и файлы метрик принадлежат разным пользователям: нужно
+# только читать их. Писать можно лишь в свой каталог состояния.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+# Telegram по HTTPS и systemctl через D-Bus.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+UMask=0077
+TasksMax=16
+MemoryMax=128M
