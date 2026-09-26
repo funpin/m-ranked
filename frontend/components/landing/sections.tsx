@@ -10,7 +10,7 @@ import {
 import { REPOSITORY_URL } from "@/lib/repository";
 import { cn } from "@/lib/utils";
 import { CountUp } from "./count-up";
-import { HeroField } from "./hero-field";
+import { HeroScene } from "./hero-scene";
 
 export type LandingPlatform = { platform: string; accounts: number | null };
 
@@ -34,9 +34,11 @@ export function SectionHead({ eyebrow, title, children, tone = "var(--chart-2)",
 
 export function Hero({ platforms }: { platforms: readonly LandingPlatform[] }) {
   return (
-    <section aria-labelledby="landing-title" className="relative isolate -mt-6 flex min-h-[min(92svh,880px)] flex-col justify-center pt-16 pb-40 sm:pb-56">
+    // Первый экран занимает всё окно под шапкой: сводка с цифрами начинается
+    // ниже и появляется только при прокрутке.
+    <section aria-labelledby="landing-title" className="relative isolate -mt-6 flex min-h-[calc(100svh-3.5rem)] flex-col justify-center py-16">
       <div className="landing-bleed landing-hero-parallax absolute inset-y-0 -z-10 overflow-hidden" aria-hidden="true">
-        <HeroField />
+        <HeroScene />
         <div className="landing-hero-veil absolute inset-0" />
       </div>
       <div className="landing-hero-copy grid max-w-5xl gap-7">
@@ -82,7 +84,7 @@ export function Stats({ summary }: { summary: SiteSummary }) {
     { value: summary.snapshots, label: "сохранённых замеров" },
   ].filter((item): item is { value: number; label: string } => item.value !== null);
   return (
-    <section aria-label="Проект в цифрах" className="landing-reveal relative -mt-24 sm:-mt-32" data-testid="landing-stats">
+    <section aria-label="Проект в цифрах" className="landing-reveal relative pt-16 sm:pt-24" data-testid="landing-stats">
       <div className="bg-card/80 ring-foreground/10 grid grid-cols-2 overflow-hidden rounded-3xl shadow-2xl shadow-black/5 ring-1 backdrop-blur-xl lg:grid-cols-4">
         {items.map((item, index) => (
           <div key={item.label} className={cn("grid gap-1 p-6 sm:p-8", index % 2 && "border-l", index >= 2 && "border-t lg:border-t-0", index === 2 && "lg:border-l")}>

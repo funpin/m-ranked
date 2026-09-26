@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  CORRIDOR_SHAPES, corridorBand, corridorShapePath, countWithUnit, formatStat, heroCurves, landingDashboard,
+  CORRIDOR_SHAPES, corridorBand, corridorShapePath, countWithUnit, formatStat, landingDashboard, sceneCurves,
   platformsFromSummary, summaryDate,
 } from "../lib/landing";
 import type { Dashboard } from "../lib/compare-dashboard";
@@ -31,11 +31,18 @@ test("дата пересчёта — по Москве и без «г.»", () =
   assert.equal(summaryDate("2026-09-25T22:30:00Z"), "26 сентября 2026");
 });
 
-test("фон первого экрана одинаков при каждой отрисовке", () => {
-  const first = heroCurves();
-  assert.deepEqual(first, heroCurves());
-  assert.ok(first.some((curve) => curve.lead && curve.marks.length > 3));
-  assert.ok(first.every((curve) => curve.d.startsWith("M") && !curve.d.includes("NaN")));
+test("модель первого экрана одинакова при каждой отрисовке и не выходит из сцены", () => {
+  const curves = sceneCurves();
+  assert.deepEqual(curves, sceneCurves());
+  assert.ok(curves.some((curve) => curve.lead));
+  for (const curve of curves) {
+    for (const [x, y, z] of curve.points) {
+      assert.ok(Number.isFinite(x + y + z));
+      assert.ok(x >= -3.21 && x <= 3.21 && y >= 0 && y <= 2.41 && z >= -2.3 && z <= 2.3, `${x} ${y} ${z}`);
+    }
+    // Накопленное значение не убывает: это счётчик.
+    assert.ok(curve.points.every((point, index) => index === 0 || point[1] >= curve.points[index - 1]![1]));
+  }
 });
 
 test("формы коридора анимируются друг в друга: одинаковое число точек", () => {

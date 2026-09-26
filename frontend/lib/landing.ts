@@ -106,59 +106,31 @@ export function seeded(seed: number) {
 }
 
 const round = (value: number) => Math.round(value * 10) / 10;
+const hundredths = (value: number) => Math.round(value * 100) / 100;
 
-/** Гладкая кривая через точки (Катмулл — Ром в кубические Безье). */
-export function smoothPath(points: readonly (readonly [number, number])[]) {
-  if (!points.length) return "";
-  let d = `M${round(points[0]![0])} ${round(points[0]![1])}`;
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const p0 = points[index - 1] ?? points[index]!;
-    const p1 = points[index]!;
-    const p2 = points[index + 1]!;
-    const p3 = points[index + 2] ?? p2;
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    d += `C${round(c1[0]!)} ${round(c1[1]!)} ${round(c2[0]!)} ${round(c2[1]!)} ${round(p2[0])} ${round(p2[1])}`;
-  }
-  return d;
-}
+export type ScenePoint = readonly [number, number, number];
+export interface SceneCurve { points: ScenePoint[]; tone: number; lead: boolean; delay: number }
 
-export interface HeroCurve { d: string; tone: number; opacity: number; width: number; delay: number; lead: boolean; marks: [number, number][] }
-
-/** Фон первого экрана: поле кривых накопления просмотров. Каждая кривая —
- *  пост: стартует в свой момент, быстро растёт и выходит на плато. Несколько
- *  ведущих кривых несут точки замеров — густо в начале, реже потом, как в
- *  настоящем расписании сбора. */
-export function heroCurves({ width = 1440, height = 720, count = 34, seed = 20260926 } = {}): HeroCurve[] {
+/** Трёхмерная модель первого экрана — «рельеф замеров». Каждая кривая —
+ *  пост: по оси x его возраст, по y накопленные просмотры, по z — место в
+ *  ленте. Пост стартует в свой момент, быстро растёт и выходит на плато;
+ *  точки гуще в начале, как в настоящем расписании сбора. Координаты — в
+ *  единицах сцены: x ∈ [-3.2; 3.2], y ∈ [0; 2.4], z ∈ [-2.2; 2.2]. */
+export function sceneCurves({ count = 26, samples = 48, seed = 20260926 } = {}): SceneCurve[] {
   const random = seeded(seed);
-  const curves: HeroCurve[] = [];
+  const curves: SceneCurve[] = [];
   for (let index = 0; index < count; index += 1) {
-    const start = -160 + random() * (width * 0.78);
-    const span = width * (0.45 + random() * 0.6);
+    const z = -2.2 + (4.4 * index) / Math.max(1, count - 1) + (random() - 0.5) * 0.08;
+    const start = -3.2 + random() * 1.8;
     // Разброс охвата огромный: немногие посты набирают в разы больше прочих.
-    const amplitude = height * (0.16 + 0.66 * random() ** 1.7);
-    const tau = span * (0.08 + random() * 0.22);
-    const base = height + 8 - random() * height * 0.08;
-    const lead = index % 9 === 4;
-    const points: [number, number][] = [];
-    const marks: [number, number][] = [];
-    const steps = 22;
-    for (let step = 0; step <= steps; step += 1) {
-      // Точки гуще в начале: там и кривая круче.
-      const x = start + span * (step / steps) ** 1.6;
-      const y = base - amplitude * (1 - Math.exp(-(x - start) / tau));
-      points.push([x, y]);
-      if (lead && step > 0 && x > 0 && x < width) marks.push([round(x), round(y)]);
+    const amplitude = 0.3 + 2.1 * random() ** 1.8;
+    const tau = 0.25 + random() * 1.1;
+    const points: ScenePoint[] = [];
+    for (let step = 0; step < samples; step += 1) {
+      const x = start + (3.2 - start) * (step / (samples - 1)) ** 1.6;
+      points.push([hundredths(x), hundredths(amplitude * (1 - Math.exp(-(x - start) / tau))), hundredths(z)]);
     }
-    curves.push({
-      d: smoothPath(points),
-      tone: index % 4,
-      opacity: lead ? 0.95 : 0.18 + random() * 0.42,
-      width: lead ? 2 : 1 + random() * 0.6,
-      delay: round(random() * 1.6),
-      lead,
-      marks,
-    });
+    curves.push({ points, tone: index % 4, lead: index % 7 === 3, delay: round(random() * 12) / 10 });
   }
   return curves;
 }

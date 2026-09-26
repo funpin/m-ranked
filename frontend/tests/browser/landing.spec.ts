@@ -59,3 +59,14 @@ for (const theme of ["light", "dark"]) {
     }
   });
 }
+
+test("первый экран без цифр: сводка ниже сгиба, а трёхмерная модель догружается отдельно", async ({ page }) => {
+  await page.goto("/");
+  const stats = page.getByTestId("landing-stats");
+  const top = await stats.evaluate((node) => node.getBoundingClientRect().top);
+  expect(top).toBeGreaterThanOrEqual(await page.evaluate(() => window.innerHeight));
+  const scene = page.getByTestId("hero-scene");
+  await expect(scene).toBeAttached();
+  const webgl = await page.evaluate(() => Boolean(document.createElement("canvas").getContext("webgl2")));
+  if (webgl) await expect(scene).toHaveAttribute("data-ready", "true", { timeout: 15_000 });
+});
