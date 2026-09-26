@@ -121,6 +121,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
         params: { path: { accountId } },
       }).then(unwrap);
     },
+    sitemapSummary() {
+      return client.GET("/api/v1/sitemap", {}).then(unwrap);
+    },
+    sitemapPublications(page: number) {
+      return client.GET("/api/v1/sitemap/publications/{page}", { params: { path: { page } } }).then(unwrap);
+    },
     comparisonDashboard(period: "7d" | "30d") {
       return client.GET("/api/v1/compare/dashboard", { params: { query: { period } } }).then(unwrap);
     },

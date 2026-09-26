@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { legacyQueryErrors } from "./lib/legacy-validation";
 import { legacyDetailError } from "./lib/legacy-detail-error";
 import { prepareManage } from "./lib/manage-facade";
+import { publicationCacheHeader } from "./lib/cache-policy";
 
 // Строгая политика с одноразовым nonce. Инлайн-скрипты разрешены только со
 // своим nonce, поэтому внедрённый в разметку скрипт не выполнится. Стили
@@ -37,9 +38,12 @@ function nonceValue(): string {
 export async function proxy(request: NextRequest) {
   const detail = legacyQueryErrors(request.nextUrl);
   if (detail.length) return NextResponse.json({ detail }, { status: 422, headers: { "Cache-Control": "no-store" } });
+  let cacheSeconds: string | null = null;
   if(request.method === "GET") {
-    const failure = await legacyDetailError(new URL(request.nextUrl.href), process.env.API_BASE_URL ?? "http://127.0.0.1:8080");
+    const apiOrigin = process.env.API_BASE_URL ?? "http://127.0.0.1:8080";
+    const failure = await legacyDetailError(new URL(request.nextUrl.href), apiOrigin);
     if(failure) return failure;
+    cacheSeconds = await publicationCacheHeader(new URL(request.nextUrl.href), apiOrigin);
   }
   const requestHeaders = new Headers(request.headers);
   // Заголовки политики и nonce приходят только отсюда: присланные клиентом
@@ -61,6 +65,8 @@ export async function proxy(request: NextRequest) {
     ? await prepareManage(request, requestHeaders)
     : NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", strict);
+  // Срок готовой страницы в кэше nginx; до клиента заголовок не доходит.
+  if (cacheSeconds && !administrative) response.headers.set("X-Accel-Expires", cacheSeconds);
   return response;
 }
 
