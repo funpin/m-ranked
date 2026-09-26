@@ -54,6 +54,7 @@ RuntimeDirectoryMode=0700
 UMask=0077
 LimitNOFILE=4096
 TasksMax=32
+CPUQuota=25%
 MemoryHigh=128M
 MemoryMax=192M
 MemorySwapMax=0

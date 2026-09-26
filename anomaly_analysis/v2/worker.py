@@ -146,6 +146,9 @@ class Worker:
         self.store.schedule_norm_recheck(version, now, self.schedule.recheck_window_seconds)
 
     def _analyze(self, due: Sequence[DueRow], now: datetime, stretch: float) -> None:
+        due = self._postpone_waiting(due, now, stretch)
+        if not due:
+            return
         series = self.store.read_series([SeriesTarget(row.publication_id, row.published_at) for row in due])
         accounts = sorted({item.account_id for item in series.values()}, key=str)
         window_start = now - timedelta(seconds=self.config.activity_lookback_seconds)
@@ -185,17 +188,54 @@ class Worker:
         self.metrics.log_entries += self.store.write_states(writes)
         self.store.postpone(postponed)
 
+    def _postpone_waiting(self, due: Sequence[DueRow], now: datetime, stretch: float) -> list[DueRow]:
+        """Отложить, не читая ряда, посты, которым анализ пока не нужен.
+
+        Большинство просроченных постов ждут новых точек, и полный ряд читался
+        только затем, чтобы это выяснить. Решение принимается тем же `_decide`
+        по тем же входам, поэтому оно не отличается от решения по ряду; всё, что
+        решилось в пользу анализа или не нашлось, идёт обычным путём.
+        """
+        candidates = [row for row in due if row.analyzed_at is not None and row.last_point_observed_at is not None
+                      and not self._norm_recheck(row)]
+        if not candidates:
+            return list(due)
+        progress = self.store.read_progress(candidates)
+        remaining: list[DueRow] = []
+        postponed: list[tuple[UUID, datetime]] = []
+        for row in due:
+            item = progress.get(row.publication_id)
+            if item is not None and item.last_observed_at is not None:
+                decision = self._decide(row, item.platform, row.published_at, item.new_points,
+                                        item.first_new_at, item.last_observed_at, now, stretch)
+                if not decision.analyze:
+                    postponed.append((row.publication_id, decision.next_due_at))
+                    self.metrics.outcomes["postponed"] += 1
+                    continue
+            remaining.append(row)
+        self.store.postpone(postponed)
+        return remaining
+
     def _plan(self, row: DueRow, subject: PostSeries, now: datetime, stretch: float):
         last = row.last_point_observed_at
         new = [at for at in subject.observed_at if last is None or at > last]
+        return self._decide(row, subject.platform, subject.published_at, len(new), new[0] if new else None,
+                            subject.observed_at[-1], now, stretch)
+
+    def _decide(self, row: DueRow, platform: str, published_at: datetime, new_points: int,
+                first_new_at: datetime | None, last_observed_at: datetime, now: datetime, stretch: float):
+        last = row.last_point_observed_at
         step = self.cadence.expected_step_seconds(
-            subject.platform, _ages(subject, (now,)))[0]
-        resumed = bool(last and new and (new[0] - last).total_seconds() > GAP_FACTOR * step)
-        stale = (now - subject.observed_at[-1]).total_seconds() > GAP_FACTOR * step
-        return plan(self.schedule, platform=subject.platform, published_at=subject.published_at, now=now,
-                    new_points=len(new), analyzed_before=row.analyzed_at is not None,
+            platform, np.array([(now - published_at).total_seconds()]))[0]
+        resumed = bool(last and first_new_at and (first_new_at - last).total_seconds() > GAP_FACTOR * step)
+        stale = (now - last_observed_at).total_seconds() > GAP_FACTOR * step
+        return plan(self.schedule, platform=platform, published_at=published_at, now=now,
+                    new_points=new_points, analyzed_before=row.analyzed_at is not None,
                     resumed_after_gap=resumed, stale=stale, stretch=stretch,
-                    norm_recheck=self.norm_version is not None and row.norm_version_id != self.norm_version)
+                    norm_recheck=self._norm_recheck(row))
+
+    def _norm_recheck(self, row: DueRow) -> bool:
+        return self.norm_version is not None and row.norm_version_id != self.norm_version
 
     def _load_accounts(self, accounts: Sequence[UUID], now: datetime, window_start: datetime) -> None:
         clock = time.monotonic()
@@ -208,10 +248,6 @@ class Worker:
         if missing:
             self._subscribers.put(self.store.read_subscribers(missing, published_since, now),
                                   missing, clock, [])
-
-
-def _ages(series: PostSeries, moments) -> np.ndarray:
-    return np.array([(moment - series.published_at).total_seconds() for moment in moments])
 
 
 def _carried(row: DueRow, detectable_from: datetime):

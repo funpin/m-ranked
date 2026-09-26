@@ -1,4 +1,5 @@
 import { api, ApiError } from "./api";
+import { chronological } from "./history-data";
 
 /** Экран «Не удалось загрузить данные» отдаётся с кодом 200, поэтому в логах
  *  сервера от него не остаётся ничего. Причина пишется явно: без неё отказ,
@@ -18,7 +19,7 @@ export async function loadAccountPublications(id: number | string, type?: Legacy
 export type DetailHistory=PublicationHistory & {accountDisplayName?:string;accountArchiveUrl?:string;previousDisplayId?:string;nextDisplayId?:string;accountId?:string;previousPublicationId?:string;nextPublicationId?:string};
 export async function loadPublicationHistory(id: number | string, type?: LegacyPublicationType, limit = 100): Promise<DetailHistory> {
   const first=await api.publicationHistory(id, type, limit);
-  const items = [...first.items].sort((a,b) => Date.parse(a.observedAt) - Date.parse(b.observedAt) || a.snapshotId.localeCompare(b.snapshotId, undefined, { numeric: true }));
+  const items = chronological(first.items);
   const publication=first.publication;
   // Остальные три запроса читают тот же снимок, что и история. Ревизия набора
   // данных на проде меняется каждые две секунды, и без закрепления примерно

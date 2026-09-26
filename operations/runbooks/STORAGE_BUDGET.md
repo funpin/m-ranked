@@ -349,10 +349,11 @@ journalctl -u m-ranked-target-maintenance -u m-ranked-target-dump-backup --since
 Before installing the observation unit, create its state/textfile directories.
 Before release GC, set explicit protected/approved basenames in its env and
 recheck units and container mounts. GC is not a deployment tool.
-The prepared GC unit's empty capability set still needs validation against
-cross-UID `/proc` reads: a successful root-shell dry-run does not prove the
-sandboxed service can inspect every process. It must fail closed on unreadable
-references; resolve and test the unit sandbox before deploying it.
+Resolved 24.09: under the unit sandbox with an empty capability set the GC
+could not read cross-UID `/proc/<pid>/cwd|exe` and refused (fail closed) on
+every run. The unit now keeps exactly `CAP_SYS_PTRACE CAP_DAC_READ_SEARCH`;
+a sandboxed dry-run with these two found every in-use, rollback and young
+release. Removal needs neither: release directories are root-owned.
 
 The minimal unresolved product concession is a finite S2 detailed-observation
 horizon or finite total collection volume. At .43–1.47 GB/day even a 30d extension

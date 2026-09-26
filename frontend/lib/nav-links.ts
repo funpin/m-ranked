@@ -2,8 +2,13 @@
  *  клиентской шапке, и серверной заглушке — а через границу клиента можно
  *  передавать только компоненты, но не обычные значения. */
 export const NAV_LINKS = [
-  { href: "/", label: "Обзор" },
+  { href: "/rating", label: "Рейтинг" },
   { href: "/statistics", label: "Статистика" },
   { href: "/compare", label: "Сравнение" },
-  { href: "/manage", label: "Управление" },
+  // Методология одна на все площадки: параметр площадки ей не передаётся.
+  { href: "/methodology", label: "Методология", platformless: true },
+  // Служебный раздел: на широком экране — значок справа, в мобильном меню — текст.
+  { href: "/manage", label: "Управление", utility: true },
 ] as const;
+
+export const MANAGE_LINK = NAV_LINKS[NAV_LINKS.length - 1];

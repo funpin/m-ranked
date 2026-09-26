@@ -42,10 +42,13 @@
   /* Цвета площадок. Оттенки взяты по смыслу названий — cyan, blue, indigo,
      violet, — а светлота подобрана так, чтобы подпись держала контраст на
      собственной подложке той же краски. */
-  --platform-telegram: oklch(0.52 0.11 215);
-  --platform-vk: oklch(0.52 0.19 260);
-  --platform-max: oklch(0.50 0.20 277);
-  --platform-rutube: oklch(0.52 0.23 294);
+  /* Фирменные оттенки площадок (брендбуки: Telegram #229ED9, VK #0077FF,
+     MAX #6E1AFF, RUTUBE #ED143B). Светлота снижена до читаемой на белом:
+     эти цвета стоят и на подписях, а не только на графиках. */
+  --platform-telegram: oklch(0.55 0.13 236);
+  --platform-vk: oklch(0.55 0.21 258);
+  --platform-max: oklch(0.52 0.27 287);
+  --platform-rutube: oklch(0.55 0.22 22);
 
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -109,10 +112,10 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
 
-  --platform-telegram: oklch(0.79 0.12 215);
-  --platform-vk: oklch(0.72 0.16 260);
-  --platform-max: oklch(0.71 0.17 277);
-  --platform-rutube: oklch(0.74 0.18 294);
+  --platform-telegram: oklch(0.76 0.12 236);
+  --platform-vk: oklch(0.72 0.16 258);
+  --platform-max: oklch(0.72 0.18 287);
+  --platform-rutube: oklch(0.72 0.17 22);
 
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
@@ -160,6 +163,7 @@
 
   --font-sans: var(--font-sans);
   --font-heading: var(--font-heading);
+  --font-mono: var(--font-mono);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

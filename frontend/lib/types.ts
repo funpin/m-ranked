@@ -34,33 +34,9 @@ export type LegacyAccountType = "channels" | "platform_accounts";
 
 export type AccountView = components["schemas"]["Account"];
 
-export type ComparisonHorizon = 24 | 48 | 72 | 168 | 336;
-export type ComparisonMetric = "views" | "reactions" | "comments" | "shares";
-export type ComparisonAggregation = "sum" | "median";
-export type ComparisonSelectionType = "channels" | "institutions";
-export const MAX_COMPARISON_INSTITUTIONS = 20;
-export const COMPARISON_PAGE_SIZE = 20;
 export const ACCOUNT_PUBLICATION_LIMIT = 100;
 export const INSTITUTION_ACCOUNT_LIMIT = 50;
 export const FULL_PUBLICATION_HISTORY_LIMIT = 3_000;
-
-export interface ComparisonRequest {
-  platform: Exclude<Platform, "all">;
-  horizonHours: ComparisonHorizon;
-  includePartial: boolean;
-  metric: ComparisonMetric;
-  aggregation: ComparisonAggregation;
-  institutionLimit?: number;
-  selectionCursor?: string;
-  institutions?: readonly number[];
-  channels?: readonly number[];
-}
-
-export type ComparisonPoint = components["schemas"]["ComparisonPoint"];
-
-export type ComparisonSeries = components["schemas"]["ComparisonSeries"];
-
-export type ComparisonView = components["schemas"]["Comparison"];
 
 export type StatisticsView = "publications" | "entities";
 export type StatisticsPublicationSort =

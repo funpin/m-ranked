@@ -1,7 +1,7 @@
 import Link from "@/components/native-link";
 import { queryHref } from "@/lib/params";
 import type { Platform } from "@/lib/types";
-import { NAV_LINKS } from "@/lib/nav-links";
+import { MANAGE_LINK, NAV_LINKS } from "@/lib/nav-links";
 import { HeaderUtilityActions } from "@/components/header-utility-actions";
 import { BrandLogo } from "@/components/brand-logo";
 
@@ -23,8 +23,8 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
         <Link
           data-testid="brand"
           className="flex shrink-0 items-center no-underline"
-          href={queryHref("/", { platform })}
-          aria-label="m-ranked — обзор"
+          href="/"
+          aria-label="m-ranked — на главную"
         >
           <BrandLogo />
         </Link>
@@ -32,14 +32,14 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
-              href={queryHref(link.href, { platform })}
-              className="text-muted-foreground rounded-md px-3 py-1.5 text-[0.875rem] font-medium no-underline transition-colors"
+              href={"platformless" in link ? link.href : queryHref(link.href, { platform })}
+              className={`${"utility" in link ? "min-[781px]:hidden " : ""}text-muted-foreground rounded-md px-3 py-1.5 text-[0.875rem] font-medium no-underline transition-colors`}
             >
               {link.label}
             </Link>
           ))}
         </div>
-        <HeaderUtilityActions />
+        <HeaderUtilityActions manageHref={queryHref(MANAGE_LINK.href, { platform })} />
       </div>
     </nav>
   );

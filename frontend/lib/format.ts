@@ -159,3 +159,13 @@ export function axisNumber(value: unknown) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "";
   return Math.abs(value) < 10_000 ? value.toLocaleString("ru-RU") : compactAxisNumber.format(value);
 }
+
+/** Русское согласование с числом: 1 канал, 2 канала, 5 каналов. */
+export function plural(value: number, one: string, few: string, many: string) {
+  const mod100 = Math.abs(value) % 100;
+  const mod10 = mod100 % 10;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}

@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="https://m.funpin.org/"><img alt="Production" src="https://img.shields.io/badge/production-m.funpin.org-0082FE?style=flat-square"></a>
-  <a href="https://github.com/funpin/m-ranked/actions/workflows/ci.yml"><img alt="Build and contract gates" src="https://github.com/funpin/m-ranked/actions/workflows/ci.yml/badge.svg?branch=alpha"></a>
+  <a href="https://github.com/funpin/m-ranked/actions/workflows/ci.yml"><img alt="Build and contract gates" src="https://github.com/funpin/m-ranked/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <img alt="Python 3.13" src="https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white">
   <img alt="FastAPI 0.141" src="https://img.shields.io/badge/FastAPI-0.141-009688?style=flat-square&amp;logo=fastapi&amp;logoColor=white">
   <img alt="Node.js 24" src="https://img.shields.io/badge/Node.js-24-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white">
@@ -35,7 +35,11 @@ Production-стек один:
 - платформенные Python-сборщики в `collector_target/` и `collector_runtime/`;
 - PostgreSQL 18 со схемой из `db/migrations/`;
 - Next.js в `frontend/`;
-- in-process LRU-кэш с инвалидацией через PostgreSQL `LISTEN/NOTIFY`.
+- кэш ответов API: на одном сервере — в памяти процесса, в профиле двух
+  серверов — общий Redis; инвалидация через PostgreSQL `LISTEN/NOTIFY`
+  ([ADR-011](docs/architecture/adr/ADR-011-shared-response-cache.md));
+- nginx в два слоя: кэш готовых страниц и шлюз рендера с пулами для людей
+  и роботов ([трафик и роботы](operations/runbooks/TRAFFIC.md)).
 
 Публичный адрес: [m.funpin.org](https://m.funpin.org).
 
@@ -81,4 +85,7 @@ frontend-тестами.
 - [raw transfer protocol](docs/architecture/raw-data-transfer.md);
 - [развёртывание](operations/runbooks/DEPLOY.md);
 - [backup и restore](operations/runbooks/BACKUP_RESTORE.md);
+- [трафик, роботы, кэш страниц и тревоги](operations/runbooks/TRAFFIC.md);
+- [бюджет хранения](operations/runbooks/STORAGE_BUDGET.md);
+- [анализ аномалий](operations/runbooks/ANOMALY.md);
 - [правила участия](CONTRIBUTING.md).

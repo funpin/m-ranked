@@ -1,0 +1,11 @@
+[Unit]
+Description=M-Ranked alerts every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Unit=m-ranked-target-alerts.service
+
+[Install]
+WantedBy=timers.target

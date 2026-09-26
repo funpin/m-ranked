@@ -11,6 +11,7 @@ import { normalizeHistoryLimit, queryHref, type SearchParams } from "@/lib/param
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
 import { anomalyReportVisible } from "@/lib/anomaly-visibility";
 import { loadNeighborContext } from "@/lib/neighbor-context-loader";
+import { previewHistory } from "@/lib/history-data";
 
 export const dynamic = "force-dynamic";
 
@@ -59,5 +60,8 @@ export default async function PublicationPage({ params, searchParams }: Props) {
         return { ...load, neighborContextFailed: true };
       }
     }) : analysis;
-  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={contextualAnalysis} />;
+  // В первый ответ — только то, что видно сразу; остальное браузер догрузит.
+  const preview = previewHistory(history.items, historyLimit);
+  return <PublicationDetail history={{ ...history, items: preview.rows }} historyLimit={historyLimit} analysis={contextualAnalysis}
+    sampledIds={preview.sampledIds} totalPoints={preview.totalPoints} />;
 }

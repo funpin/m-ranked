@@ -1,0 +1,11 @@
+[Unit]
+Description=M-Ranked ready history pages every 10 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=10min
+RandomizedDelaySec=1min
+Unit=m-ranked-target-history-pages.service
+
+[Install]
+WantedBy=timers.target

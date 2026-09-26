@@ -94,3 +94,33 @@ groups:
           summary: The nightly anomaly norm rebuild has not completed for two days.
       - record: mranked_ops_inserted_rows_per_day
         expr: sum(rate(mranked_ops_inserted_rows_total[1h])) * 86400
+  - name: m-ranked-storage
+    rules:
+      - alert: MRankedBackupStale
+        expr: time() - mranked_backup_last_success_unixtime > 36 * 3600
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: No successful full database dump for more than 36 hours.
+      - alert: MRankedStorageReserveLow
+        expr: mranked_storage_heavy_job_allowed == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Free disk is below the operating reserve plus the next heavy job; backups and backfills will refuse to start.
+      - alert: MRankedDockerReclaimable
+        expr: mranked_host_docker_reclaimable_bytes > 5e9
+        for: 6h
+        labels:
+          severity: info
+        annotations:
+          summary: Docker could free more than 5 GB; review exact image IDs (other projects share the host, no automatic prune).
+      - alert: MRankedHostGcStale
+        expr: time() - mranked_host_gc_last_run_unixtime > 3 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: Release garbage collection has not run for three days.

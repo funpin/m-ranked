@@ -1,7 +1,9 @@
 """Публичные запросы: ревизия, обзор, сущности, история."""
 from __future__ import annotations
 
+import json
 import uuid
+import zlib
 from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -374,27 +376,42 @@ async def publication_history(
                 raise BadRequest("курсор истории повреждён")
             after_snapshot_id = parsed.int
         published_month = publication_row["published_at"].date().replace(day=1)
-        rows = await db.fetch_all(details.HISTORY, {
+        # Первая страница поста с законченным сбором — из готовой выдачи
+        # (миграция 0043), если снимки с тех пор не менялись: живой расчёт
+        # стоит около секунды базы, а роботы открывают каждый пост по разу.
+        stored = None if cursor_id is not None else await db.fetch_one(details.STORED_HISTORY, {
             "publication_id": publication_id, "published_month": published_month,
-            "as_of": committed_at, "after_snapshot_id": after_snapshot_id,
-            "fetch_limit": page_size + 1,
         })
-        has_more = len(rows) > page_size
-        visible = rows[:page_size]
-        coverage_from = visible[-1]["observed_at"] if visible else publication_row["published_at"]
+        if stored is not None:
+            ready = json.loads(zlib.decompress(stored["payload"]))
+            has_more = len(ready) > page_size
+            items = ready[:page_size]
+            coverage_from = items[-1]["observedAt"] if items else publication_row["published_at"]
+            last_snapshot = int(items[-1]["snapshotId"]) if has_more and items else None
+        else:
+            rows = await db.fetch_all(details.HISTORY, {
+                "publication_id": publication_id, "published_month": published_month,
+                "as_of": committed_at, "after_snapshot_id": after_snapshot_id,
+                "fetch_limit": page_size + 1,
+            })
+            has_more = len(rows) > page_size
+            visible = rows[:page_size]
+            items = [dto.history_snapshot(row) for row in visible]
+            coverage_from = visible[-1]["observed_at"] if visible else publication_row["published_at"]
+            last_snapshot = int(visible[-1]["snapshot_id"]) if has_more and visible else None
         coverage_row = await db.fetch_one(details.COLLECTOR_COVERAGE, {
             "publication_id": publication_id,
             "from_at": coverage_from,
             "as_of": committed_at,
             "expected_interval_seconds": COLLECTOR_INTERVAL_SECONDS[publication_row["platform"]],
         })
-        cursor_uuid = str(uuid.UUID(int=int(visible[-1]["snapshot_id"]))) if has_more and visible else None
+        cursor_uuid = str(uuid.UUID(int=last_snapshot)) if last_snapshot is not None else None
         neighbours = await db.fetch_one(details.NEIGHBOURS, {
             "publication_id": publication_id, "legacy_type": canonical_type,
         })
         return {
             "publication": dto.publication(publication_row, revision),
-            "items": [dto.history_snapshot(row) for row in visible],
+            "items": items,
             "collectorCoverage": dto.collector_coverage(coverage_row),
             "previousLegacyId": neighbours["previous"] if neighbours else None,
             "nextLegacyId": neighbours["next"] if neighbours else None,

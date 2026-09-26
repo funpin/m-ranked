@@ -1,0 +1,1303 @@
+{
+  "sourceSha256": "7e54bdeae0980fe415b450c138552449b037ffe6f2b1a3f14c89d08c40c15a10",
+  "version": "1.0.0",
+  "operations": [
+    {
+      "operationId": "getDatasetRevision",
+      "path": "/api/v1/revision",
+      "summary": "Authoritative published projection revision",
+      "parameters": [],
+      "response": "DatasetRevision",
+      "fields": [
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "representationVersion",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "operationId": "getOverview",
+      "path": "/api/v1/overview",
+      "summary": "Page through institution metrics",
+      "parameters": [
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "period",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "3h",
+            "1d",
+            "7d",
+            "30d"
+          ],
+          "default": "1d"
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "default": ""
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "name",
+            "median_reactions",
+            "m_rating",
+            "reactions",
+            "views",
+            "posts",
+            "subscribers",
+            "coverage",
+            "accounts"
+          ],
+          "default": "median_reactions"
+        },
+        {
+          "name": "direction",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ]
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "OverviewPage",
+      "fields": [
+        {
+          "name": "items",
+          "type": "object[]"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "integrationStatus",
+          "type": "string"
+        },
+        {
+          "name": "integrationWarning",
+          "type": "string | null"
+        }
+      ]
+    },
+    {
+      "operationId": "getInstitution",
+      "path": "/api/v1/institutions/{legacyId}",
+      "summary": "Resolve a legacy institution id and return its metrics",
+      "parameters": [
+        {
+          "name": "legacyId",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "period",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "3h",
+            "1d",
+            "7d",
+            "30d"
+          ],
+          "default": "1d"
+        }
+      ],
+      "response": "Institution",
+      "fields": [
+        {
+          "name": "institutionId",
+          "type": "uuid"
+        },
+        {
+          "name": "legacyId",
+          "type": "integer"
+        },
+        {
+          "name": "canonicalName",
+          "type": "string"
+        },
+        {
+          "name": "shortName",
+          "type": "string | null"
+        },
+        {
+          "name": "platform",
+          "type": "string"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "metrics",
+          "type": "object"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
+      "operationId": "getPublication",
+      "path": "/api/v1/publications/{legacyId}",
+      "summary": "Resolve a legacy publication id and return latest independent counters",
+      "parameters": [
+        {
+          "name": "revision",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "legacyId",
+          "in": "path",
+          "required": true,
+          "type": "uuid | integer"
+        },
+        {
+          "name": "legacyType",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "posts",
+            "platform_posts"
+          ],
+          "default": "posts"
+        }
+      ],
+      "response": "Publication",
+      "fields": [
+        {
+          "name": "publicationId",
+          "type": "uuid"
+        },
+        {
+          "name": "legacyId",
+          "type": "integer"
+        },
+        {
+          "name": "legacyType",
+          "type": "string"
+        },
+        {
+          "name": "institutionId",
+          "type": "uuid"
+        },
+        {
+          "name": "platform",
+          "type": "string"
+        },
+        {
+          "name": "publishedAt",
+          "type": "date-time"
+        },
+        {
+          "name": "publicationType",
+          "type": "string"
+        },
+        {
+          "name": "deletedAt",
+          "type": "string | null"
+        },
+        {
+          "name": "views",
+          "type": "object"
+        },
+        {
+          "name": "reactions",
+          "type": "object"
+        },
+        {
+          "name": "comments",
+          "type": "object"
+        },
+        {
+          "name": "shares",
+          "type": "object"
+        },
+        {
+          "name": "quality",
+          "type": "string | null"
+        },
+        {
+          "name": "intervalUncertain",
+          "type": "boolean"
+        },
+        {
+          "name": "synthetic",
+          "type": "boolean"
+        },
+        {
+          "name": "historyCompleteness",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "accountLegacyId",
+          "type": "integer | null"
+        },
+        {
+          "name": "accountLegacyType",
+          "type": "string | null"
+        },
+        {
+          "name": "accountName",
+          "type": "string | null"
+        },
+        {
+          "name": "accountUsername",
+          "type": "string | null"
+        },
+        {
+          "name": "externalId",
+          "type": "string | null"
+        },
+        {
+          "name": "publicUrl",
+          "type": "string | null"
+        },
+        {
+          "name": "displayExternalId",
+          "type": "string | null"
+        },
+        {
+          "name": "repost",
+          "type": "boolean"
+        },
+        {
+          "name": "joint",
+          "type": "boolean"
+        },
+        {
+          "name": "additionalAuthorCount",
+          "type": "integer"
+        },
+        {
+          "name": "ambiguousAlbumReactions",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "operationId": "getPublicationAnomalyAnalysis",
+      "path": "/api/v1/publications/{legacyId}/anomaly-analysis",
+      "summary": "Read the current anomaly-dynamics verdict of a publication",
+      "parameters": [
+        {
+          "name": "legacyId",
+          "in": "path",
+          "required": true,
+          "type": "uuid | integer"
+        },
+        {
+          "name": "legacyType",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "posts",
+            "platform_posts"
+          ],
+          "default": "posts"
+        }
+      ],
+      "response": "PublicationAnomalyAnalysis",
+      "fields": [
+        {
+          "name": "publicationId",
+          "type": "uuid"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        },
+        {
+          "name": "level",
+          "type": "integer | null"
+        },
+        {
+          "name": "levelLabel",
+          "type": "string"
+        },
+        {
+          "name": "levelSymbol",
+          "type": "string"
+        },
+        {
+          "name": "signals",
+          "type": "object[]"
+        },
+        {
+          "name": "quality",
+          "type": "object | null"
+        },
+        {
+          "name": "analyzedAt",
+          "type": "string | null"
+        },
+        {
+          "name": "lagSeconds",
+          "type": "integer | null"
+        },
+        {
+          "name": "normVersion",
+          "type": "integer | null"
+        },
+        {
+          "name": "detectorVersions",
+          "type": "object"
+        },
+        {
+          "name": "reviewStatus",
+          "type": "string"
+        },
+        {
+          "name": "methodologyVersion",
+          "type": "string"
+        },
+        {
+          "name": "disclaimer",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "operationId": "getAccountAnomalyLevels",
+      "path": "/api/v1/accounts/{accountId}/anomaly-levels",
+      "summary": "Read the anomaly-dynamics levels of an account's analyzed publications",
+      "parameters": [
+        {
+          "name": "accountId",
+          "in": "path",
+          "required": true,
+          "type": "uuid"
+        }
+      ],
+      "response": "AccountAnomalyLevels",
+      "fields": [
+        {
+          "name": "accountId",
+          "type": "uuid"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "items",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getStatistics",
+      "path": "/api/v1/statistics",
+      "summary": "Read bounded cumulative publication statistics",
+      "parameters": [
+        {
+          "name": "view",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "publications",
+            "entities"
+          ],
+          "default": "publications"
+        },
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "period",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "3h",
+            "1d",
+            "7d",
+            "30d"
+          ]
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "publication_sort",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "erv",
+            "views",
+            "interactions",
+            "published_at"
+          ],
+          "default": "erv"
+        },
+        {
+          "name": "publication_direction",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "desc"
+        },
+        {
+          "name": "entity_sort",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "erv",
+            "median_interactions",
+            "interactions",
+            "views",
+            "publications"
+          ],
+          "default": "erv"
+        },
+        {
+          "name": "entity_direction",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "desc"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 50
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "Statistics",
+      "fields": [
+        {
+          "name": "view",
+          "type": "string"
+        },
+        {
+          "name": "platform",
+          "type": "string"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "q",
+          "type": "string"
+        },
+        {
+          "name": "publicationSort",
+          "type": "string"
+        },
+        {
+          "name": "publicationDirection",
+          "type": "string"
+        },
+        {
+          "name": "entitySort",
+          "type": "string"
+        },
+        {
+          "name": "entityDirection",
+          "type": "string"
+        },
+        {
+          "name": "sections",
+          "type": "object[]"
+        },
+        {
+          "name": "entities",
+          "type": "object[]"
+        },
+        {
+          "name": "limit",
+          "type": "integer"
+        },
+        {
+          "name": "offset",
+          "type": "integer"
+        },
+        {
+          "name": "hasMore",
+          "type": "boolean"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
+      "operationId": "getComparisonCandidates",
+      "path": "/api/v1/compare/candidates",
+      "summary": "Revision-pinned comparison selector candidates",
+      "parameters": [
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "telegram"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "ComparisonCandidatePage",
+      "fields": [
+        {
+          "name": "items",
+          "type": "object[]"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
+      "operationId": "getComparisonDashboard",
+      "path": "/api/v1/compare/dashboard",
+      "summary": "Read the all-institution comparison dashboard",
+      "parameters": [
+        {
+          "name": "period",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "7d",
+            "30d"
+          ],
+          "default": "30d"
+        }
+      ],
+      "response": "ComparisonDashboard",
+      "fields": [
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "hours",
+          "type": "integer[]"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "institutions",
+          "type": "object[]"
+        },
+        {
+          "name": "stats",
+          "type": "object[]"
+        },
+        {
+          "name": "curves",
+          "type": "object[]"
+        },
+        {
+          "name": "daily",
+          "type": "object[]"
+        },
+        {
+          "name": "timing",
+          "type": "object[]"
+        },
+        {
+          "name": "types",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getSiteSummary",
+      "path": "/api/v1/site/summary",
+      "summary": "Read the home page summary",
+      "parameters": [],
+      "response": "SiteSummary",
+      "fields": [
+        {
+          "name": "available",
+          "type": "boolean"
+        },
+        {
+          "name": "institutions",
+          "type": "integer | null"
+        },
+        {
+          "name": "accounts",
+          "type": "integer | null"
+        },
+        {
+          "name": "accountsByPlatform",
+          "type": "object"
+        },
+        {
+          "name": "publications",
+          "type": "integer | null"
+        },
+        {
+          "name": "snapshots",
+          "type": "integer | null"
+        },
+        {
+          "name": "computedAt",
+          "type": "string | null"
+        }
+      ]
+    },
+    {
+      "operationId": "getComparison",
+      "path": "/api/v1/compare",
+      "summary": "Read one fixed-cohort comparison",
+      "parameters": [
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "telegram"
+        },
+        {
+          "name": "horizonHours",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "enum": [
+            24,
+            48,
+            72,
+            168,
+            336
+          ],
+          "default": 72
+        },
+        {
+          "name": "includePartial",
+          "in": "query",
+          "required": false,
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "name": "metric",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "views",
+            "reactions",
+            "comments",
+            "shares"
+          ],
+          "default": "reactions"
+        },
+        {
+          "name": "aggregation",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "sum",
+            "median"
+          ],
+          "default": "median"
+        },
+        {
+          "name": "institutionLimit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 25,
+          "minimum": 1,
+          "maximum": 50
+        },
+        {
+          "name": "channels",
+          "in": "query",
+          "required": false,
+          "type": "integer[]"
+        },
+        {
+          "name": "institutions",
+          "in": "query",
+          "required": false,
+          "type": "integer[]"
+        },
+        {
+          "name": "selectionCursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "Comparison",
+      "fields": [
+        {
+          "name": "nextSelectionCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "cohortId",
+          "type": "uuid"
+        },
+        {
+          "name": "platform",
+          "type": "string"
+        },
+        {
+          "name": "horizonHours",
+          "type": "integer"
+        },
+        {
+          "name": "includePartial",
+          "type": "boolean"
+        },
+        {
+          "name": "metric",
+          "type": "string"
+        },
+        {
+          "name": "aggregation",
+          "type": "string"
+        },
+        {
+          "name": "selectionType",
+          "type": "string"
+        },
+        {
+          "name": "cohortSampleSize",
+          "type": "integer"
+        },
+        {
+          "name": "series",
+          "type": "object[]"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
+      "operationId": "getAccount",
+      "path": "/api/v1/accounts/{legacyId}",
+      "summary": "Resolve a legacy channel or platform-account id",
+      "parameters": [
+        {
+          "name": "revision",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "legacyId",
+          "in": "path",
+          "required": true,
+          "type": "uuid | integer"
+        },
+        {
+          "name": "legacyType",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "channels",
+            "platform_accounts"
+          ],
+          "default": "platform_accounts"
+        }
+      ],
+      "response": "Account",
+      "fields": [
+        {
+          "name": "accountId",
+          "type": "uuid"
+        },
+        {
+          "name": "legacyId",
+          "type": "integer"
+        },
+        {
+          "name": "legacyType",
+          "type": "string"
+        },
+        {
+          "name": "channelLegacyId",
+          "type": "integer | null"
+        },
+        {
+          "name": "platformAccountLegacyId",
+          "type": "integer | null"
+        },
+        {
+          "name": "institutionId",
+          "type": "uuid"
+        },
+        {
+          "name": "institutionLegacyId",
+          "type": "integer"
+        },
+        {
+          "name": "institutionName",
+          "type": "string"
+        },
+        {
+          "name": "institutionShortName",
+          "type": "string | null"
+        },
+        {
+          "name": "platform",
+          "type": "string"
+        },
+        {
+          "name": "canonicalExternalId",
+          "type": "string"
+        },
+        {
+          "name": "username",
+          "type": "string | null"
+        },
+        {
+          "name": "title",
+          "type": "string | null"
+        },
+        {
+          "name": "url",
+          "type": "string | null"
+        },
+        {
+          "name": "archiveUrl",
+          "type": "string | null"
+        },
+        {
+          "name": "accessMode",
+          "type": "string"
+        },
+        {
+          "name": "enabled",
+          "type": "boolean"
+        },
+        {
+          "name": "publicationCount",
+          "type": "integer"
+        },
+        {
+          "name": "latestObservedAt",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        },
+        {
+          "name": "stats",
+          "type": "object | null"
+        }
+      ]
+    },
+    {
+      "operationId": "getAccountPublications",
+      "path": "/api/v1/accounts/{legacyId}/publications",
+      "summary": "Revision-pinned bounded account detail continuation",
+      "parameters": [
+        {
+          "name": "revision",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "legacyId",
+          "in": "path",
+          "required": true,
+          "type": "uuid | integer"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "legacyType",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "channels",
+            "platform_accounts"
+          ],
+          "default": "platform_accounts"
+        },
+        {
+          "name": "day",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "AccountPublicationPage",
+      "fields": [
+        {
+          "name": "items",
+          "type": "object[]"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
+      "operationId": "getInstitutionAccounts",
+      "path": "/api/v1/institutions/{legacyId}/accounts",
+      "summary": "Revision-pinned bounded institution detail continuation",
+      "parameters": [
+        {
+          "name": "revision",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "legacyId",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "all"
+        }
+      ],
+      "response": "InstitutionAccountsPage",
+      "fields": [
+        {
+          "name": "items",
+          "type": "object[]"
+        },
+        {
+          "name": "legacyTotalAccountCount",
+          "type": "integer"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
+      "operationId": "getPublicationHistory",
+      "path": "/api/v1/publications/{legacyId}/history",
+      "summary": "Revision-pinned bounded publication detail continuation",
+      "parameters": [
+        {
+          "name": "legacyId",
+          "in": "path",
+          "required": true,
+          "type": "uuid | integer"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 200,
+          "minimum": 1,
+          "maximum": 3000
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "legacyType",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "posts",
+            "platform_posts"
+          ],
+          "default": "posts"
+        }
+      ],
+      "response": "PublicationHistory",
+      "fields": [
+        {
+          "name": "publication",
+          "type": "object"
+        },
+        {
+          "name": "items",
+          "type": "object[]"
+        },
+        {
+          "name": "collectorCoverage",
+          "type": "object"
+        },
+        {
+          "name": "previousLegacyId",
+          "type": "integer | null"
+        },
+        {
+          "name": "nextLegacyId",
+          "type": "integer | null"
+        },
+        {
+          "name": "archivedText",
+          "type": "string | null"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    }
+  ]
+}

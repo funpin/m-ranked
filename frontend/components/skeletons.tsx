@@ -1,3 +1,4 @@
+import { CompareDashboardSkeleton } from "@/components/compare/compare-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui";
 import {
@@ -235,13 +236,13 @@ export function AccountSkeleton({ chrome = true }: { chrome?: boolean }) {
 export function skeletonFor(href: string) {
   if (!href) return null;
   const path = href.split("?")[0] ?? "";
-  if (path === "/" ) return <CardGridSkeleton />;
+  if (path === "/rating") return <CardGridSkeleton />;
   if (path.startsWith("/statistics")) {
     const view = new URL(href, "https://m-ranked.invalid").searchParams.get("view") === "entities" ? "entities" : "publications";
     return <StatisticsSkeleton view={view} />;
   }
   if (path.startsWith("/compare")) {
-    return <TableSkeleton rows={8} chrome={false} />;
+    return <CompareDashboardSkeleton />;
   }
   if (/^\/(accounts|channels|platform-accounts|institutions)\//.test(path)) return <AccountSkeleton />;
   if (/^\/(publications|posts|platform-posts)\//.test(path)) return <PublicationSkeleton />;

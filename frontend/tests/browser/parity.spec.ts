@@ -3,50 +3,57 @@ import AxeBuilder from "@axe-core/playwright";
 
 for (const platform of ["telegram", "vk", "max", "rutube"]) {
   test(`${platform} navigation preserves platform in every destination`, async ({ page }) => {
-    await page.goto(`/?platform=${platform}`);
-    await expect(page.getByTestId("brand")).toHaveAttribute("href", `/?platform=${platform}`);
+    await page.goto(`/rating?platform=${platform}`);
+    await expect(page.getByTestId("brand")).toHaveAttribute("href", "/");
+    await expect(page.locator('[data-testid="main-nav"] a[href^="/rating"]')).toHaveAttribute("href", `/rating?platform=${platform}`);
     for (const link of await page.getByTestId("main-nav").locator("a").all()) {
-      expect(new URL((await link.getAttribute("href"))!, "http://test").searchParams.get("platform")).toBe(platform);
+      const href = new URL((await link.getAttribute("href"))!, "http://test");
+      // Методология одна на все площадки и параметра не несёт.
+      expect(href.searchParams.get("platform")).toBe(href.pathname === "/methodology" ? null : platform);
     }
   });
 
-  test(`${platform} default / explicit / empty comparison`, async ({ page }) => {
-    await page.goto(`/compare?platform=${platform}&period=24`);
+  test(`${platform} comparison opens the all-institution dashboard on its platform`, async ({ page }) => {
+    // Прежние ссылки (period в часах, выбор legacy id) открывают панель, а не 422.
+    const legacy = platform === "telegram" ? "channels=2" : "institutions=2";
+    const response = await page.goto(`/compare?platform=${platform}&period=24&submitted=true&${legacy}`);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByTestId("compare-dashboard")).toBeVisible();
     await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
-    if (platform === "max") { await expect(page.getByRole("heading", { name: "Сравнение · MAX", exact: true })).toBeVisible(); return; }
-    await expect(page.getByRole("checkbox", { name: /Альфа/ })).toBeChecked();
-    await expect(page.getByRole("checkbox", { name: /Бета/ })).toBeChecked();
-    const parameter = platform === "telegram" ? "channels" : "institutions";
-    await page.goto(`/compare?platform=${platform}&period=24&submitted=true&${parameter}=2`);
-    await expect(page.getByRole("checkbox", { name: /Бета/ })).toBeChecked();
-    await page.goto(`/compare?platform=${platform}&submitted=true`);
-    await expect(page.getByText(/Выберите хотя бы один/)).toBeVisible();
-    const rejected = await page.goto(`/compare?platform=${platform}&submitted=true&${parameter}=invalid`);
-    expect(rejected?.status()).toBe(422);
+    await expect(page.getByTestId("platform-tabs").getByRole("tab", { selected: true })).toHaveAttribute("data-value", platform);
+    if (platform !== "telegram") await expect(page.getByTestId("highlight-chip")).toContainText("Бета");
   });
 }
 
-test("compare search, bulk controls, count, legend and focused point tooltip work", async ({ page }) => {
-  await page.goto("/compare?platform=vk&period=24");
-  await page.getByRole("button", { name: "Снять выбор" }).click();
-  await expect(page.getByText("Выбрано: 0 из 2")).toBeVisible();
-  await page.getByRole("searchbox").fill("Альфа");
-  await expect(page.getByRole("checkbox", { name: /Бета/ })).toBeHidden();
-  await page.getByRole("button", { name: "Выбрать все" }).click();
-  await expect(page.getByText("Выбрано: 2 из 2")).toBeVisible();
-  const legend = page.getByRole("button", { name: "Скрыть линию: Альфа Университет" }).first();
-  await legend.focus(); await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Вернуть линию: Альфа Университет" })).toHaveCount(1);
-  const point = page.getByTestId("comparison-chart").first();
-  await expect(point).toHaveAttribute("data-chart-ready", "true");
-  await point.focus();
-  await expect(page.getByRole("tooltip")).toContainText(["Выборка: 2"]);
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("tooltip")).toHaveCount(0);
+test("comparison dashboard: platform tabs, highlight, ranking metric, table sort and period", async ({ page }) => {
+  await page.goto("/compare");
+  const dashboard = page.getByTestId("compare-dashboard");
+  await expect(dashboard).toBeVisible();
+  await expect(page.getByTestId("compare-kpi")).toHaveCount(6);
+  // Все вузы без ограничения: 12 вузов фикстуры в рейтинге и в таблице.
+  await expect(page.getByTestId("compare-table").locator("tbody tr")).toHaveCount(12);
+  // На телефоне у вкладки короткая подпись «ВК», поэтому ищем по значению.
+  await page.getByTestId("platform-tabs").locator('[role="tab"][data-value="vk"]').click();
+  await expect(page).toHaveURL(/platform=vk/);
+  await page.getByTestId("highlight-search").fill("Альфа");
+  await page.getByRole("option").first().click();
+  await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
+  await expect(page).toHaveURL(/highlight=00000009-0000-4000-8000-000000000001/);
+  await expect(page.getByTestId("compare-table").locator('tr[data-highlighted="true"]')).toHaveCount(1);
+  await page.getByRole("combobox", { name: "Мера рейтинга" }).selectOption("engagement24");
+  await expect(page.getByTestId("ranking-card")).toContainText("Вовлечённость за 24 часа");
+  const table = page.getByTestId("compare-table");
+  await table.getByRole("button", { name: /Публикаций/ }).click();
+  await expect(table.getByRole("columnheader", { name: /Публикаций/ })).toHaveAttribute("aria-sort", "descending");
+  await page.getByRole("navigation", { name: "Период" }).getByRole("link", { name: "7 дней" }).click();
+  await expect(page).toHaveURL(/period=7d/);
+  await expect(page).toHaveURL(/platform=vk/);
+  await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
+  await expect(page.locator('[data-testid="ranking-chart"] .recharts-bar-rectangle').first()).toBeVisible();
 });
 
 test("form sort direction, platform autosubmit and browser history preserve fields", async ({ page }) => {
-  await page.goto("/?platform=vk&sort=subscribers&direction=desc");
+  await page.goto("/rating?platform=vk&sort=subscribers&direction=desc");
   await page.locator('select[name="sort"]').selectOption("name");
   await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
   await page.getByTestId("platform-segments").locator('label:has(input[value="rutube"])').click();
@@ -62,14 +69,13 @@ test("form sort direction, platform autosubmit and browser history preserve fiel
 test("legacy validation returns 422 and repeated scalar chooses last", async ({ request, page }) => {
   expect((await request.get(`/?q=${"a".repeat(201)}`)).status()).toBe(422);
   for (const value of ["49", "bad", "3001"]) expect((await request.get(`/posts/1?history_limit=${value}`)).status()).toBe(422);
-  await page.goto("/?platform=telegram&platform=vk");
+  await page.goto("/rating?platform=telegram&platform=vk");
   await expect(page.locator('input[name="platform"][value="vk"]')).toBeChecked();
-  await page.goto("/?platform=invalid");
+  await page.goto("/rating?platform=invalid");
   await expect(page.locator('input[name="platform"][value="telegram"]')).toBeChecked();
 });
 
-test("statistics all-platform mode has four independent publication slices", async ({ page, request }) => {
-  expect((await request.get("/rating")).status()).toBe(404);
+test("statistics all-platform mode has four independent publication slices", async ({ page }) => {
   await page.goto("/statistics?platform=all");
   await expect(page.getByRole("heading", { level: 1, name: "Статистика публикаций" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Вузы" })).toHaveCount(0);
@@ -155,7 +161,7 @@ test("statistics mobile uses cards and keeps zero distinct from unknown", async 
 
 test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/?platform=vk");
+  await page.goto("/rating?platform=vk");
   const brand = page.getByTestId("brand");
   const toggle = page.getByTestId("menu-toggle");
   const actions = page.getByTestId("header-utility-actions");
@@ -179,7 +185,7 @@ test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({
 
 test("header follows the same horizontal grid as page content", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/?platform=telegram");
+  await page.goto("/rating?platform=telegram");
   const headerInner = page.getByTestId("header-inner");
   const main = page.locator("#main-content");
   const brand = page.getByTestId("brand");
@@ -205,7 +211,7 @@ test("header follows the same horizontal grid as page content", async ({ page })
 test("brand and favicon follow viewport and explicit theme", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("m-ranked-theme", "light"));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/?platform=telegram");
+  await page.goto("/rating?platform=telegram");
   await expect(page.getByTestId("brand-logo-mark-light")).toBeVisible();
   await expect(page.getByTestId("brand-logo-wordmark")).toBeHidden();
   const favicon = page.locator('link[rel~="icon"][type="image/svg+xml"]');
@@ -268,7 +274,7 @@ test("web app manifest exposes current install icons", async ({ request }) => {
 });
 
 test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page }) => {
-  await page.goto("/?platform=telegram");
+  await page.goto("/rating?platform=telegram");
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
   await expect(page.locator('meta[name="mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "m-ranked");
@@ -290,7 +296,7 @@ test("retired export is absent from navigation and raw quality codes are absent 
 
 for (const theme of ["dark", "light"]) {
   test(`overview and interactive compare meet axe AA in ${theme} theme`, async ({ page }) => {
-    for (const path of ["/?platform=vk", "/compare?platform=vk&period=24"]) {
+    for (const path of ["/rating?platform=vk", "/compare?platform=vk"]) {
       await page.goto(path);
       // Colour transitions are still running right after the attribute flips,
       // and sampling mid-transition reports blended values that exist in
@@ -326,11 +332,11 @@ test("account list and institutional zero/one/many routes preserve identity",asy
   await page.goto("/institutions/1?platform=telegram");await expect(page).toHaveURL(/\/accounts\/00000001-0000-4000-8000-000000000001$/);
   expect((await page.goto("/institutions/3?platform=telegram"))?.status()).toBe(404);
   await page.goto("/institutions/2?platform=telegram");await expect(page).toHaveURL(/\/accounts\/00000001-0000-4000-8000-000000000001$/);
-  await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/?platform=max");
+  await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/");await expect(page.locator('[data-testid="main-nav"] a[href^="/rating"]')).toHaveAttribute("href","/rating?platform=max");
 });
 
 test("overview and statistics share one-row desktop and wrapped mobile filters",async({page},info)=>{
-  for(const path of ["/?platform=telegram","/statistics?platform=telegram"]){
+  for(const path of ["/rating?platform=telegram","/statistics?platform=telegram"]){
     await page.goto(path);
     const toolbar=page.getByTestId("filter-toolbar");
     await expect(toolbar).toBeVisible();

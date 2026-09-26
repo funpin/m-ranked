@@ -1,0 +1,184 @@
+/* Главная. Файл подключается только страницей "/", поэтому остальные
+   разделы эти правила не загружают. Всё движение — на трансформациях,
+   прозрачности и штрихах SVG; тем, кто просил меньше движения, оно
+   отключается целиком (последний блок файла). */
+
+/* Фон первого экрана выходит за ширину содержимого — на всю ширину окна.
+   Горизонтальной прокрутки не возникает: html и body обрезают выход по x. */
+.landing-bleed {
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+}
+
+/* Вуаль прячет кривые под текстом, но оставляет их справа и снизу. */
+.landing-hero-veil {
+  background:
+    radial-gradient(ellipse 70% 60% at 18% 42%, var(--background) 0%, color-mix(in oklab, var(--background) 70%, transparent) 45%, transparent 75%),
+    linear-gradient(to bottom, var(--background) 0%, transparent 22%, transparent 78%, var(--background) 100%);
+}
+
+@keyframes landing-draw { to { stroke-dashoffset: 0; } }
+
+/* Подсветка на месте трёхмерной модели: видна, пока модель грузится, и
+   остаётся фоном, если WebGL недоступен. */
+.landing-hero-glow {
+  background:
+    radial-gradient(ellipse 38% 46% at 72% 58%, color-mix(in oklch, var(--platform-max) 22%, transparent), transparent 70%),
+    radial-gradient(ellipse 30% 36% at 84% 72%, color-mix(in oklch, var(--platform-telegram) 20%, transparent), transparent 70%);
+}
+@media (max-width: 767px) {
+  .landing-hero-scene { opacity: 0.8; }
+}
+
+/* «Как есть.» — цветами площадок. Без бесконечного перелива: анимация фона
+   перерисовывала крупный заголовок каждый кадр и давала подёргивания. */
+.landing-gradient-text {
+  background: linear-gradient(100deg, var(--platform-telegram), var(--platform-vk) 35%, var(--platform-max) 65%, var(--platform-rutube));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Появление блоков при прокрутке — на временной шкале прокрутки, без
+   скриптов. Где шкалы нет (Firefox), блоки просто видны сразу. Нижняя
+   граница шкалы поднята на 12 % высоты окна: блок начинает проявляться не
+   на самом краю экрана, а чуть выше, где его уже видно целиком. */
+@keyframes landing-rise {
+  from { opacity: 0; transform: translateY(40px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes landing-parallax {
+  to { transform: translateX(-50%) translateY(14%); opacity: 0.25; }
+}
+@supports (animation-timeline: view()) {
+  .landing-reveal {
+    animation: landing-rise linear both;
+    animation-timeline: view(block 0% 12%);
+    animation-range: entry 0% entry 55%;
+  }
+  .landing-hero-parallax {
+    animation: landing-parallax linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 100vh;
+  }
+  .landing-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: landing-draw linear both;
+    animation-timeline: view(block 0% 12%);
+    animation-range: entry 20% cover 45%;
+  }
+  .landing-ticks {
+    animation: landing-rise linear both;
+    animation-timeline: view(block 0% 12%);
+    animation-range: entry 30% cover 40%;
+  }
+}
+
+/* Цветная подпись: оттенок палитры, притянутый к цвету текста, — чтобы
+   контраст держался в обеих темах. */
+.landing-tone-text {
+  color: color-mix(in oklch, var(--tone, var(--chart-1)) 68%, var(--foreground));
+}
+
+/* Карточки площадок: подсветка фирменным цветом при наведении. */
+.landing-platform {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 300ms ease;
+}
+.landing-platform::before,
+.landing-verify::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 90% at 0% 0%, color-mix(in oklch, var(--brand) 16%, transparent), transparent 60%);
+  opacity: 0;
+  transition: opacity 400ms ease;
+  pointer-events: none;
+}
+.landing-platform:hover,
+.landing-verify:hover,
+.landing-verify:focus-visible {
+  transform: translateY(-4px);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--brand) 45%, transparent),
+    0 24px 48px -28px color-mix(in oklch, var(--brand) 70%, transparent);
+}
+.landing-platform:hover::before,
+.landing-verify:hover::before,
+.landing-verify:focus-visible::before { opacity: 1; }
+.landing-platform-logo {
+  transition: transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.landing-platform:hover .landing-platform-logo {
+  transform: scale(1.08) rotate(-4deg);
+}
+
+/* Штрихи замеров: интервал задаёт густоту. */
+.landing-ticks {
+  background:
+    repeating-linear-gradient(90deg, var(--chart-1) 0 1.5px, transparent 1.5px var(--tick-gap)),
+    color-mix(in oklch, var(--chart-1) 8%, transparent);
+}
+
+/* «Проверьте всё сами»: карточки оживают при наведении. */
+.landing-verify {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 300ms ease;
+}
+.landing-doc-line {
+  transform-origin: left center;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms ease;
+}
+.landing-verify:hover .landing-doc-line:nth-child(odd) { transform: scaleX(0.88); }
+.landing-verify:hover .landing-doc-line:nth-child(3) { background-color: color-mix(in oklch, var(--chart-1) 45%, transparent); transform: none; }
+.landing-doc-mark {
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.landing-verify:hover .landing-doc-mark { transform: translateY(2.75rem); }
+
+.landing-json-line {
+  display: inline;
+  opacity: 0.35;
+  transition: opacity 300ms ease;
+}
+.landing-verify:hover .landing-json-line,
+.landing-verify:focus-visible .landing-json-line { opacity: 1; }
+@keyframes landing-caret { 50% { opacity: 0; } }
+.landing-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--chart-2);
+  animation: landing-caret 1s steps(1) infinite;
+}
+
+.landing-branch {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.landing-branch-dot {
+  opacity: 0;
+  transition: opacity 300ms ease 500ms;
+}
+.landing-verify:hover .landing-branch,
+.landing-verify:focus-visible .landing-branch { stroke-dashoffset: 0; }
+.landing-verify:hover .landing-branch-dot,
+.landing-verify:focus-visible .landing-branch-dot { opacity: 1; }
+/* На сенсорных экранах наведения нет: ветка видна сразу. */
+@media (hover: none) {
+  .landing-branch { stroke-dashoffset: 0; }
+  .landing-branch-dot, .landing-json-line { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-draw { animation: none; stroke-dashoffset: 0; }
+  .landing-caret,
+  .landing-reveal, .landing-hero-parallax, .landing-ticks { animation: none; }
+  .landing-platform, .landing-verify, .landing-platform-logo, .landing-doc-line, .landing-doc-mark,
+  .landing-branch, .landing-branch-dot, .landing-json-line { transition: none; }
+  .landing-platform:hover, .landing-verify:hover, .landing-platform:hover .landing-platform-logo { transform: none; }
+}

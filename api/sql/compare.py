@@ -322,7 +322,9 @@ DASHBOARD = _DASHBOARD_POSTS + """, dated AS (
     SELECT coalesce(platform, 'all') AS platform, weekday, hour, count(*)::integer AS posts,
            percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24
       FROM dated
-     GROUP BY GROUPING SETS ((platform, weekday, hour), (weekday, hour))
+     -- День недели NULL — все дни: медиана по часу выхода считается по самим
+     -- постам, а не сводится из медиан отдельных дней.
+     GROUP BY GROUPING SETS ((platform, weekday, hour), (weekday, hour), (platform, hour), (hour))
 ), types AS (
     SELECT coalesce(platform, 'all') AS platform, coalesce(publication_type, 'unknown') AS publication_type,
            count(*)::integer AS posts,

@@ -54,6 +54,50 @@ SELECT DISTINCT ON (target.id, snapshot.observed_at)
 """
 
 
+# Сколько точек добавилось у постов пачки после прошлого анализа — без чтения
+# рядов. Семь из восьми просроченных постов оказываются отложенными: сборщик
+# пишет только изменения, и у поста часто нет ни одной новой точки. Раньше это
+# выяснялось лишь после чтения всего ряда. Выборка та же, что у SERIES
+# (активные несинтетические снимки месяца публикации, точка — момент
+# наблюдения), поэтому решение по ней совпадает с решением по полному ряду.
+PROGRESS = """
+SELECT due.publication_id, account.platform::text AS platform,
+       fresh.new_points, fresh.first_new_at, latest.observed_at AS last_observed_at
+  FROM unnest(%(ids)s::uuid[], %(published)s::timestamptz[], %(last)s::timestamptz[])
+       AS due(publication_id, published_at, last_point_observed_at)
+  JOIN ingest.visible_publication publication ON publication.id = due.publication_id
+  JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
+ CROSS JOIN LATERAL (
+    SELECT count(DISTINCT snapshot.observed_at)::integer AS new_points,
+           min(snapshot.observed_at) AS first_new_at
+      FROM ingest.publication_metric_snapshot_active snapshot
+     WHERE snapshot.publication_id = due.publication_id
+       AND snapshot.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
+       AND snapshot.observed_at > due.last_point_observed_at
+       AND NOT snapshot.synthetic
+ ) fresh
+  LEFT JOIN LATERAL (
+    SELECT snapshot.observed_at
+      FROM ingest.publication_metric_snapshot_active snapshot
+     WHERE snapshot.publication_id = due.publication_id
+       AND snapshot.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
+       AND NOT snapshot.synthetic
+     ORDER BY snapshot.observed_at DESC
+     LIMIT 1
+ ) latest ON true
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class Progress:
+    """Точки поста после прошлого анализа: сколько, первая из них и последняя вообще."""
+
+    platform: str
+    new_points: int
+    first_new_at: datetime | None
+    last_observed_at: datetime | None
+
+
 @dataclass(frozen=True, slots=True)
 class SeriesTarget:
     publication_id: UUID
@@ -256,6 +300,18 @@ class PostgresAnomalyStore:
                 result.update({key: series_from_rows(items, collected.get(items[0]["primary_account_id"], ()))
                                for key, items in grouped.items()})
         return result
+
+    def read_progress(self, rows: Sequence[DueRow]) -> dict[UUID, Progress]:
+        """Новые точки постов с прошлого анализа; посты без прошлой точки не передаются."""
+        if not rows:
+            return {}
+        with self._factory() as connection:
+            found = connection.execute(PROGRESS, {
+                "ids": [row.publication_id for row in rows],
+                "published": [row.published_at for row in rows],
+                "last": [row.last_point_observed_at for row in rows]}).fetchall()
+        return {row["publication_id"]: Progress(row["platform"], int(row["new_points"]), row["first_new_at"],
+                                                row["last_observed_at"]) for row in found}
 
     def read_collected(self, accounts: Sequence[UUID]) -> dict[UUID, Sequence[datetime]]:
         with self._factory() as connection:

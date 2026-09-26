@@ -1,0 +1,6 @@
+# Идентификатор сборки фронтенда для ключа кэша страниц. Контекст http,
+# ставится в /etc/m-ranked/nginx/build.conf. Пишет выкатка — значение
+# frontend/.next/BUILD_ID нового релиза; после записи nginx -t и reload.
+map $host $m_ranked_build {
+    default "REPLACE-WITH-BUILD-ID";
+}

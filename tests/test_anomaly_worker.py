@@ -9,7 +9,7 @@ from anomaly_analysis.metrics import write_textfile
 from anomaly_analysis.v2.domain import Level
 from anomaly_analysis.v2.schedule import ScheduleConfig
 from anomaly_analysis.v2.series import CollectionCadence
-from anomaly_analysis.v2.store import DueRow
+from anomaly_analysis.v2.store import DueRow, Progress
 from anomaly_analysis.v2.worker import Worker
 from anomaly_reference.mature_norms import synthetic_cases
 
@@ -20,6 +20,8 @@ class FakeStore:
         self.due = list(due)
         self.norm_version = norm_version
         self.written, self.postponed, self.rechecks = [], [], []
+        self.series_reads: list = []
+        self.progress_enabled = True
 
     def seed_new(self, now, window, limit):
         return 0
@@ -41,7 +43,22 @@ class FakeStore:
         taken = [row for row in self.due if row.next_due_at <= now][:limit]
         return sorted(taken, key=lambda row: row.published_at, reverse=True)
 
+    def read_progress(self, rows):
+        # Считается из тех же рядов, что читает read_series, — как в базе.
+        if not self.progress_enabled:
+            return {}
+        found = {}
+        for row in rows:
+            subject = self.series.get(row.publication_id)
+            if subject is None:
+                continue
+            new = [at for at in subject.observed_at if at > row.last_point_observed_at]
+            found[row.publication_id] = Progress(subject.platform, len(new), new[0] if new else None,
+                                                 subject.observed_at[-1] if subject.observed_at else None)
+        return found
+
     def read_series(self, targets):
+        self.series_reads.extend(target.publication_id for target in targets)
         return {target.publication_id: self.series[target.publication_id]
                 for target in targets if target.publication_id in self.series}
 
@@ -104,6 +121,35 @@ def test_without_three_new_points_the_post_is_only_postponed():
     store = FakeStore({subject.publication_id: subject}, [row])
     _worker(store, now).run_once()
     assert not store.written and store.postponed and store.postponed[0][1] > now
+    # Отложен без чтения ряда: новых точек мало видно и без него.
+    assert store.series_reads == []
+
+
+def test_postponing_without_the_series_decides_exactly_like_the_series():
+    cases = synthetic_cases()
+    rows, series = [], {}
+    for name in ("honest_organic_vk", "honest_organic_telegram", "p01_linear_feed_vk", "honest_organic_max"):
+        subject = cases[name].subject
+        series[subject.publication_id] = subject
+        points = subject.observed_at
+        now = points[-1] + timedelta(minutes=20)
+        # Прошлая точка: последняя, предпоследняя, три назад и далеко в прошлом —
+        # от «новых точек нет» до «пора анализировать» и «сбор возобновился».
+        for index, back in enumerate((1, 2, 4, len(points) // 2)):
+            rows.append(DueRow(UUID(int=len(rows) + 1), subject.published_at, now, now - timedelta(hours=2),
+                               points[-back], None, 0, ()))
+            series[rows[-1].publication_id] = replace(subject, publication_id=rows[-1].publication_id)
+    outcomes = []
+    for enabled in (True, False):
+        for row in rows:
+            store = FakeStore(series, [row])
+            store.progress_enabled = enabled
+            _worker(store, row.next_due_at).run_once()
+            outcomes.append((row.publication_id, tuple(store.postponed),
+                             tuple((write.next_due_at, write.reason) for write in store.written)))
+    half = len(outcomes) // 2
+    assert outcomes[:half] == outcomes[half:]
+    assert any(item[1] for item in outcomes[:half]) and any(item[2] for item in outcomes[:half])
 
 
 def test_catch_up_analyzes_each_overdue_post_once():

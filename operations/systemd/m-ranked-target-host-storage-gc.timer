@@ -1,8 +1,8 @@
 [Unit]
-Description=Prune old M-Ranked host artifacts weekly
+Description=Prune old M-Ranked releases daily
 
 [Timer]
-OnCalendar=Sun *-*-* 04:45:00 UTC
+OnCalendar=*-*-* 04:45:00 UTC
 Persistent=true
 RandomizedDelaySec=15min
 AccuracySec=1min
