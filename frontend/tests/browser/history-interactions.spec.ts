@@ -85,6 +85,12 @@ test("publication shows a collapsed analysis card that expands and marks signals
   await card.getByRole("button",{name:/Исходные сигналы/}).click();
   await expect(card.getByTestId("anomaly-signal")).toHaveCount(2);
   await expect(card.locator("code").first()).toContainText("Δпросмотры ≈ 10·t");
+  const firstMini = card.getByRole("img", { name: /Линейная подача:/ }).first();
+  await expect(firstMini.locator("svg text").first()).toBeVisible();
+  const miniTicks = (await firstMini.locator("svg text").allTextContents())
+    .map((value) => Number(value.replace(/\s/g, "")));
+  expect(miniTicks.length).toBeGreaterThan(1);
+  expect(Math.min(...miniTicks)).toBeGreaterThan(0);
   await expect(card).toContainText("пост долго показывался в рекомендациях");
   // Справка — под значком «i», а не в теле карточки.
   await expect(card.getByTestId("anomaly-quality")).toHaveCount(0);
@@ -92,12 +98,13 @@ test("publication shows a collapsed analysis card that expands and marks signals
   await expect(page.getByRole("dialog",{name:"Анализ динамики"})).toContainText("Аномалия не доказывает накрутку");
   await expect(page.getByTestId("anomaly-quality")).toBeVisible();
   await page.mouse.move(0,0);
-  // Значки признаков стоят на обоих основных графиках, по одному на признак.
+  // Пересекающиеся интервалы объединены в одну спокойную полосу на график.
   await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
-  await expect(page.locator("g[data-signal-marker]")).toHaveCount(4);
-  await expect(page.locator("g[data-signal-marker] svg.lucide").first()).toBeAttached();
+  await expect(page.locator("path[data-signal-band]")).toHaveCount(2);
+  await expect(page.locator("g.signal-markers[data-signal-count='2']")).toHaveCount(2);
+  await expect(page.locator("rect[data-signal-highlight]")).toHaveCount(0);
   await card.getByRole("button",{name:"Показать на графике"}).first().click();
-  await expect(page.locator("g[data-signal-marker][data-highlighted]")).toHaveCount(2);
+  await expect(page.locator("rect[data-signal-highlight]")).toHaveCount(2);
   await expect(page.getByTestId("publication-chart-stack")).toBeInViewport();
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);

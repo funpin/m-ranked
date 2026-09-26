@@ -393,7 +393,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         </div>
       </Section>
 
-      <Section id="ranking" title="Рейтинг вузов" icon={ChartBar} description={`Все ${activeRows.length} вузов на одной шкале, без ограничения по числу.`}>
+      <Section id="ranking" title="Рейтинг вузов" icon={ChartBar} description={`${activeRows.length} участников · одна шкала`}>
         <ChartCard title={METRICS[rankingMetric].label} note={METRICS[rankingMetric].hint} testId="ranking-card"
           action={<select value={rankingMetric} onChange={(event) => setRankingMetric(event.target.value as Metric)} aria-label="Мера рейтинга"
             className="border-input bg-transparent dark:bg-input/30 h-8 rounded-md border px-2 text-sm shadow-xs focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none">
@@ -455,7 +455,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         </div>
         <div className="mt-4">
           <ChartCard title="Доля постов с аномалиями по вузам" testId="anomaly-ranking-card"
-            description={`${anomalyRows.length} вузов, у которых проанализировано хотя бы 5 постов`}
+            description={`${anomalyRows.length} участников с ≥5 проанализированными постами`}
             note={METRICS.anomalyShare.hint}>
             <RankingChart rows={anomalyRows} metric="anomalyShare" highlights={highlights} />
           </ChartCard>

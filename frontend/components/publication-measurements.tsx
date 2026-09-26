@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
 import type { CollectorCoverage, HistorySnapshot, Platform } from "@/lib/types";
-import { boundarySnapshotIds, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
+import { boundarySnapshotIds, nearestSnapshot, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
 import { AnomalyAnalysisSkeleton, DeferredAnomalyAnalysis } from "@/components/anomaly-analysis";
 import type { ContextEvent } from "@/lib/neighbor-context";
 
@@ -288,6 +288,12 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
   }, [settledAnalysis]);
   const contextViews = contextEvents.length > 0 ? "views" as const : undefined;
   const [highlight,setHighlight] = useState<string>();
+  const chartEvidenceIds = useMemo(() => {
+    const selected = markers.find((marker) => marker.id === highlight);
+    if (!selected) return new Set<string>();
+    const ids = [selected.from, selected.to].map((at) => nearestSnapshot(rows, new Date(at).toISOString())?.snapshotId);
+    return new Set(ids.filter((id): id is string => Boolean(id)));
+  }, [highlight, markers, rows]);
   const charts = useRef<HTMLDivElement>(null);
   const showSignal = useCallback((id:string) => {
     setHighlight(id);
@@ -339,12 +345,12 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Накопление {phrase}
             <MethodNote title={`Накопление ${phrase}`}>
-              Точки — сохранённые замеры. Ромбы и полосы — сигналы анализа; ↗ — публикации рядом. Интервал между точками не означает простой сборщика.
+              Точки — сохранённые замеры. Полоса — интервалы сигналов; ромбы — границы выбранного сигнала; ↗ — публикации рядом. Интервал между точками не означает простой сборщика.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} contextEvents={contextEvents} preferredDefault={contextViews} highlight={highlight} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={chartEvidenceIds} gaps={visibleGaps} markers={markers} contextEvents={contextEvents} preferredDefault={contextViews} highlight={highlight} />
         </CardContent>
       </Card>
       <Card>
@@ -352,12 +358,12 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Прирост между сохранёнными точками
             <MethodNote title="Прирост между сохранёнными точками">
-              Столбец — разница двух сохранённых замеров, иногда нескольких опросов. Обводка — граница сигнала; ↗ — новый пост рядом.
+              Столбец — разница сохранённых замеров, иногда нескольких опросов. Обводка — граница выбранного сигнала; ↗ — новый пост рядом.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} contextEvents={contextEvents} preferredDefault={contextViews} highlight={highlight} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={chartEvidenceIds} gaps={visibleGaps} markers={markers} contextEvents={contextEvents} preferredDefault={contextViews} highlight={highlight} />
         </CardContent>
       </Card>
     </div>

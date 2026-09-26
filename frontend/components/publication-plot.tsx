@@ -2,14 +2,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis, usePlotArea, useXAxisScale } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
-import { axisNumber, duration, legacyDate } from "@/lib/format";
+import { axisNumber, legacyDate } from "@/lib/format";
 import { elapsedSincePublication } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
 import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 import type { SignalMarker } from "@/lib/anomaly";
 import type { ContextEvent } from "@/lib/neighbor-context";
-import { PatternIcon } from "@/components/anomaly-icons";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
 /** Больше этого числа столбцов прироста на экране уже не различить: при
@@ -63,31 +62,34 @@ function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
     stroke="var(--destructive)" strokeOpacity={0.45} strokeWidth={1} pointerEvents="none" /> : null;
 }
 
-/** Интервалы признаков: полупрозрачная полоса под линиями и значок признака
- *  над ней. Полоса бледнее ромбов границ и под ними, поэтому ромб остаётся
- *  читаемой отметкой точки, а полоса — отметкой промежутка. Выбранный в
- *  карточке признак подсвечивается ярче и обводится пунктиром. */
+/** One quiet band for the union of signal intervals. Individual icons used to
+ * collide with evidence diamonds and nearby-post marks; the signal list below
+ * the context card remains the place to inspect each pattern. */
 function SignalOverlay({ markers, highlight }: { markers: readonly SignalMarker[]; highlight?: string }) {
   const scale = useXAxisScale();
   const plot = usePlotArea();
   if (!scale || !plot || !markers.length) return null;
-  return <g className="signal-markers" pointerEvents="none">
-    {markers.map((marker) => {
+  const ranges = markers.flatMap((marker) => {
       const from = scale(marker.from), to = scale(marker.to);
-      if (from === undefined || to === undefined) return null;
+      if (from === undefined || to === undefined) return [];
       const left = Math.max(plot.x, Math.min(from, to));
       const right = Math.min(plot.x + plot.width, Math.max(from, to, Math.min(from, to) + 2));
-      if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return null;
-      const active = marker.id === highlight;
-      return <g key={marker.id} data-signal-marker={marker.pattern} data-highlighted={active || undefined}>
-        <rect x={left} y={plot.y} width={right - left} height={plot.height} fill="var(--chart-3)"
-          fillOpacity={active ? 0.2 : 0.08} stroke={active ? "var(--chart-3)" : "none"} strokeDasharray="4 3" strokeWidth={1.5} />
-        <g opacity={0.85}>
-          <title>{marker.title}</title>
-          <PatternIcon pattern={marker.pattern} x={left + 3} y={plot.y + 3} size={14} color="var(--foreground)" />
-        </g>
-      </g>;
-    })}
+      return Number.isFinite(left) && Number.isFinite(right) && right > left ? [{ left, right, id: marker.id }] : [];
+    }).sort((a, b) => a.left - b.left || a.right - b.right);
+  const merged: { left: number; right: number }[] = [];
+  for (const range of ranges) {
+    const previous = merged.at(-1);
+    if (previous && range.left <= previous.right + 2) previous.right = Math.max(previous.right, range.right);
+    else merged.push({ left: range.left, right: range.right });
+  }
+  const path = merged.map(({ left, right }) =>
+    `M${left.toFixed(2)},${plot.y.toFixed(2)}H${right.toFixed(2)}V${(plot.y + plot.height).toFixed(2)}H${left.toFixed(2)}Z`,
+  ).join("");
+  const active = ranges.find((range) => range.id === highlight);
+  return <g className="signal-markers" data-signal-count={markers.length} pointerEvents="none">
+    <path data-signal-band="" d={path} fill="var(--chart-3)" fillOpacity={0.07} />
+    {active ? <rect data-signal-highlight="" x={active.left} y={plot.y} width={active.right - active.left} height={plot.height}
+      fill="var(--chart-3)" fillOpacity={0.13} stroke="var(--chart-3)" strokeDasharray="4 3" strokeWidth={1.5} /> : null}
   </g>;
 }
 
@@ -135,21 +137,17 @@ function SampleDot(props: { cx?: number; cy?: number; fill?: string; evidence?: 
   return <circle cx={cx} cy={cy} r={3} fill={fill} stroke="var(--background)" strokeWidth={1} />;
 }
 
-/** Two lines per tick: the wall clock of the sample and the age of the
- *  publication at that moment, exactly as the inherited axis read. */
-function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
-  x?: number | string; y?: number | string; payload?: { value?: number }; rows: HistorySnapshot[];
+/** Keep the axis to one compact line; sample age stays in the chart tooltip. */
+function TimeTick({ x, y, payload, index, visibleTicksCount }: {
+  x?: number | string; y?: number | string; payload?: { value?: number };
   index?: number; visibleTicksCount?: number;
 }) {
   const value = payload?.value;
-  if (x === undefined || y === undefined || typeof value !== "number" || !rows.length) return null;
-  const nearest = rows.reduce((best, row) =>
-    Math.abs(Date.parse(row.observedAt) - value) < Math.abs(Date.parse(best.observedAt) - value) ? row : best, rows[0]!);
+  if (x === undefined || y === undefined || typeof value !== "number") return null;
   const anchor: "start" | "middle" | "end" = index === 0 ? "start" : index === (visibleTicksCount ?? 0) - 1 ? "end" : "middle";
   return (
-    <text x={x} y={y} textAnchor={anchor} fill="var(--muted-foreground)" fontSize={11}>
-      <tspan x={x} dy="0.8em">{shortDate(new Date(value).toISOString())}</tspan>
-      <tspan x={x} dy="1.1em">{nearest.synthetic ? "момент публикации" : `через ${duration(nearest.ageHours * 3600)}`}</tspan>
+    <text x={x} y={Number(y) + 12} textAnchor={anchor} fill="var(--muted-foreground)" fontSize={11}>
+      {shortDate(new Date(value).toISOString())}
     </text>
   );
 }
@@ -274,7 +272,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
 
   const shared = {
     data,
-    margin: { left: 4, right: 4, top: contextEvents.length ? 28 : 8, bottom: 28 },
+    margin: { left: 4, right: 4, top: contextEvents.length ? 28 : 8, bottom: 8 },
     onClick: (state: { activeLabel?: unknown }) => {
       const row = nearestRow(state?.activeLabel);
       if (row) onActivate(row.snapshotId);
@@ -295,9 +293,8 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}
         padding={delta ? { left: 18, right: 18 } : { left: 4, right: 4 }}
-        scale="time" tickLine={false} axisLine={false} height={44} interval="preserveStartEnd"
-        tick={(props) => <TimeTick {...props} rows={rows} />}
-        label={{ value: "Время сохранённой точки и возраст публикации", position: "insideBottom", offset: -6, fill: "var(--muted-foreground)" }} />
+        scale="time" tickLine={false} axisLine={false} height={30} tickCount={3} minTickGap={80} interval="preserveStartEnd"
+        tick={(props) => <TimeTick {...props} />} />
       {axes}
       <ChartTooltip
         cursor={{ strokeDasharray: "4 4" }}

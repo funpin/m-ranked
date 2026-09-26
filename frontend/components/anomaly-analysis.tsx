@@ -24,17 +24,15 @@ const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
 function Summary({ analysis, context }: { analysis: PublicationAnomalyAnalysis; context?: NeighborContextLoad | null }) {
   const line = summaryLine(analysis);
   if (context?.assessment.status === "requires_review") return (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1" data-testid="contextual-status">
+    <span className="inline-flex items-center gap-2" data-testid="contextual-status">
       <LevelIcon level={1} className="text-chart-3 size-4 shrink-0" />
       <StatusPill tone="amber">Требует проверки</StatusPill>
     </span>
   );
   return (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+    <span className="inline-flex items-center gap-2">
       <LevelIcon level={line.level} className={cn("size-4 shrink-0", line.calm ? "text-muted-foreground" : line.tone === "red" ? "text-destructive" : "text-chart-3")} />
       <b className="font-semibold">{line.calm ? line.label.replace(/^./, (letter) => letter.toUpperCase()) : <StatusPill tone={line.tone === "red" ? "red" : "amber"}>{line.label}</StatusPill>}</b>
-      {line.count ? <span className="text-muted-foreground">· {line.count}</span> : null}
-      {line.analyzedAt ? <span className="text-muted-foreground text-xs">· анализ {legacyDate(line.analyzedAt)}</span> : null}
     </span>
   );
 }
@@ -175,6 +173,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
     );
   }
   if (!analysis) return null;
+  const summary = summaryLine(analysis);
   return (
     <TooltipProvider><section className="bg-muted/40 border-border mb-4 rounded-xl border text-sm" aria-labelledby="anomaly-title" data-testid="anomaly-card">
       <Collapsible>
@@ -182,10 +181,18 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
             читается скринридером как заголовок раздела с состоянием. */}
         <div className="flex items-center gap-1 pr-3">
           <h2 id="anomaly-title" className="m-0 min-w-0 flex-1">
-            <CollapsibleTrigger data-testid="anomaly-toggle" className="group focus-visible:ring-ring/50 flex w-full items-center gap-2 rounded-xl px-4 py-3 text-left focus-visible:ring-[3px] focus-visible:outline-none">
+            <CollapsibleTrigger data-testid="anomaly-toggle" className="group focus-visible:ring-ring/50 flex w-full items-start gap-2 rounded-xl px-4 py-3 text-left focus-visible:ring-[3px] focus-visible:outline-none">
               <ChevronRight className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-90" aria-hidden="true" />
-              <span className="font-heading shrink-0 font-semibold">Анализ динамики</span>
-              <Summary analysis={analysis} context={neighborContext} />
+              <span className="grid min-w-0 gap-1">
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span className="font-heading font-semibold">Анализ динамики</span>
+                  <Summary analysis={analysis} context={neighborContext} />
+                </span>
+                {summary.count || summary.analyzedAt ? <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums">
+                  {summary.count ? <span>{summary.count}</span> : null}
+                  {summary.analyzedAt ? <span>Анализ {legacyDate(summary.analyzedAt)}</span> : null}
+                </span> : null}
+              </span>
             </CollapsibleTrigger>
           </h2>
           {/* Качество данных, легенда и методика — справка, а не вывод: под
