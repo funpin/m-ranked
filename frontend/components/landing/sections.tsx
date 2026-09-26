@@ -275,7 +275,7 @@ export function SameAge({ chart }: { chart: ReactNode }) {
       </SectionHead>
       <div className="landing-reveal bg-card ring-foreground/10 grid gap-4 rounded-3xl p-6 ring-1 sm:p-8">
         {chart}
-        <p className="text-muted-foreground text-xs">Жирная линия — типичный пост площадки (медиана), тонкие — вузы. Рейтинг сравнивает значения через 24 часа.</p>
+        <p className="text-muted-foreground text-xs">Жирная линия — типичный пост площадки (медиана), тонкие — вузы. В сравнении вузы сопоставляются по значению через 24 часа.</p>
       </div>
     </section>
   );
