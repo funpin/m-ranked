@@ -5,6 +5,8 @@ export const NAV_LINKS = [
   { href: "/rating", label: "Рейтинг" },
   { href: "/statistics", label: "Статистика" },
   { href: "/compare", label: "Сравнение" },
+  // Методология одна на все площадки: параметр площадки ей не передаётся.
+  { href: "/methodology", label: "Методология", platformless: true },
   // Служебный раздел: на широком экране — значок справа, в мобильном меню — текст.
   { href: "/manage", label: "Управление", utility: true },
 ] as const;

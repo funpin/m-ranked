@@ -1,10 +1,14 @@
 import { accountHref, publicationHref } from "./entity-routes";
+import { ARTICLES } from "./methodology";
 
 /** Карта сайта собирается из API и живёт в кэше nginx шесть часов: адреса и
  *  lastmod меняются медленно, а файл постов — это 20 тысяч строк. */
 export const SITEMAP_CACHE_SECONDS = 6 * 3600;
 
-const STATIC_PATHS = ["/", "/rating", "/statistics", "/compare"] as const;
+const STATIC_PATHS = [
+  "/", "/rating", "/statistics", "/compare", "/methodology",
+  ...ARTICLES.map((article) => `/methodology/${article.slug}`),
+] as const;
 
 function escape(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

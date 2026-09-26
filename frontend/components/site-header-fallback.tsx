@@ -32,7 +32,7 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
-              href={queryHref(link.href, { platform })}
+              href={"platformless" in link ? link.href : queryHref(link.href, { platform })}
               className={`${"utility" in link ? "min-[781px]:hidden " : ""}text-muted-foreground rounded-md px-3 py-1.5 text-[0.875rem] font-medium no-underline transition-colors`}
             >
               {link.label}

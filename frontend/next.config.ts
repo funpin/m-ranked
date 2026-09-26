@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import createMDX from "@next/mdx";
 import path from "node:path";
 
 const deploymentId = process.env.MRANKED_DEPLOYMENT_ID?.trim() || undefined;
@@ -14,9 +15,16 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   poweredByHeader: false,
   reactStrictMode: true,
+  // Оглавление статьи строится на сервере из её исходника: файлы статей должны
+  // попасть в автономную сборку вместе со страницей.
+  outputFileTracingIncludes: { "/methodology/*": ["./content/methodology/**/*"] },
   turbopack: {
     root: path.resolve(process.cwd(), ".."),
   },
 };
 
-export default nextConfig;
+// Статьи методологии — MDX-файлы в content/methodology. Плагины передаются
+// строками: функции в Turbopack не передать. GFM нужен ради таблиц.
+const withMDX = createMDX({ options: { remarkPlugins: ["remark-gfm"] } });
+
+export default withMDX(nextConfig);

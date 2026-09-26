@@ -89,7 +89,7 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
             return (
               <Link
                 key={link.href}
-                href={queryHref(link.href, { platform })}
+                href={"platformless" in link ? link.href : queryHref(link.href, { platform })}
                 aria-current={active ? "page" : undefined}
                 prefetch={false}
                 onClick={() => { setMenuOpen(false); if (visible) toggle.current?.focus(); }}
