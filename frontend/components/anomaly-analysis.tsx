@@ -82,10 +82,12 @@ function ContextRow({ window }: { window: ContextWindow }) {
 
 function ContextEvidence({ context }: { context: NeighborContextLoad }) {
   const { assessment, windows } = context;
+  const missing = windows.filter((window) => window.context === "insufficient_data").length;
   return <div className="border-border bg-card rounded-lg border p-3" data-testid="neighbor-context-method">
     <div className="mb-2 flex items-center gap-2">
       <p className="font-semibold">Поздний рост</p>
-      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", assessment.status === "insufficient_data" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300")}>{assessment.status === "insufficient_data" ? "Контекст не подтверждён" : `${assessment.contextualized}/${assessment.totalLateSpikes} вместе с каналом`}</span>
+      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium tabular-nums text-emerald-700 dark:text-emerald-300">{assessment.contextualized}/{assessment.totalLateSpikes} вместе с каналом</span>
+      {missing ? <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-medium tabular-nums">{missing} без данных</span> : null}
       <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground focus-visible:ring-ring ml-auto rounded-full focus-visible:ring-2" aria-label="Как читать сравнение позднего роста" />}><CircleHelp className="size-4" /></TooltipTrigger><TooltipContent className="max-w-sm flex-col items-start whitespace-normal leading-relaxed">
         <span>Сверху — новые посты, снизу — старые. Ось времени общая.</span>
         <span>Совместный рост снижает уверенность в сильном сигнале. Причина неизвестна.</span>
