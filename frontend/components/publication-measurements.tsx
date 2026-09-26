@@ -19,6 +19,7 @@ import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector
 import type { CollectorCoverage, HistorySnapshot, Platform } from "@/lib/types";
 import { boundarySnapshotIds, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
 import { AnomalyAnalysisSkeleton, DeferredAnomalyAnalysis } from "@/components/anomaly-analysis";
+import type { ContextEvent } from "@/lib/neighbor-context";
 
 import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 
@@ -111,11 +112,12 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>;
-  gaps: CollectorCoverage["gaps"]; markers: readonly SignalMarker[]; highlight?: string;
+  gaps: CollectorCoverage["gaps"]; markers: readonly SignalMarker[]; contextEvents?: readonly ContextEvent[]; highlight?: string;
+  preferredDefault?: Metric["key"];
 }) {
-  const { metrics, platform, delta } = props;
+  const { metrics, platform, delta, preferredDefault } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
-  const { hidden, setHidden, scale, setScale } = useHistoryPreferences(platform, delta, keys);
+  const { hidden, setHidden, scale, setScale } = useHistoryPreferences(platform, delta, keys, preferredDefault);
 
   /** «Авто» рисует одну шкалу слева и одну справа, поэтому одновременно
    *  показываются не больше двух метрик: третья вытесняет лишнюю, а не
@@ -225,9 +227,18 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
   // Анализ приходит отдельно и страницу не задерживает: графики рисуются сразу,
   // отметки признаков появляются, когда ответ придёт. Без обещания (тихий режим
   // выкатки) отчёта нет вовсе — ни карточки, ни отметок.
-  const shownAnalysis = useSettled(analysis)?.value ?? null;
+  const settledAnalysis = useSettled(analysis);
+  const shownAnalysis = settledAnalysis?.value ?? null;
   const evidenceIds = useMemo(()=>boundarySnapshotIds(shownAnalysis,rows),[shownAnalysis,rows]);
   const markers = useMemo(()=>signalMarkers(shownAnalysis),[shownAnalysis]);
+  const contextEvents = useMemo(() => {
+    const unique = new Map<string, ContextEvent>();
+    for (const event of settledAnalysis?.neighborContext?.windows.flatMap((window) => window.events) ?? []) {
+      if (event.observedFeedDistance <= 4) unique.set(event.publicationId, event);
+    }
+    return [...unique.values()].sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
+  }, [settledAnalysis]);
+  const contextViews = contextEvents.length > 0 ? "views" as const : undefined;
   const [highlight,setHighlight] = useState<string>();
   const charts = useRef<HTMLDivElement>(null);
   const showSignal = useCallback((id:string) => {
@@ -267,12 +278,12 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Накопление {phrase}
             <MethodNote title={`Накопление ${phrase}`}>
-              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы признаков анализа, полупрозрачной полосой с символом — их интервалы; остальные точки читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы признаков анализа, полупрозрачной полосой с символом — их интервалы. Синие ↗ отмечают время выхода новых постов рядом; совпадение по времени не доказывает причину роста. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} highlight={highlight} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} contextEvents={contextEvents} preferredDefault={contextViews} highlight={highlight} />
         </CardContent>
       </Card>
       <Card>
@@ -280,12 +291,12 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Прирост между сохранёнными точками
             <MethodNote title="Прирост между сохранёнными точками">
-              Сколько новых {phrase} появилось между соседними сохранёнными изменениями или контрольными снимками. Это не обязательно прирост за один опрос: одинаковые результаты между точками обычно не сохраняются. Столбец с обводкой отмечает границу сигнала, отрицательный столбец — исправление источника. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+              Сколько новых {phrase} появилось между соседними сохранёнными изменениями или контрольными снимками. Это не обязательно прирост за один опрос: одинаковые результаты между точками обычно не сохраняются. Столбец с обводкой отмечает границу сигнала, отрицательный столбец — исправление источника. Синие ↗ отмечают новые посты рядом. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} highlight={highlight} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} contextEvents={contextEvents} preferredDefault={contextViews} highlight={highlight} />
         </CardContent>
       </Card>
     </div>

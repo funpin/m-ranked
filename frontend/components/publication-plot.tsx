@@ -8,6 +8,7 @@ import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLa
 import { cn } from "@/lib/utils";
 import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 import type { SignalMarker } from "@/lib/anomaly";
+import type { ContextEvent } from "@/lib/neighbor-context";
 import { PatternIcon } from "@/components/anomaly-icons";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
@@ -90,6 +91,39 @@ function SignalOverlay({ markers, highlight }: { markers: readonly SignalMarker[
   </g>;
 }
 
+/** New nearby publications stay on the same time axis as the measured growth.
+ * Close marks share an icon at wide zoom; every underlying timestamp keeps its
+ * own line. The icon describes chronology, never a causal conclusion. */
+function ContextEventOverlay({ events }: { events: readonly ContextEvent[] }) {
+  const scale = useXAxisScale();
+  const plot = usePlotArea();
+  if (!scale || !plot || !events.length) return null;
+  const projected = events.flatMap((event) => {
+    const x = scale(Date.parse(event.publishedAt));
+    return typeof x === "number" && Number.isFinite(x) && x >= plot.x && x <= plot.x + plot.width
+      ? [{ x, event }] : [];
+  }).sort((a, b) => a.x - b.x);
+  const groups: { marks: typeof projected; x: number }[] = [];
+  for (const mark of projected) {
+    const previous = groups.at(-1);
+    if (previous && mark.x - previous.marks.at(-1)!.x < 22) {
+      previous.marks.push(mark);
+      previous.x = previous.marks.reduce((sum, item) => sum + item.x, 0) / previous.marks.length;
+    } else groups.push({ marks: [mark], x: mark.x });
+  }
+  return <g className="context-event-markers">
+    {groups.map(({ marks, x }) => <g key={marks.map(({ event }) => event.publicationId).join("-")}
+      data-context-event-marker={marks.length} role="img"
+      aria-label={`Новый пост рядом: ${marks.map(({ event }) => `№${event.displayId}, ${legacyDate(event.publishedAt)}`).join("; ")}`}>
+      <title>Новый пост рядом: {marks.map(({ event }) => `№${event.displayId} · ${legacyDate(event.publishedAt)}`).join("; ")}</title>
+      {marks.map(({ x: exact, event }) => <line key={event.publicationId} x1={exact} x2={exact} y1={plot.y + 37} y2={plot.y + plot.height}
+        stroke="var(--chart-2)" strokeOpacity={0.6} strokeWidth={1.5} strokeDasharray="4 4" pointerEvents="none" />)}
+      <circle cx={x} cy={plot.y + 25} r={11} fill="var(--chart-2)" stroke="var(--background)" strokeWidth={2} />
+      <text x={x} y={plot.y + 29} textAnchor="middle" fill="var(--background)" fontSize={12} fontWeight={700} pointerEvents="none">{marks.length > 1 ? marks.length : "↗"}</text>
+    </g>)}
+  </g>;
+}
+
 /** Evidence samples are drawn as a larger diamond, so a published signal
  *  boundary is distinguishable from an ordinary observation without colour. */
 function SampleDot(props: { cx?: number; cy?: number; fill?: string; evidence?: boolean }) {
@@ -120,10 +154,10 @@ function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
   );
 }
 
-export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps, markers = [], highlight }: {
+export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps, markers = [], contextEvents = [], highlight }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly CollectorGap[];
-  markers?: readonly SignalMarker[]; highlight?: string;
+  markers?: readonly SignalMarker[]; contextEvents?: readonly ContextEvent[]; highlight?: string;
 }) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const active = useRef(0);
@@ -256,6 +290,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       <CartesianGrid vertical={false} yAxisId={primaryAxis} stroke="var(--border)" />
       <CollectorGapOverlay gaps={gaps} />
       <SignalOverlay markers={markers} highlight={highlight} />
+      <ContextEventOverlay events={contextEvents} />
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}

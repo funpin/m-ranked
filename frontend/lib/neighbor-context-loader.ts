@@ -30,12 +30,15 @@ export async function loadNeighborContext(targetHistory: PublicationHistory, ana
     ...[...peerHistories.values()].map((history) => history.datasetRevision)]);
   const asOf = [targetHistory.asOf, publications.asOf,
     ...[...peerHistories.values()].map((history) => history.asOf)].map(Date.parse);
-  const closeReads = asOf.every(Number.isFinite) && Math.max(...asOf) - Math.min(...asOf) <= 10 * 60_000;
-  const matureWindows = windows.every((window) => Date.parse(window.endAt) < Math.min(...asOf) - 24 * 60 * 60_000);
-  // The live API changes revision every few seconds and does not expose a
-  // revision selector for histories. Mature windows read within 10 minutes are
-  // comparable for a provisional diagnostic, but remain non-atomic.
-  const comparableReads = revisions.size === 1 || (closeReads && matureWindows);
+  // Cache age differs across endpoints. The API has no pinned history revision;
+  // a ten-minute spread between read timestamps is therefore unrelated to
+  // whether old, already observed samples can be compared. Only allow a
+  // provisional diagnostic once every signal window predates the oldest read
+  // by at least a day. Historical backfills can still change these samples.
+  const matureWindows = asOf.every(Number.isFinite) && windows.every((window) =>
+    Number.isFinite(Date.parse(window.endAt))
+      && Date.parse(window.endAt) < Math.min(...asOf) - 24 * 60 * 60_000);
+  const comparableReads = revisions.size === 1 || matureWindows;
   return { windows, assessment: assessNeighborContext(analysis, windows, comparableReads),
     revisionMatched: revisions.size === 1,
     peersRequested: peers.length, peersLoaded: peerHistories.size };
