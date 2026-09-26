@@ -8,7 +8,7 @@ import logoMarkLight from "../assets/logo-mark-light.svg";
 import { SiteHeader } from "@/components/site-header";
 import { publicOrigin } from "@/lib/deployment";
 import "./globals.css";
-import { Geologica, Montserrat } from "next/font/google";
+import { Geologica, JetBrains_Mono, Onest } from "next/font/google";
 import { RouteBoundary } from "@/components/navigation-boundary";
 import { SiteHeaderFallback } from "@/components/site-header-fallback";
 import { IconSprite } from "@/components/icon-sprite";
@@ -17,7 +17,9 @@ import { cn } from "@/lib/utils";
 // Self-hosted by next/font: no request to fonts.gstatic.com, and the fallback
 // metrics it emits keep the layout from shifting while a face loads.
 const heading = Geologica({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-heading" });
-const sans = Montserrat({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-sans" });
+const sans = Onest({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-sans" });
+// Цифры главной и примеры запросов: моноширинные, с кириллицей.
+const mono = JetBrains_Mono({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-mono", preload: false });
 
 export const metadata: Metadata = {
   metadataBase: publicOrigin(),
@@ -121,7 +123,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       data-favicon-light={logoMarkLight.src}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
-      className={cn(sans.variable, heading.variable)}
+      className={cn(sans.variable, heading.variable, mono.variable)}
     >
       <head>
         <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" sizes="180x180" />
