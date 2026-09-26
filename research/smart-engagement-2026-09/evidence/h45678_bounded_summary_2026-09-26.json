@@ -1,0 +1,55 @@
+{
+  "bounded_post_count": 66,
+  "large_step_count": 58,
+  "episodes": [
+    {
+      "day_utc": "2026-09-09",
+      "steps": 1,
+      "distinct_posts": 1,
+      "age_days_min": 3.96,
+      "age_days_median": 3.96,
+      "age_days_max": 3.96,
+      "age_days_span": 0.0,
+      "largest_same_observed_at_batch": 1,
+      "median_interval_hours": 2.36
+    },
+    {
+      "day_utc": "2026-09-14",
+      "steps": 20,
+      "distinct_posts": 20,
+      "age_days_min": 3.03,
+      "age_days_median": 4.27,
+      "age_days_max": 6.19,
+      "age_days_span": 3.16,
+      "largest_same_observed_at_batch": 13,
+      "median_interval_hours": 0.5
+    },
+    {
+      "day_utc": "2026-09-16",
+      "steps": 9,
+      "distinct_posts": 9,
+      "age_days_min": 4.9,
+      "age_days_median": 5.18,
+      "age_days_max": 6.0,
+      "age_days_span": 1.1,
+      "largest_same_observed_at_batch": 5,
+      "median_interval_hours": 3.01
+    },
+    {
+      "day_utc": "2026-09-20",
+      "steps": 28,
+      "distinct_posts": 24,
+      "age_days_min": 8.69,
+      "age_days_median": 10.97,
+      "age_days_max": 14.96,
+      "age_days_span": 6.27,
+      "largest_same_observed_at_batch": 15,
+      "median_interval_hours": 0.42
+    }
+  ],
+  "all_four_endpoint_metric_qualities_rounded": 58,
+  "delta_views_zero": 9,
+  "delta_views_missing": 0,
+  "corrected_end_count": 8,
+  "interval_over_six_hours": 9
+}

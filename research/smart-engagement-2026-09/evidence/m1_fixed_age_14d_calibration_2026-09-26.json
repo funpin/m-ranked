@@ -1,0 +1,155 @@
+{
+  "horizon": "14d",
+  "split": {
+    "fit_before_utc": "2026-09-02T00:00:00+00:00",
+    "test_from_utc": "2026-09-05T00:00:00+00:00"
+  },
+  "platforms": {
+    "max": {
+      "selected_posts": 508,
+      "candidate_posts_by_period": {
+        "fit": 152,
+        "cal": 149,
+        "test": 207
+      },
+      "fit_posts": 141,
+      "calibration_posts": 148,
+      "test_posts": 207,
+      "fit_accounts": 11,
+      "calibration_accounts": 12,
+      "test_accounts": 12,
+      "minimum_attainable_empirical_p": 0.00671,
+      "combined_tail_test_counts": {
+        "0.1": 13,
+        "0.05": 9,
+        "0.01": 7
+      },
+      "combined_tail_test_rates": {
+        "0.1": 0.0628,
+        "0.05": 0.0435,
+        "0.01": 0.0338
+      },
+      "strongest_tail_affected_accounts": 2,
+      "strongest_tail_max_flags_in_one_account": 4,
+      "strongest_tail_dominant_component_direction": {
+        "reactions_per_view_low": 7
+      },
+      "combined_95pct_rate_naive_iid_wilson_upper": 0.0806,
+      "positive_views_residual_test_posts": 79,
+      "positive_reaction_rate_residual_test_posts": 72,
+      "model_scales": {
+        "log_views": 0.3066,
+        "log_reaction_rate": 0.4268
+      }
+    },
+    "rutube": {
+      "selected_posts": 358,
+      "candidate_posts_by_period": {
+        "fit": 63,
+        "cal": 87,
+        "test": 208
+      },
+      "fit_posts": 48,
+      "calibration_posts": 77,
+      "test_posts": 184,
+      "fit_accounts": 7,
+      "calibration_accounts": 9,
+      "test_accounts": 11,
+      "minimum_attainable_empirical_p": 0.01282,
+      "combined_tail_test_counts": {
+        "0.1": 8,
+        "0.05": 3,
+        "0.01": 0
+      },
+      "combined_tail_test_rates": {
+        "0.1": 0.0435,
+        "0.05": 0.0163,
+        "0.01": 0.0
+      },
+      "strongest_tail_affected_accounts": 0,
+      "strongest_tail_max_flags_in_one_account": 0,
+      "strongest_tail_dominant_component_direction": {},
+      "combined_95pct_rate_naive_iid_wilson_upper": 0.0468,
+      "positive_views_residual_test_posts": 82,
+      "positive_reaction_rate_residual_test_posts": 104,
+      "model_scales": {
+        "log_views": 1.5816,
+        "log_reaction_rate": 1.5253
+      }
+    },
+    "telegram": {
+      "selected_posts": 574,
+      "candidate_posts_by_period": {
+        "fit": 159,
+        "cal": 132,
+        "test": 283
+      },
+      "fit_posts": 139,
+      "calibration_posts": 132,
+      "test_posts": 281,
+      "fit_accounts": 11,
+      "calibration_accounts": 12,
+      "test_accounts": 12,
+      "minimum_attainable_empirical_p": 0.00752,
+      "combined_tail_test_counts": {
+        "0.1": 20,
+        "0.05": 17,
+        "0.01": 0
+      },
+      "combined_tail_test_rates": {
+        "0.1": 0.0712,
+        "0.05": 0.0605,
+        "0.01": 0.0
+      },
+      "strongest_tail_affected_accounts": 0,
+      "strongest_tail_max_flags_in_one_account": 0,
+      "strongest_tail_dominant_component_direction": {},
+      "combined_95pct_rate_naive_iid_wilson_upper": 0.0947,
+      "positive_views_residual_test_posts": 87,
+      "positive_reaction_rate_residual_test_posts": 146,
+      "model_scales": {
+        "log_views": 0.2931,
+        "log_reaction_rate": 0.5165
+      }
+    },
+    "vk": {
+      "selected_posts": 524,
+      "candidate_posts_by_period": {
+        "fit": 137,
+        "cal": 144,
+        "test": 243
+      },
+      "fit_posts": 109,
+      "calibration_posts": 129,
+      "test_posts": 216,
+      "fit_accounts": 9,
+      "calibration_accounts": 11,
+      "test_accounts": 11,
+      "minimum_attainable_empirical_p": 0.00769,
+      "combined_tail_test_counts": {
+        "0.1": 31,
+        "0.05": 13,
+        "0.01": 6
+      },
+      "combined_tail_test_rates": {
+        "0.1": 0.1435,
+        "0.05": 0.0602,
+        "0.01": 0.0278
+      },
+      "strongest_tail_affected_accounts": 3,
+      "strongest_tail_max_flags_in_one_account": 4,
+      "strongest_tail_dominant_component_direction": {
+        "reactions_per_view_high": 1,
+        "views_high": 3,
+        "reactions_per_view_low": 2
+      },
+      "combined_95pct_rate_naive_iid_wilson_upper": 0.1002,
+      "positive_views_residual_test_posts": 70,
+      "positive_reaction_rate_residual_test_posts": 100,
+      "model_scales": {
+        "log_views": 0.6196,
+        "log_reaction_rate": 0.7191
+      }
+    }
+  }
+}

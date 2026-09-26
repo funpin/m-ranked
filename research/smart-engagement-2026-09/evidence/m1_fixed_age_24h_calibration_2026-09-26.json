@@ -1,0 +1,57 @@
+{
+  "horizon": "24h",
+  "split": {
+    "fit_before_utc": "2026-09-02T00:00:00+00:00",
+    "test_from_utc": "2026-09-05T00:00:00+00:00"
+  },
+  "platforms": {
+    "max": {
+      "selected_posts": 508,
+      "fit_posts": 0,
+      "calibration_posts": 0,
+      "test_posts": 177,
+      "candidate_posts_by_period": {
+        "fit": 152,
+        "cal": 149,
+        "test": 207
+      },
+      "status": "insufficient_data"
+    },
+    "rutube": {
+      "selected_posts": 358,
+      "fit_posts": 0,
+      "calibration_posts": 0,
+      "test_posts": 128,
+      "candidate_posts_by_period": {
+        "fit": 63,
+        "cal": 87,
+        "test": 208
+      },
+      "status": "insufficient_data"
+    },
+    "telegram": {
+      "selected_posts": 574,
+      "fit_posts": 0,
+      "calibration_posts": 0,
+      "test_posts": 228,
+      "candidate_posts_by_period": {
+        "fit": 159,
+        "cal": 132,
+        "test": 283
+      },
+      "status": "insufficient_data"
+    },
+    "vk": {
+      "selected_posts": 524,
+      "fit_posts": 0,
+      "calibration_posts": 0,
+      "test_posts": 163,
+      "candidate_posts_by_period": {
+        "fit": 137,
+        "cal": 144,
+        "test": 243
+      },
+      "status": "insufficient_data"
+    }
+  }
+}

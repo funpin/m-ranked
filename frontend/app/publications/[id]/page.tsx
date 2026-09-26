@@ -10,6 +10,7 @@ import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { normalizeHistoryLimit, queryHref, type SearchParams } from "@/lib/params";
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
 import { anomalyReportVisible } from "@/lib/anomaly-visibility";
+import { loadNeighborContext } from "@/lib/neighbor-context-loader";
 
 export const dynamic = "force-dynamic";
 
@@ -48,5 +49,15 @@ export default async function PublicationPage({ params, searchParams }: Props) {
     reportDetailFailure(`publication:${id}`, error);
     return <ApiFailureState retryHref={queryHref(publicationHref(id), { history_limit: historyLimit })} />;
   }
-  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={analysis} />;
+  const localContextEnabled = process.env.MRANKED_RESEARCH_PREVIEW === "enabled";
+  const contextualAnalysis = analysis && localContextEnabled
+    ? analysis.then(async (load): Promise<AnalysisLoad> => {
+      if (load.failed || !load.value) return load;
+      try {
+        return { ...load, neighborContext: await loadNeighborContext(history, load.value) };
+      } catch {
+        return { ...load, neighborContextFailed: true };
+      }
+    }) : analysis;
+  return <PublicationDetail history={history} historyLimit={historyLimit} analysis={contextualAnalysis} />;
 }

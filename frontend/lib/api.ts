@@ -24,7 +24,9 @@ export interface ApiClientOptions {
 }
 
 export function createApiClient(options: ApiClientOptions = {}) {
-  const base = new URL(options.baseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:8080");
+  // A local review can read the public production API while administrative
+  // requests remain attached to its disposable local API/DB.
+  const base = new URL(options.baseUrl ?? (process.env.PUBLIC_API_BASE_URL?.trim() || process.env.API_BASE_URL || "http://127.0.0.1:8080"));
   if (!["https:", "http:"].includes(base.protocol) || base.username || base.password) throw new Error("API_BASE_URL must be an HTTP(S) origin without credentials");
   const fetcher: Fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
   const timeoutMs = options.timeoutMs ?? 15_000;

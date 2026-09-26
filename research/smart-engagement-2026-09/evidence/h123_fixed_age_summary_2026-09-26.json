@@ -1,0 +1,250 @@
+{
+  "frame": {
+    "selected_accounts": 48,
+    "selected_posts": 1964,
+    "usable_14d_posts": 1811,
+    "usable_24h_posts": 696
+  },
+  "platforms": {
+    "max": {
+      "accounts_selected": 12,
+      "posts_selected": 508,
+      "early_24h_usable_posts": 177,
+      "late_14d_usable_posts": 496,
+      "late_14d_median_views": 1041.5,
+      "late_14d_median_reactions": 16.5,
+      "late_14d_zero_reaction_posts": 9,
+      "late_14d_accounts_with_zero_reactions": 2,
+      "late_14d_zero_reactions_by_view_bin": {
+        "1_49": {
+          "posts": 0,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        },
+        "50_199": {
+          "posts": 0,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        },
+        "200_999": {
+          "posts": 244,
+          "zero_reactions": 6,
+          "accounts_with_zero_reactions": 1
+        },
+        "1000_plus": {
+          "posts": 252,
+          "zero_reactions": 3,
+          "accounts_with_zero_reactions": 1
+        }
+      },
+      "late_14d_median_r_over_v": 0.0161,
+      "accounts_with_at_least_3_posts_each_week": 12,
+      "accounts_with_at_least_3_positive_reaction_posts_each_week": 12,
+      "h1_spearman_week_a_vs_b_account_median_log_ratio": 0.7413,
+      "modal_format_accounts_with_at_least_3_each_week": 10,
+      "h1_modal_format_spearman_week_a_vs_b": 0.7091,
+      "h1_week_a_account_median_log_ratio_range": [
+        -4.5732,
+        -3.1061
+      ],
+      "h2_accounts_with_at_least_4_posts_each_week": 12,
+      "h2_week_a_median_within_account_sd_log_ratio": 0.5129,
+      "h2_week_b_median_within_account_sd_log_ratio": 0.4794,
+      "h2_lowest_quartile_a_count": 3,
+      "h2_lowest_quartile_a_median_sd_in_b": 0.3643,
+      "h2_other_accounts_median_sd_in_b": 0.4949,
+      "h3_accounts_tested": 12,
+      "h3_week_b_posts_tested": 207,
+      "h3_constant_better_accounts": 2,
+      "h3_proportional_better_accounts": 10,
+      "h3_median_constant_log_mae": 0.4265,
+      "h3_median_proportional_log_mae": 0.3985,
+      "h3_median_account_mae_diff_proportional_minus_constant": -0.0511,
+      "h3_modal_format_constant_better_accounts": 2,
+      "h3_modal_format_proportional_better_accounts": 8,
+      "h3_positive_support_accounts_tested": 12,
+      "h3_positive_support_constant_better_accounts": 2,
+      "h3_positive_support_proportional_better_accounts": 10
+    },
+    "rutube": {
+      "accounts_selected": 12,
+      "posts_selected": 358,
+      "early_24h_usable_posts": 128,
+      "late_14d_usable_posts": 309,
+      "late_14d_median_views": 10,
+      "late_14d_median_reactions": 0,
+      "late_14d_zero_reaction_posts": 255,
+      "late_14d_accounts_with_zero_reactions": 11,
+      "late_14d_zero_reactions_by_view_bin": {
+        "1_49": {
+          "posts": 219,
+          "zero_reactions": 203,
+          "accounts_with_zero_reactions": 9
+        },
+        "50_199": {
+          "posts": 73,
+          "zero_reactions": 41,
+          "accounts_with_zero_reactions": 8
+        },
+        "200_999": {
+          "posts": 8,
+          "zero_reactions": 2,
+          "accounts_with_zero_reactions": 2
+        },
+        "1000_plus": {
+          "posts": 9,
+          "zero_reactions": 9,
+          "accounts_with_zero_reactions": 2
+        }
+      },
+      "late_14d_median_r_over_v": 0.0,
+      "accounts_with_at_least_3_posts_each_week": 9,
+      "accounts_with_at_least_3_positive_reaction_posts_each_week": 2,
+      "h1_spearman_week_a_vs_b_account_median_log_ratio": 0.5858,
+      "modal_format_accounts_with_at_least_3_each_week": 9,
+      "h1_modal_format_spearman_week_a_vs_b": 0.5858,
+      "h1_week_a_account_median_log_ratio_range": [
+        -8.1043,
+        -1.3863
+      ],
+      "h2_accounts_with_at_least_4_posts_each_week": 9,
+      "h2_week_a_median_within_account_sd_log_ratio": 0.8357,
+      "h2_week_b_median_within_account_sd_log_ratio": 0.7935,
+      "h2_lowest_quartile_a_count": 3,
+      "h2_lowest_quartile_a_median_sd_in_b": 0.7935,
+      "h2_other_accounts_median_sd_in_b": 0.8079,
+      "h3_accounts_tested": 9,
+      "h3_week_b_posts_tested": 115,
+      "h3_constant_better_accounts": 8,
+      "h3_proportional_better_accounts": 0,
+      "h3_median_constant_log_mae": 0.0603,
+      "h3_median_proportional_log_mae": 0.611,
+      "h3_median_account_mae_diff_proportional_minus_constant": 0.2681,
+      "h3_modal_format_constant_better_accounts": 8,
+      "h3_modal_format_proportional_better_accounts": 0,
+      "h3_positive_support_accounts_tested": 2,
+      "h3_positive_support_constant_better_accounts": 2,
+      "h3_positive_support_proportional_better_accounts": 0
+    },
+    "telegram": {
+      "accounts_selected": 12,
+      "posts_selected": 574,
+      "early_24h_usable_posts": 228,
+      "late_14d_usable_posts": 552,
+      "late_14d_median_views": 1840.0,
+      "late_14d_median_reactions": 42.0,
+      "late_14d_zero_reaction_posts": 0,
+      "late_14d_accounts_with_zero_reactions": 0,
+      "late_14d_zero_reactions_by_view_bin": {
+        "1_49": {
+          "posts": 0,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        },
+        "50_199": {
+          "posts": 23,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        },
+        "200_999": {
+          "posts": 123,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        },
+        "1000_plus": {
+          "posts": 406,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        }
+      },
+      "late_14d_median_r_over_v": 0.0242,
+      "accounts_with_at_least_3_posts_each_week": 12,
+      "accounts_with_at_least_3_positive_reaction_posts_each_week": 12,
+      "h1_spearman_week_a_vs_b_account_median_log_ratio": 0.9231,
+      "modal_format_accounts_with_at_least_3_each_week": 11,
+      "h1_modal_format_spearman_week_a_vs_b": 0.9727,
+      "h1_week_a_account_median_log_ratio_range": [
+        -5.1139,
+        -2.121
+      ],
+      "h2_accounts_with_at_least_4_posts_each_week": 12,
+      "h2_week_a_median_within_account_sd_log_ratio": 0.522,
+      "h2_week_b_median_within_account_sd_log_ratio": 0.5222,
+      "h2_lowest_quartile_a_count": 3,
+      "h2_lowest_quartile_a_median_sd_in_b": 0.3278,
+      "h2_other_accounts_median_sd_in_b": 0.5725,
+      "h3_accounts_tested": 12,
+      "h3_week_b_posts_tested": 281,
+      "h3_constant_better_accounts": 4,
+      "h3_proportional_better_accounts": 8,
+      "h3_median_constant_log_mae": 0.3391,
+      "h3_median_proportional_log_mae": 0.4231,
+      "h3_median_account_mae_diff_proportional_minus_constant": -0.0117,
+      "h3_modal_format_constant_better_accounts": 6,
+      "h3_modal_format_proportional_better_accounts": 5,
+      "h3_positive_support_accounts_tested": 12,
+      "h3_positive_support_constant_better_accounts": 4,
+      "h3_positive_support_proportional_better_accounts": 8
+    },
+    "vk": {
+      "accounts_selected": 12,
+      "posts_selected": 524,
+      "early_24h_usable_posts": 163,
+      "late_14d_usable_posts": 454,
+      "late_14d_median_views": 2192.5,
+      "late_14d_median_reactions": 23.0,
+      "late_14d_zero_reaction_posts": 0,
+      "late_14d_accounts_with_zero_reactions": 0,
+      "late_14d_zero_reactions_by_view_bin": {
+        "1_49": {
+          "posts": 0,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        },
+        "50_199": {
+          "posts": 6,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        },
+        "200_999": {
+          "posts": 100,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        },
+        "1000_plus": {
+          "posts": 348,
+          "zero_reactions": 0,
+          "accounts_with_zero_reactions": 0
+        }
+      },
+      "late_14d_median_r_over_v": 0.0108,
+      "accounts_with_at_least_3_posts_each_week": 10,
+      "accounts_with_at_least_3_positive_reaction_posts_each_week": 10,
+      "h1_spearman_week_a_vs_b_account_median_log_ratio": 0.697,
+      "modal_format_accounts_with_at_least_3_each_week": 9,
+      "h1_modal_format_spearman_week_a_vs_b": 0.8167,
+      "h1_week_a_account_median_log_ratio_range": [
+        -5.2504,
+        -3.461
+      ],
+      "h2_accounts_with_at_least_4_posts_each_week": 10,
+      "h2_week_a_median_within_account_sd_log_ratio": 0.9148,
+      "h2_week_b_median_within_account_sd_log_ratio": 0.7282,
+      "h2_lowest_quartile_a_count": 3,
+      "h2_lowest_quartile_a_median_sd_in_b": 0.6592,
+      "h2_other_accounts_median_sd_in_b": 0.8287,
+      "h3_accounts_tested": 10,
+      "h3_week_b_posts_tested": 214,
+      "h3_constant_better_accounts": 4,
+      "h3_proportional_better_accounts": 6,
+      "h3_median_constant_log_mae": 0.7285,
+      "h3_median_proportional_log_mae": 0.496,
+      "h3_median_account_mae_diff_proportional_minus_constant": -0.2972,
+      "h3_modal_format_constant_better_accounts": 2,
+      "h3_modal_format_proportional_better_accounts": 7,
+      "h3_positive_support_accounts_tested": 10,
+      "h3_positive_support_constant_better_accounts": 4,
+      "h3_positive_support_proportional_better_accounts": 6
+    }
+  }
+}

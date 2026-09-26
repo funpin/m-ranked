@@ -7,7 +7,7 @@ import { prepareManage } from "./lib/manage-facade";
 // своим nonce, поэтому внедрённый в разметку скрипт не выполнится. Стили
 // остаются с 'unsafe-inline': Recharts печатает <style> в разметку страницы,
 // и перевод их на nonce — отдельная работа (владелец: фронтенд, до 2026-12-31).
-function policy(nonce: string | null): string {
+function policy(nonce: string | null, servedOverHttps: boolean): string {
   const script = nonce === null
     ? "'self' 'unsafe-inline'"
     : `'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`;
@@ -25,7 +25,9 @@ function policy(nonce: string | null): string {
     "frame-src 'none'",
     "manifest-src 'self'",
     "worker-src 'self' blob:",
-    "upgrade-insecure-requests",
+    // Safari upgrades even localhost assets to HTTPS. Keep this directive only
+    // when the browser itself reaches the site over HTTPS.
+    ...(servedOverHttps ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 }
 
@@ -38,7 +40,8 @@ export async function proxy(request: NextRequest) {
   const detail = legacyQueryErrors(request.nextUrl);
   if (detail.length) return NextResponse.json({ detail }, { status: 422, headers: { "Cache-Control": "no-store" } });
   if(request.method === "GET") {
-    const failure = await legacyDetailError(new URL(request.nextUrl.href), process.env.API_BASE_URL ?? "http://127.0.0.1:8080");
+    const publicApi = process.env.PUBLIC_API_BASE_URL?.trim() || process.env.API_BASE_URL || "http://127.0.0.1:8080";
+    const failure = await legacyDetailError(new URL(request.nextUrl.href), publicApi);
     if(failure) return failure;
   }
   const requestHeaders = new Headers(request.headers);
@@ -51,7 +54,11 @@ export async function proxy(request: NextRequest) {
   // страницы отдаются из кэша: nonce в них устарел бы раньше, чем дошёл до
   // читателя, поэтому у них пока прежняя политика без строгого script-src.
   const nonce = administrative ? nonceValue() : null;
-  const strict = policy(nonce);
+  // Nginx terminates TLS in production and sets X-Forwarded-Proto itself.
+  // Direct local HTTP has no TLS endpoint for upgraded CSS/JS requests.
+  const servedOverHttps = request.nextUrl.protocol === "https:"
+    || request.headers.get("x-forwarded-proto") === "https";
+  const strict = policy(nonce, servedOverHttps);
   if (nonce !== null) {
     requestHeaders.set("x-nonce", nonce);
     // Next читает политику из заголовка запроса и сам проставляет nonce своим скриптам.

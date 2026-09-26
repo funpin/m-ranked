@@ -1,9 +1,11 @@
 import { duration } from "./format";
 import type { AccountAnomalyLevels, AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "./types";
+import type { NeighborContextLoad } from "./neighbor-context-loader";
 
 /** Результат загрузки анализа. Сбой — не отсутствие признаков: карточка
  *  честно скажет, что результата нет. */
-export type AnalysisLoad = { value: PublicationAnomalyAnalysis | null; failed: boolean };
+export type AnalysisLoad = { value: PublicationAnomalyAnalysis | null; failed: boolean;
+  neighborContext?: NeighborContextLoad | null; neighborContextFailed?: boolean };
 
 /** Уровни постов аккаунта по id публикации; null — ответ анализа не пришёл. */
 export type AccountLevel = AccountAnomalyLevels["items"][number];

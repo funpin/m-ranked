@@ -17,7 +17,7 @@ export interface EmojiRouteOptions {
 
 export function createEmojiRoute(options: EmojiRouteOptions = {}) {
   const baseUrl = normalizedBaseUrl(
-    options.baseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:8080",
+    options.baseUrl ?? (process.env.PUBLIC_API_BASE_URL?.trim() || process.env.API_BASE_URL || "http://127.0.0.1:8080"),
   );
   const fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
   const timeoutMs = options.timeoutMs ?? 21_000;

@@ -1,15 +1,18 @@
 "use client";
 import dynamic from "next/dynamic";
 import { use } from "react";
-import { ChevronRight, LocateFixed } from "lucide-react";
+import { ChevronRight, CircleHelp, LocateFixed } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPill } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
 import { LevelIcon, PatternIcon } from "@/components/anomaly-icons";
 import { legacyDate } from "@/lib/format";
 import { FAMILY_NAMES, METRIC_NAMES, SIGNAL_LEGEND, intervalText, markerId, miniChart, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
 import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
+import type { NeighborContextLoad } from "@/lib/neighbor-context-loader";
+import type { ContextWindow } from "@/lib/neighbor-context";
 import { cn } from "@/lib/utils";
 
 const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
@@ -22,8 +25,14 @@ const REVIEW_NAMES = {
   data_error: "ошибка данных", dismissed: "отклонён",
 } as const;
 
-function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
+function Summary({ analysis, context }: { analysis: PublicationAnomalyAnalysis; context?: NeighborContextLoad | null }) {
   const line = summaryLine(analysis);
+  if (context?.assessment.status === "requires_review") return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1" data-testid="contextual-status">
+      <LevelIcon level={1} className="text-chart-3 size-4 shrink-0" />
+      <StatusPill tone="amber">Требует проверки</StatusPill>
+    </span>
+  );
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
       <LevelIcon level={line.level} className={cn("size-4 shrink-0", line.calm ? "text-muted-foreground" : line.tone === "red" ? "text-destructive" : "text-chart-3")} />
@@ -32,6 +41,51 @@ function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
       {line.analyzedAt ? <span className="text-muted-foreground text-xs">· анализ {legacyDate(line.analyzedAt)}</span> : null}
     </span>
   );
+}
+
+function growthPercent(logGrowth: number): number { return Math.max(0, Math.expm1(logGrowth) * 100); }
+
+function ContextRow({ window }: { window: ContextWindow }) {
+  const near = window.events.filter((event) => event.observedFeedDistance <= 4);
+  const target = window.target ? growthPercent(window.target.logGrowth) : null;
+  const peers = window.medianPeerLogGrowth !== null ? growthPercent(window.medianPeerLogGrowth) : null;
+  const max = Math.max(target ?? 0, peers ?? 0, 0.1);
+  const shared = window.context === "neighbor_and_shared" || window.context === "shared_channel";
+  return <div className="border-border bg-muted/20 rounded-lg border px-3 py-2.5" data-testid="neighbor-context-window">
+    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <span className="font-medium tabular-nums">{new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" }).format(new Date(window.startAt))}</span>
+      {near.map((event) => <span key={event.publicationId} className="border-chart-2/30 bg-chart-2/10 text-foreground rounded border px-1.5 py-0.5 font-medium">↗ №{event.displayId}</span>)}
+      <span className={cn("ml-auto rounded-full px-2 py-0.5 tabular-nums", shared ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{window.positivePeerCount}/{window.peers.length} ↗</span>
+      <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded-full focus-visible:ring-2" aria-label="Подробности окна роста" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-sm flex-col items-start whitespace-normal leading-relaxed">
+        <span>{legacyDate(window.startAt)} — {legacyDate(window.endAt)}</span>
+        <span>Пост: {window.target ? `+${window.target.displayedDelta.toLocaleString("ru-RU")} просмотров` : "нет пары замеров"}. Старые посты: {window.positivePeerCount} из {window.peers.length} выросли.</span>
+        <span>Остаток после вычитания медианы соседей: {window.conditionalLogResidual?.toFixed(3) ?? "нет данных"}. Это не вероятность.</span>
+      </TooltipContent></Tooltip>
+    </div>
+    {target === null || peers === null ? <div className="text-muted-foreground text-xs">Недостаточно замеров</div> : <div className="grid gap-1.5" aria-label={`Рост просмотров: пост ${target.toFixed(1)}%, соседи ${peers.toFixed(1)}%`}>
+      {([["Пост", target, "bg-blue-500"], ["Соседи", peers, "bg-emerald-500"]] as const).map(([label, value, color]) => <div key={label} className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.4rem] items-center gap-2 text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="bg-muted h-2 overflow-hidden rounded-full"><span className={cn("block h-full rounded-full", color)} style={{ width: `${Math.max(2, 100 * value / max)}%` }} /></span>
+        <span className="text-right font-medium tabular-nums">+{value.toFixed(1)}%</span>
+      </div>)}
+    </div>}
+  </div>;
+}
+
+function ContextEvidence({ context, originalStatus }: { context: NeighborContextLoad; originalStatus: string }) {
+  const { assessment, windows } = context;
+  return <div className="border-border bg-card rounded-lg border p-3" data-testid="neighbor-context-method">
+    <div className="mb-2 flex items-center gap-2">
+      <p className="font-semibold">Поздний рост</p>
+      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", assessment.status === "insufficient_data" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300")}>{assessment.contextualized}/{assessment.totalLateSpikes} вместе с каналом</span>
+      <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground focus-visible:ring-ring ml-auto rounded-full focus-visible:ring-2" aria-label="Как читать сравнение позднего роста" />}><CircleHelp className="size-4" /></TooltipTrigger><TooltipContent className="max-w-sm flex-col items-start whitespace-normal leading-relaxed">
+        <span>Полосы показывают прирост просмотров за одно окно: этот пост и медиану соседних старых постов. ↗ № — новый пост рядом во время окна.</span>
+        <span>Исходный статус: {originalStatus}. Сопутствующий рост снижает уверенность в сильной пометке, но не доказывает причину. {context.revisionMatched ? "Данные одной ревизии." : "Чтения близки по времени, но не атомарны."}</span>
+        <span>Публичный сохранённый статус не меняется.</span>
+      </TooltipContent></Tooltip>
+    </div>
+    <div className="grid gap-2">{[...windows].sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)).map((window) => <ContextRow key={`${window.startAt}-${window.endAt}`} window={window} />)}</div>
+  </div>;
 }
 
 function Signal({ signal, index, rows, publishedAt, onShow }: {
@@ -102,15 +156,16 @@ export function AnomalyAnalysisSkeleton() {
 export function DeferredAnomalyAnalysis({ load, ...props }: {
   load: Promise<AnalysisLoad>; rows: readonly HistorySnapshot[]; publishedAt: string; onShow?: (id: string) => void;
 }) {
-  const { value, failed } = use(load);
-  return <AnomalyAnalysis analysis={value} loadFailed={failed} {...props} />;
+  const { value, failed, neighborContext, neighborContextFailed } = use(load);
+  return <AnomalyAnalysis analysis={value} loadFailed={failed} neighborContext={neighborContext} neighborContextFailed={neighborContextFailed} {...props} />;
 }
 
 /** Карточка анализа на странице поста — свёрнута по умолчанию: одна строка с
  *  уровнем, числом признаков и временем анализа. Развёрнутая объясняет каждый
  *  признак формулой, мини-графиком и честными альтернативами. */
-export function AnomalyAnalysis({ analysis, loadFailed = false, rows, publishedAt, onShow }: {
+export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext, neighborContextFailed = false, rows, publishedAt, onShow }: {
   analysis: PublicationAnomalyAnalysis | null; loadFailed?: boolean; rows: readonly HistorySnapshot[];
+  neighborContext?: NeighborContextLoad | null; neighborContextFailed?: boolean;
   publishedAt: string; onShow?: (id: string) => void;
 }) {
   if (loadFailed) {
@@ -123,7 +178,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, rows, publishedA
   }
   if (!analysis) return null;
   return (
-    <section className="bg-muted/40 border-border mb-4 rounded-xl border text-sm" aria-labelledby="anomaly-title" data-testid="anomaly-card">
+    <TooltipProvider><section className="bg-muted/40 border-border mb-4 rounded-xl border text-sm" aria-labelledby="anomaly-title" data-testid="anomaly-card">
       <Collapsible>
         {/* Кнопка внутри заголовка, а не наоборот: так раскрывающийся блок
             читается скринридером как заголовок раздела с состоянием. */}
@@ -132,7 +187,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, rows, publishedA
             <CollapsibleTrigger data-testid="anomaly-toggle" className="group focus-visible:ring-ring/50 flex w-full items-center gap-2 rounded-xl px-4 py-3 text-left focus-visible:ring-[3px] focus-visible:outline-none">
               <ChevronRight className="size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-90" aria-hidden="true" />
               <span className="font-heading shrink-0 font-semibold">Анализ динамики</span>
-              <Summary analysis={analysis} />
+              <Summary analysis={analysis} context={neighborContext} />
             </CollapsibleTrigger>
           </h2>
           {/* Качество данных, легенда и методика — справка, а не вывод: под
@@ -140,17 +195,25 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, rows, publishedA
           <span data-testid="anomaly-note"><MethodNote title="Анализ динамики"><AnalysisNote analysis={analysis} /></MethodNote></span>
         </div>
         <CollapsibleContent className="grid gap-3 px-4 pb-4">
+          {neighborContext ? <ContextEvidence context={neighborContext} originalStatus={analysis.levelLabel} /> : neighborContextFailed
+            ? <p className="text-muted-foreground text-xs">Контекстный расчёт временно недоступен; исходный анализ показан без изменений.</p> : null}
           {analysis.signals.length ? (
-            <ol className="grid gap-2" aria-label="Признаки">
-              {analysis.signals.map((signal, index) => (
-                <Signal key={markerId(signal, index)} signal={signal} index={index} rows={rows} publishedAt={publishedAt} onShow={onShow} />
-              ))}
-            </ol>
+            <Collapsible className="border-border rounded-lg border">
+              <CollapsibleTrigger className="group focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium focus-visible:ring-2 focus-visible:outline-none">
+                <ChevronRight className="size-3.5 transition-transform group-data-[panel-open]:rotate-90" aria-hidden="true" />
+                Исходные сигналы <span className="bg-muted rounded-full px-1.5 py-0.5 tabular-nums">{analysis.signals.length}</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-2 pb-2"><ol className="grid gap-2" aria-label="Признаки">
+                {analysis.signals.map((signal, index) => (
+                  <Signal key={markerId(signal, index)} signal={signal} index={index} rows={rows} publishedAt={publishedAt} onShow={onShow} />
+                ))}
+              </ol></CollapsibleContent>
+            </Collapsible>
           ) : (
             <p className="text-muted-foreground">{analysis.status === "pending" ? "Пост ещё не проанализирован: анализ идёт по расписанию после первых замеров." : "Признаков аномальной динамики не найдено."}</p>
           )}
         </CollapsibleContent>
       </Collapsible>
-    </section>
+    </section></TooltipProvider>
   );
 }
