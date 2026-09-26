@@ -27,10 +27,15 @@ test("графики главной загружаются, только ког�
   await expect(page.getByTestId("reach-chart")).toHaveCount(0);
   await page.getByTestId("landing-reach").scrollIntoViewIfNeeded();
   await expect(page.getByTestId("reach-chart")).toBeVisible();
-  await page.getByTestId("landing-curves").scrollIntoViewIfNeeded();
-  await expect(page.getByTestId("curves-chart")).toBeVisible();
-  await page.getByTestId("landing-curves").getByRole("radio", { name: "ВКонтакте" }).click();
-  await expect(page.getByTestId("landing-curves").getByRole("radio", { name: "ВКонтакте" })).toHaveAttribute("aria-checked", "true");
+  const rhythm = page.getByTestId("landing-rhythm");
+  await rhythm.scrollIntoViewIfNeeded();
+  await expect(page.getByTestId("hourly-chart")).toBeVisible();
+  await rhythm.getByRole("radio", { name: "ВКонтакте" }).click();
+  await expect(rhythm.getByRole("radio", { name: "ВКонтакте" })).toHaveAttribute("aria-checked", "true");
+  await rhythm.getByRole("radio", { name: "Дни недели" }).click();
+  await expect(page.getByTestId("timing-heatmap")).toBeVisible();
+  await rhythm.getByRole("radio", { name: "Итоги анализа" }).click();
+  await expect(page.getByTestId("levels-by-platform")).toBeVisible();
 });
 
 test("коридор нормы переключает форму роста по выбору читателя", async ({ page }) => {
@@ -40,6 +45,7 @@ test("коридор нормы переключает форму роста п�
   await corridor.getByRole("radio", { name: "Поздний скачок" }).click();
   await expect(corridor.getByRole("radio", { name: "Поздний скачок" })).toHaveAttribute("aria-checked", "true");
   await expect(corridor).toContainText("вдруг — резкий прирост");
+  await expect(corridor).toContainText("обычный разброс площадки");
   await expect(corridor.getByRole("img")).toHaveAttribute("aria-label", /поздний скачок/);
 });
 
@@ -52,8 +58,8 @@ for (const theme of ["light", "dark"]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      await page.getByTestId("landing-curves").scrollIntoViewIfNeeded();
-      await expect(page.getByTestId("curves-chart")).toBeVisible();
+      await page.getByTestId("landing-rhythm").scrollIntoViewIfNeeded();
+      await expect(page.getByTestId("hourly-chart")).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);
       expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations).toEqual([]);
     }
@@ -69,4 +75,12 @@ test("первый экран без цифр: сводка ниже сгиба,
   await expect(scene).toBeAttached();
   const webgl = await page.evaluate(() => Boolean(document.createElement("canvas").getContext("webgl2")));
   if (webgl) await expect(scene).toHaveAttribute("data-ready", "true", { timeout: 15_000 });
+});
+
+test("в шапке — авторы проекта рядом с GitHub", async ({ page }) => {
+  test.skip(page.viewportSize()!.width <= 780, "на узком экране авторы скрыты");
+  await page.goto("/");
+  const contributors = page.getByTestId("contributors");
+  await expect(contributors.getByRole("link")).not.toHaveCount(0);
+  await expect(contributors.getByRole("link").first()).toHaveAttribute("href", /^https:\/\/github\.com\//);
 });

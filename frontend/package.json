@@ -16,6 +16,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm check:api && pnpm test && pnpm test:e2e && pnpm build && pnpm check:bundle",
     "generate:api": "node scripts/generate-openapi.mjs",
     "check:api": "node scripts/generate-openapi.mjs --check",
+    "generate:contributors": "node scripts/generate-contributors.mjs",
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "check:bundle": "node scripts/bundle-budget.mjs"

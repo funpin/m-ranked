@@ -31,19 +31,19 @@
   .landing-hero-scene { opacity: 0.8; }
 }
 
-/* «Как есть.» — переливом цветов площадок. */
-@keyframes landing-shimmer { to { background-position: 200% 50%; } }
+/* «Как есть.» — цветами площадок. Без бесконечного перелива: анимация фона
+   перерисовывала крупный заголовок каждый кадр и давала подёргивания. */
 .landing-gradient-text {
-  background: linear-gradient(100deg, var(--platform-telegram), var(--platform-vk), var(--platform-max), var(--platform-rutube), var(--platform-telegram));
-  background-size: 200% 100%;
+  background: linear-gradient(100deg, var(--platform-telegram), var(--platform-vk) 35%, var(--platform-max) 65%, var(--platform-rutube));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: landing-shimmer 12s linear infinite;
 }
 
 /* Появление блоков при прокрутке — на временной шкале прокрутки, без
-   скриптов. Где шкалы нет (Firefox), блоки просто видны сразу. */
+   скриптов. Где шкалы нет (Firefox), блоки просто видны сразу. Нижняя
+   граница шкалы поднята на 12 % высоты окна: блок начинает проявляться не
+   на самом краю экрана, а чуть выше, где его уже видно целиком. */
 @keyframes landing-rise {
   from { opacity: 0; transform: translateY(40px) scale(0.985); }
   to { opacity: 1; transform: none; }
@@ -54,7 +54,7 @@
 @supports (animation-timeline: view()) {
   .landing-reveal {
     animation: landing-rise linear both;
-    animation-timeline: view();
+    animation-timeline: view(block 0% 12%);
     animation-range: entry 0% entry 55%;
   }
   .landing-hero-parallax {
@@ -66,12 +66,12 @@
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
     animation: landing-draw linear both;
-    animation-timeline: view();
+    animation-timeline: view(block 0% 12%);
     animation-range: entry 20% cover 45%;
   }
   .landing-ticks {
     animation: landing-rise linear both;
-    animation-timeline: view();
+    animation-timeline: view(block 0% 12%);
     animation-range: entry 30% cover 40%;
   }
 }
@@ -120,27 +120,6 @@
   background:
     repeating-linear-gradient(90deg, var(--chart-1) 0 1.5px, transparent 1.5px var(--tick-gap)),
     color-mix(in oklch, var(--chart-1) 8%, transparent);
-}
-
-/* Пакет бежит от сервера сбора к витрине. */
-.landing-wire {
-  background: repeating-linear-gradient(90deg, var(--border) 0 4px, transparent 4px 8px);
-}
-@keyframes landing-packet {
-  from { left: 0; opacity: 0; }
-  12% { opacity: 1; }
-  88% { opacity: 1; }
-  to { left: calc(100% - 8px); opacity: 0; }
-}
-.landing-packet {
-  position: absolute;
-  top: -3.5px;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--chart-1);
-  box-shadow: 0 0 10px var(--chart-1);
-  animation: landing-packet 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
 /* «Проверьте всё сами»: карточки оживают при наведении. */
@@ -197,7 +176,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .landing-draw { animation: none; stroke-dashoffset: 0; }
-  .landing-gradient-text, .landing-packet, .landing-caret,
+  .landing-caret,
   .landing-reveal, .landing-hero-parallax, .landing-ticks { animation: none; }
   .landing-platform, .landing-verify, .landing-platform-logo, .landing-doc-line, .landing-doc-mark,
   .landing-branch, .landing-branch-dot, .landing-json-line { transition: none; }

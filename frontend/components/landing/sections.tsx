@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Braces, Check, CircleSlash, Server, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Braces, Check, CircleSlash, X } from "lucide-react";
 import Link from "@/components/native-link";
 import { GithubMark } from "@/components/github-mark";
 import { PlatformLogo } from "@/components/platform-logo";
@@ -85,7 +85,7 @@ export function Stats({ summary }: { summary: SiteSummary }) {
   ].filter((item): item is { value: number; label: string } => item.value !== null);
   return (
     <section aria-label="Проект в цифрах" className="landing-reveal relative pt-16 sm:pt-24" data-testid="landing-stats">
-      <div className="bg-card/80 ring-foreground/10 grid grid-cols-2 overflow-hidden rounded-3xl shadow-2xl shadow-black/5 ring-1 backdrop-blur-xl lg:grid-cols-4">
+      <div className="bg-card ring-foreground/10 grid grid-cols-2 overflow-hidden rounded-3xl shadow-2xl shadow-black/5 ring-1 lg:grid-cols-4">
         {items.map((item, index) => (
           <div key={item.label} className={cn("grid gap-1 p-6 sm:p-8", index % 2 && "border-l", index >= 2 && "border-t lg:border-t-0", index === 2 && "lg:border-l")}>
             <span className="font-heading text-4xl font-bold tracking-tight tabular-nums sm:text-5xl"><CountUp value={item.value} /></span>
@@ -197,15 +197,22 @@ function QualityRows() {
   );
 }
 
-function TwoServers() {
+/** Фрагмент истории замеров поста — то, что видно на его странице и в API. */
+function HistoryRows() {
+  const rows = [
+    ["12:05", "1 204", "+318"], ["12:10", "1 377", "+173"], ["12:15", "1 462", "+85"], ["12:30", "1 530", "+68"],
+  ] as const;
   return (
-    <div className="grid gap-3 text-xs">
-      <div className="flex items-center gap-3">
-        <span className="bg-muted/60 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 font-medium"><Server className="size-3.5" aria-hidden="true" />сбор</span>
-        <span className="landing-wire relative h-px flex-1" aria-hidden="true"><span className="landing-packet" /></span>
-        <span className="bg-muted/60 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 font-medium"><Server className="size-3.5" aria-hidden="true" />витрина</span>
+    <div className="ring-foreground/10 overflow-hidden rounded-xl text-xs ring-1">
+      <div className="bg-muted/50 text-muted-foreground grid grid-cols-3 px-3 py-1.5 text-[11px] tracking-wide uppercase">
+        <span>замер</span><span className="text-right">просмотры</span><span className="text-right">прирост</span>
       </div>
-      <p className="text-muted-foreground">Пакеты идут по защищённому каналу, каждый принимается ровно один раз.</p>
+      {rows.map(([time, views, delta]) => (
+        <div key={time} className="grid grid-cols-3 border-t px-3 py-1.5 font-mono tabular-nums">
+          <span className="text-muted-foreground">{time}</span><span className="text-right">{views}</span>
+          <span className="landing-tone-text text-right">{delta}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -230,9 +237,10 @@ const STEPS = [
     visual: <QualityRows />,
   },
   {
-    title: "Сбор отделён от витрины",
-    text: <>Сборщики работают на своём сервере и не зависят от посещаемости сайта; витрина получает готовые пакеты.</>,
-    visual: <TwoServers />,
+    title: "Каждое число — с историей",
+    text: <>На странице поста — все замеры по времени, пропуски сбора и вывод анализа. Тот же ряд отдаёт открытый API:
+      любую цифру на сайте можно пересчитать.</>,
+    visual: <HistoryRows />,
   },
 ] as const;
 
@@ -268,17 +276,14 @@ export function Pipeline({ chart }: { chart: ReactNode }) {
   );
 }
 
-export function SameAge({ chart }: { chart: ReactNode }) {
+export function Rhythm({ chart }: { chart: ReactNode }) {
   return (
-    <section aria-labelledby="landing-age" className="grid gap-12 py-24 sm:py-32">
-      <SectionHead id="landing-age" eyebrow="сравнение" tone="var(--chart-3)" title="Сравниваем в одном возрасте">
-        У вчерашнего поста просмотров всегда меньше, чем у позавчерашнего, — он просто моложе. Поэтому вузы сравниваются
-        по значению на одном и том же часу жизни поста: через час, сутки, неделю.
+    <section aria-labelledby="landing-rhythm" className="grid gap-12 py-24 sm:py-32">
+      <SectionHead id="landing-rhythm" eyebrow="ритм площадок" tone="var(--chart-3)" title="Когда публикуют и что это даёт">
+        Сколько публикаций выходит в каждый час и день недели, сколько типичный пост набирает за первые сутки и чем
+        заканчивается проверка динамики — по живым данным за 30 дней.
       </SectionHead>
-      <div className="landing-reveal bg-card ring-foreground/10 grid gap-4 rounded-3xl p-6 ring-1 sm:p-8">
-        {chart}
-        <p className="text-muted-foreground text-xs">Жирная линия — типичный пост площадки (медиана), тонкие — вузы. В сравнении вузы сопоставляются по значению через 24 часа.</p>
-      </div>
+      <div className="landing-reveal bg-card ring-foreground/10 grid gap-4 rounded-3xl p-6 ring-1 sm:p-8">{chart}</div>
     </section>
   );
 }
@@ -286,9 +291,9 @@ export function SameAge({ chart }: { chart: ReactNode }) {
 export function Analysis({ corridor }: { corridor: ReactNode }) {
   return (
     <section aria-labelledby="landing-analysis" className="grid gap-12 py-24 sm:py-32">
-      <SectionHead id="landing-analysis" eyebrow="анализ динамики" tone="var(--chart-10)" title="Коридор нормы">
-        Рост каждого поста сверяется с постами того же возраста на той же площадке. Анализатор называет форму отклонения
-        и её силу — это повод присмотреться, а не вывод.
+      <SectionHead id="landing-analysis" eyebrow="автоматический анализ" tone="var(--chart-10)" title="Каждый пост проверяется сам">
+        Пока идёт сбор, анализатор сверяет рост поста с обычным разбросом постов того же возраста на той же площадке.
+        Живой шум — норма: сигналом становится только необычная форма роста. Её сила — повод присмотреться, а не вывод.
       </SectionHead>
       <div className="landing-reveal">{corridor}</div>
       <aside className="landing-reveal bg-muted/40 ring-foreground/5 grid gap-3 rounded-3xl p-6 ring-1 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-8 sm:p-8">

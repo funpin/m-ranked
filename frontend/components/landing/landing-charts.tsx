@@ -17,8 +17,14 @@ const ReachAreaChart = dynamic(() => import("@/components/compare/compare-charts
 const DailyChart = dynamic(() => import("@/components/compare/compare-charts").then((module) => module.DailyChart), {
   ssr: false, loading: () => <ChartSkeleton height={300} />,
 });
-const CurvesChart = dynamic(() => import("./landing-curves-chart"), {
-  ssr: false, loading: () => <ChartSkeleton height={340} />,
+const HourlyReachChart = dynamic(() => import("@/components/compare/compare-charts").then((module) => module.HourlyReachChart), {
+  ssr: false, loading: () => <ChartSkeleton height={280} />,
+});
+const LevelsByPlatform = dynamic(() => import("@/components/compare/compare-charts").then((module) => module.LevelsByPlatform), {
+  ssr: false, loading: () => <ChartSkeleton height={240} />,
+});
+const TimingHeatmap = dynamic(() => import("@/components/compare/timing-heatmap").then((module) => module.TimingHeatmap), {
+  ssr: false, loading: () => <ChartSkeleton height={240} />,
 });
 
 const NETWORKS = ["telegram", "vk", "max", "rutube"] as const satisfies readonly Network[];
@@ -74,21 +80,37 @@ export function LandingReach({ data }: { data: Dashboard }) {
   );
 }
 
-/** Типичный пост площадки по часам жизни: медиана и тонкие линии всех вузов. */
-export function LandingCurves({ data }: { data: Dashboard }) {
-  const available = useMemo(() => NETWORKS.filter((network) =>
-    data.curves.some((curve) => curve.platform === network && curve.views.some((value) => value !== null))), [data]);
-  const [platform, setPlatform] = useState<Network>(available[0] ?? "telegram");
-  if (!available.length) return null;
+type RhythmView = "hours" | "week" | "analysis";
+type RhythmPlatform = "all" | Network;
+
+/** Ритм площадок: когда публикуют, сколько пост набирает за первые сутки в
+ *  зависимости от часа выхода и чем заканчивается анализ динамики. */
+export function LandingRhythm({ data }: { data: Dashboard }) {
+  const [view, setView] = useState<RhythmView>("hours");
+  const available = useMemo(() => NETWORKS.filter((network) => data.timing.some((cell) => cell.platform === network && cell.posts > 0)), [data]);
+  const [platform, setPlatform] = useState<RhythmPlatform>("all");
   return (
-    <div className="grid gap-4" data-testid="landing-curves">
-      <Switcher label="Площадка" value={platform} onChange={setPlatform}
-        options={available.map((network) => ({
-          value: network,
-          label: <><PlatformLogo platform={network} size={16} decorative />{KNOWN_PLATFORMS[network].name}</>,
-        }))} />
-      <WhenNear height={340}>
-        <CurvesChart data={data} platform={platform} />
+    <div className="grid gap-4" data-testid="landing-rhythm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Switcher label="Что показать" value={view} onChange={setView}
+          options={[{ value: "hours", label: "Час выхода" }, { value: "week", label: "Дни недели" }, { value: "analysis", label: "Итоги анализа" }]} />
+        {view !== "analysis" && (
+          <Switcher label="Площадка" value={platform} onChange={setPlatform}
+            options={[{ value: "all" as const, label: "Все" }, ...available.map((network) => ({
+              value: network,
+              label: <><PlatformLogo platform={network} size={16} decorative /><span className="max-sm:sr-only">{KNOWN_PLATFORMS[network].name}</span></>,
+            }))]} />
+        )}
+      </div>
+      <p className="text-muted-foreground text-sm">
+        {view === "hours" ? "Столбцы — сколько публикаций выходит в каждый час, линия — сколько типичный пост этого часа набирает за первые сутки."
+          : view === "week" ? "Чем насыщеннее клетка, тем больше публикаций выходит в этот день и час."
+            : "Доля постов каждой площадки на каждом уровне анализа динамики."}
+      </p>
+      <WhenNear height={280}>
+        {view === "hours" ? <HourlyReachChart data={data} platform={platform} />
+          : view === "week" ? <TimingHeatmap data={data} platform={platform} />
+            : <LevelsByPlatform data={data} />}
       </WhenNear>
     </div>
   );

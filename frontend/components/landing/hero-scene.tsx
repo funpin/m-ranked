@@ -26,7 +26,8 @@ function readPalette(): ScenePalette {
       resolveColor("--platform-max", probe), resolveColor("--platform-rutube", probe),
     ],
     background: resolveColor("--background", probe),
-    grid: resolveColor("--border", probe),
+    // Сетка — цветом текста: на светлой теме цвет рамок сливался с фоном.
+    grid: resolveColor("--foreground", probe),
     dark: document.documentElement.dataset.theme === "dark",
   };
 }

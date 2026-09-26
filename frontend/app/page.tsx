@@ -2,10 +2,10 @@ import { cache, Suspense } from "react";
 import "./landing.css";
 import type { Metadata } from "next";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LandingCurves, LandingReach } from "@/components/landing/landing-charts";
+import { LandingReach, LandingRhythm } from "@/components/landing/landing-charts";
 import { LazyCorridor } from "@/components/landing/lazy-corridor";
 import {
-  Analysis, ChartUnavailable, Hero, LandingFooter, Pipeline, Platforms, SameAge, Stats, Verify, type LandingPlatform,
+  Analysis, ChartUnavailable, Hero, LandingFooter, Pipeline, Platforms, Rhythm, Stats, Verify, type LandingPlatform,
 } from "@/components/landing/sections";
 import { api } from "@/lib/api";
 import { publicOrigin } from "@/lib/deployment";
@@ -45,9 +45,9 @@ async function Reach() {
   return data ? <LandingReach data={data} /> : <ChartUnavailable />;
 }
 
-async function Curves() {
+async function RhythmCharts() {
   const data = await dashboard();
-  return data ? <LandingCurves data={data} /> : <ChartUnavailable />;
+  return data ? <LandingRhythm data={data} /> : <ChartUnavailable />;
 }
 
 const chartFallback = (height: number) => <Skeleton className="w-full rounded-lg" style={{ height }} aria-label="График загружается" role="status" />;
@@ -65,7 +65,7 @@ export default async function HomePage() {
       {site && <Stats summary={site} />}
       <Platforms platforms={platforms} />
       <Pipeline chart={<Suspense fallback={chartFallback(340)}><Reach /></Suspense>} />
-      <SameAge chart={<Suspense fallback={chartFallback(390)}><Curves /></Suspense>} />
+      <Rhythm chart={<Suspense fallback={chartFallback(380)}><RhythmCharts /></Suspense>} />
       <Analysis corridor={<LazyCorridor />} />
       <Verify summary={site} origin={publicOrigin().origin} />
       <LandingFooter />

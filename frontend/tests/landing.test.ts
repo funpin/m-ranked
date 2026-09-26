@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  CORRIDOR_SHAPES, corridorBand, corridorShapePath, countWithUnit, formatStat, landingDashboard, sceneCurves,
+  CORRIDOR_SHAPES, corridorBand, corridorCrowd, corridorShapePath, countWithUnit, formatStat, landingDashboard, sceneCurves,
   platformsFromSummary, summaryDate,
 } from "../lib/landing";
 import type { Dashboard } from "../lib/compare-dashboard";
@@ -61,8 +61,21 @@ test("в разметку главной не уходят данные, кот�
   } as unknown as Dashboard;
   const pruned = landingDashboard(data);
   assert.equal(pruned.stats.length, 1);
-  assert.deepEqual(pruned.curves[0]!.reactions, []);
-  assert.deepEqual(pruned.curves[0]!.views, [1, 2]);
-  assert.deepEqual([pruned.timing, pruned.types], [[], []]);
+  assert.deepEqual([pruned.curves, pruned.types, pruned.institutions], [[], [], []]);
+  assert.deepEqual(pruned.timing, [{ weekday: 1 }]);
   assert.equal(pruned.daily.length, 1);
+});
+
+test("живые посты неровные, но не убывают и не выходят из обычного разброса", () => {
+  const normal = CORRIDOR_SHAPES.find((shape) => shape.id === "normal")!;
+  const typical = (t: number) => 0.52 * (1 - Math.exp(-t * 5.2));
+  let previous = -1;
+  for (let step = 0; step <= 100; step += 1) {
+    const t = step / 100;
+    const value = normal.values(t);
+    assert.ok(value >= previous - 1e-9, `убывает на ${t}`);
+    assert.ok(value <= typical(t) * 1.34 + 1e-9 && value >= typical(t) * 0.68 - 1e-9, `вне разброса на ${t}`);
+    previous = value;
+  }
+  assert.equal(corridorCrowd().length, 5);
 });

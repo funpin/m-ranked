@@ -3,6 +3,7 @@
  *  а компоненты главной лишь рисуют результат. */
 import type { components } from "../../contracts/openapi/m-ranked-v1-client";
 import type { Dashboard } from "./compare-dashboard";
+import { plural } from "./format";
 
 export type SiteSummary = components["schemas"]["SiteSummary"];
 
@@ -40,15 +41,6 @@ export function formatStat(value: number) {
   return integer.format(Math.round(value));
 }
 
-/** Русское согласование с числом: 1 канал, 2 канала, 5 каналов. */
-export function plural(value: number, one: string, few: string, many: string) {
-  const mod100 = Math.abs(value) % 100;
-  const mod10 = mod100 % 10;
-  if (mod100 >= 11 && mod100 <= 14) return many;
-  if (mod10 === 1) return one;
-  if (mod10 >= 2 && mod10 <= 4) return few;
-  return many;
-}
 
 const UNIT_FORMS: Record<string, [string, string, string]> = {
   канал: ["канал", "канала", "каналов"],
@@ -77,33 +69,20 @@ export const COLLECTION_SCHEDULE = [
 export const RUTUBE_SCHEDULE = "от часа в первые трое суток до 12 часов к концу месяца";
 export const TRACKING_DAYS = 30;
 
-/** Только то, что рисуют графики главной: сутки по площадкам и кривые
- *  просмотров. Остальное (тепловая карта, типы, реакции, счётчики по вузам) в разметку
- *  главной не попадает — это десятки килобайт, которых никто не увидит. */
+/** Только то, что рисуют графики главной: сутки по площадкам, ритм
+ *  публикаций и итоги анализа по площадкам. Кривые, типы и строки вузов в
+ *  разметку главной не попадают — это десятки килобайт, которых никто не увидит. */
 export function landingDashboard(data: Dashboard): Dashboard {
   return {
     ...data,
+    institutions: [],
     stats: data.stats.filter((stat) => stat.institutionId === null),
-    curves: data.curves.map((curve) => ({ ...curve, reactions: [] })),
-    timing: [],
+    curves: [],
     types: [],
   };
 }
 
 // --- Геометрия иллюстраций ---
-
-/** Детерминированный генератор (mulberry32): сервер и клиент получают одну
- *  и ту же картинку, и она не меняется от сборки к сборке. */
-export function seeded(seed: number) {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 const round = (value: number) => Math.round(value * 10) / 10;
 const hundredths = (value: number) => Math.round(value * 100) / 100;
@@ -111,32 +90,42 @@ const hundredths = (value: number) => Math.round(value * 100) / 100;
 export type ScenePoint = readonly [number, number, number];
 export interface SceneCurve { points: ScenePoint[]; tone: number; lead: boolean; delay: number }
 
+
 /** Трёхмерная модель первого экрана — «рельеф замеров». Каждая кривая —
  *  пост: по оси x его возраст, по y накопленные просмотры, по z — место в
  *  ленте. Пост стартует в свой момент, быстро растёт и выходит на плато;
- *  точки гуще в начале, как в настоящем расписании сбора. Координаты — в
+ *  точки гуще в начале, как в настоящем расписании сбора. Кривых немного:
+ *  модель передаёт идею, а не изображает данные. Координаты — в
  *  единицах сцены: x ∈ [-3.2; 3.2], y ∈ [0; 2.4], z ∈ [-2.2; 2.2]. */
-export function sceneCurves({ count = 26, samples = 48, seed = 20260926 } = {}): SceneCurve[] {
-  const random = seeded(seed);
+export function sceneCurves({ samples = 40 } = {}): SceneCurve[] {
+  // Четыре площадки — четыре ведущие кривые разной высоты и крутизны; рядом
+  // с каждой — тихая кривая другого поста того же аккаунта.
+  const leads = [
+    { z: -1.8, start: -3.0, amplitude: 1.55, tau: 0.55, delay: 0 },
+    { z: -0.6, start: -2.7, amplitude: 2.15, tau: 0.8, delay: 0.25 },
+    { z: 0.6, start: -2.3, amplitude: 1.25, tau: 0.42, delay: 0.5 },
+    { z: 1.8, start: -2.85, amplitude: 1.8, tau: 0.95, delay: 0.75 },
+  ];
   const curves: SceneCurve[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const z = -2.2 + (4.4 * index) / Math.max(1, count - 1) + (random() - 0.5) * 0.08;
-    const start = -3.2 + random() * 1.8;
-    // Разброс охвата огромный: немногие посты набирают в разы больше прочих.
-    const amplitude = 0.3 + 2.1 * random() ** 1.8;
-    const tau = 0.25 + random() * 1.1;
-    const points: ScenePoint[] = [];
-    for (let step = 0; step < samples; step += 1) {
-      const x = start + (3.2 - start) * (step / (samples - 1)) ** 1.6;
-      points.push([hundredths(x), hundredths(amplitude * (1 - Math.exp(-(x - start) / tau))), hundredths(z)]);
+  for (const [tone, lead] of leads.entries()) {
+    for (const quiet of [false, true]) {
+      const start = lead.start + (quiet ? 0.9 : 0);
+      const amplitude = lead.amplitude * (quiet ? 0.5 : 1);
+      const points: ScenePoint[] = [];
+      for (let step = 0; step < samples; step += 1) {
+        const x = start + (3.2 - start) * (step / (samples - 1)) ** 1.6;
+        points.push([hundredths(x), hundredths(amplitude * (1 - Math.exp(-(x - start) / lead.tau))), hundredths(lead.z + (quiet ? 0.38 : 0))]);
+      }
+      curves.push({ points, tone, lead: !quiet, delay: lead.delay + (quiet ? 0.4 : 0) });
     }
-    curves.push({ points, tone: index % 4, lead: index % 7 === 3, delay: round(random() * 12) / 10 });
   }
   return curves;
 }
 
-/** Схема «коридора нормы»: одинаковое число точек у всех кривых, чтобы
- *  переход между ними анимировался плавно. Координаты — в поле 640 × 300. */
+/** Схема автоматического анализа: обычный разброс площадки, живые посты
+ *  внутри него и формы, которые анализатор отмечает. У всех кривых одинаковое
+ *  число точек, чтобы переход между ними анимировался плавно. Координаты — в
+ *  поле 640 × 300. */
 export const CORRIDOR = { width: 640, height: 300, left: 36, right: 620, top: 24, bottom: 268 } as const;
 const CORRIDOR_POINTS = 41;
 
@@ -151,6 +140,24 @@ function typical(t: number) {
   return 0.52 * (1 - Math.exp(-t * 5.2));
 }
 
+/** Живой пост: скорость роста неровная — всплески, паузы, суточный ритм, —
+ *  но счётчик не убывает. Считается как сумма шагов с «шумной» скоростью. */
+function live(t: number, seed: number, scale = 1) {
+  const steps = 80;
+  let value = 0;
+  for (let step = 0; step < Math.round(t * steps); step += 1) {
+    const at = (step + 0.5) / steps;
+    const rate = 0.52 * 5.2 * Math.exp(-at * 5.2) / steps;
+    // В первые минуты шум мал: рост ещё не успел разойтись.
+    const noise = Math.min(1, at * 5) * (0.75 * Math.sin(at * 23 + seed) + 0.45 * Math.sin(at * 61 + seed * 2.3));
+    value += rate * Math.max(0, 1 + noise);
+  }
+  // Живой пост остаётся внутри обычного разброса; границы монотонны, поэтому
+  // и ограниченный ряд не убывает.
+  const expected = typical(t);
+  return Math.min(expected * 1.28, Math.max(expected * 0.74, value * scale));
+}
+
 function polyline(values: (t: number) => number) {
   const parts: string[] = [];
   for (let index = 0; index < CORRIDOR_POINTS; index += 1) {
@@ -160,7 +167,7 @@ function polyline(values: (t: number) => number) {
   return parts.join("");
 }
 
-/** Коридор нормы площадки: между «тихими» и «громкими» постами того же возраста. */
+/** Обычный разброс площадки: между «тихими» и «громкими» постами того же возраста. */
 export function corridorBand() {
   const upper: string[] = [];
   const lower: string[] = [];
@@ -169,15 +176,20 @@ export function corridorBand() {
     upper.push(`${round(corridorX(t))} ${round(corridorY(typical(t) * 1.34))}`);
     lower.unshift(`${round(corridorX(t))} ${round(corridorY(typical(t) * 0.68))}`);
   }
-  // Подпись встаёт над верхней границей коридора у правого края.
+  // Подпись встаёт над верхней границей у правого края.
   return { area: `M${upper.join("L")}L${lower.join("L")}Z`, median: polyline(typical), labelY: round(corridorY(typical(1) * 1.34) - 10) };
+}
+
+/** Несколько обычных постов: все разные и неровные, но в пределах разброса. */
+export function corridorCrowd() {
+  return [[0.7, 0.86], [1.9, 1.12], [3.1, 0.94], [4.4, 1.22], [5.6, 0.78]].map(([seed, scale]) => polyline((t) => live(t, seed!, scale!)));
 }
 
 export const CORRIDOR_SHAPES = [
   {
-    id: "normal", title: "Обычный пост", level: 0,
-    text: "Быстрый старт, затем плавное замедление. Кривая остаётся в коридоре своей площадки.",
-    values: (t: number) => typical(t) * 1.06 + 0.012 * Math.sin(t * 9),
+    id: "normal", title: "Живой рост", level: 0,
+    text: "Рост неровный: всплески, паузы, суточный ритм. Пока кривая в пределах обычного разброса площадки, это шум, а не сигнал.",
+    values: (t: number) => live(t, 0.3, 1.04),
   },
   {
     id: "linear", title: "Линейная подача", level: 1,
@@ -203,7 +215,7 @@ export function corridorShapePath(id: CorridorShapeId) {
 
 /** Уровни анализа — как в самом анализаторе (anomaly_analysis/v2/levels.py). */
 export const ANALYSIS_LEVELS = [
-  { level: 0, title: "Нет признаков", text: "Рост в пределах нормы площадки." },
+  { level: 0, title: "Нет признаков", text: "Рост в пределах обычного разброса площадки." },
   { level: 1, title: "Уровень 1", text: "Один признак средней силы или несколько слабых." },
   { level: 2, title: "Уровень 2", text: "Один сильный признак." },
   { level: 3, title: "Признаки искусственной активности", text: "Сильные признаки из двух разных семейств сразу." },

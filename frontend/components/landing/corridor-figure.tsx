@@ -1,17 +1,18 @@
 import type { ReactNode } from "react";
-import { ANALYSIS_LEVELS, CORRIDOR, CORRIDOR_SHAPES, corridorBand, corridorShapePath, type CorridorShapeId } from "@/lib/landing";
+import { ANALYSIS_LEVELS, CORRIDOR, CORRIDOR_SHAPES, corridorBand, corridorCrowd, corridorShapePath, type CorridorShapeId } from "@/lib/landing";
 import { cn } from "@/lib/utils";
 
 export const LEVEL_TONES = ["var(--chart-1)", "var(--chart-10)", "var(--chart-3)", "var(--destructive)"] as const;
 export const CORRIDOR_PATHS = Object.fromEntries(CORRIDOR_SHAPES.map((shape) => [shape.id, corridorShapePath(shape.id)])) as Record<CorridorShapeId, string>;
 const BAND = corridorBand();
+const CROWD = corridorCrowd();
 
 export function shapeOf(id: CorridorShapeId) {
   return CORRIDOR_SHAPES.find((item) => item.id === id)!;
 }
 
-/** Разметка коридора нормы. Кривую поста передаёт вызывающий: до загрузки
- *  анимации это обычный path, после — анимированный. */
+/** Схема автоматического анализа. Кривую поста передаёт вызывающий: до
+ *  загрузки анимации это обычный path, после — анимированный. */
 export function CorridorFigure({ active, curve, onSelect, figureRef }: {
   active: CorridorShapeId; curve: ReactNode; onSelect?: (id: CorridorShapeId) => void; figureRef?: React.Ref<HTMLDivElement>;
 }) {
@@ -23,7 +24,7 @@ export function CorridorFigure({ active, curve, onSelect, figureRef }: {
           <span>просмотры</span><span>схема · не данные</span>
         </div>
         <svg viewBox={`0 0 ${CORRIDOR.width} ${CORRIDOR.height}`} className="h-auto w-full" role="img"
-          aria-label={`Схема: ${shape.title.toLowerCase()} относительно коридора нормы площадки`}>
+          aria-label={`Схема: ${shape.title.toLowerCase()} относительно обычного разброса площадки`}>
           <defs>
             <linearGradient id="corridor-band" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor="var(--chart-2)" stopOpacity="0.26" />
@@ -36,8 +37,9 @@ export function CorridorFigure({ active, curve, onSelect, figureRef }: {
           })}
           <line x1={CORRIDOR.left} x2={CORRIDOR.right} y1={CORRIDOR.bottom} y2={CORRIDOR.bottom} stroke="var(--border)" />
           <path d={BAND.area} fill="url(#corridor-band)" />
-          <path d={BAND.median} fill="none" stroke="var(--chart-2)" strokeOpacity={0.7} strokeWidth={1.5} strokeDasharray="5 5" />
-          <text x={CORRIDOR.right} y={BAND.labelY} textAnchor="end" className="fill-muted-foreground text-[11px]">коридор нормы площадки</text>
+          {/* Живые посты площадки: все разные, но в пределах разброса. */}
+          {CROWD.map((d, index) => <path key={index} d={d} fill="none" stroke="var(--muted-foreground)" strokeOpacity={0.35} strokeWidth={1} />)}
+          <text x={CORRIDOR.right} y={BAND.labelY} textAnchor="end" className="fill-muted-foreground text-[11px]">обычный разброс площадки</text>
           {curve}
           <text x={CORRIDOR.left} y={CORRIDOR.bottom + 22} className="fill-muted-foreground text-[11px]">публикация</text>
           <text x={CORRIDOR.right} y={CORRIDOR.bottom + 22} textAnchor="end" className="fill-muted-foreground text-[11px]">возраст поста →</text>
