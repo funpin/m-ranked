@@ -7,7 +7,9 @@ for (const platform of ["telegram", "vk", "max", "rutube"]) {
     await expect(page.getByTestId("brand")).toHaveAttribute("href", "/");
     await expect(page.locator('[data-testid="main-nav"] a[href^="/rating"]')).toHaveAttribute("href", `/rating?platform=${platform}`);
     for (const link of await page.getByTestId("main-nav").locator("a").all()) {
-      expect(new URL((await link.getAttribute("href"))!, "http://test").searchParams.get("platform")).toBe(platform);
+      const href = new URL((await link.getAttribute("href"))!, "http://test");
+      // Методология одна на все площадки и параметра не несёт.
+      expect(href.searchParams.get("platform")).toBe(href.pathname === "/methodology" ? null : platform);
     }
   });
 
