@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from collector_runtime.config import Settings
+from collector_runtime.storage import CollectionDiskGate
 
 from .auth import apply_platform_auth_file
 from .coordinator import (
@@ -357,6 +358,18 @@ def _maintain_working_set(
         )
 
 
+async def _disk_admission(gate: CollectionDiskGate, stop: asyncio.Event, *, once: bool) -> bool:
+    # Called before acquiring any phase/global lease. Existing persistence and
+    # the independent sender finish normally; no transaction is held here.
+    while not stop.is_set():
+        if gate.allows_cycle():
+            return True
+        logger.error("collector paused by disk admission path=%s", gate.path)
+        if once or await _wait_or_stop(stop, 30):
+            return False
+    return False
+
+
 async def _close(adapter: Any, platform: Platform) -> None:
     close = getattr(adapter, "close", None)
     if not callable(close):
@@ -540,9 +553,17 @@ async def _run(args: argparse.Namespace) -> int:
             except (NotImplementedError, RuntimeError):  # pragma: no cover - platform guard
                 pass
 
+        disk_gate = CollectionDiskGate(
+            settings.collector_disk_path,
+            int(os.environ.get("COLLECTOR_DISK_PAUSE_FREE_BYTES", "2000000000")),
+            int(os.environ.get("COLLECTOR_DISK_RESUME_FREE_BYTES", "3000000000")),
+            paused=True,
+        )
         if schedule_mode == "legacy":
             while not stop.is_set():
                 ensure_runtime_release_available()
+                if not await _disk_admission(disk_gate, stop, once=args.once):
+                    return 75 if args.once else 0
                 began = time.monotonic()
                 scheduled_at = repository.resumable_scheduled_at(
                     platform, args.partition, collector_version,
@@ -588,6 +609,8 @@ async def _run(args: argparse.Namespace) -> int:
         while not stop.is_set():
             try:
                 ensure_runtime_release_available()
+                if not await _disk_admission(disk_gate, stop, once=args.once):
+                    return 75 if args.once else 0
                 now = utc(clock.now(), "clock.now")
                 if pending_phase is not None:
                     (
@@ -694,6 +717,10 @@ async def _run(args: argparse.Namespace) -> int:
                     continue
 
                 phase_lease = acquisition.lease
+                if not disk_gate.allows_cycle():
+                    phase_lease.release()
+                    pending_phase = None
+                    continue
                 began = time.monotonic()
                 summary = None
                 forced_shutdown = False

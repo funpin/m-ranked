@@ -5,5 +5,8 @@ export const NAV_LINKS = [
   { href: "/", label: "Обзор" },
   { href: "/statistics", label: "Статистика" },
   { href: "/compare", label: "Сравнение" },
-  { href: "/manage", label: "Управление" },
+  // Служебный раздел: на широком экране — значок справа, в мобильном меню — текст.
+  { href: "/manage", label: "Управление", utility: true },
 ] as const;
+
+export const MANAGE_LINK = NAV_LINKS[NAV_LINKS.length - 1];

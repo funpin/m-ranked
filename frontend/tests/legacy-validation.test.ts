@@ -27,3 +27,9 @@ test("metadata uses the production origin and rejects ambiguous deployment confi
   assert.equal(publicOrigin().origin, "https://m.funpin.org");
   for (const value of ["http://example.test", "https://user:pass@example.test", "https://example.test/path", "https://example.test/?x=1"]) assert.throws(() => publicOrigin(value));
 });
+
+test("the comparison dashboard accepts its own and legacy query values", () => {
+  for (const query of ["period=7d", "period=30d&platform=vk", "period=24&channels=bad&submitted=maybe", "highlight=x"]) {
+    assert.equal(legacyQueryErrors(new URL(`https://test/compare?${query}`)).length, 0, query);
+  }
+});

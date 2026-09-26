@@ -33,9 +33,12 @@ WITH selected AS (
                            ELSE interval '30 days' END
        AND publication.published_at<=%(as_of)s::timestamptz
        AND publication.created_at<=%(as_of)s::timestamptz
+      -- Без отсечки по as_of: в publication_latest одна строка на пост, и
+      -- отсечка не даёт прежнее значение, а выбрасывает пост целиком. Ревизия
+      -- страницы берётся из кэшированной карточки и отстаёт на минуты, так что
+      -- самые свежие (чаще всего опрашиваемые) посты выпадали из медиан.
       LEFT JOIN analytics.publication_latest latest ON latest.publication_id=publication.id
-       AND latest.observed_at<=%(as_of)s::timestamptz AND NOT latest.synthetic
-       AND latest.quality<>'invalid'
+       AND NOT latest.synthetic AND latest.quality<>'invalid'
 ), metric AS (
     SELECT value.metric_key, count(value.metric_value)::integer AS sample_size,
            sum(value.metric_value)::numeric AS total_value,
@@ -405,8 +408,10 @@ SELECT page.id AS publication_id, alias.legacy_id, alias.entity_type, alias.lega
        FROM ingest.publication_identity candidate
        WHERE candidate.publication_id=page.id AND candidate.role='primary'
        ORDER BY candidate.id LIMIT 1) identity ON true
+  -- Последний замер без отсечки по as_of — см. INSTITUTION: иначе свежие
+  -- посты показывались «ожидает замера».
   LEFT JOIN analytics.publication_latest latest ON latest.publication_id=page.id
-   AND latest.observed_at<=%(as_of)s::timestamptz AND NOT latest.synthetic AND latest.quality<>'invalid'
+   AND NOT latest.synthetic AND latest.quality<>'invalid'
   LEFT JOIN growth ON growth.publication_id=page.id
  ORDER BY page.published_at DESC,page.id DESC
 """
@@ -460,7 +465,7 @@ SELECT publication.id AS publication_id, alias.legacy_id,alias.entity_type,
        WHERE candidate.publication_id=publication.id AND candidate.role='primary'
        ORDER BY candidate.id LIMIT 1) identity ON true
   LEFT JOIN analytics.publication_latest latest ON latest.publication_id=publication.id
-   AND latest.observed_at<=%(as_of)s::timestamptz AND NOT latest.synthetic AND latest.quality<>'invalid'
+   AND NOT latest.synthetic AND latest.quality<>'invalid'
   LEFT JOIN LATERAL (
       SELECT analytics.observation_quality_from_rank(max(analytics.observation_quality_rank(value.metric_quality)))::text AS quality
         FROM (VALUES
@@ -565,6 +570,31 @@ SELECT windowed.id AS snapshot_id,windowed.*,
  ) delta_reactions
  WHERE windowed.position<=%(fetch_limit)s
  ORDER BY windowed.observed_at DESC,windowed.published_month DESC,windowed.id DESC
+"""
+
+
+# Отпечаток истории поста: число снимков и наибольший номер. Читается по
+# индексу месяца публикации, без самих строк — дешевле любой части HISTORY.
+# Поправка добавляет снимок с большим номером, удаление уменьшает число.
+HISTORY_FINGERPRINT = """
+SELECT count(*)::integer AS snapshot_count, coalesce(max(snapshot.id),0)::bigint AS max_snapshot_id
+  FROM ingest.publication_metric_snapshot snapshot
+ WHERE snapshot.published_month=%(published_month)s::date
+   AND snapshot.publication_id=%(publication_id)s::uuid
+"""
+
+# Готовая выдача HISTORY для поста с законченным сбором (миграция 0043) —
+# только если отпечаток совпадает с текущим. Иначе ответ строится заново.
+STORED_HISTORY = """
+SELECT page.payload, page.items_count
+  FROM analytics.publication_history_page page
+ WHERE page.publication_id=%(publication_id)s::uuid
+   AND page.published_month=%(published_month)s::date
+   AND (page.snapshot_count, page.max_snapshot_id) = (
+       SELECT count(*)::integer, coalesce(max(snapshot.id),0)::bigint
+         FROM ingest.publication_metric_snapshot snapshot
+        WHERE snapshot.published_month=%(published_month)s::date
+          AND snapshot.publication_id=%(publication_id)s::uuid)
 """
 
 
@@ -696,7 +726,6 @@ WITH bounds AS (
                 THEN NULL ELSE latest.views_count END AS views
       FROM published
       LEFT JOIN analytics.publication_latest latest ON latest.publication_id=published.id
-       AND latest.observed_at<=%(as_of)s::timestamptz
        AND NOT latest.synthetic AND latest.quality<>'invalid'
 ), tracked AS (
     -- Все посты площадки, а не только вышедшие на этой неделе: за сутки

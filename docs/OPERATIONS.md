@@ -1,7 +1,7 @@
 # Эксплуатация
 
 M-Ranked работает как единый Python/PostgreSQL/Next.js release. Переходного
-SQLite-контура, Spring, Redis и reverse-sync в текущем релизе нет.
+SQLite-контура, Spring и reverse-sync в текущем релизе нет. Профиль B использует Redis как ограниченный непостоянный cache.
 
 ## Процессы
 
@@ -50,7 +50,7 @@ CSV-экспорт удалён из рабочего контура. FastAPI н
 admin export endpoints, Next.js не содержит совместимых `/export/*.csv`
 маршрутов, а collectors не создают `analytics.legacy_native_export_lexeme`.
 Миграция `0033_remove_csv_exports.sql` удаляет оставшуюся таблицу с production.
-Служебный cold archive Parquet относится к retention/DR и остаётся включённым.
+Служебный cold archive Parquet относится к retention/DR; наличие кода не означает включённую архивацию. На проверке 24.09.2026 архивы и работающая archive job отсутствовали.
 
 Подробные процедуры: [deploy](../operations/runbooks/DEPLOY.md),
 [backup/restore](../operations/runbooks/BACKUP_RESTORE.md),

@@ -33,9 +33,12 @@ export function DaySpotlight({ day, mode = "median" }: { day?: string; mode?: "m
   if (!day) return null;
   return (
     <>
-    {mode === "median" ? <style>{`[data-published-day]{transition:background-color .2s,opacity .2s}
-      [data-published-day]:not([data-published-day="${day}"]){opacity:.45!important}
-      [data-published-day="${day}"]{background:var(--accent)}`}</style> : null}
+    {/* Затемняются ячейки, а не строка: opacity на <tr> браузеры (WebKit в
+        первую очередь) перерисовывают ненадёжно — при наведении на список
+        строки других дней «проявлялись». */}
+    {mode === "median" ? <style>{`[data-published-day]>td{transition:background-color .2s,opacity .2s}
+      [data-published-day]:not([data-published-day="${day}"])>td{opacity:.45}
+      [data-published-day="${day}"]>td{background:var(--accent)}`}</style> : null}
     <div className="mb-3 flex flex-wrap items-center gap-2 text-sm" role="status">
       <span className="bg-accent text-accent-foreground inline-flex items-center rounded-full px-2.5 py-0.5 font-medium tabular">
         {dayLabel(day)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,7 +8,7 @@ import { Activity, Clock, Eye, Heart, Hourglass, MessageCircle, Share2, Smile, T
 import Link from "@/components/native-link";
 import { duration, legacyDate, legacyNumber } from "@/lib/format";
 import { useHistoryPreferences } from "@/lib/history-preferences";
-import { historyReactionEntries, sampleHistory, signedDuration } from "@/lib/history-data";
+import { chronological, historyReactionEntries, sampleHistory, signedDuration } from "@/lib/history-data";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -16,7 +16,9 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
-import type { CollectorCoverage, HistorySnapshot, Platform, PublicationAnomalyAnalysis } from "@/lib/types";
+import type { CollectorCoverage, HistorySnapshot, Platform } from "@/lib/types";
+import { boundarySnapshotIds, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
+import { AnomalyAnalysisSkeleton, DeferredAnomalyAnalysis } from "@/components/anomaly-analysis";
 
 import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 
@@ -109,7 +111,7 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>;
-  gaps: CollectorCoverage["gaps"];
+  gaps: CollectorCoverage["gaps"]; markers: readonly SignalMarker[]; highlight?: string;
 }) {
   const { metrics, platform, delta } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
@@ -183,22 +185,84 @@ function MetricChart(props: {
   </>;
 }
 
-export function PublicationMeasurements({ rows, collectorCoverage, platform, publishedAt, historyLimit, analysis=null, fullHistoryHref }: { rows: HistorySnapshot[];collectorCoverage:CollectorCoverage;platform:Exclude<Platform,"all">;publishedAt:string;historyLimit:number;analysis?:PublicationAnomalyAnalysis|null;fullHistoryHref?:string }) {
+/** Значение обещания, когда оно выполнится, — без Suspense. Графики не должны
+ *  пересоздаваться при приходе анализа: иначе пропало бы всё, что пользователь
+ *  успел в них переключить. */
+function useSettled<T>(promise: Promise<T> | null | undefined): T | undefined {
+  const [settled, setSettled] = useState<{ promise: Promise<T>; value: T }>();
+  useEffect(() => {
+    if (!promise) return;
+    let live = true;
+    void promise.then((value) => { if (live) setSettled({ promise, value }); });
+    return () => { live = false; };
+  }, [promise]);
+  return settled && settled.promise === promise ? settled.value : undefined;
+}
+
+/** Строк таблицы в серверном ответе. Остальные дорисовываются в браузере после
+ *  загрузки: серверу не нужно рисовать и отдавать сотню строк по 2,3 КБ, а
+ *  роботу без скриптов хватает последних замеров. */
+const SERVER_TABLE_ROWS = 20;
+const subscribeNever = () => () => {};
+
+export function PublicationMeasurements({ publicationId, rows: initialRows, sampledIds=null, totalPoints, collectorCoverage, platform, publishedAt, historyLimit, analysis=null, fullHistoryHref }: { publicationId:string;rows: HistorySnapshot[];sampledIds?:string[]|null;totalPoints?:number;collectorCoverage:CollectorCoverage;platform:Exclude<Platform,"all">;publishedAt:string;historyLimit:number;analysis?:Promise<AnalysisLoad>|null;fullHistoryHref?:string }) {
+  // Страница может прийти с выборкой истории (см. previewHistory): точки графика
+  // на всём диапазоне и хвост таблицы. Полная история догружается при первом
+  // действии, которому она нужна: сужение диапазона, переход к точке или сигналу.
+  const [loadedRows,setLoadedRows] = useState<HistorySnapshot[]|null>(null);
+  const preview = loadedRows === null && sampledIds !== null;
+  const rows = loadedRows ?? initialRows;
   const [start,setStart] = useState(0), [end,setEnd] = useState(Math.max(0,rows.length-1));
+  const [fullState,setFullState] = useState<"idle"|"loading"|"failed">("idle");
+  // На сервере — false, в браузере после гидратации — true, без лишнего рендера.
+  const hydrated = useSyncExternalStore(subscribeNever, () => true, () => false);
+  // Догрузка отвечает асинхронно и должна видеть последний выбранный диапазон.
+  const latest = useRef({ rows, start, end, preview });
+  useEffect(() => { latest.current = { rows, start, end, preview }; });
+  const waiting = useRef<((full: HistorySnapshot[]) => void)[]>([]);
+  const inflight = useRef(false);
+  const requestFull = useCallback((then?: (full: HistorySnapshot[]) => void) => {
+    if (!latest.current.preview) { then?.(latest.current.rows); return; }
+    if (then) waiting.current.push(then);
+    if (inflight.current) return;
+    inflight.current = true;
+    setFullState("loading");
+    fetch(`/api/v1/publications/${publicationId}/history?limit=3000`, { headers: { accept: "application/json" } })
+      .then((response) => { if (!response.ok) throw new Error(`history ${response.status}`); return response.json(); })
+      .then((body: { items: HistorySnapshot[] }) => {
+        const full = chronological(body.items);
+        const { rows: shown, start: low, end: high } = latest.current;
+        // Выбранный на выборке диапазон переносится по времени, а не по номеру точки.
+        const whole = low === 0 && high === shown.length - 1;
+        const from = Date.parse(shown[low]?.observedAt ?? ""), to = Date.parse(shown[high]?.observedAt ?? "");
+        let first = whole ? 0 : full.findIndex((row) => Date.parse(row.observedAt) >= from);
+        let last = full.length - 1;
+        if (!whole) while (last > 0 && Date.parse(full[last]!.observedAt) > to) last--;
+        if (first < 0) first = 0;
+        setLoadedRows(full);
+        setStart(first);
+        setEnd(Math.max(first, last));
+        setFullState("idle");
+        const actions = waiting.current;
+        waiting.current = [];
+        for (const action of actions) action(full);
+      })
+      .catch(() => { inflight.current = false; waiting.current = []; setFullState("failed"); });
+  }, [publicationId]);
   const [selectedId,setSelectedId] = useState<string>();
   const telegram = platform === "telegram";
   const metrics = useMemo(() => availableHistoryMetrics(rows),[rows]);
   const [tableOverride,setTableOverride] = useState<{base:number;limit:number}>();
   const tableLimit = tableOverride?.base === historyLimit ? tableOverride.limit : historyLimit;
   const [scrollRequest,setScrollRequest] = useState<{id:string}>();
-  const activate = useCallback((id:string) => {
-    const index=rows.findIndex(row=>row.snapshotId===id);
+  const activate = useCallback((id:string) => requestFull((list) => {
+    const index=list.findIndex(row=>row.snapshotId===id);
     if(index<0) return;
     setSelectedId(id);
     setTableOverride(previous => ({base:historyLimit,limit:Math.max(
-      previous?.base===historyLimit ? previous.limit : historyLimit, rows.length-index)}));
+      previous?.base===historyLimit ? previous.limit : historyLimit, list.length-index)}));
     setScrollRequest({id});
-  },[rows,historyLimit]);
+  }),[requestFull,historyLimit]);
   useEffect(() => {
     if(!scrollRequest) return;
     const row=document.getElementById(`snapshot-${scrollRequest.id}`);
@@ -206,9 +270,30 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
     row?.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
   },[scrollRequest]);
   const sampledId = end-start+1 > 144 ? selectedId : undefined;
-  const evidenceIds = useMemo(()=>new Set(analysis?.findings.flatMap(finding=>[finding.startSnapshotId,finding.endSnapshotId].filter((id):id is string=>id!==null))??[]),[analysis]);
-  const displayed = useMemo(() => sampleHistory(rows,start,end,sampledId,[...evidenceIds]),[rows,start,end,sampledId,evidenceIds]);
+  // Анализ приходит отдельно и страницу не задерживает: графики рисуются сразу,
+  // отметки признаков появляются, когда ответ придёт. Без обещания (тихий режим
+  // выкатки) отчёта нет вовсе — ни карточки, ни отметок.
+  const shownAnalysis = useSettled(analysis)?.value ?? null;
+  const evidenceIds = useMemo(()=>boundarySnapshotIds(shownAnalysis,rows),[shownAnalysis,rows]);
+  const markers = useMemo(()=>signalMarkers(shownAnalysis),[shownAnalysis]);
+  const [highlight,setHighlight] = useState<string>();
+  const charts = useRef<HTMLDivElement>(null);
+  const showSignal = useCallback((id:string) => {
+    setHighlight(id);
+    charts.current?.scrollIntoView({block:"start",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
+  },[]);
+  const wholeRange = start === 0 && end === rows.length - 1;
+  // На выборке весь диапазон — это ровно те точки, что сервер отобрал из полной
+  // истории, плюс выбранная и границы признаков, если они есть в выборке.
+  const displayed = useMemo(() => {
+    if (!preview || !wholeRange) return sampleHistory(rows,start,end,sampledId,[...evidenceIds]);
+    const keep = new Set([...(sampledIds ?? []), ...evidenceIds, ...(selectedId ? [selectedId] : [])]);
+    return rows.filter((row) => keep.has(row.snapshotId));
+  },[preview,wholeRange,rows,start,end,sampledId,evidenceIds,sampledIds,selectedId]);
+  const total = preview ? totalPoints ?? rows.length : rows.length;
+  const rangePoints = preview && wholeRange ? total : end-start+1;
   const tableRows = rows.slice(-Math.max(1,tableLimit));
+  const shownTableRows = hydrated ? tableRows : tableRows.slice(-SERVER_TABLE_ROWS);
   const nouns=metrics.map((metric)=>noun(metric,platform));
   const phrase=nouns.length<=1 ? nouns[0] ?? "метрик" : `${nouns.slice(0,-1).join(", ")} и ${nouns.at(-1)}`;
   const tableMetrics = useMemo(() => tabulatedHistoryMetrics(rows),[rows]);
@@ -222,25 +307,33 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
     && Date.parse(collectorCoverage.through) >= Date.parse(rows[end]!.observedAt));
   const missingSeconds = visibleGaps.reduce((total, gap) => total + gap.missingSeconds, 0);
   function jump(id: string) {
-    const index = rows.findIndex((row) => row.snapshotId === id);
-    if(index<0) return;
-    if (index < start || index > end) {setStart(Math.max(0,index-36));setEnd(Math.min(rows.length-1,index+36));}
-    setSelectedId(id);
+    requestFull((list) => {
+      const index = list.findIndex((row) => row.snapshotId === id);
+      if(index<0) return;
+      const { start: low, end: high } = latest.current;
+      if (index < low || index > high) {setStart(Math.max(0,index-36));setEnd(Math.min(list.length-1,index+36));}
+      setSelectedId(id);
+    });
   }
   const maximum = Math.max(0, rows.length - 1);
   return <>
-    <div data-testid="publication-chart-stack" className="grid gap-4">
+    {analysis ? (
+      <Suspense fallback={<AnomalyAnalysisSkeleton />}>
+        <DeferredAnomalyAnalysis load={analysis} rows={rows} publishedAt={publishedAt} onShow={showSignal} />
+      </Suspense>
+    ) : null}
+    <div ref={charts} data-testid="publication-chart-stack" className="grid scroll-mt-4 gap-4">
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Накопление {phrase}
             <MethodNote title={`Накопление ${phrase}`}>
-              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы опубликованных сигналов; остальные точки читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы признаков анализа, полупрозрачной полосой с символом — их интервалы; остальные точки читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} highlight={highlight} />
         </CardContent>
       </Card>
       <Card>
@@ -253,7 +346,7 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} highlight={highlight} />
         </CardContent>
       </Card>
     </div>
@@ -267,7 +360,7 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
               Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых сохранённых точек; при приближении детализация возвращается. Красным отмечены только подтверждённые разрывы в журнале успешных циклов аккаунта, а не длинные интервалы без изменения метрик. Близкие разрывы на общем масштабе визуально объединяются; при приближении видны их реальные границы.
             </MethodNote>
           </b>
-          <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${end-start+1} сохранённых точек` : "Нет сохранённых точек"}</span>
+          <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${rangePoints} сохранённых точек` : "Нет сохранённых точек"}</span>
         </div>
         <Slider
           className="my-4"
@@ -280,6 +373,9 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
             const [low, high] = next as [number, number];
             setStart(Math.min(low, high));
             setEnd(Math.max(low, high));
+            // Приближение требует всех точек; пока они грузятся, диапазон
+            // двигается по выборке и потом переносится по времени.
+            requestFull();
           }}
           getAriaLabel={(index) => (index === 0 ? "Начало диапазона" : "Конец диапазона")}
         />
@@ -291,7 +387,9 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
               ? <p data-testid="collector-gap-summary" className="text-muted-foreground text-sm">По журналу циклов аккаунта подтверждённых пропусков в выбранном диапазоне нет.</p>
               : <p data-testid="collector-gap-summary" className="text-muted-foreground text-sm">Журнал циклов покрывает выбранный диапазон не полностью — в непокрытой части наличие пропусков неизвестно.</p>}
           <p className="text-muted-foreground text-xs">В журнале от первой показанной точки до текущего среза: успешных циклов — {collectorCoverage.successfulPolls}, с ошибкой — {collectorCoverage.failedPolls}. Ожидаемый шаг — {duration(collectorCoverage.expectedIntervalSeconds)}.</p>
-          {end-start+1 > displayed.length ? <Badge variant="secondary" className="w-fit rounded-full font-semibold">Не отображено точек: {end-start+1-displayed.length}</Badge> : null}
+          {fullState === "loading" ? <p data-testid="full-history-loading" className="text-muted-foreground text-sm" role="status">Загружаем все сохранённые точки…</p> : null}
+          {fullState === "failed" ? <p className="text-destructive text-sm" role="status">Не удалось загрузить все точки — график показывает выборку по всему периоду.</p> : null}
+          {rangePoints > displayed.length ? <Badge variant="secondary" className="w-fit rounded-full font-semibold">Не отображено точек: {rangePoints-displayed.length}</Badge> : null}
         </div>
       </CardContent>
     </Card>
@@ -300,10 +398,14 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
       <CardHeader>
         <CardTitle as="h2" className="font-heading text-lg">История сохранённых точек</CardTitle>
         <p data-testid="saved-history-note" className="text-muted-foreground mt-2 text-sm">Каждая строка — изменение метрик или контрольный снимок. Интервал до предыдущей строки не равен простою сборщика: между строками могли быть успешные опросы с теми же значениями.</p>
-        {fullHistoryHref && rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
+        {fullHistoryHref && total > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {total} сохранённых точек · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
       </CardHeader>
       <CardContent>
-        {rows.length ? <div className="max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
+        {/* relative обязателен: скрытые для глаз подписи (sr-only) — абсолютные, и
+            без собственного блока позиционирования строка глубоко в таблице
+            выходила из-под прокрутки и растягивала страницу на всю высоту
+            таблицы — под постами с анализом оставались тысячи пикселей пустоты. */}
+        {rows.length ? <div className="relative max-h-[70vh] isolate overflow-auto overscroll-contain rounded-lg border"><table data-testid="snapshot-history-table" className="w-full min-w-max border-separate border-spacing-0 text-xs"><thead><tr>{([
           { icon: Clock, label: "Время сохранённой точки, МСК" },
           { icon: Timer, label: "Между сохранёнными точками" },
           { icon: Activity, label: "Работа сборщика в интервале" },
@@ -315,8 +417,8 @@ export function PublicationMeasurements({ rows, collectorCoverage, platform, pub
           ]),
           ...(showBreakdown ? [{ icon: Smile, label: "Реакции по типам" }, { icon: Smile, label: "Прирост реакций по типам", delta: true }] : []),
         ] as { icon: LucideIcon; label: string; delta?: boolean }[]).map((column) => <ColumnHead key={column.label} icon={column.icon} label={column.label} delta={column.delta} />)}</tr></thead><tbody>
-          {tableRows.map((row,index) => {
-            const previous = rows[rows.length-tableRows.length+index-1];
+          {shownTableRows.map((row,index) => {
+            const previous = rows[rows.length-shownTableRows.length+index-1];
             const elapsed = previous ? (Date.parse(row.observedAt)-Date.parse(previous.observedAt))/1000 : null;
             const selected = selectedId === row.snapshotId;
             const boundary = evidenceIds.has(row.snapshotId);

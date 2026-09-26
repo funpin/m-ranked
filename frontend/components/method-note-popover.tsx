@@ -21,7 +21,7 @@ export function MethodNotePopover({ title, defaultOpen, children }: {
 }) {
   return (
     <Popover defaultOpen={defaultOpen}>
-      <PopoverTrigger className={NOTE_TRIGGER} aria-label={`Как считается: ${title}`}>
+      <PopoverTrigger openOnHover delay={100} className={NOTE_TRIGGER} aria-label={`Как считается: ${title}`}>
         <Icon name="info" className="size-4" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 leading-relaxed">

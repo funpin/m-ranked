@@ -39,3 +39,19 @@ test("publication redirects retain history limits and navigation uses UUIDs", as
   expect((await request.get(`/accounts/${uuid(1,9999)}`)).status()).toBe(404);
   expect((await request.get(`/publications/${uuid(5,9999)}`)).status()).toBe(404);
 });
+
+test("sitemap lists canonical pages and publications with lastmod", async ({ request }) => {
+  const index = await request.get("/sitemap.xml");
+  expect(index.status()).toBe(200);
+  expect(index.headers()["content-type"]).toContain("application/xml");
+  const body = await index.text();
+  expect(body).toContain("/sitemaps/pages.xml</loc>");
+  expect(body).toContain("/sitemaps/publications-0.xml</loc>");
+  const pages = await (await request.get("/sitemaps/pages.xml")).text();
+  expect(pages).toContain("/institutions/1</loc>");
+  expect(pages).toContain(`/accounts/${uuid(1,1)}</loc>`);
+  const posts = await (await request.get("/sitemaps/publications-0.xml")).text();
+  expect(posts).toContain(`/publications/${uuid(5,1)}</loc><lastmod>2026-07-07T15:00:00.000Z</lastmod>`);
+  expect((await request.get("/sitemaps/other.xml")).status()).toBe(404);
+  expect(await (await request.get("/robots.txt")).text()).toMatch(/Sitemap: https:\/\/[^\s]+\/sitemap\.xml/);
+});

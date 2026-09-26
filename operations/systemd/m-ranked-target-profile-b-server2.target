@@ -8,6 +8,7 @@ Wants=m-ranked-target-redis.service
 Wants=m-ranked-target-cache-warmup.service
 Wants=m-ranked-target-web-cache-gc.timer
 Wants=m-ranked-target-anomaly-analysis.service
+Wants=m-ranked-target-anomaly-norms.timer
 Wants=m-ranked-target-maintenance.timer
 Wants=m-ranked-target-official-rating.timer
 Wants=m-ranked-target-overview-metrics.timer

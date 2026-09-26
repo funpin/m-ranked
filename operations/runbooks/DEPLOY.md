@@ -171,7 +171,7 @@ bootstrap по населённой базе не проигрывается н�
 Исключение — миграция `0033_remove_csv_exports.sql`: она удаляет таблицу,
 в которую старые collectors ещё пишут. Для неё сначала остановите все четыре
 `m-ranked-target-collector@*.service`, переключите API, web и collectors на
-релиз без CSV-экспорта, затем примените `0029` и запустите collectors. Не
+релиз без CSV-экспорта, затем примените `0033` и запустите collectors. Не
 применяйте `0029` перед заменой кода и не оставляйте старый collector работающим
 во время удаления таблицы.
 
@@ -226,29 +226,67 @@ SECRET
 каталога релиза. `.venv` переносится с предыдущего релиза жёсткими ссылками, а
 не копируется.
 
-Три вещи, которых нет в `git archive` и без которых выкатка падает молча:
+Четыре вещи, которых нет в `git archive` и без которых выкатка падает молча:
 
-1. **`frontend/.next/cache` обязан существовать в релизе.** Контейнер web
+1. **Корень релиза обязан быть доступен runtime-пользователям.** Создавайте
+   `/opt/m-ranked/releases/<релиз>` как `root:m-ranked-release-readers` с
+   режимом `0750`; добавьте в эту системную группу существующих пользователей
+   API, collectors и maintenance до их перезапуска. Режим `0700`, который
+   оставляет `mktemp -d`, ломает поздние Python imports у ещё работающих
+   процессов и даёт `status=200/CHDIR` при следующем старте unit. Проверка:
+
+   ```bash
+   getent group m-ranked-release-readers >/dev/null || groupadd --system m-ranked-release-readers
+   for user in m-ranked-api m-ranked-web m-ranked-maintenance \
+       m-ranked-collector-telegram m-ranked-collector-vk \
+       m-ranked-collector-max m-ranked-collector-rutube; do
+       usermod -a -G m-ranked-release-readers "$user"
+   done
+   chown root:m-ranked-release-readers /opt/m-ranked/releases/<релиз>
+   chmod 0750 /opt/m-ranked/releases/<релиз>
+   stat -c '%U:%G %a %n' /opt/m-ranked/releases/<релиз>
+   runuser -u m-ranked-collector-max -- test -r /opt/m-ranked/releases/<релиз>/collector_target/__main__.py
+   ```
+
+   Не добавляйте nginx в эту группу: `/_next/static/` проксируется в тот же
+   Next.js process, который отдал HTML, и не читает release tree напрямую.
+2. **`frontend/.next/cache` обязан существовать в релизе.** Контейнер web
    монтирует туда `/var/lib/m-ranked/web-cache`, а точку монтирования в
    read-only слое создать не может: docker падает с кодом 125 и сайт ложится.
    Сборка standalone этот каталог не создаёт — создайте руками.
-2. **`api/data/official-m-rating-channel-codes.json` под `.gitignore`**, но
+3. **`api/data/official-m-rating-channel-codes.json` под `.gitignore`**, но
    нужен ежедневному заданию официального рейтинга. Копируется отдельно.
-3. `.env`, сессии площадок, дампы и учётные данные в релиз не попадают.
+4. `.env`, сессии площадок, дампы и учётные данные в релиз не попадают.
 
 ## 5. Зависимости
 
 ```bash
 pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend build
-mkdir -p frontend/.next/cache
+MRANKED_DEPLOYMENT_ID=<уникальный-id-релиза> pnpm --dir frontend build
+operations/scripts/finalize-web-release.sh "$PWD"
 ```
+
+`MRANKED_DEPLOYMENT_ID` обязателен для production-сборки и должен отличаться у
+каждого релиза (подходит имя каталога релиза: только буквы, цифры, `_` и `-`).
+Next.js добавляет его как `?dpl=<id>` к URL клиентских ассетов. Это не даёт
+браузеру переиспользовать `403/404`, ошибочно закэшированный старым nginx как
+`immutable`, и отделяет ассеты параллельных blue/green-релизов. После запуска
+проверьте наличие `?dpl=` в HTML публичной страницы.
+
+`finalize-web-release.sh` сохраняет standalone runtime и static, но удаляет из
+готового релиза полный `node_modules`, `.pnpm-store` и `.next/cache` сборщика.
+Точка `frontend/.next/cache` затем создаётся пустой для writable bind mount.
+Не переключайте `current`, если после финализации отсутствует
+`frontend/server.js` или не прошёл пробный запуск web-контейнера.
 
 Python на проде — 3.11, а `requirements/*.lock` собраны под 3.13. Целиком их
 поставить нельзя: пакет с колесом `cp313` (psycopg-binary, pydantic-core,
 uvloop, httptools, watchfiles) на 3.11 просто не встанет. Ставятся только
 изменившиеся пакеты и только по хешу из lock; для платформенных колёс нужна
-сборка под 3.11 отдельно.
+сборка под 3.11 отдельно. Анализ аномалий v2 добавил в `anomaly.lock` numpy и
+scipy — тоже платформенные колёса: версии выбраны так, что колёса для 3.11
+есть, но их хеши в lock — от cp313. Порядок выкатки анализа —
+[`ANOMALY.md`](ANOMALY.md).
 
 Частичное обновление опаснее полного: FastAPI без совместимого pydantic даёт
 `ImportError` на старте и бесконечный перезапуск юнита. Меняете FastAPI или
@@ -366,7 +404,33 @@ textfile. Если grace меняется, stop timeout должен остав�
 5. Не менять интервалы `300/300/300/3600` в том же rollout. Они остаются
    desired cadence; изменение production cadence требует отдельного решения.
 
-## 8. Проверка
+## 8. Ограничение накопления релизов и Docker-артефактов
+
+Host GC сохраняет current, один предыдущий rollback, реально используемые cwd/exe,
+mounts всех containers и ссылки systemd для следующего запуска. Молодые каталоги
+младше суток сохраняются. Удаление требует явного списка согласованных basenames
+в `MRANKED_APPROVED_RELEASE_REMOVALS`; forensic и дополнительные rollback задаются
+в `MRANKED_PROTECTED_RELEASES`. Blanket Docker prune отключён: images/containers
+удаляются только по отдельно проверенным IDs без force; volumes не удаляются.
+GC и deployment используют общий lock `/run/lock/m-ranked-release.lock`.
+
+Установите collector вне immutable release, сначала проверьте dry-run, затем
+включите еженедельный timer:
+
+```bash
+install -D -o root -g root -m 0755 operations/scripts/gc_host_storage.py \
+  /usr/local/libexec/m-ranked/gc_host_storage.py
+install -o root -g root -m 0644 \
+  operations/systemd/m-ranked-target-host-storage-gc.service \
+  operations/systemd/m-ranked-target-host-storage-gc.timer /etc/systemd/system/
+install -o root -g root -m 0600 operations/env/host-storage-gc.env.example \
+  /etc/m-ranked/host-storage-gc.env
+/usr/local/libexec/m-ranked/gc_host_storage.py
+systemctl daemon-reload
+systemctl enable --now m-ranked-target-host-storage-gc.timer
+```
+
+## 9. Проверка
 
 Выкатка не закончена, пока всё это не ответило:
 
@@ -409,7 +473,7 @@ rm -f "$jar"
 означает нехватку сериализованной ёмкости и не должен маскироваться повышением
 freshness threshold.
 
-## 9. Если API не отвечает
+## 10. Если API не отвечает
 
 Порядок разбора — от процесса к сети, а не наоборот:
 
@@ -517,13 +581,13 @@ journalctl -u m-ranked-target-api -n 100 --no-pager
     ```sql
     SELECT months.published_month,
            ops_and_admin.collector_working_set_month_releasable(
-               months.published_month, 960) AS releasable
+               months.published_month, 720) AS releasable
       FROM (SELECT DISTINCT published_month
               FROM ingest.publication_metric_snapshot) AS months
      ORDER BY months.published_month;
     ```
 
-    Значение `960` должно буквально совпадать с просмотренным
+    Значение `720` должно буквально совпадать с просмотренным
     `TRACK_POST_FOR_HOURS`, а вывод прикладывается к отдельному approval шага 11.
 11. **Отдельное необратимое подтверждение.** Только новым явным разрешением
     владельца данных поставить retention `on`. Изменение конфигурации ещё можно
@@ -550,3 +614,10 @@ API master перед каждым стартом удаляет только
 - `HEALTH.md` — что означает каждый health-endpoint;
 - `BACKUP_RESTORE.md` — резервные копии и проверка восстановления;
 - `docs/architecture/security/dependency-policy.md` — пороги выпуска по CVE.
+
+## Storage rollout gate
+
+Перед изменением retention, backup или GC используйте
+[STORAGE_BUDGET.md](STORAGE_BUDGET.md). Подготовленный код не подтверждает
+production rollout. Host GC больше не выполняет blanket Docker prune;
+release deletion ограничено согласованным списком и проверками занятости.

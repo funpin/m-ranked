@@ -94,16 +94,19 @@ for (const path of ["/compare?platform=vk", "/posts/1"]) {
     });
     try {
       await page.goto(path, { waitUntil: "domcontentloaded" });
-      const control = path.startsWith("/compare")
-        ? page.getByTestId("comparison-legend-toggle").first()
+      const compare = path.startsWith("/compare");
+      const control = compare
+        ? page.getByTestId("platform-tabs").getByRole("tab", { name: "Telegram" })
         : page.getByRole("button", { name: "Авто", exact: true }).first();
+      const state = compare ? "aria-selected" : "aria-pressed";
       await control.click();
-      await expect(control).toHaveAttribute("aria-pressed", path.startsWith("/compare") ? "false" : "true");
+      await expect(control).toHaveAttribute(state, "true");
       await expect.poll(() => delayed).toBe(true);
       await expect(page.locator("svg.recharts-surface")).toHaveCount(0);
       release!();
-      await expect(page.locator('[data-chart-ready="true"] svg.recharts-surface')).toHaveCount(2);
-      await expect(control).toHaveAttribute("aria-pressed", path.startsWith("/compare") ? "false" : "true");
+      if (compare) await expect(page.locator('[data-slot="chart"] svg.recharts-surface').first()).toBeVisible();
+      else await expect(page.locator('[data-chart-ready="true"] svg.recharts-surface')).toHaveCount(2);
+      await expect(control).toHaveAttribute(state, "true");
     } finally { release?.(); }
   });
 }
@@ -170,9 +173,13 @@ test("в режиме медианы нажатие выделяет публи�
   await expect(banner).toContainText("публикации этого дня");
   await expect(banner).toContainText("1.07");
   await expect(page).toHaveURL(/day=2026-07-01&trend=median/);
-  await expect(rows.first()).toHaveCSS("opacity", "1");
-  await expect(rows.nth(1)).toHaveCSS("opacity", "0.45");
+  await expect(rows.first().locator("td").first()).toHaveCSS("opacity", "1");
+  await expect(rows.nth(1).locator("td").first()).toHaveCSS("opacity", "0.45");
   await expect(rows.first()).not.toContainText("+50");
+  // Проведение мышью по списку не «проявляет» другие дни.
+  await rows.nth(1).hover();
+  await rows.first().hover();
+  await expect(rows.nth(1).locator("td").last()).toHaveCSS("opacity", "0.45");
 
   await banner.getByRole("link", { name: "показать все" }).click();
   await expect(page.getByRole("status")).toHaveCount(0);
@@ -197,7 +204,7 @@ test("в режиме всего нажатие показывает суточ�
   const rows = page.locator("tbody tr[data-published-day]");
   await expect(rows.first()).toContainText("+50");
   await expect(rows.nth(1)).toContainText("+40");
-  await expect(rows.nth(1)).toHaveCSS("opacity", "1");
+  await expect(rows.nth(1).locator("td").first()).toHaveCSS("opacity", "1");
 });
 
 test("значки ссылаются на общий набор, а не возят свои контуры", async ({ page }) => {
@@ -315,4 +322,21 @@ test("шапка таблицы не участвует в волне", async ({
   // А строки — участвуют.
   const row = page.locator("table.reveal > tbody > tr").first();
   expect(await row.evaluate((node) => getComputedStyle(node).animationName)).toBe("reveal");
+});
+
+test("управление — значок справа на широком экране и текст в мобильном меню", async ({ page }) => {
+  await page.goto("/?platform=vk");
+  const width = page.viewportSize()!.width;
+  const icon = page.getByTestId("manage-link");
+  const textLink = page.getByTestId("main-nav").getByRole("link", { name: "Управление" });
+  if (width > 780) {
+    await expect(icon).toBeVisible();
+    await expect(icon).toHaveAttribute("href", "/manage?platform=vk");
+    await expect(icon.locator("svg.lucide-settings")).toHaveCount(1);
+    await expect(textLink).toBeHidden();
+  } else {
+    await expect(icon).toBeHidden();
+    await page.getByTestId("menu-toggle").click();
+    await expect(textLink).toBeVisible();
+  }
 });

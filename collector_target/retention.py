@@ -46,7 +46,7 @@ class RetentionRefused(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class RetentionPolicy:
     mode: str = "off"
-    track_post_for_hours: int = 960
+    track_post_for_hours: int = 720
     months_per_run: int = 1
 
     def __post_init__(self) -> None:
@@ -155,14 +155,17 @@ class WorkingSetRetention:
 
     def candidate_months(self, connection: Any) -> tuple[tuple[date, bool], ...]:
         """Every stored month with whether it may be released right now."""
+        # Read partition metadata; never DISTINCT over the observation history.
         rows = connection.execute(
             """SELECT months.published_month,
                       ops_and_admin.collector_working_set_month_releasable(
                           months.published_month, %s
                       ) AS releasable
                  FROM (
-                     SELECT DISTINCT published_month
-                       FROM ingest.publication_metric_snapshot
+                     SELECT to_date(right(c.relname, 7), 'YYYY_MM') AS published_month
+                       FROM pg_inherits i JOIN pg_class c ON c.oid=i.inhrelid
+                      WHERE i.inhparent='ingest.publication_metric_snapshot'::regclass
+                        AND c.relname ~ '^publication_metric_snapshot_[0-9]{4}_[0-9]{2}$'
                  ) AS months
                 ORDER BY months.published_month""",
             (self.policy.track_post_for_hours,),
@@ -222,8 +225,10 @@ class WorkingSetRetention:
 
         with self.repository._connection() as connection:
             remaining = connection.execute(
-                """SELECT min(published_month) AS oldest
-                     FROM ingest.publication_metric_snapshot""",
+                """SELECT min(to_date(right(c.relname,7), 'YYYY_MM')) AS oldest
+                     FROM pg_inherits i JOIN pg_class c ON c.oid=i.inhrelid
+                    WHERE i.inhparent='ingest.publication_metric_snapshot'::regclass
+                      AND c.relname ~ '^publication_metric_snapshot_[0-9]{4}_[0-9]{2}$'""",
             ).fetchone()
             oldest = _row(remaining, "oldest", 0) if remaining is not None else None
         return RetentionOutcome(tuple(released), deferred, oldest, False)

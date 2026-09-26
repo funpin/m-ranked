@@ -1,5 +1,8 @@
 # Analyze module and capacity isolation
 
+> Документ описывает модель v1 и сохранён как история. Анализ v2 — [ADR-014](adr/ADR-014-anomaly-analysis-v2.md)
+> и [описание методов](../research/anomaly-methods-v2.md).
+
 Дата: 2026-09-16 · commit `b242378` · статус `code contract validated; production worker inactive`
 
 ## Existing boundary

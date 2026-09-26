@@ -1,15 +1,24 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 from pathlib import Path
 import signal
 import time
 
-from .config import default_manifest
-from .coordinator import AnalysisCoordinator, WorkerConfig
-from .metrics import TextfileMetrics
-from .postgres import PostgresAnalysisRepository
+from .metrics import write_textfile
+from .v2.schedule import ScheduleConfig
+from .v2.series import CollectionCadence
+from .v2.store import PostgresAnomalyStore
+from .v2.worker import Worker, WorkerConfig
+
+# Сбой базы переживается внутри процесса, как у сборщиков: пауза растёт от
+# двух секунд до тридцати, а не перезапуск юнита с холодными кэшами.
+TRANSIENT_BACKOFF_MIN_SECONDS = 2.0
+TRANSIENT_BACKOFF_MAX_SECONDS = 30.0
+
+log = logging.getLogger("anomaly_analysis")
 
 
 def _positive(name: str, default: int, maximum: int) -> int:
@@ -19,25 +28,32 @@ def _positive(name: str, default: int, maximum: int) -> int:
     return value
 
 
+def _transient(error: Exception) -> bool:
+    try:
+        import psycopg
+    except ImportError:  # pragma: no cover - packaging guard
+        return False
+    return isinstance(error, (psycopg.OperationalError, psycopg.InterfaceError))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="M-Ranked publication anomaly analysis worker")
     parser.add_argument("--once", action="store_true")
     arguments = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     dsn = os.environ.get("ANOMALY_DATABASE_URL", "").strip()
     if not dsn:
         raise SystemExit("ANOMALY_DATABASE_URL is required")
-    config = WorkerConfig(
-        batch_size=_positive("ANOMALY_BATCH_SIZE", 20, 100),
-        lease_seconds=_positive("ANOMALY_LEASE_SECONDS", 120, 900),
-        max_points_per_publication=_positive("ANOMALY_MAX_POINTS", 4096, 10000),
-        retry_base_seconds=_positive("ANOMALY_RETRY_BASE_SECONDS", 30, 3600),
-        retry_max_seconds=_positive("ANOMALY_RETRY_MAX_SECONDS", 3600, 86400),
-        backfill_batch_size=_positive("ANOMALY_BACKFILL_BATCH_SIZE", 50, 1000),
-        backfill_interval_seconds=_positive("ANOMALY_BACKFILL_INTERVAL_SECONDS", 300, 86400),
-    )
     metrics_value = os.environ.get("ANOMALY_METRICS_FILE", "").strip()
-    coordinator = AnalysisCoordinator(PostgresAnalysisRepository(dsn), default_manifest(), config,
-                                      TextfileMetrics(Path(metrics_value) if metrics_value else None))
+    metrics_path = Path(metrics_value) if metrics_value else None
+    # Окно отслеживания и шаг сбора — те же переменные, что у сборщиков.
+    worker = Worker(
+        PostgresAnomalyStore(dsn), ScheduleConfig.from_environment(os.environ),
+        CollectionCadence.from_environment(os.environ),
+        WorkerConfig(batch_size=_positive("ANOMALY_BATCH_SIZE", 50, 200)),
+        publish=lambda metrics: write_textfile(metrics_path, metrics.samples()),
+    )
+    poll_seconds = _positive("ANOMALY_POLL_SECONDS", 5, 300)
     stopping = False
 
     def stop(*_):
@@ -46,12 +62,22 @@ def main() -> None:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    poll_seconds = _positive("ANOMALY_POLL_SECONDS", 5, 300)
+    backoff = TRANSIENT_BACKOFF_MIN_SECONDS
     while not stopping:
-        processed = coordinator.run_once()
+        try:
+            processed = worker.run_once()
+            backoff = TRANSIENT_BACKOFF_MIN_SECONDS
+        except Exception as error:
+            if not _transient(error) or arguments.once:
+                raise
+            log.warning("database unavailable, retrying in %.0fs: %s", backoff, type(error).__name__)
+            time.sleep(backoff)
+            backoff = min(backoff * 2, TRANSIENT_BACKOFF_MAX_SECONDS)
+            continue
         if arguments.once:
             return
-        if not processed:
+        # Пустая пачка — очередь догнана; полная — сразу следующая.
+        if processed < worker.config.batch_size:
             time.sleep(poll_seconds)
 
 

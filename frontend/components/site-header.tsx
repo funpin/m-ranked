@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Menu, X } from "lucide-react";
 import { normalizePlatform, queryHref } from "@/lib/params";
-import { NAV_LINKS } from "@/lib/nav-links";
+import { MANAGE_LINK, NAV_LINKS } from "@/lib/nav-links";
 import type { Platform } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { HEADER_BUTTON } from "@/components/header-button";
@@ -94,6 +94,7 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
                 prefetch={false}
                 onClick={() => { setMenuOpen(false); if (visible) toggle.current?.focus(); }}
                 className={cn(
+                  "utility" in link && "min-[781px]:hidden",
                   "rounded-md px-3 py-1.5 text-[0.875rem] font-medium no-underline transition-colors",
                   "hover:bg-accent hover:text-accent-foreground hover:no-underline",
                   "focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
@@ -106,7 +107,8 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
           })}
         </div>
 
-        <HeaderUtilityActions menuToggle={
+        <HeaderUtilityActions manageHref={queryHref(MANAGE_LINK.href, { platform })}
+          manageActive={pathname.startsWith(MANAGE_LINK.href)} menuToggle={
           <Button
             data-testid="menu-toggle"
             variant="ghost"

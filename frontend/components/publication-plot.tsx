@@ -7,6 +7,8 @@ import { elapsedSincePublication } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
 import type { CollectorGap, HistorySnapshot } from "@/lib/types";
+import type { SignalMarker } from "@/lib/anomaly";
+import { PatternIcon } from "@/components/anomaly-icons";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
 /** Больше этого числа столбцов прироста на экране уже не различить: при
@@ -60,6 +62,34 @@ function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
     stroke="var(--destructive)" strokeOpacity={0.45} strokeWidth={1} pointerEvents="none" /> : null;
 }
 
+/** Интервалы признаков: полупрозрачная полоса под линиями и значок признака
+ *  над ней. Полоса бледнее ромбов границ и под ними, поэтому ромб остаётся
+ *  читаемой отметкой точки, а полоса — отметкой промежутка. Выбранный в
+ *  карточке признак подсвечивается ярче и обводится пунктиром. */
+function SignalOverlay({ markers, highlight }: { markers: readonly SignalMarker[]; highlight?: string }) {
+  const scale = useXAxisScale();
+  const plot = usePlotArea();
+  if (!scale || !plot || !markers.length) return null;
+  return <g className="signal-markers" pointerEvents="none">
+    {markers.map((marker) => {
+      const from = scale(marker.from), to = scale(marker.to);
+      if (from === undefined || to === undefined) return null;
+      const left = Math.max(plot.x, Math.min(from, to));
+      const right = Math.min(plot.x + plot.width, Math.max(from, to, Math.min(from, to) + 2));
+      if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return null;
+      const active = marker.id === highlight;
+      return <g key={marker.id} data-signal-marker={marker.pattern} data-highlighted={active || undefined}>
+        <rect x={left} y={plot.y} width={right - left} height={plot.height} fill="var(--chart-3)"
+          fillOpacity={active ? 0.2 : 0.08} stroke={active ? "var(--chart-3)" : "none"} strokeDasharray="4 3" strokeWidth={1.5} />
+        <g opacity={0.85}>
+          <title>{marker.title}</title>
+          <PatternIcon pattern={marker.pattern} x={left + 3} y={plot.y + 3} size={14} color="var(--foreground)" />
+        </g>
+      </g>;
+    })}
+  </g>;
+}
+
 /** Evidence samples are drawn as a larger diamond, so a published signal
  *  boundary is distinguishable from an ordinary observation without colour. */
 function SampleDot(props: { cx?: number; cy?: number; fill?: string; evidence?: boolean }) {
@@ -90,9 +120,10 @@ function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
   );
 }
 
-export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps }: {
+export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps, markers = [], highlight }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly CollectorGap[];
+  markers?: readonly SignalMarker[]; highlight?: string;
 }) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const active = useRef(0);
@@ -224,6 +255,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
           приглушает стандартный штрих вдвое и на тёмной теме его не видно. */}
       <CartesianGrid vertical={false} yAxisId={primaryAxis} stroke="var(--border)" />
       <CollectorGapOverlay gaps={gaps} />
+      <SignalOverlay markers={markers} highlight={highlight} />
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}

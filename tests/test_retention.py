@@ -56,7 +56,7 @@ def test_default_policy_is_off_so_nothing_is_released_by_accident() -> None:
     policy = RetentionPolicy()
     assert policy.mode == "off"
     assert not policy.enabled
-    assert policy.track_post_for_hours == 960
+    assert policy.track_post_for_hours == 720
 
 
 @pytest.mark.parametrize(

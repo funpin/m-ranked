@@ -85,31 +85,93 @@ const historyStart=Date.parse("2026-07-01T00:00:00Z");
 const historyAt=(index:number)=>new Date(historyStart+index*3600000).toISOString();
 const historyRows:Schema["HistorySnapshot"][] = Array.from({length:160},(_,index) => ({snapshotId:String(index+1),observedAt:historyAt(index),ageHours:index,views:counter(index*10),reactions:counter(index === 159 ? 155 : index),comments:counter(0),shares:counter(null),deltaViews:index ? 10 : null,deltaReactions:index ? index === 159 ? -3 : 1 : null,deltaComments:index ? 0 : null,deltaShares:null,reactionsBreakdown:{"👍":index,"custom:123456":1},reactionsBreakdownEntries:[{reaction:"👍",count:index},{reaction:"custom:123456",count:1}],deltaReactionsBreakdown:index?{"👍":1}:null,deltaReactionsBreakdownEntries:index?[{reaction:"👍",count:1}]:null,synthetic:index === 0,intervalUncertain:index === 40,quality:"exact",rawEvidence:{fingerprint:`fixture-${index}`},collectorInterval:index?{from:historyAt(index-1),to:historyAt(index),successfulPolls:12,failedPolls:0}:null}));
 function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["PublicationAnomalyAnalysis"] {
-  const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,analysisRevision:3,sourceDatasetRevision:16,
-    analyzedAt:asOf,status:"ready",sourceRevisionAt:asOf,suspicionScore:0.82,overallSeverity:"high",
-    manualAssessmentPresent:false,affectedMetrics:["views"],activeFindingCount:1,nextCursor:null,
-    methodologyVersion:"anomaly-dynamics-v1",disclaimer:"Сигнал сам по себе не доказывает искусственное происхождение активности или действия университета.",
-    findings:[{id:uuid(8,id),origin:"automatic",metric:"views",detectorId:"delayed_spike_after_plateau",detectorVersion:"1.0.0",
-      suspicionScore:0.82,severity:"high",explanationCode:"large_rate_jump_after_plateau",
-      suspiciousStartAt:historyRows[39]!.observedAt,suspiciousEndAt:historyRows[40]!.observedAt,
-      startSnapshotId:"40",endSnapshotId:"41",evidence:{delta:500,rateRatio:12},qualityCodes:[],
-      alternativeExplanationCodes:["external_referral"],reviewState:"unreviewed"}]};
-  if(type!=="posts") {
-    // Provider capability differences: VK exposes reposts, Rutube and MAX do not
-    // get an unsupported metric invented for them.
-    const metric:Schema["AnomalyFinding"]["metric"]=id===21 ? "shares" : id===41 ? "views" : "comments";
-    return {...base,affectedMetrics:[metric],findings:base.findings.map(item=>({...item,metric}))};
-  }
-  if(id===2) return {...base,status:"pending",sourceDatasetRevision:null,analyzedAt:null,sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
-  if(id===3) return {...base,status:"partial",suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
-  if(id===4) return {...base,status:"stale",suspicionScore:0.52,overallSeverity:"medium",findings:base.findings.map(item=>({...item,suspicionScore:0.52,severity:"medium",reviewState:"explained"}))};
-  if(id===5) return {...base,status:"failed",sourceDatasetRevision:null,analyzedAt:null,sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,affectedMetrics:[],activeFindingCount:0,findings:[]};
-  if(id===6) return {...base,suspicionScore:0,overallSeverity:"medium",manualAssessmentPresent:true,affectedMetrics:["comments"],findings:[{...base.findings[0]!,id:uuid(8,6),origin:"manual",metric:"comments",detectorId:null,detectorVersion:null,suspicionScore:null,severity:"medium",explanationCode:"operator_context",reviewState:"unresolved"}]};
+  const signal=(pattern:1|6,metric:"views"|"reactions",from:number,to:number):Schema["AnomalySignal"] => ({
+    pattern,symbol:pattern===1?"⟋":"⇅",title:pattern===1?"Линейная подача":"Реакции раньше просмотров",
+    family:pattern===1?"velocity":"cross_metric",metric,strength:pattern===1?0.94:0.88,
+    startAt:historyRows[from]!.observedAt,endAt:historyRows[to]!.observedAt,scaleSeconds:3600,
+    formula:pattern===1?"Δпросмотры ≈ 10·t (t в часах), R² = 0.999, t ∈ [1д15ч; 1д16ч], масштаб 1 ч":"Δреакции = +40 при Δпросмотры = +2 за 2ч (ожидалось ≤ 1)",
+    render:pattern===1?{kind:"linear",startAge:from*3600,endAge:to*3600,slope:10,intercept:from*10,r2:0.999}:{kind:"lead",startAge:from*3600,endAge:to*3600,reactionsDelta:40,viewsDelta:2},
+    alternatives:[{code:"recommendation_feed",text:"пост долго показывался в рекомендациях с ровным притоком"}],normConfidence:null,
+  });
+  const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,
+    status:"analyzed",level:3,levelLabel:"признаки искусственной активности",levelSymbol:"●",
+    signals:[signal(1,"views",39,40),signal(6,"reactions",36,38)],
+    quality:{coverage:1,summary:"замеры полные, покрытие 100%",codes:[],unanalyzable:[]},
+    analyzedAt:asOf,lagSeconds:40,normVersion:3,detectorVersions:{linear_feed:"2.0.0",reactions_before_views:"2.0.0"},
+    reviewStatus:"unreviewed",methodologyVersion:"anomaly-dynamics-v2",
+    disclaimer:"Сигнал аномальной динамики носит информационный характер и сам по себе не доказывает искусственное происхождение активности или действия университета."};
+  // Провайдерские различия метрик: у ВК есть репосты, у RuTube и MAX их не выдумываем.
+  if(type!=="posts") return {...base,signals:base.signals.map(item=>({...item,metric:id===21 ? "shares" : id===41 ? "views" : "comments"}))};
+  if(id===2) return {...base,status:"pending",level:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{}};
+  if(id===3) return {...base,level:0,levelLabel:"нет признаков",levelSymbol:"○",signals:[]};
+  if(id===4) return {...base,level:1,levelLabel:"слабый сигнал",levelSymbol:"◔",signals:[{...base.signals[0]!,strength:0.5,normConfidence:0.3}]};
   return base;
+}
+
+// Панель сравнения: детерминированные данные на все вузы фикстуры (в замере
+// производительности — 207) и четыре площадки. Числа различаются так, чтобы
+// рейтинг, карта и выделение имели что показывать.
+function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
+  const networks = ["telegram", "vk", "max", "rutube"] as const;
+  const count = Math.max(12, names.length);
+  const institutions = Array.from({ length: count }, (_, index) => ({
+    institutionId: uuid(9, index + 1), legacyId: index + 1,
+    name: names[index] ?? `Университет ${index + 1}`, shortName: index < 2 ? ["Альфа", "Бета"][index]! : null,
+    platforms: index % 5 === 4 ? ["telegram", "vk"] : [...networks],
+    subscribers: { telegram: 1000 + index * 350, vk: 2000 + index * 500, max: 300 + index * 40, rutube: index % 3 ? 150 + index * 10 : 0 },
+  })) as Schema["ComparisonDashboard"]["institutions"];
+  const stat = (institutionId: string | null, platform: string, seed: number): Schema["ComparisonDashboardStat"] => {
+    const posts = 20 + (seed * 7) % 60;
+    const analyzed = posts - 2;
+    const level3 = seed % 9 === 0 ? 3 : 0, level2 = seed % 4 === 0 ? 2 : 0, level1 = seed % 3;
+    return { institutionId, platform: platform as Schema["PlatformValue"], posts, viewsTotal: posts * (300 + seed * 11),
+      reactionsTotal: posts * (10 + seed % 17), commentsTotal: posts, sharesTotal: platform === "vk" ? posts * 2 : null,
+      sample24: posts - 4, views24: 150 + (seed * 37) % 900, reactions24: 5 + (seed * 13) % 60, comments24: seed % 4,
+      shares24: platform === "vk" ? seed % 6 : null, engagement24: 1 + ((seed * 7) % 90) / 10, analyzed,
+      levels: [analyzed - level1 - level2 - level3, level1, level2, level3] };
+  };
+  const stats: Schema["ComparisonDashboardStat"][] = [];
+  institutions.forEach((institution, index) => {
+    for (const [offset, network] of networks.entries()) {
+      if (institution.platforms.includes(network)) stats.push(stat(institution.institutionId, network, index * 4 + offset + 1));
+    }
+    stats.push(stat(institution.institutionId, "all", index * 4 + 5));
+  });
+  for (const [offset, network] of networks.entries()) stats.push(stat(null, network, 100 + offset));
+  stats.push(stat(null, "all", 200));
+  const hours = [1, 3, 6, 12, 24, 48, 72, 168];
+  const curve = (institutionId: string | null, platform: string, scale: number) => ({
+    institutionId, platform: platform as Schema["PlatformValue"], samples: hours.map(() => 12),
+    views: hours.map((hour) => Math.round(scale * Math.log2(hour + 1) * 40)),
+    reactions: hours.map((hour) => Math.round(scale * Math.log2(hour + 1) * 2)),
+  });
+  const curves = [
+    ...institutions.flatMap((institution, index) => networks.filter((n) => institution.platforms.includes(n))
+      .map((network) => curve(institution.institutionId, network, 0.5 + (index % 7) / 3))),
+    ...networks.map((network) => curve(null, network, 1.2)),
+  ];
+  const days = period === "7d" ? 7 : 30;
+  const daily = Array.from({ length: days }, (_, index) => {
+    const day = new Date(Date.UTC(2026, 6, 3 + index)).toISOString().slice(0, 10);
+    return [...networks, "all"].map((platform, offset) => ({ platform: platform as Schema["PlatformValue"], day,
+      posts: 10 + (index * 3 + offset * 5) % 25, viewsTotal: 5000 + index * 120 + offset * 700,
+      reactionsTotal: 200 + index * 7, analyzed: 9 + (index + offset) % 20, anomalous: (index + offset) % 4 }));
+  }).flat();
+  const timing: Schema["ComparisonDashboard"]["timing"] = [];
+  for (const platform of [...networks, "all"]) {
+    for (let weekday = 0; weekday < 7; weekday += 1) for (let hour = 0; hour < 24; hour += 1) {
+      const posts = hour < 7 ? 0 : (weekday + hour) % 6;
+      if (posts) timing.push({ platform: platform as Schema["PlatformValue"], weekday, hour, posts, views24: 200 + hour * 20 });
+    }
+    for (let hour = 7; hour < 24; hour += 1) timing.push({ platform: platform as Schema["PlatformValue"], weekday: null, hour, posts: 10 + hour, views24: 300 + hour * 15 });
+  }
+  const types = [...networks, "all"].flatMap((platform) => ["photo", "album", "video", "text"].map((type, index) => ({
+    platform: platform as Schema["PlatformValue"], type, posts: 40 - index * 8, views24: 500 + index * 150, engagement24: 3 + index })));
+  return { period, hours, datasetRevision: revision, asOf, institutions, stats, curves, daily, timing, types };
 }
 const server = createServer(async (request, response) => {
   const url = new URL(request.url!, "http://127.0.0.1");
-  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis))?$/.exec(url.pathname);
+  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis|anomaly-levels))?$/.exec(url.pathname);
   if (canonical) {
     const id = Number(canonical[2]!.slice(-12));
     const kind = Number(canonical[2]!.slice(0,8));
@@ -154,6 +216,9 @@ const server = createServer(async (request, response) => {
   const pubId=/^\/api\/v1\/publications\/(\d+)$/.exec(url.pathname);
   if(pubId) return json(publication(Number(pubId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts"));
   if(/^\/api\/v1\/accounts\/\d+\/publications$/.test(url.pathname)) {const day=url.searchParams.get("day");return json({items:[postItem(1,url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts",day),postItem(2,"posts",day)],nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);}
+  // Уровни аккаунта: первый пост с выраженной аномалией, второй ещё не проанализирован.
+  const levelsId=/^\/api\/v1\/accounts\/(\d+)\/anomaly-levels$/.exec(url.pathname);
+  if(levelsId) {const type=url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts";return json({accountId:uuid(1,Number(levelsId[1])),datasetRevision:revision,items:[{publicationId:publication(1,type).publicationId,level:2,levelLabel:"выраженная аномалия",levelSymbol:"◑"}]} satisfies Schema["AccountAnomalyLevels"]);}
   const historyId=/^\/api\/v1\/publications\/(\d+)\/history$/.exec(url.pathname);
   if(historyId) {
     const p=publication(Number(historyId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts");
@@ -201,6 +266,12 @@ const server = createServer(async (request, response) => {
   const accountsId=/^\/api\/v1\/institutions\/(\d+)\/accounts$/.exec(url.pathname);
   if(accountsId) {const ids=accountsId[1] === "3" ? [] : accountsId[1] === "2" ? [1,2] : [1];return json({items:ids.map((id) => account(id,platform === "telegram" ? "channels" : "platform_accounts")),legacyTotalAccountCount:ids.length,nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["InstitutionAccountsPage"]);}
   if (url.pathname === "/api/v1/overview") return json({ items: url.searchParams.get("q") ? [] : (performanceFixture ? selectionIds.slice(0,50).map(id => item(id,platform)) : [item(1, platform), item(2, platform)]), nextCursor: null, datasetRevision: revision, asOf, integrationStatus: "unknown", integrationWarning: null } satisfies Schema["OverviewPage"]);
+  if (url.pathname === "/api/v1/sitemap") return json({ publicationPages: 1, publications: 2, datasetRevision: revision, asOf,
+    accounts: [{ accountId: uuid(1,1), lastModified: "2026-07-07T00:00:00Z" }], institutions: [{ legacyId: 1 }, { legacyId: 2 }] });
+  const sitemapPage = /^\/api\/v1\/sitemap\/publications\/(\d+)$/.exec(url.pathname);
+  if (sitemapPage) return json({ page: Number(sitemapPage[1]), datasetRevision: revision, asOf, items: Number(sitemapPage[1]) === 0
+    ? [{ publicationId: uuid(5,1), lastModified: "2026-07-07T15:00:00Z" }, { publicationId: uuid(5,2), lastModified: "2026-07-08T00:00:00Z" }] : [] });
+  if (url.pathname === "/api/v1/compare/dashboard") return json(dashboard(url.searchParams.get("period") === "7d" ? "7d" : "30d"));
   if (url.pathname === "/api/v1/compare/candidates") return json({
     items: selectionIds.map((id) => ({ selectionId: `selection-${id}`, selectionType: platform === "telegram" ? "channels" : "institutions",
       selectionLegacyId: id, selectionLabel: names[id - 1]!, selectionDescription: names[id - 1]!, institutionId: `institution-${id}`, canonicalName: names[id - 1]! })),

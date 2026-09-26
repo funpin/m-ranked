@@ -72,13 +72,54 @@ test("chart activation selects the exact row and reveals an old collapsed point"
   await expect(page.locator("#snapshot-1").getByTestId("snapshot-jump")).toBeFocused();
 });
 
-test("publication hides the analyzer panel but preserves boundary rows for future redesign",async({page})=>{
+test("publication shows a collapsed analysis card that expands and marks signals on the charts",async({page})=>{
   await page.goto("/posts/1");
-  await expect(page.getByRole("region",{name:"Сигнал аномальной динамики"})).toHaveCount(0);
+  const card=page.getByTestId("anomaly-card");
+  const toggle=page.getByTestId("anomaly-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded","false");
+  await expect(toggle).toContainText("признаки искусственной активности");
+  await expect(toggle).toContainText("2 признака");
+  await expect(card.getByTestId("anomaly-signal")).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded","true");
+  await expect(card.getByTestId("anomaly-signal")).toHaveCount(2);
+  await expect(card.locator("code").first()).toContainText("Δпросмотры ≈ 10·t");
+  await expect(card).toContainText("пост долго показывался в рекомендациях");
+  // Справка — под значком «i», а не в теле карточки.
+  await expect(card.getByTestId("anomaly-quality")).toHaveCount(0);
+  await card.getByTestId("anomaly-note").getByRole("button").hover();
+  await expect(page.getByLabel("Значки признаков")).toContainText("линейная подача");
+  await expect(page.getByTestId("anomaly-quality")).toBeVisible();
+  await page.mouse.move(0,0);
+  // Значки признаков стоят на обоих основных графиках, по одному на признак.
+  await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
+  await expect(page.locator("g[data-signal-marker]")).toHaveCount(4);
+  await expect(page.locator("g[data-signal-marker] svg.lucide").first()).toBeAttached();
+  await card.getByRole("button",{name:"Показать на графике"}).first().click();
+  await expect(page.locator("g[data-signal-marker][data-highlighted]")).toHaveCount(2);
+  await expect(page.getByTestId("publication-chart-stack")).toBeInViewport();
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
   await expect(page.locator("#snapshot-40[data-anomaly-boundary]")).toContainText("граница сигнала аномальной динамики");
   await expect(page.locator("#snapshot-41[data-anomaly-boundary]")).toContainText("граница сигнала аномальной динамики");
+});
+
+test("account table shows the analysis level without waiting for it",async({page})=>{
+  await page.goto("/channels/1");
+  await expect(page.getByRole("columnheader",{name:"Анализ динамики"})).toBeVisible();
+  const cells=page.getByTestId("anomaly-level-cell");
+  await expect(cells).toHaveCount(2);
+  await expect(cells.nth(0)).toContainText("выраженная аномалия");
+  await expect(cells.nth(0).locator("svg.lucide")).toHaveCount(1);
+  await expect(cells.nth(1)).toContainText("ожидает");
+});
+
+test("a post without signals reads calmly and an unanalyzed post says so",async({page})=>{
+  await page.goto("/posts/3");
+  await expect(page.getByTestId("anomaly-toggle")).toContainText("Нет признаков");
+  await expect(page.getByTestId("anomaly-toggle").locator('[data-slot="badge"]')).toHaveCount(0);
+  await page.goto("/posts/2");
+  await expect(page.getByTestId("anomaly-toggle")).toContainText("Ещё не проанализирован");
 });
 
 test("cumulative and delta charts both draw when anomaly boundaries size points per sample",async({page})=>{
@@ -86,7 +127,7 @@ test("cumulative and delta charts both draw when anomaly boundaries size points 
   // A per-sample point size once collapsed the whole line geometry to NaN and
   // left the cumulative plot blank while the bar plot still drew.
   await expect.poll(async()=>page.evaluate(()=>{
-    const plots=[...document.querySelectorAll('[role="img"][data-chart-ready="true"] svg')];
+    const plots=[...document.querySelectorAll('[role="img"][data-chart-ready="true"] svg.recharts-surface')];
     return {
       count:plots.length,
       allDrawn:plots.length===2&&plots.every(svg=>svg.querySelectorAll("path.recharts-curve, path.recharts-area-area, path.recharts-rectangle, rect.recharts-rectangle").length>0),
@@ -146,12 +187,39 @@ test("a confirmed account-cycle outage is marked in both charts and the table",a
   await expect(page.locator(".collector-gap")).toHaveCount(2);
 });
 
-test("publication page with hidden analyzer meets axe AA and exposes non-color boundary text",async({page})=>{
+test("publication page with the expanded analysis card meets axe AA and exposes non-color boundary text",async({page})=>{
   await page.goto("/posts/1");
+  await page.getByTestId("anomaly-toggle").click();
+  await expect(page.getByTestId("anomaly-signal")).toHaveCount(2);
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
   await expect(page.locator("[data-anomaly-boundary] .sr-only").first()).toHaveText(", граница сигнала аномальной динамики");
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
+});
+
+test("a long history arrives as a preview and loads the rest on the first zoom",async({page,request})=>{
+  test.setTimeout(60_000);
+  // В проде /api/v1 отдаёт nginx; у стенда API — отдельный процесс фикстуры.
+  await page.route("**/api/v1/**",(route)=>route.continue({url:route.request().url().replace(/^http:\/\/[^/]+/,"http://127.0.0.1:18091")}));
+  const preview=await (await request.get("/posts/99")).text();
+  const full=await (await request.get("/posts/99?history_limit=3000")).text();
+  // Сервер рисует двадцать строк таблицы и отдаёт выборку, а не 1205 точек.
+  expect(preview.match(/<tr id="snapshot-/g)?.length).toBe(20);
+  expect(preview.length).toBeLessThan(full.length*0.4);
+  expect(preview).not.toContain("fixture-");
+  await page.goto("/posts/99");
+  const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
+  await expect(chart).toHaveAttribute("data-chart-ready","true",{timeout:30_000});
+  await expect(page.locator("tbody tr")).toHaveCount(100);
+  await expect(page.getByTestId("chart-range-head")).toContainText("1205 сохранённых точек");
+  const loaded=page.waitForRequest(/\/api\/v1\/publications\/[0-9a-f-]{36}\/history\?limit=3000$/);
+  await page.getByRole("slider",{name:"Начало диапазона"}).focus();
+  await page.keyboard.press("End");
+  await loaded;
+  await expect(page.getByTestId("full-history-loading")).toHaveCount(0);
+  await expect(page.getByTestId("chart-range-head")).not.toContainText("1205 сохранённых точек");
+  await expect(chart).toHaveAttribute("data-chart-ready","true");
+  await expect(page.locator("tbody tr")).toHaveCount(100);
 });
 
 test("a point older than the 1000-row boundary remains reachable and the next publication resets its range",async({page}) => {
@@ -184,4 +252,12 @@ test("hundreds of collector gaps use one SVG overlay per chart",async({page})=>{
   await expect(overlays).toHaveCount(2);
   await expect(overlays.first()).toHaveAttribute("data-gap-count","800");
   await expect(overlays.first()).toHaveAttribute("data-gap-blocks","1");
+});
+
+test("hidden labels deep in the history table do not stretch the page below it",async({page})=>{
+  await page.goto("/posts/1?history_limit=3000");
+  await expect(page.locator("#snapshot-40[data-anomaly-boundary]")).toHaveCount(1);
+  const gap=await page.evaluate(()=>document.documentElement.scrollHeight-(document.querySelector("main")!.getBoundingClientRect().bottom+window.scrollY));
+  // Под main — только подвал; тысяч пикселей пустоты быть не должно.
+  expect(gap).toBeLessThan(200);
 });

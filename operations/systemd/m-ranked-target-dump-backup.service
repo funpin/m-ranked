@@ -11,8 +11,12 @@ Group=root
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/dump-backup.env
 Environment=TZ=Europe/Moscow
-ExecStart=/opt/m-ranked/current/operations/scripts/dump-backup.sh
+ExecStart=/usr/local/libexec/m-ranked/dump-backup.sh
+# Страховка на случай, если скрипт убит без ловушки (SIGKILL, OOM): контейнер
+# дампа живёт вне cgroup юнита и сам не остановится.
+ExecStopPost=-/bin/sh -c 'docker ps -q --filter name=^mranked-backup- | xargs -r docker kill'
 TimeoutStartSec=90min
+TimeoutStopSec=60s
 Nice=10
 IOSchedulingClass=idle
 NoNewPrivileges=true

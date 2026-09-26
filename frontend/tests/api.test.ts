@@ -127,160 +127,17 @@ test("account publication query forwards the selected Moscow day", async () => {
   assert.equal(query.get("revision"), "17");
 });
 
-test("analysis client uses its independent endpoint and preserves nullable score", async () => {
+test("analysis client uses its independent endpoint and keeps an unanalyzed post a 200 body", async () => {
   let seenUrl="";
   const client=createApiClient({baseUrl:"https://api.example.test",fetcher:async(input)=>{
     seenUrl=String(input);return Response.json({publicationId:"10000000-0000-4000-8000-000000000001",
-      datasetRevision:17,analysisRevision:2,sourceDatasetRevision:16,analyzedAt:null,status:"partial",
-      sourceRevisionAt:null,suspicionScore:null,overallSeverity:null,manualAssessmentPresent:false,
-      affectedMetrics:[],activeFindingCount:0,findings:[],nextCursor:null,
-      methodologyVersion:"anomaly-dynamics-v1",disclaimer:"informational"},{headers:{ETag:'"analysis-2"'}});
+      datasetRevision:17,status:"pending",level:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",
+      signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{},
+      reviewStatus:"unreviewed",methodologyVersion:"anomaly-dynamics-v2",disclaimer:"informational"},{headers:{ETag:'"analysis-2"'}});
   }});
   const value=await client.publicationAnomalyAnalysis("10000000-0000-4000-8000-000000000001");
-  assert.equal(value.suspicionScore,null);
-  assert.match(seenUrl,/\/api\/v1\/publications\/10000000-0000-4000-8000-000000000001\/anomaly-analysis/);
-});
-
-test("comparison client sends the fixed-cohort contract without camel-case drift", async () => {
-  let seenUrl = "";
-  const client = createApiClient({
-    baseUrl: "https://api.example.test",
-    fetcher: async (input) => {
-      seenUrl = String(input);
-      return Response.json({ series: [] });
-    },
-  });
-
-  await client.comparison({
-    platform: "vk",
-    horizonHours: 168,
-    includePartial: true,
-    metric: "shares",
-    aggregation: "sum",
-    institutionLimit: 500,
-    institutions: [91, 7, 34],
-  });
-
-  const url = new URL(seenUrl);
-  assert.equal(url.pathname, "/api/v1/compare");
-  assert.deepEqual(Object.fromEntries(url.searchParams), {
-    aggregation: "sum",
-    horizonHours: "168",
-    includePartial: "true",
-    institutionLimit: "20",
-    institutions: "34",
-    metric: "shares",
-    platform: "vk",
-  });
-  assert.deepEqual(url.searchParams.getAll("institutions"), ["91", "7", "34"]);
-});
-
-test("comparison client preserves repeated Telegram channel IDs in request order", async () => {
-  let seenUrl = "";
-  const client = createApiClient({
-    baseUrl: "https://api.example.test",
-    fetcher: async (input) => {
-      seenUrl = String(input);
-      return Response.json({ series: [] });
-    },
-  });
-
-  await client.comparison({
-    platform: "telegram",
-    horizonHours: 72,
-    includePartial: false,
-    metric: "reactions",
-    aggregation: "median",
-    channels: [920002, 920001],
-  });
-
-  const url = new URL(seenUrl);
-  assert.deepEqual(url.searchParams.getAll("channels"), ["920002", "920001"]);
-  assert.equal(url.searchParams.has("institutions"), false);
-});
-
-test("comparison client deduplicates relevant IDs and ignores the other legacy namespace", async () => {
-  let calls = 0;
-  const seenUrls: string[] = [];
-  const client = createApiClient({
-    baseUrl: "https://api.example.test",
-    fetcher: async (input) => {
-      calls += 1;
-      seenUrls.push(String(input));
-      return Response.json({ series: [] });
-    },
-  });
-
-  await client.comparison({
-    platform: "telegram",
-    horizonHours: 72,
-    includePartial: false,
-    metric: "reactions",
-    aggregation: "median",
-    channels: [7, 7, 9],
-    institutions: [91],
-  });
-  await client.comparison({
-    platform: "vk",
-    horizonHours: 72,
-    includePartial: false,
-    metric: "reactions",
-    aggregation: "median",
-    channels: [7],
-    institutions: [91, 91],
-  });
-
-  assert.deepEqual(new URL(seenUrls[0]!).searchParams.getAll("channels"), ["7", "9"]);
-  assert.equal(new URL(seenUrls[0]!).searchParams.has("institutions"), false);
-  assert.deepEqual(new URL(seenUrls[1]!).searchParams.getAll("institutions"), ["91"]);
-  assert.equal(new URL(seenUrls[1]!).searchParams.has("channels"), false);
-  assert.equal(calls, 2);
-});
-
-test("comparison client rejects invalid or excess relevant IDs without substitution", () => {
-  let calls = 0;
-  const client = createApiClient({
-    baseUrl: "https://api.example.test",
-    fetcher: async () => {
-      calls += 1;
-      return Response.json({ series: [] });
-    },
-  });
-
-  assert.throws(
-    () => client.comparison({
-      platform: "telegram",
-      horizonHours: 72,
-      includePartial: false,
-      metric: "reactions",
-      aggregation: "median",
-      channels: [0],
-    }),
-    /positive safe integers/,
-  );
-  assert.throws(
-    () => client.comparison({
-      platform: "telegram",
-      horizonHours: 72,
-      includePartial: false,
-      metric: "reactions",
-      aggregation: "median",
-      channels: Array.from({ length: 21 }, (_, index) => index + 1),
-    }),
-    /between 1 and 20/,
-  );
-  assert.throws(
-    () => client.comparison({
-      platform: "telegram",
-      horizonHours: 72,
-      includePartial: false,
-      metric: "reactions",
-      aggregation: "median",
-      channels: [],
-    }),
-    /between 1 and 20/,
-  );
-  assert.equal(calls, 0);
+  assert.equal(value.level,null);
+  assert.match(seenUrl,/\/api\/v1\/publications\/10000000-0000-4000-8000-000000000001\/anomaly-analysis$/);
 });
 
 test("statistics client sends every result dimension and bounds the limit", async () => {

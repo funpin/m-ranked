@@ -5,7 +5,7 @@ import { deletedPublicationArchiveUrl, legacyDate, PLATFORM_LONG_LABELS, postTyp
 import type { DetailHistory } from "@/lib/detail-data";
 import { queryHref } from "@/lib/params";
 import { FULL_PUBLICATION_HISTORY_LIMIT } from "@/lib/types";
-import type { PublicationAnomalyAnalysis } from "@/lib/types";
+import type { AnalysisLoad } from "@/lib/anomaly";
 import { PublicationMeasurements } from "./publication-measurements";
 import { StatusPill } from "@/components/ui";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,7 @@ function Neighbour({ href, id, platform, direction }: {
   );
 }
 
-export function PublicationDetail({history,historyLimit=100,analysis=null}:{history:DetailHistory;historyLimit?:number;analysis?:PublicationAnomalyAnalysis|null}) {
+export function PublicationDetail({history,historyLimit=100,analysis=null,sampledIds=null,totalPoints}:{history:DetailHistory;historyLimit?:number;analysis?:Promise<AnalysisLoad>|null;sampledIds?:string[]|null;totalPoints?:number}) {
   const p=history.publication, telegram=p.platform === "telegram";
   const archiveUrl=deletedPublicationArchiveUrl(p.platform,p.deletedAt,p.displayExternalId ?? p.externalId,p.accountUsername,history.accountArchiveUrl);
   const url=archiveUrl ?? p.publicUrl;
@@ -105,7 +105,7 @@ export function PublicationDetail({history,historyLimit=100,analysis=null}:{hist
       </Card>
     ) : null}
 
-    <PublicationMeasurements key={p.publicationId} rows={history.items} collectorCoverage={history.collectorCoverage} platform={p.platform} publishedAt={p.publishedAt} historyLimit={historyLimit} analysis={analysis}
+    <PublicationMeasurements key={p.publicationId} publicationId={p.publicationId} rows={history.items} sampledIds={sampledIds} totalPoints={totalPoints ?? history.items.length} collectorCoverage={history.collectorCoverage} platform={p.platform} publishedAt={p.publishedAt} historyLimit={historyLimit} analysis={analysis}
       fullHistoryHref={historyLimit < FULL_PUBLICATION_HISTORY_LIMIT ? queryHref(publicationHref(p.publicationId),{history_limit:FULL_PUBLICATION_HISTORY_LIMIT}) : undefined} />
     </NavigationBoundary>
   </>;

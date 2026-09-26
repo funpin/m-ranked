@@ -21,9 +21,21 @@ from ..sql import analysis as sql
 
 router = APIRouter()
 
-ANALYSIS_TAGS = frozenset({"publications", "analysis"})
+ANALYSIS_TAGS = frozenset({"analysis"})
 DISCLAIMER = ("Сигнал аномальной динамики носит информационный характер и сам по себе "
               "не доказывает искусственное происхождение активности или действия университета.")
+METHODOLOGY_VERSION = "anomaly-dynamics-v2"
+# Названия уровней — те же, что пишет модуль анализа (ADR-006); API его не
+# импортирует, совпадение проверяет тест.
+LEVEL_LABELS = {
+    0: "нет признаков",
+    1: "слабый сигнал",
+    2: "выраженная аномалия",
+    3: "признаки искусственной активности",
+}
+LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
+NOT_ANALYZED = "ещё не проанализирован"
+NOT_ANALYZED_SYMBOL = "·"
 
 
 class ManualSignal(BaseModel):
@@ -94,13 +106,9 @@ def _command_error(error: Exception) -> ApiProblem:
 
 
 @router.get("/api/v1/publications/{legacyId}/anomaly-analysis", tags=["Query"])
-async def publication_analysis(
-    legacyId: str, request: Request, legacyType: str = Query("posts"),
-    limit: int = Query(25), cursor: str | None = Query(None),
-) -> Response:
+async def publication_analysis(legacyId: str, request: Request, legacyType: str = Query("posts")) -> Response:
     if legacyType not in ("posts", "platform_posts"):
         raise BadRequest("неподдерживаемый legacyType")
-    page_size = normalize.limit(limit, default=25, maximum=100)
     entity_uuid, legacy_id = normalize.entity_id(legacyId)
 
     async def build(dataset_revision: int, committed_at: Any) -> dict[str, Any]:
@@ -110,41 +118,64 @@ async def publication_analysis(
         if resolved is None:
             raise NotFound(f"публикация {legacyId} не найдена")
         publication_id = resolved["id"]
-        head = await request.app.state.db.fetch_one(
-            sql.REVISION, {"publication": publication_id})
-        analysis_revision = int(head["analysis_revision"])
-        dimensions = f"analysis:{publication_id}:{page_size}"
-        after = normalize.scoped_cursor(cursor, analysis_revision, dimensions)
-        row = await request.app.state.db.fetch_one(sql.LOAD, {
-            "publication": publication_id, "after": after,
-            "limit": page_size, "fetch_limit": page_size+1,
-        })
-        if row is None or int(row["analysis_revision"]) != analysis_revision:
-            raise BadRequest("анализ изменился во время чтения")
-        findings = row["findings"]
-        for finding in findings:
-            finding["suspicionScore"] = dto.number(finding["suspicionScore"])
-        continuation = row["continuation_id"]
-        return {
-            "publicationId": str(publication_id), "datasetRevision": dataset_revision,
-            "analysisRevision": analysis_revision,
-            "sourceDatasetRevision": row["source_dataset_revision_id"],
-            "analyzedAt": dto.iso(row["analyzed_at"]), "status": row["status"],
-            "sourceRevisionAt": dto.iso(row["source_revision_at"]),
-            "suspicionScore": dto.number(row["suspicion_score"]),
-            "overallSeverity": row["overall_severity"],
-            "manualAssessmentPresent": row["manual_present"],
-            "affectedMetrics": row["affected_metrics"],
-            "activeFindingCount": row["active_count"], "findings": findings,
-            "nextCursor": normalize.encode_scoped_cursor(
-                str(continuation) if continuation else None, analysis_revision, dimensions),
-            "methodologyVersion": "anomaly-dynamics-v1", "disclaimer": DISCLAIMER,
-        }
+        row = await request.app.state.db.fetch_one(sql.STATE, {"publication": publication_id})
+        return analysis_body(str(publication_id), dataset_revision, row)
 
+    # Ответ не зависит от загрузки замеров: теги «publications» здесь нет, иначе
+    # каждое уведомление о новой порции данных помечало бы анализ несвежим.
+    # Свежесть держит TTL записи — вывод отстаёт от анализа меньше минуты.
     return await serve(request, "publication-analysis", {
-        "id": legacyId.lower(), "legacyType": legacyType, "limit": page_size,
-        "cursor": cursor or "",
+        "id": legacyId.lower(), "legacyType": legacyType,
     }, ANALYSIS_TAGS, build)
+
+
+# Столько постов аккаунта вмещает окно отслеживания с запасом; таблица
+# аккаунта показывает первые сто.
+ACCOUNT_LEVELS_LIMIT = 1000
+
+
+@router.get("/api/v1/accounts/{accountId}/anomaly-levels", tags=["Query"])
+async def account_levels(accountId: str, request: Request) -> Response:
+    account = _uuid(accountId, "accountId")
+
+    async def build(dataset_revision: int, committed_at: Any) -> dict[str, Any]:
+        rows = await request.app.state.db.fetch_all(sql.ACCOUNT_LEVELS, {
+            "account": account, "limit": ACCOUNT_LEVELS_LIMIT,
+        })
+        return levels_body(str(account), dataset_revision, rows)
+
+    return await serve(request, "account-anomaly-levels", {"id": str(account)}, ANALYSIS_TAGS, build)
+
+
+def levels_body(account_id: str, dataset_revision: int, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Только уровень: признаки и качество читает страница поста."""
+    return {
+        "accountId": account_id, "datasetRevision": dataset_revision,
+        "items": [{"publicationId": str(row["publication_id"]), "level": int(row["level"]),
+                   "levelLabel": LEVEL_LABELS[int(row["level"])],
+                   "levelSymbol": LEVEL_SYMBOLS[int(row["level"])]} for row in rows],
+    }
+
+
+def analysis_body(publication_id: str, dataset_revision: int, row: dict[str, Any] | None) -> dict[str, Any]:
+    """Тело ответа. Пост без анализа — не ошибка, а «ещё не проанализирован»."""
+    analyzed = row is not None and row["analyzed_at"] is not None
+    level = int(row["level"]) if analyzed else None
+    return {
+        "publicationId": publication_id, "datasetRevision": dataset_revision,
+        "status": "analyzed" if analyzed else "pending",
+        "level": level,
+        "levelLabel": LEVEL_LABELS[level] if level is not None else NOT_ANALYZED,
+        "levelSymbol": LEVEL_SYMBOLS[level] if level is not None else NOT_ANALYZED_SYMBOL,
+        "signals": list(row["signals"]) if analyzed else [],
+        "quality": dict(row["quality"]) if analyzed and row["quality"] else None,
+        "analyzedAt": dto.iso(row["analyzed_at"]) if analyzed else None,
+        "lagSeconds": row["lag_seconds"] if analyzed else None,
+        "normVersion": row["norm_version_id"] if analyzed else None,
+        "detectorVersions": dict(row["detector_versions"] or {}) if analyzed else {},
+        "reviewStatus": row["review_status"] if row is not None else "unreviewed",
+        "methodologyVersion": METHODOLOGY_VERSION, "disclaimer": DISCLAIMER,
+    }
 
 
 @router.post("/api/v1/admin/publications/{publicationId}/anomaly-signals", tags=["Admin"])

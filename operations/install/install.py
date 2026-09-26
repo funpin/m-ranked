@@ -170,6 +170,18 @@ def presentation_users(context: Context) -> None:
         owner="m-ranked-api", group="m-ranked-api")
 
 
+def anomaly_analysis(context: Context, secrets: dict[str, str]) -> None:
+    """Работник анализа и задание норм: одна учётная запись, одно окружение."""
+    rule("Анализ аномальной динамики")
+    steps.ensure_user(context, "m-ranked-anomaly")
+    context.run("usermod", "-aG", "node-exporter", "m-ranked-anomaly", check=False)
+    steps.render_env(
+        context, ENV_EXAMPLES / "anomaly-analysis.env.example", steps.ETC / "anomaly-analysis.env", {},
+    )
+    steps.write_pgpass(
+        context, "anomaly-pgpass", "analytics_worker", secrets.get("analytics_worker", ""))
+
+
 def admin_credentials(context: Context) -> None:
     """Учётные данные админки. Хеш пароля и TOTP задаёт оператор."""
     rule("Админка")
@@ -201,6 +213,14 @@ UNITS_COMMON_PRESENTATION = [
     "m-ranked-target-overview-metrics.timer",
     "m-ranked-target-dump-backup.service",
     "m-ranked-target-dump-backup.timer",
+]
+
+# Анализ аномальной динамики: работник и ночной пересчёт норм. Живёт там же,
+# где база с полной историей, — в профиле A и на Сервере 2 профиля B.
+UNITS_ANOMALY = [
+    "m-ranked-target-anomaly-analysis.service",
+    "m-ranked-target-anomaly-norms.service",
+    "m-ranked-target-anomaly-norms.timer",
 ]
 
 UNITS_COLLECTORS = [
@@ -242,8 +262,10 @@ def install_profile_a(context: Context) -> list[str]:
     steps.write_pgpass(
         context, "maintenance-pgpass", "maintenance", secrets.get("maintenance", ""))
 
+    anomaly_analysis(context, secrets)
+
     rule("Юниты")
-    units = UNITS_COMMON_PRESENTATION + UNITS_COLLECTORS + ["m-ranked-target.target"]
+    units = UNITS_COMMON_PRESENTATION + UNITS_COLLECTORS + UNITS_ANOMALY + ["m-ranked-target.target"]
     steps.install_units(context, units)
     steps.daemon_reload(context)
     return units
@@ -306,7 +328,7 @@ def install_profile_b_server1(context: Context) -> list[str]:
 
 # --- профиль B, сервер 2 ----------------------------------------------------
 
-UNITS_SERVER2 = UNITS_COMMON_PRESENTATION + [
+UNITS_SERVER2 = UNITS_COMMON_PRESENTATION + UNITS_ANOMALY + [
     "m-ranked-target-redis.service",
     "m-ranked-target-transfer-ingest.service",
     "m-ranked-target-cache-warmup.service",
@@ -424,6 +446,7 @@ def install_profile_b_server2(context: Context) -> list[str]:
     steps.write_pgpass(
         context, "transfer-ingest-pgpass", "collector_ingest",
         secrets.get("collector_ingest", ""))
+    anomaly_analysis(context, secrets)
 
     rule("Юниты")
     steps.install_units(context, UNITS_SERVER2)
@@ -469,7 +492,9 @@ def next_steps(profile: str, context: Context) -> None:
         print("  • собрать фронтенд: pnpm install && pnpm build,")
         print("    затем operations/scripts/finalize-web-release.sh <релиз>;")
         print("  • положить vhost из operations/nginx и выпустить сертификат;")
-        print("  • заполнить admin-auth-users.json до первого входа в админку.")
+        print("  • заполнить admin-auth-users.json до первого входа в админку;")
+        print("  • анализ аномалий выкатывать по operations/runbooks/ANOMALY.md:")
+        print("    миграция 0036, работник в тихом режиме, первая норма, показ.")
     if profile == "b-server2":
         print(f"  • открыть порт приёмника только для Сервера 1:")
         print(f"      ip saddr {context.answers.get('collector_hosts')} "

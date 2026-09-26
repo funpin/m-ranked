@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 ACCOUNT_PUBLICATIONS_LIMIT = 100
 INSTITUTION_ACCOUNTS_LIMIT = 100
 PUBLICATION_HISTORY_LIMIT = 3000
-ANALYSIS_LIMIT = 100
 OVERVIEW_PAGE_LIMIT = 200
 
 
@@ -170,8 +169,7 @@ class CacheWarmer:
                 parse=True,
             ),
             self._get(
-                _path("/api/v1/publications/{}/anomaly-analysis", publication_id,
-                      limit=ANALYSIS_LIMIT),
+                _path("/api/v1/publications/{}/anomaly-analysis", publication_id),
                 absent_ok=True,
             ),
         )

@@ -134,7 +134,7 @@ CASES = [
     ("/api/v1/compare", "get", "200",
      "/api/v1/compare?platform=rutube&horizonHours=24&institutionLimit=2"),
     ("/api/v1/publications/{legacyId}/anomaly-analysis", "get", "200",
-     "/api/v1/publications/99269506-1466-5e18-a215-a3db2688d786/anomaly-analysis?limit=5"),
+     "/api/v1/publications/99269506-1466-5e18-a215-a3db2688d786/anomaly-analysis"),
 ]
 
 
@@ -373,15 +373,10 @@ def test_emoji_validation_and_success_headers(client, validator_for, monkeypatch
 def test_analysis_cursor_and_admin_security(client, validator_for, monkeypatch) -> None:
     publication = "99269506-1466-5e18-a215-a3db2688d786"
     analysis = assert_contract_response(
-        client.get(f"/api/v1/publications/{publication}/anomaly-analysis?limit=1"),
+        client.get(f"/api/v1/publications/{publication}/anomaly-analysis"),
         validator_for, "/api/v1/publications/{legacyId}/anomaly-analysis")
-    if analysis["nextCursor"]:
-        page = client.get(f"/api/v1/publications/{publication}/anomaly-analysis", params={
-            "limit": 1, "cursor": analysis["nextCursor"],
-        })
-        assert page.status_code == 200
-        assert not ({item["id"] for item in analysis["findings"]}
-                    & {item["id"] for item in page.json()["findings"]})
+    # Ответ v2 — одна строка на пост: страниц и курсора больше нет.
+    assert "nextCursor" not in analysis and len(analysis["signals"]) <= 6
 
     path = f"/api/v1/admin/publications/{publication}/anomaly-signals"
     unauthorized = client.post(path, json={})
@@ -571,3 +566,62 @@ def test_detail_routes_pin_the_requested_dataset_revision(client) -> None:
     assert unknown.json()["datasetRevision"] != 999999999
 
     assert client.get(f"/api/v1/accounts/{account_id}?revision=0").status_code == 400
+
+
+def test_latest_metrics_are_not_cut_by_the_page_revision():
+    # В publication_latest одна строка на пост: отсечка по as_of не даёт
+    # прежнее значение, а выбрасывает пост. Ревизия страницы берётся из
+    # кэшированной карточки и отстаёт на минуты — свежие посты показывались
+    # «ожидает замера» и выпадали из медиан.
+    import re
+    from api.sql import details
+
+    text = "\n".join(value for name, value in vars(details).items() if name.isupper() and isinstance(value, str))
+    joins = re.findall(r"JOIN analytics\.publication_latest latest ON[^\n]*\n[^\n]*", text)
+    assert joins
+    assert not [join for join in joins if "as_of" in join]
+
+
+def test_comparison_dashboard_body_matches_the_contract():
+    import datetime
+    import json
+    import pathlib
+    import uuid
+
+    import yaml
+    from jsonschema import Draft202012Validator
+    from referencing import Registry, Resource
+    from referencing.jsonschema import DRAFT202012
+
+    from api.routes import compare
+
+    contract = yaml.safe_load((pathlib.Path(__file__).resolve().parents[1]
+                               / "contracts/openapi/m-ranked-v1.yaml").read_text(encoding="utf-8"))
+    institution = uuid.uuid4()
+    stat = {"institution_id": str(institution), "platform": "vk", "posts": 12, "views_total": 9000,
+            "reactions_total": 300, "comments_total": 20, "shares_total": None, "sample24": 10,
+            "views24": 812.5, "reactions24": 30.0, "comments24": 2.0, "shares24": None,
+            "engagement24": 4.12345, "analyzed": 11, "level0": 8, "level1": 1, "level2": 1, "level3": 1}
+    body = compare.dashboard_body(
+        "30d", 5, datetime.datetime(2026, 9, 23, tzinfo=datetime.timezone.utc),
+        {"stats": [stat, {**stat, "institution_id": None, "platform": "all"}],
+         "daily": [{"platform": "all", "day": "2026-09-22", "posts": 3, "views_total": 10,
+                    "reactions_total": 1, "analyzed": 3, "anomalous": 1}],
+         "timing": [{"platform": "vk", "weekday": 0, "hour": 9, "posts": 4, "views24": 100.0}],
+         "types": [{"platform": "vk", "publication_type": "photo", "posts": 4, "views24": None,
+                    "engagement24": 1.5}]},
+        [{"institution_id": institution, "platform": "vk", "hour_offset": 24, "samples": 10,
+          "views": 812.5, "reactions": 30.0},
+         {"institution_id": None, "platform": "vk", "hour_offset": 1, "samples": 90,
+          "views": 100.0, "reactions": None}],
+        [{"id": institution, "legacy_id": 7, "canonical_name": "Университет", "short_name": "У",
+          "telegram": 10, "vk": 20, "max": 0, "rutube": None, "platforms": ["vk", "telegram"]}],
+    )
+    registry = Registry().with_resource("urn:contract", Resource.from_contents(contract, default_specification=DRAFT202012))
+    errors = list(Draft202012Validator({"$ref": "urn:contract#/components/schemas/ComparisonDashboard"},
+                                       registry=registry).iter_errors(json.loads(json.dumps(body, default=str))))
+    assert not errors, [f"{list(error.path)}: {error.message}" for error in errors]
+    assert body["stats"][0]["levels"] == [8, 1, 1, 1] and body["stats"][0]["views24"] == 812
+    curve = next(item for item in body["curves"] if item["institutionId"] == str(institution))
+    assert curve["views"][4] == 812 and curve["views"][0] is None
+    assert body["institutions"][0]["platforms"] == ["telegram", "vk"]

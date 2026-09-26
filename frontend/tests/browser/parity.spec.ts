@@ -10,39 +10,43 @@ for (const platform of ["telegram", "vk", "max", "rutube"]) {
     }
   });
 
-  test(`${platform} default / explicit / empty comparison`, async ({ page }) => {
-    await page.goto(`/compare?platform=${platform}&period=24`);
+  test(`${platform} comparison opens the all-institution dashboard on its platform`, async ({ page }) => {
+    // Прежние ссылки (period в часах, выбор legacy id) открывают панель, а не 422.
+    const legacy = platform === "telegram" ? "channels=2" : "institutions=2";
+    const response = await page.goto(`/compare?platform=${platform}&period=24&submitted=true&${legacy}`);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByTestId("compare-dashboard")).toBeVisible();
     await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
-    if (platform === "max") { await expect(page.getByRole("heading", { name: "Сравнение · MAX", exact: true })).toBeVisible(); return; }
-    await expect(page.getByRole("checkbox", { name: /Альфа/ })).toBeChecked();
-    await expect(page.getByRole("checkbox", { name: /Бета/ })).toBeChecked();
-    const parameter = platform === "telegram" ? "channels" : "institutions";
-    await page.goto(`/compare?platform=${platform}&period=24&submitted=true&${parameter}=2`);
-    await expect(page.getByRole("checkbox", { name: /Бета/ })).toBeChecked();
-    await page.goto(`/compare?platform=${platform}&submitted=true`);
-    await expect(page.getByText(/Выберите хотя бы один/)).toBeVisible();
-    const rejected = await page.goto(`/compare?platform=${platform}&submitted=true&${parameter}=invalid`);
-    expect(rejected?.status()).toBe(422);
+    await expect(page.getByTestId("platform-tabs").getByRole("tab", { selected: true })).toHaveAttribute("data-value", platform);
+    if (platform !== "telegram") await expect(page.getByTestId("highlight-chip")).toContainText("Бета");
   });
 }
 
-test("compare search, bulk controls, count, legend and focused point tooltip work", async ({ page }) => {
-  await page.goto("/compare?platform=vk&period=24");
-  await page.getByRole("button", { name: "Снять выбор" }).click();
-  await expect(page.getByText("Выбрано: 0 из 2")).toBeVisible();
-  await page.getByRole("searchbox").fill("Альфа");
-  await expect(page.getByRole("checkbox", { name: /Бета/ })).toBeHidden();
-  await page.getByRole("button", { name: "Выбрать все" }).click();
-  await expect(page.getByText("Выбрано: 2 из 2")).toBeVisible();
-  const legend = page.getByRole("button", { name: "Скрыть линию: Альфа Университет" }).first();
-  await legend.focus(); await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Вернуть линию: Альфа Университет" })).toHaveCount(1);
-  const point = page.getByTestId("comparison-chart").first();
-  await expect(point).toHaveAttribute("data-chart-ready", "true");
-  await point.focus();
-  await expect(page.getByRole("tooltip")).toContainText(["Выборка: 2"]);
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("tooltip")).toHaveCount(0);
+test("comparison dashboard: platform tabs, highlight, ranking metric, table sort and period", async ({ page }) => {
+  await page.goto("/compare");
+  const dashboard = page.getByTestId("compare-dashboard");
+  await expect(dashboard).toBeVisible();
+  await expect(page.getByTestId("compare-kpi")).toHaveCount(6);
+  // Все вузы без ограничения: 12 вузов фикстуры в рейтинге и в таблице.
+  await expect(page.getByTestId("compare-table").locator("tbody tr")).toHaveCount(12);
+  // На телефоне у вкладки короткая подпись «ВК», поэтому ищем по значению.
+  await page.getByTestId("platform-tabs").locator('[role="tab"][data-value="vk"]').click();
+  await expect(page).toHaveURL(/platform=vk/);
+  await page.getByTestId("highlight-search").fill("Альфа");
+  await page.getByRole("option").first().click();
+  await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
+  await expect(page).toHaveURL(/highlight=00000009-0000-4000-8000-000000000001/);
+  await expect(page.getByTestId("compare-table").locator('tr[data-highlighted="true"]')).toHaveCount(1);
+  await page.getByRole("combobox", { name: "Мера рейтинга" }).selectOption("engagement24");
+  await expect(page.getByTestId("ranking-card")).toContainText("Вовлечённость за 24 часа");
+  const table = page.getByTestId("compare-table");
+  await table.getByRole("button", { name: /Публикаций/ }).click();
+  await expect(table.getByRole("columnheader", { name: /Публикаций/ })).toHaveAttribute("aria-sort", "descending");
+  await page.getByRole("navigation", { name: "Период" }).getByRole("link", { name: "7 дней" }).click();
+  await expect(page).toHaveURL(/period=7d/);
+  await expect(page).toHaveURL(/platform=vk/);
+  await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
+  await expect(page.locator('[data-testid="ranking-chart"] .recharts-bar-rectangle').first()).toBeVisible();
 });
 
 test("form sort direction, platform autosubmit and browser history preserve fields", async ({ page }) => {
@@ -290,7 +294,7 @@ test("retired export is absent from navigation and raw quality codes are absent 
 
 for (const theme of ["dark", "light"]) {
   test(`overview and interactive compare meet axe AA in ${theme} theme`, async ({ page }) => {
-    for (const path of ["/?platform=vk", "/compare?platform=vk&period=24"]) {
+    for (const path of ["/?platform=vk", "/compare?platform=vk"]) {
       await page.goto(path);
       // Colour transitions are still running right after the attribute flips,
       // and sampling mid-transition reports blended values that exist in

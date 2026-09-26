@@ -7,7 +7,9 @@ at retrieval using the authoritative PG purge_after value.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timedelta
+import fcntl
 import hashlib
 import json
 import os
@@ -15,6 +17,7 @@ import re
 from pathlib import Path
 import stat
 import tempfile
+import time
 from urllib.parse import unquote, urlsplit
 
 from .normalize import canonical_json, sanitize_evidence
@@ -95,7 +98,8 @@ class ImmutableEvidenceStore:
 
 
     def purge_expired(self, connection, *, now: datetime, max_objects: int = 1000,
-                      orphan_grace: timedelta = timedelta(days=7)) -> int:
+                      orphan_grace: timedelta = timedelta(days=7),
+                      max_seconds: float = 10) -> int:
         """Bounded physical expiry; uses the collector's exact per-hash DB lock.
 
         Use a maintenance connection and the same durable directory. A crash
@@ -104,28 +108,39 @@ class ImmutableEvidenceStore:
         """
         if max_objects < 1 or max_objects > 100_000 or orphan_grace < timedelta(days=7):
             raise ValueError("unsafe evidence purge bounds")
+        if not 0 < max_seconds <= 60:
+            raise ValueError("unsafe evidence time budget")
+        deadline = time.monotonic() + max_seconds
         now = utc(now, "now")
         self._directory()
         removed = 0
         examined = 0
-        with os.scandir(self.root) as entries:
+        # A durable worklist scans the directory once per sweep, not on every
+        # batch. 70 bytes/object (~21 MiB at 312k files), constant process RAM.
+        # Progress also advances over retained objects. Replaying after a crash
+        # is safe because metadata and the per-hash lock are checked again.
+        with self._gc_entries(max_objects, deadline) as entries:
             for entry in entries:
                 if examined >= max_objects:
                     break
-                if not re.fullmatch(r"[0-9a-f]{64}\.json", entry.name) or not entry.is_file(follow_symlinks=False):
+                if not re.fullmatch(r"[0-9a-f]{64}\.json", entry.name) or entry.is_symlink() or not entry.is_file():
                     continue
                 examined += 1
                 digest = entry.name[:-5]
                 uri = (self.root / entry.name).as_uri()
                 with connection.transaction():
+                    connection.execute("SET LOCAL lock_timeout='1s'")
+                    connection.execute("SET LOCAL statement_timeout='5s'")
                     connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))", ("raw-evidence:" + digest,))
                     result = connection.execute(
                         "SELECT max(purge_after) FROM ingest.raw_payload WHERE external_ref=%s", (uri,)
                     ).fetchone()
+                    if not entry.exists():
+                        continue
                     latest = next(iter(result.values())) if isinstance(result, dict) else result[0]
                     if latest is not None and latest > now:
                         continue
-                    if latest is None and datetime.fromtimestamp(entry.stat(follow_symlinks=False).st_mtime, now.tzinfo) > now - orphan_grace:
+                    if latest is None and datetime.fromtimestamp(entry.lstat().st_mtime, now.tzinfo) > now - orphan_grace:
                         continue
                     self._read_bytes(self.root / entry.name, digest)
                     (self.root / entry.name).unlink()
@@ -137,3 +152,80 @@ class ImmutableEvidenceStore:
                     connection.execute("SELECT ops_and_admin.purge_raw_evidence_reference(%s,%s)", (uri,now))
                     removed += 1
         return removed
+
+    @contextmanager
+    def _gc_entries(self, limit: int, deadline: float):
+        """Single sweeper; atomically published manifest + durable byte cursor.
+
+        The directory is service-owned and private. Opening control files with
+        O_NOFOLLOW prevents an unexpected symlink from redirecting GC writes.
+        New objects enter the next sweep; orphan grace still applies.
+        """
+        lock_fd = os.open(self.root / '.gc-lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(lock_fd, 'r+') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            manifest = self.root / '.gc-worklist'
+            cursor = self.root / '.gc-cursor'
+            offset = 0
+            if cursor.exists():
+                fd = os.open(cursor, os.O_RDONLY | os.O_NOFOLLOW)
+                with os.fdopen(fd) as stream:
+                    offset = int(stream.read(32))
+                if offset < 0 or offset % 70:
+                    raise EvidenceUnavailable('invalid GC cursor')
+            if not manifest.exists():
+                offset = 0
+                fd, name = tempfile.mkstemp(prefix='.gc-build-', dir=self.root)
+                try:
+                    with os.fdopen(fd, 'w') as stream, os.scandir(self.root) as entries:
+                        for entry in entries:
+                            # Remove only this sweeper's stale crash temporaries,
+                            # never JSON evidence by filename/mtime alone.
+                            if entry.name.startswith(('.gc-build-', '.gc-state-')) and entry.name != Path(name).name and entry.is_file(follow_symlinks=False):
+                                info = entry.stat(follow_symlinks=False)
+                                if info.st_uid == os.geteuid() and info.st_mtime < time.time() - 86400:
+                                    (self.root / entry.name).unlink(missing_ok=True)
+                            if re.fullmatch(r'[0-9a-f]{64}\.json', entry.name) and entry.is_file(follow_symlinks=False):
+                                stream.write(entry.name + '\n')
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    # Reset cursor before publishing: crash may safely replay.
+                    self._gc_checkpoint(cursor, 0)
+                    os.replace(name, manifest)
+                finally:
+                    Path(name).unlink(missing_ok=True)
+            fd = os.open(manifest, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, 'rb') as stream:
+                stream.seek(offset)
+                def entries():
+                    for _ in range(limit):
+                        if time.monotonic() >= deadline:
+                            break
+                        line = stream.readline(71)
+                        if not line:
+                            break
+                        if len(line) != 70 or not re.fullmatch(rb'[0-9a-f]{64}\.json\n', line):
+                            raise EvidenceUnavailable('invalid GC worklist')
+                        yield self.root / line.decode('ascii').strip()
+                yield entries()
+                # Only commit progress on success; exceptions retry this batch.
+                self._gc_checkpoint(cursor, stream.tell())
+                if not stream.read(1):
+                    manifest.unlink()
+                    self._gc_checkpoint(cursor, 0)
+
+    def _gc_checkpoint(self, cursor: Path, offset: int) -> None:
+        fd, name = tempfile.mkstemp(prefix='.gc-state-', dir=self.root)
+        try:
+            with os.fdopen(fd, 'w') as stream:
+                stream.write(str(offset))
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(name, cursor)
+            directory = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        finally:
+            Path(name).unlink(missing_ok=True)

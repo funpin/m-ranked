@@ -1,3 +1,4 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = ["benchmark: замер времени с запасом; на перегруженной машине может быть нестабилен"]

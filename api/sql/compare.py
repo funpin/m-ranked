@@ -239,3 +239,138 @@ SELECT params.cohort_id,cohort.size AS cohort_sample_size,params.as_of,
   LEFT JOIN engagement_grouped engagement ON engagement.selection_id=selection.selection_id AND engagement.hour_offset=hour.hour_offset
  ORDER BY selection.position,hour.hour_offset
 """
+
+
+# Панель сравнения всех вузов. Читает только небольшие таблицы: посты окна,
+# их последний замер, вывод анализа и значения на фиксированных часах из
+# analytics.publication_checkpoint — снимки не трогает, поэтому весь набор
+# собирается за доли секунды и без ограничения числа вузов.
+#
+# Сравнимая мера — значение на 24-м часу: текущий счётчик вчерашнего поста
+# заведомо меньше позавчерашнего, и медиана по нему наказывала бы тех, кто
+# публикуется чаще. Суммы берутся из последнего замера: это объём за окно.
+_DASHBOARD_POSTS = """
+WITH params AS (
+    SELECT %(as_of)s::timestamptz AS as_of, %(days)s::integer AS days
+), posts AS MATERIALIZED (
+    SELECT publication.id, publication.published_at, publication.publication_type::text AS publication_type,
+           account.platform::text AS platform, account.institution_id,
+           CASE WHEN latest.views_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.views_count END AS views,
+           CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.reactions_count END AS reactions,
+           CASE WHEN latest.comments_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.comments_count END AS comments,
+           CASE WHEN latest.shares_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.shares_count END AS shares,
+           state.level,
+           day24.views_count AS views24, day24.reactions_count AS reactions24,
+           day24.comments_count AS comments24, day24.shares_count AS shares24,
+           CASE WHEN day24.views_count > 0 AND (day24.reactions_count IS NOT NULL
+                     OR (account.platform <> 'telegram' AND (day24.comments_count IS NOT NULL OR day24.shares_count IS NOT NULL)))
+                THEN (coalesce(day24.reactions_count,0)
+                      + CASE WHEN account.platform = 'telegram' THEN 0
+                             ELSE coalesce(day24.comments_count,0) + coalesce(day24.shares_count,0) END
+                     )::numeric * 100 / day24.views_count END AS engagement24
+      FROM params
+      JOIN ingest.visible_publication publication
+        ON publication.published_at > params.as_of - make_interval(days => params.days)
+       AND publication.published_at <= params.as_of
+      JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id AND account.enabled
+      LEFT JOIN analytics.publication_latest latest ON latest.publication_id = publication.id
+       AND NOT latest.synthetic AND latest.quality <> 'invalid'
+      LEFT JOIN analytics.post_anomaly_state state ON state.publication_id = publication.id
+       AND state.analyzed_at IS NOT NULL
+      LEFT JOIN analytics.publication_checkpoint day24 ON day24.publication_id = publication.id
+       AND day24.hour_offset = 24
+)
+"""
+
+# Все разрезы по одному набору постов: сам набор — самая дорогая часть, и
+# четыре отдельных запроса собирали его четыре раза.
+DASHBOARD = _DASHBOARD_POSTS + """, dated AS (
+    SELECT posts.*, (published_at AT TIME ZONE 'Europe/Moscow')::date AS day,
+           extract(isodow FROM published_at AT TIME ZONE 'Europe/Moscow')::integer - 1 AS weekday,
+           extract(hour FROM published_at AT TIME ZONE 'Europe/Moscow')::integer AS hour
+      FROM posts
+), stats AS (
+    SELECT institution_id, coalesce(platform, 'all') AS platform,
+           count(*)::integer AS posts,
+           sum(views)::bigint AS views_total, sum(reactions)::bigint AS reactions_total,
+           sum(comments)::bigint AS comments_total, sum(shares)::bigint AS shares_total,
+           count(views24)::integer AS sample24,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY reactions24) AS reactions24,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY comments24) AS comments24,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY shares24) AS shares24,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY engagement24) AS engagement24,
+           count(level)::integer AS analyzed,
+           count(*) FILTER (WHERE level = 0)::integer AS level0,
+           count(*) FILTER (WHERE level = 1)::integer AS level1,
+           count(*) FILTER (WHERE level = 2)::integer AS level2,
+           count(*) FILTER (WHERE level = 3)::integer AS level3
+      FROM dated
+     GROUP BY GROUPING SETS ((institution_id, platform), (institution_id), (platform), ())
+), daily AS (
+    -- Динамика по московским суткам: сколько вышло, сколько набрали и какая
+    -- доля проанализированных постов получила уровень 2–3.
+    SELECT coalesce(platform, 'all') AS platform, day,
+           count(*)::integer AS posts, sum(views)::bigint AS views_total,
+           sum(reactions)::bigint AS reactions_total,
+           count(level)::integer AS analyzed,
+           count(*) FILTER (WHERE level >= 2)::integer AS anomalous
+      FROM dated
+     GROUP BY GROUPING SETS ((platform, day), (day))
+), timing AS (
+    -- Когда публикуют и когда это работает: день недели и час выхода по Москве.
+    SELECT coalesce(platform, 'all') AS platform, weekday, hour, count(*)::integer AS posts,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24
+      FROM dated
+     -- День недели NULL — все дни: медиана по часу выхода считается по самим
+     -- постам, а не сводится из медиан отдельных дней.
+     GROUP BY GROUPING SETS ((platform, weekday, hour), (weekday, hour), (platform, hour), (hour))
+), types AS (
+    SELECT coalesce(platform, 'all') AS platform, coalesce(publication_type, 'unknown') AS publication_type,
+           count(*)::integer AS posts,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY engagement24) AS engagement24
+      FROM dated
+     GROUP BY GROUPING SETS ((platform, publication_type), (publication_type))
+)
+SELECT (SELECT coalesce(json_agg(stats), '[]') FROM stats) AS stats,
+       (SELECT coalesce(json_agg(daily ORDER BY day), '[]') FROM daily) AS daily,
+       (SELECT coalesce(json_agg(timing), '[]') FROM timing) AS timing,
+       (SELECT coalesce(json_agg(types), '[]') FROM types) AS types
+"""
+
+# Кривые накопления: медиана значений на каждом фиксированном часу. Площадки
+# не смешиваются — просмотр в Telegram и во ВКонтакте значит разное.
+DASHBOARD_CURVES = """
+WITH params AS (
+    SELECT %(as_of)s::timestamptz AS as_of, %(days)s::integer AS days
+)
+SELECT account.institution_id, account.platform::text AS platform, checkpoint.hour_offset,
+       count(checkpoint.views_count)::integer AS samples,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY checkpoint.views_count) AS views,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY checkpoint.reactions_count) AS reactions
+  FROM params
+  JOIN ingest.visible_publication publication
+    ON publication.published_at > params.as_of - make_interval(days => params.days)
+   AND publication.published_at <= params.as_of
+  JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id AND account.enabled
+  JOIN analytics.publication_checkpoint checkpoint ON checkpoint.publication_id = publication.id
+ GROUP BY GROUPING SETS ((account.institution_id, account.platform, checkpoint.hour_offset),
+                         (account.platform, checkpoint.hour_offset))
+"""
+
+DASHBOARD_INSTITUTIONS = """
+SELECT institution.id, alias.legacy_id, institution.canonical_name, institution.short_name,
+       coalesce(sum(subscribers.value) FILTER (WHERE account.platform = 'telegram'), 0)::bigint AS telegram,
+       coalesce(sum(subscribers.value) FILTER (WHERE account.platform = 'vk'), 0)::bigint AS vk,
+       coalesce(sum(subscribers.value) FILTER (WHERE account.platform = 'max'), 0)::bigint AS max,
+       coalesce(sum(subscribers.value) FILTER (WHERE account.platform = 'rutube'), 0)::bigint AS rutube,
+       array_agg(DISTINCT account.platform::text) FILTER (WHERE account.id IS NOT NULL) AS platforms
+  FROM catalog.visible_institution institution
+  LEFT JOIN catalog.legacy_entity_alias alias ON alias.target_uuid = institution.id AND alias.entity_type = 'institutions'
+  LEFT JOIN catalog.visible_platform_account account ON account.institution_id = institution.id AND account.enabled
+  LEFT JOIN analytics.account_latest subscribers ON subscribers.platform_account_id = account.id
+   AND subscribers.metric_key = 'subscribers'
+ GROUP BY institution.id, alias.legacy_id, institution.canonical_name, institution.short_name
+ ORDER BY lower(coalesce(institution.short_name, institution.canonical_name))
+"""

@@ -44,7 +44,7 @@ def validate_tracking_policy(settings: Any) -> None:
     scan_limit = _positive_setting(settings, "collector_refresh_scan_limit", 400)
     if scan_limit < refresh_limit:
         raise ValueError("collector_refresh_scan_limit must not be below refresh limit")
-    _positive_setting(settings, "track_post_for_hours", 960)
+    _positive_setting(settings, "track_post_for_hours", 720)
     deletion_confirmation_threshold(settings)
 
 
@@ -72,7 +72,7 @@ def plan_refresh(
     validate_tracking_policy(settings)
     refresh_limit = _positive_setting(settings, "collector_refresh_limit", 100)
     scan_limit = _positive_setting(settings, "collector_refresh_scan_limit", 400)
-    track_hours = _positive_setting(settings, "track_post_for_hours", 960)
+    track_hours = _positive_setting(settings, "track_post_for_hours", 720)
     page = tracking.tracked_publications(
         account,
         published_after=observed - timedelta(hours=track_hours),

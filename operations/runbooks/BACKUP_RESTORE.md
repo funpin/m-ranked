@@ -37,15 +37,53 @@ back them up separately with distinct encryption and verify their inventory.
 
 ## Ночной снимок там, где нет pgBackRest
 
-`m-ranked-target-dump-backup.timer` снимает базу целиком каждую ночь
-(`pg_dump -Fc`), проверяет снятое чтением оглавления и оставляет на диске три
-последние копии в `/var/backups/m-ranked`. Проверка выполняется клиентом из
-образа самой базы, если на хосте нет `pg_restore`.
+Подготовленная policy описана в [STORAGE_BUDGET.md](STORAGE_BUDGET.md).
+На production при проверке 24.09.2026 ещё действовали три локальных копии,
+архив WAL был выключен. Изложенные выше RPO/RTO — цели целевой pgBackRest
+схемы, не подтверждённые свойства действующего nightly dump.
 
-Это не замена pgBackRest: восстановление возможно только на момент снимка, а
-не на произвольную точку — архива WAL здесь нет. Восстановление:
+Новый `dump-backup.sh` использует один lock, проверяет резерв до запуска,
+ограничивает поток 5 ГБ и сохраняет 11 ГБ доступного места во время записи.
+Проверка декодирует весь архив, а не только TOC. Это проверка целостности,
+не restore. Ротация сохраняет последнюю копию с receipt реального restore
+плюс `BACKUP_KEEP` новых. При KEEP=1 это временно две готовые копии и ещё
+одна создаваемая; для бюджета считать максимум **три**, пока verifier не
+проверяет каждую новую копию до следующего backup. Без receipt ротация
+отказывается удалять что-либо; оператор должен устранить причину до следующего
+запуска. Резерв продолжает ограничивать накопление даже при ошибке verifier.
+
+После успешного restore receipt `<basename>.restore-verified.json` содержит
+`dump` (basename), `sha256`, `restore_exit_code: 0`. Записывать receipt
+на production разрешается только вместе с согласованным rollout после
+проверки всего restore, ролей/ACL и smoke queries. Один только `--no-owner
+--no-acl` drill не доказывает восстановление production permissions.
+
+Установка требует одобрения пакета. Все четыре helper должны идти вместе:
 
 ```bash
-docker exec -i mranked-production-postgres-1 \
-  pg_restore -h 127.0.0.1 -U mranked_bootstrap -d mranked_restore --clean --if-exists < снимок.dump
+install -d -m 0755 /usr/local/libexec/m-ranked
+for file in dump-backup.sh backup-stream.py rotate-dumps.py storage_guard.py; do
+  install -o root -g root -m 0755 "operations/scripts/$file" "/usr/local/libexec/m-ranked/$file"
+done
 ```
+
+Это не замена pgBackRest: восстановление — на момент snapshot, без PITR.
+Проверенный 24.09.2026 порядок для полного custom dump: новый изолированный
+кластер с исходной bootstrap superuser, определения ролей **без паролей**,
+затем три отдельные фазы. Единственный параллельный запуск целиком на проверенном
+архиве активировал partition trigger раньше нужного UNIQUE-ограничения и упал.
+
+```bash
+# Только выделенная restore DB, никогда production DB.
+for section in pre-data data post-data; do
+  pg_restore --exit-on-error --jobs=2 --section="$section" \
+    --dbname="$RESTORE_DATABASE_URL" "$DUMP_FILE" || exit
+done
+```
+
+Проверить schema contract, invalid indexes, роли/ACL, receipts, representative
+history/API queries и внешний evidence inventory. Последний проверенный dump
+восстановился локально за <=353s после передачи; это не обещание RTO на S2.
+130 NOT VALID constraints требуют отдельной проверки целостности, а external
+raw files/credentials вообще не входят в database dump. Receipt хранить рядом
+с dump только после успешной проверки; ротация сверяет SHA256 перед удалением.

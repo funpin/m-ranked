@@ -1,7 +1,6 @@
 import createClient from "openapi-fetch";
 import type { paths } from "../../contracts/openapi/m-ranked-v1-client";
-import { MAX_COMPARISON_INSTITUTIONS, COMPARISON_PAGE_SIZE } from "./types";
-import type { ApiProblem, ComparisonRequest, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection, StatisticsRequest } from "./types";
+import type { ApiProblem, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection, StatisticsRequest } from "./types";
 import type { OverviewSort } from "./params";
 import { revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
 import { publicResponseCacheFromEnv } from "./bounded-response-cache";
@@ -112,18 +111,24 @@ export function createApiClient(options: ApiClientOptions = {}) {
     publicationHistory(legacyId: number | string, legacyType?: LegacyPublicationType, limit = 100, cursor?: string) {
       return client.GET("/api/v1/publications/{legacyId}/history", { params: { path: { legacyId }, query: { legacyType, limit: Math.min(3000, Math.max(1, limit)), cursor } } }).then(unwrap);
     },
-    publicationAnomalyAnalysis(legacyId: number | string, legacyType?: LegacyPublicationType, cursor?: string) {
+    publicationAnomalyAnalysis(legacyId: number | string, legacyType?: LegacyPublicationType) {
       return analysisClient.GET("/api/v1/publications/{legacyId}/anomaly-analysis", {
-        params: { path: { legacyId }, query: { legacyType, limit: 100, cursor } },
+        params: { path: { legacyId }, query: { legacyType } },
       }).then(unwrap);
     },
-    comparisonCandidates(platform: Exclude<Platform, "all">, limit = 200, cursor?: string) {
-      return client.GET("/api/v1/compare/candidates", { params: { query: { platform, limit: Math.min(200, Math.max(1, limit)), cursor } } }).then(unwrap);
+    accountAnomalyLevels(accountId: string) {
+      return analysisClient.GET("/api/v1/accounts/{accountId}/anomaly-levels", {
+        params: { path: { accountId } },
+      }).then(unwrap);
     },
-    comparison(input: ComparisonRequest) {
-      const channels = input.platform === "telegram" ? normalizeComparisonIds("channels", input.channels) : undefined;
-      const institutions = input.platform === "telegram" ? undefined : normalizeComparisonIds("institutions", input.institutions);
-      return client.GET("/api/v1/compare", { params: { query: { ...input, channels: channels && [...channels], institutions: institutions && [...institutions], institutionLimit: Math.min(COMPARISON_PAGE_SIZE, Math.max(1, input.institutionLimit ?? COMPARISON_PAGE_SIZE)) } } }).then(unwrap);
+    sitemapSummary() {
+      return client.GET("/api/v1/sitemap", {}).then(unwrap);
+    },
+    sitemapPublications(page: number) {
+      return client.GET("/api/v1/sitemap/publications/{page}", { params: { path: { page } } }).then(unwrap);
+    },
+    comparisonDashboard(period: "7d" | "30d") {
+      return client.GET("/api/v1/compare/dashboard", { params: { query: { period } } }).then(unwrap);
     },
     statistics(input: StatisticsRequest) {
       const q = (input.q ?? "").trim();
@@ -143,9 +148,3 @@ export function createApiClient(options: ApiClientOptions = {}) {
 const nextPublicCache = process.env.NEXT_PUBLIC_DATA_CACHE === "disabled" ? undefined : publicResponseCacheFromEnv();
 export const api = createApiClient({ publicCache: nextPublicCache });
 
-function normalizeComparisonIds(parameter: "channels" | "institutions", value: readonly number[] | undefined): readonly number[] | undefined {
-  if (value === undefined) return undefined;
-  if (value.length === 0 || value.length > MAX_COMPARISON_INSTITUTIONS) throw new RangeError(`${parameter} must contain between 1 and ${MAX_COMPARISON_INSTITUTIONS} IDs`);
-  for (const id of value) if (!Number.isSafeInteger(id) || id <= 0) throw new RangeError(`${parameter} IDs must be positive safe integers`);
-  return [...new Set(value)];
-}

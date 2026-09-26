@@ -1,5 +1,5 @@
 [Unit]
-Description=M-Ranked independent publication anomaly analysis worker
+Description=M-Ranked publication anomaly analysis worker (v2)
 Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
 After=network-online.target
 Wants=network-online.target
@@ -50,7 +50,12 @@ ReadWritePaths=/var/lib/node_exporter/textfile_collector
 RuntimeDirectory=m-ranked-anomaly
 RuntimeDirectoryMode=0700
 UMask=0077
-MemoryMax=512M
+# Бюджет Сервера 2 (план, раздел 11): ~17 000 анализов в час укладываются в
+# 0.2 ядра в среднем; половина ядра — потолок на догонку после простоя.
+# Работник уступает процессор API и базе и не держит больше 384 МБ.
+CPUQuota=50%
+Nice=10
+MemoryMax=384M
 LimitNOFILE=4096
 TasksMax=32
 

@@ -1,0 +1,43 @@
+[Unit]
+Description=Collect old M-Ranked releases
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Environment=TZ=UTC
+EnvironmentFile=-/etc/m-ranked/host-storage-gc.env
+ExecStart=/usr/bin/flock -n /run/lock/m-ranked-release.lock /usr/local/libexec/m-ranked/gc_host_storage.py --apply
+TimeoutStartSec=30min
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Защита занятых релизов читает /proc/<pid>/cwd и exe процессов других
+# пользователей (API, web, анализ). Без этих двух прав root такие ссылки не
+# прочитает, и очистка честно отказывается работать каждую ночь — проверено
+# на Сервере 2 24.09. Удалению они не нужны: каталоги релизов принадлежат root.
+CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+UMask=0077
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

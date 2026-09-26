@@ -1,34 +1,5 @@
-"""Deterministic publication anomaly analysis.
+"""Анализ аномальной динамики публикаций.
 
-The package owns derived judgments only.  It deliberately has no HTTP surface
-and its analytical modules do not import database or runtime configuration.
+Пакет владеет только производными выводами: у него нет HTTP-поверхности, а
+API читает его таблицы SQL-запросом. Вся логика — в подпакете `v2`.
 """
-
-from .aggregation import AGGREGATOR_VERSION, AggregateResult, aggregate
-from .config import AnalysisManifest, default_manifest
-from .domain import (
-    Abstained,
-    Clean,
-    Finding,
-    Metric,
-    MetricObservation,
-    ObservationQuality,
-    PublicationHistory,
-    Severity,
-)
-
-__all__ = [
-    "AGGREGATOR_VERSION",
-    "Abstained",
-    "AggregateResult",
-    "AnalysisManifest",
-    "Clean",
-    "Finding",
-    "Metric",
-    "MetricObservation",
-    "ObservationQuality",
-    "PublicationHistory",
-    "Severity",
-    "aggregate",
-    "default_manifest",
-]

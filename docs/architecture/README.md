@@ -26,7 +26,8 @@ anomaly worker и PostgreSQL 18.
 - [ADR-010: профили развёртывания и граница raw/ready](adr/ADR-010-deployment-profiles.md);
 - [ADR-011: общий кэш ответов](adr/ADR-011-shared-response-cache.md);
 - [ADR-012: collect и persist как разные фазы](adr/ADR-012-collect-persist-phases.md);
-- [ADR-013: размещение сборщиков и слияние наблюдений](adr/ADR-013-collector-placement-and-merge.md).
+- [ADR-013: размещение сборщиков и слияние наблюдений](adr/ADR-013-collector-placement-and-merge.md);
+- [ADR-014: анализ аномальной динамики v2](adr/ADR-014-anomaly-analysis-v2.md).
 
 ## Планы
 

@@ -58,39 +58,69 @@ groups:
         annotations:
           summary: Measured disk growth or the 5x capacity scenario exceeds available storage.
       - alert: MRankedAnomalyWorkerMetricsStale
-        expr: mranked_anomaly_candidate_backlog > 0 and time() - mranked_anomaly_last_completion_unixtime > 900
+        expr: mranked_anomaly_due_backlog > 0 and time() - mranked_anomaly_last_completion_unixtime > 900
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: Anomaly analysis has pending work but its worker textfile is stale.
-      - alert: MRankedAnomalyEligibleBacklog
-        expr: mranked_ops_anomaly_eligible_backlog > 500 or mranked_ops_anomaly_oldest_candidate_age_seconds > 3600
+          summary: Anomaly analysis has due posts but its worker textfile is stale.
+      - alert: MRankedAnomalyQueueLag
+        expr: mranked_anomaly_queue_lag_seconds > 3600
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: Eligible anomaly-analysis work is accumulating.
+          summary: The oldest due anomaly analysis is more than an hour late; 7-30 day intervals are being stretched.
       - alert: MRankedAnomalyWorkerFailures
-        expr: mranked_ops_anomaly_failures_last_hour > 20 or mranked_ops_anomaly_retry_candidates > 100
+        expr: increase(mranked_anomaly_analyses_total{outcome="failed"}[1h]) > 20
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: Anomaly analysis is repeatedly failing and retrying.
-      - alert: MRankedAnomalyLeaseStuck
-        expr: mranked_ops_anomaly_expired_leases > 0
-        for: 10m
+          summary: Anomaly analysis is repeatedly failing on individual posts.
+      - alert: MRankedAnomalyNormNeedsReview
+        expr: mranked_anomaly_norm_latest_status{status="drift_review"} == 1
+        for: 1h
         labels:
           severity: warning
         annotations:
-          summary: An anomaly-analysis claim lease expired and needs recovery.
-      - alert: MRankedAnomalyRevisionLag
-        expr: mranked_ops_anomaly_candidate_backlog > 0 and mranked_ops_anomaly_source_revision_lag > 10
+          summary: A new anomaly norm version shifted sharply and waits for manual review; analysis stays on the previous accepted version.
+      - alert: MRankedAnomalyNormJobStale
+        expr: time() - mranked_anomaly_norm_last_run_unixtime > 172800
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: The nightly anomaly norm rebuild has not completed for two days.
+      - record: mranked_ops_inserted_rows_per_day
+        expr: sum(rate(mranked_ops_inserted_rows_total[1h])) * 86400
+  - name: m-ranked-storage
+    rules:
+      - alert: MRankedBackupStale
+        expr: time() - mranked_backup_last_success_unixtime > 36 * 3600
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: No successful full database dump for more than 36 hours.
+      - alert: MRankedStorageReserveLow
+        expr: mranked_storage_heavy_job_allowed == 0
         for: 30m
         labels:
           severity: warning
         annotations:
-          summary: Anomaly analysis is lagging behind committed dataset revisions.
-      - record: mranked_ops_inserted_rows_per_day
-        expr: sum(rate(mranked_ops_inserted_rows_total[1h])) * 86400
+          summary: Free disk is below the operating reserve plus the next heavy job; backups and backfills will refuse to start.
+      - alert: MRankedDockerReclaimable
+        expr: mranked_host_docker_reclaimable_bytes > 5e9
+        for: 6h
+        labels:
+          severity: info
+        annotations:
+          summary: Docker could free more than 5 GB; review exact image IDs (other projects share the host, no automatic prune).
+      - alert: MRankedHostGcStale
+        expr: time() - mranked_host_gc_last_run_unixtime > 3 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: Release garbage collection has not run for three days.

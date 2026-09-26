@@ -1,0 +1,14 @@
+[Unit]
+Description=M-Ranked disk budget observation (no cleanup)
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/m-ranked/storage-guard.env
+ExecStart=/usr/local/libexec/m-ranked/storage-guard.sh
+User=root
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=30s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/m-ranked/storage-guard /var/lib/node_exporter/textfile_collector

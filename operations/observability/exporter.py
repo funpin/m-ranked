@@ -29,32 +29,21 @@ PG_SQL = """SELECT jsonb_build_object(
  'partition_bytes',(SELECT coalesce(sum(pg_total_relation_size(c.oid)),0) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='ingest' AND c.relispartition AND c.relkind='r'),
  'inserted_rows_total',(SELECT coalesce(sum(n_tup_ins),0) FROM pg_stat_user_tables WHERE schemaname IN ('catalog','ingest','analytics','rating','ops_and_admin')))
 """
-APP_SQL = """WITH anomaly AS MATERIALIZED (SELECT analytics.anomaly_operational_metrics() AS value)
-SELECT jsonb_build_object(
+# Анализ аномалий v2 публикует свою очередь и отставание сам, в textfile
+# работника (mranked_anomaly_*): старой очереди кандидатов больше никто не читает.
+APP_SQL = """SELECT jsonb_build_object(
  'latest_dataset_revision',(SELECT coalesce(max(id),0) FROM analytics.dataset_revision),
  'pending_outbox',(SELECT count(*) FROM ops_and_admin.outbox_event WHERE published_at IS NULL),
  'archive_staging',(SELECT count(*) FROM ops_and_admin.archive_manifest WHERE status='staging'),
  'archive_verified',(SELECT count(*) FROM ops_and_admin.archive_manifest WHERE status='verified'),
  'archive_fenced',(SELECT count(*) FROM ops_and_admin.publication_partition_fence WHERE state='archiving'),
  'collection_rows_24h',(SELECT coalesce(sum(result.snapshot_count),0) FROM ingest.collection_run run JOIN ingest.collection_account_result result ON result.collection_run_id=run.id WHERE run.platform IN ('telegram','vk','max','rutube') AND run.started_at>=now()-interval '1 day'),
- 'collection_last_success_unixtime',(SELECT coalesce(extract(epoch FROM max(completed_at)),0) FROM ingest.collection_run WHERE status='succeeded'),
- 'anomaly_candidate_backlog',(SELECT (value->>'candidate_backlog')::numeric FROM anomaly),
- 'anomaly_eligible_backlog',(SELECT (value->>'eligible_backlog')::numeric FROM anomaly),
- 'anomaly_oldest_candidate_age_seconds',(SELECT (value->>'oldest_candidate_age_seconds')::numeric FROM anomaly),
- 'anomaly_expired_leases',(SELECT (value->>'expired_leases')::numeric FROM anomaly),
- 'anomaly_retry_candidates',(SELECT (value->>'retry_candidates')::numeric FROM anomaly),
- 'anomaly_failures_last_hour',(SELECT (value->>'failures_last_hour')::numeric FROM anomaly),
- 'anomaly_latest_analysis_revision',(SELECT (value->>'latest_analysis_revision')::numeric FROM anomaly),
- 'anomaly_latest_source_dataset_revision',(SELECT (value->>'latest_source_dataset_revision')::numeric FROM anomaly),
- 'anomaly_source_revision_lag',(SELECT (value->>'source_revision_lag')::numeric FROM anomaly),
- 'anomaly_last_success_unixtime',(SELECT (value->>'last_success_unixtime')::numeric FROM anomaly))
+ 'collection_last_success_unixtime',(SELECT coalesce(extract(epoch FROM max(completed_at)),0) FROM ingest.collection_run WHERE status='succeeded'))
 """
 SOURCES=('postgres','application','spool','disk')
 NAMES={
     'postgres':('wal_bytes_total','wal_archive_failures_total','wal_last_archived_unixtime','replication_connected','replication_lag_bytes','replication_replay_lag_seconds','lock_waits','database_bytes','table_bytes','index_bytes','partition_bytes','inserted_rows_total'),
-    'application':('latest_dataset_revision','pending_outbox','archive_staging','archive_verified','archive_fenced','collection_rows_24h','collection_last_success_unixtime',
-                   'anomaly_candidate_backlog','anomaly_eligible_backlog','anomaly_oldest_candidate_age_seconds','anomaly_expired_leases','anomaly_retry_candidates',
-                   'anomaly_failures_last_hour','anomaly_latest_analysis_revision','anomaly_latest_source_dataset_revision','anomaly_source_revision_lag','anomaly_last_success_unixtime'),
+    'application':('latest_dataset_revision','pending_outbox','archive_staging','archive_verified','archive_fenced','collection_rows_24h','collection_last_success_unixtime'),
     'disk':('free_bytes','total_bytes','required_5x_bytes','required_10x_bytes'),
 }
 

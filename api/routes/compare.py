@@ -163,3 +163,92 @@ async def comparison(
         "dimensions": dimensions, "cursor": selectionCursor or "",
     }, COMPARE_TAGS, build,
         pinned_revision=normalize.cursor_revision(selectionCursor))
+
+
+DASHBOARD_PERIODS = {"7d": 7, "30d": 30}
+CHECKPOINT_HOURS = (1, 3, 6, 12, 24, 48, 72, 168)
+
+
+def _number(value: Any, digits: int = 0) -> float | int | None:
+    if value is None:
+        return None
+    rounded = round(float(value), digits)
+    return int(rounded) if digits == 0 else rounded
+
+
+def _json_rows(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    return json.loads(value) if isinstance(value, str) else list(value)
+
+
+def dashboard_body(period: str, revision: int, committed_at: Any, dashboard: dict[str, Any],
+                   curves: list[dict[str, Any]], institutions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Всё, что рисует страница сравнения, одним ответом без ограничения числа
+    вузов. Медианы — значения на 24-м часу; суммы — по последнему замеру."""
+    curve_rows: dict[tuple[Any, str], dict[str, list[Any]]] = {}
+    for row in curves:
+        key = (str(row["institution_id"]) if row["institution_id"] else None, row["platform"])
+        curve = curve_rows.setdefault(key, {
+            "samples": [0] * len(CHECKPOINT_HOURS),
+            "views": [None] * len(CHECKPOINT_HOURS),
+            "reactions": [None] * len(CHECKPOINT_HOURS),
+        })
+        index = CHECKPOINT_HOURS.index(int(row["hour_offset"]))
+        curve["samples"][index] = int(row["samples"])
+        curve["views"][index] = _number(row["views"])
+        curve["reactions"][index] = _number(row["reactions"])
+    return {
+        "period": period, "hours": list(CHECKPOINT_HOURS),
+        "datasetRevision": revision, "asOf": committed_at.isoformat(),
+        "institutions": [{
+            "institutionId": str(row["id"]), "legacyId": row["legacy_id"],
+            "name": row["canonical_name"], "shortName": row["short_name"],
+            "platforms": sorted(row["platforms"] or []),
+            "subscribers": {platform: int(row[platform] or 0) for platform in PLATFORMS},
+        } for row in institutions],
+        "stats": [{
+            "institutionId": row["institution_id"], "platform": row["platform"],
+            "posts": row["posts"], "viewsTotal": row["views_total"],
+            "reactionsTotal": row["reactions_total"], "commentsTotal": row["comments_total"],
+            "sharesTotal": row["shares_total"], "sample24": row["sample24"],
+            "views24": _number(row["views24"]), "reactions24": _number(row["reactions24"]),
+            "comments24": _number(row["comments24"]), "shares24": _number(row["shares24"]),
+            "engagement24": _number(row["engagement24"], 3),
+            "analyzed": row["analyzed"],
+            "levels": [row["level0"], row["level1"], row["level2"], row["level3"]],
+        } for row in _json_rows(dashboard.get("stats"))],
+        "curves": [{"institutionId": institution, "platform": platform, **curve}
+                   for (institution, platform), curve in curve_rows.items()],
+        "daily": [{
+            "platform": row["platform"], "day": row["day"], "posts": row["posts"],
+            "viewsTotal": row["views_total"], "reactionsTotal": row["reactions_total"],
+            "analyzed": row["analyzed"], "anomalous": row["anomalous"],
+        } for row in _json_rows(dashboard.get("daily"))],
+        "timing": [{
+            "platform": row["platform"], "weekday": row["weekday"], "hour": row["hour"],
+            "posts": row["posts"], "views24": _number(row["views24"]),
+        } for row in _json_rows(dashboard.get("timing"))],
+        "types": [{
+            "platform": row["platform"], "type": row["publication_type"], "posts": row["posts"],
+            "views24": _number(row["views24"]), "engagement24": _number(row["engagement24"], 3),
+        } for row in _json_rows(dashboard.get("types"))],
+    }
+
+
+@router.get("/api/v1/compare/dashboard")
+async def dashboard(request: Request, period: str = Query("30d")) -> Response:
+    resolved_period = _choice(period, tuple(DASHBOARD_PERIODS), "period")
+    days = DASHBOARD_PERIODS[resolved_period]
+
+    async def build(revision: int, committed_at: Any) -> dict[str, Any]:
+        db: Database = request.app.state.db
+        values = {"as_of": committed_at, "days": days}
+        dashboard_row = await db.fetch_one(sql.DASHBOARD, values)
+        curves = await db.fetch_all(sql.DASHBOARD_CURVES, values)
+        institutions = await db.fetch_all(sql.DASHBOARD_INSTITUTIONS, {})
+        return dashboard_body(resolved_period, revision, committed_at,
+                              dict(dashboard_row or {}), curves, institutions)
+
+    return await serve(request, "comparison-dashboard", {"period": resolved_period},
+                       COMPARE_TAGS, build)
