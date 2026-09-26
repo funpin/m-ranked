@@ -45,7 +45,7 @@ export default function ApiReferencePage() {
           </p>
         </header>
 
-        <section aria-labelledby="basics" className="mb-14 grid gap-4">
+        <section aria-labelledby="basics" className="mb-14 grid grid-cols-1 gap-4">
           <h2 id="basics" className="font-heading text-2xl font-bold tracking-tight">Как обращаться</h2>
           <ul className="text-foreground/90 ml-5 list-disc space-y-2 text-base leading-relaxed">
             <li>Адрес: <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">{origin}/api/v1/…</code>, только GET.</li>
@@ -60,13 +60,15 @@ export default function ApiReferencePage() {
         </section>
 
         {sections.map((section) => (
-          <section key={section.id} aria-labelledby={`section-${section.id}`} className="mb-14 grid gap-6">
+          <section key={section.id} aria-labelledby={`section-${section.id}`} className="mb-14 grid grid-cols-1 gap-6">
             <h2 id={`section-${section.id}`} className="font-heading scroll-mt-24 text-2xl font-bold tracking-tight sm:text-3xl">{section.title}</h2>
             {section.operations.map((operation) => {
               const anchor = operationAnchor(operation.operationId);
               const command = `curl -s "${origin}${operation.example ?? operation.path}"`;
+              // grid-cols-1 — колонка minmax(0, 1fr): широкая таблица и пример
+              // запроса прокручиваются внутри карточки, а не растягивают её.
               return (
-                <div key={operation.operationId} className="bg-card ring-foreground/10 grid gap-4 rounded-2xl p-5 ring-1 sm:p-6" data-operation={operation.operationId}>
+                <div key={operation.operationId} className="bg-card ring-foreground/10 grid grid-cols-1 gap-4 rounded-2xl p-5 ring-1 sm:p-6" data-operation={operation.operationId}>
                   <div className="grid gap-2">
                     <h3 id={anchor} className="font-heading scroll-mt-24 text-xl font-semibold tracking-tight">{operation.title}</h3>
                     <p className="flex flex-wrap items-center gap-2 font-mono text-sm">

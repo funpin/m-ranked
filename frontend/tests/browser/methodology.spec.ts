@@ -53,3 +53,17 @@ for (const theme of ["light", "dark"]) {
     }
   });
 }
+
+test("карточки справочника не заезжают под оглавление", async ({ page }) => {
+  for (const width of [1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/methodology/api");
+    const overflow = await page.evaluate(() => {
+      const article = document.querySelector("[data-testid=api-reference]")!.getBoundingClientRect();
+      return [...document.querySelectorAll("[data-operation]")]
+        .map((card) => Math.round(card.getBoundingClientRect().right - article.right))
+        .filter((excess) => excess > 1);
+    });
+    expect(overflow, `${width}px`).toEqual([]);
+  }
+});
