@@ -34,8 +34,8 @@ export default function ApiReferencePage() {
     ...section.operations.map((operation) => ({ id: operationAnchor(operation.operationId), text: operation.title, level: 3 as const })),
   ]);
   return (
-    <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_208px]">
-      <article data-article className="max-w-[80ch] min-w-0" data-testid="api-reference">
+    <div className="grid min-w-0 gap-12 2xl:grid-cols-[minmax(0,1fr)_208px]">
+      <article data-article className="w-full max-w-[80ch] min-w-0" data-testid="api-reference">
         <header className="mb-10 grid gap-4 border-b pb-8">
           <p className="text-muted-foreground font-mono text-xs">Методология / API · версия {API_DIGEST.version}</p>
           <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight sm:text-5xl">Открытый API</h1>
@@ -135,7 +135,7 @@ export default function ApiReferencePage() {
           настоящие — они есть в адресах страниц аккаунтов и публикаций.
         </p>
       </article>
-      <aside className="max-xl:hidden">
+      <aside className="max-2xl:hidden">
         <div className="sticky top-20 max-h-[calc(100svh-6rem)] overflow-y-auto"><ArticleToc entries={toc} /></div>
       </aside>
     </div>

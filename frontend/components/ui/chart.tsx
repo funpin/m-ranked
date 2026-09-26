@@ -193,7 +193,7 @@ function ChartTooltipContent({
   return (
     <div
       className={cn(
-        "grid min-w-32 items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs/relaxed shadow-xl",
+        "grid min-w-48 max-w-[min(90vw,20rem)] items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs/relaxed shadow-xl",
         className
       )}
     >
@@ -210,7 +210,7 @@ function ChartTooltipContent({
               <div
                 key={index}
                 className={cn(
-                  "flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
+                  "flex w-full min-w-0 items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
                   indicator === "dot" && "items-center"
                 )}
               >
@@ -244,18 +244,18 @@ function ChartTooltipContent({
                     )}
                     <div
                       className={cn(
-                        "flex flex-1 justify-between leading-none",
+                        "grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-4 leading-none",
                         nestLabel ? "items-end" : "items-center"
                       )}
                     >
-                      <div className="grid gap-1.5">
+                      <div className="grid min-w-0 gap-1.5">
                         {nestLabel ? tooltipLabel : null}
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground min-w-0 truncate">
                           {itemConfig?.label ?? item.name}
                         </span>
                       </div>
                       {item.value != null && (
-                        <span className="font-mono font-medium text-foreground tabular-nums">
+                        <span className="font-mono font-medium text-foreground shrink-0 text-right tabular-nums">
                           {valueFormatter
                             ? valueFormatter(item.value, item.dataKey as TooltipNameType ?? item.name ?? "")
                             : typeof item.value === "number"

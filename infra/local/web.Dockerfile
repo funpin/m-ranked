@@ -14,6 +14,7 @@ WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 COPY --chown=node:node --from=build /app/frontend/.next/standalone ./
 COPY --chown=node:node --from=build /app/frontend/.next/static ./frontend/.next/static
+COPY --chown=node:node --from=build /app/frontend/public ./frontend/public
 RUN mkdir -p /app/frontend/.next/cache && chown -R node:node /app
 # Образ node несёт непривилегированного пользователя node (uid 1000).
 USER node

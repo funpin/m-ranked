@@ -52,6 +52,31 @@ test("comparison dashboard: platform tabs, highlight, ranking metric, table sort
   await expect(page.locator('[data-testid="ranking-chart"] .recharts-bar-rectangle').first()).toBeVisible();
 });
 
+test("comparison charts and names stay inside their cards", async ({ page }) => {
+  test.skip(page.viewportSize()!.width < 1024, "широкая компоновка");
+  await page.goto("/compare");
+  await expect(page.getByTestId("radar-chart")).toBeVisible();
+  const layout = await page.evaluate(() => {
+    const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const card = rect('[data-testid="radar-card"]');
+    const legend = rect('[data-testid="radar-card"] [aria-label="Выделенные вузы"]');
+    const name = rect('[data-testid="compare-table"] tbody td:nth-child(2) button span:last-child');
+    const next = rect('[data-testid="compare-table"] tbody td:nth-child(3)');
+    return {
+      legendInside: legend.bottom <= card.bottom && legend.left >= card.left && legend.right <= card.right,
+      nameInside: name.right <= next.left,
+      pageOverflow: document.documentElement.scrollWidth - innerWidth,
+    };
+  });
+  expect(layout).toEqual({ legendInside: true, nameInside: true, pageOverflow: 0 });
+  await page.getByRole("navigation", { name: "Разделы страницы" }).getByRole("link", { name: "Карта вузов" }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const heading = document.querySelector('#map-title')!.getBoundingClientRect();
+    const toolbar = document.querySelector('[data-testid="compare-dashboard"] > div')!.getBoundingClientRect();
+    return heading.top >= toolbar.bottom;
+  })).toBe(true);
+});
+
 test("form sort direction, platform autosubmit and browser history preserve fields", async ({ page }) => {
   await page.goto("/rating?platform=vk&sort=subscribers&direction=desc");
   await page.locator('select[name="sort"]').selectOption("name");

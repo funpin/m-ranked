@@ -34,7 +34,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const { previous, next } = neighbours(article.slug);
   const number = ARTICLES.findIndex((item) => item.slug === article.slug) + 1;
   return (
-    <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_208px]">
+    <div className="grid min-w-0 gap-12 2xl:grid-cols-[minmax(0,1fr)_208px]">
       <article data-article className="max-w-[72ch] min-w-0">
         <header className="mb-10 grid gap-4 border-b pb-8">
           <p className="text-muted-foreground font-mono text-xs">
@@ -68,7 +68,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
           </nav>
         </footer>
       </article>
-      <aside className="max-xl:hidden">
+      <aside className="max-2xl:hidden">
         <div className="sticky top-20"><ArticleToc entries={headingsOf(source)} /></div>
       </aside>
     </div>

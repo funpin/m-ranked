@@ -116,10 +116,10 @@ function ContextEventOverlay({ events }: { events: readonly ContextEvent[] }) {
       data-context-event-marker={marks.length} role="img"
       aria-label={`Новый пост рядом: ${marks.map(({ event }) => `№${event.displayId}, ${legacyDate(event.publishedAt)}`).join("; ")}`}>
       <title>Новый пост рядом: {marks.map(({ event }) => `№${event.displayId} · ${legacyDate(event.publishedAt)}`).join("; ")}</title>
-      {marks.map(({ x: exact, event }) => <line key={event.publicationId} x1={exact} x2={exact} y1={plot.y + 37} y2={plot.y + plot.height}
+      {marks.map(({ x: exact, event }) => <line key={event.publicationId} x1={exact} x2={exact} y1={plot.y} y2={plot.y + plot.height}
         stroke="var(--chart-2)" strokeOpacity={0.6} strokeWidth={1.5} strokeDasharray="4 4" pointerEvents="none" />)}
-      <circle cx={x} cy={plot.y + 25} r={11} fill="var(--chart-2)" stroke="var(--background)" strokeWidth={2} />
-      <text x={x} y={plot.y + 29} textAnchor="middle" fill="var(--background)" fontSize={12} fontWeight={700} pointerEvents="none">{marks.length > 1 ? marks.length : "↗"}</text>
+      <circle cx={x} cy={plot.y - 12} r={8} fill="var(--chart-2)" stroke="var(--background)" strokeWidth={1.5} />
+      <text x={x} y={plot.y - 9} textAnchor="middle" fill="var(--background)" fontSize={10} fontWeight={700} pointerEvents="none">{marks.length > 1 ? marks.length : "↗"}</text>
     </g>)}
   </g>;
 }
@@ -274,7 +274,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
 
   const shared = {
     data,
-    margin: { left: 4, right: 4, top: 8, bottom: 28 },
+    margin: { left: 4, right: 4, top: contextEvents.length ? 28 : 8, bottom: 28 },
     onClick: (state: { activeLabel?: unknown }) => {
       const row = nearestRow(state?.activeLabel);
       if (row) onActivate(row.snapshotId);

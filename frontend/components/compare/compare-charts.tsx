@@ -321,20 +321,27 @@ export function RadarProfile({ rows, highlights }: { rows: readonly InstitutionR
   for (const row of chosen) config[row.id] = { label: row.name, color: highlights.get(row.id)! };
   if (!chosen.length) return <EmptyChart text="Выделите вузы, чтобы сравнить их профили." />;
   return (
-    <ChartContainer config={config} className="mx-auto aspect-square max-h-[360px] w-full" data-testid="radar-chart" role="img"
-      aria-label="Профиль выделенных вузов">
-      <RadarChart data={data} outerRadius="72%">
-        <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => `${value} из 100`} />} />
-        <PolarGrid />
-        <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11 }} />
-        <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-        {chosen.map((row) => (
-          <Radar key={row.id} dataKey={row.id} stroke={`var(--color-${row.id})`} fill={`var(--color-${row.id})`}
-            fillOpacity={chosen.length > 2 ? 0.08 : 0.2} strokeWidth={2} isAnimationActive={false} />
-        ))}
-        <ChartLegend content={<ChartLegendContent />} />
-      </RadarChart>
-    </ChartContainer>
+    <div className="min-w-0">
+      <ChartContainer config={config} className="mx-auto aspect-auto h-[300px] w-full max-w-[440px]" data-testid="radar-chart" role="img"
+        aria-label="Профиль выделенных вузов">
+        <RadarChart data={data} outerRadius="60%" margin={{ top: 14, right: 36, bottom: 14, left: 36 }}>
+          <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => `${value} из 100`} />} />
+          <PolarGrid />
+          <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11 }} />
+          <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+          {chosen.map((row) => (
+            <Radar key={row.id} dataKey={row.id} stroke={`var(--color-${row.id})`} fill={`var(--color-${row.id})`}
+              fillOpacity={chosen.length > 2 ? 0.08 : 0.2} strokeWidth={2} isAnimationActive={false} />
+          ))}
+        </RadarChart>
+      </ChartContainer>
+      <div className="mt-1 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs" aria-label="Выделенные вузы">
+        {chosen.map((row) => <span key={row.id} className="inline-flex max-w-full min-w-0 items-center gap-1.5">
+          <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: highlights.get(row.id) }} aria-hidden="true" />
+          <span className="truncate" title={row.fullName}>{row.name}</span>
+        </span>)}
+      </div>
+    </div>
   );
 }
 

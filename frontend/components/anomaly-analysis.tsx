@@ -41,25 +41,37 @@ function Summary({ analysis, context }: { analysis: PublicationAnomalyAnalysis; 
 
 function growthPercent(logGrowth: number): number { return Math.max(0, Math.expm1(logGrowth) * 100); }
 
+const windowDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
+const windowTime = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
+const windowDay = new Intl.DateTimeFormat("ru-RU", { year: "numeric", month: "numeric", day: "numeric", timeZone: "Europe/Moscow" });
+
 function ContextRow({ window }: { window: ContextWindow }) {
   const near = window.events.filter((event) => event.observedFeedDistance <= 4);
   const target = window.target ? growthPercent(window.target.logGrowth) : null;
   const peers = window.medianPeerLogGrowth !== null ? growthPercent(window.medianPeerLogGrowth) : null;
   const shared = window.context === "neighbor_and_shared" || window.context === "shared_channel";
+  const start = new Date(window.startAt), end = new Date(window.endAt);
+  const endLabel = windowDay.format(start) === windowDay.format(end) ? windowTime.format(end) : windowDate.format(end);
   return <div className="border-border bg-muted/20 rounded-lg border px-3 py-2.5" data-testid="neighbor-context-window">
-    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-      <span className="font-medium tabular-nums">{new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" }).format(new Date(window.startAt))}</span>
-      {near.map((event) => <span key={event.publicationId} className="border-amber-400/30 bg-amber-400/10 text-foreground rounded border px-1.5 py-0.5 font-medium">↗ №{event.displayId}</span>)}
-      <span className={cn("ml-auto rounded-full px-2 py-0.5 tabular-nums", shared ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{window.positivePeerCount}/{window.peers.length} ↗</span>
-      <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded-full focus-visible:ring-2" aria-label="Подробности окна роста" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-sm flex-col items-start whitespace-normal leading-relaxed">
-        <span>До 24 реальных замеров на линию. Время роста между ними неизвестно.</span>
-        <span>Совпадение по времени не доказывает причину.</span>
-      </TooltipContent></Tooltip>
+    <div className="mb-2 grid gap-1.5 text-xs">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="font-medium tabular-nums" aria-label={`Окно роста: ${windowDate.format(start)} — ${windowDate.format(end)}`}><span className="text-muted-foreground mr-1.5">Окно роста</span>{windowDate.format(start)}–{endLabel}</span>
+        <span className={cn("ml-auto rounded-full px-2 py-0.5 tabular-nums", shared ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{window.positivePeerCount} из {window.peers.length} старых ↑</span>
+        <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded-full focus-visible:ring-2" aria-label="Подробности окна роста" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-sm flex-col items-start whitespace-normal leading-relaxed">
+          <span>Окно — время сигнала, а не публикации. Между замерами момент роста неизвестен.</span>
+          <span>Совпадение по времени не доказывает причину.</span>
+        </TooltipContent></Tooltip>
+      </div>
+      {near.length ? <div className="flex flex-wrap items-center gap-1.5"><span className="text-muted-foreground mr-0.5">Новые</span>
+        {near.map((event) => <span key={event.publicationId} className="border-amber-400/30 bg-amber-400/10 text-foreground rounded border px-1.5 py-0.5 font-medium tabular-nums" aria-label={`Пост №${event.displayId} опубликован ${windowDate.format(new Date(event.publishedAt))}`}>
+          ↗ №{event.displayId} · {windowDay.format(start) === windowDay.format(new Date(event.publishedAt)) ? windowTime.format(new Date(event.publishedAt)) : windowDate.format(new Date(event.publishedAt))}
+        </span>)}
+      </div> : null}
     </div>
     {target === null || peers === null ? <div className="text-muted-foreground text-xs">Недостаточно замеров</div> : <>
       <div className="mb-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
         <span className="text-muted-foreground">▧ Окно сигнала</span>
-        {near.length ? <span className="text-amber-400">● Новые посты</span> : null}
+        {near.length ? <span className="text-amber-400">▨ После выхода</span> : null}
         <span className="text-blue-500">● Этот +{target.toFixed(1)}%</span>
         <span className="text-emerald-500">● Соседние +{peers.toFixed(1)}% <span className="text-muted-foreground">медиана</span></span>
       </div>

@@ -14,7 +14,7 @@ test("методология: обзор ведёт к статьям, стат�
 });
 
 test("оглавление статьи ведёт к её заголовкам", async ({ page }) => {
-  test.skip(page.viewportSize()!.width < 1280, "оглавление показывается на широком экране");
+  await page.setViewportSize({ width: 1920, height: 900 });
   await page.goto("/methodology/analysis");
   const toc = page.getByTestId("article-toc");
   await expect(toc.getByRole("link")).not.toHaveCount(0);
@@ -60,6 +60,8 @@ test("карточки справочника не заезжают под ог�
     await page.goto("/methodology/api");
     const overflow = await page.evaluate(() => {
       const article = document.querySelector("[data-testid=api-reference]")!.getBoundingClientRect();
+      const toc = document.querySelector("aside [data-testid=article-toc]")?.getBoundingClientRect();
+      if (toc && toc.width > 0 && article.right > toc.left - 8) return ["article meets toc"];
       return [...document.querySelectorAll("[data-operation]")]
         .map((card) => Math.round(card.getBoundingClientRect().right - article.right))
         .filter((excess) => excess > 1);

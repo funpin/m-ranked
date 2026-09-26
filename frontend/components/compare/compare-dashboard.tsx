@@ -63,7 +63,7 @@ function Section({ id, title, description, icon: Icon, children }: {
   id: string; title: string; description?: string; icon: typeof ChartBar; children: ReactNode;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="min-w-0 scroll-mt-28">
+    <section id={id} aria-labelledby={`${id}-title`} className="min-w-0 scroll-mt-48">
       <div className="mb-3 flex items-center gap-2">
         <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-md"><Icon className="size-4" aria-hidden="true" /></span>
         <div>
@@ -224,8 +224,11 @@ function InstitutionTable({ rows, highlights, onToggle }: {
     return sortRows(rows, sort.key, sort.descending);
   }, [rows, sort]);
   return (
-    <div className="overflow-x-auto" data-testid="compare-table">
-      <Table>
+    <div className="min-w-0" data-testid="compare-table">
+      <Table className="min-w-[1517px] table-fixed">
+        <colgroup>
+          {[44, 285, 118, 90, 125, 145, 140, 145, 150, 140, 135].map((width, index) => <col key={index} style={{ width }} />)}
+        </colgroup>
         <TableHeader>
           <TableRow>
             <TableHead className="w-10">#</TableHead>
@@ -246,11 +249,11 @@ function InstitutionTable({ rows, highlights, onToggle }: {
             return (
               <TableRow key={row.id} data-highlighted={color ? "true" : undefined} className={cn(color && "bg-muted/60")}>
                 <TableCell className="text-muted-foreground tabular-nums">{index + 1}</TableCell>
-                <TableCell className="max-w-[260px]">
-                  <button type="button" onClick={() => onToggle(row.id)} className="flex items-center gap-2 text-left"
+                <TableCell className="max-w-[285px]">
+                  <button type="button" onClick={() => onToggle(row.id)} className="flex w-full min-w-0 items-center gap-2 text-left"
                     title={color ? "Снять выделение" : "Выделить на графиках"}>
                     <span className="size-2.5 shrink-0 rounded-full border" style={{ background: color ?? "transparent" }} aria-hidden="true" />
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1" title={row.fullName}>
                       <span className="block truncate font-medium">{row.name}</span>
                       {row.fullName !== row.name ? <span className="text-muted-foreground block truncate text-xs">{row.fullName}</span> : null}
                     </span>
@@ -332,7 +335,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     // min-w-0: секции — элементы сетки, и без него широкая таблица вузов
     // растягивала колонку, а с ней всю страницу за край окна.
     <div className="grid min-w-0 grid-cols-1 gap-8" data-testid="compare-dashboard">
-      <div className="bg-background/85 supports-[backdrop-filter]:bg-background/70 sticky top-14 z-20 -mx-4 border-b px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+      <div className="bg-background/90 sticky top-[4.5rem] z-20 rounded-xl border px-3 py-3 shadow-lg backdrop-blur">
         <div className="flex flex-wrap items-center gap-3">
           {/* Лёгкий список вкладок вместо компонента Tabs: переключение не
               меняет панель под ним, а меняет разрез данных, и библиотечная
