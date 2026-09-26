@@ -7,7 +7,7 @@ import test from "node:test";
 const linkFreeSources = ["app/rating/page.tsx"];
 const linkSources = [
   "app/manage/page.tsx",
-  "app/page.tsx",
+  "components/landing/sections.tsx",
   "app/not-found.tsx",
   "app/statistics/page.tsx",
   "components/account-detail.tsx",
