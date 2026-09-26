@@ -7,9 +7,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPill } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
+import { NeighborContextTimeline } from "@/components/neighbor-context-timeline";
 import { LevelIcon, PatternIcon } from "@/components/anomaly-icons";
 import { legacyDate } from "@/lib/format";
-import { FAMILY_NAMES, METRIC_NAMES, SIGNAL_LEGEND, intervalText, markerId, miniChart, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
+import { FAMILY_NAMES, METRIC_NAMES, intervalText, markerId, miniChart, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
 import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
 import type { NeighborContextLoad } from "@/lib/neighbor-context-loader";
 import type { ContextWindow } from "@/lib/neighbor-context";
@@ -19,11 +20,6 @@ const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
   ssr: false,
   loading: () => <Skeleton className="h-36 w-full" role="status" aria-label="Загрузка мини-графика" />,
 });
-
-const REVIEW_NAMES = {
-  unreviewed: "не проверен", explained: "объяснён", unresolved: "требует проверки",
-  data_error: "ошибка данных", dismissed: "отклонён",
-} as const;
 
 function Summary({ analysis, context }: { analysis: PublicationAnomalyAnalysis; context?: NeighborContextLoad | null }) {
   const line = summaryLine(analysis);
@@ -49,39 +45,38 @@ function ContextRow({ window }: { window: ContextWindow }) {
   const near = window.events.filter((event) => event.observedFeedDistance <= 4);
   const target = window.target ? growthPercent(window.target.logGrowth) : null;
   const peers = window.medianPeerLogGrowth !== null ? growthPercent(window.medianPeerLogGrowth) : null;
-  const max = Math.max(target ?? 0, peers ?? 0, 0.1);
   const shared = window.context === "neighbor_and_shared" || window.context === "shared_channel";
   return <div className="border-border bg-muted/20 rounded-lg border px-3 py-2.5" data-testid="neighbor-context-window">
     <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
       <span className="font-medium tabular-nums">{new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" }).format(new Date(window.startAt))}</span>
-      {near.map((event) => <span key={event.publicationId} className="border-chart-2/30 bg-chart-2/10 text-foreground rounded border px-1.5 py-0.5 font-medium">↗ №{event.displayId}</span>)}
+      {near.map((event) => <span key={event.publicationId} className="border-amber-400/30 bg-amber-400/10 text-foreground rounded border px-1.5 py-0.5 font-medium">↗ №{event.displayId}</span>)}
       <span className={cn("ml-auto rounded-full px-2 py-0.5 tabular-nums", shared ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{window.positivePeerCount}/{window.peers.length} ↗</span>
       <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded-full focus-visible:ring-2" aria-label="Подробности окна роста" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-sm flex-col items-start whitespace-normal leading-relaxed">
-        <span>{legacyDate(window.startAt)} — {legacyDate(window.endAt)}</span>
-        <span>Пост: {window.target ? `+${window.target.displayedDelta.toLocaleString("ru-RU")} просмотров` : "нет пары замеров"}. Старые посты: {window.positivePeerCount} из {window.peers.length} выросли.</span>
-        <span>Остаток после вычитания медианы соседей: {window.conditionalLogResidual?.toFixed(3) ?? "нет данных"}. Это не вероятность.</span>
+        <span>До 24 реальных замеров на линию. Время роста между ними неизвестно.</span>
+        <span>Совпадение по времени не доказывает причину.</span>
       </TooltipContent></Tooltip>
     </div>
-    {target === null || peers === null ? <div className="text-muted-foreground text-xs">Недостаточно замеров</div> : <div className="grid gap-1.5" aria-label={`Рост просмотров: пост ${target.toFixed(1)}%, соседи ${peers.toFixed(1)}%`}>
-      {([["Пост", target, "bg-blue-500"], ["Соседи", peers, "bg-emerald-500"]] as const).map(([label, value, color]) => <div key={label} className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.4rem] items-center gap-2 text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="bg-muted h-2 overflow-hidden rounded-full"><span className={cn("block h-full rounded-full", color)} style={{ width: `${Math.max(2, 100 * value / max)}%` }} /></span>
-        <span className="text-right font-medium tabular-nums">+{value.toFixed(1)}%</span>
-      </div>)}
-    </div>}
+    {target === null || peers === null ? <div className="text-muted-foreground text-xs">Недостаточно замеров</div> : <>
+      <div className="mb-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+        <span className="text-muted-foreground">▧ Окно сигнала</span>
+        {near.length ? <span className="text-amber-400">● Новые посты</span> : null}
+        <span className="text-blue-500">● Этот +{target.toFixed(1)}%</span>
+        <span className="text-emerald-500">● Соседние +{peers.toFixed(1)}% <span className="text-muted-foreground">медиана</span></span>
+      </div>
+      <NeighborContextTimeline window={window} />
+    </>}
   </div>;
 }
 
-function ContextEvidence({ context, originalStatus }: { context: NeighborContextLoad; originalStatus: string }) {
+function ContextEvidence({ context }: { context: NeighborContextLoad }) {
   const { assessment, windows } = context;
   return <div className="border-border bg-card rounded-lg border p-3" data-testid="neighbor-context-method">
     <div className="mb-2 flex items-center gap-2">
       <p className="font-semibold">Поздний рост</p>
       <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", assessment.status === "insufficient_data" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300")}>{assessment.status === "insufficient_data" ? "Контекст не подтверждён" : `${assessment.contextualized}/${assessment.totalLateSpikes} вместе с каналом`}</span>
       <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground focus-visible:ring-ring ml-auto rounded-full focus-visible:ring-2" aria-label="Как читать сравнение позднего роста" />}><CircleHelp className="size-4" /></TooltipTrigger><TooltipContent className="max-w-sm flex-col items-start whitespace-normal leading-relaxed">
-        <span>Полосы показывают прирост просмотров за одно окно: этот пост и медиану соседних старых постов. ↗ № — новый пост рядом во время окна.</span>
-        <span>Исходный статус: {originalStatus}. Сопутствующий рост снижает уверенность в сильной пометке, но не доказывает причину. {context.revisionMatched ? "Данные одной ревизии." : "Старые окна разных ревизий; сравнение предварительное."}</span>
-        <span>Публичный сохранённый статус не меняется.</span>
+        <span>Сверху — новые посты, снизу — старые. Ось времени общая.</span>
+        <span>Совместный рост снижает уверенность в сильном сигнале. Причина неизвестна.</span>
       </TooltipContent></Tooltip>
     </div>
     <div className="grid gap-2">{[...windows].sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)).map((window) => <ContextRow key={`${window.startAt}-${window.endAt}`} window={window} />)}</div>
@@ -115,25 +110,14 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
   );
 }
 
-/** Текст под значком «i»: качество данных, легенда значков, методика и
- *  оговорка. Внутри описания всплывающего окна (это абзац), поэтому строки —
- *  блочные span, а не p. */
+/** Short public explanation; technical versions remain in the method record. */
 function AnalysisNote({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
   return (
-    <span className="grid gap-2">
-      {analysis.quality ? <span className="block" data-testid="anomaly-quality">Качество данных: {analysis.quality.summary}.</span> : null}
-      <span className="grid gap-1" aria-label="Значки признаков">
-        {SIGNAL_LEGEND.map((item) => (
-          <span key={item.pattern} className="flex items-center gap-1.5">
-            <PatternIcon pattern={item.pattern} className="text-chart-3 size-3.5 shrink-0" />{item.title}
-          </span>
-        ))}
-      </span>
-      <span className="block">Уровень складывается из согласия независимых семейств методов: один сильный признак — выраженная аномалия, сильные признаки двух разных семейств — признаки искусственной активности. Признаки относительно нормы при молодой норме не сильнее слабого сигнала.</span>
-      <span className="block">Методика {analysis.methodologyVersion} · норма {analysis.normVersion ?? "ещё не построена"} · ревизия данных {analysis.datasetRevision}
-        {analysis.lagSeconds !== null ? ` · отставание анализа ${Math.round(analysis.lagSeconds / 60)} мин` : ""} · статус проверки: {REVIEW_NAMES[analysis.reviewStatus]}</span>
-      {Object.keys(analysis.detectorVersions).length ? <span className="block">Детекторы: {Object.entries(analysis.detectorVersions).map(([name, version]) => `${name} ${version}`).join(", ")}.</span> : null}
-      <span className="block">{analysis.disclaimer}</span>
+    <span className="grid gap-1.5">
+      {analysis.quality ? <span className="block" data-testid="anomaly-quality">Данные: {analysis.quality.summary}.</span> : null}
+      <span>Уровень зависит от силы и числа независимых признаков.</span>
+      <span>Аномалия не доказывает накрутку.</span>
+      <span className="text-foreground/70">{analysis.methodologyVersion}</span>
     </span>
   );
 }
@@ -195,7 +179,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
           <span data-testid="anomaly-note"><MethodNote title="Анализ динамики"><AnalysisNote analysis={analysis} /></MethodNote></span>
         </div>
         <CollapsibleContent className="grid gap-3 px-4 pb-4">
-          {neighborContext ? <ContextEvidence context={neighborContext} originalStatus={analysis.levelLabel} /> : neighborContextFailed
+          {neighborContext ? <ContextEvidence context={neighborContext} /> : neighborContextFailed
             ? <p className="text-muted-foreground text-xs">Контекстный расчёт временно недоступен; исходный анализ показан без изменений.</p> : null}
           {analysis.signals.length ? (
             <Collapsible className="border-border rounded-lg border">

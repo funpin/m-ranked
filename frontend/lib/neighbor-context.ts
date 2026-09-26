@@ -23,14 +23,20 @@ export type ContextEvent = {
   observedFeedDistance: number;
 };
 
+export type ContextPoint = { observedAt: string; views: number };
+export type ContextTrace = { displayId: string; points: ContextPoint[] };
+
 export type ContextWindow = {
   startAt: string;
   endAt: string;
   originalStrength: number;
   originalFormula: string;
   target: WindowMeasurement | null;
+  targetTrace: ContextPoint[];
   peers: { displayId: string; measurement: WindowMeasurement }[];
+  peerTraces: ContextTrace[];
   events: ContextEvent[];
+  eventTraces: ContextTrace[];
   positivePeerCount: number;
   medianPeerLogGrowth: number | null;
   conditionalLogResidual: number | null;
@@ -76,6 +82,20 @@ function median(values: number[]): number | null {
   return ordered.length % 2 ? ordered[middle]! : (ordered[middle - 1]! + ordered[middle]!) / 2;
 }
 
+/** Keep the real observation times; never synthesize points between polls. */
+function trace(history: PublicationHistory, from: string, to: string): ContextPoint[] {
+  const low = Date.parse(from), high = Date.parse(to);
+  const points = history.items.filter(accepted)
+    .filter((row) => {
+      const at = Date.parse(row.observedAt);
+      return at >= low && at <= high;
+    })
+    .sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt))
+    .map((row) => ({ observedAt: row.observedAt, views: row.views.value! }));
+  if (points.length <= 24) return points;
+  return Array.from({ length: 24 }, (_, index) => points[Math.round(index * (points.length - 1) / 23)]!);
+}
+
 function comparePosts(a: PublicationListItem, b: PublicationListItem): number {
   const date = Date.parse(a.publishedAt) - Date.parse(b.publishedAt);
   if (date) return date;
@@ -106,18 +126,31 @@ export function evaluateNeighborContext(input: {
   return analysis.signals.filter((signal) => signal.pattern === 2 && signal.metric === "views")
     .map((signal) => {
       const target = bracketViews(targetHistory, signal.startAt, signal.endAt);
-      const peers = peerPosts.flatMap((post) => {
+      const targetTrace = target ? trace(targetHistory, target.beforeAt, target.afterAt) : [];
+      const peerMeasurements = peerPosts.flatMap((post) => {
         if (Date.parse(post.publishedAt) >= Date.parse(signal.startAt)) return [];
         const history = peerHistories.get(post.publicationId);
         const measurement = history && bracketViews(history, signal.startAt, signal.endAt);
-        return measurement ? [{ displayId: post.displayExternalId ?? post.publicationId, measurement }] : [];
+        return measurement ? [{ displayId: post.displayExternalId ?? post.publicationId, measurement, history }] : [];
       });
+      const peers = peerMeasurements.map(({ displayId, measurement }) => ({ displayId, measurement }));
+      const peerTraces = peerMeasurements.map((peer) => ({
+        displayId: peer.displayId,
+        points: trace(peer.history, peer.measurement.beforeAt, peer.measurement.afterAt),
+      }));
       const events = position < 0 ? [] : ordered.flatMap((post, index) => {
         const at = Date.parse(post.publishedAt);
         if (index <= position || at <= Date.parse(signal.startAt) || at > Date.parse(signal.endAt)) return [];
         return [{ publicationId: post.publicationId, displayId: post.displayExternalId ?? post.publicationId,
           publishedAt: post.publishedAt, observedFeedDistance: index - position }];
       });
+      const traceEnd = target?.afterAt ?? signal.endAt;
+      const eventTraces = events.filter((event) => event.observedFeedDistance <= NEARBY_POSTS)
+        .flatMap((event) => {
+          const history = peerHistories.get(event.publicationId);
+          return history ? [{ displayId: event.displayId,
+            points: trace(history, event.publishedAt, traceEnd) }] : [];
+        });
       const positivePeerCount = peers.filter((peer) => peer.measurement.displayedDelta > 0).length;
       const medianPeerLogGrowth = median(peers.map((peer) => peer.measurement.logGrowth));
       const near = events.some((event) => event.observedFeedDistance <= NEARBY_POSTS);
@@ -127,7 +160,8 @@ export function evaluateNeighborContext(input: {
           : near ? "neighbor_only" : shared ? "shared_channel" : "unresolved";
       return {
         startAt: signal.startAt, endAt: signal.endAt, originalStrength: signal.strength,
-        originalFormula: signal.formula, target, peers, events, positivePeerCount,
+        originalFormula: signal.formula, target, targetTrace, peers, peerTraces,
+        events, eventTraces, positivePeerCount,
         medianPeerLogGrowth,
         conditionalLogResidual: target && medianPeerLogGrowth !== null ? target.logGrowth - medianPeerLogGrowth : null,
         context,

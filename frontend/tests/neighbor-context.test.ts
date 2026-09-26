@@ -32,12 +32,19 @@ test("a late signal records both nearby publication and co-moving old posts with
     post("new", "11343", "2026-09-14T12:20:00Z"),
   ];
   const points = (before: number, after: number) => [point("2026-09-14T11:50:00Z", before), point("2026-09-14T13:05:00Z", after)];
-  const windows = evaluateNeighborContext({ analysis, targetHistory: history("target", points(2800, 2900)), publications,
-    peerHistories: new Map([["p1", history("p1", points(2000, 2050))], ["p2", history("p2", points(2500, 2570))]]) });
+  const windows = evaluateNeighborContext({ analysis, targetHistory: history("target", [
+    point("2026-09-14T11:50:00Z", 2800), point("2026-09-14T12:30:00Z", 2850), point("2026-09-14T13:05:00Z", 2900),
+  ]), publications,
+    peerHistories: new Map([["p1", history("p1", points(2000, 2050))], ["p2", history("p2", points(2500, 2570))],
+      ["new", history("new", [point("2026-09-14T12:25:00Z", 20), point("2026-09-14T12:55:00Z", 80)])]]) });
   assert.equal(windows.length, 1);
   assert.equal(windows[0]?.context, "neighbor_and_shared");
   assert.equal(windows[0]?.positivePeerCount, 2);
   assert.deepEqual(windows[0]?.events.map((event) => event.displayId), ["11343"]);
+  assert.deepEqual(windows[0]?.targetTrace.map((point) => point.views), [2800, 2850, 2900]);
+  assert.deepEqual(windows[0]?.eventTraces[0]?.points.map((point) => point.views), [20, 80]);
+  assert.deepEqual(windows[0]?.eventTraces[0]?.points.map((point) => point.observedAt),
+    ["2026-09-14T12:25:00Z", "2026-09-14T12:55:00Z"]);
   assert.equal(typeof windows[0]?.conditionalLogResidual, "number");
   assert.deepEqual(assessNeighborContext(analysis, windows, true), {
     status: "requires_review", contextualized: 1, totalLateSpikes: 1,
