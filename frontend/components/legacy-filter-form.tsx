@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { normalizePlatform } from "@/lib/params";
 
 /** Hydrates only form interaction; all labels, values and results are SSR. */
-export function LegacyFilterForm({ action = "/", ...props }: ComponentProps<"form">) {
+export function LegacyFilterForm({ action = "/rating", ...props }: ComponentProps<"form">) {
   const form = useRef<HTMLFormElement>(null);
   const query=useSearchParams();
   const router=useRouter();

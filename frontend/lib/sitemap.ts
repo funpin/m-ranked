@@ -4,7 +4,7 @@ import { accountHref, publicationHref } from "./entity-routes";
  *  lastmod меняются медленно, а файл постов — это 20 тысяч строк. */
 export const SITEMAP_CACHE_SECONDS = 6 * 3600;
 
-const STATIC_PATHS = ["/", "/statistics", "/compare"] as const;
+const STATIC_PATHS = ["/", "/rating", "/statistics", "/compare"] as const;
 
 function escape(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

@@ -61,7 +61,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
     return (
       <>
         <PageHeader title={platform === "all" ? "Обзор вузов" : "Обзор каналов"} description="Активность официальных соцсетей вузов за выбранный период." />
-        <ApiFailureState retryHref={queryHref("/", { platform, period, q })} />
+        <ApiFailureState retryHref={queryHref("/rating", { platform, period, q })} />
       </>
     );
   }
@@ -85,7 +85,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
           : "Прирост показателей всех постов в базе за выбранный период, а не только новых."}
       />
 
-      <LegacyFilterForm key={`${platform}:${period}:${sort}:${direction}:${q}`} action="/" method="get"
+      <LegacyFilterForm key={`${platform}:${period}:${sort}:${direction}:${q}`} action="/rating" method="get"
         aria-label="Фильтры обзора" data-testid="filter-toolbar" className={FILTER_TOOLBAR_CLASS}>
               <div className={FILTER_SEARCH_CLASS}>
                 <NativeInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" />

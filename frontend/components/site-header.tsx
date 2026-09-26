@@ -62,8 +62,8 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
         <Link
           data-testid="brand"
           className="flex shrink-0 items-center no-underline"
-          href={queryHref("/", { platform })}
-          aria-label="m-ranked — обзор"
+          href="/"
+          aria-label="m-ranked — на главную"
           prefetch={false}
           onClick={() => setMenuOpen(false)}
         >
@@ -85,7 +85,7 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
           )}
         >
           {NAV_LINKS.map((link) => {
-            const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+            const active = pathname.startsWith(link.href);
             return (
               <Link
                 key={link.href}

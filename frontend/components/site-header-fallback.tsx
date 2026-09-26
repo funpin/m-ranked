@@ -23,8 +23,8 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
         <Link
           data-testid="brand"
           className="flex shrink-0 items-center no-underline"
-          href={queryHref("/", { platform })}
-          aria-label="m-ranked — обзор"
+          href="/"
+          aria-label="m-ranked — на главную"
         >
           <BrandLogo />
         </Link>

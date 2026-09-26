@@ -3,6 +3,7 @@ import { legacyQueryErrors } from "./lib/legacy-validation";
 import { legacyDetailError } from "./lib/legacy-detail-error";
 import { prepareManage } from "./lib/manage-facade";
 import { publicationCacheHeader } from "./lib/cache-policy";
+import { overviewRedirect } from "./lib/overview-redirect";
 
 // Строгая политика с одноразовым nonce. Инлайн-скрипты разрешены только со
 // своим nonce, поэтому внедрённый в разметку скрипт не выполнится. Стили
@@ -38,6 +39,8 @@ function nonceValue(): string {
 export async function proxy(request: NextRequest) {
   const detail = legacyQueryErrors(request.nextUrl);
   if (detail.length) return NextResponse.json({ detail }, { status: 422, headers: { "Cache-Control": "no-store" } });
+  const moved = overviewRedirect(new URL(request.nextUrl.href));
+  if (moved) return NextResponse.redirect(moved, 308);
   let cacheSeconds: string | null = null;
   if(request.method === "GET") {
     const apiOrigin = process.env.API_BASE_URL ?? "http://127.0.0.1:8080";

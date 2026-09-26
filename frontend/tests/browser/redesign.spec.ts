@@ -49,7 +49,7 @@ async function viewportLayout(page: Page) {
 test("PWA pages cannot pan into an empty strip at iPhone widths", async ({ page }) => {
   for (const width of [375, 390, 430]) {
     await page.setViewportSize({ width, height: 844 });
-    for (const path of ["/?platform=telegram", "/statistics?platform=telegram", "/statistics?platform=telegram&view=entities", "/accounts/00000001-0000-4000-8000-000000000001"]) {
+    for (const path of ["/rating?platform=telegram", "/statistics?platform=telegram", "/statistics?platform=telegram&view=entities", "/accounts/00000001-0000-4000-8000-000000000001"]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await settled(page);
@@ -208,7 +208,7 @@ test("в режиме всего нажатие показывает суточ�
 });
 
 test("значки ссылаются на общий набор, а не возят свои контуры", async ({ page }) => {
-  const response = await page.goto("/");
+  const response = await page.goto("/rating");
   const html = (await response!.text());
   // Контуры объявлены один раз, значки ссылаются на объявление.
   expect(html.match(/<use href="#i-/g)?.length ?? 0).toBeGreaterThan(3);
@@ -300,7 +300,7 @@ test("строка таблицы открывает публикацию, а с
 });
 
 test("список проявляется волной, а не разом", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/rating");
   const cards = page.locator("section.reveal > *");
   await expect(cards.first()).toBeVisible();
   // Волна идёт сверху вниз: у каждой следующей задержка больше предыдущей.
@@ -325,7 +325,7 @@ test("шапка таблицы не участвует в волне", async ({
 });
 
 test("управление — значок справа на широком экране и текст в мобильном меню", async ({ page }) => {
-  await page.goto("/?platform=vk");
+  await page.goto("/rating?platform=vk");
   const width = page.viewportSize()!.width;
   const icon = page.getByTestId("manage-link");
   const textLink = page.getByTestId("main-nav").getByRole("link", { name: "Управление" });

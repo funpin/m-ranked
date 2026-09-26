@@ -4,7 +4,7 @@ import { first, normalizeHistoryLimit } from "./params";
 export function legacyQueryErrors(url: URL): object[] {
   const errors: object[] = [];
   const q = first(url.searchParams.getAll("q"));
-  if ((url.pathname === "/" || url.pathname === "/statistics") && q !== undefined && [...q].length > 200) {
+  if ((url.pathname === "/" || url.pathname === "/rating" || url.pathname === "/statistics") && q !== undefined && [...q].length > 200) {
     errors.push({ type: "string_too_long", loc: ["query", "q"], msg: "String should have at most 200 characters", input: q, ctx: { max_length: 200 } });
   }
   if (/^\/(posts|publications)\/[^/]+$/.test(url.pathname) && url.searchParams.has("history_limit")) {
