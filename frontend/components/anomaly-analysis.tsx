@@ -77,10 +77,10 @@ function ContextEvidence({ context, originalStatus }: { context: NeighborContext
   return <div className="border-border bg-card rounded-lg border p-3" data-testid="neighbor-context-method">
     <div className="mb-2 flex items-center gap-2">
       <p className="font-semibold">Поздний рост</p>
-      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", assessment.status === "insufficient_data" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300")}>{assessment.contextualized}/{assessment.totalLateSpikes} вместе с каналом</span>
+      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", assessment.status === "insufficient_data" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300")}>{assessment.status === "insufficient_data" ? "Контекст не подтверждён" : `${assessment.contextualized}/${assessment.totalLateSpikes} вместе с каналом`}</span>
       <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground focus-visible:ring-ring ml-auto rounded-full focus-visible:ring-2" aria-label="Как читать сравнение позднего роста" />}><CircleHelp className="size-4" /></TooltipTrigger><TooltipContent className="max-w-sm flex-col items-start whitespace-normal leading-relaxed">
         <span>Полосы показывают прирост просмотров за одно окно: этот пост и медиану соседних старых постов. ↗ № — новый пост рядом во время окна.</span>
-        <span>Исходный статус: {originalStatus}. Сопутствующий рост снижает уверенность в сильной пометке, но не доказывает причину. {context.revisionMatched ? "Данные одной ревизии." : "Чтения близки по времени, но не атомарны."}</span>
+        <span>Исходный статус: {originalStatus}. Сопутствующий рост снижает уверенность в сильной пометке, но не доказывает причину. {context.revisionMatched ? "Данные одной ревизии." : "Старые окна разных ревизий; сравнение предварительное."}</span>
         <span>Публичный сохранённый статус не меняется.</span>
       </TooltipContent></Tooltip>
     </div>
