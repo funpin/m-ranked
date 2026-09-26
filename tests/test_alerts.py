@@ -100,3 +100,35 @@ def test_alert_is_sent_on_entry_repeat_and_resolution_only():
 def test_metrics_files_are_read_by_full_series_name(tmp_path):
     (tmp_path / "a.prom").write_text('# HELP x\nmranked_x{producer="a"} 1.5\nmranked_y 2\n')
     assert alerts.metrics(tmp_path) == {'mranked_x{producer="a"}': 1.5, "mranked_y": 2.0}
+
+
+def _server(tmp_path, monkeypatch, **env):
+    """Сервер без бэкапа и метрик: тревоги точно будут."""
+    monkeypatch.delenv("ALERTS_TELEGRAM_CHAT_ID", raising=False)
+    for name, value in {"ALERTS_STATE_DIR": tmp_path / "state", "ALERTS_ACCESS_LOG": tmp_path / "access.log",
+                        "ALERTS_METRICS_DIR": tmp_path / "metrics", "ALERTS_BACKUP_DIR": tmp_path / "backups",
+                        "ALERTS_TELEGRAM_TOKEN_FILE": tmp_path / "no-token", **env}.items():
+        monkeypatch.setenv(name, str(value))
+    monkeypatch.setattr(alerts, "failed_units", lambda: [])
+
+
+def test_without_telegram_alerts_go_to_the_journal_only(tmp_path, monkeypatch, capsys):
+    # Telegram необязателен: без токена и чата тревоги пишутся в журнал службы,
+    # запуск успешен, и в сеть ничего не уходит.
+    _server(tmp_path, monkeypatch)
+    monkeypatch.setattr(alerts, "send", lambda *args: (_ for _ in ()).throw(AssertionError("send without Telegram")))
+    assert alerts.main() == 0
+    assert capsys.readouterr().out.strip()
+    assert (tmp_path / "state" / "state.json").exists()
+
+
+def test_unreachable_telegram_does_not_break_the_run(tmp_path, monkeypatch, capsys):
+    token = tmp_path / "token"
+    token.write_text("123:abc\n")
+    _server(tmp_path, monkeypatch, ALERTS_TELEGRAM_TOKEN_FILE=token, ALERTS_TELEGRAM_CHAT_ID="42")
+
+    def unreachable(*args):
+        raise OSError("network is unreachable")
+    monkeypatch.setattr(alerts, "send", unreachable)
+    assert alerts.main() == 0
+    assert "telegram send failed" in capsys.readouterr().err

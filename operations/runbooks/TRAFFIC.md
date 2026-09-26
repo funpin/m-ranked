@@ -88,9 +88,15 @@ if nginx -t; then systemctl reload nginx; else <вернуть копии>; fi
 юниты, приём пакетов, отставание анализа, Docker, 5xx людям, 503 роботам,
 промахи кэша и доля попаданий за 5 минут. Сообщение — при входе в проблему,
 при выходе и раз в 6 часов, пока она держится. Пороги — `/etc/m-ranked/alerts.env`
-(образец `operations/env/alerts.env.example`). Токен бота — файл 0600
-`/etc/m-ranked/credentials/alerts-telegram-token`; без него тревоги только в
-журнале: `journalctl -u m-ranked-target-alerts`.
+(образец `operations/env/alerts.env.example`).
+
+Telegram необязателен. Без токена или `ALERTS_TELEGRAM_CHAT_ID` тревоги пишутся
+только в журнал службы — проверки идут так же:
+`journalctl -u m-ranked-target-alerts -n 50`. Чтобы получать их в Telegram,
+положите токен бота файлом 0600 `/etc/m-ranked/credentials/alerts-telegram-token`
+и укажите chat id; перезапуск не нужен — таймер прочитает их при следующем
+прогоне. Недоступный Telegram прогон не ломает: тревога остаётся в журнале, а
+отправка повторяется через минуту.
 
 ## Потолки ресурсов
 
