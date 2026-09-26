@@ -45,10 +45,12 @@ const components: MDXComponents = {
   ),
   code: ({ children }) => <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">{children}</code>,
   pre: ({ children }) => (
-    <pre className="bg-muted/60 ring-foreground/10 my-6 overflow-x-auto rounded-xl p-4 font-mono text-[13px] leading-6 ring-1 [&_code]:bg-transparent [&_code]:p-0">{children}</pre>
+    <pre tabIndex={0} className="bg-muted/60 ring-foreground/10 focus-visible:ring-ring/60 outline-none focus-visible:ring-2 my-6 overflow-x-auto rounded-xl p-4 font-mono text-[13px] leading-6 ring-1 [&_code]:bg-transparent [&_code]:p-0">{children}</pre>
   ),
   table: ({ children }) => (
-    <div className="ring-foreground/10 my-6 overflow-x-auto rounded-xl ring-1">
+    // Широкая таблица прокручивается вбок: область доступна и с клавиатуры.
+    <div className="ring-foreground/10 focus-visible:ring-ring/60 my-6 overflow-x-auto rounded-xl ring-1 outline-none focus-visible:ring-2"
+      tabIndex={0} role="region" aria-label="Таблица">
       <table className="w-full border-collapse text-sm">{children}</table>
     </div>
   ),

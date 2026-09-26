@@ -7,7 +7,7 @@ export const SITEMAP_CACHE_SECONDS = 6 * 3600;
 
 const STATIC_PATHS = [
   "/", "/rating", "/statistics", "/compare", "/methodology",
-  ...ARTICLES.map((article) => `/methodology/${article.slug}`),
+  ...ARTICLES.map((article) => `/methodology/${article.slug}`), "/methodology/api",
 ] as const;
 
 function escape(value: string) {
