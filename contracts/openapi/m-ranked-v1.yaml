@@ -569,6 +569,33 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/site/summary:
+    get:
+      tags: [Query]
+      operationId: getSiteSummary
+      summary: Read the home page summary
+      description: >-
+        Institutions, accounts (total and by platform), publications and stored metric snapshots.
+        Recomputed once a day by scheduled maintenance; available is false until the first run.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Home page summary.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteSummary'
+        '304':
+          description: The supplied validator matches this representation.
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/sitemap:
     get:
       tags: [Query]
@@ -2169,6 +2196,20 @@ components:
     '503':
       $ref: '#/components/responses/AdminUnavailable'
   schemas:
+    SiteSummary:
+      type: object
+      additionalProperties: false
+      required: [available, institutions, accounts, accountsByPlatform, publications, snapshots, computedAt]
+      properties:
+        available: { type: boolean }
+        institutions: { type: ['integer', 'null'], minimum: 0 }
+        accounts: { type: ['integer', 'null'], minimum: 0 }
+        accountsByPlatform:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        publications: { type: ['integer', 'null'], minimum: 0 }
+        snapshots: { type: ['integer', 'null'], minimum: 0 }
+        computedAt: { type: ['string', 'null'], format: date-time }
     SitemapSummary:
       type: object
       additionalProperties: false

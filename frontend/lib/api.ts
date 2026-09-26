@@ -121,6 +121,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
         params: { path: { accountId } },
       }).then(unwrap);
     },
+    siteSummary() {
+      return client.GET("/api/v1/site/summary", {}).then(unwrap);
+    },
     sitemapSummary() {
       return client.GET("/api/v1/sitemap", {}).then(unwrap);
     },

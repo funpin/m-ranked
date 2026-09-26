@@ -13,6 +13,8 @@ MAINTENANCE_RAW_PURGE_MAX_BATCHES="${MAINTENANCE_RAW_PURGE_MAX_BATCHES:-10}"
 
 MAINTENANCE_ENABLE_OUTBOX_PURGE="${MAINTENANCE_ENABLE_OUTBOX_PURGE:-false}"
 MAINTENANCE_ENABLE_REVISION_PURGE="${MAINTENANCE_ENABLE_REVISION_PURGE:-false}"
+MAINTENANCE_ENABLE_SITE_SUMMARY="${MAINTENANCE_ENABLE_SITE_SUMMARY:-true}"
+MAINTENANCE_SITE_SUMMARY_MAX_AGE_HOURS="${MAINTENANCE_SITE_SUMMARY_MAX_AGE_HOURS:-23}"
 MAINTENANCE_REVISION_BATCH_SIZE="${MAINTENANCE_REVISION_BATCH_SIZE:-5000}"
 MAINTENANCE_REVISION_MAX_BATCHES="${MAINTENANCE_REVISION_MAX_BATCHES:-20}"
 MAINTENANCE_REVISION_MAX_SECONDS="${MAINTENANCE_REVISION_MAX_SECONDS:-60}"
@@ -144,6 +146,20 @@ SQL
     (( deleted == MAINTENANCE_REVISION_BATCH_SIZE )) || break
   done
   echo "dataset revision purge completed rows=$total_revisions elapsed=$((SECONDS-began))"
+fi
+
+# Сводка главной (0044): раз в сутки, остальные прогоны — одна проверка.
+if [[ "$MAINTENANCE_ENABLE_SITE_SUMMARY" == true ]]; then
+  if [[ ! "$MAINTENANCE_SITE_SUMMARY_MAX_AGE_HOURS" =~ ^[1-9][0-9]{0,2}$ ]]; then
+    echo "MAINTENANCE_SITE_SUMMARY_MAX_AGE_HOURS must be between 1 and 999" >&2; exit 64
+  fi
+  script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  refreshed="$(psql "$MAINTENANCE_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -At \
+    -v max_age_hours="$MAINTENANCE_SITE_SUMMARY_MAX_AGE_HOURS" \
+    -f "$script_root/db/tools/refresh-site-summary.sql" | tail -n 1)"
+  if [[ -n "$refreshed" ]]; then
+    echo "site summary refreshed at=$refreshed"
+  fi
 fi
 
 if [[ -n "${MAINTENANCE_METRICS_FILE:-}" ]]; then
