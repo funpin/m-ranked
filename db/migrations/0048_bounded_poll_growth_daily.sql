@@ -33,6 +33,8 @@ CREATE INDEX bounded_poll_growth_daily_retention_idx
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON analytics.bounded_poll_growth_daily
     TO analytics_worker;
+GRANT SELECT ON ingest.visible_publication, catalog.visible_platform_account
+    TO analytics_worker;
 
 COMMENT ON TABLE analytics.bounded_poll_growth_daily IS
     '120-day bounded upper growth reference from actual successful opt-in poll receipts';

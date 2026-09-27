@@ -38,8 +38,8 @@ SELECT r.publication_id, p.primary_account_id, p.published_at,
        r.views_quality::text AS views_quality, r.interval_uncertain,
        r.views_display_unit
 FROM ingest.publication_poll_receipt r
-JOIN ingest.publication p ON p.id = r.publication_id
-JOIN catalog.platform_account a ON a.id = p.primary_account_id
+JOIN ingest.visible_publication p ON p.id = r.publication_id
+JOIN catalog.visible_platform_account a ON a.id = p.primary_account_id
 WHERE p.primary_account_id = ANY(%s::uuid[])
   AND a.platform::text = %s
   AND r.observed_at >= %s AND r.observed_at < %s

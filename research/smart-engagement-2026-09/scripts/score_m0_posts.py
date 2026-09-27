@@ -81,8 +81,8 @@ def main() -> None:
         ).fetchall()
         frame = connection.execute(
             """SELECT p.id,p.primary_account_id,p.published_at
-                 FROM ingest.publication p
-                 JOIN catalog.platform_account a ON a.id=p.primary_account_id
+                 FROM ingest.visible_publication p
+                 JOIN catalog.visible_platform_account a ON a.id=p.primary_account_id
                 WHERE p.primary_account_id=%s AND a.platform::text=%s
                   AND p.published_at >= %s AND p.published_at < %s
                   AND p.published_at <= %s
@@ -97,7 +97,7 @@ def main() -> None:
                       r.views_count,r.views_quality::text AS views_quality,
                       r.interval_uncertain,r.views_display_unit
                  FROM ingest.publication_poll_receipt r
-                 JOIN ingest.publication p ON p.id=r.publication_id
+                 JOIN ingest.visible_publication p ON p.id=r.publication_id
                 WHERE r.publication_id=ANY(%s::uuid[])
                   AND r.observed_at <= %s
                 ORDER BY r.publication_id,r.observed_at LIMIT 250001""",
