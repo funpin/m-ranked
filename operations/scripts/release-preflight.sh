@@ -23,7 +23,8 @@ changed() { git diff --name-only "$deployed..HEAD" -- "$@"; }
 echo "Выкатка $deployed → $head_sha"
 
 section "Миграции (применять до перезапуска API)"
-migrations="$(changed db/migrations)"
+# pending/ holds reviewed proposals, not executable release migrations.
+migrations="$(changed db/migrations | grep -E '^db/migrations/[0-9]{4}_[^/]+\.sql$' || true)"
 if [ -n "$migrations" ]; then
   echo "$migrations"
   echo "Порядок: резервная копия → проверка восстановления → psql -f каждая по очереди."
