@@ -2821,13 +2821,14 @@ components:
     CollectorFreshness:
       type: object
       additionalProperties: false
-      required: [status, asOf, datasetRevision, revisionLag, freshnessThresholdSeconds, platforms]
+      required: [status, asOf, datasetRevision, revisionLag, freshnessThresholdSeconds, freshnessSource, platforms]
       properties:
         status: {type: string, enum: [UP, DOWN]}
         asOf: {type: string, format: date-time}
         datasetRevision: {type: integer, format: int64, minimum: 0}
         revisionLag: {type: integer, format: int64, minimum: 0}
         freshnessThresholdSeconds: {type: integer, minimum: 600}
+        freshnessSource: {type: string, enum: [collector_run, delivered_account]}
         platforms:
           type: object
           additionalProperties: false
@@ -2840,11 +2841,12 @@ components:
     PlatformFreshness:
       type: object
       additionalProperties: false
-      required: [configured, fresh, completedAt]
+      required: [configured, fresh, completedAt, thresholdSeconds]
       properties:
         configured: {type: boolean}
         fresh: {type: boolean}
         completedAt: {type: [string, 'null']}
+        thresholdSeconds: {type: integer, minimum: 600}
     Liveness:
       type: object
       additionalProperties: false

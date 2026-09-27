@@ -154,7 +154,7 @@ jobs:
         working-directory: frontend
       - run: pnpm lint && pnpm typecheck && pnpm check:api && pnpm test && pnpm test:e2e
         working-directory: frontend
-      - run: pnpm build && pnpm check:bundle
+      - run: MRANKED_DEPLOYMENT_ID="$GITHUB_SHA" pnpm build && pnpm check:bundle
         working-directory: frontend
       - name: Package the verified production frontend
         run: |
