@@ -24,3 +24,11 @@ c636b74c961b0699defe93396c8e04db09bf384d:tests/test_api_security.py:generic-api-
 # `key`, но являются публичными идентификаторами координации, не секретами.
 122d8e28cf354be95d3abf9b397886afd724221f:operations/scripts/collector-watchdog.sh:generic-api-key:82
 122d8e28cf354be95d3abf9b397886afd724221f:collector_target/phase.py:generic-api-key:23
+
+# Rebased historical checkpoint identifiers and literal test CSRF placeholders.
+# Exact commit/file/rule/line fingerprints keep new findings blocking.
+9ef39a6cfd358f32542e686b04caaab23f81c429:collector_target/phase.py:generic-api-key:23
+9ef39a6cfd358f32542e686b04caaab23f81c429:operations/scripts/collector-watchdog.sh:generic-api-key:82
+9ef39a6cfd358f32542e686b04caaab23f81c429:tests/test_api_admin.py:generic-api-key:44
+9ef39a6cfd358f32542e686b04caaab23f81c429:tests/test_api_security.py:generic-api-key:27
+9ef39a6cfd358f32542e686b04caaab23f81c429:tests/test_admin_session_postgres.py:generic-api-key:27
