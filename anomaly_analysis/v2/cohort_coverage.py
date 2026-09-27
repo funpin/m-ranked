@@ -16,6 +16,7 @@ from anomaly_analysis.neighbor_exposure import PublishedPost, SuccessfulRead
 
 from .post_tail import Checkpoint, _validate_plan
 from .receipt_panel import ObservedGrowth, consecutive_growth
+from .rounded_growth import bounded_view_growth
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +47,7 @@ def audit_cohort_coverage(
     observed_through: datetime,
     max_gap_by_platform: Mapping[str, timedelta],
     source: Literal["successful_poll_receipts"],
+    require_bounded_views: bool = False,
 ) -> tuple[PostCoverage, ...]:
     """Report whether each due post has a usable read pair at every checkpoint.
 
@@ -80,6 +82,8 @@ def audit_cohort_coverage(
             raise ValueError("eligible platform has no gap limit")
     selected_reads = tuple(read for read in reads
                            if read.publication_id in ids and read.observed_at <= through)
+    read_by_key = {(read.publication_id, read.observed_at): read
+                   for read in selected_reads}
     intervals = consecutive_growth(
         selected_reads, frame, platform_by_account,
         max_gap_by_platform=max_gap_by_platform,
@@ -109,8 +113,17 @@ def audit_cohort_coverage(
                 abs((row.end_at - post.published_at).total_seconds() - check.age_seconds),
                 row.end_at,
             ))
+            status = "usable" if chosen.usable else chosen.status
+            if status == "usable" and require_bounded_views:
+                bounds = bounded_view_growth(
+                    read_by_key[(post.publication_id, chosen.start_at)],
+                    read_by_key[(post.publication_id, chosen.end_at)],
+                    max_gap=max_gap_by_platform[platform_by_account[post.account_id]],
+                )
+                if bounds.status != "bounded":
+                    status = bounds.status
             checks.append(CheckpointCoverage(
-                check.name, "usable" if chosen.usable else chosen.status, chosen,
+                check.name, status, chosen,
             ))
         if any(check.status == "not_due" for check in checks):
             status = "not_due"

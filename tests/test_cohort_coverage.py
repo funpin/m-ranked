@@ -65,6 +65,33 @@ def test_nearest_read_is_selected_by_time_not_by_growth():
     assert result[0].checkpoints[0].interval.end_at == post.published_at + timedelta(hours=1)
 
 
+def test_bounded_readiness_requires_compact_display_precision():
+    post = POSTS[0]
+    one_check = (CHECKS[0],)
+
+    def checked(unit):
+        reads = (
+            SuccessfulRead(post.publication_id, ACCOUNT,
+                           START + timedelta(minutes=45), 1000, "rounded",
+                           views_display_unit=unit),
+            SuccessfulRead(post.publication_id, ACCOUNT,
+                           START + timedelta(minutes=60), 1200, "rounded",
+                           views_display_unit=unit),
+        )
+        return audit_cohort_coverage(
+            (post,), reads, {ACCOUNT: "telegram"}, frozenset({ACCOUNT}), one_check,
+            cohort_start=START, cohort_end=START + timedelta(days=1),
+            observed_through=START + timedelta(hours=2),
+            max_gap_by_platform={"telegram": timedelta(minutes=30)},
+            source="successful_poll_receipts", require_bounded_views=True,
+        )[0]
+
+    unknown = checked(None)
+    assert unknown.status == "insufficient_data"
+    assert unknown.checkpoints[0].status == "unknown_rounding_precision"
+    assert checked(100).status == "complete"
+
+
 def test_rejects_incomplete_frame_metadata_and_naive_time():
     with pytest.raises(ValueError, match="timezone"):
         audit_cohort_coverage(POSTS, (), {ACCOUNT: "max"}, frozenset({ACCOUNT}),

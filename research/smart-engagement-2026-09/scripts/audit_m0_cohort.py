@@ -85,7 +85,7 @@ def main() -> int:
             ids = [row["id"] for row in frame]
             receipt_rows = connection.execute(
                 """SELECT r.publication_id, p.primary_account_id,
-                          r.observed_at, r.views_count,
+                          r.observed_at, r.views_count, r.views_display_unit,
                           r.views_quality::text AS views_quality,
                           r.interval_uncertain
                      FROM ingest.publication_poll_receipt AS r
@@ -99,7 +99,8 @@ def main() -> int:
                                 row["published_at"]) for row in frame)
     reads = tuple(SuccessfulRead(row["publication_id"], row["primary_account_id"],
                                  row["observed_at"], row["views_count"],
-                                 row["views_quality"], row["interval_uncertain"])
+                                 row["views_quality"], row["interval_uncertain"],
+                                 row["views_display_unit"])
                   for row in receipt_rows)
     platforms = {row["primary_account_id"]: row["platform"] for row in frame}
     rows = audit_cohort_coverage(
@@ -107,6 +108,7 @@ def main() -> int:
         EARLY_CHECKPOINTS if args.horizon == "early" else LATE_CHECKPOINTS,
         cohort_start=start, cohort_end=end, observed_through=through,
         max_gap_by_platform=gaps, source="successful_poll_receipts",
+        require_bounded_views=True,
     )
     summary: dict[str, Counter[str]] = defaultdict(Counter)
     for row in rows:
