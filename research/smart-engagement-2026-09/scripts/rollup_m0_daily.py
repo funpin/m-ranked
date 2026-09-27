@@ -80,6 +80,7 @@ def _summarize(rows, start: date, end: date, max_gap: timedelta):
         ))
     candidates = []
     statuses = Counter()
+    growth_evidence = Counter()
     for post_id, reads in groups.items():
         reads.sort(key=lambda item: item.observed_at)
         for before, after in zip(reads, reads[1:]):
@@ -98,6 +99,12 @@ def _summarize(rows, start: date, end: date, max_gap: timedelta):
             growth = bounded_view_growth(before, after, max_gap=max_gap)
             statuses[growth.status] += 1
             if growth.status == "bounded":
+                if growth.positive_growth_guaranteed:
+                    growth_evidence["guaranteed_positive"] += 1
+                if growth.lower_delta <= 0 <= growth.upper_delta:
+                    growth_evidence["compatible_with_zero"] += 1
+                if growth.exact_zero_observed:
+                    growth_evidence["exact_zero"] += 1
                 candidates.append(BoundedInterval(
                     platforms[post_id],
                     posts[post_id], before, after,
@@ -105,7 +112,7 @@ def _summarize(rows, start: date, end: date, max_gap: timedelta):
     daily = summarize_daily_upper_bounds(
         candidates, source="successful_poll_receipts", max_gap=max_gap,
     )
-    return daily, statuses, len(posts)
+    return daily, statuses, len(posts), growth_evidence
 
 
 def main() -> None:
@@ -145,7 +152,9 @@ def main() -> None:
             rows = cursor.fetchall()
         if len(rows) > MAX_RECEIPTS:
             parser.error("receipt window exceeds the bounded local run limit")
-        daily, statuses, post_count = _summarize(rows, args.start, args.end, max_gap)
+        daily, statuses, post_count, growth_evidence = _summarize(
+            rows, args.start, args.end, max_gap,
+        )
         pruned = 0
         if args.write:
             if connection.execute(
@@ -178,6 +187,10 @@ def main() -> None:
         "receipt_rows": len(rows),
         "posts_with_receipts": post_count,
         "pair_status": dict(sorted(statuses.items())),
+        "growth_evidence": {
+            name: growth_evidence[name]
+            for name in ("guaranteed_positive", "compatible_with_zero", "exact_zero")
+        },
         "daily_summary_rows": len(daily),
         "written": args.write,
         "pruned_older_than_120_days": pruned,

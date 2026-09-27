@@ -31,7 +31,7 @@ def test_rollup_uses_only_consecutive_successful_bounded_pairs():
         receipt(12, 60, 1000, quality="rounded", unit=10),
         receipt(12, 61, 2000, quality="rounded", unit=10),
     ]
-    daily, statuses, posts = summarize(
+    daily, statuses, posts, growth_evidence = summarize(
         rows, START.date(), (START + timedelta(days=1)).date(),
         timedelta(minutes=30),
     )
@@ -43,3 +43,5 @@ def test_rollup_uses_only_consecutive_successful_bounded_pairs():
     assert daily[0].publication_id == UUID(int=10)
     assert 800 < daily[0].upper_rate_per_hour < 800.000000001
     assert daily[0].source == "successful_poll_receipts"
+    assert growth_evidence["guaranteed_positive"] == 1
+    assert growth_evidence["exact_zero"] == 1
