@@ -26,7 +26,19 @@ def med(values):
     return round(statistics.median(values), 3) if values else None
 
 
-def main(path):
+def match_quiet(events, quiet, *, calendar_hours=24, duration_low=0.5, duration_high=2):
+    pairs = []
+    for event in events:
+        matches = [row for row in quiet if row["post"] == event["post"]
+                   and abs((row["start"] - event["start"]).total_seconds()) <= calendar_hours * 3600
+                   and duration_low <= row["hours"] / event["hours"] <= duration_high]
+        if matches:
+            nearest = min(matches, key=lambda row: abs((row["start"] - event["start"]).total_seconds()))
+            pairs.append((event, nearest))
+    return pairs
+
+
+def main(path, destination=None):
     with path.open(newline="") as source:
         rows = list(csv.DictReader(source, fieldnames=FIELDS))
     if not rows or any(None in row for row in rows):
@@ -54,7 +66,7 @@ def main(path):
                 points[post_id].append({
                     "at": time(row["observed_at"]),
                     "age": int(row["age_seconds"]),
-                    "views": int(row["views_count"]) if row["views_count"] else None,
+                    "views": int(row["views_count"]) if row["views_count"] != "" else None,
                     "quality": row["views_quality"],
                     "uncertain": row["interval_uncertain"] == "t",
                 })
@@ -112,23 +124,28 @@ def main(path):
                     "delta": delta,
                     "rate": delta * 3600 / duration,
                     "kind": kind,
+                    "event_id": events[0]["id"] if events else None,
                     "distance": events[0]["order"] - meta["order"] if events else None,
                     "fraction_after": fraction_after,
                 })
         event = [x for x in intervals if x["kind"] == "event"]
         filtered = [x for x in event if x["distance"] <= 6 and x["fraction_after"] >= 0.2]
         quiet = [x for x in intervals if x["kind"] == "quiet"]
-        pairs = []
-        for x in filtered:
-            matches = [y for y in quiet if y["post"] == x["post"]
-                       and abs((y["start"] - x["start"]).total_seconds()) <= 86400
-                       and 0.5 <= y["hours"] / x["hours"] <= 2]
-            if matches:
-                y = min(matches, key=lambda y: abs((y["start"] - x["start"]).total_seconds()))
-                pairs.append((x, y))
+        pairs = match_quiet(filtered, quiet)
+        strict_events = [x for x in event if x["distance"] <= 4
+                         and x["fraction_after"] >= 0.5 and 0.25 <= x["hours"] <= 1.5]
+        strict_pairs = match_quiet(strict_events, quiet, calendar_hours=12,
+                                   duration_low=0.75, duration_high=1.33)
+        strict_by_account = defaultdict(list)
+        for x, y in strict_pairs:
+            strict_by_account[x["account"]].append(x["rate"] - y["rate"])
         account_pairs = defaultdict(list)
+        event_pairs = defaultdict(list)
         for x, y in pairs:
-            account_pairs[x["account"]].append(x["rate"] - y["rate"])
+            difference = x["rate"] - y["rate"]
+            account_pairs[x["account"]].append(difference)
+            event_pairs[x["event_id"]].append(difference)
+        account_medians = [statistics.median(values) for values in account_pairs.values()]
         output[platform] = {
             "accounts": len(by_account),
             "publications": len(posts),
@@ -142,21 +159,36 @@ def main(path):
             "quiet_intervals": len(quiet),
             "matched_event_quiet_pairs": len(pairs),
             "matched_accounts": len(account_pairs),
+            "matched_new_publications": len(event_pairs),
+            "matched_old_publications": len({x["post"] for x, _ in pairs}),
             "median_event_delta_matched": med([x["delta"] for x, _ in pairs]),
             "median_quiet_delta_matched": med([y["delta"] for _, y in pairs]),
             "median_pair_rate_difference_per_hour": med([x["rate"]-y["rate"] for x, y in pairs]),
+            "median_event_level_rate_difference_per_hour": med(
+                [statistics.median(values) for values in event_pairs.values()]),
+            "account_median_rate_difference_range_per_hour":
+                [round(min(account_medians), 3), round(max(account_medians), 3)] if account_medians else None,
             "account_median_difference_positive": sum(statistics.median(v) > 0 for v in account_pairs.values()),
             "account_median_difference_nonpositive": sum(statistics.median(v) <= 0 for v in account_pairs.values()),
+            "strict_sensitivity": {
+                "matched_pairs": len(strict_pairs),
+                "matched_accounts": len(strict_by_account),
+                "account_median_positive": sum(statistics.median(v) > 0
+                                               for v in strict_by_account.values()),
+                "median_pair_rate_difference_per_hour": med(
+                    [x["rate"] - y["rate"] for x, y in strict_pairs]),
+            },
             "rutube_event_windows_2_to_12_hours": len(long_event_windows) if platform == "rutube" else None,
             "rutube_event_window_accounts_2_to_12_hours": len({x["account"] for x in long_event_windows})
                 if platform == "rutube" else None,
         }
-    destination = Path(__file__).resolve().parents[1] / "evidence" / "non_telegram_neighbor_feasibility_2026-09-26.json"
+    if destination is None:
+        destination = Path(__file__).resolve().parents[1] / "evidence" / "non_telegram_neighbor_feasibility_2026-09-26.json"
     destination.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: non_telegram_neighbor_feasibility.py TEMP_CSV")
-    main(Path(sys.argv[1]))
+    if len(sys.argv) not in (2, 3):
+        raise SystemExit("usage: non_telegram_neighbor_feasibility.py TEMP_CSV [AGGREGATE_JSON]")
+    main(Path(sys.argv[1]), Path(sys.argv[2]) if len(sys.argv) == 3 else None)

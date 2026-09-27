@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import re
 import os
 import threading
@@ -30,6 +30,7 @@ from .model import (
 )
 from .normalize import canonical_json, sanitize_evidence, source_fingerprint
 from .evidence import ImmutableEvidenceStore
+from .poll_receipts import PollReceiptPolicy
 from .transfer import TransferEnvelope, seal_batch, with_cursor
 
 
@@ -80,6 +81,7 @@ class PostgresCollectorRepository:
         raw_retention_days: int = 7,
         statement_timeout_seconds: int = 60,
         snapshot_heartbeat_hours: int = 24,
+        poll_receipt_policy: PollReceiptPolicy | None = None,
         evidence_store: ImmutableEvidenceStore | None = None,
         pool_size: int = 3,
         transfer_producer_id: str | None = None,
@@ -109,6 +111,8 @@ class PostgresCollectorRepository:
         self.raw_retention = timedelta(days=raw_retention_days)
         self.statement_timeout_seconds = statement_timeout_seconds
         self.snapshot_heartbeat = timedelta(hours=snapshot_heartbeat_hours)
+        self.poll_receipt_policy = poll_receipt_policy or PollReceiptPolicy()
+        self._last_poll_receipt_prune: datetime | None = None
         self.evidence_store = evidence_store or ImmutableEvidenceStore(
             Path(os.environ.get("COLLECTOR_RAW_EVIDENCE_DIR", "data/target-raw-evidence"))
         )
@@ -255,6 +259,13 @@ class PostgresCollectorRepository:
                 "database schema contract mismatch: "
                 f"expected {_EXPECTED_SCHEMA_CONTRACT!r}, found {contract!r}"
             )
+        if self.poll_receipt_policy.enabled:
+            with self._connection() as connection:
+                receipt = connection.execute(
+                    "SELECT to_regclass('ingest.publication_poll_receipt') AS table_name"
+                ).fetchone()
+            if receipt is None or _row_value(receipt, "table_name", 0) is None:
+                raise RuntimeError("poll receipt cohort requires migration 0045")
 
     def start_run(self, context: CollectionContext) -> None:
         with self._connection() as connection, connection.transaction():
@@ -788,6 +799,11 @@ class PostgresCollectorRepository:
             snapshot_count += int(snapshot)
             changed = changed or publication_changed
 
+        self._persist_poll_receipts(
+            connection, batch, persisted_ids, publication_results,
+        )
+        self._prune_poll_receipts(connection)
+
         explicit_probes = tuple(
             replace(probe, publication_id=persisted_ids.get(
                 probe.publication_id, probe.publication_id,
@@ -895,6 +911,102 @@ class PostgresCollectorRepository:
         if row is None:
             raise RuntimeError("transfer batch was not sealed")
         return with_cursor(envelope, int(_row_value(row, "cursor", 0)))
+
+    def _persist_poll_receipts(
+        self,
+        connection: Any,
+        batch: CanonicalAccountBatch,
+        persisted_ids: Mapping[UUID, UUID],
+        publication_results: tuple[tuple[UUID, bool, bool, bool], ...],
+    ) -> None:
+        policy = self.poll_receipt_policy
+        selected = policy.select(batch.account.id, batch.publications)
+        if not selected:
+            return
+        written_by_source = {
+            (publication.id, publication.snapshot.observed_at): result[2]
+            for publication, result in zip(batch.publications, publication_results, strict=True)
+        }
+        cadence_seconds = int(policy.cadence.total_seconds())
+        receipts_by_key: dict[tuple[UUID, int], dict[str, Any]] = {}
+        for item in selected:
+            publication_id = persisted_ids[item.id]
+            bucket = policy.bucket(item)
+            receipt = {
+                "publication_id": publication_id,
+                "cadence_seconds": cadence_seconds,
+                "observed_bucket": bucket,
+                "observed_at": item.snapshot.observed_at,
+                "collection_run_id": batch.context.run_id,
+                "views_count": item.snapshot.views_count,
+                "reactions_count": item.snapshot.reactions_count,
+                "comments_count": item.snapshot.comments_count,
+                "shares_count": item.snapshot.shares_count,
+                "views_quality": item.snapshot.metric_quality["views"].value,
+                "reactions_quality": item.snapshot.metric_quality["reactions"].value,
+                "comments_quality": item.snapshot.metric_quality["comments"].value,
+                "shares_quality": item.snapshot.metric_quality["shares"].value,
+                "interval_uncertain": item.snapshot.interval_uncertain,
+                "snapshot_written": written_by_source[(item.id, item.snapshot.observed_at)],
+            }
+            key = (publication_id, bucket)
+            if (key not in receipts_by_key
+                    or receipt["observed_at"] > receipts_by_key[key]["observed_at"]):
+                receipts_by_key[key] = receipt
+        connection.execute(
+            """INSERT INTO ingest.publication_poll_receipt(
+                   publication_id, cadence_seconds, observed_bucket, observed_at,
+                   collection_run_id, views_count, reactions_count,
+                   comments_count, shares_count, views_quality,
+                   reactions_quality, comments_quality, shares_quality,
+                   interval_uncertain,
+                   snapshot_written
+               ) SELECT item.publication_id, item.cadence_seconds,
+                        item.observed_bucket, item.observed_at,
+                        item.collection_run_id, item.views_count,
+                        item.reactions_count, item.comments_count,
+                        item.shares_count,
+                        item.views_quality::ingest.observation_quality,
+                        item.reactions_quality::ingest.observation_quality,
+                        item.comments_quality::ingest.observation_quality,
+                        item.shares_quality::ingest.observation_quality,
+                        item.interval_uncertain, item.snapshot_written
+                   FROM jsonb_to_recordset(%s::jsonb) AS item(
+                       publication_id uuid, cadence_seconds integer,
+                       observed_bucket bigint, observed_at timestamptz,
+                       collection_run_id uuid, views_count bigint,
+                       reactions_count bigint, comments_count bigint,
+                       shares_count bigint, views_quality text,
+                       reactions_quality text, comments_quality text,
+                       shares_quality text, interval_uncertain boolean,
+                       snapshot_written boolean
+                   )
+               ON CONFLICT (publication_id, cadence_seconds, observed_bucket)
+               DO NOTHING""",
+            (_json(list(receipts_by_key.values())),),
+        )
+
+    def _prune_poll_receipts(self, connection: Any) -> None:
+        policy = self.poll_receipt_policy
+        if not policy.enabled:
+            return
+        now = datetime.now(timezone.utc)
+        if (self._last_poll_receipt_prune is not None
+                and now - self._last_poll_receipt_prune < policy.cadence):
+            return
+        connection.execute(
+            """DELETE FROM ingest.publication_poll_receipt AS receipt
+                 USING (
+                    SELECT ctid
+                      FROM ingest.publication_poll_receipt
+                     WHERE observed_at < %s
+                     ORDER BY observed_at
+                     LIMIT %s
+                 ) AS expired
+                WHERE receipt.ctid=expired.ctid""",
+            (now - policy.retention, policy.prune_batch_size),
+        )
+        self._last_poll_receipt_prune = now
 
     def _persist_account_observation(
         self,

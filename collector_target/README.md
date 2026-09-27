@@ -54,7 +54,16 @@ and every eligible row is eventually revisited without starving discovery.
 `PUBLICATION_SNAPSHOT_HEARTBEAT_HOURS` (default `24`) keeps a sparse full
 snapshot when the versioned metric, quality, evidence, semantic and reaction
 state is unchanged. Successful polls remain traceable through the collection
-run/account result and compact availability state.
+run/account result and compact availability state, but these do not identify
+which unchanged post was read. For that research question, migration `0045`
+adds an optional seven-day per-post receipt cohort. It is **disabled** unless
+`PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS` lists at most 16 account UUIDs in both
+the collector and transfer receiver environments. Each account batch selects
+up to 16 non-synthetic posts younger than seven days; a post has at most one
+receipt per 15-minute bucket. All four metric values and quality flags are
+retained, including unchanged reads; old rows are pruned in bounded batches.
+An absent receipt still means *unknown*. Do not enable on working hosts before
+measuring heap/index/WAL growth and collector latency on a small local cohort.
 
 For systemd `LoadCredential`, set
 `COLLECTOR_PLATFORM_AUTH_FILE=%d/platform-auth`. The file is parsed as UTF-8
