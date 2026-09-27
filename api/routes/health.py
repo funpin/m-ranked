@@ -32,6 +32,26 @@ SELECT to_regclass('catalog.visible_platform_account') IS NOT NULL
 """
 REVISION_SQL = "SELECT id, committed_at FROM analytics.latest_dataset_revision()"
 SNAPSHOT_SQL = "SELECT ops_and_admin.public_health_snapshot() AS snapshot"
+DELIVERED_CYCLES_SQL = """
+WITH platforms(platform) AS (
+    VALUES ('telegram'::catalog.platform_code), ('vk'::catalog.platform_code),
+           ('max'::catalog.platform_code), ('rutube'::catalog.platform_code)
+)
+SELECT platforms.platform::text AS platform, delivered.completed_at
+  FROM platforms
+  LEFT JOIN LATERAL (
+    SELECT max(result.completed_at) AS completed_at
+      FROM (
+        SELECT id FROM ingest.collection_run
+         WHERE platform=platforms.platform
+           AND started_at >= statement_timestamp() - interval '3 hours'
+         ORDER BY started_at DESC LIMIT 16
+      ) AS recent
+      JOIN ingest.collection_account_result AS result
+        ON result.collection_run_id=recent.id
+     WHERE result.status='succeeded'
+  ) AS delivered ON true
+"""
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -67,14 +87,15 @@ async def legacy(request: Request) -> Response:
     settings: Settings = request.app.state.settings
     try:
         snapshot = await _snapshot(request.app.state.db)
+        checkpoints = _mapping(snapshot.get("checkpoints"))
+        cycles = (await _delivered_cycles(request.app.state.db)
+                  if settings.deployment_profile == "b" else _cycles(snapshot, checkpoints))
     except Exception:
         logger.warning("операционный снимок недоступен", exc_info=True)
         return JSONResponse({"status": "DOWN"}, status_code=503, headers=NO_STORE)
 
-    checkpoints = _mapping(snapshot.get("checkpoints"))
-    cycles = _cycles(snapshot, checkpoints)
     configured = _configured(settings)
-    fresh = _fresh(snapshot, cycles["telegram"], "telegram", settings.freshness_seconds)
+    fresh = _cycle_fresh(snapshot, cycles["telegram"], "telegram", settings)
 
     telegram_connected = (
         settings.health_mode == "telegram_web"
@@ -122,24 +143,27 @@ async def freshness(request: Request) -> Response:
     settings: Settings = request.app.state.settings
     try:
         snapshot = await _snapshot(request.app.state.db)
+        checkpoints = _mapping(snapshot.get("checkpoints"))
+        cycles = (await _delivered_cycles(request.app.state.db)
+                  if settings.deployment_profile == "b" else _cycles(snapshot, checkpoints))
     except Exception:
         logger.warning("операционный снимок недоступен", exc_info=True)
         return JSONResponse({"status": "DOWN"}, status_code=503, headers=NO_STORE)
 
-    checkpoints = _mapping(snapshot.get("checkpoints"))
-    cycles = _cycles(snapshot, checkpoints)
     configured = _configured(settings)
 
     healthy = True
     platforms: dict[str, Any] = {}
     for platform in PLATFORMS:
-        is_fresh = _fresh(snapshot, cycles[platform], platform, settings.freshness_seconds)
+        threshold = _threshold(settings, platform)
+        is_fresh = _cycle_fresh(snapshot, cycles[platform], platform, settings)
         if configured[platform] and not is_fresh:
             healthy = False
         platforms[platform] = {
             "configured": configured[platform],
             "fresh": is_fresh,
             "completedAt": cycles[platform].get("completed_at"),
+            "thresholdSeconds": threshold,
         }
 
     raw = int(snapshot.get("rawRevision") or 0)
@@ -156,6 +180,7 @@ async def freshness(request: Request) -> Response:
         "revisionLag": max(0, raw - published),
         "publishedGenerationAgeSeconds": snapshot.get("publishedGenerationAgeSeconds"),
         "freshnessThresholdSeconds": settings.freshness_seconds,
+        "freshnessSource": "delivered_account" if settings.deployment_profile == "b" else "collector_run",
         "platforms": platforms,
         "outbox": snapshot.get("outbox"),
         "storage": snapshot.get("storage"),
@@ -165,6 +190,40 @@ async def freshness(request: Request) -> Response:
 
 async def _snapshot(db: Database) -> dict[str, Any]:
     return _mapping(await db.fetch_value(SNAPSHOT_SQL))
+
+
+async def _delivered_cycles(db: Database) -> dict[str, dict[str, Any]]:
+    """Profile B receives account batches, not collector run completions."""
+    rows = await db.fetch_all(DELIVERED_CYCLES_SQL)
+    completed = {row["platform"]: row["completed_at"] for row in rows}
+    return {
+        platform: {
+            "completed_at": (completed[platform].isoformat() if completed.get(platform) else None),
+            "duration_seconds": None,
+            "error_count": None,
+            "started_at": None,
+            "account_count": None,
+            "channel_count": None,
+        }
+        for platform in PLATFORMS
+    }
+
+
+def _threshold(settings: Settings, platform: str) -> int:
+    if settings.deployment_profile == "b":
+        return max(settings.freshness_seconds, 5400 if platform == "rutube" else 2700)
+    return settings.freshness_seconds
+
+
+def _cycle_fresh(snapshot: dict[str, Any], cycle: dict[str, Any],
+                 platform: str, settings: Settings) -> bool:
+    if settings.deployment_profile == "b":
+        try:
+            age = (_instant(snapshot["asOf"]) - _instant(cycle["completed_at"])).total_seconds()
+        except (KeyError, TypeError, ValueError):
+            return False
+        return 0 <= age <= _threshold(settings, platform)
+    return _fresh(snapshot, cycle, platform, settings.freshness_seconds)
 
 
 def _flag(request: Request, name: str) -> bool:

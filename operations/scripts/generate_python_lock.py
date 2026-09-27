@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Собрать воспроизводимый lock с хешами для среды выполнения.
 
-Замыкание решается под целевую платформу CI и продакшена — linux x86_64,
-CPython 3.13, — а не под машину разработчика: иначе в lock попали бы колёса
-другой архитектуры и установка в образе не сошлась бы.
+Замыкание решается интерпретатором целевой версии Python, а колёса скачиваются
+для linux x86_64. Запускайте скрипт под той же версией Python, для которой
+создаётся lock: транзитивные зависимости у 3.11 и 3.13 могут различаться.
 
 Проход первый решает состав зависимостей, проход второй скачивает каждый пакет
 уже под целевую платформу. Пакет без колеса (такой, как pyaes у Telethon)
@@ -55,8 +55,12 @@ def main() -> int:
     parser.add_argument("target", type=pathlib.Path)
     parser.add_argument("--python-version", default="3.13")
     parser.add_argument("--extra", nargs="*", default=[],
-                        help="дополнительные закреплённые пакеты, например setuptools==80.9.0")
+                        help="дополнительные закреплённые пакеты, например setuptools==83.0.0")
     arguments = parser.parse_args()
+    running_python = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if running_python != arguments.python_version:
+        parser.error(f"run with Python {arguments.python_version}; running Python {running_python} "
+                     "would resolve the wrong transitive dependencies")
     abi = "cp"+arguments.python_version.replace(".", "")
     platform_arguments = [item for platform in PLATFORMS for item in ("--platform", platform)]
     platform_arguments += ["--python-version", arguments.python_version,

@@ -1,0 +1,161 @@
+[
+  {
+    "candidate_id": "5124e3e9-0af2-5e9d-8e47-a12219d014fa",
+    "account_id": "4c70c763-d2d2-5453-bfe9-726b01d9c138",
+    "week_posts": 30,
+    "first_under_24h": 30,
+    "both_horizons_usable": 30,
+    "late_reaction_changes_sorted": [
+      2,
+      5,
+      7,
+      8,
+      11,
+      13,
+      71,
+      128,
+      131,
+      132,
+      133,
+      133,
+      134,
+      138,
+      138,
+      140,
+      140,
+      140,
+      141,
+      141,
+      141,
+      142,
+      143,
+      143,
+      143,
+      147,
+      147,
+      147,
+      148,
+      151
+    ],
+    "median_change": 139.0,
+    "candidate_change": 140,
+    "candidate_rank_from_top": 13,
+    "ties_at_candidate": 3,
+    "large_late_steps_by_calendar_day": [
+      {
+        "end_date_utc": "2026-09-09",
+        "steps_with_delta_reactions_at_least_50": 1,
+        "distinct_posts": 1,
+        "largest_shared_exact_observed_at": 1,
+        "delta_reactions_range": [
+          66,
+          66
+        ],
+        "delta_views_range": [
+          30,
+          30
+        ],
+        "median_stored_interval_hours": 2.36,
+        "corrected_end_steps": 0
+      },
+      {
+        "end_date_utc": "2026-09-20",
+        "steps_with_delta_reactions_at_least_50": 28,
+        "distinct_posts": 24,
+        "largest_shared_exact_observed_at": 15,
+        "delta_reactions_range": [
+          51,
+          137
+        ],
+        "delta_views_range": [
+          0,
+          120
+        ],
+        "median_stored_interval_hours": 0.42,
+        "corrected_end_steps": 0
+      }
+    ]
+  },
+  {
+    "candidate_id": "918ec5a0-0d52-51e9-83d8-aa48f745317a",
+    "account_id": "fb6f943f-c76f-507b-88b0-2339783f6385",
+    "week_posts": 36,
+    "first_under_24h": 36,
+    "both_horizons_usable": 35,
+    "late_reaction_changes_sorted": [
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      3,
+      3,
+      4,
+      5,
+      103,
+      103,
+      103,
+      103,
+      104,
+      104,
+      104,
+      104,
+      105,
+      105,
+      106,
+      155,
+      155,
+      155,
+      157,
+      157,
+      158,
+      158,
+      160,
+      160
+    ],
+    "median_change": 103,
+    "candidate_change": 157,
+    "candidate_rank_from_top": 5,
+    "ties_at_candidate": 2,
+    "large_late_steps_by_calendar_day": [
+      {
+        "end_date_utc": "2026-09-14",
+        "steps_with_delta_reactions_at_least_50": 20,
+        "distinct_posts": 20,
+        "largest_shared_exact_observed_at": 13,
+        "delta_reactions_range": [
+          52,
+          105
+        ],
+        "delta_views_range": [
+          0,
+          80
+        ],
+        "median_stored_interval_hours": 0.5,
+        "corrected_end_steps": 2
+      },
+      {
+        "end_date_utc": "2026-09-16",
+        "steps_with_delta_reactions_at_least_50": 9,
+        "distinct_posts": 9,
+        "largest_shared_exact_observed_at": 5,
+        "delta_reactions_range": [
+          53,
+          56
+        ],
+        "delta_views_range": [
+          0,
+          60
+        ],
+        "median_stored_interval_hours": 3.01,
+        "corrected_end_steps": 6
+      }
+    ]
+  }
+]

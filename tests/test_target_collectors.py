@@ -20,7 +20,7 @@ from collector_runtime.public_web import PublicChannel
 from collector_runtime.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from collector_runtime.vk import VkCommunity, VkPost
 from collector_target.__main__ import (
-    _log_startup, _parser, _poll_interval_seconds, _run, _scheduled_slot, next_delay,
+    _log_startup, _parser, _pilot_cohort, _poll_interval_seconds, _run, _scheduled_slot, next_delay,
     platform_offset, slot_delay,
 )
 from collector_target.adapters import (
@@ -40,6 +40,7 @@ from collector_target.coordinator import (
     PollCycleCoordinator,
     RuntimeReleaseUnavailable,
     ensure_runtime_release_available,
+    select_pilot_accounts,
 )
 from collector_target.lease import InMemoryLeaseProvider, advisory_lock_key, lease_name
 from collector_target.model import (
@@ -64,6 +65,7 @@ from collector_target.normalize import (
     sanitize_evidence,
 )
 from collector_target.ports import CollectorRepository, PlatformCollector
+from collector_target.poll_receipts import PollReceiptPolicy
 from collector_target.repository import PostgresCollectorRepository
 from collector_target.runtime_adapters import (
     MaxGatewayCollector,
@@ -588,6 +590,8 @@ def test_telegram_public_timely_discovery_emits_synthetic_baseline_and_actual() 
         published_at=published,
         post_type="text",
         views_count=370,
+        views_display="370",
+        views_display_unit=1,
         reactions=SimpleNamespace(total=173, raw="173", reactions={"👍": 173}),
         is_repost=False,
     )
@@ -616,6 +620,8 @@ def test_telegram_public_timely_discovery_emits_synthetic_baseline_and_actual() 
     assert baseline.reaction_breakdown == {}
     assert actual.synthetic is False
     assert actual.metrics["views"] == 370
+    assert actual.source["views_display"] == "370"
+    assert actual.source["views_display_unit"] == 1
     assert actual.metrics["reactions"] == 173
     assert actual.metrics["comments"] == 12
     assert baseline.history_completeness == HistoryCompleteness.COMPLETE
@@ -629,6 +635,8 @@ def test_telegram_public_timely_discovery_emits_synthetic_baseline_and_actual() 
     assert canonical_baseline.synthetic_baseline_allowed is True
     assert canonical_actual.snapshot.synthetic is False
     assert canonical_actual.synthetic_baseline_allowed is False
+    assert PostgresCollectorRepository._metric_evidence(
+        canonical_actual.snapshot)["views"]["display_unit"] == 1
 
 
 def test_telegram_public_late_discovery_stays_incomplete_without_baseline() -> None:
@@ -1286,6 +1294,27 @@ class _RetryAdapter:
         return None
 
 
+def test_local_pilot_is_one_shot_bounded_and_subset_of_receipt_cohort() -> None:
+    selected, unrelated = account(Platform.TELEGRAM, 1), account(Platform.TELEGRAM, 2)
+    raw = str(selected.id)
+    cohort = _pilot_cohort(raw, once=True, collector_version="local-pilot-v1",
+                           receipt_account_ids=(selected.id,))
+    assert cohort == frozenset({selected.id})
+    assert select_pilot_accounts((selected, unrelated), cohort) == (selected,)
+    assert select_pilot_accounts((selected, unrelated), None) == (selected, unrelated)
+    with pytest.raises(ValueError, match="requires --once"):
+        _pilot_cohort(raw, once=False, collector_version="local-pilot-v1",
+                      receipt_account_ids=(selected.id,))
+    with pytest.raises(ValueError, match="requires --once"):
+        _pilot_cohort(raw, once=True, collector_version="target-v1",
+                      receipt_account_ids=(selected.id,))
+    with pytest.raises(ValueError, match="PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS"):
+        _pilot_cohort(raw, once=True, collector_version="local-pilot-v1",
+                      receipt_account_ids=(unrelated.id,))
+    with pytest.raises(ValueError, match="all be enabled"):
+        select_pilot_accounts((unrelated,), cohort)
+
+
 def test_coordinator_resumes_failed_accounts_without_replaying_successes() -> None:
     first, second = account(Platform.TELEGRAM, 1), account(Platform.TELEGRAM, 2)
     repository = _MemoryRepository((first, second))
@@ -1753,6 +1782,88 @@ def test_repository_skips_unchanged_snapshot_before_heartbeat(monkeypatch, tmp_p
     assert result.snapshot_count == 0
     assert "INSERT INTO ingest.publication_metric_snapshot(" not in sql
     assert "INSERT INTO ingest.reaction_breakdown(" not in sql
+    assert "INSERT INTO ingest.publication_poll_receipt" not in sql
+
+
+def test_poll_receipt_policy_is_bounded_to_recent_real_posts() -> None:
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    base = CanonicalNormalizer().normalize(raw_batch(target, run_context), run_context).publications[0]
+    policy = PollReceiptPolicy(account_ids=frozenset({target.id}))
+    eligible = replace(base, id=UUID("30000000-0000-4000-8000-000000000011"),
+                       snapshot=replace(base.snapshot, age_seconds=6 * 86400))
+    too_old = replace(base, id=UUID("30000000-0000-4000-8000-000000000012"),
+                      snapshot=replace(base.snapshot, age_seconds=8 * 86400))
+    synthetic = replace(base, id=UUID("30000000-0000-4000-8000-000000000013"),
+                        snapshot=replace(base.snapshot, synthetic=True))
+    assert policy.select(target.id, (eligible, too_old, synthetic)) == (eligible,)
+    assert policy.select(UUID("30000000-0000-4000-8000-000000000014"), (eligible,)) == ()
+
+
+def test_opt_in_receipt_records_successful_unchanged_read(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    canonical = CanonicalNormalizer().normalize(raw_batch(target, run_context), run_context)
+    fingerprint = canonical.publications[0].snapshot.semantic_fingerprint
+    connection = _ScriptedConnection(latest_snapshot={
+        "semantic_fingerprint": fingerprint,
+        "observed_at": NOW - timedelta(minutes=5),
+    })
+    repository = PostgresCollectorRepository(
+        connection_factory=lambda: connection,
+        poll_receipt_policy=PollReceiptPolicy(account_ids=frozenset({target.id})),
+    )
+
+    result = repository.persist_account_batch(canonical)
+
+    receipts = [params for sql, params in connection.calls
+                if "INSERT INTO ingest.publication_poll_receipt" in sql]
+    assert result.snapshot_count == 0
+    assert len(receipts) == 1
+    receipt = json.loads(receipts[0][0])[0]
+    assert receipt["publication_id"] == str(canonical.publications[0].id)
+    assert receipt["views_count"] == 0
+    assert receipt["views_display_unit"] is None
+    assert receipt["snapshot_written"] is False
+    assert receipt["observed_bucket"] == int(NOW.timestamp()) // 900
+    assert any("DELETE FROM ingest.publication_poll_receipt" in sql
+               for sql, _params in connection.calls)
+
+
+def test_rounded_public_receipt_retains_display_precision(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    raw = raw_batch(target, run_context, source={
+        "gateway": "telegram_public_web", "views_display": "1.2K",
+        "views_display_unit": 100,
+    })
+    publication = replace(raw.publications[0],
+                          metrics={"views": 1200, "reactions": 0,
+                                   "comments": None, "shares": None},
+                          quality=ObservationQuality.ROUNDED)
+    canonical = CanonicalNormalizer().normalize(
+        replace(raw, publications=(publication,)), run_context,
+    )
+    connection = _ScriptedConnection(latest_snapshot={
+        "semantic_fingerprint": canonical.publications[0].snapshot.semantic_fingerprint,
+        "observed_at": NOW - timedelta(minutes=5),
+    })
+    repository = PostgresCollectorRepository(
+        connection_factory=lambda: connection,
+        poll_receipt_policy=PollReceiptPolicy(account_ids=frozenset({target.id})),
+    )
+    repository.persist_account_batch(canonical)
+    receipts = [params for sql, params in connection.calls
+                if "INSERT INTO ingest.publication_poll_receipt" in sql]
+    receipt = json.loads(receipts[0][0])[0]
+    assert receipt["views_count"] == 1200
+    assert receipt["views_display_unit"] == 100
+    assert repository._metric_evidence(canonical.publications[0].snapshot)[
+        "views"]["display_unit"] == 100
 
 
 def test_repository_persists_deterministic_unchanged_heartbeat(monkeypatch, tmp_path) -> None:

@@ -18,3 +18,9 @@ logs
 .pytest_cache
 **/*.log
 **/tsconfig.tsbuildinfo
+
+# Source-only material is not copied by any runtime Dockerfile.
+benchmarks/
+research/
+tests/
+frontend/tests/

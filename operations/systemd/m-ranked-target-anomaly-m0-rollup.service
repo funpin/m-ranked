@@ -1,0 +1,49 @@
+[Unit]
+Description=M-Ranked bounded M0 receipt rollup (research only)
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-anomaly
+Group=m-ranked-anomaly
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/anomaly-analysis.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/anomaly-pgpass
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-anomaly -g m-ranked-anomaly %d/pgpass /run/m-ranked-anomaly-m0-rollup/pgpass
+Environment=PGPASSFILE=/run/m-ranked-anomaly-m0-rollup/pgpass
+Environment=TZ=Europe/Moscow
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m anomaly_analysis.m0_rollup_job
+TimeoutStartSec=15min
+TimeoutStopSec=30s
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+RuntimeDirectory=m-ranked-anomaly-m0-rollup
+RuntimeDirectoryMode=0700
+UMask=0077
+CPUQuota=50%
+Nice=10
+MemoryMax=768M
+LimitNOFILE=4096
+TasksMax=32

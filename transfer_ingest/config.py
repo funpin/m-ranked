@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from uuid import UUID
+
+from collector_target.poll_receipts import parse_account_ids
 
 
 def _int(name: str, default: int) -> int:
@@ -22,6 +25,7 @@ class IngestSettings:
     database_url: str
     path: str = "/transfer/v1/batches"
     allowed_producers: tuple[str, ...] = ()
+    publication_poll_receipt_account_ids: tuple[UUID, ...] = ()
     # Тело применённого конверта держится столько, сколько может
     # понадобиться, чтобы разобрать применение вручную. Дальше оно только
     # занимает место: данные уже в рабочих таблицах. Ноль отключает
@@ -67,6 +71,10 @@ class IngestSettings:
             database_url=dsn,
             path=os.getenv("TRANSFER_INGEST_PATH", "/transfer/v1/batches").strip(),
             allowed_producers=producers,
+            publication_poll_receipt_account_ids=parse_account_ids(
+                os.getenv("PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS", ""),
+                name="PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS",
+            ),
             payload_retention_hours=_int(
                 "TRANSFER_INGEST_PAYLOAD_RETENTION_HOURS", 24,
             ),

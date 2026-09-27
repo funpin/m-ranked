@@ -1,0 +1,17 @@
+platform,sample_rank,publication_id,public_url,provisional_label,data_error_state,context_state
+telegram,3,066c4657-81cb-5f4a-b97a-7d950f3a3cf4,https://t.me/hse_official/6193,insufficient_early,unverified,not_checked
+telegram,6,17913f83-ef74-5279-bd41-cadb62af3040,https://t.me/Bru_Live/21805,no_clear_signal,unverified,not_checked
+telegram,15,5124e3e9-0af2-5e9d-8e47-a12219d014fa,https://t.me/nust_misis/31395,candidate_anomaly,unverified,not_checked
+telegram,16,918ec5a0-0d52-51e9-83d8-aa48f745317a,https://t.me/gubkin_university/13998,candidate_anomaly,unverified,not_checked
+vk,3,2b3f7982-676f-5bba-88be-efdf6888464c,https://vk.com/wall-85587208_11554,no_clear_signal,unverified,not_checked
+vk,6,52cc0aca-cf86-5201-b19c-882a22524833,https://vk.com/wall-71938736_229565,no_clear_signal,unverified,not_checked
+vk,8,0858944f-13a3-509b-b30a-e85733a4d6e2,https://vk.com/wall-58265344_37614,insufficient_early,unverified,not_checked
+vk,20,c5527c6b-bc78-59e4-ac2f-0357f0c6a86d,https://vk.com/wall-44036459_315903,no_clear_signal,possible_counter_removal,not_checked
+max,2,85d273c5-082b-541e-ab70-30fe5750a921,https://max.ru/beluniversity/AaCO_Qo3eAI,insufficient_early,unverified,not_checked
+max,3,2dff9578-a546-5cda-8223-188305812165,https://max.ru/chuvsu/AaCPRCErfas,no_clear_signal,unverified,not_checked
+max,15,4be67b2f-775a-5a8f-8314-9a3642da5908,https://max.ru/maiuniversity/AaCG1s_4eKw,no_clear_signal,possible_counter_removal,not_checked
+max,16,e4b2f3f3-5d48-579d-9efd-40e24ccea9fa,https://max.ru/YaroslavlSTU/AaCPSIkZNSc,no_clear_signal,unverified,not_checked
+rutube,1,63b69686-3d52-521a-a75c-b46aad77d1ba,https://rutube.ru/video/d275e3a4c80bae1d109fb4e6e9e44d20/,candidate_anomaly,unverified,not_checked
+rutube,5,c5aa7365-838b-5535-9b23-7d09ef978f29,https://rutube.ru/video/e1d94e265d032a17d227d226cf30e8c1/,insufficient_early,unverified,not_checked
+rutube,9,5e6ecce3-ba99-5a1c-a746-bdcadc474b9b,https://rutube.ru/video/821c6c15cadea26f32a2bdeb1bb65cc1/,no_clear_signal,unverified,not_checked
+rutube,18,839b4dc7-a934-50c9-8119-7f69ed6fb681,https://rutube.ru/video/effb0da723adad660b3e7c3a0f067b43/,no_clear_signal,unverified,not_checked

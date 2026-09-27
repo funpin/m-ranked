@@ -8,7 +8,7 @@ import logoMarkLight from "../assets/logo-mark-light.svg";
 import { SiteHeader } from "@/components/site-header";
 import { publicOrigin } from "@/lib/deployment";
 import "./globals.css";
-import { Geologica, Montserrat } from "next/font/google";
+import { Geologica, JetBrains_Mono, Onest } from "next/font/google";
 import { RouteBoundary } from "@/components/navigation-boundary";
 import { SiteHeaderFallback } from "@/components/site-header-fallback";
 import { IconSprite } from "@/components/icon-sprite";
@@ -17,7 +17,9 @@ import { cn } from "@/lib/utils";
 // Self-hosted by next/font: no request to fonts.gstatic.com, and the fallback
 // metrics it emits keep the layout from shifting while a face loads.
 const heading = Geologica({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-heading" });
-const sans = Montserrat({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-sans" });
+const sans = Onest({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-sans" });
+// Цифры главной и примеры запросов: моноширинные, с кириллицей.
+const mono = JetBrains_Mono({ subsets: ["cyrillic", "latin"], display: "swap", variable: "--font-mono", preload: false });
 
 export const metadata: Metadata = {
   metadataBase: publicOrigin(),
@@ -110,6 +112,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const path = incoming.get("x-mranked-path") ?? "/";
   // nonce выдаёт прокси на каждый ответ; свой инлайн-скрипт обязан его нести.
   const nonce = incoming.get("x-nonce") ?? undefined;
+  const localSnapshotLabel = process.env.MRANKED_LOCAL_SNAPSHOT_LABEL?.trim();
   let activePlatform: Platform = path.startsWith("/institutions/") ? "all" : "telegram";
   const identity = /^\/(accounts|publications)\/([0-9a-f-]{36})$/i.exec(path);
   if (identity) {
@@ -126,7 +129,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       data-favicon-light={logoMarkLight.src}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
-      className={cn(sans.variable, heading.variable)}
+      className={cn(sans.variable, heading.variable, mono.variable)}
     >
       <head>
         <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" sizes="180x180" />
@@ -148,6 +151,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <IconSprite />
         <a className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[300] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring" href="#main-content">Перейти к содержимому</a>
         <Suspense fallback={<SiteHeaderFallback platform={activePlatform} />}><SiteHeader initialPlatform={activePlatform} /></Suspense>
+        {localSnapshotLabel ? <div className="border-border bg-amber-500/5 text-muted-foreground border-b px-4 py-2 text-center text-xs">
+          <span className="mr-2 rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-700 dark:text-amber-300">Локальный срез</span>
+          {localSnapshotLabel}
+        </div> : null}
         <main id="main-content" tabIndex={-1} className="safe-page-inset mx-auto w-full max-w-[1400px] min-w-0 py-6"><RouteBoundary>{children}</RouteBoundary></main>
       </body>
     </html>

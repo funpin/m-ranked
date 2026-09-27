@@ -52,6 +52,25 @@ def test_stored_verdict_is_served_as_is_and_matches_the_contract():
     _validate(empty)
 
 
+def test_context_cap_changes_public_level_but_preserves_original_signals():
+    moment = synthetic_cases()["owner_vk_497246_linear_with_leading_likes"].subject.observed_at[-1]
+    signal = {"pattern": 2, "symbol": "⚡", "title": "Поздний скачок", "family": "shape",
+              "metric": "views", "strength": .87, "startAt": moment.isoformat(),
+              "endAt": (moment + timedelta(hours=1)).isoformat(), "scaleSeconds": 900,
+              "formula": "факт выше ожидания", "render": {"kind": "expected", "startAge": 0, "endAge": 3600},
+              "alternatives": [], "normConfidence": 1.0}
+    row = {"level": 1, "original_level": 2, "recheck_reason": "new_post_and_shared_old_growth",
+           "recheck_method_version": "late-view-context-cap-v1",
+           "recheck_evidence": {"windows": [{"measuredOldPosts": 2}]},
+           "signals": [signal], "quality": {"coverage": 1, "summary": "замеры полные", "codes": [],
+                                      "unanalyzable": []}, "analyzed_at": moment, "lag_seconds": 0,
+           "norm_version_id": 1, "detector_versions": {}, "review_status": "unreviewed"}
+    body = analysis.analysis_body("99269506-1466-5e18-a215-a3db2688d786", 12, row)
+    _validate(body)
+    assert body["level"] == 1 and body["originalLevel"] == 2
+    assert body["levelLabel"] == "слабый сигнал" and body["signals"] == [signal]
+
+
 def test_api_level_words_match_the_analysis_module_and_the_glossary():
     assert analysis.LEVEL_LABELS == levels.LEVEL_LABELS
     assert analysis.LEVEL_SYMBOLS == levels.LEVEL_SYMBOLS

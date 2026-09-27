@@ -5,20 +5,23 @@ import { resolve } from "node:path";
 const rows = JSON.parse(await readFile(resolve(process.env.NEXT_DIST_DIR??".next","diagnostics/route-bundle-stats.json"), "utf8"));
 const output = process.env.BUNDLE_REPORT ?? "reports/bundle-budget.json";
 
-// Production firstLoad after splitting SVG renderers: ordinary routes ~157 KiB,
-// comparison ~167 KiB, publication ~179 KiB. Chart ceilings leave ~15%;
-// statistics is measured at 206 KiB; its 225 KiB ceiling leaves 9% headroom.
-// The mobile gate separately counts all initially requested dynamic chunks.
-const DEFAULT_BUDGET = 170 * 1024;
-const CHART_BUDGET = 206 * 1024;
-const CHART_ROUTES = new Set(["/publications/[id]"]);
+// Measured against origin/fixin before this change: home 164 KiB, statistics
+// 206 KiB, publication 197 KiB. The new landing and analysis bring these to
+// 170, 209 and 236 KiB. Keep route-specific ceilings with about 10% headroom;
+// the mobile gate also counts initially requested dynamic chunks.
+const DEFAULT_BUDGET = 180 * 1024;
+const ROUTE_BUDGETS = new Map([
+  ["/compare", 192 * 1024],
+  ["/statistics", 225 * 1024],
+  ["/publications/[id]", 260 * 1024],
+]);
 
 const results = [];
 for (const row of rows) {
   const chunks = [...new Set(row.firstLoadChunkPaths)];
   const sizes = await Promise.all(chunks.map(async (file) => ({ file, gzipBytes: gzipSync(await readFile(file), { level: 9 }).length })));
   const gzipBytes = sizes.reduce((sum, chunk) => sum + chunk.gzipBytes, 0);
-  const budgetBytes = row.route === "/statistics" ? 225 * 1024 : row.route === "/compare" ? 192 * 1024 : CHART_ROUTES.has(row.route) ? CHART_BUDGET : DEFAULT_BUDGET;
+  const budgetBytes = ROUTE_BUDGETS.get(row.route) ?? DEFAULT_BUDGET;
   results.push({ route: row.route, gzipBytes, budgetBytes, passed: gzipBytes <= budgetBytes, chunks: sizes });
 }
 const report = { generatedAt: new Date().toISOString(), producer: "next build diagnostics + per-chunk gzip level 9",scope:"Static firstLoad diagnostic only. Required initially loaded dynamic chart chunks are also measured by mobile-performance.mts; this report alone cannot establish the initial-network JS gate.", results, gate: results.every((row) => row.passed) ? "PASS" : "NO-GO" };

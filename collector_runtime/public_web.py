@@ -18,6 +18,8 @@ class PublicPost:
     reactions: ReactionState
     views_count: int | None
     is_repost: bool = False
+    views_display: str | None = None
+    views_display_unit: int | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,22 @@ def parse_compact_count(value: str) -> int:
     number = float(match.group(1).replace(",", "."))
     multiplier = {"": 1, "K": 1_000, "M": 1_000_000, "B": 1_000_000_000}[match.group(2)]
     return int(round(number * multiplier))
+
+
+def compact_count_display_unit(value: str) -> int | None:
+    """The last displayed count digit, in whole counter units.
+
+    This is metadata about the display, not a claim about Telegram's rounding
+    direction. An interval scorer must allow at least one unit either way.
+    """
+    cleaned = value.strip().replace("\u00a0", "").upper()
+    match = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*([KMB]?)$", cleaned)
+    if not match:
+        return None
+    multiplier = {"": 1, "K": 1_000, "M": 1_000_000, "B": 1_000_000_000}[match.group(2)]
+    numeric = match.group(1).replace(",", ".")
+    decimals = len(numeric.partition(".")[2])
+    return max(1, multiplier // 10 ** decimals)
 
 
 def parse_exact_subscriber_count(html: str) -> int | None:
@@ -219,15 +237,17 @@ def _parse_public_page(soup: BeautifulSoup, username: str) -> list[PublicPost]:
             reactions[key] = reactions.get(key, 0) + count
             raw.append({"key": key, "displayed_count": span.get_text(" ", strip=True), "count": count})
         views_node = node.select_one(".tgme_widget_message_views")
+        views_display = views_node.get_text(" ", strip=True) if views_node else None
         views_count = (
-            parse_compact_count(views_node.get_text(" ", strip=True))
-            if views_node else None
+            parse_compact_count(views_display) if views_display is not None else None
         )
         posts.append(
             PublicPost(
                 message_id, published.astimezone(timezone.utc), _post_type(node),
                 ReactionState(reactions, sum(reactions.values()), raw), views_count,
                 _is_public_repost(node, username),
+                views_display, (compact_count_display_unit(views_display)
+                                if views_display is not None else None),
             )
         )
     return sorted(posts, key=lambda post: post.message_id)

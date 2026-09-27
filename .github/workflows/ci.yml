@@ -2,7 +2,7 @@ name: Build and contract gates
 on:
   pull_request:
   push:
-    branches: [alpha, main]
+    branches: [alpha, main, fixin]
   workflow_dispatch:
 
 permissions:
@@ -47,6 +47,33 @@ jobs:
             psql --username mranked_bootstrap --dbname mranked --no-psqlrc \
             --tuples-only --no-align --command \
             "SELECT to_regnamespace('flyway') IS NULL AND to_regnamespace('migration') IS NULL")" = t
+      - name: Rehearse the single in-place release package
+        run: |
+          set -euo pipefail
+          container="$(docker compose -f infra/compose.yaml ps -q postgres)"
+          db=mranked_release_ci
+          docker exec "$container" createdb -U mranked_bootstrap "$db"
+          trap 'docker exec "$container" dropdb -U mranked_bootstrap --force "$db"' EXIT
+          docker exec "$container" mkdir -p /tmp/mranked-release/operations/sql /tmp/mranked-release/db
+          docker exec "$container" ln -s /m-ranked-schema /tmp/mranked-release/db/migrations
+          docker cp operations/sql/release-schema-0038-to-0044.sql \
+            "$container":/tmp/mranked-release/operations/sql/release-schema-0038-to-0044.sql
+          for migration in db/migrations/*.sql; do
+            name="${migration##*/}"
+            if (( 10#${name:0:4} <= 38 )); then
+              docker exec "$container" psql -U mranked_bootstrap -d "$db" \
+                --no-psqlrc -v ON_ERROR_STOP=1 -f "/m-ranked-schema/$name" >/dev/null
+            fi
+          done
+          for attempt in 1 2; do
+            docker exec "$container" psql -U mranked_bootstrap -d "$db" \
+              --no-psqlrc -v ON_ERROR_STOP=1 \
+              -f /tmp/mranked-release/operations/sql/release-schema-0038-to-0044.sql >/dev/null
+          done
+          test "$(docker exec "$container" psql -U mranked_bootstrap -d "$db" -Atc \
+            "SELECT to_regclass('analytics.site_summary') IS NOT NULL AND \
+                    to_regclass('analytics.bounded_poll_growth_daily') IS NOT NULL AND \
+                    to_regclass('analytics.publication_history_page') IS NOT NULL")" = t
       - name: Python gates with a protected release-fixture directory
         run: |
           # Provenance tests validate every ancestor's permissions; /tmp is
@@ -60,6 +87,45 @@ jobs:
         with:
           name: canonical-integrity-evidence
           path: .pytest_cache
+  production-python-311:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Install and smoke-test each production Python 3.11 environment
+        run: |
+          set -euo pipefail
+          for target in api collector anomaly; do
+            venv="$RUNNER_TEMP/py311-$target"
+            python -m venv "$venv"
+            "$venv/bin/pip" install --quiet --require-hashes --no-deps --upgrade \
+              -r requirements/py311/tooling.lock
+            if [ "$target" = collector ]; then
+              "$venv/bin/pip" install --quiet --require-hashes --no-deps \
+                --no-build-isolation -r requirements/py311/collector.lock
+              "$venv/bin/pip" wheel --quiet --no-deps \
+                --wheel-dir "$RUNNER_TEMP/pymax-wheel" -r requirements/pymax.txt
+              "$venv/bin/pip" install --quiet --no-deps --no-index \
+                --find-links "$RUNNER_TEMP/pymax-wheel" maxapi-python
+              "$venv/bin/python" -c 'import collector_target.__main__; import msgpack; from pymax.protocol.tcp.payload import MsgpackPayloadCodec'
+            else
+              "$venv/bin/pip" install --quiet --require-hashes --no-deps \
+                --only-binary=:all: -r "requirements/py311/$target.lock"
+              if [ "$target" = api ]; then
+                "$venv/bin/python" -c 'import api.app'
+              else
+                "$venv/bin/python" -c 'import anomaly_analysis'
+              fi
+            fi
+            "$venv/bin/pip" check
+          done
+          "$RUNNER_TEMP/py311-api/bin/python" -m compileall -q \
+            api anomaly_analysis collector_target operations/scripts
   browser-parity:
     # Keep the job ID stable for existing required-check settings.
     runs-on: ubuntu-24.04
@@ -88,7 +154,7 @@ jobs:
         working-directory: frontend
       - run: pnpm lint && pnpm typecheck && pnpm check:api && pnpm test && pnpm test:e2e
         working-directory: frontend
-      - run: pnpm build && pnpm check:bundle
+      - run: MRANKED_DEPLOYMENT_ID="$GITHUB_SHA" pnpm build && pnpm check:bundle
         working-directory: frontend
       - name: Package the verified production frontend
         run: |
@@ -215,12 +281,22 @@ jobs:
             --upgrade -r requirements/tooling.lock
           "$RUNNER_TEMP/collector/bin/pip" install --quiet --require-hashes --no-deps \
             --no-build-isolation -r requirements/collector.lock
+          "$RUNNER_TEMP/collector/bin/pip" wheel --quiet --no-deps \
+            --wheel-dir "$RUNNER_TEMP/pymax-wheel" -r requirements/pymax.txt
+          "$RUNNER_TEMP/collector/bin/pip" install --quiet --no-deps --no-index \
+            --find-links "$RUNNER_TEMP/pymax-wheel" maxapi-python
+          "$RUNNER_TEMP/collector/bin/pip" check
       - name: Known vulnerabilities in every production environment
         run: |
           .venv/bin/pip-audit --progress-spinner off
           for environment in api anomaly collector; do
             .venv/bin/pip-audit --progress-spinner off \
-              --path "$RUNNER_TEMP/$environment/lib" || exit 1
+              --path "$RUNNER_TEMP/$environment/lib/python3.13/site-packages" || exit 1
+          done
+          for lock in requirements/{api,anomaly,collector,tooling}.lock \
+                      requirements/py311/{api,anomaly,collector,tooling}.lock; do
+            .venv/bin/pip-audit --progress-spinner off --disable-pip --no-deps \
+              -r "$lock"
           done
       - name: Known vulnerabilities in production frontend dependencies
         run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level=high

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from collector_runtime.public_web import (
+    compact_count_display_unit,
     older_page_before,
     parse_compact_count,
     parse_exact_subscriber_count,
@@ -16,6 +17,11 @@ def test_compact_public_counts():
     assert parse_compact_count("57") == 57
     assert parse_compact_count("1.2K") == 1200
     assert parse_compact_count("5.46K") == 5460
+    assert compact_count_display_unit("57") == 1
+    assert compact_count_display_unit("1.2K") == 100
+    assert compact_count_display_unit("5.46K") == 10
+    assert compact_count_display_unit("1M") == 1_000_000
+    assert compact_count_display_unit("unknown") is None
 
 
 def test_public_page_reactions_paid_custom_and_album():
@@ -38,6 +44,8 @@ def test_public_page_reactions_paid_custom_and_album():
     assert posts[0].reactions.reactions == {"paid:star": 3, "custom:123": 57}
     assert posts[0].reactions.total == 60
     assert posts[0].views_count == 3530
+    assert posts[0].views_display == "3.53K"
+    assert posts[0].views_display_unit == 10
 
 
 def test_public_page_reaction_markup_variants():

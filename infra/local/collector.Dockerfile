@@ -23,6 +23,8 @@ RUN pip install --require-hashes --no-deps --upgrade -r requirements/tooling.loc
 COPY --from=pymax /wheels /wheels
 RUN pip install --no-deps --no-index --find-links /wheels maxapi-python \
  && rm -rf /wheels \
+ && python -m pip check \
+ && python -c 'from pymax.protocol.tcp.payload import MsgpackPayloadCodec; import msgpack' \
  && python -m pip uninstall --yes setuptools wheel \
  && python -m pip uninstall --yes pip
 COPY collector_runtime ./collector_runtime

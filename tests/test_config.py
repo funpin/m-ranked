@@ -1,5 +1,8 @@
 from collector_runtime.config import Settings
+from collector_target.poll_receipts import parse_account_ids
+from transfer_ingest.config import IngestSettings
 import pytest
+from uuid import uuid4
 
 
 def test_storage_retention_does_not_extend_post_tracking(monkeypatch, tmp_path):
@@ -21,6 +24,28 @@ def test_storage_retention_does_not_extend_post_tracking(monkeypatch, tmp_path):
     assert settings.collector_phase_max_wait_seconds == 900
     assert settings.collector_transfer_mode == "in-process"
     assert settings.collector_transfer_producer_id == "local"
+    assert settings.publication_poll_receipt_account_ids == ()
+
+
+def test_poll_receipt_cohort_requires_unique_bounded_uuid_list(monkeypatch, tmp_path):
+    account_id = uuid4()
+    monkeypatch.setenv("PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS", str(account_id))
+    assert Settings.load(tmp_path / "missing.env").publication_poll_receipt_account_ids == (account_id,)
+    monkeypatch.setenv("PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS", f"{account_id},{account_id}")
+    with pytest.raises(ValueError, match="at most 16 unique"):
+        Settings.load(tmp_path / "missing.env")
+    with pytest.raises(ValueError, match="comma-separated UUIDs"):
+        parse_account_ids("not-an-id", name="PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS")
+
+
+def test_transfer_receiver_reads_the_same_opt_in_cohort(monkeypatch, tmp_path):
+    account_id = uuid4()
+    monkeypatch.setenv("PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS", str(account_id))
+    monkeypatch.setenv("TRANSFER_INGEST_CERTIFICATE", str(tmp_path / "cert"))
+    monkeypatch.setenv("TRANSFER_INGEST_PRIVATE_KEY", str(tmp_path / "key"))
+    monkeypatch.setenv("TRANSFER_INGEST_CA_BUNDLE", str(tmp_path / "ca"))
+    monkeypatch.setenv("TRANSFER_INGEST_DATABASE_URL", "postgresql:///local-test")
+    assert IngestSettings.load().publication_poll_receipt_account_ids == (account_id,)
 
 
 def test_phase_configuration_is_strict(monkeypatch, tmp_path):

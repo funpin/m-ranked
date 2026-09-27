@@ -99,7 +99,8 @@ trap 'exit 143' TERM INT HUP
 # видны в списке процессов любому пользователю машины.
 export PGPASSWORD
 # Снимок пишется во временное имя: недоснятый файл не должен выглядеть готовым.
-docker run --rm -i --name "$dumper" --network "container:$MRANKED_DB_CONTAINER" \
+# Иначе Docker сохраняет многогигабайтный stdout ещё раз в json-file log.
+docker run --rm -i --log-driver=none --name "$dumper" --network "container:$MRANKED_DB_CONTAINER" \
   --cpus "$BACKUP_CPUS" --memory 512m --pids-limit 64 \
   -e PGPASSWORD -e PGAPPNAME="$dumper" "$image" \
   pg_dump -h 127.0.0.1 -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" -Fc --compress="$BACKUP_COMPRESSION" --no-password \

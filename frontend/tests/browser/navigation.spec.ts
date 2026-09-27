@@ -20,7 +20,7 @@ async function delayMatchingNavigation(page: Page, matches: (url: URL) => boolea
 
 test("переход по меню и открытие карточки не перезагружают документ", async ({ page }, info) => {
   test.skip(info.project.name === "mobile", "меню спрятано за гамбургером; переходы проверяются на широком экране");
-  await page.goto("/?platform=telegram");
+  await page.goto("/review?platform=telegram");
   await stamp(page);
 
   await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
@@ -29,7 +29,7 @@ test("переход по меню и открытие карточки не п�
   expect(await kept(page)).toBe("kept");
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/\?platform=telegram/);
+  await expect(page).toHaveURL(/\/review\?platform=telegram/);
   expect(await kept(page)).toBe("kept");
 
   await page.getByTestId("platform-overview-card").first().click();
@@ -38,11 +38,10 @@ test("переход по меню и открытие карточки не п�
 });
 
 test("смена периода и площадки не перезагружает документ", async ({ page }) => {
-  await page.goto("/?platform=telegram");
+  await page.goto("/review?platform=telegram");
   await stamp(page);
 
-  await page.locator('select[name="period"]').selectOption("7d");
-  await page.getByRole("button", { name: "Применить фильтры" }).click();
+  await page.locator('label:has(input[name="period"][value="7d"])').click();
   await expect(page).toHaveURL(/period=7d/);
   expect(await kept(page)).toBe("kept");
 
@@ -56,17 +55,17 @@ test.describe("без JavaScript", () => {
 
   test("меню и фильтры остаются рабочими обычной навигацией", async ({ page }, info) => {
     test.skip(info.project.name === "mobile", "гамбургер требует скриптов; на узком экране меню недоступно без них");
-    await page.goto("/?platform=telegram");
+    await page.goto("/review?platform=telegram");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByRole("link", { name: "Исходный код на GitHub" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Тема:/ })).toBeVisible();
 
-    await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
+    await page.getByTestId("main-nav-fallback").getByRole("link", { name: "Статистика" }).click();
     await expect(page).toHaveURL(/\/statistics\?platform=telegram/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-    await page.goto("/?platform=telegram");
-    await page.locator('select[name="period"]').selectOption("7d");
+    await page.goto("/review?platform=telegram");
+    await page.locator('label:has(input[name="period"][value="7d"])').click();
     await page.getByRole("button", { name: "Применить фильтры" }).click();
     await expect(page).toHaveURL(/period=7d/);
     await expect(page.getByTestId("platform-overview-card").first()).toBeVisible();
@@ -75,7 +74,7 @@ test.describe("без JavaScript", () => {
 
 test("заготовка при переходе принадлежит той странице, куда идём", async ({ page }, info) => {
   test.skip(info.project.name === "mobile", "меню спрятано за гамбургером; переходы проверяются на широком экране");
-  await page.goto("/?platform=telegram");
+  await page.goto("/review?platform=telegram");
   // Ответ задерживается, чтобы заготовка успела показаться и её можно было
   // разглядеть: без задержки переход завершается за один кадр.
   await page.route("**/statistics**", async (route) => {
@@ -92,18 +91,17 @@ test("заготовка при переходе принадлежит той �
 });
 
 test("локальные заготовки не дублируют постоянную шапку страницы", async ({ page }) => {
-  await page.goto("/?platform=telegram");
-  await delayMatchingNavigation(page, (url) => ["/", "/statistics"].includes(url.pathname) && url.searchParams.get("period") === "7d");
+  await page.goto("/review?platform=telegram");
+  await delayMatchingNavigation(page, (url) => ["/review", "/statistics"].includes(url.pathname) && url.searchParams.get("period") === "7d");
 
-  await page.locator('select[name="period"]').selectOption("7d");
-  await page.getByRole("button", { name: "Применить фильтры" }).click();
+  await page.locator('label:has(input[name="period"][value="7d"])').click();
 
   await expect(page.getByText("Загрузка карточек")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
   await expect(page).toHaveURL(/period=7d/);
   await page.goto("/statistics?platform=telegram");
-  await page.locator('select[name="period"]').selectOption("7d");
+  await page.locator('label:has(input[name="period"][value="7d"])').click();
 
   await expect(page.getByText("Загрузка статистики")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);

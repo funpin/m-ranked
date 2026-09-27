@@ -168,6 +168,14 @@ bootstrap по населённой базе не проигрывается н�
 в DOWN. Это не декорация: выкатка кода вперёд миграции — штатный способ получить
 отказ на ровном месте.
 
+Если preflight указал `operations/sql/release-schema-0038-to-0044.sql`, сначала
+снимите каталог только для чтения через `operations/sql/release-schema-audit.sql`.
+Один SQL-пакет применяет недостающие объекты одной транзакцией для проверенных
+состояний 0038, 0043, 0044 с одной таблицей `site_summary` и 0044–0046;
+неизвестную частичную схему он отклоняет.
+Он не копирует таблицы с историей. Очистку outbox и ревизий включают только
+после отдельных индексов и замера нагрузки.
+
 Исключение — миграция `0033_remove_csv_exports.sql`: она удаляет таблицу,
 в которую старые collectors ещё пишут. Для неё сначала остановите все четыре
 `m-ranked-target-collector@*.service`, переключите API, web и collectors на
@@ -223,10 +231,11 @@ SECRET
 ## 4. Доставка дерева
 
 На машине нет rsync: дерево едет архивом и распаковывается поверх очищенного
-каталога релиза. `.venv` переносится с предыдущего релиза жёсткими ссылками, а
-не копируется.
+каталога релиза. Для релиза с обновлением Python-зависимостей создайте отдельную
+`.venv` в новом каталоге; проверьте запас места до её установки. Не обновляйте
+среду предыдущего релиза, которая нужна для отката.
 
-Четыре вещи, которых нет в `git archive` и без которых выкатка падает молча:
+Перед переключением релиза проверьте четыре условия:
 
 1. **Корень релиза обязан быть доступен runtime-пользователям.** Создавайте
    `/opt/m-ranked/releases/<релиз>` как `root:m-ranked-release-readers` с
@@ -254,8 +263,9 @@ SECRET
    монтирует туда `/var/lib/m-ranked/web-cache`, а точку монтирования в
    read-only слое создать не может: docker падает с кодом 125 и сайт ложится.
    Сборка standalone этот каталог не создаёт — создайте руками.
-3. **`api/data/official-m-rating-channel-codes.json` под `.gitignore`**, но
-   нужен ежедневному заданию официального рейтинга. Копируется отдельно.
+3. **`api/data/official-m-rating-channel-codes.json` входит в Git-архив.**
+   Убедитесь, что файл есть в новом релизе: он нужен ежедневному заданию
+   официального рейтинга. Отдельно копировать его не требуется.
 4. `.env`, сессии площадок, дампы и учётные данные в релиз не попадают.
 
 ## 5. Зависимости
@@ -279,38 +289,34 @@ Next.js добавляет его как `?dpl=<id>` к URL клиентских
 Не переключайте `current`, если после финализации отсутствует
 `frontend/server.js` или не прошёл пробный запуск web-контейнера.
 
-Python на проде — 3.11, а `requirements/*.lock` собраны под 3.13. Целиком их
-поставить нельзя: пакет с колесом `cp313` (psycopg-binary, pydantic-core,
-uvloop, httptools, watchfiles) на 3.11 просто не встанет. Ставятся только
-изменившиеся пакеты и только по хешу из lock; для платформенных колёс нужна
-сборка под 3.11 отдельно. Анализ аномалий v2 добавил в `anomaly.lock` numpy и
-scipy — тоже платформенные колёса: версии выбраны так, что колёса для 3.11
-есть, но их хеши в lock — от cp313. Порядок выкатки анализа —
+На Сервере 1 (Python 3.11) сборщикам и отправителю нужна только среда
+`collector`. Не объединяйте все `requirements/py311/*.lock` в одной среде:
+они проверяются в CI отдельно, а их объединение нарушает `pip check`.
+Корневые lock-файлы предназначены для Python 3.13. Порядок выкатки анализа —
 [`ANOMALY.md`](ANOMALY.md).
 
-Частичное обновление опаснее полного: FastAPI без совместимого pydantic даёт
-`ImportError` на старте и бесконечный перезапуск юнита. Меняете FastAPI или
-Starlette — проверьте pydantic и уже потом перезапускайте.
-
-Для справки, полная установка среды (пригодна там, где Python 3.13):
+Среда Сервера 1 в отдельном каталоге кандидата:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install --require-hashes --no-deps --upgrade -r requirements/tooling.lock
-.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/api.lock
-.venv/bin/pip install --require-hashes --no-deps --no-build-isolation -r requirements/collector.lock
-.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/anomaly.lock
+python3.11 -m venv .venv
+.venv/bin/pip install --require-hashes --no-deps --upgrade -r requirements/py311/tooling.lock
+.venv/bin/pip install --require-hashes --no-deps --no-build-isolation -r requirements/py311/collector.lock
 .venv/bin/pip install --no-deps -r requirements/pymax.txt
+.venv/bin/pip check
+.venv/bin/python -c 'import collector_target.__main__, collector_target.transfer_sender'
 # Режим telegram_web дополнительно требует браузера:
 # .venv/bin/pip install -r requirements/telegram-web.txt
 ```
 
-Lock-файлы правятся только пересозданием, целиком:
+На Сервере 2 с Python 3.13 установите корневые lock-файлы `tooling`, `api`,
+`collector`, `anomaly` и проверьте `pip check` и импорты до перезапуска служб.
+
+Lock-файлы правятся только пересозданием под соответствующей версией Python:
 
 ```bash
-python3 operations/scripts/generate_python_lock.py requirements/api.txt requirements/api.lock
-python3 operations/scripts/generate_python_lock.py requirements/collector.txt \
-  requirements/collector.lock --extra setuptools==80.9.0 wheel==0.46.2
+python3.11 operations/scripts/generate_python_lock.py requirements/api.txt requirements/py311/api.lock --python-version 3.11
+python3.11 operations/scripts/generate_python_lock.py requirements/collector.txt \
+  requirements/py311/collector.lock --python-version 3.11 --extra setuptools==83.0.0 wheel==0.46.2
 ```
 
 ### Ограничение Next.js cache

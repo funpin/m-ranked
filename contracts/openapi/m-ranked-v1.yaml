@@ -569,6 +569,34 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/site/summary:
+    get:
+      tags: [Query]
+      operationId: getSiteSummary
+      summary: Read the home page summary
+      description: >-
+        Institutions, accounts (total and by platform), publications and stored metric snapshots.
+        The snapshot total is approximate, based on PostgreSQL partition statistics.
+        Recomputed once a day by scheduled maintenance; available is false until the first run.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Home page summary.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteSummary'
+        '304':
+          description: The supplied validator matches this representation.
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/sitemap:
     get:
       tags: [Query]
@@ -2169,6 +2197,20 @@ components:
     '503':
       $ref: '#/components/responses/AdminUnavailable'
   schemas:
+    SiteSummary:
+      type: object
+      additionalProperties: false
+      required: [available, institutions, accounts, accountsByPlatform, publications, snapshots, computedAt]
+      properties:
+        available: { type: boolean }
+        institutions: { type: ['integer', 'null'], minimum: 0 }
+        accounts: { type: ['integer', 'null'], minimum: 0 }
+        accountsByPlatform:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        publications: { type: ['integer', 'null'], minimum: 0 }
+        snapshots: { type: ['integer', 'null'], minimum: 0, description: Approximate count from partition statistics. }
+        computedAt: { type: ['string', 'null'], format: date-time }
     SitemapSummary:
       type: object
       additionalProperties: false
@@ -2779,13 +2821,14 @@ components:
     CollectorFreshness:
       type: object
       additionalProperties: false
-      required: [status, asOf, datasetRevision, revisionLag, freshnessThresholdSeconds, platforms]
+      required: [status, asOf, datasetRevision, revisionLag, freshnessThresholdSeconds, freshnessSource, platforms]
       properties:
         status: {type: string, enum: [UP, DOWN]}
         asOf: {type: string, format: date-time}
         datasetRevision: {type: integer, format: int64, minimum: 0}
         revisionLag: {type: integer, format: int64, minimum: 0}
         freshnessThresholdSeconds: {type: integer, minimum: 600}
+        freshnessSource: {type: string, enum: [collector_run, delivered_account]}
         platforms:
           type: object
           additionalProperties: false
@@ -2798,11 +2841,12 @@ components:
     PlatformFreshness:
       type: object
       additionalProperties: false
-      required: [configured, fresh, completedAt]
+      required: [configured, fresh, completedAt, thresholdSeconds]
       properties:
         configured: {type: boolean}
         fresh: {type: boolean}
         completedAt: {type: [string, 'null']}
+        thresholdSeconds: {type: integer, minimum: 600}
     Liveness:
       type: object
       additionalProperties: false
@@ -4249,7 +4293,8 @@ components:
     PublicationAnomalyAnalysis:
       type: object
       additionalProperties: false
-      required: [publicationId, datasetRevision, status, level, levelLabel, levelSymbol, signals,
+      required: [publicationId, datasetRevision, status, level, levelLabel, levelSymbol,
+        originalLevel, recheckReason, recheckMethodVersion, recheckEvidence, signals,
         quality, analyzedAt, lagSeconds, normVersion, detectorVersions, reviewStatus,
         methodologyVersion, disclaimer]
       properties:
@@ -4259,6 +4304,13 @@ components:
         level: { type: [integer, 'null'], minimum: 0, maximum: 3 }
         levelLabel: { type: string }
         levelSymbol: { type: string, maxLength: 4 }
+        originalLevel: { type: [integer, 'null'], minimum: 0, maximum: 3,
+          description: 'Сохранённый уровень исходного детектора до контекстной проверки.' }
+        recheckReason: { type: [string, 'null'], description: 'Основание изменения итогового уровня.' }
+        recheckMethodVersion: { type: [string, 'null'], description: 'Версия консервативной контекстной проверки.' }
+        recheckEvidence:
+          type: [object, 'null']
+          description: 'Ограниченные наблюдения, по которым изменён итоговый уровень; исходные сигналы не удаляются.'
         signals:
           type: array
           maxItems: 6

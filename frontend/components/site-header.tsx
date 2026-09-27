@@ -62,8 +62,8 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
         <Link
           data-testid="brand"
           className="flex shrink-0 items-center no-underline"
-          href={queryHref("/", { platform })}
-          aria-label="m-ranked — обзор"
+          href="/"
+          aria-label="m-ranked — на главную"
           prefetch={false}
           onClick={() => setMenuOpen(false)}
         >
@@ -85,11 +85,11 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
           )}
         >
           {NAV_LINKS.map((link) => {
-            const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+            const active = pathname.startsWith(link.href);
             return (
               <Link
                 key={link.href}
-                href={queryHref(link.href, { platform })}
+                href={"platformless" in link ? link.href : queryHref(link.href, { platform })}
                 aria-current={active ? "page" : undefined}
                 prefetch={false}
                 onClick={() => { setMenuOpen(false); if (visible) toggle.current?.focus(); }}

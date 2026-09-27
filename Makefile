@@ -2,8 +2,6 @@
 # Toolchain: Node 24, Python 3.13+, Docker.
 
 PYTHON  ?= .venv/bin/python
-COMPOSE := docker compose --env-file infra/local/compose.env.example -f infra/compose.yaml -f infra/compose.local.yaml -p mranked-local
-
 .PHONY: help venv test test-python test-frontend gates stand stand-down clean
 
 help: ## List the available targets
@@ -23,10 +21,11 @@ test: test-python test-frontend ## Every gate
 gates: test ## Everything that must be green before a release
 
 stand: ## Local FastAPI/PostgreSQL/Next.js stand
-	bash infra/local/stack.sh up -d --build
+	bash infra/local/stack.sh build
+	env -u DOCKER_DEFAULT_PLATFORM bash infra/local/stack.sh up -d --no-build
 
 stand-down: ## Stop the local stand and keep its volumes
-	$(COMPOSE) stop
+	bash infra/local/stack.sh stop
 
 clean: ## Remove build output and caches
 	rm -rf frontend/.next frontend/test-results .pytest_cache

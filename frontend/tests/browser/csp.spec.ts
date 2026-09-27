@@ -48,6 +48,13 @@ test("public pages keep the baseline policy and receive no nonce", async ({ page
     expect(header).toContain(directive);
 });
 
+test("local HTTP keeps CSS and scripts on HTTP", async ({ page }) => {
+  const response = await page.goto("/");
+  const header = response?.headers()["content-security-policy"] ?? "";
+  expect(header).not.toContain("upgrade-insecure-requests");
+  expect(await page.locator("nav").evaluate((node) => getComputedStyle(node).position)).toBe("sticky");
+});
+
 test("injected markup cannot execute while the page\'s own script still runs", async ({ page }) => {
   await page.goto("/manage");
   // Классический вектор внедрения — разметка с обработчиком в атрибуте.

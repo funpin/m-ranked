@@ -17,8 +17,9 @@ import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
 import type { CollectorCoverage, HistorySnapshot, Platform } from "@/lib/types";
-import { boundarySnapshotIds, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
+import { boundarySnapshotIds, nearestSnapshot, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
 import { AnomalyAnalysisSkeleton, DeferredAnomalyAnalysis } from "@/components/anomaly-analysis";
+import type { ContextEvent } from "@/lib/neighbor-context";
 
 import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 
@@ -112,10 +113,11 @@ function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>;
   gaps: CollectorCoverage["gaps"]; markers: readonly SignalMarker[]; highlight?: string;
+  preferredDefault?: Metric["key"];
 }) {
-  const { metrics, platform, delta } = props;
+  const { metrics, platform, delta, preferredDefault } = props;
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
-  const { hidden, setHidden, scale, setScale } = useHistoryPreferences(platform, delta, keys);
+  const { hidden, setHidden, scale, setScale } = useHistoryPreferences(platform, delta, keys, preferredDefault);
 
   /** «Авто» рисует одну шкалу слева и одну справа, поэтому одновременно
    *  показываются не больше двух метрик: третья вытесняет лишнюю, а не
@@ -265,18 +267,38 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
   }),[requestFull,historyLimit]);
   useEffect(() => {
     if(!scrollRequest) return;
-    const row=document.getElementById(`snapshot-${scrollRequest.id}`);
-    row?.scrollIntoView({block:"center",inline:"nearest",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
-    row?.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
-  },[scrollRequest]);
+    const frame=requestAnimationFrame(() => {
+      const row=document.getElementById(`snapshot-${scrollRequest.id}`);
+      if(!row) return;
+      row.scrollIntoView({block:"center",inline:"nearest",behavior:"instant"});
+      row.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
+      setScrollRequest((current) => current?.id === scrollRequest.id ? undefined : current);
+    });
+    return () => cancelAnimationFrame(frame);
+  },[scrollRequest,tableOverride,rows]);
   const sampledId = end-start+1 > 144 ? selectedId : undefined;
   // Анализ приходит отдельно и страницу не задерживает: графики рисуются сразу,
   // отметки признаков появляются, когда ответ придёт. Без обещания (тихий режим
   // выкатки) отчёта нет вовсе — ни карточки, ни отметок.
-  const shownAnalysis = useSettled(analysis)?.value ?? null;
+  const settledAnalysis = useSettled(analysis);
+  const shownAnalysis = settledAnalysis?.value ?? null;
   const evidenceIds = useMemo(()=>boundarySnapshotIds(shownAnalysis,rows),[shownAnalysis,rows]);
   const markers = useMemo(()=>signalMarkers(shownAnalysis),[shownAnalysis]);
+  const contextEvents = useMemo(() => {
+    const unique = new Map<string, ContextEvent>();
+    for (const event of settledAnalysis?.neighborContext?.windows.flatMap((window) => window.events) ?? []) {
+      unique.set(event.publicationId, event);
+    }
+    return [...unique.values()].sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
+  }, [settledAnalysis]);
+  const contextViews = contextEvents.length > 0 ? "views" as const : undefined;
   const [highlight,setHighlight] = useState<string>();
+  const chartEvidenceIds = useMemo(() => {
+    const selected = markers.find((marker) => marker.id === highlight);
+    if (!selected) return new Set<string>();
+    const ids = [selected.from, selected.to].map((at) => nearestSnapshot(rows, new Date(at).toISOString())?.snapshotId);
+    return new Set(ids.filter((id): id is string => Boolean(id)));
+  }, [highlight, markers, rows]);
   const charts = useRef<HTMLDivElement>(null);
   const showSignal = useCallback((id:string) => {
     setHighlight(id);
@@ -323,17 +345,21 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
       </Suspense>
     ) : null}
     <div ref={charts} data-testid="publication-chart-stack" className="grid scroll-mt-4 gap-4">
+      {markers.length ? <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs" aria-label="Обозначения графиков">
+        {markers.some((marker) => marker.tone === "priority") ? <span><span className="text-destructive font-bold">●</span> Исходный сигнал · приоритетный</span> : null}
+        {markers.some((marker) => marker.tone === "review") ? <span><span className="text-[var(--chart-3)] font-bold">●</span> Исходный сигнал · проверка</span> : null}
+      </div> : null}
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Накопление {phrase}
             <MethodNote title={`Накопление ${phrase}`}>
-              Линии построены по сохранённым изменениям метрик и контрольным снимкам. Одинаковые результаты опросов обычно не сохраняются, поэтому расстояние между точками не показывает время работы или простоя сборщика. Ромбами отмечены границы признаков анализа, полупрозрачной полосой с символом — их интервалы; остальные точки читаются по подсказке и по таблице ниже. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+              Точки — сохранённые замеры. Полоса — интервалы сигналов; ромбы — границы выбранного сигнала. Новые публикации и их точное время показаны в строках анализа. Интервал между точками не означает простой сборщика.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} highlight={highlight} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={chartEvidenceIds} gaps={visibleGaps} markers={markers} preferredDefault={contextViews} highlight={highlight} />
         </CardContent>
       </Card>
       <Card>
@@ -341,12 +367,12 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Прирост между сохранёнными точками
             <MethodNote title="Прирост между сохранёнными точками">
-              Сколько новых {phrase} появилось между соседними сохранёнными изменениями или контрольными снимками. Это не обязательно прирост за один опрос: одинаковые результаты между точками обычно не сохраняются. Столбец с обводкой отмечает границу сигнала, отрицательный столбец — исправление источника. В режиме 1:1 используется общая шкала; «Авто» даёт каждой метрике свою шкалу — слева и справа — и показывает не больше двух сразу.
+              Столбец — разница сохранённых замеров, иногда нескольких опросов. Обводка — граница выбранного сигнала. Новые посты показаны в строках анализа.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={evidenceIds} gaps={visibleGaps} markers={markers} highlight={highlight} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={chartEvidenceIds} gaps={visibleGaps} markers={markers} preferredDefault={contextViews} highlight={highlight} />
         </CardContent>
       </Card>
     </div>
@@ -357,7 +383,7 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
           <b className="text-foreground flex items-center gap-1.5 text-sm">
             Масштаб по времени
             <MethodNote title="Масштаб по времени">
-              Двигайте левую и правую границы. В выбранном диапазоне график показывает не более 144 равномерно распределённых сохранённых точек; при приближении детализация возвращается. Красным отмечены только подтверждённые разрывы в журнале успешных циклов аккаунта, а не длинные интервалы без изменения метрик. Близкие разрывы на общем масштабе визуально объединяются; при приближении видны их реальные границы.
+              Двигайте границы для детализации. Красное — подтверждённые пропуски сбора. Длинный интервал между точками сам по себе не означает простой.
             </MethodNote>
           </b>
           <span className="tabular">{rows.length ? `${shortDate(rows[start]!.observedAt)} — ${shortDate(rows[end]!.observedAt)} · ${rangePoints} сохранённых точек` : "Нет сохранённых точек"}</span>
@@ -379,26 +405,31 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
           }}
           getAriaLabel={(index) => (index === 0 ? "Начало диапазона" : "Конец диапазона")}
         />
-        <div className="grid gap-2">
-          <p data-testid="sparse-history-note" className="text-muted-foreground text-sm">Графики показывают сохранённые изменения метрик и контрольные снимки. Опросы без изменений обычно не записываются, поэтому длинный интервал между точками сам по себе не означает, что сборщик не работал.</p>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span data-testid="sparse-history-note" className="text-muted-foreground">● Изменения + контроль</span>
           {visibleGaps.length
-            ? <p data-testid="collector-gap-summary" className="text-destructive text-sm font-medium">Подтверждённые пропуски сбора в выбранном диапазоне: {visibleGaps.length}, суммарно {duration(missingSeconds)}. Они отмечены красным; близкие пропуски на текущем масштабе объединяются в общий блок.{coverageComplete ? "" : " Часть диапазона вне журнала: в ней наличие пропусков неизвестно."}</p>
+            ? <span data-testid="collector-gap-summary" className="bg-destructive/10 text-destructive inline-flex items-center rounded-full px-2.5 py-1 font-medium tabular-nums">● Пропуски {visibleGaps.length} · {duration(missingSeconds)}</span>
             : coverageComplete
-              ? <p data-testid="collector-gap-summary" className="text-muted-foreground text-sm">По журналу циклов аккаунта подтверждённых пропусков в выбранном диапазоне нет.</p>
-              : <p data-testid="collector-gap-summary" className="text-muted-foreground text-sm">Журнал циклов покрывает выбранный диапазон не полностью — в непокрытой части наличие пропусков неизвестно.</p>}
-          <p className="text-muted-foreground text-xs">В журнале от первой показанной точки до текущего среза: успешных циклов — {collectorCoverage.successfulPolls}, с ошибкой — {collectorCoverage.failedPolls}. Ожидаемый шаг — {duration(collectorCoverage.expectedIntervalSeconds)}.</p>
+              ? <span data-testid="collector-gap-summary" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 inline-flex items-center rounded-full px-2.5 py-1">● Без пропусков</span>
+              : <span data-testid="collector-gap-summary" className="bg-muted text-muted-foreground inline-flex items-center rounded-full px-2.5 py-1">◌ Неполный журнал</span>}
+          <span className="text-muted-foreground tabular-nums">Циклы {collectorCoverage.successfulPolls.toLocaleString("ru-RU")} / {collectorCoverage.failedPolls.toLocaleString("ru-RU")} ошибок</span>
+          {!coverageComplete && visibleGaps.length ? <span className="text-muted-foreground">◌ Часть вне журнала</span> : null}
           {fullState === "loading" ? <p data-testid="full-history-loading" className="text-muted-foreground text-sm" role="status">Загружаем все сохранённые точки…</p> : null}
           {fullState === "failed" ? <p className="text-destructive text-sm" role="status">Не удалось загрузить все точки — график показывает выборку по всему периоду.</p> : null}
-          {rangePoints > displayed.length ? <Badge variant="secondary" className="w-fit rounded-full font-semibold">Не отображено точек: {rangePoints-displayed.length}</Badge> : null}
+          {rangePoints > displayed.length ? <Badge variant="secondary" className="w-fit rounded-full font-semibold">+{rangePoints-displayed.length} точек при приближении</Badge> : null}
         </div>
       </CardContent>
     </Card>
 
     <Card className="mt-4 overflow-hidden">
       <CardHeader>
-        <CardTitle as="h2" className="font-heading text-lg">История сохранённых точек</CardTitle>
-        <p data-testid="saved-history-note" className="text-muted-foreground mt-2 text-sm">Каждая строка — изменение метрик или контрольный снимок. Интервал до предыдущей строки не равен простою сборщика: между строками могли быть успешные опросы с теми же значениями.</p>
-        {fullHistoryHref && total > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {total} сохранённых точек · <Link className="text-foreground underline underline-offset-2" href={fullHistoryHref}>загрузить всю историю</Link></p> : rows.length > tableRows.length ? <p className="text-muted-foreground mt-2 text-sm">Показаны последние {tableRows.length} из {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>показать всю историю</button></p> : rows.length > 100 ? <p className="text-muted-foreground mt-2 text-sm">Показаны все {rows.length} сохранённых точек · <button type="button" className="bg-transparent text-foreground underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>свернуть историю</button></p> : null}
+        <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">История сохранённых точек
+          <MethodNote title="История сохранённых точек">Строки — изменения и контрольные снимки. Между ними могли быть опросы с теми же значениями.</MethodNote>
+        </CardTitle>
+        <div data-testid="saved-history-note" className="text-muted-foreground mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="tabular-nums">{tableRows.length} / {Math.max(total, rows.length)} точек</span>
+          {fullHistoryHref && total > tableRows.length ? <Link className="text-foreground font-medium underline underline-offset-2" href={fullHistoryHref} aria-label="загрузить всю историю">Вся история →</Link> : rows.length > tableRows.length ? <button type="button" className="bg-transparent text-foreground font-medium underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>Показать все →</button> : rows.length > 100 ? <button type="button" aria-label="свернуть историю" className="bg-transparent text-foreground font-medium underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>Свернуть</button> : null}
+        </div>
       </CardHeader>
       <CardContent>
         {/* relative обязателен: скрытые для глаз подписи (sr-only) — абсолютные, и

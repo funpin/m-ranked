@@ -1,0 +1,111 @@
+{
+  "max": {
+    "accounts": 12,
+    "publications": 351,
+    "publications_without_points": 0,
+    "effective_rows": 21035,
+    "eligible_intervals": 10192,
+    "excluded_segments": {
+      "age_or_duration": 10462,
+      "multiple_events": 29,
+      "negative_net": 1
+    },
+    "event_intervals": 1048,
+    "event_accounts": 9,
+    "event_distance_1_to_6_after_20pct": 189,
+    "quiet_intervals": 6014,
+    "matched_event_quiet_pairs": 188,
+    "matched_accounts": 9,
+    "matched_new_publications": 68,
+    "matched_old_publications": 85,
+    "median_event_delta_matched": 3.0,
+    "median_quiet_delta_matched": 1.0,
+    "median_pair_rate_difference_per_hour": 2.617,
+    "median_event_level_rate_difference_per_hour": 2.58,
+    "account_median_rate_difference_range_per_hour": [
+      0.11,
+      15.719
+    ],
+    "account_median_difference_positive": 9,
+    "account_median_difference_nonpositive": 0,
+    "strict_sensitivity": {
+      "matched_pairs": 31,
+      "matched_accounts": 9,
+      "account_median_positive": 9,
+      "median_pair_rate_difference_per_hour": 5.727
+    },
+    "rutube_event_windows_2_to_12_hours": null,
+    "rutube_event_window_accounts_2_to_12_hours": null
+  },
+  "rutube": {
+    "accounts": 12,
+    "publications": 194,
+    "publications_without_points": 2,
+    "effective_rows": 984,
+    "eligible_intervals": 96,
+    "excluded_segments": {
+      "age_or_duration": 693,
+      "quality_or_uncertain": 1
+    },
+    "event_intervals": 0,
+    "event_accounts": 0,
+    "event_distance_1_to_6_after_20pct": 0,
+    "quiet_intervals": 82,
+    "matched_event_quiet_pairs": 0,
+    "matched_accounts": 0,
+    "matched_new_publications": 0,
+    "matched_old_publications": 0,
+    "median_event_delta_matched": null,
+    "median_quiet_delta_matched": null,
+    "median_pair_rate_difference_per_hour": null,
+    "median_event_level_rate_difference_per_hour": null,
+    "account_median_rate_difference_range_per_hour": null,
+    "account_median_difference_positive": 0,
+    "account_median_difference_nonpositive": 0,
+    "strict_sensitivity": {
+      "matched_pairs": 0,
+      "matched_accounts": 0,
+      "account_median_positive": 0,
+      "median_pair_rate_difference_per_hour": null
+    },
+    "rutube_event_windows_2_to_12_hours": 21,
+    "rutube_event_window_accounts_2_to_12_hours": 5
+  },
+  "vk": {
+    "accounts": 12,
+    "publications": 317,
+    "publications_without_points": 1,
+    "effective_rows": 21887,
+    "eligible_intervals": 13667,
+    "excluded_segments": {
+      "age_or_duration": 7895,
+      "multiple_events": 8
+    },
+    "event_intervals": 819,
+    "event_accounts": 7,
+    "event_distance_1_to_6_after_20pct": 137,
+    "quiet_intervals": 10245,
+    "matched_event_quiet_pairs": 136,
+    "matched_accounts": 7,
+    "matched_new_publications": 44,
+    "matched_old_publications": 58,
+    "median_event_delta_matched": 3.0,
+    "median_quiet_delta_matched": 2.0,
+    "median_pair_rate_difference_per_hour": -0.727,
+    "median_event_level_rate_difference_per_hour": -0.913,
+    "account_median_rate_difference_range_per_hour": [
+      -2.802,
+      3.639
+    ],
+    "account_median_difference_positive": 2,
+    "account_median_difference_nonpositive": 5,
+    "strict_sensitivity": {
+      "matched_pairs": 34,
+      "matched_accounts": 7,
+      "account_median_positive": 4,
+      "median_pair_rate_difference_per_hour": 0.98
+    },
+    "rutube_event_windows_2_to_12_hours": null,
+    "rutube_event_window_accounts_2_to_12_hours": null
+  }
+}

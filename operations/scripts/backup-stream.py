@@ -26,8 +26,12 @@ with path.open('xb') as output:
         if written + len(block) > maximum:
             raise SystemExit(f'dump stopped at the size cap: {maximum} bytes')
         usage = shutil.disk_usage(path.parent)
-        if usage.free < max(reserve, usage.total // 5) + len(block):
-            raise SystemExit('dump stopped before consuming reserved disk space')
+        required = max(reserve, usage.total // 5) + len(block)
+        if usage.free < required:
+            raise SystemExit(
+                'dump stopped before consuming reserved disk space: '
+                f'written={written} free={usage.free} required={required}'
+            )
         output.write(block)
         written += len(block)
         if rate:

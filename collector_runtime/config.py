@@ -4,6 +4,9 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import UUID
+
+from collector_target.poll_receipts import parse_account_ids
 
 try:
     from dotenv import load_dotenv
@@ -101,6 +104,7 @@ class Settings:
     collector_refresh_limit: int = 100
     collector_refresh_scan_limit: int = 400
     publication_snapshot_heartbeat_hours: int = 24
+    publication_poll_receipt_account_ids: tuple[UUID, ...] = ()
     collector_schedule_mode: str = "phased"
     collector_phase_max_wait_seconds: int = 900
     collector_phase_retry_seconds: float = 2.0
@@ -322,6 +326,10 @@ class Settings:
             ),
             publication_snapshot_heartbeat_hours=_int(
                 "PUBLICATION_SNAPSHOT_HEARTBEAT_HOURS", 24
+            ),
+            publication_poll_receipt_account_ids=parse_account_ids(
+                os.getenv("PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS", ""),
+                name="PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS",
             ),
             collector_schedule_mode=(
                 os.getenv("COLLECTOR_SCHEDULE_MODE", "phased").strip().lower()

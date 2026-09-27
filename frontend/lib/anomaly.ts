@@ -1,9 +1,11 @@
 import { duration } from "./format";
 import type { AccountAnomalyLevels, AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "./types";
+import type { NeighborContextLoad } from "./neighbor-context-loader";
 
 /** Результат загрузки анализа. Сбой — не отсутствие признаков: карточка
  *  честно скажет, что результата нет. */
-export type AnalysisLoad = { value: PublicationAnomalyAnalysis | null; failed: boolean };
+export type AnalysisLoad = { value: PublicationAnomalyAnalysis | null; failed: boolean;
+  neighborContext?: NeighborContextLoad | null; neighborContextFailed?: boolean };
 
 /** Уровни постов аккаунта по id публикации; null — ответ анализа не пришёл. */
 export type AccountLevel = AccountAnomalyLevels["items"][number];
@@ -86,13 +88,21 @@ export function boundarySnapshotIds(analysis: PublicationAnomalyAnalysis | null,
   return ids;
 }
 
-export type SignalMarker = { id: string; pattern: number; title: string; from: number; to: number };
+export type SignalMarker = {
+  id: string; pattern: number; title: string; from: number; to: number;
+  tone: "review" | "priority";
+};
 
+/** Marker reflects the saved detector only. M2 is descriptive and must not
+ * recolor a signal as confirmed or excluded based on its contrast sign. */
 export function signalMarkers(analysis: PublicationAnomalyAnalysis | null): SignalMarker[] {
-  return (analysis?.signals ?? []).map((signal, index) => ({
-    id: markerId(signal, index), pattern: signal.pattern, title: signal.title,
-    from: Date.parse(signal.startAt), to: Date.parse(signal.endAt),
-  }));
+  return (analysis?.signals ?? []).map((signal, index) => {
+    return {
+      id: markerId(signal, index), pattern: signal.pattern, title: signal.title,
+      from: Date.parse(signal.startAt), to: Date.parse(signal.endAt),
+      tone: analysis?.level === 3 ? "priority" : "review",
+    };
+  });
 }
 
 export function markerId(signal: AnomalySignal, index: number) {

@@ -13,11 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MethodNote } from "@/components/method-note";
+import { TimingHeatmap } from "./timing-heatmap";
 import { cn } from "@/lib/utils";
+import { STICKY_CONTROL_SURFACE_CLASS } from "@/components/filter-toolbar";
 import {
   DASHBOARD_PLATFORMS, HIGHLIGHT_COLORS, LEVEL_COLORS, LEVEL_NAMES, MAX_HIGHLIGHTS, METRICS, NETWORKS, PLATFORM_NAMES,
-  WEEKDAYS, formatCompact, formatInteger, formatPercent, formatValue, institutionRows, platformSummary, sortRows,
-  timingGrid, type Dashboard, type DashboardPeriod, type DashboardPlatform, type InstitutionRow, type Metric, type Network,
+  formatCompact, formatInteger, formatPercent, formatValue, institutionRows, platformSummary, sortRows,
+  type Dashboard, type DashboardPeriod, type DashboardPlatform, type InstitutionRow, type Metric, type Network,
 } from "@/lib/compare-dashboard";
 
 function ChartSkeleton({ height = 300 }: { height?: number }) {
@@ -49,7 +51,7 @@ const SCATTER_PRESETS: { id: string; label: string; x: Metric; y: Metric }[] = [
 ];
 const SECTIONS = [
   { id: "summary", label: "Сводка", icon: LayoutGrid },
-  { id: "ranking", label: "Рейтинг", icon: ChartBar },
+  { id: "ranking", label: "По показателю", icon: ChartBar },
   { id: "map", label: "Карта вузов", icon: ChartScatter },
   { id: "growth", label: "Накопление", icon: TrendingUp },
   { id: "anomalies", label: "Аномалии", icon: ShieldAlert },
@@ -62,7 +64,7 @@ function Section({ id, title, description, icon: Icon, children }: {
   id: string; title: string; description?: string; icon: typeof ChartBar; children: ReactNode;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="min-w-0 scroll-mt-28">
+    <section id={id} aria-labelledby={`${id}-title`} className="min-w-0 scroll-mt-48">
       <div className="mb-3 flex items-center gap-2">
         <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-md"><Icon className="size-4" aria-hidden="true" /></span>
         <div>
@@ -183,46 +185,6 @@ function HighlightPicker({ rows, highlights, onToggle, onClear }: {
   );
 }
 
-/** Тепловая карта «день недели × час выхода»: число публикаций, в подсказке —
- *  медиана просмотров за сутки. Сетка из блоков, без графической библиотеки. */
-function TimingHeatmap({ data, platform }: { data: Dashboard; platform: DashboardPlatform }) {
-  const grid = useMemo(() => timingGrid(data, platform), [data, platform]);
-  const peak = Math.max(1, ...grid.flat().map((cell) => cell.posts));
-  return (
-    // На узком экране сетка прокручивается: область фокусируется с клавиатуры.
-    <div className="overflow-x-auto focus-visible:ring-ring/50 rounded-md focus-visible:ring-[3px] focus-visible:outline-none"
-      data-testid="timing-heatmap" tabIndex={0} role="region" aria-label="Публикации по дню недели и часу выхода">
-      <div className="grid min-w-[560px] gap-[3px]" style={{ gridTemplateColumns: "28px repeat(24, minmax(0, 1fr))" }} role="table" aria-label="Публикации по дню недели и часу">
-        <span />
-        {Array.from({ length: 24 }, (_, hour) => (
-          <span key={hour} className="text-muted-foreground text-center text-[10px]">{hour % 3 === 0 ? hour : ""}</span>
-        ))}
-        {grid.map((row, weekday) => (
-          <div key={weekday} className="contents" role="row">
-            <span className="text-muted-foreground self-center text-[11px]" role="rowheader">{WEEKDAYS[weekday]}</span>
-            {row.map((cell, hour) => {
-              const intensity = cell.posts / peak;
-              return (
-                <span key={hour} role="cell"
-                  title={`${WEEKDAYS[weekday]}, ${String(hour).padStart(2, "0")}:00 — ${formatInteger(cell.posts)} публ., медиана просмотров за 24 ч: ${formatInteger(cell.views24)}`}
-                  className="aspect-square rounded-[3px]"
-                  style={{ background: cell.posts ? `color-mix(in oklch, var(--chart-2) ${Math.round(12 + intensity * 88)}%, transparent)` : "var(--muted)" }} />
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <div className="text-muted-foreground mt-2 flex items-center gap-2 text-[11px]">
-        меньше
-        {[0.12, 0.35, 0.6, 0.85, 1].map((step) => (
-          <span key={step} className="size-3 rounded-[3px]" style={{ background: `color-mix(in oklch, var(--chart-2) ${Math.round(step * 100)}%, transparent)` }} />
-        ))}
-        больше публикаций
-      </div>
-    </div>
-  );
-}
-
 /** Полоса уровней анализа в строке таблицы: доли 0–3 одной строкой. */
 function LevelBar({ levels }: { levels: readonly number[] }) {
   const total = levels.reduce((sum, value) => sum + value, 0);
@@ -263,8 +225,11 @@ function InstitutionTable({ rows, highlights, onToggle }: {
     return sortRows(rows, sort.key, sort.descending);
   }, [rows, sort]);
   return (
-    <div className="overflow-x-auto" data-testid="compare-table">
-      <Table>
+    <div className="min-w-0" data-testid="compare-table">
+      <Table className="min-w-[1517px] table-fixed">
+        <colgroup>
+          {[44, 285, 118, 90, 125, 145, 140, 145, 150, 140, 135].map((width, index) => <col key={index} style={{ width }} />)}
+        </colgroup>
         <TableHeader>
           <TableRow>
             <TableHead className="w-10">#</TableHead>
@@ -285,11 +250,11 @@ function InstitutionTable({ rows, highlights, onToggle }: {
             return (
               <TableRow key={row.id} data-highlighted={color ? "true" : undefined} className={cn(color && "bg-muted/60")}>
                 <TableCell className="text-muted-foreground tabular-nums">{index + 1}</TableCell>
-                <TableCell className="max-w-[260px]">
-                  <button type="button" onClick={() => onToggle(row.id)} className="flex items-center gap-2 text-left"
+                <TableCell className="max-w-[285px]">
+                  <button type="button" onClick={() => onToggle(row.id)} className="flex w-full min-w-0 items-center gap-2 text-left"
                     title={color ? "Снять выделение" : "Выделить на графиках"}>
                     <span className="size-2.5 shrink-0 rounded-full border" style={{ background: color ?? "transparent" }} aria-hidden="true" />
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1" title={row.fullName}>
                       <span className="block truncate font-medium">{row.name}</span>
                       {row.fullName !== row.name ? <span className="text-muted-foreground block truncate text-xs">{row.fullName}</span> : null}
                     </span>
@@ -318,12 +283,15 @@ function InstitutionTable({ rows, highlights, onToggle }: {
   );
 }
 
-const SHORT_PLATFORM_NAMES: Partial<Record<DashboardPlatform, string>> = { all: "Все", vk: "ВК" };
+const SHORT_PLATFORM_NAMES: Record<DashboardPlatform, string> = {
+  all: "Все", telegram: "TG", vk: "ВК", max: "MAX", rutube: "RT",
+};
 
 export function CompareDashboard({ data, period, initialPlatform, initialHighlights }: {
   data: Dashboard; period: DashboardPeriod; initialPlatform: DashboardPlatform; initialHighlights: readonly string[];
 }) {
   const [platform, setPlatform] = useState(initialPlatform);
+  const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("summary");
   const [rankingMetric, setRankingMetric] = useState<Metric>("views24");
   const [scatter, setScatter] = useState(SCATTER_PRESETS[0]!.id);
   const [curveField, setCurveField] = useState<"views" | "reactions">("views");
@@ -351,6 +319,40 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     window.history.replaceState(window.history.state, "", url);
   }, [platform, highlightIds]);
 
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      // The last section which passed the sticky controls owns the active tab.
+      // This also works for long sections and at the very bottom of the page.
+      let current: (typeof SECTIONS)[number]["id"] = "summary";
+      for (const section of SECTIONS) {
+        const node = document.getElementById(section.id);
+        if (node && node.getBoundingClientRect().top <= 210) current = section.id;
+      }
+      setActiveSection(current);
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(update); };
+    update();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, []);
+
+  useEffect(() => {
+    const nav = document.querySelector<HTMLElement>('[data-testid="compare-section-nav"]');
+    const link = nav?.querySelector<HTMLElement>(`[href="#${activeSection}"]`);
+    if (!nav || !link) return;
+    const left = link.offsetLeft - nav.offsetLeft;
+    if (left < nav.scrollLeft || left + link.offsetWidth > nav.scrollLeft + nav.clientWidth) {
+      nav.scrollTo({ left: left - 8, behavior: "smooth" });
+    }
+  }, [activeSection]);
+
   const toggle = useCallback((id: string) => setHighlightIds((current) =>
     current.includes(id) ? current.filter((item) => item !== id)
       : current.length >= MAX_HIGHLIGHTS ? current : [...current, id]), []);
@@ -371,13 +373,13 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     // min-w-0: секции — элементы сетки, и без него широкая таблица вузов
     // растягивала колонку, а с ней всю страницу за край окна.
     <div className="grid min-w-0 grid-cols-1 gap-8" data-testid="compare-dashboard">
-      <div className="bg-background/85 supports-[backdrop-filter]:bg-background/70 sticky top-14 z-20 -mx-4 border-b px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className={cn("rounded-xl border px-3 py-3", STICKY_CONTROL_SURFACE_CLASS)}>
+        <div className="flex flex-wrap items-center gap-3 md:flex-nowrap md:overflow-x-auto">
           {/* Лёгкий список вкладок вместо компонента Tabs: переключение не
               меняет панель под ним, а меняет разрез данных, и библиотечная
               машинерия панелей здесь была бы лишним весом первой загрузки. */}
           <div role="tablist" aria-label="Соцсеть" data-testid="platform-tabs"
-            className="bg-muted text-muted-foreground grid h-8 w-full grid-cols-4 items-center rounded-lg p-[3px] sm:inline-flex sm:w-auto"
+            className="bg-muted text-muted-foreground grid h-8 w-full grid-cols-5 items-center rounded-lg p-[3px] sm:inline-flex sm:w-auto"
             onKeyDown={(event) => {
               if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
               const index = DASHBOARD_PLATFORMS.indexOf(platform);
@@ -390,10 +392,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
                 tabIndex={platform === value ? 0 : -1} onClick={() => changePlatform(value)}
                 className={cn("rounded-md px-2 py-0.5 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
                   platform === value ? "bg-background text-foreground shadow-sm" : "hover:text-foreground")}>
-                {/* На телефоне четыре полных названия не помещаются в строку. */}
-                {SHORT_PLATFORM_NAMES[value]
-                  ? <><span className="sm:hidden">{SHORT_PLATFORM_NAMES[value]}</span><span className="max-sm:hidden">{PLATFORM_NAMES[value]}</span></>
-                  : PLATFORM_NAMES[value]}
+                <span title={PLATFORM_NAMES[value]}>{SHORT_PLATFORM_NAMES[value]}</span>
               </button>
             ))}
           </div>
@@ -407,9 +406,11 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
           </nav>
           <HighlightPicker rows={rows} highlights={highlights} onToggle={toggle} onClear={() => setHighlightIds([])} />
         </div>
-        <nav aria-label="Разделы страницы" className="mt-2 hidden flex-wrap gap-1 md:flex">
+        <nav aria-label="Разделы страницы" data-testid="compare-section-nav" className="mt-2 hidden gap-1 whitespace-nowrap md:flex md:flex-nowrap md:overflow-x-auto">
           {SECTIONS.map(({ id, label, icon: Icon }) => (
-            <a key={id} href={`#${id}`} className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs">
+            <a key={id} href={`#${id}`} aria-current={activeSection === id ? "location" : undefined}
+              className={cn("hover:bg-muted hover:text-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors",
+                activeSection === id ? "bg-muted text-foreground font-medium" : "text-muted-foreground")}>
               <Icon className="size-3.5" aria-hidden="true" />{label}
             </a>
           ))}
@@ -429,7 +430,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         </div>
       </Section>
 
-      <Section id="ranking" title="Рейтинг вузов" icon={ChartBar} description={`Все ${activeRows.length} вузов на одной шкале, без ограничения по числу.`}>
+      <Section id="ranking" title="Вузы по показателю" icon={ChartBar} description={`${activeRows.length} участников · одна шкала`}>
         <ChartCard title={METRICS[rankingMetric].label} note={METRICS[rankingMetric].hint} testId="ranking-card"
           action={<select value={rankingMetric} onChange={(event) => setRankingMetric(event.target.value as Metric)} aria-label="Мера рейтинга"
             className="border-input bg-transparent dark:bg-input/30 h-8 rounded-md border px-2 text-sm shadow-xs focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none">
@@ -491,7 +492,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         </div>
         <div className="mt-4">
           <ChartCard title="Доля постов с аномалиями по вузам" testId="anomaly-ranking-card"
-            description={`${anomalyRows.length} вузов, у которых проанализировано хотя бы 5 постов`}
+            description={`${anomalyRows.length} участников с ≥5 проанализированными постами`}
             note={METRICS.anomalyShare.hint}>
             <RankingChart rows={anomalyRows} metric="anomalyShare" highlights={highlights} />
           </ChartCard>

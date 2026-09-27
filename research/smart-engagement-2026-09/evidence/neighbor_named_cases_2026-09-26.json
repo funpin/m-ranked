@@ -1,0 +1,169 @@
+[
+  {
+    "account": "513a6138-6350-5c1e-afe8-47e4253c7266",
+    "arm": "hash_sample",
+    "new_post_id": "76346802-c8c0-5618-92fc-5dad9b3ba088",
+    "new_published_utc": "2026-09-14T02:56:01+00:00",
+    "old_intervals": [
+      {
+        "old_post_id": "5d2b388f-406a-524c-b13c-5d47edb1ea27",
+        "old_published_utc": "2026-09-12T03:05:10+00:00",
+        "distance": 1,
+        "old_age_hours": 47.6,
+        "from_utc": "2026-09-14T02:41:57.414979+00:00",
+        "to_utc": "2026-09-14T03:09:17.269410+00:00",
+        "old_views_before": 734,
+        "old_views_after": 770,
+        "delta_displayed_views": 36,
+        "new_views_by_old_end": 154,
+        "quality": "rounded",
+        "corrected_start": false,
+        "corrected_end": true,
+        "old_external_id": "m:15235",
+        "old_public_url": "https://t.me/reshetnevuniversity/15235"
+      },
+      {
+        "old_post_id": "1443a026-6df2-5ec2-97e3-b6bdb5ac1fdc",
+        "old_published_utc": "2026-09-11T03:00:05+00:00",
+        "distance": 3,
+        "old_age_hours": 70.5,
+        "from_utc": "2026-09-14T01:32:58.309697+00:00",
+        "to_utc": "2026-09-14T03:30:01.400576+00:00",
+        "old_views_before": 944,
+        "old_views_after": 967,
+        "delta_displayed_views": 23,
+        "new_views_by_old_end": 235,
+        "quality": "rounded",
+        "corrected_start": false,
+        "corrected_end": true,
+        "old_external_id": "m:15222",
+        "old_public_url": "https://t.me/reshetnevuniversity/15222"
+      }
+    ],
+    "old_post_count": 2,
+    "max_old_delta": 36,
+    "institution": "Университет Решетнёва",
+    "new_external_id": "m:15237",
+    "new_public_url": "https://t.me/reshetnevuniversity/15237"
+  },
+  {
+    "account": "7bed0c82-cf7b-523a-95b7-5b616bb8cd7b",
+    "arm": "hash_sample",
+    "new_post_id": "76332340-3038-5a3e-b9fb-717dc397e00b",
+    "new_published_utc": "2026-09-14T06:43:01+00:00",
+    "old_intervals": [
+      {
+        "old_post_id": "b93f121c-21b6-5d4f-b472-0ce7ed5c744e",
+        "old_published_utc": "2026-09-12T08:01:42+00:00",
+        "distance": 2,
+        "old_age_hours": 46.3,
+        "from_utc": "2026-09-14T06:19:58.121843+00:00",
+        "to_utc": "2026-09-14T06:58:36.414805+00:00",
+        "old_views_before": 1730,
+        "old_views_after": 1770,
+        "delta_displayed_views": 40,
+        "new_views_by_old_end": 373,
+        "quality": "rounded",
+        "corrected_start": false,
+        "corrected_end": true,
+        "old_external_id": "m:6286",
+        "old_public_url": "https://t.me/chuvsu21/6286"
+      }
+    ],
+    "old_post_count": 1,
+    "max_old_delta": 40,
+    "institution": "ЧувГУ",
+    "new_external_id": "m:6288",
+    "new_public_url": "https://t.me/chuvsu21/6288"
+  },
+  {
+    "account": "7bed0c82-cf7b-523a-95b7-5b616bb8cd7b",
+    "arm": "hash_sample",
+    "new_post_id": "b5d6b495-5c07-57e8-a89d-3f0258e68bd1",
+    "new_published_utc": "2026-09-14T08:18:01+00:00",
+    "old_intervals": [
+      {
+        "old_post_id": "b93f121c-21b6-5d4f-b472-0ce7ed5c744e",
+        "old_published_utc": "2026-09-12T08:01:42+00:00",
+        "distance": 3,
+        "old_age_hours": 48.2,
+        "from_utc": "2026-09-14T08:11:46.284582+00:00",
+        "to_utc": "2026-09-14T08:26:14.783026+00:00",
+        "old_views_before": 1830,
+        "old_views_after": 1860,
+        "delta_displayed_views": 30,
+        "new_views_by_old_end": 292,
+        "quality": "rounded",
+        "corrected_start": false,
+        "corrected_end": true,
+        "old_external_id": "m:6286",
+        "old_public_url": "https://t.me/chuvsu21/6286"
+      }
+    ],
+    "old_post_count": 1,
+    "max_old_delta": 30,
+    "institution": "ЧувГУ",
+    "new_external_id": "m:6289",
+    "new_public_url": "https://t.me/chuvsu21/6289"
+  },
+  {
+    "account": "7bed0c82-cf7b-523a-95b7-5b616bb8cd7b",
+    "arm": "hash_sample",
+    "new_post_id": "46078e00-c190-58b6-8c7e-8b7f307b32eb",
+    "new_published_utc": "2026-09-14T12:34:27+00:00",
+    "old_intervals": [
+      {
+        "old_post_id": "b93f121c-21b6-5d4f-b472-0ce7ed5c744e",
+        "old_published_utc": "2026-09-12T08:01:42+00:00",
+        "distance": 4,
+        "old_age_hours": 52.2,
+        "from_utc": "2026-09-14T12:12:26.916839+00:00",
+        "to_utc": "2026-09-14T12:42:24.867574+00:00",
+        "old_views_before": 1960,
+        "old_views_after": 1980,
+        "delta_displayed_views": 20,
+        "new_views_by_old_end": 265,
+        "quality": "rounded",
+        "corrected_start": false,
+        "corrected_end": true,
+        "old_external_id": "m:6286",
+        "old_public_url": "https://t.me/chuvsu21/6286"
+      }
+    ],
+    "old_post_count": 1,
+    "max_old_delta": 20,
+    "institution": "ЧувГУ",
+    "new_external_id": "m:6291",
+    "new_public_url": "https://t.me/chuvsu21/6291"
+  },
+  {
+    "account": "7bed0c82-cf7b-523a-95b7-5b616bb8cd7b",
+    "arm": "hash_sample",
+    "new_post_id": "cd437223-cf75-5f19-87e7-60827e9b4655",
+    "new_published_utc": "2026-09-15T06:43:01+00:00",
+    "old_intervals": [
+      {
+        "old_post_id": "bd57e8be-96da-57de-9959-30cc17228ade",
+        "old_published_utc": "2026-09-13T13:04:09+00:00",
+        "distance": 4,
+        "old_age_hours": 41.4,
+        "from_utc": "2026-09-15T06:27:10.428494+00:00",
+        "to_utc": "2026-09-15T06:57:07.989738+00:00",
+        "old_views_before": 1950,
+        "old_views_after": 1970,
+        "delta_displayed_views": 20,
+        "new_views_by_old_end": 355,
+        "quality": "rounded",
+        "corrected_start": false,
+        "corrected_end": true,
+        "old_external_id": "m:6287",
+        "old_public_url": "https://t.me/chuvsu21/6287"
+      }
+    ],
+    "old_post_count": 1,
+    "max_old_delta": 20,
+    "institution": "ЧувГУ",
+    "new_external_id": "m:6292",
+    "new_public_url": "https://t.me/chuvsu21/6292"
+  }
+]

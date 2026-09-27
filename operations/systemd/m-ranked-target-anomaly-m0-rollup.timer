@@ -1,0 +1,12 @@
+[Unit]
+Description=Build bounded M0 receipt reference daily
+
+[Timer]
+OnCalendar=*-*-* 05:15:00 Europe/Moscow
+RandomizedDelaySec=45min
+Persistent=true
+AccuracySec=1min
+Unit=m-ranked-target-anomaly-m0-rollup.service
+
+[Install]
+WantedBy=timers.target

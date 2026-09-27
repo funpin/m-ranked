@@ -1,35 +1,36 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis, usePlotArea, useXAxisScale } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
-import { axisNumber, duration, legacyDate } from "@/lib/format";
+import { axisNumber, legacyDate } from "@/lib/format";
 import { elapsedSincePublication } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
+import { PatternIcon } from "@/components/anomaly-icons";
+import { clusterPixelMarks, gapPresentation, mergePixelIntervals } from "@/lib/plot-density";
 import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 import type { SignalMarker } from "@/lib/anomaly";
-import { PatternIcon } from "@/components/anomaly-icons";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
 /** Больше этого числа столбцов прироста на экране уже не различить: при
  *  ширине графика около девятисот точек каждый столбец становится тоньше
  *  волоса, и картинка перестаёт читаться. */
 const MAX_BARS = 56;
-const GAP_MERGE_DISTANCE_PX = 2;
+const GAP_MERGE_DISTANCE_PX = 3;
 
 /** Draw confirmed collector gaps as subpaths of one SVG element.
  *
  * A noisy account can have hundreds of short gaps. Rendering each one as a
  * Recharts ReferenceArea created thousands of React/SVG nodes across the two
  * plots and made the whole page expensive to paint while scrolling. Gaps whose
- * visible separation is two pixels or less are merged at the current scale:
+ * visible separation is three pixels or less are merged at the current scale:
  * zooming in separates them again. The textual count and duration remain exact.
  * One path keeps the overlay at one DOM node per chart. */
 function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
   const scale = useXAxisScale();
   const plot = usePlotArea();
   const overlay = useMemo(() => {
-    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0 };
+    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0, mode: "bands" as const };
     const minX = plot.x;
     const maxX = plot.x + plot.width;
     const minY = plot.y;
@@ -43,48 +44,61 @@ function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
       if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return [];
       return [{ left, right }];
     }).sort((a,b) => a.left-b.left || a.right-b.right);
-    const blocks: {left:number;right:number}[] = [];
-    for (const range of projected) {
-      const previous = blocks.at(-1);
-      if (previous && range.left <= previous.right + GAP_MERGE_DISTANCE_PX) {
-        previous.right = Math.max(previous.right, range.right);
-      } else {
-        blocks.push({...range});
-      }
-    }
+    const blocks = mergePixelIntervals(projected, GAP_MERGE_DISTANCE_PX);
+    const mode = gapPresentation(blocks, plot.width);
     const path = blocks.map(({left,right}) =>
-      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${maxY.toFixed(2)}H${left.toFixed(2)}Z`,
+      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${(mode === "rail" ? minY + 4 : maxY).toFixed(2)}H${left.toFixed(2)}Z`,
     ).join("");
-    return {path,blocks:blocks.length};
+    return {path,blocks:blocks.length,mode};
   }, [gaps, plot, scale]);
-  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length}
-    d={overlay.path} fill="var(--destructive)" fillOpacity={0.13}
-    stroke="var(--destructive)" strokeOpacity={0.45} strokeWidth={1} pointerEvents="none" /> : null;
+  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length} data-gap-mode={overlay.mode}
+    d={overlay.path} fill="var(--destructive)" fillOpacity={overlay.mode === "rail" ? 0.8 : 0.11}
+    stroke="var(--destructive)" strokeOpacity={overlay.mode === "rail" ? 0 : 0.35} strokeWidth={1} pointerEvents="none" /> : null;
 }
 
-/** Интервалы признаков: полупрозрачная полоса под линиями и значок признака
- *  над ней. Полоса бледнее ромбов границ и под ними, поэтому ромб остаётся
- *  читаемой отметкой точки, а полоса — отметкой промежутка. Выбранный в
- *  карточке признак подсвечивается ярче и обводится пунктиром. */
+const SIGNAL_COLORS: Record<SignalMarker["tone"], string> = {
+  priority: "var(--destructive)",
+  review: "var(--chart-3)",
+};
+const SIGNAL_RANK: Record<SignalMarker["tone"], number> = {
+  priority: 3, review: 2,
+};
+
+/** Pattern glyphs are the primary marks. Nearby intervals share a mark at the
+ * current pixel scale; their exact identity stays in the title and flat list. */
 function SignalOverlay({ markers, highlight }: { markers: readonly SignalMarker[]; highlight?: string }) {
   const scale = useXAxisScale();
   const plot = usePlotArea();
   if (!scale || !plot || !markers.length) return null;
-  return <g className="signal-markers" pointerEvents="none">
-    {markers.map((marker) => {
+  const ranges = markers.flatMap((marker) => {
       const from = scale(marker.from), to = scale(marker.to);
-      if (from === undefined || to === undefined) return null;
+      if (from === undefined || to === undefined) return [];
       const left = Math.max(plot.x, Math.min(from, to));
       const right = Math.min(plot.x + plot.width, Math.max(from, to, Math.min(from, to) + 2));
-      if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return null;
-      const active = marker.id === highlight;
-      return <g key={marker.id} data-signal-marker={marker.pattern} data-highlighted={active || undefined}>
-        <rect x={left} y={plot.y} width={right - left} height={plot.height} fill="var(--chart-3)"
-          fillOpacity={active ? 0.2 : 0.08} stroke={active ? "var(--chart-3)" : "none"} strokeDasharray="4 3" strokeWidth={1.5} />
-        <g opacity={0.85}>
-          <title>{marker.title}</title>
-          <PatternIcon pattern={marker.pattern} x={left + 3} y={plot.y + 3} size={14} color="var(--foreground)" />
-        </g>
+      return Number.isFinite(left) && Number.isFinite(right) && right > left
+        ? [{ left, right, x: (left + right) / 2, marker }] : [];
+    }).sort((a, b) => a.left - b.left || a.right - b.right);
+  const groups = clusterPixelMarks(ranges, 25);
+  return <g className="signal-markers" data-signal-count={markers.length} data-signal-groups={groups.length}>
+    {groups.map(({ x, marks }) => {
+      const lead = [...marks].sort((a, b) => SIGNAL_RANK[b.marker.tone] - SIGNAL_RANK[a.marker.tone])[0]!.marker;
+      const color = SIGNAL_COLORS[lead.tone];
+      const left = Math.min(...marks.map((mark) => mark.left));
+      const right = Math.max(...marks.map((mark) => mark.right));
+      const selected = marks.some((mark) => mark.marker.id === highlight);
+      const label = marks.map((mark) => mark.marker.title).join("; ");
+      return <g key={marks.map((mark) => mark.marker.id).join("-")} data-signal-marker={marks.length}
+        role="img" aria-label={`${marks.length > 1 ? `${marks.length} признака: ` : "Признак: "}${label}`}>
+        <title>{label}</title>
+        <rect data-signal-band="" x={left} y={plot.y} width={Math.max(2, right - left)} height={plot.height}
+          fill={color} fillOpacity={selected ? 0.13 : 0.055} pointerEvents="none" />
+        {selected ? <rect data-signal-highlight="" x={left} y={plot.y} width={Math.max(2, right - left)} height={plot.height}
+          fill="none" stroke={color} strokeOpacity={0.65} strokeWidth={1.5} pointerEvents="none" /> : null}
+        <circle cx={x} cy={plot.y - 13} r={10} fill="var(--background)" stroke={color} strokeWidth={2} pointerEvents="none" />
+        <PatternIcon pattern={lead.pattern} x={x - 6} y={plot.y - 19} width={12} height={12}
+          color={color} strokeWidth={2.2} pointerEvents="none" />
+        {marks.length > 1 ? <text x={x + 11} y={plot.y - 19} fill={color} fontSize={9} fontWeight={700}
+          pointerEvents="none">+{marks.length - 1}</text> : null}
       </g>;
     })}
   </g>;
@@ -101,21 +115,17 @@ function SampleDot(props: { cx?: number; cy?: number; fill?: string; evidence?: 
   return <circle cx={cx} cy={cy} r={3} fill={fill} stroke="var(--background)" strokeWidth={1} />;
 }
 
-/** Two lines per tick: the wall clock of the sample and the age of the
- *  publication at that moment, exactly as the inherited axis read. */
-function TimeTick({ x, y, payload, rows, index, visibleTicksCount }: {
-  x?: number | string; y?: number | string; payload?: { value?: number }; rows: HistorySnapshot[];
+/** Keep the axis to one compact line; sample age stays in the chart tooltip. */
+function TimeTick({ x, y, payload, index, visibleTicksCount }: {
+  x?: number | string; y?: number | string; payload?: { value?: number };
   index?: number; visibleTicksCount?: number;
 }) {
   const value = payload?.value;
-  if (x === undefined || y === undefined || typeof value !== "number" || !rows.length) return null;
-  const nearest = rows.reduce((best, row) =>
-    Math.abs(Date.parse(row.observedAt) - value) < Math.abs(Date.parse(best.observedAt) - value) ? row : best, rows[0]!);
+  if (x === undefined || y === undefined || typeof value !== "number") return null;
   const anchor: "start" | "middle" | "end" = index === 0 ? "start" : index === (visibleTicksCount ?? 0) - 1 ? "end" : "middle";
   return (
-    <text x={x} y={y} textAnchor={anchor} fill="var(--muted-foreground)" fontSize={11}>
-      <tspan x={x} dy="0.8em">{shortDate(new Date(value).toISOString())}</tspan>
-      <tspan x={x} dy="1.1em">{nearest.synthetic ? "момент публикации" : `через ${duration(nearest.ageHours * 3600)}`}</tspan>
+    <text x={x} y={Number(y) + 12} textAnchor={anchor} fill="var(--muted-foreground)" fontSize={11}>
+      {shortDate(new Date(value).toISOString())}
     </text>
   );
 }
@@ -240,9 +250,18 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
 
   const shared = {
     data,
-    margin: { left: 4, right: 4, top: 8, bottom: 28 },
-    onClick: (state: { activeLabel?: unknown }) => {
-      const row = nearestRow(state?.activeLabel);
+    margin: { left: 4, right: 4, top: markers.length ? 30 : 8, bottom: 8 },
+    onClick: (state: { activeLabel?: unknown }, event: ReactMouseEvent<SVGGraphicsElement>) => {
+      let row = nearestRow(state?.activeLabel);
+      // Recharts has no active label when the click lands between sparse
+      // points. Resolve that click by its position in the visible time axis.
+      if (!row && rows.length) {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const left = bounds.left + 76;
+        const width = Math.max(1, bounds.width - 80 - (scale === "auto" && visible.length > 1 ? 72 : 0));
+        const fraction = Math.max(0, Math.min(1, (event.clientX - left) / width));
+        row = nearestRow(firstAt + fraction * (lastAt - firstAt));
+      }
       if (row) onActivate(row.snapshotId);
     },
   };
@@ -260,9 +279,8 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}
         padding={delta ? { left: 18, right: 18 } : { left: 4, right: 4 }}
-        scale="time" tickLine={false} axisLine={false} height={44} interval="preserveStartEnd"
-        tick={(props) => <TimeTick {...props} rows={rows} />}
-        label={{ value: "Время сохранённой точки и возраст публикации", position: "insideBottom", offset: -6, fill: "var(--muted-foreground)" }} />
+        scale="time" tickLine={false} axisLine={false} height={30} tickCount={3} minTickGap={80} interval="preserveStartEnd"
+        tick={(props) => <TimeTick {...props} />} />
       {axes}
       <ChartTooltip
         cursor={{ strokeDasharray: "4 4" }}

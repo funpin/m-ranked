@@ -6,6 +6,22 @@ import type { MiniChart } from "@/lib/anomaly";
 
 const COLORS = ["var(--chart-2)", "var(--chart-1)", "var(--chart-4)"];
 
+function visibleDomain(chart: Extract<MiniChart, { type: "lines" }>, axis: "left" | "right"): [number, number] {
+  const keys = chart.series.filter((series) => (series.axis ?? "left") === axis).map((series) => series.key);
+  if (axis === "left" && chart.band) keys.push(chart.band.low, chart.band.high);
+  const values = chart.points.flatMap((point) => keys.map((key) => point[key]))
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!values.length) return [0, 1];
+  const low = Math.min(...values), high = Math.max(...values);
+  const padding = Math.max((high - low) * 0.1, Math.abs(high) * 0.015, 1);
+  const roughStep = (high - low + padding * 2) / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const step = [1, 2, 5, 10].find((multiple) => multiple * magnitude >= roughStep)! * magnitude;
+  const from = Math.max(low >= 0 ? 0 : -Infinity, Math.floor((low - padding) / step) * step);
+  const to = Math.ceil((high + padding) / step) * step;
+  return [from, Math.max(from + step, to)];
+}
+
 /** Мини-график признака: одна картинка, которая объясняет формулу. */
 export default function AnomalyMiniChart({ chart, label }: { chart: MiniChart; label: string }) {
   if (chart.type === "bars") {
@@ -26,14 +42,16 @@ export default function AnomalyMiniChart({ chart, label }: { chart: MiniChart; l
   }
   const config: ChartConfig = Object.fromEntries(chart.series.map((series, index) => [series.key, { label: series.label, color: COLORS[index % COLORS.length] }]));
   const twoAxes = chart.series.some((series) => series.axis === "right");
+  const leftDomain = visibleDomain(chart, "left");
+  const rightDomain = twoAxes ? visibleDomain(chart, "right") : null;
   return (
     <div role="img" aria-label={`${label}: ${chart.series.map((series) => series.label).join(" и ")} на интервале признака`}>
       <ChartContainer config={config} className="h-36 w-full">
         <ComposedChart data={chart.points} margin={{ left: 0, right: twoAxes ? 0 : 8, top: 6, bottom: 0 }}>
           <CartesianGrid vertical={false} yAxisId="left" stroke="var(--border)" />
           <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} hide />
-          <YAxis yAxisId="left" width={48} tickLine={false} axisLine={false} tickFormatter={axisNumber} fontSize={10} />
-          {twoAxes ? <YAxis yAxisId="right" orientation="right" width={48} tickLine={false} axisLine={false} tickFormatter={axisNumber} fontSize={10} /> : null}
+          <YAxis yAxisId="left" domain={leftDomain} tickCount={4} allowDataOverflow width={48} tickLine={false} axisLine={false} tickFormatter={axisNumber} fontSize={10} />
+          {rightDomain ? <YAxis yAxisId="right" orientation="right" domain={rightDomain} tickCount={4} allowDataOverflow width={48} tickLine={false} axisLine={false} tickFormatter={axisNumber} fontSize={10} /> : null}
           <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, payload) => {
             const at = (payload?.[0] as { payload?: { t?: number } } | undefined)?.payload?.t;
             return typeof at === "number" ? legacyDate(new Date(at).toISOString()) : "";

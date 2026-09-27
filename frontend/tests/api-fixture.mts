@@ -95,6 +95,7 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
   });
   const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,
     status:"analyzed",level:3,levelLabel:"признаки искусственной активности",levelSymbol:"●",
+    originalLevel:3,recheckReason:null,recheckMethodVersion:null,recheckEvidence:null,
     signals:[signal(1,"views",39,40),signal(6,"reactions",36,38)],
     quality:{coverage:1,summary:"замеры полные, покрытие 100%",codes:[],unanalyzable:[]},
     analyzedAt:asOf,lagSeconds:40,normVersion:3,detectorVersions:{linear_feed:"2.0.0",reactions_before_views:"2.0.0"},
@@ -102,9 +103,9 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
     disclaimer:"Сигнал аномальной динамики носит информационный характер и сам по себе не доказывает искусственное происхождение активности или действия университета."};
   // Провайдерские различия метрик: у ВК есть репосты, у RuTube и MAX их не выдумываем.
   if(type!=="posts") return {...base,signals:base.signals.map(item=>({...item,metric:id===21 ? "shares" : id===41 ? "views" : "comments"}))};
-  if(id===2) return {...base,status:"pending",level:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{}};
-  if(id===3) return {...base,level:0,levelLabel:"нет признаков",levelSymbol:"○",signals:[]};
-  if(id===4) return {...base,level:1,levelLabel:"слабый сигнал",levelSymbol:"◔",signals:[{...base.signals[0]!,strength:0.5,normConfidence:0.3}]};
+  if(id===2) return {...base,status:"pending",level:null,originalLevel:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{}};
+  if(id===3) return {...base,level:0,originalLevel:0,levelLabel:"нет признаков",levelSymbol:"○",signals:[]};
+  if(id===4) return {...base,level:1,originalLevel:1,levelLabel:"слабый сигнал",levelSymbol:"◔",signals:[{...base.signals[0]!,strength:0.5,normConfidence:0.3}]};
   return base;
 }
 
@@ -266,6 +267,8 @@ const server = createServer(async (request, response) => {
   const accountsId=/^\/api\/v1\/institutions\/(\d+)\/accounts$/.exec(url.pathname);
   if(accountsId) {const ids=accountsId[1] === "3" ? [] : accountsId[1] === "2" ? [1,2] : [1];return json({items:ids.map((id) => account(id,platform === "telegram" ? "channels" : "platform_accounts")),legacyTotalAccountCount:ids.length,nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["InstitutionAccountsPage"]);}
   if (url.pathname === "/api/v1/overview") return json({ items: url.searchParams.get("q") ? [] : (performanceFixture ? selectionIds.slice(0,50).map(id => item(id,platform)) : [item(1, platform), item(2, platform)]), nextCursor: null, datasetRevision: revision, asOf, integrationStatus: "unknown", integrationWarning: null } satisfies Schema["OverviewPage"]);
+  if (url.pathname === "/api/v1/site/summary") return json({ available: true, institutions: 12, accounts: 40,
+    accountsByPlatform: { telegram: 11, vk: 12, max: 9, rutube: 8 }, publications: 1234, snapshots: 98765, computedAt: asOf });
   if (url.pathname === "/api/v1/sitemap") return json({ publicationPages: 1, publications: 2, datasetRevision: revision, asOf,
     accounts: [{ accountId: uuid(1,1), lastModified: "2026-07-07T00:00:00Z" }], institutions: [{ legacyId: 1 }, { legacyId: 2 }] });
   const sitemapPage = /^\/api\/v1\/sitemap\/publications\/(\d+)$/.exec(url.pathname);

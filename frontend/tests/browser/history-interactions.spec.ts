@@ -83,20 +83,32 @@ test("publication shows a collapsed analysis card that expands and marks signals
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded","true");
   await expect(card.getByTestId("anomaly-signal")).toHaveCount(2);
-  await expect(card.locator("code").first()).toContainText("Δпросмотры ≈ 10·t");
-  await expect(card).toContainText("пост долго показывался в рекомендациях");
+  await expect(card.getByRole("img", { name: /Линейная подача:/ })).toHaveCount(0);
+  await card.getByTestId("anomaly-signal").filter({hasText:"Линейная подача"})
+    .getByTestId("signal-detail-toggle").click();
+  const firstMini = card.getByRole("img", { name: /Линейная подача:/ }).first();
+  await expect(firstMini.locator("svg text").first()).toBeVisible();
+  const miniTicks = (await firstMini.locator("svg text").allTextContents())
+    .map((value) => Number(value.replace(/\s/g, "")));
+  expect(miniTicks.length).toBeGreaterThan(1);
+  expect(Math.min(...miniTicks)).toBeGreaterThan(0);
+  await card.getByRole("button",{name:"Формула и возможные объяснения"}).hover();
+  await expect(page.locator('[data-slot="tooltip-content"]')).toContainText("Δпросмотры ≈ 10·t");
+  await expect(page.locator('[data-slot="tooltip-content"]')).toContainText("пост долго показывался в рекомендациях");
+  await page.mouse.move(0,0);
   // Справка — под значком «i», а не в теле карточки.
   await expect(card.getByTestId("anomaly-quality")).toHaveCount(0);
   await card.getByTestId("anomaly-note").getByRole("button").hover();
-  await expect(page.getByLabel("Значки признаков")).toContainText("линейная подача");
+  await expect(page.getByRole("dialog",{name:"Анализ динамики"})).toContainText("Сигнал не доказывает накрутку");
   await expect(page.getByTestId("anomaly-quality")).toBeVisible();
   await page.mouse.move(0,0);
-  // Значки признаков стоят на обоих основных графиках, по одному на признак.
+  // Пересекающиеся интервалы объединены в одну спокойную полосу на график.
   await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
-  await expect(page.locator("g[data-signal-marker]")).toHaveCount(4);
-  await expect(page.locator("g[data-signal-marker] svg.lucide").first()).toBeAttached();
+  await expect(page.locator("rect[data-signal-band]")).toHaveCount(2);
+  await expect(page.locator("g.signal-markers[data-signal-count='2']")).toHaveCount(2);
+  await expect(page.locator("rect[data-signal-highlight]")).toHaveCount(0);
   await card.getByRole("button",{name:"Показать на графике"}).first().click();
-  await expect(page.locator("g[data-signal-marker][data-highlighted]")).toHaveCount(2);
+  await expect(page.locator("rect[data-signal-highlight]")).toHaveCount(2);
   await expect(page.getByTestId("publication-chart-stack")).toBeInViewport();
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);
@@ -138,9 +150,9 @@ test("cumulative and delta charts both draw when anomaly boundaries size points 
 
 test("a long interval between saved changes is spaced by time without claiming collector downtime",async({page})=>{
   await page.goto("/posts/7");
-  await expect(page.getByTestId("sparse-history-note")).toContainText("не означает, что сборщик не работал");
-  await expect(page.getByTestId("saved-history-note")).toContainText("могли быть успешные опросы с теми же значениями");
-  await expect(page.getByTestId("collector-gap-summary")).toContainText("подтверждённых пропусков в выбранном диапазоне нет");
+  await expect(page.getByTestId("sparse-history-note")).toContainText("Изменения + контроль");
+  await expect(page.getByTestId("saved-history-note")).toContainText("точек");
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("Без пропусков");
   await expect(page.locator(".collector-gap")).toHaveCount(0);
   await expect(page.getByTestId("collector-covered-badge").first()).toHaveText("Сбор шёл");
   const longInterval=page.getByTestId("saved-point-interval").filter({hasText:"+2 д 13 ч"});
@@ -179,7 +191,7 @@ test("a long interval between saved changes is spaced by time without claiming c
 
 test("a confirmed account-cycle outage is marked in both charts and the table",async({page})=>{
   await page.goto("/posts/8");
-  await expect(page.getByTestId("collector-gap-summary")).toContainText("Подтверждённые пропуски сбора");
+  await expect(page.getByTestId("collector-gap-summary")).toContainText("Пропуски");
   await expect(page.getByTestId("collector-gap-summary")).toContainText("50 мин");
   await expect(page.getByTestId("collector-gap-badge")).toHaveCount(1);
   await expect(page.getByTestId("collector-gap-badge")).toHaveText("Пропуск 50 мин");

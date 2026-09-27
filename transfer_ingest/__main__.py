@@ -13,6 +13,7 @@ from typing import Any
 from collector_target.normalize import sanitize_error_code
 from collector_target.evidence import ImmutableEvidenceStore
 from collector_target.repository import PostgresCollectorRepository
+from collector_target.poll_receipts import PollReceiptPolicy
 from collector_target.transfer import PostgresDataAdapter
 
 from .config import IngestSettings
@@ -104,7 +105,12 @@ async def _run() -> int:
     repository: PostgresCollectorRepository | None = None
     try:
         settings = IngestSettings.load()
-        repository = PostgresCollectorRepository(settings.database_url)
+        repository = PostgresCollectorRepository(
+            settings.database_url,
+            poll_receipt_policy=PollReceiptPolicy(
+                account_ids=frozenset(settings.publication_poll_receipt_account_ids),
+            ),
+        )
         repository.assert_schema_contract()
         adapter = PostgresDataAdapter(repository)
         server = IngestServer(

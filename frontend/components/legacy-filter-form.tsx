@@ -3,10 +3,10 @@
 import { useEffect, useRef, useTransition, type ComponentProps } from "react";
 import { beginNavigation } from "@/lib/navigation-pending";
 import { useRouter, useSearchParams } from "next/navigation";
-import { normalizePlatform } from "@/lib/params";
+import { normalizePeriod, normalizePlatform } from "@/lib/params";
 
 /** Hydrates only form interaction; all labels, values and results are SSR. */
-export function LegacyFilterForm({ action = "/", ...props }: ComponentProps<"form">) {
+export function LegacyFilterForm({ action = "/review", ...props }: ComponentProps<"form">) {
   const form = useRef<HTMLFormElement>(null);
   const query=useSearchParams();
   const router=useRouter();
@@ -22,6 +22,8 @@ export function LegacyFilterForm({ action = "/", ...props }: ComponentProps<"for
       // Read the current URL, which is authoritative for this history entry.
       const platform=normalizePlatform(new URL(location.href).searchParams.getAll("platform"));
       form.current?.querySelectorAll<HTMLInputElement>('input[name="platform"]').forEach((radio) => {radio.checked=radio.value===platform;});
+      const period=normalizePeriod(new URL(location.href).searchParams.getAll("period"), "1d");
+      form.current?.querySelectorAll<HTMLInputElement>('input[name="period"]').forEach((radio) => {radio.checked=radio.value===period;});
     }, 0); };
     const show = (event: PageTransitionEvent) => { if (event.persisted) restore(); };
     if ((performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined)?.type === "back_forward") restore();
@@ -50,7 +52,7 @@ export function LegacyFilterForm({ action = "/", ...props }: ComponentProps<"for
       const direction = event.currentTarget.elements.namedItem("direction");
       if (direction instanceof HTMLSelectElement) direction.value = field.value === "name" ? "asc" : "desc";
     }
-    if (field instanceof HTMLInputElement && field.name === "platform" && field.type === "radio") {
+    if (field instanceof HTMLInputElement && (field.name === "platform" || field.name === "period") && field.type === "radio") {
       event.currentTarget.requestSubmit();
     }
   }}>{props.children}<span className="sr-only" role="status" hidden={!pending}>Обновляю…</span></form>;

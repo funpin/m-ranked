@@ -8,6 +8,7 @@ import signal
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from uuid import UUID
 
 from collector_runtime.config import Settings
 from collector_runtime.storage import CollectionDiskGate
@@ -32,6 +33,7 @@ from .phase import (
 )
 from .placement import Placement, parse_membership
 from .platforms.registry import build_adapter
+from .poll_receipts import PollReceiptPolicy, parse_account_ids
 from .retention import (
     RetentionPolicy,
     WorkingSetRetention,
@@ -137,11 +139,29 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", default=".env")
     parser.add_argument("--once", action="store_true")
     parser.add_argument(
+        "--pilot-account-ids", default="",
+        help="one-shot local receipt pilot: comma-separated account UUIDs (max 16)",
+    )
+    parser.add_argument(
         "--log-level",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         default=os.getenv("LOG_LEVEL", "INFO").upper(),
     )
     return parser
+
+
+def _pilot_cohort(
+    raw: str, *, once: bool, collector_version: str | None,
+    receipt_account_ids: tuple[UUID, ...],
+) -> frozenset[UUID] | None:
+    if not raw.strip():
+        return None
+    cohort = frozenset(parse_account_ids(raw, name="--pilot-account-ids"))
+    if not once or not collector_version or not collector_version.startswith("local-pilot-"):
+        raise ValueError("--pilot-account-ids requires --once and --collector-version=local-pilot-*")
+    if not cohort <= set(receipt_account_ids):
+        raise ValueError("pilot accounts must be included in PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS")
+    return cohort
 
 
 def _default_concurrency(platform: Platform, settings: Settings) -> int:
@@ -391,6 +411,11 @@ async def _run(args: argparse.Namespace) -> int:
     phase_arbiter: PostgresPhaseArbiter | None = None
     try:
         settings = Settings.load(args.env_file)
+        pilot_account_ids = _pilot_cohort(
+            args.pilot_account_ids, once=args.once,
+            collector_version=args.collector_version,
+            receipt_account_ids=settings.publication_poll_receipt_account_ids,
+        )
         settings = apply_platform_auth_file(
             settings,
             platform,
@@ -436,6 +461,9 @@ async def _run(args: argparse.Namespace) -> int:
         repository = PostgresCollectorRepository(
             dsn,
             snapshot_heartbeat_hours=settings.publication_snapshot_heartbeat_hours,
+            poll_receipt_policy=PollReceiptPolicy(
+                account_ids=frozenset(settings.publication_poll_receipt_account_ids),
+            ),
             transfer_producer_id=producer_id,
             deployment_profile=deployment_profile,
         )
@@ -489,6 +517,7 @@ async def _run(args: argparse.Namespace) -> int:
             persist_guard=persist_guard,
             placement=placement,
             server_id=settings.collector_server_id if placement else None,
+            pilot_account_ids=pilot_account_ids,
         )
         if transfer_mode == "in-process":
             data_adapter = PostgresDataAdapter(repository)

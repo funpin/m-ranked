@@ -19,20 +19,20 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
       aria-label="Основная навигация"
       className="site-header-glass sticky top-0 z-[200] h-14 border-b"
     >
-      <div data-testid="header-inner" className="safe-page-inset relative mx-auto flex h-full w-full max-w-[1400px] items-center gap-6">
+      <div data-testid="header-inner-fallback" className="safe-page-inset relative mx-auto flex h-full w-full max-w-[1400px] items-center gap-6">
         <Link
-          data-testid="brand"
+          data-testid="brand-fallback"
           className="flex shrink-0 items-center no-underline"
-          href={queryHref("/", { platform })}
-          aria-label="m-ranked — обзор"
+          href="/"
+          aria-label="m-ranked — на главную"
         >
           <BrandLogo />
         </Link>
-        <div data-testid="main-nav" className="mr-auto flex items-center gap-1 max-[780px]:hidden">
+        <div data-testid="main-nav-fallback" className="mr-auto flex items-center gap-1 max-[780px]:hidden">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
-              href={queryHref(link.href, { platform })}
+              href={"platformless" in link ? link.href : queryHref(link.href, { platform })}
               className={`${"utility" in link ? "min-[781px]:hidden " : ""}text-muted-foreground rounded-md px-3 py-1.5 text-[0.875rem] font-medium no-underline transition-colors`}
             >
               {link.label}

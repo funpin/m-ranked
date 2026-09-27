@@ -20,7 +20,7 @@ from .outbox import OutboxMarker
 from .security import AuthConfig
 from .security_events import SecurityTelemetry
 from .sessions import SessionPolicy, SessionStore
-from .routes import admin, analysis, compare, emoji, health, query, sitemap, statistics
+from .routes import admin, analysis, compare, emoji, health, query, site, sitemap, statistics
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(ApiProblem, handle)
     app.add_exception_handler(RequestValidationError, handle_validation)
 
-    for module in (health, query, statistics, compare, emoji, analysis, sitemap, admin):
+    for module in (health, query, statistics, compare, emoji, analysis, site, sitemap, admin):
         app.include_router(module.router)
     app.add_middleware(BodyLimit, maximum=settings.max_body_bytes)
     return app

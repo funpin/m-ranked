@@ -17,18 +17,33 @@ LIMIT 1
 # Вывод анализа v2 — одна строка на пост по первичному ключу. Остальные
 # маршруты таблиц анализа не читают.
 STATE = """
-SELECT state.level, state.signals, state.quality, state.analyzed_at, state.lag_seconds,
+SELECT coalesce(recheck.effective_level, state.level) AS level,
+       state.level AS original_level, recheck.reason AS recheck_reason,
+       recheck.method_version AS recheck_method_version,
+       recheck.evidence AS recheck_evidence,
+       state.signals, state.quality, state.analyzed_at, state.lag_seconds,
        state.norm_version_id, state.detector_versions, state.review_status
   FROM analytics.post_anomaly_state state
+  LEFT JOIN analytics.post_anomaly_context_recheck recheck
+    ON recheck.publication_id=state.publication_id
+   AND recheck.source_analyzed_at=state.analyzed_at
+   AND recheck.source_level=state.level
+   AND state.review_status='unreviewed'
  WHERE state.publication_id=%(publication)s
 """
 
 # Уровни постов аккаунта для колонки в таблице публикаций: по индексу
 # (аккаунт, дата публикации) и первичному ключу состояния, без признаков.
 ACCOUNT_LEVELS = """
-SELECT publication.id AS publication_id, state.level
+SELECT publication.id AS publication_id,
+       coalesce(recheck.effective_level, state.level) AS level
   FROM ingest.publication publication
   JOIN analytics.post_anomaly_state state ON state.publication_id=publication.id
+  LEFT JOIN analytics.post_anomaly_context_recheck recheck
+    ON recheck.publication_id=state.publication_id
+   AND recheck.source_analyzed_at=state.analyzed_at
+   AND recheck.source_level=state.level
+   AND state.review_status='unreviewed'
  WHERE publication.primary_account_id=%(account)s::uuid AND state.analyzed_at IS NOT NULL
  ORDER BY publication.published_at DESC, publication.id DESC
  LIMIT %(limit)s

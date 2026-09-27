@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import time
 from typing import Any, Iterable
+from uuid import UUID
 
 from .model import (
     AccountRef,
@@ -55,6 +56,16 @@ class SystemUtcClock:
         return datetime.now(timezone.utc)
 
 
+def select_pilot_accounts(accounts: tuple[AccountRef, ...], cohort: frozenset[UUID] | None) -> tuple[AccountRef, ...]:
+    """An explicit, fail-closed account boundary for a one-shot local pilot."""
+    if cohort is None:
+        return accounts
+    available = {account.id for account in accounts}
+    if not cohort or not cohort <= available:
+        raise ValueError("pilot accounts must all be enabled in this platform partition")
+    return tuple(account for account in accounts if account.id in cohort)
+
+
 class PollCycleCoordinator:
     """One independently leased platform cycle with resumable account batches."""
 
@@ -74,6 +85,7 @@ class PollCycleCoordinator:
         persist_guard: Any = None,
         placement: Any = None,
         server_id: str | None = None,
+        pilot_account_ids: frozenset[UUID] | None = None,
     ) -> None:
         if adapter.platform != platform:
             raise ValueError("adapter platform does not match coordinator platform")
@@ -95,6 +107,7 @@ class PollCycleCoordinator:
         # поведение ровно прежнее.
         self.placement = placement
         self.server_id = server_id
+        self.pilot_account_ids = pilot_account_ids
         self.clock = clock or SystemUtcClock()
         output = os.environ.get("COLLECTOR_METRICS_FILE")
         self.metrics = metrics or CollectorMetrics(Path(output) if output else None)
@@ -122,6 +135,7 @@ class PollCycleCoordinator:
             accounts = tuple(
                 self.repository.enabled_accounts(self.platform, self.partition_key)
             )
+            accounts = select_pilot_accounts(accounts, self.pilot_account_ids)
             if self.placement is not None and self.server_id is not None:
                 offered = len(accounts)
                 accounts = filter_accounts(
