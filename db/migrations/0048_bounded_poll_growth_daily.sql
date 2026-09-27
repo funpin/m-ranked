@@ -12,6 +12,8 @@ CREATE TABLE analytics.bounded_poll_growth_daily (
         ('0-6h', '6-24h', '1-2d', '2-4d', '4-7d', '7d+')),
     exposure_band text NOT NULL CHECK (exposure_band IN
         ('<=30m', '30m-2h', '2-8h', '8h+')),
+    max_gap_seconds integer NOT NULL
+        CHECK (max_gap_seconds BETWEEN 300 AND 86400),
     upper_rate_per_hour numeric(30, 6) NOT NULL
         CHECK (upper_rate_per_hour >= 0),
     method_version text NOT NULL DEFAULT 'bounded-v1-10m'
@@ -19,12 +21,13 @@ CREATE TABLE analytics.bounded_poll_growth_daily (
     source text NOT NULL DEFAULT 'successful_poll_receipts'
         CHECK (source = 'successful_poll_receipts'),
     updated_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
-    PRIMARY KEY (publication_id, observed_day, age_band, exposure_band)
+    PRIMARY KEY (publication_id, observed_day, age_band, exposure_band,
+                 max_gap_seconds)
 );
 
 CREATE INDEX bounded_poll_growth_daily_reference_idx
     ON analytics.bounded_poll_growth_daily
-    (platform, account_id, age_band, exposure_band, observed_day);
+    (platform, account_id, max_gap_seconds, age_band, exposure_band, observed_day);
 CREATE INDEX bounded_poll_growth_daily_retention_idx
     ON analytics.bounded_poll_growth_daily (observed_day);
 

@@ -50,10 +50,12 @@ LIMIT %s
 UPSERT = """
 INSERT INTO analytics.bounded_poll_growth_daily (
     publication_id, account_id, platform, observed_day,
-    age_band, exposure_band, upper_rate_per_hour, source, method_version
-) VALUES (%s, %s, %s, %s, %s, %s, %s,
+    age_band, exposure_band, max_gap_seconds, upper_rate_per_hour,
+    source, method_version
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
           'successful_poll_receipts', 'bounded-v1-10m')
-ON CONFLICT (publication_id, observed_day, age_band, exposure_band)
+ON CONFLICT (publication_id, observed_day, age_band, exposure_band,
+             max_gap_seconds)
 DO UPDATE SET upper_rate_per_hour = GREATEST(
     analytics.bounded_poll_growth_daily.upper_rate_per_hour,
     EXCLUDED.upper_rate_per_hour
@@ -154,6 +156,7 @@ def main() -> None:
                 cursor.executemany(UPSERT, [
                     (row.publication_id, row.account_id, row.platform,
                      row.observed_day, row.age_band, row.exposure_band,
+                     args.max_gap_minutes * 60,
                      Decimal(str(row.upper_rate_per_hour)).quantize(
                          Decimal("0.000001"), rounding=ROUND_CEILING))
                     for row in daily
@@ -169,6 +172,8 @@ def main() -> None:
         "kind": "bounded_receipt_reference_rollup_not_anomaly_verdict",
         "database": database,
         "platform": args.platform,
+        "method_version": "bounded-v1-10m",
+        "max_gap_minutes": args.max_gap_minutes,
         "window": [str(args.start), str(args.end)],
         "receipt_rows": len(rows),
         "posts_with_receipts": post_count,

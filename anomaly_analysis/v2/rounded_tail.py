@@ -54,6 +54,7 @@ class DailyUpperBound:
     observed_day: date
     age_band: str
     exposure_band: str
+    max_gap_seconds: int
     upper_rate_per_hour: float
 
 
@@ -114,7 +115,8 @@ def summarize_daily_upper_bounds(
             continue
         key = (row.platform, account_id, row.post.publication_id, day, age, exposure)
         maxima[key] = max(maxima.get(key, 0.0), upper)
-    return tuple(DailyUpperBound(source, *key, upper) for key, upper in sorted(
+    return tuple(DailyUpperBound(source, *key, int(max_gap.total_seconds()), upper)
+                 for key, upper in sorted(
         maxima.items(), key=lambda item: tuple(str(part) for part in item[0])
     ))
 
@@ -177,6 +179,8 @@ class BoundedTailReference:
                 raise ValueError("daily reference source differs from requested source")
             if row.platform != platform:
                 raise ValueError("bounded reference cannot mix platforms")
+            if row.max_gap_seconds != int(max_gap.total_seconds()):
+                raise ValueError("daily reference max gap differs from requested max gap")
             if not isfinite(row.upper_rate_per_hour) or row.upper_rate_per_hour < 0:
                 raise ValueError("daily upper rate must be finite and nonnegative")
             cell = (row.account_id, row.age_band, row.exposure_band)

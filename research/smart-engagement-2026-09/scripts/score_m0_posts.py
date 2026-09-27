@@ -70,12 +70,13 @@ def main() -> None:
             parser.error("migration 0048 is missing")
         reference_rows = connection.execute(
             """SELECT source,platform,account_id,publication_id,observed_day,
-                      age_band,exposure_band,upper_rate_per_hour
+                      age_band,exposure_band,max_gap_seconds,upper_rate_per_hour
                  FROM analytics.bounded_poll_growth_daily
                 WHERE account_id=%s AND platform=%s
+                  AND max_gap_seconds=%s
                   AND method_version='bounded-v1-10m'
                   AND observed_day >= %s AND observed_day < %s""",
-            (args.account, args.platform,
+            (args.account, args.platform, args.max_gap_minutes * 60,
              args.start - timedelta(days=120), args.start),
         ).fetchall()
         frame = connection.execute(
@@ -114,6 +115,7 @@ def main() -> None:
     reference_data = tuple(DailyUpperBound(
         row["source"], row["platform"], row["account_id"], row["publication_id"],
         row["observed_day"], row["age_band"], row["exposure_band"],
+        row["max_gap_seconds"],
         nextafter(float(row["upper_rate_per_hour"]), inf),
     ) for row in reference_rows)
     reference = (BoundedTailReference.fit_daily(
@@ -145,6 +147,8 @@ def main() -> None:
     print(json.dumps({
         "kind": "prospective_bounded_post_research_not_public_anomaly_verdict",
         "platform": args.platform,
+        "method_version": "bounded-v1-10m",
+        "max_gap_minutes": args.max_gap_minutes,
         "checkpoint_plan": [check.name for check in checks],
         "eligible_posts": len(posts),
         "receipt_rows": len(reads),

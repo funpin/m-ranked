@@ -101,6 +101,11 @@ def test_daily_summary_retains_same_rank_and_source_after_raw_reads_expire():
             (replace(daily[0], source="change_only_shadow"), *daily[1:]),
             source="successful_poll_receipts",
         )
+    with pytest.raises(ValueError, match="max gap differs"):
+        BoundedTailReference.fit_daily(
+            (replace(daily[0], max_gap_seconds=3600), *daily[1:]),
+            source="successful_poll_receipts",
+        )
 
 
 def test_daily_summary_skips_unknown_precision_without_inventing_zero():
