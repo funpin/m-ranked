@@ -26,8 +26,18 @@ section "Миграции (применять до перезапуска API)"
 # pending/ holds reviewed proposals, not executable release migrations.
 migrations="$(changed db/migrations | grep -E '^db/migrations/[0-9]{4}_[^/]+\.sql$' || true)"
 if [ -n "$migrations" ]; then
-  echo "$migrations"
-  echo "Порядок: резервная копия → проверка восстановления → psql -f каждая по очереди."
+  expected_migrations=$'db/migrations/0040_bounded_cache_outbox_purge.sql\ndb/migrations/0042_dataset_revision_retention.sql\ndb/migrations/0043_publication_history_page.sql\ndb/migrations/0044_in_place_release.sql'
+  if [[ "$migrations" == "$expected_migrations" ]]; then
+    echo "Один транзакционный SQL-пакет: operations/sql/release-schema-0038-to-0044.sql"
+    echo "Сначала сверить реальную схему; пакет откажет неизвестному частичному состоянию."
+  elif [[ "$migrations" != *$'\n'* ]]; then
+    echo "$migrations"
+  else
+    echo "$migrations"
+    echo "NO-GO: релиз требует больше одной миграции, единого пакета для этой дельты нет." >&2
+    exit 1
+  fi
+  echo "Порядок: проверенная резервная копия → проба на восстановленной БД → один SQL-пакет."
 else
   echo "нет"
 fi
