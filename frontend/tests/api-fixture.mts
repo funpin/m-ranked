@@ -95,6 +95,7 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
   });
   const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,
     status:"analyzed",level:3,levelLabel:"признаки искусственной активности",levelSymbol:"●",
+    originalLevel:3,recheckReason:null,recheckMethodVersion:null,recheckEvidence:null,
     signals:[signal(1,"views",39,40),signal(6,"reactions",36,38)],
     quality:{coverage:1,summary:"замеры полные, покрытие 100%",codes:[],unanalyzable:[]},
     analyzedAt:asOf,lagSeconds:40,normVersion:3,detectorVersions:{linear_feed:"2.0.0",reactions_before_views:"2.0.0"},
@@ -102,9 +103,9 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
     disclaimer:"Сигнал аномальной динамики носит информационный характер и сам по себе не доказывает искусственное происхождение активности или действия университета."};
   // Провайдерские различия метрик: у ВК есть репосты, у RuTube и MAX их не выдумываем.
   if(type!=="posts") return {...base,signals:base.signals.map(item=>({...item,metric:id===21 ? "shares" : id===41 ? "views" : "comments"}))};
-  if(id===2) return {...base,status:"pending",level:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{}};
-  if(id===3) return {...base,level:0,levelLabel:"нет признаков",levelSymbol:"○",signals:[]};
-  if(id===4) return {...base,level:1,levelLabel:"слабый сигнал",levelSymbol:"◔",signals:[{...base.signals[0]!,strength:0.5,normConfidence:0.3}]};
+  if(id===2) return {...base,status:"pending",level:null,originalLevel:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{}};
+  if(id===3) return {...base,level:0,originalLevel:0,levelLabel:"нет признаков",levelSymbol:"○",signals:[]};
+  if(id===4) return {...base,level:1,originalLevel:1,levelLabel:"слабый сигнал",levelSymbol:"◔",signals:[{...base.signals[0]!,strength:0.5,normConfidence:0.3}]};
   return base;
 }
 

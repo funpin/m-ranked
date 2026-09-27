@@ -259,7 +259,7 @@ WITH params AS (
            CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.reactions_count END AS reactions,
            CASE WHEN latest.comments_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.comments_count END AS comments,
            CASE WHEN latest.shares_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.shares_count END AS shares,
-           state.level,
+           coalesce(recheck.effective_level, state.level) AS level,
            day24.views_count AS views24, day24.reactions_count AS reactions24,
            day24.comments_count AS comments24, day24.shares_count AS shares24,
            CASE WHEN day24.views_count > 0 AND (day24.reactions_count IS NOT NULL
@@ -277,6 +277,11 @@ WITH params AS (
        AND NOT latest.synthetic AND latest.quality <> 'invalid'
       LEFT JOIN analytics.post_anomaly_state state ON state.publication_id = publication.id
        AND state.analyzed_at IS NOT NULL
+      LEFT JOIN analytics.post_anomaly_context_recheck recheck
+        ON recheck.publication_id = state.publication_id
+       AND recheck.source_analyzed_at = state.analyzed_at
+       AND recheck.source_level = state.level
+       AND state.review_status = 'unreviewed'
       LEFT JOIN analytics.publication_checkpoint day24 ON day24.publication_id = publication.id
        AND day24.hour_offset = 24
 )

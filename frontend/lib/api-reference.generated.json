@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "7e54bdeae0980fe415b450c138552449b037ffe6f2b1a3f14c89d08c40c15a10",
+  "sourceSha256": "e9c5bf081aa5cdb05de6e30dda73ec75ab0e57384f75c37a16ee7209fb99d853",
   "version": "1.0.0",
   "operations": [
     {
@@ -412,6 +412,22 @@
         {
           "name": "levelSymbol",
           "type": "string"
+        },
+        {
+          "name": "originalLevel",
+          "type": "integer | null"
+        },
+        {
+          "name": "recheckReason",
+          "type": "string | null"
+        },
+        {
+          "name": "recheckMethodVersion",
+          "type": "string | null"
+        },
+        {
+          "name": "recheckEvidence",
+          "type": "object | null"
         },
         {
           "name": "signals",

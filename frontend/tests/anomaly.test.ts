@@ -30,6 +30,7 @@ function analysis(overrides: Partial<PublicationAnomalyAnalysis> = {}): Publicat
   return {
     publicationId: "10000000-0000-4000-8000-000000000001", datasetRevision: 1, status: "analyzed", level: 2,
     levelLabel: "выраженная аномалия", levelSymbol: "◑", signals: [signal()], quality: null,
+    originalLevel: 2, recheckReason: null, recheckMethodVersion: null, recheckEvidence: null,
     analyzedAt: at(70), lagSeconds: 0, normVersion: 1, detectorVersions: {}, reviewStatus: "unreviewed",
     methodologyVersion: "anomaly-dynamics-v2", disclaimer: "", ...overrides,
   };

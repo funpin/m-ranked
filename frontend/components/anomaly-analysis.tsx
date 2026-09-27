@@ -29,7 +29,7 @@ function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
     <span className="inline-flex flex-wrap items-center gap-2" data-testid="saved-anomaly-status">
       <LevelIcon level={line.level} className={cn("size-4 shrink-0", line.calm ? "text-muted-foreground" : line.tone === "red" ? "text-destructive" : "text-chart-3")} />
       {line.calm ? <b className="font-semibold">{line.label.replace(/^./, (letter) => letter.toUpperCase())}</b>
-        : <><span className="text-muted-foreground text-xs font-normal">Сохранённая оценка</span>
+        : <><span className="text-muted-foreground text-xs font-normal">Итоговая оценка</span>
           <StatusPill tone={line.tone === "red" ? "red" : "amber"}>{line.label}</StatusPill></>}
     </span>
   );
@@ -155,7 +155,8 @@ function AnalysisNote({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
     <span className="grid gap-1.5">
       {analysis.quality ? <span className="block" data-testid="anomaly-quality">Данные: {analysis.quality.summary}.</span> : null}
       <span>Уровень зависит от силы и числа независимых признаков.</span>
-      <span>Сохранённый уровень показан в заголовке. Сравнение со старыми постами описывает наблюдения, но не устанавливает причину роста и не меняет уровень автоматически.</span>
+      <span>В заголовке показан итоговый уровень. При одновременном росте старых постов и появлении новых контекстная проверка может понизить оценку сильных поздних скачков просмотров до слабого сигнала. Исходные признаки остаются видны.</span>
+      <span>Сравнение со старыми постами описывает наблюдения, но не устанавливает причину роста. Число «Разница со старыми» само по себе не повышает и не понижает уровень.</span>
       <span>Аномалия не доказывает накрутку.</span>
       <span className="text-foreground/70">{analysis.methodologyVersion}</span>
     </span>
@@ -221,6 +222,8 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
                 {summary.count || summary.analyzedAt ? <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums">
                   {summary.count ? <span>{summary.count}</span> : null}
                   {summary.analyzedAt ? <span>Анализ {legacyDate(summary.analyzedAt)}</span> : null}
+                  {analysis.originalLevel !== null && analysis.level !== null && analysis.originalLevel > analysis.level
+                    ? <span data-testid="context-cap-status">Понижено после проверки контекста · исходно: выраженная аномалия</span> : null}
                   {neighborContext && neighborContext.assessment.totalLateSpikes > 0
                     ? <span data-testid="contextual-status">{recheckLabel(neighborContext.assessment)}</span> : null}
                 </span> : null}
@@ -232,6 +235,10 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
           <span data-testid="anomaly-note"><MethodNote title="Анализ динамики"><AnalysisNote analysis={analysis} /></MethodNote></span>
         </div>
         <CollapsibleContent className="px-4 pb-4">
+          {analysis.originalLevel !== null && analysis.level !== null && analysis.originalLevel > analysis.level
+            ? <p className="text-muted-foreground pt-1 text-xs" data-testid="context-cap-explanation">
+              Поздние скачки зафиксированы. В их окнах вышли новые посты, а старые посты канала тоже заметно росли. Поэтому сила вывода ограничена слабым сигналом; источник просмотров не установлен.
+            </p> : null}
           {neighborContextFailed ? <p className="text-muted-foreground text-xs">Контекст временно недоступен; исходные сигналы сохранены.</p> : null}
           {analysis.signals.length ? <>
             <p className="text-muted-foreground pt-1 text-xs">Сигналы аномалий · {analysis.signals.length}</p>

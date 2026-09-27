@@ -4290,7 +4290,8 @@ components:
     PublicationAnomalyAnalysis:
       type: object
       additionalProperties: false
-      required: [publicationId, datasetRevision, status, level, levelLabel, levelSymbol, signals,
+      required: [publicationId, datasetRevision, status, level, levelLabel, levelSymbol,
+        originalLevel, recheckReason, recheckMethodVersion, recheckEvidence, signals,
         quality, analyzedAt, lagSeconds, normVersion, detectorVersions, reviewStatus,
         methodologyVersion, disclaimer]
       properties:
@@ -4300,6 +4301,13 @@ components:
         level: { type: [integer, 'null'], minimum: 0, maximum: 3 }
         levelLabel: { type: string }
         levelSymbol: { type: string, maxLength: 4 }
+        originalLevel: { type: [integer, 'null'], minimum: 0, maximum: 3,
+          description: 'Сохранённый уровень исходного детектора до контекстной проверки.' }
+        recheckReason: { type: [string, 'null'], description: 'Основание изменения итогового уровня.' }
+        recheckMethodVersion: { type: [string, 'null'], description: 'Версия консервативной контекстной проверки.' }
+        recheckEvidence:
+          type: [object, 'null']
+          description: 'Ограниченные наблюдения, по которым изменён итоговый уровень; исходные сигналы не удаляются.'
         signals:
           type: array
           maxItems: 6
