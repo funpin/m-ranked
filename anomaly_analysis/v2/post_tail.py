@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, Literal
 from uuid import UUID
 
-from .event_adjusted_tail import FeedObservedGrowth, PairedTailRank
+from .event_adjusted_tail import SUPPORTED_PLATFORMS, FeedObservedGrowth, PairedTailRank
 
 if TYPE_CHECKING:
     from .cohort_coverage import PostCoverage
@@ -91,6 +91,8 @@ def _rank(row: FeedObservedGrowth, paired: PairedTailRank) -> tuple[float | None
     m1_resolution = m1.smallest_resolvable_rank
     if m1_resolution is None:
         return None, "m1:unknown_resolution", None, False, None
+    if row.interval.platform in SUPPORTED_PLATFORMS and not row.complete_order:
+        return None, "incomplete_publication_order", None, False, None
     if row.nearest_event_distance is None:
         return m1.upper_tail_rank, None, None, False, m1_resolution
     m2 = paired.m2

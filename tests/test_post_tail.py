@@ -100,6 +100,16 @@ def test_missing_or_unranked_checkpoint_abstains():
     assert "m2:insufficient_calibration" in result.reason
 
 
+def test_incomplete_publication_order_cannot_be_called_no_new_post():
+    first = observation(3600, .01)
+    later = observation(21600, .20)
+    unknown_order = replace(first[0], complete_order=False)
+    result = score(POST, ((unknown_order, first[1]), later), CHECKS)
+    assert result.status == "insufficient_data"
+    assert result.post_rank_bound is None
+    assert "incomplete_publication_order" in result.reason
+
+
 def test_observed_zero_is_neutral_not_missing():
     first = observation(3600, None, event=True, delta=0, m2_status="observed_zero")
     later = observation(21600, .20)
