@@ -15,7 +15,7 @@ import { publicationHref } from "@/lib/entity-routes";
 import { FAMILY_NAMES, METRIC_NAMES, intervalText, markerId, miniChart, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
 import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
 import type { NeighborContextLoad } from "@/lib/neighbor-context-loader";
-import type { ContextAssessment, ContextWindow } from "@/lib/neighbor-context";
+import type { ContextWindow } from "@/lib/neighbor-context";
 import { cn } from "@/lib/utils";
 
 const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
@@ -34,17 +34,6 @@ function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
     </span>
   );
 }
-
-function recheckLabel(assessment: ContextAssessment): string {
-  const parts = [
-    assessment.positiveContrast + assessment.nonpositiveContrast
-      ? `контраст рассчитан: ${assessment.positiveContrast + assessment.nonpositiveContrast}` : null,
-    assessment.unevaluated ? `без оценки: ${assessment.unevaluated}` : null,
-  ].filter(Boolean);
-  return `Сравнение со старыми: ${parts.join(" · ") || "нет оценки"}`;
-}
-
-function growthPercent(logGrowth: number): number { return Math.max(0, Math.expm1(logGrowth) * 100); }
 
 const windowDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
 const windowTime = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
@@ -69,33 +58,23 @@ function ContextRow({ window, signal, index, onShow }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(window.events[0]?.publicationId);
-  const target = window.target ? growthPercent(window.target.logGrowth) : null;
-  const peers = window.medianPeerLogGrowth !== null ? growthPercent(window.medianPeerLogGrowth) : null;
   const shared = window.context === "neighbor_and_shared" || window.context === "shared_channel";
-  const approximate = window.matchedContrast?.rounded ? "≈" : "";
-  const explanation = window.context === "insufficient_data" ? "Контекст: мало данных"
-    : shared && window.events.length ? "Контекст: новые посты и общий рост"
-      : shared ? "Контекст: общий рост канала"
-        : window.events.length ? "Контекст: новые посты без общего роста"
-          : "Контекст: нового поста и общего роста нет";
+  const explanation = window.context === "insufficient_data" ? "Недостаточно замеров"
+    : shared && window.events.length ? "Новый пост · общий рост"
+      : shared ? "Общий рост канала"
+        : window.events.length ? "Новый пост · общего роста нет"
+          : "Контекст не найден";
   const activeEvent = window.events.find((event) => event.publicationId === selectedEvent) ?? window.events[0];
   return <li className="border-border border-b py-3 last:border-b-0" data-testid="anomaly-signal" data-pattern={signal.pattern}>
     <SignalHeading signal={signal} expanded={expanded} onToggle={() => setExpanded(!expanded)} />
     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-[22px] text-xs" data-testid="neighbor-context-window">
       <span className={cn("font-medium", shared ? "text-emerald-600 dark:text-emerald-300" : "text-muted-foreground")}>{explanation}</span>
       {window.events.length ? <span className="text-amber-600 dark:text-amber-300 tabular-nums">
-        Новый №{window.events[0]!.displayId}{window.events.length > 1 ? ` +${window.events.length - 1}` : ""}
+        №{window.events[0]!.displayId}{window.events.length > 1 ? ` +${window.events.length - 1}` : ""} · позиция +{window.events[0]!.observedFeedDistance}
       </span> : null}
-      <span className="text-blue-500">● Этот {target === null ? "—" : `+${target.toFixed(1)}%`}</span>
-      <span className="text-emerald-500">● Старые {peers === null ? "—" : `+${peers.toFixed(1)}%`}</span>
-      <span className="text-muted-foreground tabular-nums">{window.positivePeerCount}/{window.peers.length} ↑</span>
-      <span className="text-muted-foreground font-medium tabular-nums">
-        {window.matchedContrast
-          ? `Разница со старыми ${approximate}${window.matchedContrast.contrastPerHour >= 0 ? "+" : ""}${window.matchedContrast.contrastPerHour.toFixed(1)}/ч`
-          : "Нет контрольных замеров"}
-      </span>
-      <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground rounded-full focus-visible:ring-2 focus-visible:ring-ring" aria-label="Основание и контраст M2" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
-        {window.originalFormula}. Из прироста этого поста сверх его тихого периода вычитается медиана такого же прироста старых постов. Разница не учитывает положение постов в ленте и переходы от нового поста. Её знак не подтверждает и не опровергает аномалию.
+      {window.peers.length ? <span className="text-muted-foreground tabular-nums">Старые выросли: {window.positivePeerCount}/{window.peers.length}</span> : null}
+      <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground rounded-full focus-visible:ring-2 focus-visible:ring-ring" aria-label="Что означает контекст" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
+        Порядок в ленте и рост старых постов видны по данным. Источник переходов счётчики не раскрывают.
       </TooltipContent></Tooltip>
     </div>
     {expanded ? <div className="border-border mt-3 border-t pt-3" data-testid="neighbor-event-chart">
@@ -154,10 +133,8 @@ function AnalysisNote({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
   return (
     <span className="grid gap-1.5">
       {analysis.quality ? <span className="block" data-testid="anomaly-quality">Данные: {analysis.quality.summary}.</span> : null}
-      <span>Уровень зависит от силы и числа независимых признаков.</span>
-      <span>В заголовке показан итоговый уровень. При одновременном росте старых постов и появлении новых контекстная проверка может понизить оценку сильных поздних скачков просмотров до слабого сигнала. Исходные признаки остаются видны.</span>
-      <span>Сравнение со старыми постами описывает наблюдения, но не устанавливает причину роста. Число «Разница со старыми» само по себе не повышает и не понижает уровень.</span>
-      <span>Аномалия не доказывает накрутку.</span>
+      <span>Поздний скачок остаётся в истории. Если одновременно выросли соседние старые посты, итоговую оценку можно понизить.</span>
+      <span>Переходы между постами не наблюдаются. Сигнал не доказывает накрутку.</span>
       <span className="text-foreground/70">{analysis.methodologyVersion}</span>
     </span>
   );
@@ -223,9 +200,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
                   {summary.count ? <span>{summary.count}</span> : null}
                   {summary.analyzedAt ? <span>Анализ {legacyDate(summary.analyzedAt)}</span> : null}
                   {analysis.originalLevel !== null && analysis.level !== null && analysis.originalLevel > analysis.level
-                    ? <span data-testid="context-cap-status">Понижено после проверки контекста · исходно: выраженная аномалия</span> : null}
-                  {neighborContext && neighborContext.assessment.totalLateSpikes > 0
-                    ? <span data-testid="contextual-status">{recheckLabel(neighborContext.assessment)}</span> : null}
+                    ? <span data-testid="context-cap-status">Сильный признак ослаблен контекстом</span> : null}
                 </span> : null}
               </span>
             </CollapsibleTrigger>
@@ -237,7 +212,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
         <CollapsibleContent className="px-4 pb-4">
           {analysis.originalLevel !== null && analysis.level !== null && analysis.originalLevel > analysis.level
             ? <p className="text-muted-foreground pt-1 text-xs" data-testid="context-cap-explanation">
-              Поздние скачки зафиксированы. В их окнах вышли новые посты, а старые посты канала тоже заметно росли. Поэтому сила вывода ограничена слабым сигналом; источник просмотров не установлен.
+              Скачок есть; общий рост после новых постов ослабляет вывод. Источник просмотров неизвестен.
             </p> : null}
           {neighborContextFailed ? <p className="text-muted-foreground text-xs">Контекст временно недоступен; исходные сигналы сохранены.</p> : null}
           {analysis.signals.length ? <>

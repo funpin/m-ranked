@@ -26,7 +26,7 @@ export function SectionHead({ eyebrow, title, children, tone = "var(--chart-2)",
       <p className="text-muted-foreground inline-flex items-center gap-2 text-xs font-medium tracking-[0.14em] uppercase">
         <span className="size-1.5 rounded-full" style={{ background: tone }} aria-hidden="true" />{eyebrow}
       </p>
-      <h2 id={id} className="font-heading text-4xl leading-[1.02] font-bold tracking-tight text-balance sm:text-6xl">{title}</h2>
+      <h2 id={id} className="font-heading scroll-mt-36 text-4xl leading-[1.02] font-bold tracking-tight text-balance sm:text-6xl">{title}</h2>
       {children && <p className="text-muted-foreground max-w-2xl text-base leading-relaxed text-pretty sm:text-lg">{children}</p>}
     </header>
   );
@@ -62,7 +62,7 @@ export function Hero({ platforms }: { platforms: readonly LandingPlatform[] }) {
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/review" prefetch={false} data-testid="landing-cta"
             className="group bg-foreground text-background focus-visible:ring-ring/50 inline-flex h-12 items-center gap-2 rounded-full px-6 text-sm font-semibold shadow-lg shadow-black/10 transition-transform outline-none hover:-translate-y-0.5 focus-visible:ring-4 active:translate-y-0">
-            Открыть рейтинг
+            Перейти к обзору
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
           </Link>
           <a href="#how"
@@ -246,10 +246,10 @@ const STEPS = [
 
 export function Pipeline({ chart }: { chart: ReactNode }) {
   return (
-    <section aria-labelledby="how" className="grid scroll-mt-24 gap-12 py-24 sm:py-32">
+    <section aria-labelledby="how" className="grid gap-12 py-24 sm:py-32">
       <SectionHead id="how" eyebrow="как это устроено" tone="var(--chart-1)" title={<>От публикации<br />до графика</>}>
         Сборщики обходят аккаунты вузов по расписанию, сохраняют историю каждого счётчика и отправляют её на витрину,
-        где из неё строятся рейтинг, графики и анализ.
+          где из неё строятся обзор, графики и анализ.
       </SectionHead>
       <ol className="grid gap-4 md:grid-cols-2">
         {STEPS.map((step, index) => (
@@ -355,7 +355,7 @@ export function Verify({ summary, origin }: { summary: SiteSummary | null; origi
           <span className="landing-doc-mark absolute top-5 left-3 h-2.5 w-1 rounded-full" style={{ background: "var(--chart-1)" }} />
         </VerifyCard>
         <VerifyCard href="/methodology/api" tone="var(--chart-2)" icon={<Braces className="size-4" />} action="Открытый API"
-          title="Данные машинам" text="История каждого поста, рейтинг и сравнение — в машиночитаемом виде, без ключей." testId="verify-api">
+          title="Данные машинам" text="История каждого поста, обзор и сравнение — в машиночитаемом виде, без ключей." testId="verify-api">
           <pre className="absolute inset-4 overflow-hidden font-mono text-[11px] leading-5">
             <span className="text-muted-foreground">$ curl {origin.replace(/^https:\/\//, "")}/api/v1/site/summary</span>{"\n"}
             <span className="landing-json">

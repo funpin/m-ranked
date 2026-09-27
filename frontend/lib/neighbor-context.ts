@@ -173,13 +173,13 @@ function comparePosts(a: PublicationListItem, b: PublicationListItem): number {
   return a.publicationId.localeCompare(b.publicationId);
 }
 
-/** Small same-channel peer set, chosen before looking at any signal values. */
+/** Same-feed-depth peer set, chosen before looking at any signal values. */
 export function selectContextPeers(publications: PublicationListItem[], targetId: string): PublicationListItem[] {
   const ordered = [...publications].sort(comparePosts);
   const position = ordered.findIndex((post) => post.publicationId === targetId);
   if (position < 0) return [];
   return ordered.slice(Math.max(0, position - 2), position)
-    .concat(ordered.slice(position + 1, position + 5));
+    .concat(ordered.slice(position + 1, position + 3));
 }
 
 /** A signal window is only resolved to polling precision. A publication just

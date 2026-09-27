@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Label, Line, LineChart, Pie, PieChart,
+  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Label, Line, LineChart, Pie, PieChart,
   PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ReferenceLine, Scatter, ScatterChart,
   XAxis, YAxis, ZAxis,
 } from "recharts";
@@ -212,11 +212,11 @@ export function LevelsByPlatform({ data }: { data: Dashboard }) {
   );
 }
 
-/** Динамика по дням: публикации по площадкам и доля аномалий поверх. */
+/** Динамика по дням: каждая линия показывает свою площадку, без накопления. */
 export function DailyChart({ data, platform }: { data: Dashboard; platform: DashboardPlatform }) {
   const rows = useMemo(() => dailyRows(data), [data]);
   const networks: readonly Network[] = platform === "all" ? NETWORKS : [platform];
-  const config: ChartConfig = { [`anomaly_${platform}`]: { label: "Доля аномалий", color: "var(--destructive)" } };
+  const config: ChartConfig = { [`anomaly_${platform}`]: { label: "Доля аномалий", color: "var(--chart-10)" } };
   for (const network of networks) config[`posts_${network}`] = { label: PLATFORM_NAMES[network], color: PLATFORM_COLORS[network] };
   if (!rows.length) return <EmptyChart />;
   return (
@@ -230,11 +230,11 @@ export function DailyChart({ data, platform }: { data: Dashboard; platform: Dash
         <ChartTooltip content={<ChartTooltipContent labelFormatter={(value) => dayLabel(String(value))}
           valueFormatter={(value, name) => String(name).startsWith("anomaly") ? formatPercent(Number(value)) : formatInteger(Number(value))} />} />
         {networks.map((network) => (
-          <Area key={network} yAxisId="posts" dataKey={`posts_${network}`} stackId="posts" type="monotone"
-            fill={`var(--color-posts_${network})`} fillOpacity={0.35} stroke={`var(--color-posts_${network})`} isAnimationActive={false} />
+          <Line key={network} yAxisId="posts" dataKey={`posts_${network}`} type="monotone"
+            stroke={`var(--color-posts_${network})`} strokeWidth={2} dot={false} isAnimationActive={false} />
         ))}
         <Line yAxisId="share" dataKey={`anomaly_${platform}`} stroke={`var(--color-anomaly_${platform})`} strokeWidth={2}
-          dot={false} type="monotone" connectNulls isAnimationActive={false} />
+          strokeDasharray="5 4" dot={false} type="monotone" connectNulls isAnimationActive={false} />
         <ChartLegend content={<ChartLegendContent />} />
       </ComposedChart>
     </ChartContainer>
@@ -378,7 +378,7 @@ export function PresenceChart({ rows, highlights }: { rows: readonly Institution
   );
 }
 
-/** Охват по дням по площадкам — сколько просмотров набрали вышедшие в этот день посты. */
+/** Охват по дням: линия каждой площадки показывает её собственное значение. */
 export function ReachAreaChart({ data, platform }: { data: Dashboard; platform: DashboardPlatform }) {
   const rows = useMemo(() => dailyRows(data), [data]);
   const networks: readonly Network[] = platform === "all" ? NETWORKS : [platform];
@@ -387,26 +387,18 @@ export function ReachAreaChart({ data, platform }: { data: Dashboard; platform: 
   return (
     <ChartContainer config={config} className="aspect-auto h-[300px] w-full" data-testid="reach-chart" role="img"
       aria-label="Просмотры публикаций по дню выхода">
-      <AreaChart data={rows} margin={{ left: 4, right: 12, top: 8 }}>
-        <defs>
-          {networks.map((network) => (
-            <linearGradient key={network} id={`reach-${network}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={`var(--color-views_${network})`} stopOpacity={0.7} />
-              <stop offset="95%" stopColor={`var(--color-views_${network})`} stopOpacity={0.05} />
-            </linearGradient>
-          ))}
-        </defs>
+      <LineChart data={rows} margin={{ left: 4, right: 12, top: 8 }}>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="day" tickFormatter={dayLabel} tickLine={false} axisLine={false} minTickGap={16} />
-        <YAxis tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={48} />
+        <YAxis tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={70} />
         <ChartTooltip content={<ChartTooltipContent labelFormatter={(value) => dayLabel(String(value))}
           valueFormatter={(value) => formatInteger(Number(value))} />} />
         {networks.map((network) => (
-          <Area key={network} dataKey={`views_${network}`} stackId="views" type="monotone"
-            fill={`url(#reach-${network})`} stroke={`var(--color-views_${network})`} isAnimationActive={false} />
+          <Line key={network} dataKey={`views_${network}`} type="monotone"
+            stroke={`var(--color-views_${network})`} strokeWidth={2} dot={false} isAnimationActive={false} />
         ))}
         <ChartLegend content={<ChartLegendContent />} />
-      </AreaChart>
+      </LineChart>
     </ChartContainer>
   );
 }

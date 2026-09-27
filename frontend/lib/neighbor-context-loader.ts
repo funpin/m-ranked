@@ -19,13 +19,13 @@ export async function loadNeighborContext(targetHistory: PublicationHistory, ana
     .flatMap((signal) => selectWindowEvents(publications.items, account.publicationId,
       signal.startAt, signal.endAt, signal.scaleSeconds).events.map((event) => event.publicationId)));
   const peerIds = new Set(peers.map((post) => post.publicationId));
-  // Keep page load bounded while resolving later posts beyond the four closest
+  // Keep page load bounded while resolving later posts beyond the closest
   // feed neighbors. Missing event histories stay visibly unmeasured in the UI.
   const extraEvents = publications.items.filter((post) => eventIds.has(post.publicationId) && !peerIds.has(post.publicationId))
     .slice(0, 8);
   const requested = [...peers, ...extraEvents];
   const peerHistories = new Map<string, PublicationHistory>();
-  // At most fourteen histories and two concurrent requests bound API load.
+  // At most twelve histories and two concurrent requests bound API load.
   for (let offset = 0; offset < requested.length; offset += 2) {
     const batch = requested.slice(offset, offset + 2);
     const results = await Promise.allSettled(batch.map((post) => api.publicationHistory(post.publicationId, undefined, 500)));
