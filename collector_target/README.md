@@ -55,7 +55,7 @@ and every eligible row is eventually revisited without starving discovery.
 snapshot when the versioned metric, quality, evidence, semantic and reaction
 state is unchanged. Successful polls remain traceable through the collection
 run/account result and compact availability state, but these do not identify
-which unchanged post was read. For that research question, migration `0045`
+which unchanged post was read. For that research question, migration `0044`
 adds an optional seven-day per-post receipt cohort. It is **disabled** unless
 `PUBLICATION_POLL_RECEIPT_ACCOUNT_IDS` lists at most 16 account UUIDs in both
 the collector and transfer receiver environments. Each account batch selects

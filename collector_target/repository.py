@@ -278,7 +278,7 @@ class PostgresCollectorRepository:
                     "SELECT to_regclass('ingest.publication_poll_receipt') AS table_name"
                 ).fetchone()
             if receipt is None or _row_value(receipt, "table_name", 0) is None:
-                raise RuntimeError("poll receipt cohort requires migration 0045")
+                raise RuntimeError("poll receipt cohort requires migration 0044")
 
     def start_run(self, context: CollectionContext) -> None:
         with self._connection() as connection, connection.transaction():

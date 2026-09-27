@@ -2,7 +2,7 @@
 """Build a bounded M0 growth reference from complete opt-in poll receipts.
 
 Dry run is the default. Writing requires an explicit database name and migration
-0048. This command never reads the change-only metric snapshot table.
+0044. This command never reads the change-only metric snapshot table.
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ def run_rollup(*, dsn: str, platform: str, accounts: tuple[UUID, ...],
             if connection.execute(
                 "SELECT to_regclass('analytics.bounded_poll_growth_daily') AS name"
             ).fetchone()["name"] is None:
-                raise ValueError("migration 0048 is missing")
+                raise ValueError("migration 0044 is missing")
             with connection.cursor() as cursor:
                 cursor.executemany(UPSERT, [
                     (row.publication_id, row.account_id, row.platform,

@@ -123,7 +123,7 @@ SET status='accepted', decided_at=now() WHERE id=…` от имени владе
 
 ## Ограниченный сбор M0
 
-M0 не меняет публичный вывод. После миграций `0045`, `0047`, `0048` и замера
+M0 не меняет публичный вывод. После единой миграции `0044` и замера
 стоимости выберите не более 16 аккаунтов; одинаковые ID задаются в collector,
 transfer receiver и `ANOMALY_M0_ACCOUNT_IDS`. Укажите имя базы в
 `ANOMALY_M0_EXPECTED_DATABASE`, затем включите `ANOMALY_M0_ROLLUP_ENABLED=true`.

@@ -2,7 +2,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-MIGRATION = (ROOT / "db/migrations/0044_site_summary.sql").read_text()
+MIGRATION = (ROOT / "db/migrations/0044_in_place_release.sql").read_text()
 REFRESH = (ROOT / "db/tools/refresh-site-summary.sql").read_text()
 MAINTENANCE = (ROOT / "operations/scripts/run-maintenance.sh").read_text()
 

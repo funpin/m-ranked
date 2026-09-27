@@ -67,7 +67,7 @@ def main() -> None:
         if connection.execute(
             "SELECT to_regclass('analytics.bounded_poll_growth_daily') AS name"
         ).fetchone()["name"] is None:
-            parser.error("migration 0048 is missing")
+            parser.error("migration 0044 is missing")
         reference_rows = connection.execute(
             """SELECT source,platform,account_id,publication_id,observed_day,
                       age_band,exposure_band,max_gap_seconds,upper_rate_per_hour

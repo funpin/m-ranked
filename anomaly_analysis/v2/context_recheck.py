@@ -1,6 +1,6 @@
 """Bounded, repeatable contextual recheck of saved strong late-view signals.
 
-Run as the analytics_worker database role, after migration 0046. A dry run is
+Run as the analytics_worker database role, after migration 0044. A dry run is
 the default. Each post is read and (with --apply) written in one repeatable-read
 transaction, so the window, neighbor histories and source verdict are coherent.
 This is a separate pass over saved v2 results; the original detector and its
