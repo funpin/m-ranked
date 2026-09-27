@@ -60,7 +60,7 @@ test.describe("без JavaScript", () => {
     await expect(page.getByRole("link", { name: "Исходный код на GitHub" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Тема:/ })).toBeVisible();
 
-    await page.getByTestId("main-nav").getByRole("link", { name: "Статистика" }).click();
+    await page.getByTestId("main-nav-fallback").getByRole("link", { name: "Статистика" }).click();
     await expect(page).toHaveURL(/\/statistics\?platform=telegram/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
