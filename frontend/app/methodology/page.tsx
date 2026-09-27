@@ -46,7 +46,7 @@ export default function MethodologyIndex() {
         <div className="bg-card ring-foreground/10 grid gap-3 rounded-2xl p-5 text-sm leading-relaxed ring-1 sm:p-6">
           <p><strong>Анализ динамики:</strong> действующий детектор сохраняет признаки и уровень для публикаций четырёх площадок.</p>
           <p><strong>Контекстная проверка:</strong> для части поздних скачков Telegram и MAX отдельный пересмотр может понизить итоговый уровень, сохранив исходный сигнал. Наличие нового поста не раскрывает источник просмотров.</p>
-          <p className="text-muted-foreground"><strong className="text-foreground">Исследовательский метод M1/M2:</strong> первый архивный прогон на MAX показал, что текущая версия M2 пока не снижает число малых рангов. <Link href="/methodology/pilot" prefetch={false} className="text-foreground underline underline-offset-4">Результат на локальной копии</Link>. До проверки новой когорты метод не участвует в публичной оценке.</p>
+          <p className="text-muted-foreground"><strong className="text-foreground">Исследовательский метод M1/M2:</strong> расчёт на реальных интервалах чтения подготовлен, но до сбора и проверки новой когорты не участвует в публичной оценке. <Link href="/methodology/analysis" prefetch={false} className="text-foreground underline underline-offset-4">Как читать вывод</Link>.</p>
         </div>
       </section>
 
