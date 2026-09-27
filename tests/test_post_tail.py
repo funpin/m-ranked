@@ -47,6 +47,7 @@ def test_context_only_reduces_evidence_and_post_bound_counts_planned_looks():
     assert result.evidence[0].context_reduced
     assert result.evidence[0].interval_rank == .40
     assert result.minimum_interval_rank == .02
+    assert result.smallest_resolvable_post_rank == 2 / 41
     assert result.m1_post_rank_bound == .02
     assert result.post_rank_bound == .04
 
@@ -110,3 +111,13 @@ def test_change_only_archive_cannot_return_a_full_receipt_status():
                         CHECKS, source="change_only_shadow")
     assert result.status == "shadow_only"
     assert result.post_rank_bound == .02
+
+
+def test_reference_resolution_is_reported_after_multiple_checks():
+    first = observation(3600, .10)
+    later = observation(21600, .20)
+    sparse = tuple((row, replace(paired, m1=replace(
+        paired.m1, smallest_resolvable_rank=.10))) for row, paired in (first, later))
+    result = score(POST, sparse, CHECKS)
+    assert result.smallest_resolvable_post_rank == .20
+    assert result.post_rank_bound == .20

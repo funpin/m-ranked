@@ -91,6 +91,7 @@
       "posts_with_holdout_intervals": 178,
       "shadow_evaluable_posts": 102,
       "insufficient_data_posts": 76,
+      "posts_with_5pct_resolution": 102,
       "m1_small_tail_posts": 0,
       "context_small_tail_posts": 0,
       "posts_with_reduced_evidence": 0
@@ -103,6 +104,7 @@
       "posts_with_holdout_intervals": 178,
       "shadow_evaluable_posts": 38,
       "insufficient_data_posts": 140,
+      "posts_with_5pct_resolution": 38,
       "m1_small_tail_posts": 0,
       "context_small_tail_posts": 0,
       "posts_with_reduced_evidence": 1

@@ -43,6 +43,7 @@ LATE_CHECKPOINTS = (
 class CheckpointEvidence:
     name: str
     interval_rank: float
+    smallest_resolvable_rank: float
     m1_rank: float
     m2_rank: float | None
     context_reduced: bool
@@ -56,6 +57,7 @@ class PostTailResult:
     observed_checks: int
     reason: str | None
     minimum_interval_rank: float | None
+    smallest_resolvable_post_rank: float | None
     m1_post_rank_bound: float | None
     post_rank_bound: float | None
     evidence: tuple[CheckpointEvidence, ...]
@@ -76,21 +78,25 @@ def _validate_plan(checkpoints: tuple[Checkpoint, ...]) -> None:
 
 
 def _rank(row: FeedObservedGrowth, paired: PairedTailRank) -> tuple[float | None, str | None,
-                                                                   float | None, bool]:
+                                                                   float | None, bool, float | None]:
     m1 = paired.m1
     if m1.status == "observed_zero":
-        return 1.0, None, None, False
+        return 1.0, None, None, False, 1.0
     if m1.status != "ranked" or m1.upper_tail_rank is None:
-        return None, f"m1:{m1.status}", None, False
+        return None, f"m1:{m1.status}", None, False, None
+    m1_resolution = m1.smallest_resolvable_rank
+    if m1_resolution is None:
+        return None, "m1:unknown_resolution", None, False, None
     if row.nearest_event_distance is None:
-        return m1.upper_tail_rank, None, None, False
+        return m1.upper_tail_rank, None, None, False, m1_resolution
     m2 = paired.m2
     if m2.status != "ranked" or m2.upper_tail_rank is None:
-        return None, f"m2:{m2.status}", None, False
+        return None, f"m2:{m2.status}", None, False, None
     # The event-conditioned reference can only temper a pre-existing M1 tail.
     # max(p1,p2) is conservative if p1 is valid, without independence of p1/p2.
     effective = max(m1.upper_tail_rank, m2.upper_tail_rank)
-    return effective, None, m2.upper_tail_rank, effective > m1.upper_tail_rank
+    resolution = max(m1_resolution, 1 / (m2.calibration_blocks + 1))
+    return effective, None, m2.upper_tail_rank, effective > m1.upper_tail_rank, resolution
 
 
 def score_post(
@@ -139,20 +145,24 @@ def score_post(
             missing.append(checkpoint.name)
             continue
         _distance, _time, row, paired = min(candidates, key=lambda value: value[:2])
-        rank, reason, m2_rank, reduced = _rank(row, paired)
-        if reason is not None or rank is None:
+        rank, reason, m2_rank, reduced, resolution = _rank(row, paired)
+        if reason is not None or rank is None or resolution is None:
             missing.append(f"{checkpoint.name}:{reason}")
             continue
         m1_rank = paired.m1.upper_tail_rank if paired.m1.upper_tail_rank is not None else 1.0
-        chosen.append(CheckpointEvidence(checkpoint.name, rank, m1_rank, m2_rank, reduced))
+        chosen.append(CheckpointEvidence(checkpoint.name, rank, resolution,
+                                         m1_rank, m2_rank, reduced))
     if missing:
         return PostTailResult(publication_id, "insufficient_data", len(checkpoints),
-                              len(chosen), ",".join(missing), None, None, None,
+                              len(chosen), ",".join(missing), None, None, None, None,
                               tuple(chosen))
     smallest = min(item.interval_rank for item in chosen)
     # Union bound over planned looks: no independence assumption across reads.
     bound = min(1.0, len(checkpoints) * smallest)
+    resolution_bound = min(1.0, len(checkpoints) * min(
+        item.smallest_resolvable_rank for item in chosen))
     m1_bound = min(1.0, len(checkpoints) * min(item.m1_rank for item in chosen))
     status = "research_ranked" if source == "complete_receipts" else "shadow_only"
     return PostTailResult(publication_id, status, len(checkpoints), len(chosen),
-                          None, smallest, m1_bound, bound, tuple(chosen))
+                          None, smallest, resolution_bound, m1_bound, bound,
+                          tuple(chosen))

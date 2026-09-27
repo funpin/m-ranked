@@ -231,6 +231,8 @@ def _post_level_shadow(holdout, results, checkpoints):
         "posts_with_holdout_intervals": len(scores),
         "shadow_evaluable_posts": len(ranked),
         "insufficient_data_posts": len(scores) - len(ranked),
+        "posts_with_5pct_resolution": sum(
+            score.smallest_resolvable_post_rank <= .05 for score in ranked),
         "m1_small_tail_posts": sum(score.m1_post_rank_bound <= .05 for score in ranked),
         "context_small_tail_posts": sum(score.post_rank_bound <= .05 for score in ranked),
         "posts_with_reduced_evidence": sum(
