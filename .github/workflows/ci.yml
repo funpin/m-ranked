@@ -2,7 +2,7 @@ name: Build and contract gates
 on:
   pull_request:
   push:
-    branches: [alpha, main]
+    branches: [alpha, main, fixin]
   workflow_dispatch:
 
 permissions:
