@@ -7,10 +7,13 @@ test("главная показывает сводку и площадки из 
   const stats = page.getByTestId("landing-stats");
   // Числа ниже экрана досчитывают, когда до них долистали.
   await stats.scrollIntoViewIfNeeded();
-  await expect(stats).toContainText("вузов под наблюдением");
+  await expect(stats).toContainText("Под наблюдением");
   await expect(stats).toContainText("98 765");
   await expect(page.getByTestId("landing-platforms").locator(":scope > li")).toHaveCount(4);
-  await expect(page.getByTestId("landing-platforms")).toContainText("12 сообществ");
+  const vk = page.getByTestId("landing-platforms").locator(":scope > li").first();
+  await expect(vk).toContainText("ВКонтакте");
+  await expect(vk).toContainText("12");
+  await expect(vk).toContainText("сообществ");
 
   // Шапка не в счёт: в содержимом главной каждая страница — одной ссылкой.
   const main = page.locator("#main-content");
@@ -32,10 +35,13 @@ test("графики главной загружаются, только ког�
   await expect(page.getByTestId("hourly-chart")).toBeVisible();
   await rhythm.getByRole("radio", { name: "ВКонтакте" }).click();
   await expect(rhythm.getByRole("radio", { name: "ВКонтакте" })).toHaveAttribute("aria-checked", "true");
-  await rhythm.getByRole("radio", { name: "Дни недели" }).click();
+  // Остальные графики — в ленте: листаются стрелкой, грузятся, когда видны.
+  await rhythm.getByRole("button", { name: "Ритм площадок: дальше" }).click();
+  await rhythm.getByText("Дни недели.").scrollIntoViewIfNeeded();
   await expect(page.getByTestId("timing-heatmap")).toBeVisible();
-  await rhythm.getByRole("radio", { name: "Итоги анализа" }).click();
+  await rhythm.getByText("Итоги анализа.").scrollIntoViewIfNeeded();
   await expect(page.getByTestId("levels-by-platform")).toBeVisible();
+  await expect(rhythm.getByRole("button", { name: "Ритм площадок: назад" })).toBeEnabled();
 });
 
 test("коридор нормы переключает форму роста по выбору читателя", async ({ page }) => {

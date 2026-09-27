@@ -19,7 +19,7 @@ export function CorridorFigure({ active, curve, onSelect, figureRef }: {
   const shape = shapeOf(active);
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-center" data-testid="norm-corridor">
-      <div ref={figureRef} className="bg-card ring-foreground/10 relative overflow-hidden rounded-2xl p-4 ring-1 sm:p-6">
+      <div ref={figureRef} className="landing-tile relative overflow-hidden p-4 sm:p-7">
         <div className="text-muted-foreground mb-2 flex items-center justify-between text-[11px] tracking-wide uppercase">
           <span>просмотры</span><span>схема · не данные</span>
         </div>

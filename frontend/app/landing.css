@@ -40,22 +40,93 @@
   color: transparent;
 }
 
-/* Появление блоков при прокрутке — на временной шкале прокрутки, без
-   скриптов. Где шкалы нет (Firefox), блоки просто видны сразу. Нижняя
-   граница шкалы поднята на 12 % высоты окна: блок начинает проявляться не
-   на самом краю экрана, а чуть выше, где его уже видно целиком. */
+/* Плитки в духе Apple: на тёмной теме — глубокий чёрный на сером фоне
+   страницы, на светлой — светло-серые на белом. Радиус крупный, без рамки. */
+.landing-tile {
+  border-radius: 28px;
+  background: oklch(0.955 0.002 250);
+  color: var(--foreground);
+}
+:root[data-theme="dark"] .landing-tile {
+  background: oklch(0.09 0 0);
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.05);
+}
+.landing-tile-wide {
+  border-radius: 32px;
+  /* Мягкое свечение цветами площадок сверху — как подсветка на витринах. */
+  background-image:
+    radial-gradient(60% 45% at 18% 0%, color-mix(in oklch, var(--platform-telegram) 14%, transparent), transparent 70%),
+    radial-gradient(50% 40% at 82% 0%, color-mix(in oklch, var(--platform-max) 14%, transparent), transparent 70%);
+}
+
+/* Ленты: карточки уходят за правый край окна, левый край ровняется по
+   колонке текста. Полоса прокрутки скрыта — листают жестом и стрелками. */
+.landing-ribbon { --gutter: max(1rem, calc((100vw - 1400px) / 2 + 1rem)); }
+@media (min-width: 40rem) { .landing-ribbon { --gutter: max(1.5rem, calc((100vw - 1400px) / 2 + 1.5rem)); } }
+@media (min-width: 64rem) { .landing-ribbon { --gutter: max(2.5rem, calc((100vw - 1400px) / 2 + 2.5rem)); } }
+.landing-ribbon-track {
+  margin-inline: calc(50% - 50vw);
+  padding-inline: var(--gutter);
+  scroll-padding-inline: var(--gutter);
+  scrollbar-width: none;
+}
+.landing-ribbon-track::-webkit-scrollbar { display: none; }
+
+/* Появление при прокрутке — на временной шкале прокрутки, без скриптов, и
+   у разных элементов разное: заголовки поднимаются из размытия, цифры
+   выпрыгивают по очереди, карточки лент въезжают справа, большая плитка
+   раскрывается на всю ширину, схема «встаёт» из наклона. Нижняя граница
+   шкалы поднята на 12 % окна: элемент проявляется не на самом краю экрана.
+   Где шкалы нет (Firefox), всё просто видно сразу. */
 @keyframes landing-rise {
-  from { opacity: 0; transform: translateY(40px) scale(0.985); }
+  from { opacity: 0; transform: translateY(48px); filter: blur(10px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes landing-pop {
+  from { opacity: 0; transform: translateY(28px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes landing-slide {
+  from { opacity: 0; transform: translateX(96px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes landing-widen {
+  from { clip-path: inset(0 8% round 40px); transform: scale(0.97); }
+  to { clip-path: inset(0 0 round 32px); transform: none; }
+}
+@keyframes landing-tilt {
+  from { opacity: 0.2; transform: perspective(1600px) rotateX(28deg) translateY(80px) scale(0.92); }
   to { opacity: 1; transform: none; }
 }
 @keyframes landing-parallax {
   to { transform: translateX(-50%) translateY(14%); opacity: 0.25; }
 }
 @supports (animation-timeline: view()) {
-  .landing-reveal {
+  .landing-rise {
     animation: landing-rise linear both;
     animation-timeline: view(block 0% 12%);
-    animation-range: entry 0% entry 55%;
+    animation-range: entry 0% entry 70%;
+  }
+  .landing-pop {
+    animation: landing-pop linear both;
+    animation-timeline: view(block 0% 12%);
+    animation-range: entry calc(var(--i, 0) * 12%) entry calc(60% + var(--i, 0) * 12%);
+  }
+  .landing-slide {
+    animation: landing-slide linear both;
+    animation-timeline: view(block 0% 12%);
+    animation-range: entry calc(10% + var(--i, 0) * 10%) cover calc(30% + var(--i, 0) * 6%);
+  }
+  .landing-widen {
+    animation: landing-widen linear both;
+    animation-timeline: view(block 0% 12%);
+    animation-range: entry 0% cover 45%;
+  }
+  .landing-tilt {
+    transform-origin: 50% 100%;
+    animation: landing-tilt linear both;
+    animation-timeline: view(block 0% 12%);
+    animation-range: entry 0% cover 40%;
   }
   .landing-hero-parallax {
     animation: landing-parallax linear both;
@@ -70,11 +141,89 @@
     animation-range: entry 20% cover 45%;
   }
   .landing-ticks {
-    animation: landing-rise linear both;
+    animation: landing-pop linear both;
     animation-timeline: view(block 0% 12%);
     animation-range: entry 30% cover 40%;
   }
 }
+
+/* Кольцо монет площадок: настоящее 3D на CSS. Монеты стоят по кругу и
+   поворачиваются вместе с прокруткой раздела; без шкалы — просто повёрнуты. */
+/* Угол кольца — отдельное свойство: монеты читают его, чтобы почти
+   поворачиваться к зрителю и не показывать знак задом наперёд. */
+@property --spin {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 30deg;
+}
+@keyframes landing-orbit {
+  from { --spin: 30deg; }
+  to { --spin: -150deg; }
+}
+.landing-orbit {
+  --radius: 150px;
+  --coin: 104px;
+  position: relative;
+  height: calc(var(--coin) * 2.4);
+  perspective: 1100px;
+  perspective-origin: 50% 30%;
+}
+@media (min-width: 40rem) { .landing-orbit { --radius: 230px; --coin: 132px; } }
+.landing-orbit-ring {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateX(-14deg) rotateY(var(--spin));
+}
+@supports (animation-timeline: view()) {
+  .landing-orbit-ring {
+    animation: landing-orbit linear both;
+    animation-timeline: view();
+    animation-range: cover 5% cover 95%;
+  }
+}
+.landing-coin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--coin);
+  height: var(--coin);
+  margin: calc(var(--coin) / -2);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  --place: calc(var(--i) * 360deg / var(--n));
+  transform: rotateY(var(--place)) translateZ(var(--radius)) rotateY(calc((var(--place) + var(--spin)) * -0.78)) rotateX(14deg);
+  background:
+    radial-gradient(circle at 32% 26%, oklch(1 0 0 / 0.55), transparent 42%),
+    radial-gradient(circle at 50% 60%, color-mix(in oklch, var(--brand) 30%, oklch(0.98 0 0)), color-mix(in oklch, var(--brand) 55%, oklch(0.55 0 0)));
+  box-shadow:
+    inset 0 -6px 14px oklch(0 0 0 / 0.25),
+    inset 0 4px 10px oklch(1 0 0 / 0.5),
+    0 18px 40px -14px color-mix(in oklch, var(--brand) 65%, transparent);
+}
+:root[data-theme="dark"] .landing-coin {
+  background:
+    radial-gradient(circle at 32% 26%, oklch(1 0 0 / 0.35), transparent 42%),
+    radial-gradient(circle at 50% 60%, color-mix(in oklch, var(--brand) 55%, oklch(0.25 0 0)), color-mix(in oklch, var(--brand) 35%, oklch(0.08 0 0)));
+}
+.landing-coin-logo {
+  width: 52%;
+  height: 52%;
+  filter: drop-shadow(0 2px 3px oklch(0 0 0 / 0.3));
+}
+.landing-orbit-floor {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: calc(var(--radius) * 2.6);
+  height: 40px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, oklch(0 0 0 / 0.18), transparent);
+  filter: blur(6px);
+}
+:root[data-theme="dark"] .landing-orbit-floor { background: radial-gradient(closest-side, oklch(1 0 0 / 0.08), transparent); }
 
 /* Цветная подпись: оттенок палитры, притянутый к цвету текста, — чтобы
    контраст держался в обеих темах. */
@@ -176,8 +325,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .landing-draw { animation: none; stroke-dashoffset: 0; }
-  .landing-caret,
-  .landing-reveal, .landing-hero-parallax, .landing-ticks { animation: none; }
+  .landing-caret, .landing-rise, .landing-pop, .landing-slide, .landing-widen, .landing-tilt,
+  .landing-hero-parallax, .landing-ticks, .landing-orbit-ring { animation: none; }
   .landing-platform, .landing-verify, .landing-platform-logo, .landing-doc-line, .landing-doc-mark,
   .landing-branch, .landing-branch-dot, .landing-json-line { transition: none; }
   .landing-platform:hover, .landing-verify:hover, .landing-platform:hover .landing-platform-logo { transform: none; }

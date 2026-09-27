@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CORRIDOR_SHAPES, corridorBand, corridorCrowd, corridorShapePath, countWithUnit, formatStat, landingDashboard, sceneCurves,
-  platformsFromSummary, summaryDate,
+  platformsFromSummary,
 } from "../lib/landing";
 import type { Dashboard } from "../lib/compare-dashboard";
 
@@ -25,10 +25,6 @@ test("площадки берутся из сводки: новая появля
   const platforms = platformsFromSummary({ accountsByPlatform: { telegram: 83, vk: 84, ok: 3, max: 83, rutube: 0 } });
   assert.deepEqual(platforms.map((item) => item.platform), ["vk", "max", "telegram", "ok"]);
   assert.deepEqual(platforms[0], { platform: "vk", accounts: 84 });
-});
-
-test("дата пересчёта — по Москве и без «г.»", () => {
-  assert.equal(summaryDate("2026-09-25T22:30:00Z"), "26 сентября 2026");
 });
 
 test("модель первого экрана одинакова при каждой отрисовке и не выходит из сцены", () => {

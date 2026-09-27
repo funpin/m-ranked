@@ -7,14 +7,12 @@ import { PlatformLogo } from "@/components/platform-logo";
 import type { Dashboard, Network } from "@/lib/compare-dashboard";
 import { KNOWN_PLATFORMS } from "@/lib/landing";
 import { cn } from "@/lib/utils";
+import { Ribbon } from "./ribbon";
 import { useNear } from "./use-near";
 
 // Те же графики, что на странице сравнения. Библиотека графиков не входит в
 // первую загрузку главной: фрагмент запрашивается, когда блок подъезжает к экрану.
 const ReachAreaChart = dynamic(() => import("@/components/compare/compare-charts").then((module) => module.ReachAreaChart), {
-  ssr: false, loading: () => <ChartSkeleton height={300} />,
-});
-const DailyChart = dynamic(() => import("@/components/compare/compare-charts").then((module) => module.DailyChart), {
   ssr: false, loading: () => <ChartSkeleton height={300} />,
 });
 const HourlyReachChart = dynamic(() => import("@/components/compare/compare-charts").then((module) => module.HourlyReachChart), {
@@ -61,57 +59,58 @@ function Switcher<T extends string>({ value, options, onChange, label }: {
   );
 }
 
-type ReachView = "views" | "posts";
-
-/** Последние 30 дней на всех площадках: просмотры или публикации по дням. */
+/** Последние 30 дней на всех площадках: просмотры по дням выхода. */
 export function LandingReach({ data }: { data: Dashboard }) {
-  const [view, setView] = useState<ReachView>("views");
   return (
-    <div className="grid gap-4" data-testid="landing-reach">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-muted-foreground text-sm">Последние 30 дней, все площадки. Живые данные — те же, что в сравнении.</p>
-        <Switcher label="Что показать" value={view} onChange={setView}
-          options={[{ value: "views", label: "Просмотры" }, { value: "posts", label: "Публикации" }]} />
-      </div>
-      <WhenNear height={300}>
-        {view === "views" ? <ReachAreaChart data={data} platform="all" /> : <DailyChart data={data} platform="all" />}
-      </WhenNear>
+    <div data-testid="landing-reach">
+      <WhenNear height={300}><ReachAreaChart data={data} platform="all" /></WhenNear>
     </div>
   );
 }
 
-type RhythmView = "hours" | "week" | "analysis";
 type RhythmPlatform = "all" | Network;
 
-/** Ритм площадок: когда публикуют, сколько пост набирает за первые сутки в
- *  зависимости от часа выхода и чем заканчивается анализ динамики. */
+/** Плитка ленты: график в тёмной карточке и подпись под ней — как в галереях
+ *  Apple: жирное начало и серое продолжение. */
+function RhythmTile({ title, text, height, children }: { title: string; text: string; height: number; children: ReactNode }) {
+  return (
+    <figure className="landing-ribbon-item landing-slide grid w-[min(86vw,760px)] shrink-0 snap-start content-start gap-5">
+      <div className="landing-tile grid min-h-[360px] content-center p-5 sm:p-8">
+        <WhenNear height={height}>{children}</WhenNear>
+      </div>
+      <figcaption className="text-muted-foreground max-w-xl px-1 text-base leading-relaxed text-pretty">
+        <b className="text-foreground font-semibold">{title}</b> {text}
+      </figcaption>
+    </figure>
+  );
+}
+
+/** Ритм площадок: лента из трёх графиков — час выхода, дни недели, итоги
+ *  анализа. Площадку выбирает переключатель над лентой. */
 export function LandingRhythm({ data }: { data: Dashboard }) {
-  const [view, setView] = useState<RhythmView>("hours");
   const available = useMemo(() => NETWORKS.filter((network) => data.timing.some((cell) => cell.platform === network && cell.posts > 0)), [data]);
   const [platform, setPlatform] = useState<RhythmPlatform>("all");
   return (
-    <div className="grid gap-4" data-testid="landing-rhythm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Switcher label="Что показать" value={view} onChange={setView}
-          options={[{ value: "hours", label: "Час выхода" }, { value: "week", label: "Дни недели" }, { value: "analysis", label: "Итоги анализа" }]} />
-        {view !== "analysis" && (
-          <Switcher label="Площадка" value={platform} onChange={setPlatform}
-            options={[{ value: "all" as const, label: "Все" }, ...available.map((network) => ({
-              value: network,
-              label: <><PlatformLogo platform={network} size={16} decorative /><span className="max-sm:sr-only">{KNOWN_PLATFORMS[network].name}</span></>,
-            }))]} />
-        )}
+    <div className="grid gap-8" data-testid="landing-rhythm">
+      <div className="flex justify-center">
+        <Switcher label="Площадка" value={platform} onChange={setPlatform}
+          options={[{ value: "all" as const, label: "Все" }, ...available.map((network) => ({
+            value: network,
+            label: <><PlatformLogo platform={network} size={16} decorative /><span className="max-sm:sr-only">{KNOWN_PLATFORMS[network].name}</span></>,
+          }))]} />
       </div>
-      <p className="text-muted-foreground text-sm">
-        {view === "hours" ? "Столбцы — сколько публикаций выходит в каждый час, линия — сколько типичный пост этого часа набирает за первые сутки."
-          : view === "week" ? "Чем насыщеннее клетка, тем больше публикаций выходит в этот день и час."
-            : "Доля постов каждой площадки на каждом уровне анализа динамики."}
-      </p>
-      <WhenNear height={280}>
-        {view === "hours" ? <HourlyReachChart data={data} platform={platform} />
-          : view === "week" ? <TimingHeatmap data={data} platform={platform} />
-            : <LevelsByPlatform data={data} />}
-      </WhenNear>
+      <Ribbon label="Ритм площадок">
+        <RhythmTile title="Час выхода." height={280}
+          text="Столбцы — сколько публикаций выходит в каждый час, линия — сколько типичный пост этого часа набирает за первые сутки.">
+          <HourlyReachChart data={data} platform={platform} />
+        </RhythmTile>
+        <RhythmTile title="Дни недели." height={260} text="Когда вузы публикуют чаще всего: день недели и час выхода.">
+          <TimingHeatmap data={data} platform={platform} />
+        </RhythmTile>
+        <RhythmTile title="Итоги анализа." height={240} text="Какая доля постов каждой площадки оказалась на каждом уровне анализа динамики.">
+          <LevelsByPlatform data={data} />
+        </RhythmTile>
+      </Ribbon>
     </div>
   );
 }

@@ -52,12 +52,6 @@ export function countWithUnit(value: number, unit: string) {
   return `${integer.format(value)} ${plural(value, ...forms)}`;
 }
 
-/** Дата пересчёта сводки: «26 сентября 2026». */
-export function summaryDate(iso: string) {
-  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Moscow" })
-    .format(new Date(iso)).replace(/\s*г\.$/, "");
-}
-
 /** Расписание замеров: чем моложе пост, тем чаще. Совпадает с настройками
  *  сборщиков на проде; через 30 суток сбор по посту завершается. */
 export const COLLECTION_SCHEDULE = [
@@ -66,7 +60,6 @@ export const COLLECTION_SCHEDULE = [
   { age: "4–6 сутки", step: "30 мин", share: 3 },
   { age: "7–30 сутки", step: "60 мин", share: 24 },
 ] as const;
-export const RUTUBE_SCHEDULE = "от часа в первые трое суток до 12 часов к концу месяца";
 export const TRACKING_DAYS = 30;
 
 /** Только то, что рисуют графики главной: сутки по площадкам, ритм
