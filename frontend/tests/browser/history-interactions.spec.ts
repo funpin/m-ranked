@@ -99,12 +99,12 @@ test("publication shows a collapsed analysis card that expands and marks signals
   // Справка — под значком «i», а не в теле карточки.
   await expect(card.getByTestId("anomaly-quality")).toHaveCount(0);
   await card.getByTestId("anomaly-note").getByRole("button").hover();
-  await expect(page.getByRole("dialog",{name:"Анализ динамики"})).toContainText("Аномалия не доказывает накрутку");
+  await expect(page.getByRole("dialog",{name:"Анализ динамики"})).toContainText("Сигнал не доказывает накрутку");
   await expect(page.getByTestId("anomaly-quality")).toBeVisible();
   await page.mouse.move(0,0);
   // Пересекающиеся интервалы объединены в одну спокойную полосу на график.
   await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
-  await expect(page.locator("path[data-signal-band]")).toHaveCount(2);
+  await expect(page.locator("rect[data-signal-band]")).toHaveCount(2);
   await expect(page.locator("g.signal-markers[data-signal-count='2']")).toHaveCount(2);
   await expect(page.locator("rect[data-signal-highlight]")).toHaveCount(0);
   await card.getByRole("button",{name:"Показать на графике"}).first().click();

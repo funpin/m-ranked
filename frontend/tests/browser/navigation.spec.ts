@@ -41,8 +41,7 @@ test("смена периода и площадки не перезагружа�
   await page.goto("/review?platform=telegram");
   await stamp(page);
 
-  await page.locator('select[name="period"]').selectOption("7d");
-  await page.getByRole("button", { name: "Применить фильтры" }).click();
+  await page.locator('label:has(input[name="period"][value="7d"])').click();
   await expect(page).toHaveURL(/period=7d/);
   expect(await kept(page)).toBe("kept");
 
@@ -66,7 +65,7 @@ test.describe("без JavaScript", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
     await page.goto("/review?platform=telegram");
-    await page.locator('select[name="period"]').selectOption("7d");
+    await page.locator('label:has(input[name="period"][value="7d"])').click();
     await page.getByRole("button", { name: "Применить фильтры" }).click();
     await expect(page).toHaveURL(/period=7d/);
     await expect(page.getByTestId("platform-overview-card").first()).toBeVisible();
@@ -95,15 +94,14 @@ test("локальные заготовки не дублируют постоя
   await page.goto("/review?platform=telegram");
   await delayMatchingNavigation(page, (url) => ["/review", "/statistics"].includes(url.pathname) && url.searchParams.get("period") === "7d");
 
-  await page.locator('select[name="period"]').selectOption("7d");
-  await page.getByRole("button", { name: "Применить фильтры" }).click();
+  await page.locator('label:has(input[name="period"][value="7d"])').click();
 
   await expect(page.getByText("Загрузка карточек")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
   await expect(page).toHaveURL(/period=7d/);
   await page.goto("/statistics?platform=telegram");
-  await page.locator('select[name="period"]').selectOption("7d");
+  await page.locator('label:has(input[name="period"][value="7d"])').click();
 
   await expect(page.getByText("Загрузка статистики")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);

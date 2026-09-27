@@ -96,7 +96,7 @@ for (const path of ["/compare?platform=vk", "/posts/1"]) {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       const compare = path.startsWith("/compare");
       const control = compare
-        ? page.getByTestId("platform-tabs").getByRole("tab", { name: "Telegram" })
+        ? page.getByTestId("platform-tabs").getByRole("tab", { name: "TG" })
         : page.getByRole("button", { name: "Авто", exact: true }).first();
       const state = compare ? "aria-selected" : "aria-pressed";
       await control.click();

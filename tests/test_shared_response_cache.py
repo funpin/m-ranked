@@ -298,7 +298,7 @@ def test_only_public_route_modules_import_the_cache_serve_boundary() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and any(alias.name == "serve" for alias in node.names):
                 users.add(source.stem)
-    assert users == {"analysis", "compare", "query", "statistics"}
+    assert users == {"analysis", "compare", "query", "site", "sitemap", "statistics"}
     assert users.isdisjoint({"admin", "exports", "health", "sessions"})
 
 

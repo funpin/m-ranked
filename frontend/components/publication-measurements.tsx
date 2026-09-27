@@ -267,10 +267,15 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
   }),[requestFull,historyLimit]);
   useEffect(() => {
     if(!scrollRequest) return;
-    const row=document.getElementById(`snapshot-${scrollRequest.id}`);
-    row?.scrollIntoView({block:"center",inline:"nearest",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
-    row?.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
-  },[scrollRequest]);
+    const frame=requestAnimationFrame(() => {
+      const row=document.getElementById(`snapshot-${scrollRequest.id}`);
+      if(!row) return;
+      row.scrollIntoView({block:"center",inline:"nearest",behavior:"instant"});
+      row.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
+      setScrollRequest((current) => current?.id === scrollRequest.id ? undefined : current);
+    });
+    return () => cancelAnimationFrame(frame);
+  },[scrollRequest,tableOverride,rows]);
   const sampledId = end-start+1 > 144 ? selectedId : undefined;
   // Анализ приходит отдельно и страницу не задерживает: графики рисуются сразу,
   // отметки признаков появляются, когда ответ придёт. Без обещания (тихий режим

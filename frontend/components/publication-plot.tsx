@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis, usePlotArea, useXAxisScale } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, legacyDate } from "@/lib/format";
@@ -251,8 +251,17 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   const shared = {
     data,
     margin: { left: 4, right: 4, top: markers.length ? 30 : 8, bottom: 8 },
-    onClick: (state: { activeLabel?: unknown }) => {
-      const row = nearestRow(state?.activeLabel);
+    onClick: (state: { activeLabel?: unknown }, event: ReactMouseEvent<SVGGraphicsElement>) => {
+      let row = nearestRow(state?.activeLabel);
+      // Recharts has no active label when the click lands between sparse
+      // points. Resolve that click by its position in the visible time axis.
+      if (!row && rows.length) {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const left = bounds.left + 76;
+        const width = Math.max(1, bounds.width - 80 - (scale === "auto" && visible.length > 1 ? 72 : 0));
+        const fraction = Math.max(0, Math.min(1, (event.clientX - left) / width));
+        row = nearestRow(firstAt + fraction * (lastAt - firstAt));
+      }
       if (row) onActivate(row.snapshotId);
     },
   };

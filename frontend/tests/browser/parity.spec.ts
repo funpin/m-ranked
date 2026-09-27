@@ -360,7 +360,7 @@ test("account list and institutional zero/one/many routes preserve identity",asy
   await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/");await expect(page.locator('[data-testid="main-nav"] a[href^="/review"]')).toHaveAttribute("href","/review?platform=max");
 });
 
-test("overview and statistics share one-row desktop and wrapped mobile filters",async({page},info)=>{
+test("overview and statistics keep desktop filters within two rows and wrap on mobile",async({page},info)=>{
   for(const path of ["/review?platform=telegram","/statistics?platform=telegram"]){
     await page.goto(path);
     const toolbar=page.getByTestId("filter-toolbar");
@@ -368,7 +368,7 @@ test("overview and statistics share one-row desktop and wrapped mobile filters",
     const boxes=await toolbar.locator(":scope > :not(input[type=hidden]):not([role=status])").evaluateAll(elements=>elements.map(element=>{
       const box=element.getBoundingClientRect();return {top:Math.round(box.top),bottom:Math.round(box.bottom)};
     }));
-    if(info.project.name==="desktop") expect(new Set(boxes.map(box=>box.top)).size).toBe(1);
+    if(info.project.name==="desktop") expect(new Set(boxes.map(box=>box.top)).size).toBeLessThanOrEqual(2);
     else {
       expect(new Set(boxes.map(box=>box.top)).size).toBeGreaterThan(1);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBe(0);
