@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { formatStat } from "@/lib/format";
 
-const SELECTOR = ".landing-rise, .landing-pop, .landing-slide, .landing-widen, .landing-tilt, .landing-ticks, .landing-draw";
+const SELECTOR = ".landing-rise, .landing-pop, .landing-slide, .landing-widen, .landing-tilt, .landing-ticks, .landing-draw, .landing-phone-reveal";
 
 /** Число досчитывает от нуля до значения вместе с появлением. Сервер рисует
  *  итоговое значение: без скрипта и при «меньше движения» оно просто стоит. */
