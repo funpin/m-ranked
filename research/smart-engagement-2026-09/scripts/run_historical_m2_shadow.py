@@ -13,9 +13,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import statistics
 import sys
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
 
@@ -29,6 +30,9 @@ from anomaly_analysis.v2.event_adjusted_tail import (  # noqa: E402
 )
 from anomaly_analysis.v2.receipt_panel import consecutive_growth  # noqa: E402
 from anomaly_analysis.v2.post_tail import EARLY_CHECKPOINTS, score_post  # noqa: E402
+from anomaly_analysis.v2.post_calibration import (  # noqa: E402
+    PostRankInput, PostTailCalibration,
+)
 
 
 PLATFORM = "max"
@@ -36,6 +40,7 @@ FIRST_DAY = date(2026, 9, 7)
 FIT_END = date(2026, 9, 14)
 CAL_END = date(2026, 9, 19)
 LAST_DAY = date(2026, 9, 24)
+POST_CAL_END = date(2026, 9, 23)
 MAX_GAP = timedelta(hours=2)
 HASH_DIVISOR = 10
 
@@ -240,6 +245,80 @@ def _post_level_shadow(holdout, results, checkpoints):
     }
 
 
+def _whole_post_shadow(selected, holdout, results):
+    """Calibrate post scores on earlier days, then test later days of the archive."""
+    plan = EARLY_CHECKPOINTS[:2]
+    maximum_readiness = timedelta(seconds=plan[-1].age_seconds
+                                  + plan[-1].tolerance_seconds)
+    metadata = {post.publication_id: post for post in selected}
+    by_post = defaultdict(list)
+    for row, paired in zip(holdout, results, strict=True):
+        by_post[row.interval.publication_id].append((row, paired))
+    scores = (
+        score_post(post_id, rows, plan,
+                   source="change_only_shadow")
+        for post_id, rows in by_post.items()
+    )
+    rows = [
+        PostRankInput(metadata[score.publication_id].account_id, PLATFORM,
+                      metadata[score.publication_id].published_at,
+                      metadata[score.publication_id].published_at + maximum_readiness,
+                      "max-m1-m2-2026-09-19", score)
+        for score in scores if score.status == "shadow_only"
+    ]
+    test_start = datetime.combine(POST_CAL_END, datetime.min.time(), tzinfo=timezone.utc)
+    fit = [row for row in rows if row.published_at.date() < POST_CAL_END
+           and row.score_available_at < test_start]
+    test = [row for row in rows if row.published_at.date() >= POST_CAL_END]
+    result = {
+        "source": "change_only_shadow",
+        "checkpoint_plan": [check.name for check in plan],
+        "post_calibration_days": [str(CAL_END), str(POST_CAL_END)],
+        "test_days": [str(POST_CAL_END), str(LAST_DAY)],
+        "evaluable_calibration_posts": len(fit),
+        "evaluable_test_posts": len(test),
+    }
+    if not fit or not test:
+        return result | {"status": "insufficient_calibration"}
+    reference = PostTailCalibration.fit(
+        fit, source="change_only_shadow",
+        interval_reference_through=datetime.combine(CAL_END, datetime.min.time(),
+                                                    tzinfo=timezone.utc),
+        min_blocks=30, min_accounts=3, min_days=3,
+    )
+    ranks = [(row, reference.rank(row)) for row in test]
+    scored = [rank.upper_tail_rank for _row, rank in ranks
+              if rank.status == "shadow_only" and rank.upper_tail_rank is not None]
+    most_unusual = sorted(
+        ((row, rank) for row, rank in ranks if rank.upper_tail_rank is not None),
+        key=lambda item: (item[1].upper_tail_rank, item[0].published_at),
+    )[:5]
+    return result | {
+        "status": "shadow_only" if scored else "insufficient_calibration",
+        "calibration_blocks": len(reference.block_minima),
+        "calibration_accounts": len({account for account, _day in reference.block_minima}),
+        "calibration_days": len({day for _account, day in reference.block_minima}),
+        "ranked_test_posts": len(scored),
+        "post_rank_at_most_5pct": sum(rank <= .05 for rank in scored),
+        "post_rank_at_most_10pct": sum(rank <= .10 for rank in scored),
+        "post_rank_at_most_20pct": sum(rank <= .20 for rank in scored),
+        "least_test_post_rank": min(scored) if scored else None,
+        "median_test_post_rank": statistics.median(scored) if scored else None,
+        "smallest_resolvable_rank": 1 / (len(reference.block_minima) + 1),
+        "most_unusual_posts": [
+            {
+                "publication_id": str(row.score.publication_id),
+                "published_at": row.published_at.isoformat(),
+                "empirical_post_rank": rank.upper_tail_rank,
+                "best_interval_rank": row.score.minimum_interval_rank,
+                "context_reduced_checks": sum(
+                    check.context_reduced for check in row.score.evidence),
+            }
+            for row, rank in most_unusual
+        ],
+    }
+
+
 def _summary(selected, reads, intervals, split, discarded, cal, holdout, validation):
     paired = [(row, result) for row, result in zip(holdout, validation.holdout, strict=True)
               if row.nearest_event_distance is not None
@@ -318,6 +397,8 @@ def _summary(selected, reads, intervals, split, discarded, cal, holdout, validat
             "later_72h": _post_level_shadow(holdout, validation.holdout,
                                             EARLY_CHECKPOINTS[3:5]),
         },
+        "whole_post_shadow_calibration": _whole_post_shadow(
+            selected, holdout, validation.holdout),
         "event_examples_m2_less_unusual": [_example(*item) for item in raised[:3]],
         "event_examples_m2_more_unusual": [_example(*item) for item in lowered[:3]],
         "limits": [
@@ -326,7 +407,8 @@ def _summary(selected, reads, intervals, split, discarded, cal, holdout, validat
             "New-post reach is a displayed counter proxy, not observed referrals to the old post.",
             "The 5% rank cut is descriptive and has no validated false-alert interpretation.",
             "Posts are disjoint across periods, but repeated holdout intervals of one post are not independent alerts.",
-            "The split dates were chosen after earlier exploration and are not a pristine prospective holdout.",
+        "The split dates were chosen after earlier exploration and are not a pristine prospective holdout.",
+        "Whole-post archive calibration is a shadow diagnostic, not a deployment threshold.",
         ],
     }
 
@@ -367,7 +449,8 @@ def main():
     print(json.dumps({key: result[key] for key in (
         "selected_posts", "saved_reads", "exact_usable_pairs_by_split",
         "holdout_m1_status", "holdout_m2_status", "holdout_event_paired_ranked",
-        "event_paired_5pct_diagnostic", "fixed_checkpoint_post_tail")},
+        "event_paired_5pct_diagnostic", "fixed_checkpoint_post_tail",
+        "whole_post_shadow_calibration")},
         ensure_ascii=False))
 
 
