@@ -7,6 +7,7 @@ import pytest
 from anomaly_analysis.v2.event_adjusted_tail import (
     FeedObservedGrowth, FeedTailRank, PairedTailRank,
 )
+from anomaly_analysis.v2.cohort_coverage import CheckpointCoverage, PostCoverage
 from anomaly_analysis.v2.interval_baseline import IntervalScore
 from anomaly_analysis.v2.post_tail import Checkpoint, score_post
 from anomaly_analysis.v2.receipt_panel import ObservedGrowth
@@ -20,7 +21,11 @@ CHECKS = (Checkpoint("1h", 3600, 600), Checkpoint("6h", 21600, 600))
 
 
 def score(*args):
-    return score_post(*args, source="complete_receipts")
+    plan = args[2]
+    coverage = PostCoverage(POST, ACCOUNT, "max", "complete",
+                            tuple(CheckpointCoverage(item.name, "usable", None)
+                                  for item in plan))
+    return score_post(*args, source="complete_receipts", coverage=coverage)
 
 
 def observation(age_end: int, m1_rank: float | None, m2_rank: float | None = None,
@@ -121,3 +126,20 @@ def test_reference_resolution_is_reported_after_multiple_checks():
     result = score(POST, sparse, CHECKS)
     assert result.smallest_resolvable_post_rank == .20
     assert result.post_rank_bound == .20
+
+
+def test_complete_receipts_require_matching_full_frame_coverage():
+    rows = (observation(3600, .01), observation(21600, .20))
+    with pytest.raises(ValueError, match="cohort coverage audit"):
+        score_post(POST, rows, CHECKS, source="complete_receipts")
+    wrong = PostCoverage(UUID(int=3), ACCOUNT, "max", "complete",
+                         tuple(CheckpointCoverage(item.name, "usable", None)
+                               for item in CHECKS))
+    with pytest.raises(ValueError, match="another publication"):
+        score_post(POST, rows, CHECKS, source="complete_receipts", coverage=wrong)
+    incomplete = replace(wrong, publication_id=POST, status="insufficient_data")
+    result = score_post(POST, rows, CHECKS, source="complete_receipts",
+                        coverage=incomplete)
+    assert result.status == "insufficient_data"
+    assert result.reason == "incomplete_receipt_coverage"
+    assert result.post_rank_bound is None

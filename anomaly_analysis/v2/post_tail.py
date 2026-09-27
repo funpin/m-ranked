@@ -10,10 +10,13 @@ still require validated interval references and complete successful reads.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Literal
+from typing import TYPE_CHECKING, Iterable, Literal
 from uuid import UUID
 
 from .event_adjusted_tail import FeedObservedGrowth, PairedTailRank
+
+if TYPE_CHECKING:
+    from .cohort_coverage import PostCoverage
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,15 +109,33 @@ def score_post(
     checkpoints: tuple[Checkpoint, ...],
     *,
     source: Literal["complete_receipts", "change_only_shadow"],
+    coverage: PostCoverage | None = None,
 ) -> PostTailResult:
     """Score one post only when every prespecified checkpoint is usable.
 
-    A caller must separately verify the receipt schedule and eligible-post
-    denominator. Change-triggered snapshots are not complete poll receipts.
+    A complete-receipt result requires the separate full-frame coverage audit.
+    Change-triggered snapshots are never complete poll receipts.
     """
     _validate_plan(checkpoints)
     if source not in {"complete_receipts", "change_only_shadow"}:
         raise ValueError("unknown observation source")
+    if source == "complete_receipts":
+        from .cohort_coverage import PostCoverage
+
+        if not isinstance(coverage, PostCoverage):
+            raise ValueError("complete receipts require a cohort coverage audit")
+        if coverage.publication_id != publication_id:
+            raise ValueError("coverage belongs to another publication")
+        if tuple(check.name for check in coverage.checkpoints) != tuple(
+            check.name for check in checkpoints
+        ):
+            raise ValueError("coverage and checkpoint plan disagree")
+        if coverage.status != "complete" or any(
+            check.status != "usable" for check in coverage.checkpoints
+        ):
+            return PostTailResult(publication_id, "insufficient_data", len(checkpoints),
+                                  0, "incomplete_receipt_coverage", None, None,
+                                  None, None, ())
     rows = tuple(observations)
     seen = set()
     account_platform = set()
