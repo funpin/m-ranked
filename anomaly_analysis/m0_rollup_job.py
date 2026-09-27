@@ -4,18 +4,14 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
-import sys
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
 from uuid import UUID
 
 import psycopg
 
+from anomaly_analysis.v2.m0_rollup import run_rollup
 
-SCRIPT = (Path(__file__).resolve().parents[1] / "research" /
-          "smart-engagement-2026-09" / "scripts" / "rollup_m0_daily.py")
 PLATFORMS = frozenset({"telegram", "max", "vk", "rutube"})
 
 
@@ -74,16 +70,13 @@ def main() -> None:
             "WHERE id = ANY(%s::uuid[])", (list(accounts),),
         ).fetchall()
     plan = _plan(rows, accounts, datetime.now(timezone.utc).date())
-    if not SCRIPT.is_file():
-        raise FileNotFoundError("M0 rollup script is absent from the release")
     for platform, ids, start, end in plan:
-        command = [sys.executable, str(SCRIPT), "--platform", platform,
-                   "--start", start.isoformat(), "--end", end.isoformat(),
-                   "--max-gap-minutes", str(max_gap), "--write",
-                   "--expected-database", expected_database]
-        for account_id in ids:
-            command.extend(("--account", str(account_id)))
-        subprocess.run(command, check=True, timeout=600)
+        result = run_rollup(
+            dsn=dsn, platform=platform, accounts=ids, start=start, end=end,
+            max_gap_minutes=max_gap, write=True,
+            expected_database=expected_database,
+        )
+        print(json.dumps(result, ensure_ascii=False))
     print(json.dumps({"kind": "m0_rollup", "status": "complete",
                       "platforms": [entry[0] for entry in plan],
                       "account_count": len(accounts),

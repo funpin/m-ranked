@@ -63,15 +63,13 @@ def test_enabled_rollup_checks_database_and_invokes_bounded_writer(monkeypatch, 
 
     monkeypatch.setattr(m0_rollup_job.psycopg, "connect",
                         lambda *_args, **_kwargs: Connection())
-    commands = []
-    monkeypatch.setattr(m0_rollup_job.subprocess, "run",
-                        lambda command, **kwargs: commands.append((command, kwargs)))
+    calls = []
+    monkeypatch.setattr(m0_rollup_job, "run_rollup",
+                        lambda **kwargs: calls.append(kwargs) or {"kind": "rollup"})
     m0_rollup_job.main()
-    assert len(commands) == 1
-    command, options = commands[0]
-    assert command[0] == m0_rollup_job.sys.executable
-    assert command.count("--account") == 1
-    assert command[command.index("--account") + 1] == str(ACCOUNT)
-    assert command[command.index("--expected-database") + 1] == "research"
-    assert "--write" in command and options == {"check": True, "timeout": 600}
-    assert json.loads(capsys.readouterr().out)["status"] == "complete"
+    assert len(calls) == 1
+    assert calls[0]["accounts"] == (ACCOUNT,)
+    assert calls[0]["expected_database"] == "research"
+    assert calls[0]["write"] is True
+    assert calls[0]["max_gap_minutes"] == 60
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])["status"] == "complete"
