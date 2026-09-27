@@ -115,7 +115,7 @@ def _measurement(cursor, post: dict, start: datetime, end: datetime) -> tuple[in
     return before["views_count"], after["views_count"]
 
 
-def _window(cursor, source: dict, signal: dict, old_posts: list[dict],
+def _window(cursor, source: dict, signal: dict, old_posts: list[tuple[dict, int]],
             later_posts: list[dict]) -> tuple[WindowEvidence, dict]:
     start = datetime.fromisoformat(signal["startAt"])
     end = datetime.fromisoformat(signal["endAt"])
@@ -123,30 +123,34 @@ def _window(cursor, source: dict, signal: dict, old_posts: list[dict],
     # The signal's start is a polling boundary, not publication time. A post
     # within the previous poll interval can still be a contextual event.
     tolerance = min(3600, max(900, int(signal.get("scaleSeconds") or 0)))
-    events = [post for post in later_posts
+    events = [(post, distance) for distance, post in enumerate(later_posts, start=1)
               if start - timedelta(seconds=tolerance) <= post["published_at"] <= end]
     measured_new = 0
-    for event in events[:6]:
+    for event, _distance in events[:6]:
         month = event["published_at"].date().replace(day=1)
         cursor.execute(NEW_POST_VIEW, (event["id"], month, event["published_at"],
                                        end + BOUNDARY_TOLERANCE))
         measured_new += cursor.fetchone() is not None
-    old = [post for post in old_posts if post["published_at"] < start]
-    measurements = [(post, value) for post in old
+    old = [(post, distance) for post, distance in old_posts if post["published_at"] < start]
+    measurements = [(post, distance, value) for post, distance in old
                     if (value := _measurement(cursor, post, start, end)) is not None]
     growth = [math.log1p(after) - math.log1p(before)
-              for _post, (before, after) in measurements]
-    positive = sum(after > before for _post, (before, after) in measurements)
+              for _post, _distance, (before, after) in measurements]
+    positive = sum(after > before for _post, _distance, (before, after) in measurements)
     median_growth = median(growth) if growth else None
     evidence = WindowEvidence(signal["startAt"], signal["endAt"], target is not None,
-                              True, tuple(str(post["id"]) for post in events),
-                              measured_new, positive, len(measurements), median_growth)
+                              True, tuple(str(post["id"]) for post, _ in events),
+                              measured_new, positive, len(measurements), median_growth,
+                              min((distance for _, distance in events), default=None),
+                              sum(abs(distance) <= 2 for _, distance, _ in measurements))
     detail = {
         "startAt": signal["startAt"], "endAt": signal["endAt"],
         "targetMeasured": target is not None,
         "newPublicationIds": list(evidence.new_publication_ids[:6]),
+        "nearestNewPostFeedDistance": evidence.nearest_event_feed_distance,
         "measuredNewPosts": measured_new,
         "measuredOldPosts": len(measurements), "positiveOldPosts": positive,
+        "oldPostFeedDistances": [distance for _post, distance, _value in measurements],
         "medianOldGrowthPercent": round(math.expm1(median_growth) * 100, 2)
         if median_growth is not None else None,
     }
@@ -178,9 +182,11 @@ def recheck_one(connection, publication_id: UUID, *, apply: bool) -> dict:
             later = cursor.fetchall()
             if len(later) > MAX_LATER_POSTS:
                 return {"publicationId": str(publication_id), "status": "too_many_neighbors"}
-            # Same fixed feed peer set as the post page: two previous and four
-            # next posts. A neighbor published after a signal is not an old peer.
-            old_posts = previous + later[:4]
+            # Match control posts to the target's feed depth: at most two slots
+            # on either side. A later post is an old control only if published
+            # before this signal; event distance is still measured from target.
+            old_posts = [(post, index - len(previous)) for index, post in enumerate(previous)]
+            old_posts += [(post, index) for index, post in enumerate(later[:2], start=1)]
             windows, details = [], []
             for signal in strong:
                 window, detail = _window(cursor, source, signal, old_posts, later)
