@@ -1,4 +1,4 @@
--- One in-place transaction for the known 0038, 0043 or 0044–0046 schemas.
+-- One in-place transaction for the known 0038, 0043, site-summary-only or 0044–0046 schemas.
 -- Run with psql -v ON_ERROR_STOP=1 -f this-file. No old table is copied.
 -- Check the actual production schema and disk/backup state before running.
 -- The 0044 script closes this transaction when its objects are absent.
@@ -25,7 +25,26 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'unexpected partial 0044 schema: inspect it before release';
     END IF;
-    IF new_tables NOT IN (0, 3, 4) THEN
+    IF new_tables = 1 AND NOT (
+        to_regclass('analytics.site_summary') IS NOT NULL
+        AND to_regclass('ingest.publication_poll_receipt') IS NULL
+        AND to_regclass('analytics.post_anomaly_context_recheck') IS NULL
+        AND to_regclass('analytics.bounded_poll_growth_daily') IS NULL
+        AND (SELECT count(*) FROM pg_attribute
+             WHERE attrelid = to_regclass('analytics.site_summary')
+               AND attnum > 0 AND NOT attisdropped) = 7
+        AND (SELECT count(*) FROM pg_constraint
+             WHERE conrelid = to_regclass('analytics.site_summary')
+               AND conname IN ('site_summary_pkey', 'site_summary_single_row',
+                               'site_summary_counts_check')) = 3
+        AND has_table_privilege('api_read', to_regclass('analytics.site_summary'), 'SELECT')
+        AND has_table_privilege('maintenance', to_regclass('analytics.site_summary'), 'SELECT')
+        AND has_table_privilege('maintenance', to_regclass('analytics.site_summary'), 'INSERT')
+        AND has_table_privilege('maintenance', to_regclass('analytics.site_summary'), 'UPDATE')
+    ) THEN
+        RAISE EXCEPTION 'unknown site-summary-only schema: inspect it before release';
+    END IF;
+    IF new_tables NOT IN (0, 1, 3, 4) THEN
         RAISE EXCEPTION 'partial 0044 schema: inspect it before release';
     END IF;
     IF to_regclass('analytics.publication_history_page') IS NOT NULL
@@ -75,7 +94,7 @@ SELECT to_regclass('analytics.publication_history_page') IS NULL AS install_hist
 \ir ../../db/migrations/0043_publication_history_page.sql
 \endif
 
-SELECT to_regclass('analytics.site_summary') IS NULL AS install_0044 \gset
+SELECT to_regclass('ingest.publication_poll_receipt') IS NULL AS install_0044 \gset
 \if :install_0044
 -- 0044 contains BEGIN (harmless nested-BEGIN warning) and the final COMMIT.
 \ir ../../db/migrations/0044_in_place_release.sql

@@ -13,7 +13,7 @@ SET LOCAL statement_timeout = '2min';
 -- шагом планового обслуживания (db/tools/refresh-site-summary.sql), а API
 -- читает одну готовую строку. Площадки считаются из данных: новая площадка
 -- появится в сводке без правки схемы.
-CREATE TABLE analytics.site_summary (
+CREATE TABLE IF NOT EXISTS analytics.site_summary (
     id smallint DEFAULT 1 NOT NULL,
     institutions integer NOT NULL,
     accounts integer NOT NULL,

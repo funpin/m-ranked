@@ -31,9 +31,14 @@ section "Миграции (применять до перезапуска API)"
 migrations="$(changed db/migrations | grep -E '^db/migrations/[0-9]{4}_[^/]+\.sql$' || true)"
 if [ -n "$migrations" ]; then
   expected_migrations=$'db/migrations/0040_bounded_cache_outbox_purge.sql\ndb/migrations/0042_dataset_revision_retention.sql\ndb/migrations/0043_publication_history_page.sql\ndb/migrations/0044_in_place_release.sql'
-  if [[ "$migrations" == "$expected_migrations" ]]; then
+  older_collector_migrations=$'db/migrations/0034_transfer_outbox_retention.sql\ndb/migrations/0035_transfer_inbox_payload_retention.sql\ndb/migrations/0036_anomaly_analysis_v2.sql\ndb/migrations/0037_publication_checkpoint.sql\ndb/migrations/0038_anomaly_collection_runs.sql\ndb/migrations/0040_bounded_cache_outbox_purge.sql\ndb/migrations/0042_dataset_revision_retention.sql\ndb/migrations/0043_publication_history_page.sql\ndb/migrations/0044_in_place_release.sql'
+  renamed_0044=$'db/migrations/0044_in_place_release.sql\ndb/migrations/0044_site_summary.sql'
+  if [[ "$migrations" == "$expected_migrations" || "$migrations" == "$renamed_0044" ]]; then
     echo "Один транзакционный SQL-пакет: operations/sql/release-schema-0038-to-0044.sql"
     echo "Сначала сверить реальную схему; пакет откажет неизвестному частичному состоянию."
+  elif [[ "$migrations" == "$older_collector_migrations" ]]; then
+    echo "Код отстаёт от уже установленной схемы коллектора: подтвердите объекты 0034–0038 в живой БД."
+    echo "После подтверждения состояния 0038 — один SQL-пакет: operations/sql/release-schema-0038-to-0044.sql"
   elif [[ "$migrations" != *$'\n'* ]]; then
     echo "$migrations"
   else
