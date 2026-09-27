@@ -313,7 +313,7 @@ Lock-файлы правятся только пересозданием под 
 ```bash
 python3.11 operations/scripts/generate_python_lock.py requirements/api.txt requirements/py311/api.lock --python-version 3.11
 python3.11 operations/scripts/generate_python_lock.py requirements/collector.txt \
-  requirements/py311/collector.lock --python-version 3.11 --extra setuptools==80.9.0 wheel==0.46.2
+  requirements/py311/collector.lock --python-version 3.11 --extra setuptools==83.0.0 wheel==0.46.2
 ```
 
 ### Ограничение Next.js cache

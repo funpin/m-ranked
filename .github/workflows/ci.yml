@@ -108,7 +108,11 @@ jobs:
             if [ "$target" = collector ]; then
               "$venv/bin/pip" install --quiet --require-hashes --no-deps \
                 --no-build-isolation -r requirements/py311/collector.lock
-              "$venv/bin/python" -c 'import collector_target.__main__'
+              "$venv/bin/pip" wheel --quiet --no-deps \
+                --wheel-dir "$RUNNER_TEMP/pymax-wheel" -r requirements/pymax.txt
+              "$venv/bin/pip" install --quiet --no-deps --no-index \
+                --find-links "$RUNNER_TEMP/pymax-wheel" maxapi-python
+              "$venv/bin/python" -c 'import collector_target.__main__; import msgpack; from pymax.protocol.tcp.payload import MsgpackPayloadCodec'
             else
               "$venv/bin/pip" install --quiet --require-hashes --no-deps \
                 --only-binary=:all: -r "requirements/py311/$target.lock"
@@ -277,12 +281,22 @@ jobs:
             --upgrade -r requirements/tooling.lock
           "$RUNNER_TEMP/collector/bin/pip" install --quiet --require-hashes --no-deps \
             --no-build-isolation -r requirements/collector.lock
+          "$RUNNER_TEMP/collector/bin/pip" wheel --quiet --no-deps \
+            --wheel-dir "$RUNNER_TEMP/pymax-wheel" -r requirements/pymax.txt
+          "$RUNNER_TEMP/collector/bin/pip" install --quiet --no-deps --no-index \
+            --find-links "$RUNNER_TEMP/pymax-wheel" maxapi-python
+          "$RUNNER_TEMP/collector/bin/pip" check
       - name: Known vulnerabilities in every production environment
         run: |
           .venv/bin/pip-audit --progress-spinner off
           for environment in api anomaly collector; do
             .venv/bin/pip-audit --progress-spinner off \
-              --path "$RUNNER_TEMP/$environment/lib" || exit 1
+              --path "$RUNNER_TEMP/$environment/lib/python3.13/site-packages" || exit 1
+          done
+          for lock in requirements/{api,anomaly,collector,tooling}.lock \
+                      requirements/py311/{api,anomaly,collector,tooling}.lock; do
+            .venv/bin/pip-audit --progress-spinner off --disable-pip --no-deps \
+              -r "$lock"
           done
       - name: Known vulnerabilities in production frontend dependencies
         run: pnpm install --frozen-lockfile && pnpm audit --prod --audit-level=high

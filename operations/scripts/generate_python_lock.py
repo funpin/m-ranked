@@ -55,7 +55,7 @@ def main() -> int:
     parser.add_argument("target", type=pathlib.Path)
     parser.add_argument("--python-version", default="3.13")
     parser.add_argument("--extra", nargs="*", default=[],
-                        help="дополнительные закреплённые пакеты, например setuptools==80.9.0")
+                        help="дополнительные закреплённые пакеты, например setuptools==83.0.0")
     arguments = parser.parse_args()
     running_python = f"{sys.version_info.major}.{sys.version_info.minor}"
     if running_python != arguments.python_version:
