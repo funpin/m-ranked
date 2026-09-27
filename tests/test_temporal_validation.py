@@ -55,3 +55,18 @@ def test_temporal_validation_rejects_leakage_across_calendar_days() -> None:
         validate_future_m1(train, cal, cal)
     with pytest.raises(ValueError, match="nonpositive interval"):
         validate_future_m1(train, cal, [replace(future[0], end_at=future[0].start_at)])
+
+
+def test_temporal_validation_rejects_same_post_in_different_periods() -> None:
+    train = [interval(0, i % 3 + 1, i) for i in range(24)]
+    cal = [interval(2, i % 3 + 1, 100 + i) for i in range(24)]
+    future = [interval(4, i % 3 + 1, 200 + i) for i in range(24)]
+    with pytest.raises(ValueError, match="publication leakage"):
+        validate_future_m1(train, cal + [replace(cal[0], publication_id=train[0].publication_id)],
+                           future)
+    with pytest.raises(ValueError, match="publication leakage"):
+        validate_future_m1(train, cal, future + [replace(future[0],
+                                                         publication_id=cal[0].publication_id)])
+    with pytest.raises(ValueError, match="timezone-naive"):
+        validate_future_m1(train, cal, [replace(future[0], start_at=future[0].start_at.replace(
+            tzinfo=None))])

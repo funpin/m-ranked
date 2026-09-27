@@ -9,7 +9,7 @@ probabilities of manipulation or a public anomaly decision.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Iterable
 from uuid import UUID
 
@@ -119,12 +119,26 @@ def validate_future_m1(
     if not train or not cal or not future:
         raise ValueError("training, calibration and holdout must all be nonempty")
     for name, rows in (("training", train), ("calibration", cal), ("holdout", future)):
+        if any(row.start_at.tzinfo is None or row.start_at.utcoffset() is None
+               or row.end_at.tzinfo is None or row.end_at.utcoffset() is None
+               for row in rows):
+            raise ValueError(f"{name} contains a timezone-naive interval")
         if any(row.start_at >= row.end_at for row in rows):
             raise ValueError(f"{name} contains a nonpositive interval")
-    if max(row.end_at.date() for row in train) >= min(row.start_at.date() for row in cal):
+    def utc_day(value: datetime) -> date:
+        return value.astimezone(timezone.utc).date()
+
+    if max(utc_day(row.end_at) for row in train) >= min(utc_day(row.start_at) for row in cal):
         raise ValueError("training and calibration must occupy separate ordered days")
-    if max(row.end_at.date() for row in cal) >= min(row.start_at.date() for row in future):
+    if max(utc_day(row.end_at) for row in cal) >= min(utc_day(row.start_at) for row in future):
         raise ValueError("calibration and holdout must occupy separate ordered days")
+    post_sets = [
+        {row.publication_id for row in rows}
+        for rows in (train, cal, future)
+    ]
+    if (post_sets[0] & post_sets[1] or post_sets[0] & post_sets[2]
+            or post_sets[1] & post_sets[2]):
+        raise ValueError("publication leakage across fit, calibration and holdout")
     baseline = ConditionalIntervalBaseline.fit(
         train, min_intervals=min_fit_intervals, min_accounts=min_fit_accounts,
     )
