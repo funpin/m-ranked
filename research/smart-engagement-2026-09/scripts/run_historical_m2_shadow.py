@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the M1/M2 research chain on a bounded, historical MAX snapshot sample.
+"""Run the M1/M2 research chain on bounded Telegram or MAX snapshots.
 
 This is an archive demonstration, not a calibrated or public anomaly verdict.
 Snapshots were retained on counter changes, so the sampled read pairs are not
@@ -35,7 +35,7 @@ from anomaly_analysis.v2.post_calibration import (  # noqa: E402
 )
 
 
-PLATFORM = "max"
+SUPPORTED = ("max", "telegram")
 FIRST_DAY = date(2026, 9, 7)
 FIT_END = date(2026, 9, 14)
 CAL_END = date(2026, 9, 19)
@@ -88,10 +88,10 @@ WHERE p.id=ANY(%s)
 """
 
 
-def _read_archive(connection):
+def _read_archive(connection, platform):
     """Return selected post metadata, all visible feed order, and saved reads."""
     with connection.cursor() as cursor:
-        cursor.execute(POSTS, (PLATFORM, FIRST_DAY, LAST_DAY))
+        cursor.execute(POSTS, (platform, FIRST_DAY, LAST_DAY))
         post_rows = cursor.fetchall()
         cursor.execute(SELECTED, ([row["id"] for row in post_rows], HASH_DIVISOR))
         selected_ids = {row["id"] for row in cursor.fetchall()}
@@ -245,7 +245,7 @@ def _post_level_shadow(holdout, results, checkpoints):
     }
 
 
-def _whole_post_shadow(selected, holdout, results):
+def _whole_post_shadow(selected, holdout, results, platform):
     """Calibrate post scores on earlier days, then test later days of the archive."""
     plan = EARLY_CHECKPOINTS[:2]
     maximum_readiness = timedelta(seconds=plan[-1].age_seconds
@@ -260,10 +260,10 @@ def _whole_post_shadow(selected, holdout, results):
         for post_id, rows in by_post.items()
     )
     rows = [
-        PostRankInput(metadata[score.publication_id].account_id, PLATFORM,
+        PostRankInput(metadata[score.publication_id].account_id, platform,
                       metadata[score.publication_id].published_at,
                       metadata[score.publication_id].published_at + maximum_readiness,
-                      "max-m1-m2-2026-09-19", score)
+                      f"{platform}-m1-m2-2026-09-19", score)
         for score in scores if score.status == "shadow_only"
     ]
     test_start = datetime.combine(POST_CAL_END, datetime.min.time(), tzinfo=timezone.utc)
@@ -319,7 +319,8 @@ def _whole_post_shadow(selected, holdout, results):
     }
 
 
-def _summary(selected, reads, intervals, split, discarded, cal, holdout, validation):
+def _summary(selected, reads, intervals, split, discarded, cal, holdout, validation,
+             platform):
     paired = [(row, result) for row, result in zip(holdout, validation.holdout, strict=True)
               if row.nearest_event_distance is not None
               and result.m1.status == result.m2.status == "ranked"]
@@ -356,7 +357,7 @@ def _summary(selected, reads, intervals, split, discarded, cal, holdout, validat
         }
     return {
         "kind": "historical_change_sample_shadow_not_public_validation",
-        "platform": PLATFORM,
+        "platform": platform,
         "selection": "1/10 publication IDs by PostgreSQL hashtext; post-disjoint UTC cohorts; 7-day post age; 2-hour maximum saved-read gap",
         "utc_splits": {"fit": [str(FIRST_DAY), str(FIT_END)],
                        "calibration": [str(FIT_END), str(CAL_END)],
@@ -398,7 +399,7 @@ def _summary(selected, reads, intervals, split, discarded, cal, holdout, validat
                                             EARLY_CHECKPOINTS[3:5]),
         },
         "whole_post_shadow_calibration": _whole_post_shadow(
-            selected, holdout, validation.holdout),
+            selected, holdout, validation.holdout, platform),
         "event_examples_m2_less_unusual": [_example(*item) for item in raised[:3]],
         "event_examples_m2_more_unusual": [_example(*item) for item in lowered[:3]],
         "limits": [
@@ -413,15 +414,30 @@ def _summary(selected, reads, intervals, split, discarded, cal, holdout, validat
     }
 
 
-def run(connection):
-    selected, by_account, reads = _read_archive(connection)
+def run(connection, platform):
+    if platform not in SUPPORTED:
+        raise ValueError(f"unsupported platform: {platform}")
+    selected, by_account, reads = _read_archive(connection, platform)
     if not selected or not reads:
         raise ValueError(f"local archive selection empty: posts={len(selected)}, reads={len(reads)}")
     intervals = consecutive_growth(
-        reads, selected, {post.account_id: PLATFORM for post in selected},
-        max_gap_by_platform={PLATFORM: MAX_GAP},
+        reads, selected, {post.account_id: platform for post in selected},
+        max_gap_by_platform={platform: MAX_GAP},
     )
     split, discarded = _split(intervals, selected)
+    if any(not split[name] for name in ("fit", "calibration", "holdout")):
+        return {
+            "kind": "historical_change_sample_shadow_not_public_validation",
+            "platform": platform,
+            "status": "insufficient_data",
+            "reason": "at least one chronological cohort has no exact usable intervals",
+            "selected_posts": len(selected),
+            "saved_reads": len(reads),
+            "read_pairs_all_statuses": len(intervals),
+            "discarded_pair_statuses": dict(sorted(discarded.items())),
+            "exact_usable_pairs_by_split": {name: len(rows)
+                                            for name, rows in split.items()},
+        }
     reads_by_key = {(read.publication_id, read.observed_at): read for read in reads}
     cal_pre, cal_ids = _exposure_rows(split["calibration"], by_account, reads_by_key)
     hold_pre, hold_ids = _exposure_rows(split["holdout"], by_account, reads_by_key)
@@ -430,12 +446,14 @@ def run(connection):
     holdout = tuple(feed_observation(row, exposure, event_reads)
                     for row, exposure in hold_pre)
     validation = validate_future_m2(tuple(split["fit"]), cal, holdout)
-    return _summary(selected, reads, intervals, split, discarded, cal, holdout, validation)
+    return _summary(selected, reads, intervals, split, discarded, cal, holdout,
+                    validation, platform)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--platform", choices=SUPPORTED, default="max")
     args = parser.parse_args()
     dsn = os.environ.get("ANOMALY_DATABASE_URL", "").strip()
     if not dsn:
@@ -444,13 +462,14 @@ def main():
     from psycopg.rows import dict_row
     with psycopg.connect(dsn, row_factory=dict_row,
                          options="-c default_transaction_read_only=on -c statement_timeout=120000") as connection:
-        result = run(connection)
+        result = run(connection, args.platform)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({key: result[key] for key in (
-        "selected_posts", "saved_reads", "exact_usable_pairs_by_split",
+        "status", "selected_posts", "saved_reads", "read_pairs_all_statuses",
+        "discarded_pair_statuses", "exact_usable_pairs_by_split",
         "holdout_m1_status", "holdout_m2_status", "holdout_event_paired_ranked",
         "event_paired_5pct_diagnostic", "fixed_checkpoint_post_tail",
-        "whole_post_shadow_calibration")},
+        "whole_post_shadow_calibration") if key in result},
         ensure_ascii=False))
 
 
