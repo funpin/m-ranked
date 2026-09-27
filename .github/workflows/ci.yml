@@ -87,6 +87,41 @@ jobs:
         with:
           name: canonical-integrity-evidence
           path: .pytest_cache
+  production-python-311:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Install and smoke-test each production Python 3.11 environment
+        run: |
+          set -euo pipefail
+          for target in api collector anomaly; do
+            venv="$RUNNER_TEMP/py311-$target"
+            python -m venv "$venv"
+            "$venv/bin/pip" install --quiet --require-hashes --no-deps --upgrade \
+              -r requirements/py311/tooling.lock
+            if [ "$target" = collector ]; then
+              "$venv/bin/pip" install --quiet --require-hashes --no-deps \
+                --no-build-isolation -r requirements/py311/collector.lock
+              "$venv/bin/python" -c 'import collector_target.__main__'
+            else
+              "$venv/bin/pip" install --quiet --require-hashes --no-deps \
+                --only-binary=:all: -r "requirements/py311/$target.lock"
+              if [ "$target" = api ]; then
+                "$venv/bin/python" -c 'import api.app'
+              else
+                "$venv/bin/python" -c 'import anomaly_analysis'
+              fi
+            fi
+            "$venv/bin/pip" check
+          done
+          "$RUNNER_TEMP/py311-api/bin/python" -m compileall -q \
+            api anomaly_analysis collector_target operations/scripts
   browser-parity:
     # Keep the job ID stable for existing required-check settings.
     runs-on: ubuntu-24.04

@@ -66,12 +66,12 @@ section "systemd (нужен daemon-reload)"
 unit_changes="$(changed operations/systemd)"
 [ -n "$unit_changes" ] && echo "$unit_changes" || echo "нет"
 
-section "Зависимости Python (прод на 3.11, lock собран под 3.13)"
+section "Зависимости Python (прод на 3.11)"
 lock_changes="$(changed requirements)"
 if [ -n "$lock_changes" ]; then
   echo "$lock_changes"
-  echo "Ставить только изменившиеся пакеты и только по хешу из lock;"
-  echo "пакет с колесом cp313 на прод не встанет — нужна сборка под 3.11."
+  echo "Создать отдельную среду кандидата из requirements/py311/*.lock;"
+  echo "после установки проверить pip check и импорты до переключения current."
 else
   echo "нет"
 fi

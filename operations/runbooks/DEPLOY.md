@@ -230,8 +230,9 @@ SECRET
 ## 4. Доставка дерева
 
 На машине нет rsync: дерево едет архивом и распаковывается поверх очищенного
-каталога релиза. `.venv` переносится с предыдущего релиза жёсткими ссылками, а
-не копируется.
+каталога релиза. Для релиза с обновлением Python-зависимостей создайте отдельную
+`.venv` в новом каталоге; проверьте запас места до её установки. Не обновляйте
+среду предыдущего релиза, которая нужна для отката.
 
 Четыре вещи, которых нет в `git archive` и без которых выкатка падает молча:
 
@@ -286,38 +287,33 @@ Next.js добавляет его как `?dpl=<id>` к URL клиентских
 Не переключайте `current`, если после финализации отсутствует
 `frontend/server.js` или не прошёл пробный запуск web-контейнера.
 
-Python на проде — 3.11, а `requirements/*.lock` собраны под 3.13. Целиком их
-поставить нельзя: пакет с колесом `cp313` (psycopg-binary, pydantic-core,
-uvloop, httptools, watchfiles) на 3.11 просто не встанет. Ставятся только
-изменившиеся пакеты и только по хешу из lock; для платформенных колёс нужна
-сборка под 3.11 отдельно. Анализ аномалий v2 добавил в `anomaly.lock` numpy и
-scipy — тоже платформенные колёса: версии выбраны так, что колёса для 3.11
-есть, но их хеши в lock — от cp313. Порядок выкатки анализа —
-[`ANOMALY.md`](ANOMALY.md).
+На проде Python 3.11: ставьте `requirements/py311/*.lock`, собранные под Linux
+x86_64 и проверенные отдельным CI-заданием. Корневые `requirements/*.lock`
+предназначены для Python 3.13 и не подходят для серверной 3.11. Устанавливайте
+зависимости в отдельную среду кандидата, проверяйте `pip check` и импорты до
+переключения `current`. Порядок выкатки анализа — [`ANOMALY.md`](ANOMALY.md).
 
-Частичное обновление опаснее полного: FastAPI без совместимого pydantic даёт
-`ImportError` на старте и бесконечный перезапуск юнита. Меняете FastAPI или
-Starlette — проверьте pydantic и уже потом перезапускайте.
-
-Для справки, полная установка среды (пригодна там, где Python 3.13):
+Полная установка на проде:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install --require-hashes --no-deps --upgrade -r requirements/tooling.lock
-.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/api.lock
-.venv/bin/pip install --require-hashes --no-deps --no-build-isolation -r requirements/collector.lock
-.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/anomaly.lock
+python3.11 -m venv .venv
+.venv/bin/pip install --require-hashes --no-deps --upgrade -r requirements/py311/tooling.lock
+.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/py311/api.lock
+.venv/bin/pip install --require-hashes --no-deps --no-build-isolation -r requirements/py311/collector.lock
+.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/py311/anomaly.lock
 .venv/bin/pip install --no-deps -r requirements/pymax.txt
+.venv/bin/pip check
+.venv/bin/python -c 'import api.app, anomaly_analysis, collector_target'
 # Режим telegram_web дополнительно требует браузера:
 # .venv/bin/pip install -r requirements/telegram-web.txt
 ```
 
-Lock-файлы правятся только пересозданием, целиком:
+Lock-файлы правятся только пересозданием под соответствующей версией Python:
 
 ```bash
-python3 operations/scripts/generate_python_lock.py requirements/api.txt requirements/api.lock
-python3 operations/scripts/generate_python_lock.py requirements/collector.txt \
-  requirements/collector.lock --extra setuptools==80.9.0 wheel==0.46.2
+python3.11 operations/scripts/generate_python_lock.py requirements/api.txt requirements/py311/api.lock --python-version 3.11
+python3.11 operations/scripts/generate_python_lock.py requirements/collector.txt \
+  requirements/py311/collector.lock --python-version 3.11 --extra setuptools==80.9.0 wheel==0.46.2
 ```
 
 ### Ограничение Next.js cache
