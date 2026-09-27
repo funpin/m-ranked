@@ -164,6 +164,7 @@ class EventAdjustedTail:
 
 @dataclass(frozen=True, slots=True)
 class PairedTailRank:
+    interval: ObservedGrowth
     m1: TailRank
     m2: FeedTailRank
 
@@ -207,6 +208,6 @@ def validate_future_m2(
         m1.baseline, calibration, min_blocks=min_calibration_blocks,
         min_accounts=min_calibration_accounts,
     )
-    paired = tuple(PairedTailRank(first, m2.rank(row))
+    paired = tuple(PairedTailRank(row.interval, first, m2.rank(row))
                    for first, row in zip(m1.holdout, holdout, strict=True))
     return TemporalM2Validation(m1, m2, paired)

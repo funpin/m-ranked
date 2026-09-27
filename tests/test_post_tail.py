@@ -7,8 +7,11 @@ import pytest
 from anomaly_analysis.v2.event_adjusted_tail import (
     FeedObservedGrowth, FeedTailRank, PairedTailRank,
 )
-from anomaly_analysis.v2.cohort_coverage import CheckpointCoverage, PostCoverage
-from anomaly_analysis.v2.interval_baseline import IntervalScore
+from anomaly_analysis.neighbor_exposure import PublishedPost, SuccessfulRead
+from anomaly_analysis.v2.cohort_coverage import (
+    CheckpointCoverage, PostCoverage, audit_cohort_coverage,
+)
+from anomaly_analysis.v2.interval_baseline import IntervalScore, age_band, exposure_band
 from anomaly_analysis.v2.post_tail import Checkpoint, score_post
 from anomaly_analysis.v2.receipt_panel import ObservedGrowth
 from anomaly_analysis.v2.temporal_validation import TailRank
@@ -21,10 +24,21 @@ CHECKS = (Checkpoint("1h", 3600, 600), Checkpoint("6h", 21600, 600))
 
 
 def score(*args):
-    plan = args[2]
-    coverage = PostCoverage(POST, ACCOUNT, "max", "complete",
-                            tuple(CheckpointCoverage(item.name, "usable", None)
-                                  for item in plan))
+    rows, plan = args[1], args[2]
+    checks = []
+    for item in plan:
+        candidates = [row.interval for row, _paired in rows
+                      if abs(row.interval.age_seconds + row.interval.elapsed_seconds
+                             - item.age_seconds) <= item.tolerance_seconds]
+        chosen = min(candidates, key=lambda interval: (
+            abs(interval.age_seconds + interval.elapsed_seconds - item.age_seconds),
+            interval.end_at,
+        )) if candidates else None
+        checks.append(CheckpointCoverage(item.name,
+                                         "usable" if chosen else "missing_read_pair", chosen))
+    coverage = PostCoverage(POST, ACCOUNT, "max",
+                            "complete" if all(check.interval for check in checks)
+                            else "insufficient_data", tuple(checks))
     return score_post(*args, source="complete_receipts", coverage=coverage)
 
 
@@ -41,7 +55,7 @@ def observation(age_end: int, m1_rank: float | None, m2_rank: float | None = Non
     m2 = FeedTailRank(m2_status, score, "next_post" if event else None,
                       "high_reach" if event else None, m2_rank, 30, 4)
     return FeedObservedGrowth(interval, 1 if event else None, True,
-                              200 if event else 0), PairedTailRank(m1, m2)
+                              200 if event else 0), PairedTailRank(interval, m1, m2)
 
 
 def test_context_only_reduces_evidence_and_post_bound_counts_planned_looks():
@@ -99,13 +113,15 @@ def test_rejects_mixed_or_mismatched_pairs_and_overlapping_plan():
     first = observation(3600, .01)
     later = observation(21600, .20)
     with pytest.raises(ValueError, match="duplicate"):
-        score(POST, (first, first), CHECKS)
+        score(POST, (first, first, later), CHECKS)
     with pytest.raises(ValueError, match="mixed publications"):
         score(POST, (first, (replace(later[0], interval=replace(
             later[0].interval, publication_id=UUID(int=3))), later[1])), CHECKS)
     with pytest.raises(ValueError, match="rank and observed interval"):
         score(POST, (first, (replace(later[0], interval=replace(
             later[0].interval, displayed_delta_views=999)), later[1])), CHECKS)
+    with pytest.raises(ValueError, match="rank and observed interval"):
+        score(POST, (first, (later[0], replace(later[1], interval=first[0].interval))), CHECKS)
     with pytest.raises(ValueError, match="disjoint"):
         score(POST, (first, later), (Checkpoint("a", 3600, 3000),
                                          Checkpoint("b", 7200, 3000)))
@@ -130,11 +146,12 @@ def test_reference_resolution_is_reported_after_multiple_checks():
 
 def test_complete_receipts_require_matching_full_frame_coverage():
     rows = (observation(3600, .01), observation(21600, .20))
+    good = PostCoverage(POST, ACCOUNT, "max", "complete",
+                        tuple(CheckpointCoverage(check.name, "usable", row.interval)
+                              for check, (row, _paired) in zip(CHECKS, rows, strict=True)))
     with pytest.raises(ValueError, match="cohort coverage audit"):
         score_post(POST, rows, CHECKS, source="complete_receipts")
-    wrong = PostCoverage(UUID(int=3), ACCOUNT, "max", "complete",
-                         tuple(CheckpointCoverage(item.name, "usable", None)
-                               for item in CHECKS))
+    wrong = replace(good, publication_id=UUID(int=3))
     with pytest.raises(ValueError, match="another publication"):
         score_post(POST, rows, CHECKS, source="complete_receipts", coverage=wrong)
     incomplete = replace(wrong, publication_id=POST, status="insufficient_data")
@@ -143,3 +160,55 @@ def test_complete_receipts_require_matching_full_frame_coverage():
     assert result.status == "insufficient_data"
     assert result.reason == "incomplete_receipt_coverage"
     assert result.post_rank_bound is None
+    with pytest.raises(ValueError, match="account or platform"):
+        score_post(POST, rows, CHECKS, source="complete_receipts",
+                   coverage=replace(good, account_id=UUID(int=4)))
+    with pytest.raises(ValueError, match="audited receipt pair"):
+        score_post(POST, rows, CHECKS, source="complete_receipts",
+                   coverage=replace(good, checkpoints=(
+                       replace(good.checkpoints[0], interval=replace(
+                           good.checkpoints[0].interval, before_views=99)),
+                       good.checkpoints[1],
+                   )))
+    with pytest.raises(ValueError, match="no usable audited interval"):
+        score_post(POST, rows, CHECKS, source="complete_receipts",
+                   coverage=replace(good, checkpoints=(
+                       replace(good.checkpoints[0], interval=None), good.checkpoints[1],
+                   )))
+
+
+def test_real_receipt_audit_binds_the_post_score_to_the_full_cohort():
+    unread = UUID(int=3)
+    publications = (PublishedPost(POST, ACCOUNT, START),
+                    PublishedPost(unread, ACCOUNT, START))
+    reads = tuple(SuccessfulRead(POST, ACCOUNT, START + timedelta(minutes=minute),
+                                 views, "exact")
+                  for minute, views in ((45, 100), (60, 120), (345, 150), (360, 170)))
+    coverage = audit_cohort_coverage(
+        publications, reads, {ACCOUNT: "max"}, frozenset({ACCOUNT}), CHECKS,
+        cohort_start=START, cohort_end=START + timedelta(days=1),
+        observed_through=START + timedelta(hours=8),
+        max_gap_by_platform={"max": timedelta(minutes=30)},
+        source="successful_poll_receipts",
+    )
+    assert [row.status for row in coverage] == ["complete", "insufficient_data"]
+    rows = []
+    for check, rank in zip(coverage[0].checkpoints, (.01, .20), strict=True):
+        interval = check.interval
+        score = IntervalScore("scored_positive", interval.platform,
+                              age_band(interval.age_seconds),
+                              exposure_band(interval.elapsed_seconds),
+                              interval.displayed_delta_views, 80, 20, 1, 100, 5)
+        m1 = TailRank("ranked", score, rank, 40, 5, 1 / 41, False)
+        m2 = FeedTailRank("ranked", score, None, None, rank, 30, 4)
+        rows.append((FeedObservedGrowth(interval, None, True, 0),
+                     PairedTailRank(interval, m1, m2)))
+    result = score_post(POST, rows, CHECKS, source="complete_receipts",
+                        coverage=coverage[0])
+    assert result.status == "research_ranked"
+    assert result.post_rank_bound == .02
+    with pytest.raises(ValueError, match="audited receipt pair"):
+        tampered = replace(rows[0][0].interval, before_views=99)
+        score_post(POST, ((replace(rows[0][0], interval=tampered),
+                           replace(rows[0][1], interval=tampered)), rows[1]),
+                   CHECKS, source="complete_receipts", coverage=coverage[0])

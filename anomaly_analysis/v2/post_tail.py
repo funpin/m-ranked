@@ -147,15 +147,20 @@ def score_post(
             raise ValueError("duplicate read pair in one post score")
         seen.add(key)
         account_platform.add((row.interval.account_id, row.interval.platform))
-        if (paired.m1.interval.platform != row.interval.platform
+        if (paired.interval != row.interval
+                or paired.m1.interval.platform != row.interval.platform
                 or paired.m1.interval.displayed_delta != row.interval.displayed_delta_views
                 or paired.m2.m1 != paired.m1.interval):
             raise ValueError("rank and observed interval disagree")
     if len(account_platform) > 1:
         raise ValueError("mixed account or platform in one post score")
+    if source == "complete_receipts" and account_platform and account_platform != {
+        (coverage.account_id, coverage.platform)
+    }:
+        raise ValueError("coverage account or platform disagrees with observations")
     chosen: list[CheckpointEvidence] = []
     missing: list[str] = []
-    for checkpoint in checkpoints:
+    for index, checkpoint in enumerate(checkpoints):
         candidates = [
             (abs(row.interval.age_seconds + row.interval.elapsed_seconds
                  - checkpoint.age_seconds), row.interval.end_at, row, paired)
@@ -167,6 +172,12 @@ def score_post(
             missing.append(checkpoint.name)
             continue
         _distance, _time, row, paired = min(candidates, key=lambda value: value[:2])
+        if source == "complete_receipts":
+            audited = coverage.checkpoints[index].interval
+            if audited is None or not audited.usable:
+                raise ValueError("complete coverage has no usable audited interval")
+            if row.interval != audited:
+                raise ValueError("scored interval differs from audited receipt pair")
         rank, reason, m2_rank, reduced, resolution = _rank(row, paired)
         if reason is not None or rank is None or resolution is None:
             missing.append(f"{checkpoint.name}:{reason}")
