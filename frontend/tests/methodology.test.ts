@@ -48,4 +48,10 @@ test("справочник API: только публичные чтения, и
   assert.equal(sections.flatMap((section) => section.operations).length, API_DIGEST.operations.length);
   const anchors = [...sections.map((section) => `section-${section.id}`), ...API_DIGEST.operations.map((operation) => operationAnchor(operation.operationId))];
   assert.equal(new Set(anchors).size, anchors.length);
+  const overview = API_DIGEST.operations.find((operation) => operation.operationId === "getOverview");
+  assert.equal(overview?.path, "/api/v1/overview");
+  assert.ok(API_DIGEST.operations.every((operation) => !operation.path.startsWith("/api/v1/rating")));
+  const analysis = API_DIGEST.operations.find((operation) => operation.operationId === "getPublicationAnomalyAnalysis");
+  assert.ok(analysis?.fields.some((field) => field.name === "originalLevel"));
+  assert.ok(analysis?.fields.some((field) => field.name === "recheckMethodVersion"));
 });

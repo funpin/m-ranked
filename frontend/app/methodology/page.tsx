@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 const PRINCIPLES = [
   { icon: Eye, title: "Только публичное", text: "Берём счётчики, которые видит любой читатель. Закрытых данных площадок у нас нет." },
-  { icon: Scale, title: "Честное сравнение", text: "Сравниваем посты одного возраста и не складываем несопоставимые показатели." },
+  { icon: Scale, title: "Честное сравнение", text: "Прирост за период и значения постов одного возраста показываем отдельно." },
   { icon: ShieldQuestion, title: "Наблюдение, а не обвинение", text: "Анализ называет форму отклонения и её силу, рядом — объяснения, которые данные не исключают." },
 ] as const;
 
@@ -27,7 +27,7 @@ export default function MethodologyIndex() {
         <h1 className="font-heading text-5xl leading-[1] font-bold tracking-tight sm:text-6xl">Методология</h1>
         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
           Как устроен m-ranked: что и как часто мы замеряем, какие значения считаем достоверными, как сравниваем вузы и
-          что именно сообщает анализ динамики. Каждая статья ссылается на код, который можно прочитать.
+          что именно сообщает анализ динамики. Описания можно сверить с открытым кодом.
         </p>
       </header>
 
@@ -40,6 +40,15 @@ export default function MethodologyIndex() {
           </li>
         ))}
       </ul>
+
+      <section aria-labelledby="method-status" className="grid gap-4">
+        <h2 id="method-status" className="font-heading text-2xl font-bold tracking-tight">Что работает сейчас</h2>
+        <div className="bg-card ring-foreground/10 grid gap-3 rounded-2xl p-5 text-sm leading-relaxed ring-1 sm:p-6">
+          <p><strong>Анализ динамики:</strong> действующий детектор сохраняет признаки и уровень для публикаций четырёх площадок.</p>
+          <p><strong>Контекстная проверка:</strong> для части поздних скачков Telegram и MAX отдельный пересмотр может понизить итоговый уровень, сохранив исходный сигнал. Наличие нового поста не раскрывает источник просмотров.</p>
+          <p className="text-muted-foreground"><strong className="text-foreground">Исследовательский метод M1/M2:</strong> расчёт на реальных интервалах чтения подготовлен, но до сбора и проверки новой когорты не участвует в публичной оценке. <Link href="/methodology/analysis" prefetch={false} className="text-foreground underline underline-offset-4">Как читать вывод</Link>.</p>
+        </div>
+      </section>
 
       <section aria-labelledby="articles" className="grid gap-5">
         <h2 id="articles" className="font-heading text-2xl font-bold tracking-tight">Статьи по порядку</h2>

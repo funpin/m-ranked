@@ -7,7 +7,7 @@ import { publicOrigin } from "@/lib/deployment";
 import type { TocEntry } from "@/lib/methodology";
 import { REPOSITORY_URL } from "@/lib/repository";
 
-const DESCRIPTION = "Публичные методы API m-ranked с параметрами и примерами запросов: рейтинг, сравнение, аккаунты, публикации и история замеров.";
+const DESCRIPTION = "Публичные методы API m-ranked с параметрами и примерами запросов: обзор, сравнение, аккаунты, публикации и история замеров.";
 export const metadata: Metadata = {
   title: "Открытый API — методология",
   description: DESCRIPTION,
@@ -43,16 +43,18 @@ export default function ApiReferencePage() {
             Те же данные, что на сайте, в JSON. Ключ не нужен. Здесь — публичные методы чтения; полный контракт — в
             {" "}<a href={CONTRACT_URL} target="_blank" rel="noopener noreferrer" className="text-foreground underline underline-offset-4">OpenAPI 3.1</a>.
           </p>
+          <p className="text-muted-foreground text-sm">
+            Страница <Link href="/review" prefetch={false} className="text-foreground underline underline-offset-4">«Обзор»</Link> использует <code>/api/v1/overview</code>. Адрес <code>/rating</code> оставлен для будущего самостоятельного рейтинга.
+          </p>
         </header>
 
         <section aria-labelledby="basics" className="mb-14 grid grid-cols-1 gap-4">
           <h2 id="basics" className="font-heading text-2xl font-bold tracking-tight">Как обращаться</h2>
           <ul className="text-foreground/90 ml-5 list-disc space-y-2 text-base leading-relaxed">
-            <li>Адрес: <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">{origin}/api/v1/…</code>, только GET.</li>
-            <li>Каждый ответ несёт <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">datasetRevision</code> и
-              {" "}<code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">asOf</code> — ревизию данных и момент расчёта.</li>
-            <li>Ответы кэшируются: повторите запрос с <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">If-None-Match</code> и
-              полученным <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">ETag</code> — если данные не изменились, придёт 304 без тела.</li>
+            <li>Адрес: <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">{origin}/api/v1/…</code>. Все методы в этом справочнике — GET.</li>
+            <li>Поля <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">datasetRevision</code> и
+              {" "}<code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">asOf</code> есть у большинства витринных ответов. Смотрите список полей у конкретного метода: например, у анализа публикации есть ревизия и <code>analyzedAt</code>, а у сводки сайта этих полей нет.</li>
+            <li>Кэшируемый ответ с <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">ETag</code> можно запросить повторно с <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">If-None-Match</code>. При совпадении вернётся 304 без тела; метод ревизии не кэшируется.</li>
             <li>Отсутствующее значение — <code className="bg-muted rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">null</code>, а не 0
               (<Link href="/methodology/platforms" prefetch={false} className="underline underline-offset-4">почему</Link>).</li>
             <li>Будьте бережны: частые запросы с одного адреса получают 429 или 503 с заголовком Retry-After.</li>

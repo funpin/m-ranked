@@ -29,7 +29,7 @@ type OperationText = { section: SectionId; title: string; text: string; example?
 export const OPERATION_TEXT: Record<string, OperationText> = {
   getOverview: {
     section: "overview", title: "Обзор вузов",
-    text: "Карточки вузов с приростом просмотров, реакций, комментариев и репостов за период и медианами по публикациям. Постранично, с курсором.",
+    text: "Данные страницы /review: карточки вузов с приростом просмотров, реакций, комментариев и репостов за период и медианами по публикациям. Постранично, с курсором.",
     example: "/api/v1/overview?platform=vk&period=7d&limit=10",
   },
   getStatistics: {
@@ -89,7 +89,7 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
   },
   getPublicationAnomalyAnalysis: {
     section: "publications", title: "Анализ динамики публикации",
-    text: "Уровень, признаки с формулами и интервалами, качество данных, версии нормы и оговорка. Пост без анализа — уровень null и статус pending.",
+    text: "Итоговый уровень, исходный уровень до контекстной проверки, признаки и качество данных. Поля recheckReason и recheckMethodVersion заполняются только после пересмотра. Пост без анализа — уровень null и статус pending.",
     example: "/api/v1/publications/{uuid}/anomaly-analysis",
   },
   getSiteSummary: {
@@ -107,7 +107,7 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
 /** Русские описания общих параметров; остальное — по контракту. */
 export const PARAMETER_TEXT: Record<string, string> = {
   platform: "Площадка; all — все сразу.",
-  period: "Окно: 3 часа, сутки, 7 или 30 дней.",
+  period: "Окно расчёта; доступные значения зависят от метода и указаны рядом.",
   q: "Поиск по названию, до 200 символов.",
   sort: "Поле сортировки.",
   direction: "Направление сортировки.",
