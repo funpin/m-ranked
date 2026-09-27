@@ -1,0 +1,172 @@
+{
+  "kind": "historical_change_sample_shadow_not_public_validation",
+  "platform": "max",
+  "selection": "1/10 publication IDs by PostgreSQL hashtext; post-disjoint UTC cohorts; 7-day post age; 2-hour maximum saved-read gap",
+  "utc_splits": {
+    "fit": [
+      "2026-09-07",
+      "2026-09-14"
+    ],
+    "calibration": [
+      "2026-09-14",
+      "2026-09-19"
+    ],
+    "holdout": [
+      "2026-09-19",
+      "2026-09-24"
+    ]
+  },
+  "selected_posts": 632,
+  "selected_accounts": 79,
+  "posts_with_saved_reads": 615,
+  "saved_reads": 126307,
+  "read_pairs_all_statuses": 125692,
+  "discarded_pair_statuses": {
+    "cross_day": 789,
+    "excessive_gap": 6995,
+    "negative_correction_or_reset": 392,
+    "post_outside_period_cohort": 21426
+  },
+  "exact_usable_pairs_by_split": {
+    "fit": 45872,
+    "calibration": 25656,
+    "holdout": 24562
+  },
+  "posts_in_multiple_splits": 0,
+  "fitted_m1_cells": 10,
+  "calibrated_m1_cells": 10,
+  "calibrated_m2_cells": 68,
+  "calibration_event_pairs": 2076,
+  "holdout_event_pairs": 1997,
+  "holdout_m1_status": {
+    "observed_zero": 279,
+    "ranked": 24283
+  },
+  "holdout_m2_status": {
+    "insufficient_calibration": 475,
+    "observed_zero": 279,
+    "ranked": 23808
+  },
+  "holdout_paired_ranked": 23808,
+  "holdout_event_paired_ranked": 1507,
+  "holdout_ranked_by_context": {
+    "new_post": {
+      "pairs": 1507,
+      "posts": 160,
+      "m1_small_tail_pairs": 12,
+      "m2_small_tail_pairs": 52,
+      "m1_small_tail_posts": 8,
+      "m2_small_tail_posts": 31
+    },
+    "no_new_post": {
+      "pairs": 22301,
+      "posts": 178,
+      "m1_small_tail_pairs": 133,
+      "m2_small_tail_pairs": 138,
+      "m1_small_tail_posts": 29,
+      "m2_small_tail_posts": 30
+    }
+  },
+  "event_paired_5pct_diagnostic": {
+    "m1_small_tail": 12,
+    "m2_small_tail": 52,
+    "m1_only": 0,
+    "m2_only": 40
+  },
+  "event_examples_m2_less_unusual": [
+    {
+      "publication_id": "e57b99d9-5628-5ff9-bc92-ee5ab8b5b778",
+      "account_id": "ee221562-2b7b-5cbf-a2f4-95d8ecbe6f31",
+      "start_at": "2026-09-21T16:06:29.085126+00:00",
+      "end_at": "2026-09-21T16:46:03.674393+00:00",
+      "before_views": 942,
+      "delta_views": 9,
+      "new_post_distance": 7,
+      "new_post_views": 104,
+      "m1_tail_rank": 0.0592,
+      "m2_tail_rank": 0.1538,
+      "m1_reference_blocks": 151,
+      "m2_reference_blocks": 25
+    },
+    {
+      "publication_id": "cdea4cbe-b5aa-5595-a3dc-bec2a4a82b9e",
+      "account_id": "7427f28c-ebc2-5f0f-acb3-b0bff15bf09a",
+      "start_at": "2026-09-21T09:13:27.271281+00:00",
+      "end_at": "2026-09-21T09:45:55.972335+00:00",
+      "before_views": 662,
+      "delta_views": 6,
+      "new_post_distance": 8,
+      "new_post_views": 100,
+      "m1_tail_rank": 0.0724,
+      "m2_tail_rank": 0.1538,
+      "m1_reference_blocks": 151,
+      "m2_reference_blocks": 25
+    },
+    {
+      "publication_id": "604bc741-4727-5863-b27f-99a7cbe6c798",
+      "account_id": "ee221562-2b7b-5cbf-a2f4-95d8ecbe6f31",
+      "start_at": "2026-09-21T10:08:42.148548+00:00",
+      "end_at": "2026-09-21T10:45:35.600899+00:00",
+      "before_views": 999,
+      "delta_views": 7,
+      "new_post_distance": 6,
+      "new_post_views": 167,
+      "m1_tail_rank": 0.0724,
+      "m2_tail_rank": 0.1538,
+      "m1_reference_blocks": 151,
+      "m2_reference_blocks": 25
+    }
+  ],
+  "event_examples_m2_more_unusual": [
+    {
+      "publication_id": "858b8cd9-c3e7-53a9-8a18-6ab04d79ba9b",
+      "account_id": "820d487b-ada6-54cf-b025-3d26f56e9c43",
+      "start_at": "2026-09-21T09:19:33.564948+00:00",
+      "end_at": "2026-09-21T09:24:57.712406+00:00",
+      "before_views": 907,
+      "delta_views": 27,
+      "new_post_distance": 2,
+      "new_post_views": 86,
+      "m1_tail_rank": 0.8611,
+      "m2_tail_rank": 0.04,
+      "m1_reference_blocks": 143,
+      "m2_reference_blocks": 49
+    },
+    {
+      "publication_id": "e2d738db-a84c-5336-a332-b868a49c8239",
+      "account_id": "a6a15e13-06e8-43a9-b7da-ba7a403d9855",
+      "start_at": "2026-09-21T09:07:55.562465+00:00",
+      "end_at": "2026-09-21T09:13:48.401872+00:00",
+      "before_views": 583,
+      "delta_views": 16,
+      "new_post_distance": 2,
+      "new_post_views": 45,
+      "m1_tail_rank": 0.8611,
+      "m2_tail_rank": 0.04,
+      "m1_reference_blocks": 143,
+      "m2_reference_blocks": 49
+    },
+    {
+      "publication_id": "602719db-2360-5712-98cd-21e1a6ea24d8",
+      "account_id": "2444b0a5-0555-4387-9a41-c37ea7954675",
+      "start_at": "2026-09-23T14:30:15.931053+00:00",
+      "end_at": "2026-09-23T14:35:14.949661+00:00",
+      "before_views": 1150,
+      "delta_views": 12,
+      "new_post_distance": 3,
+      "new_post_views": 35,
+      "m1_tail_rank": 0.8611,
+      "m2_tail_rank": 0.0465,
+      "m1_reference_blocks": 143,
+      "m2_reference_blocks": 42
+    }
+  ],
+  "limits": [
+    "Historical snapshots are change-triggered and omit many unchanged successful reads.",
+    "Feed order is reconstructed from currently visible publications; deleted or missed posts may be absent.",
+    "New-post reach is a displayed counter proxy, not observed referrals to the old post.",
+    "The 5% rank cut is descriptive and has no validated false-alert interpretation.",
+    "Posts are disjoint across periods, but repeated holdout intervals of one post are not independent alerts.",
+    "The split dates were chosen after earlier exploration and are not a pristine prospective holdout."
+  ]
+}

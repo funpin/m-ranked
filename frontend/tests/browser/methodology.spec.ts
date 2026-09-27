@@ -41,11 +41,21 @@ test("справочник API перечисляет публичные мет�
   await expect(reference.locator('[data-operation="getSiteSummary"] code')).toContainText("/api/v1/site/summary");
 });
 
+test("пилот M1/M2 показывает реальный архивный результат и его ограничение", async ({ page }) => {
+  await page.goto("/methodology");
+  await page.getByRole("link", { name: "Результат на локальной копии" }).click();
+  await expect(page).toHaveURL(/\/methodology\/pilot$/);
+  await expect(page.getByRole("heading", { level: 1, name: "M1/M2 на реальных измерениях" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Что получилось" }).locator("..")).toContainText("12");
+  await expect(page.getByRole("heading", { name: "Что получилось" }).locator("..")).toContainText("52");
+  await expect(page.getByText("Сохранены в основном изменения счётчиков", { exact: false })).toBeVisible();
+});
+
 for (const theme of ["light", "dark"]) {
   test(`методология и API проходят axe AA и не шире экрана в ${theme} теме`, async ({ page }) => {
     await page.addInitScript((value) => localStorage.setItem("m-ranked-theme", value), theme);
     await page.emulateMedia({ reducedMotion: "reduce" });
-    for (const path of ["/methodology", "/methodology/data-quality", "/methodology/api"]) {
+    for (const path of ["/methodology", "/methodology/data-quality", "/methodology/pilot", "/methodology/api"]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), path).toBe(0);
