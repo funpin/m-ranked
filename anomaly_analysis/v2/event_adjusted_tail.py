@@ -18,6 +18,10 @@ from anomaly_analysis.neighbor_exposure import NeighborInterval, SuccessfulRead
 
 from .interval_baseline import ConditionalIntervalBaseline, IntervalScore
 from .receipt_panel import ObservedGrowth
+from .temporal_validation import TailRank, TemporalM1Validation, validate_future_m1
+
+
+SUPPORTED_PLATFORMS = frozenset({"telegram", "max"})
 
 
 def feed_band(distance: int | None) -> str:
@@ -122,7 +126,7 @@ class EventAdjustedTail:
             raise ValueError("calibration requires at least two blocks and accounts")
         blocks: dict[CellKey, dict[BlockKey, float]] = {}
         for row in calibration:
-            if not row.complete_order:
+            if row.interval.platform not in SUPPORTED_PLATFORMS or not row.complete_order:
                 continue
             reach = reach_band(row)
             if reach is None:
@@ -139,6 +143,8 @@ class EventAdjustedTail:
 
     def rank(self, row: FeedObservedGrowth) -> FeedTailRank:
         score = self.m1.score(row.interval)
+        if row.interval.platform not in SUPPORTED_PLATFORMS:
+            return FeedTailRank("unsupported_platform", score, None, None, None, 0, 0)
         if not row.complete_order:
             return FeedTailRank("incomplete_publication_order", score, None, None, None, 0, 0)
         band = feed_band(row.nearest_event_distance)
@@ -154,3 +160,53 @@ class EventAdjustedTail:
             return FeedTailRank("insufficient_calibration", score, band, reach, None, count, accounts)
         rank = (1 + sum(value >= score.positive_residual for value in reference.values())) / (count + 1)
         return FeedTailRank("ranked", score, band, reach, rank, count, accounts)
+
+
+@dataclass(frozen=True, slots=True)
+class PairedTailRank:
+    m1: TailRank
+    m2: FeedTailRank
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalM2Validation:
+    m1: TemporalM1Validation
+    m2: EventAdjustedTail
+    holdout: tuple[PairedTailRank, ...]
+
+    @property
+    def paired_ranked_count(self) -> int:
+        return sum(row.m1.status == row.m2.status == "ranked" for row in self.holdout)
+
+
+def validate_future_m2(
+    training: tuple[ObservedGrowth, ...],
+    calibration: tuple[FeedObservedGrowth, ...],
+    holdout: tuple[FeedObservedGrowth, ...],
+    *,
+    min_fit_intervals: int = 20,
+    min_fit_accounts: int = 2,
+    min_calibration_blocks: int = 20,
+    min_calibration_accounts: int = 3,
+) -> TemporalM2Validation:
+    """Compare M1 and M2 on the identical future intervals without day leakage.
+
+    M1 establishes the ordered fit/calibration/holdout boundaries. M2 uses
+    only that fitted M1 and the same calibration dates. Sparse M2 cells abstain;
+    they are never filled with M1 ranks or treated as successful predictions.
+    """
+    m1 = validate_future_m1(
+        training, (row.interval for row in calibration),
+        (row.interval for row in holdout),
+        min_fit_intervals=min_fit_intervals,
+        min_fit_accounts=min_fit_accounts,
+        min_calibration_blocks=min_calibration_blocks,
+        min_calibration_accounts=min_calibration_accounts,
+    )
+    m2 = EventAdjustedTail.fit(
+        m1.baseline, calibration, min_blocks=min_calibration_blocks,
+        min_accounts=min_calibration_accounts,
+    )
+    paired = tuple(PairedTailRank(first, m2.rank(row))
+                   for first, row in zip(m1.holdout, holdout, strict=True))
+    return TemporalM2Validation(m1, m2, paired)

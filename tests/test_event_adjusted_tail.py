@@ -1,10 +1,15 @@
 """Feed-conditioned M2 keeps unlike exposure windows apart."""
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 from math import log1p
 from uuid import UUID
 
+import pytest
+
 from anomaly_analysis.neighbor_exposure import NeighborInterval, SuccessfulRead
-from anomaly_analysis.v2.event_adjusted_tail import EventAdjustedTail, FeedObservedGrowth, feed_observation
+from anomaly_analysis.v2.event_adjusted_tail import (
+    EventAdjustedTail, FeedObservedGrowth, feed_observation, validate_future_m2,
+)
 from anomaly_analysis.v2.interval_baseline import ConditionalCell, ConditionalIntervalBaseline
 from anomaly_analysis.v2.receipt_panel import ObservedGrowth
 
@@ -81,3 +86,33 @@ def test_feed_feature_must_match_the_same_successful_read_pair():
         pass
     else:
         raise AssertionError("different read pairs cannot be joined")
+
+
+def test_future_m2_uses_same_holdout_as_m1_and_rejects_time_leakage():
+    train = (observed(ACCOUNTS[0], 10, 10, None).interval,
+             observed(ACCOUNTS[1], 10, 20, None).interval)
+    cal = (observed(ACCOUNTS[0], 15, 100, 1), observed(ACCOUNTS[1], 16, 120, 1),
+           observed(ACCOUNTS[0], 15, 10, None), observed(ACCOUNTS[1], 16, 20, None))
+    future = (observed(ACCOUNTS[0], 18, 50, 1), observed(ACCOUNTS[0], 18, 50, None),
+              observed(ACCOUNTS[1], 18, 50, 1, new_views=None))
+    result = validate_future_m2(train, cal, future, min_fit_intervals=2,
+                                min_calibration_blocks=2, min_calibration_accounts=2)
+    assert [row.m1.status for row in result.holdout] == ["ranked"] * 3
+    assert [row.m2.status for row in result.holdout] == [
+        "ranked", "ranked", "missing_new_post_reach"]
+    assert result.paired_ranked_count == 2
+    assert result.holdout[0].m2.upper_tail_rank == 1
+    assert result.holdout[1].m2.upper_tail_rank == 1 / 3
+    with pytest.raises(ValueError, match="training and calibration"):
+        validate_future_m2(train + (cal[0].interval,), cal, future,
+                           min_fit_intervals=2, min_calibration_blocks=2,
+                           min_calibration_accounts=2)
+
+
+def test_vk_event_tail_abstains_until_its_separate_late_model_exists():
+    model = EventAdjustedTail.fit(M1, (observed(ACCOUNTS[0], 15, 100, 1),
+                                       observed(ACCOUNTS[1], 16, 120, 1)),
+                                  min_blocks=2, min_accounts=2)
+    vk = observed(ACCOUNTS[0], 18, 50, 1)
+    assert model.rank(replace(vk, interval=replace(vk.interval, platform="vk"))).status == \
+        "unsupported_platform"
