@@ -11,16 +11,15 @@ INSERT INTO receipt_size_bench (
     shares_count, views_quality, reactions_quality, comments_quality,
     shares_quality, interval_uncertain, snapshot_written
 )
-SELECT publication.id, 900, tick.n,
+SELECT md5('m0-benchmark-post-' || post.n)::uuid, 900, tick.n,
        TIMESTAMPTZ '2026-09-01 00:00:00+00' + tick.n * INTERVAL '15 minutes',
-       run.id, 1000 + tick.n, 12 + tick.n / 100, NULL, NULL,
+       md5('m0-benchmark-run')::uuid, 1000 + tick.n, 12 + tick.n / 100, NULL, NULL,
        'exact'::ingest.observation_quality,
        'exact'::ingest.observation_quality,
        'unknown'::ingest.observation_quality,
        'unknown'::ingest.observation_quality,
        false, false
-FROM (SELECT id FROM ingest.publication ORDER BY id LIMIT 256) AS publication
-CROSS JOIN (SELECT id FROM ingest.collection_run LIMIT 1) AS run
+FROM generate_series(0, 255) AS post(n)
 CROSS JOIN generate_series(0, 39) AS tick(n);
 
 SELECT count(*) AS rows,
