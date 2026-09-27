@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta, timezone
+from math import inf, isfinite, nextafter
 from typing import Iterable, Literal
 from uuid import UUID
 
@@ -42,6 +43,20 @@ class BoundedTailRank:
     calibration_posts: int
 
 
+@dataclass(frozen=True, slots=True)
+class DailyUpperBound:
+    """Compact sufficient reference datum, derived from successful read pairs."""
+
+    source: Source
+    platform: str
+    account_id: UUID
+    publication_id: UUID
+    observed_day: date
+    age_band: str
+    exposure_band: str
+    upper_rate_per_hour: float
+
+
 class _UnavailableBound(ValueError):
     def __init__(self, status: str):
         super().__init__(f"bounded interval unavailable: {status}")
@@ -67,10 +82,41 @@ def _features(row: BoundedInterval, max_gap: timedelta) -> tuple[Cell, date, flo
     cell = (row.post.account_id,
             age_band((row.before.observed_at - row.post.published_at).total_seconds()),
             exposure_band(elapsed))
-    hours = elapsed / 3600
+    lower_delta = max(0, growth.lower_delta)
+    upper_delta = max(0, growth.upper_delta)
+    lower_rate = lower_delta * 3600 / elapsed
+    upper_rate = upper_delta * 3600 / elapsed
+    # Floating-point conversion must not narrow conservative integer bounds.
+    if lower_delta:
+        lower_rate = nextafter(lower_rate, -inf)
+    if upper_delta:
+        upper_rate = nextafter(upper_rate, inf)
     return (cell, after_day,
-            max(0, growth.lower_delta) / hours,
-            max(0, growth.upper_delta) / hours)
+            lower_rate, upper_rate)
+
+
+def summarize_daily_upper_bounds(
+    rows: Iterable[BoundedInterval], *, source: Source,
+    max_gap: timedelta = timedelta(hours=2),
+) -> tuple[DailyUpperBound, ...]:
+    """Keep the largest upper growth bound per post/day/comparable cell.
+
+    The caller must supply actual consecutive successful reads. It must never
+    manufacture unchanged receipts from a change-only snapshot stream.
+    """
+    if source not in {"successful_poll_receipts", "change_only_shadow"}:
+        raise ValueError("unknown read source")
+    maxima: dict[tuple[str, UUID, UUID, date, str, str], float] = {}
+    for row in rows:
+        try:
+            (account_id, age, exposure), day, _lower, upper = _features(row, max_gap)
+        except _UnavailableBound:
+            continue
+        key = (row.platform, account_id, row.post.publication_id, day, age, exposure)
+        maxima[key] = max(maxima.get(key, 0.0), upper)
+    return tuple(DailyUpperBound(source, *key, upper) for key, upper in sorted(
+        maxima.items(), key=lambda item: tuple(str(part) for part in item[0])
+    ))
 
 
 class BoundedTailReference:
@@ -95,10 +141,29 @@ class BoundedTailReference:
     def fit(cls, rows: Iterable[BoundedInterval], *, source: Source,
             max_gap: timedelta = timedelta(hours=2), min_days: int = 7,
             min_posts: int = 5) -> "BoundedTailReference":
+        items = tuple(rows)
+        if not items:
+            raise ValueError("bounded reference cannot be empty")
+        # A reference cohort is expected to contain only rankable readings.
+        # Do not silently drop unknown precision during calibration.
+        for row in items:
+            _features(row, max_gap)
+        return cls.fit_daily(
+            summarize_daily_upper_bounds(items, source=source, max_gap=max_gap),
+            source=source,
+            max_gap=max_gap, min_days=min_days, min_posts=min_posts,
+        )
+
+    @classmethod
+    def fit_daily(cls, rows: Iterable[DailyUpperBound], *, source: Source,
+                  max_gap: timedelta = timedelta(hours=2), min_days: int = 7,
+                  min_posts: int = 5) -> "BoundedTailReference":
         if source not in {"successful_poll_receipts", "change_only_shadow"}:
             raise ValueError("unknown read source")
         if min_days < 2 or min_posts < 2:
             raise ValueError("reference needs at least two days and posts")
+        if max_gap <= timedelta(0):
+            raise ValueError("maximum read gap must be positive")
         items = tuple(rows)
         if not items:
             raise ValueError("bounded reference cannot be empty")
@@ -108,13 +173,18 @@ class BoundedTailReference:
         ids: set[UUID] = set()
         days: set[date] = set()
         for row in items:
+            if row.source != source:
+                raise ValueError("daily reference source differs from requested source")
             if row.platform != platform:
                 raise ValueError("bounded reference cannot mix platforms")
-            cell, day, _lower, upper = _features(row, max_gap)
+            if not isfinite(row.upper_rate_per_hour) or row.upper_rate_per_hour < 0:
+                raise ValueError("daily upper rate must be finite and nonnegative")
+            cell = (row.account_id, row.age_band, row.exposure_band)
+            day, upper = row.observed_day, row.upper_rate_per_hour
             per_day = blocks.setdefault(cell, {})
             per_day[day] = max(per_day.get(day, 0.0), upper)
-            posts.setdefault(cell, set()).add(row.post.publication_id)
-            ids.add(row.post.publication_id)
+            posts.setdefault(cell, set()).add(row.publication_id)
+            ids.add(row.publication_id)
             days.add(day)
         return cls(platform, source, blocks,
                    {cell: frozenset(values) for cell, values in posts.items()},
