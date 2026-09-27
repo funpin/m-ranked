@@ -28,6 +28,7 @@ from anomaly_analysis.v2.event_adjusted_tail import (  # noqa: E402
     FeedObservedGrowth, feed_observation, validate_future_m2,
 )
 from anomaly_analysis.v2.receipt_panel import consecutive_growth  # noqa: E402
+from anomaly_analysis.v2.post_tail import EARLY_CHECKPOINTS, score_post  # noqa: E402
 
 
 PLATFORM = "max"
@@ -216,6 +217,27 @@ def _first_comparable_event_per_post(holdout, results):
     }
 
 
+def _post_level_shadow(holdout, results, checkpoints):
+    """Apply fixed checkpoints, including explicit post-level abstentions."""
+    by_post = defaultdict(list)
+    for row, paired in zip(holdout, results, strict=True):
+        by_post[row.interval.publication_id].append((row, paired))
+    scores = tuple(score_post(post_id, rows, checkpoints,
+                              source="change_only_shadow")
+                   for post_id, rows in by_post.items())
+    ranked = tuple(score for score in scores if score.status == "shadow_only")
+    return {
+        "checkpoints": [item.name for item in checkpoints],
+        "posts_with_holdout_intervals": len(scores),
+        "shadow_evaluable_posts": len(ranked),
+        "insufficient_data_posts": len(scores) - len(ranked),
+        "m1_small_tail_posts": sum(score.m1_post_rank_bound <= .05 for score in ranked),
+        "context_small_tail_posts": sum(score.post_rank_bound <= .05 for score in ranked),
+        "posts_with_reduced_evidence": sum(
+            score.post_rank_bound > score.m1_post_rank_bound for score in ranked),
+    }
+
+
 def _summary(selected, reads, intervals, split, discarded, cal, holdout, validation):
     paired = [(row, result) for row, result in zip(holdout, validation.holdout, strict=True)
               if row.nearest_event_distance is not None
@@ -288,6 +310,12 @@ def _summary(selected, reads, intervals, split, discarded, cal, holdout, validat
         },
         "first_comparable_event_per_post": _first_comparable_event_per_post(
             holdout, validation.holdout),
+        "fixed_checkpoint_post_tail": {
+            "early_24h": _post_level_shadow(holdout, validation.holdout,
+                                            EARLY_CHECKPOINTS[:3]),
+            "later_72h": _post_level_shadow(holdout, validation.holdout,
+                                            EARLY_CHECKPOINTS[3:5]),
+        },
         "event_examples_m2_less_unusual": [_example(*item) for item in raised[:3]],
         "event_examples_m2_more_unusual": [_example(*item) for item in lowered[:3]],
         "limits": [
@@ -337,7 +365,8 @@ def main():
     print(json.dumps({key: result[key] for key in (
         "selected_posts", "saved_reads", "exact_usable_pairs_by_split",
         "holdout_m1_status", "holdout_m2_status", "holdout_event_paired_ranked",
-        "event_paired_5pct_diagnostic")}, ensure_ascii=False))
+        "event_paired_5pct_diagnostic", "fixed_checkpoint_post_tail")},
+        ensure_ascii=False))
 
 
 if __name__ == "__main__":

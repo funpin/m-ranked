@@ -81,6 +81,33 @@
     "m1_only": 0,
     "m2_only": 13
   },
+  "fixed_checkpoint_post_tail": {
+    "early_24h": {
+      "checkpoints": [
+        "1h",
+        "6h",
+        "24h"
+      ],
+      "posts_with_holdout_intervals": 178,
+      "shadow_evaluable_posts": 102,
+      "insufficient_data_posts": 76,
+      "m1_small_tail_posts": 0,
+      "context_small_tail_posts": 0,
+      "posts_with_reduced_evidence": 0
+    },
+    "later_72h": {
+      "checkpoints": [
+        "48h",
+        "72h"
+      ],
+      "posts_with_holdout_intervals": 178,
+      "shadow_evaluable_posts": 38,
+      "insufficient_data_posts": 140,
+      "m1_small_tail_posts": 0,
+      "context_small_tail_posts": 0,
+      "posts_with_reduced_evidence": 1
+    }
+  },
   "event_examples_m2_less_unusual": [
     {
       "publication_id": "e57b99d9-5628-5ff9-bc92-ee5ab8b5b778",
