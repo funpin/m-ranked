@@ -169,3 +169,14 @@ export function plural(value: number, one: string, few: string, many: string) {
   if (mod10 >= 2 && mod10 <= 4) return few;
   return many;
 }
+
+const statInteger = new Intl.NumberFormat("ru-RU");
+const statDecimal = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
+
+/** Крупное число для витрины: до миллиона — полностью, дальше — «13,2 млн». */
+export function formatStat(value: number) {
+  if (Math.abs(value) >= 1_000_000_000) return `${statDecimal.format(value / 1_000_000_000)} млрд`;
+  if (Math.abs(value) >= 1_000_000) return `${statDecimal.format(value / 1_000_000)} млн`;
+  return statInteger.format(Math.round(value));
+}
+

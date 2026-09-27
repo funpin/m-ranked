@@ -3,7 +3,9 @@
  *  а компоненты главной лишь рисуют результат. */
 import type { components } from "../../contracts/openapi/m-ranked-v1-client";
 import type { Dashboard } from "./compare-dashboard";
-import { plural } from "./format";
+import { formatStat, plural } from "./format";
+
+export { formatStat };
 
 export type SiteSummary = components["schemas"]["SiteSummary"];
 
@@ -32,14 +34,6 @@ export function platformsFromSummary(summary: Pick<SiteSummary, "accountsByPlatf
 }
 
 const integer = new Intl.NumberFormat("ru-RU");
-const oneDecimal = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
-
-/** Крупное число для витрины: до миллиона — полностью, дальше — «13,2 млн». */
-export function formatStat(value: number) {
-  if (Math.abs(value) >= 1_000_000_000) return `${oneDecimal.format(value / 1_000_000_000)} млрд`;
-  if (Math.abs(value) >= 1_000_000) return `${oneDecimal.format(value / 1_000_000)} млн`;
-  return integer.format(Math.round(value));
-}
 
 
 const UNIT_FORMS: Record<string, [string, string, string]> = {
@@ -52,12 +46,6 @@ export function countWithUnit(value: number, unit: string) {
   return `${integer.format(value)} ${plural(value, ...forms)}`;
 }
 
-/** Дата пересчёта сводки: «26 сентября 2026». */
-export function summaryDate(iso: string) {
-  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Moscow" })
-    .format(new Date(iso)).replace(/\s*г\.$/, "");
-}
-
 /** Расписание замеров: чем моложе пост, тем чаще. Совпадает с настройками
  *  сборщиков на проде; через 30 суток сбор по посту завершается. */
 export const COLLECTION_SCHEDULE = [
@@ -66,7 +54,6 @@ export const COLLECTION_SCHEDULE = [
   { age: "4–6 сутки", step: "30 мин", share: 3 },
   { age: "7–30 сутки", step: "60 мин", share: 24 },
 ] as const;
-export const RUTUBE_SCHEDULE = "от часа в первые трое суток до 12 часов к концу месяца";
 export const TRACKING_DAYS = 30;
 
 /** Только то, что рисуют графики главной: сутки по площадкам, ритм
@@ -80,6 +67,35 @@ export function landingDashboard(data: Dashboard): Dashboard {
     curves: [],
     types: [],
   };
+}
+
+export type PhoneNetwork = {
+  platform: KnownPlatform; posts: number; views: number; views24: number | null; engagement24: number | null;
+  anomalyShare: number | null; daily: number[];
+};
+
+/** Сводка для экрана телефона на главной: по каждой площадке — публикации и
+ *  просмотры за окно, типичный пост за сутки, вовлечённость, доля постов с
+ *  выраженными признаками и просмотры по дням. Все вузы вместе. */
+export function phoneSummary(data: Dashboard): { days: string[]; networks: PhoneNetwork[] } {
+  const days = [...new Set(data.daily.map((row) => row.day))].sort();
+  const index = new Map(days.map((day, position) => [day, position]));
+  const networks = (Object.keys(KNOWN_PLATFORMS) as KnownPlatform[]).map((platform) => {
+    const daily = days.map(() => 0);
+    let posts = 0;
+    let views = 0;
+    for (const row of data.daily) {
+      if (row.platform !== platform) continue;
+      posts += row.posts;
+      views += row.viewsTotal ?? 0;
+      daily[index.get(row.day)!]! += row.viewsTotal ?? 0;
+    }
+    const stat = data.stats.find((item) => item.institutionId === null && item.platform === platform);
+    const levels = stat?.levels ?? [];
+    const anomalyShare = stat && stat.analyzed ? ((levels[2] ?? 0) + (levels[3] ?? 0)) / stat.analyzed : null;
+    return { platform, posts, views, views24: stat?.views24 ?? null, engagement24: stat?.engagement24 ?? null, anomalyShare, daily };
+  }).filter((network) => network.posts > 0 || network.views > 0);
+  return { days, networks };
 }
 
 // --- Геометрия иллюстраций ---
@@ -220,3 +236,23 @@ export const ANALYSIS_LEVELS = [
   { level: 2, title: "Уровень 2", text: "Один сильный признак." },
   { level: 3, title: "Признаки искусственной активности", text: "Сильные признаки из двух разных семейств сразу." },
 ] as const;
+
+export type CorridorModel = {
+  frame: typeof CORRIDOR;
+  band: ReturnType<typeof corridorBand>;
+  crowd: string[];
+  shapes: { id: CorridorShapeId; title: string; level: number; text: string; d: string }[];
+  levels: typeof ANALYSIS_LEVELS;
+};
+
+/** Готовая геометрия схемы анализа. Считается на сервере: в браузер уходят
+ *  строки путей, а не математика кривых. */
+export function corridorModel(): CorridorModel {
+  return {
+    frame: CORRIDOR,
+    band: corridorBand(),
+    crowd: corridorCrowd(),
+    shapes: CORRIDOR_SHAPES.map(({ id, title, level, text }) => ({ id, title, level, text, d: corridorShapePath(id) })),
+    levels: ANALYSIS_LEVELS,
+  };
+}
