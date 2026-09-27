@@ -49,6 +49,11 @@ def test_exact_reads_remain_exact_and_unknown_legacy_precision_abstains():
 
 
 def test_untrusted_or_out_of_order_reads_cannot_be_scored():
+    assert bounded_view_growth(read(0, 1200), read(1, 1600),
+                               max_gap=timedelta(minutes=30)).status == "short_gap"
+    assert bounded_view_growth(read(0, 1200, "exact", None),
+                               read(1, 1600, "exact", None),
+                               max_gap=timedelta(minutes=30)).status == "bounded"
     assert bounded_view_growth(read(0, 1200), read(45, 1600),
                                max_gap=timedelta(minutes=30)).status == "excessive_gap"
     assert bounded_view_growth(read(0, 1200), read(15, 1600, uncertain=True),

@@ -28,13 +28,17 @@ def test_rollup_uses_only_consecutive_successful_bounded_pairs():
         receipt(10, 90, 1200),
         receipt(11, 60, 1000, quality="rounded"),
         receipt(11, 75, 1300, quality="rounded"),
+        receipt(12, 60, 1000, quality="rounded", unit=10),
+        receipt(12, 61, 2000, quality="rounded", unit=10),
     ]
     daily, statuses, posts = summarize(
         rows, START.date(), (START + timedelta(days=1)).date(),
         timedelta(minutes=30),
     )
-    assert posts == 2
-    assert statuses == {"bounded": 2, "unknown_rounding_precision": 1}
+    assert posts == 3
+    assert statuses == {
+        "bounded": 2, "unknown_rounding_precision": 1, "short_gap": 1,
+    }
     assert len(daily) == 1
     assert daily[0].publication_id == UUID(int=10)
     assert 800 < daily[0].upper_rate_per_hour < 800.000000001

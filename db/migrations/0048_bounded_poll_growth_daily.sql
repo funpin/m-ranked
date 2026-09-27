@@ -14,6 +14,8 @@ CREATE TABLE analytics.bounded_poll_growth_daily (
         ('<=30m', '30m-2h', '2-8h', '8h+')),
     upper_rate_per_hour numeric(30, 6) NOT NULL
         CHECK (upper_rate_per_hour >= 0),
+    method_version text NOT NULL DEFAULT 'bounded-v1-10m'
+        CHECK (method_version = 'bounded-v1-10m'),
     source text NOT NULL DEFAULT 'successful_poll_receipts'
         CHECK (source = 'successful_poll_receipts'),
     updated_at timestamptz NOT NULL DEFAULT transaction_timestamp(),

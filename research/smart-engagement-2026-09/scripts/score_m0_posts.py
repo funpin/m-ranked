@@ -9,7 +9,7 @@ import os
 import sys
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
-from math import inf, nextafter
+from math import ceil, inf, nextafter
 from pathlib import Path
 from uuid import UUID
 
@@ -43,7 +43,8 @@ def main() -> None:
     parser.add_argument("--end", type=date.fromisoformat, required=True)
     parser.add_argument("--through", type=_utc, required=True)
     parser.add_argument("--max-gap-minutes", type=int, required=True)
-    parser.add_argument("--checkpoints", choices=("1h", "6h", "24h", "early3"),
+    parser.add_argument("--checkpoints", choices=(
+        *(check.name for check in EARLY_CHECKPOINTS), "early3", "early5"),
                         required=True)
     args = parser.parse_args()
     if not args.start < args.end:
@@ -52,10 +53,11 @@ def main() -> None:
         parser.error("max gap must be 5–1440 minutes")
     start_at = datetime.combine(args.start, time.min, timezone.utc)
     end_at = datetime.combine(args.end, time.min, timezone.utc)
-    if args.through < end_at:
-        parser.error("through must include the whole publication window")
+    if args.through < start_at:
+        parser.error("through must follow the publication window start")
     checks = (EARLY_CHECKPOINTS[:3] if args.checkpoints == "early3" else
-              tuple(check for check in EARLY_CHECKPOINTS[:3]
+              EARLY_CHECKPOINTS if args.checkpoints == "early5" else
+              tuple(check for check in EARLY_CHECKPOINTS
                     if check.name == args.checkpoints))
     dsn = os.environ.get("ANOMALY_DATABASE_URL", "").strip()
     if not dsn:
@@ -71,6 +73,7 @@ def main() -> None:
                       age_band,exposure_band,upper_rate_per_hour
                  FROM analytics.bounded_poll_growth_daily
                 WHERE account_id=%s AND platform=%s
+                  AND method_version='bounded-v1-10m'
                   AND observed_day >= %s AND observed_day < %s""",
             (args.account, args.platform,
              args.start - timedelta(days=120), args.start),
@@ -81,8 +84,9 @@ def main() -> None:
                  JOIN catalog.platform_account a ON a.id=p.primary_account_id
                 WHERE p.primary_account_id=%s AND a.platform::text=%s
                   AND p.published_at >= %s AND p.published_at < %s
+                  AND p.published_at <= %s
                 ORDER BY p.published_at,p.id LIMIT 5001""",
-            (args.account, args.platform, start_at, end_at),
+            (args.account, args.platform, start_at, end_at, args.through),
         ).fetchall()
         if len(frame) > 5000:
             parser.error("publication frame exceeds 5,000 posts")
@@ -133,7 +137,9 @@ def main() -> None:
     ) for item in coverage] if reference else []
     statuses = Counter(score.status for score in scores)
     if not reference:
-        statuses["insufficient_reference"] = len(posts)
+        for item in coverage:
+            statuses["insufficient_reference" if item.status == "complete"
+                     else item.status] += 1
     ranked = sorted((score for score in scores if score.post_rank_bound is not None),
                     key=lambda score: (score.post_rank_bound, str(score.publication_id)))
     print(json.dumps({
@@ -143,7 +149,15 @@ def main() -> None:
         "eligible_posts": len(posts),
         "receipt_rows": len(reads),
         "reference_rows": len(reference_data),
+        "reference_distinct_days": len({row.observed_day for row in reference_data}),
+        "minimum_per_cell_reference_days_for_5pct": ceil(len(checks) / .05 - 1),
         "coverage": dict(sorted(Counter(row.status for row in coverage).items())),
+        "checkpoint_status": {
+            check.name: dict(sorted(Counter(
+                row.checkpoints[index].status for row in coverage
+            ).items()))
+            for index, check in enumerate(checks)
+        },
         "score_status": dict(sorted(statuses.items())),
         "rank_at_most_5pct": sum(score.post_rank_bound <= .05 for score in ranked),
         "best_attainable_bound": min(

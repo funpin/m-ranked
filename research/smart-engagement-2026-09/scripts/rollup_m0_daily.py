@@ -50,8 +50,9 @@ LIMIT %s
 UPSERT = """
 INSERT INTO analytics.bounded_poll_growth_daily (
     publication_id, account_id, platform, observed_day,
-    age_band, exposure_band, upper_rate_per_hour, source
-) VALUES (%s, %s, %s, %s, %s, %s, %s, 'successful_poll_receipts')
+    age_band, exposure_band, upper_rate_per_hour, source, method_version
+) VALUES (%s, %s, %s, %s, %s, %s, %s,
+          'successful_poll_receipts', 'bounded-v1-10m')
 ON CONFLICT (publication_id, observed_day, age_band, exposure_band)
 DO UPDATE SET upper_rate_per_hour = GREATEST(
     analytics.bounded_poll_growth_daily.upper_rate_per_hour,

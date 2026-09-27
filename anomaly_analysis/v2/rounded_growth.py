@@ -14,6 +14,9 @@ from datetime import timedelta
 from anomaly_analysis.neighbor_exposure import SuccessfulRead
 
 
+MIN_BOUNDED_GAP = timedelta(minutes=10)
+
+
 @dataclass(frozen=True, slots=True)
 class ViewRange:
     lower: int
@@ -50,6 +53,9 @@ def bounded_view_growth(
         raise ValueError("reads must belong to the same post and account")
     if max_gap <= timedelta(0) or before.observed_at >= after.observed_at:
         raise ValueError("read gap must be positive")
+    if ("rounded" in {before.views_quality, after.views_quality}
+            and after.observed_at - before.observed_at < MIN_BOUNDED_GAP):
+        return BoundedViewGrowth("short_gap", None, None, False, False)
     if after.observed_at - before.observed_at > max_gap:
         return BoundedViewGrowth("excessive_gap", None, None, False, False)
     if before.views_count is None or after.views_count is None:
