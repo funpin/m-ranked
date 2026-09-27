@@ -190,6 +190,32 @@ def _example(row, paired):
     }
 
 
+def _first_comparable_event_per_post(holdout, results):
+    """One prespecified event observation per post, independent of its rank."""
+    first = {}
+    for row, result in zip(holdout, results, strict=True):
+        if (row.nearest_event_distance is None
+                or result.m1.status != "ranked" or result.m2.status != "ranked"):
+            continue
+        post_id = row.interval.publication_id
+        previous = first.get(post_id)
+        if previous is None or row.interval.end_at < previous[0].interval.end_at:
+            first[post_id] = (row, result)
+    selected = tuple(first.values())
+    m1_small = sum(result.m1.upper_tail_rank <= .05 for _row, result in selected)
+    m2_small = sum(result.m2.upper_tail_rank <= .05 for _row, result in selected)
+    return {
+        "selection": "earliest fully ranked new-post interval per publication; no rank-based selection",
+        "posts": len(selected),
+        "m1_small_tail_posts": m1_small,
+        "m2_small_tail_posts": m2_small,
+        "m1_only": sum(result.m1.upper_tail_rank <= .05 < result.m2.upper_tail_rank
+                       for _row, result in selected),
+        "m2_only": sum(result.m2.upper_tail_rank <= .05 < result.m1.upper_tail_rank
+                       for _row, result in selected),
+    }
+
+
 def _summary(selected, reads, intervals, split, discarded, cal, holdout, validation):
     paired = [(row, result) for row, result in zip(holdout, validation.holdout, strict=True)
               if row.nearest_event_distance is not None
@@ -260,6 +286,8 @@ def _summary(selected, reads, intervals, split, discarded, cal, holdout, validat
             "m1_small_tail": m1_high, "m2_small_tail": m2_high,
             "m1_only": m1_only, "m2_only": m2_only,
         },
+        "first_comparable_event_per_post": _first_comparable_event_per_post(
+            holdout, validation.holdout),
         "event_examples_m2_less_unusual": [_example(*item) for item in raised[:3]],
         "event_examples_m2_more_unusual": [_example(*item) for item in lowered[:3]],
         "limits": [

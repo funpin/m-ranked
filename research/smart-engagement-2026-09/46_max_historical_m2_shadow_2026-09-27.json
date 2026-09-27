@@ -73,6 +73,14 @@
     "m1_only": 0,
     "m2_only": 40
   },
+  "first_comparable_event_per_post": {
+    "selection": "earliest fully ranked new-post interval per publication; no rank-based selection",
+    "posts": 160,
+    "m1_small_tail_posts": 0,
+    "m2_small_tail_posts": 13,
+    "m1_only": 0,
+    "m2_only": 13
+  },
   "event_examples_m2_less_unusual": [
     {
       "publication_id": "e57b99d9-5628-5ff9-bc92-ee5ab8b5b778",
