@@ -35,8 +35,9 @@ LATE_CHECKPOINTS = (
     Checkpoint("4d", 4 * 86400, 6 * 3600),
     Checkpoint("5d", 5 * 86400, 6 * 3600),
     Checkpoint("7d", 7 * 86400, 8 * 3600),
-    Checkpoint("14d", 14 * 86400, 12 * 3600),
 )
+# A 14-day look needs a separate M0 policy with max_post_age >= 14 days
+# and sufficient retention. The default bounded pilot stops reading at 7 days.
 
 
 @dataclass(frozen=True, slots=True)
