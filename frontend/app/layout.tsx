@@ -37,7 +37,6 @@ export const metadata: Metadata = {
   other: { "apple-mobile-web-app-capable": "yes" },
   icons: {
     icon: [
-      { url: logoMarkDark.src, type: "image/svg+xml" },
       { url: "/icons/favicon-32.png?v=20260921", type: "image/png", sizes: "32x32" },
     ],
     shortcut: [{ url: "/icons/favicon-32.png?v=20260921", type: "image/png" }],
@@ -80,6 +79,12 @@ const themeScript = `(() => {
     : matchMedia("(prefers-color-scheme: light)").matches ? "light"
     : "dark";
   document.documentElement.dataset.theme = theme;
+  const icon = document.createElement("link");
+  icon.id = "theme-favicon";
+  icon.rel = "icon";
+  icon.type = "image/svg+xml";
+  icon.href = theme === "light" ? document.documentElement.dataset.faviconLight : document.documentElement.dataset.faviconDark;
+  document.head.appendChild(icon);
 })();`;
 
 // iOS does not build a branded launch screen from the web app manifest.

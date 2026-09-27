@@ -48,8 +48,16 @@ export function applyTheme(preference: ThemePreference) {
 export function syncThemeFavicon(theme: ResolvedTheme) {
   const root = document.documentElement;
   const href = theme === "light" ? root.dataset.faviconLight : root.dataset.faviconDark;
-  const icon = document.querySelector<HTMLLinkElement>('link[rel~="icon"][type="image/svg+xml"]');
-  if (icon && href) icon.href = href;
+  if (!href) return;
+  let icon = document.querySelector<HTMLLinkElement>("#theme-favicon");
+  if (!icon) {
+    icon = document.createElement("link");
+    icon.id = "theme-favicon";
+    icon.rel = "icon";
+    icon.type = "image/svg+xml";
+    document.head.appendChild(icon);
+  }
+  icon.href = href;
 }
 
 export function subscribeTheme(notify: () => void) {
