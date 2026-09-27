@@ -251,6 +251,8 @@ def telegram_public_batch(
                 "gateway": source_name,
                 "message_id": post.message_id,
                 "views": post.views_count,
+                "views_display": getattr(post, "views_display", None),
+                "views_display_unit": getattr(post, "views_display_unit", None),
                 "reactions": post.reactions.raw,
                 "comments": comment_counts.get(post.message_id),
             },

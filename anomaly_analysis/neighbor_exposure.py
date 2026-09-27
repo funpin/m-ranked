@@ -25,11 +25,16 @@ class SuccessfulRead:
     views_count: int | None
     views_quality: str
     interval_uncertain: bool = False
+    views_display_unit: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "observed_at", _utc(self.observed_at))
         if self.views_count is not None and self.views_count < 0:
             raise ValueError("views_count must be nonnegative")
+        if (self.views_display_unit is not None
+                and (type(self.views_display_unit) is not int
+                     or self.views_display_unit not in {10 ** power for power in range(10)})):
+            raise ValueError("views display unit must be a positive power of ten")
 
 
 @dataclass(frozen=True, slots=True)

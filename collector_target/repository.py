@@ -131,8 +131,17 @@ class PostgresCollectorRepository:
         self._transfer_sender = sender
 
     @staticmethod
+    def _rounded_views_display_unit(snapshot: Any) -> int | None:
+        if (snapshot.views_count is None
+                or snapshot.metric_quality["views"].value != "rounded"):
+            return None
+        source = snapshot.sanitized_source.get("source")
+        unit = source.get("views_display_unit") if isinstance(source, Mapping) else None
+        return unit if type(unit) is int and unit in {10 ** power for power in range(10)} else None
+
+    @staticmethod
     def _metric_evidence(snapshot: Any) -> dict[str, Any]:
-        return {
+        evidence = {
             metric: {
                 "source_field": metric,
                 "quality": quality.value,
@@ -144,6 +153,10 @@ class PostgresCollectorRepository:
             }
             for metric, quality in snapshot.metric_quality.items()
         }
+        unit = PostgresCollectorRepository._rounded_views_display_unit(snapshot)
+        if unit is not None:
+            evidence["views"]["display_unit"] = unit
+        return evidence
 
     def _metric_evidence_id(self, evidence: Mapping[str, Any]) -> int:
         payload = _json(evidence)
@@ -943,6 +956,7 @@ class PostgresCollectorRepository:
                 "comments_count": item.snapshot.comments_count,
                 "shares_count": item.snapshot.shares_count,
                 "views_quality": item.snapshot.metric_quality["views"].value,
+                "views_display_unit": self._rounded_views_display_unit(item.snapshot),
                 "reactions_quality": item.snapshot.metric_quality["reactions"].value,
                 "comments_quality": item.snapshot.metric_quality["comments"].value,
                 "shares_quality": item.snapshot.metric_quality["shares"].value,
@@ -957,7 +971,7 @@ class PostgresCollectorRepository:
             """INSERT INTO ingest.publication_poll_receipt(
                    publication_id, cadence_seconds, observed_bucket, observed_at,
                    collection_run_id, views_count, reactions_count,
-                   comments_count, shares_count, views_quality,
+                   comments_count, shares_count, views_quality, views_display_unit,
                    reactions_quality, comments_quality, shares_quality,
                    interval_uncertain,
                    snapshot_written
@@ -967,6 +981,7 @@ class PostgresCollectorRepository:
                         item.reactions_count, item.comments_count,
                         item.shares_count,
                         item.views_quality::ingest.observation_quality,
+                        item.views_display_unit,
                         item.reactions_quality::ingest.observation_quality,
                         item.comments_quality::ingest.observation_quality,
                         item.shares_quality::ingest.observation_quality,
@@ -977,6 +992,7 @@ class PostgresCollectorRepository:
                        collection_run_id uuid, views_count bigint,
                        reactions_count bigint, comments_count bigint,
                        shares_count bigint, views_quality text,
+                       views_display_unit integer,
                        reactions_quality text, comments_quality text,
                        shares_quality text, interval_uncertain boolean,
                        snapshot_written boolean
