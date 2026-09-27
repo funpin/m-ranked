@@ -576,6 +576,7 @@ paths:
       summary: Read the home page summary
       description: >-
         Institutions, accounts (total and by platform), publications and stored metric snapshots.
+        The snapshot total is approximate, based on PostgreSQL partition statistics.
         Recomputed once a day by scheduled maintenance; available is false until the first run.
       security: []
       parameters:
@@ -2208,7 +2209,7 @@ components:
           type: object
           additionalProperties: { type: integer, minimum: 0 }
         publications: { type: ['integer', 'null'], minimum: 0 }
-        snapshots: { type: ['integer', 'null'], minimum: 0 }
+        snapshots: { type: ['integer', 'null'], minimum: 0, description: Approximate count from partition statistics. }
         computedAt: { type: ['string', 'null'], format: date-time }
     SitemapSummary:
       type: object

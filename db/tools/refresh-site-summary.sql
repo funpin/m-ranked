@@ -15,7 +15,15 @@ SELECT 1,
        (SELECT count(*)
           FROM ingest.visible_publication publication
           JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id),
-       (SELECT count(*) FROM ingest.publication_metric_snapshot),
+       -- The history holds millions of rows. Read partition statistics instead
+       -- of scanning every snapshot during routine maintenance.
+       (SELECT coalesce(sum(
+                   CASE WHEN partition.reltuples >= 0 THEN partition.reltuples::bigint
+                        ELSE greatest(stats.n_live_tup, 0)::bigint END), 0)::bigint
+          FROM pg_inherits inheritance
+          JOIN pg_class partition ON partition.oid = inheritance.inhrelid
+          LEFT JOIN pg_stat_all_tables stats ON stats.relid = partition.oid
+         WHERE inheritance.inhparent = 'ingest.publication_metric_snapshot'::regclass),
        transaction_timestamp()
  WHERE NOT EXISTS (
        SELECT 1 FROM analytics.site_summary fresh

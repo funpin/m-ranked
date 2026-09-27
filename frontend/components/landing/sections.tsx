@@ -79,7 +79,7 @@ export function Stats({ summary }: { summary: SiteSummary }) {
     { value: summary.institutions, label: "Под наблюдением", caption: "вузов" },
     { value: summary.accounts, label: "Официальных", caption: "аккаунтов в соцсетях" },
     { value: summary.publications, label: "Публикаций", caption: "с полной историей замеров" },
-    { value: summary.snapshots, label: "Сохранено", caption: "замеров счётчиков" },
+    { value: summary.snapshots, label: "Около", caption: "замеров счётчиков" },
   ].filter((item): item is { value: number; label: string; caption: string } => item.value !== null);
   return (
     <section aria-label="Проект в цифрах" className="mx-auto w-full max-w-6xl py-24 sm:py-36" data-testid="landing-stats">
