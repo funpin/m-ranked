@@ -19,16 +19,16 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
       aria-label="Основная навигация"
       className="site-header-glass sticky top-0 z-[200] h-14 border-b"
     >
-      <div data-testid="header-inner" className="safe-page-inset relative mx-auto flex h-full w-full max-w-[1400px] items-center gap-6">
+      <div data-testid="header-inner-fallback" className="safe-page-inset relative mx-auto flex h-full w-full max-w-[1400px] items-center gap-6">
         <Link
-          data-testid="brand"
+          data-testid="brand-fallback"
           className="flex shrink-0 items-center no-underline"
           href="/"
           aria-label="m-ranked — на главную"
         >
           <BrandLogo />
         </Link>
-        <div data-testid="main-nav" className="mr-auto flex items-center gap-1 max-[780px]:hidden">
+        <div data-testid="main-nav-fallback" className="mr-auto flex items-center gap-1 max-[780px]:hidden">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
