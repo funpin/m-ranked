@@ -43,9 +43,6 @@ export default function ApiReferencePage() {
             Те же данные, что на сайте, в JSON. Ключ не нужен. Здесь — публичные методы чтения; полный контракт — в
             {" "}<a href={CONTRACT_URL} target="_blank" rel="noopener noreferrer" className="text-foreground underline underline-offset-4">OpenAPI 3.1</a>.
           </p>
-          <p className="text-muted-foreground text-sm">
-            Страница <Link href="/review" prefetch={false} className="text-foreground underline underline-offset-4">«Обзор»</Link> использует <code>/api/v1/overview</code>. Адрес <code>/rating</code> оставлен для будущего самостоятельного рейтинга.
-          </p>
         </header>
 
         <section aria-labelledby="basics" className="mb-14 grid grid-cols-1 gap-4">
