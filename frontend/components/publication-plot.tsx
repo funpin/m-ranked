@@ -59,11 +59,9 @@ function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
 const SIGNAL_COLORS: Record<SignalMarker["tone"], string> = {
   priority: "var(--destructive)",
   review: "var(--chart-3)",
-  context_views: "var(--chart-2)",
-  context_comments: "var(--chart-1)",
 };
 const SIGNAL_RANK: Record<SignalMarker["tone"], number> = {
-  priority: 3, review: 2, context_views: 1, context_comments: 1,
+  priority: 3, review: 2,
 };
 
 /** Pattern glyphs are the primary marks. Nearby intervals share a mark at the

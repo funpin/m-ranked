@@ -47,10 +47,10 @@ test("a late signal records both nearby publication and co-moving old posts with
   assert.deepEqual(windows[0]?.eventTraces[0]?.points.map((point) => point.views), [20, 80]);
   assert.deepEqual(windows[0]?.eventTraces[0]?.points.map((point) => point.observedAt),
     ["2026-09-14T12:25:00Z", "2026-09-14T12:55:00Z"]);
-  assert.equal(typeof windows[0]?.conditionalLogResidual, "number");
+  assert.equal(typeof windows[0]?.relativeLogGrowth, "number");
   assert.deepEqual(assessNeighborContext(analysis, windows, true), {
     status: "insufficient_data", contextualized: 1, totalLateSpikes: 1,
-    residualExcess: 0, compatible: 0, unevaluated: 1,
+    positiveContrast: 0, nonpositiveContrast: 0, unevaluated: 1,
   });
   assert.equal(assessNeighborContext(analysis, windows, false).status, "insufficient_data");
 });
@@ -118,19 +118,22 @@ test("M2 contrasts each post with its own observed quiet window, then subtracts 
   const [window] = evaluateNeighborContext({ analysis, targetHistory, publications, peerHistories });
   assert.equal(window?.matchedContrast?.targetExtraPerHour, 40);
   assert.equal(window?.matchedContrast?.peerExtraMedianPerHour, 10);
-  assert.equal(window?.matchedContrast?.residualPerHour, 30);
+  assert.equal(window?.matchedContrast?.contrastPerHour, 30);
   assert.equal(window?.matchedContrast?.matchedPeerCount, 2);
   assert.deepEqual(assessNeighborContext(analysis, [window!], true), {
-    status: "residual_excess", contextualized: 1, totalLateSpikes: 1,
-    residualExcess: 1, compatible: 0, unevaluated: 0,
+    status: "contrast_available", contextualized: 1, totalLateSpikes: 1,
+    positiveContrast: 1, nonpositiveContrast: 0, unevaluated: 0,
   });
-  assert.equal(signalMarkers(analysis, [window!])[0]?.tone, "review");
-  assert.equal(signalMarkers({ ...analysis, level: 3 }, [window!])[0]?.tone, "priority");
-  const compatibleWindow = { ...window!, matchedContrast: {
-    ...window!.matchedContrast!, residualPerHour: -1,
+  assert.equal(signalMarkers(analysis)[0]?.tone, "review");
+  assert.equal(signalMarkers({ ...analysis, level: 3 })[0]?.tone, "priority");
+  const nonpositiveWindow = { ...window!, matchedContrast: {
+    ...window!.matchedContrast!, contrastPerHour: -1,
   } };
-  assert.equal(assessNeighborContext(analysis, [compatibleWindow], true).status, "context_compatible");
-  assert.equal(signalMarkers(analysis, [compatibleWindow])[0]?.tone, "context_views");
+  assert.deepEqual(assessNeighborContext(analysis, [nonpositiveWindow], true), {
+    status: "contrast_available", contextualized: 1, totalLateSpikes: 1,
+    positiveContrast: 0, nonpositiveContrast: 1, unevaluated: 0,
+  });
+  assert.equal(signalMarkers(analysis)[0]?.tone, "review");
   const noQuiet = evaluateNeighborContext({ analysis, targetHistory: history("target", rows(100, 10, 50).slice(2)),
     publications, peerHistories });
   assert.equal(noQuiet[0]?.matchedContrast, null);

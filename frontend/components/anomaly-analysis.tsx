@@ -15,7 +15,7 @@ import { publicationHref } from "@/lib/entity-routes";
 import { FAMILY_NAMES, METRIC_NAMES, intervalText, markerId, miniChart, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
 import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
 import type { NeighborContextLoad } from "@/lib/neighbor-context-loader";
-import { lateGrowthEvidence, type ContextAssessment, type ContextWindow } from "@/lib/neighbor-context";
+import type { ContextAssessment, ContextWindow } from "@/lib/neighbor-context";
 import { cn } from "@/lib/utils";
 
 const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
@@ -26,20 +26,22 @@ const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
 function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
   const line = summaryLine(analysis);
   return (
-    <span className="inline-flex items-center gap-2" data-testid="saved-anomaly-status">
+    <span className="inline-flex flex-wrap items-center gap-2" data-testid="saved-anomaly-status">
       <LevelIcon level={line.level} className={cn("size-4 shrink-0", line.calm ? "text-muted-foreground" : line.tone === "red" ? "text-destructive" : "text-chart-3")} />
-      <b className="font-semibold">{line.calm ? line.label.replace(/^./, (letter) => letter.toUpperCase()) : <StatusPill tone={line.tone === "red" ? "red" : "amber"}>{line.label}</StatusPill>}</b>
+      {line.calm ? <b className="font-semibold">{line.label.replace(/^./, (letter) => letter.toUpperCase())}</b>
+        : <><span className="text-muted-foreground text-xs font-normal">Сохранённая оценка</span>
+          <StatusPill tone={line.tone === "red" ? "red" : "amber"}>{line.label}</StatusPill></>}
     </span>
   );
 }
 
 function recheckLabel(assessment: ContextAssessment): string {
   const parts = [
-    assessment.residualExcess ? `остаточный рост: ${assessment.residualExcess}` : null,
-    assessment.compatible ? `согласуется с контекстом: ${assessment.compatible}` : null,
-    assessment.unevaluated ? `без количественной оценки: ${assessment.unevaluated}` : null,
+    assessment.positiveContrast + assessment.nonpositiveContrast
+      ? `контраст рассчитан: ${assessment.positiveContrast + assessment.nonpositiveContrast}` : null,
+    assessment.unevaluated ? `без оценки: ${assessment.unevaluated}` : null,
   ].filter(Boolean);
-  return `Перепроверка: ${parts.join(" · ") || "нет оценки"}`;
+  return `Сравнение со старыми: ${parts.join(" · ") || "нет оценки"}`;
 }
 
 function growthPercent(logGrowth: number): number { return Math.max(0, Math.expm1(logGrowth) * 100); }
@@ -71,7 +73,6 @@ function ContextRow({ window, signal, index, onShow }: {
   const peers = window.medianPeerLogGrowth !== null ? growthPercent(window.medianPeerLogGrowth) : null;
   const shared = window.context === "neighbor_and_shared" || window.context === "shared_channel";
   const approximate = window.matchedContrast?.rounded ? "≈" : "";
-  const evidence = lateGrowthEvidence(window);
   const explanation = window.context === "insufficient_data" ? "Контекст: мало данных"
     : shared && window.events.length ? "Контекст: новые посты и общий рост"
       : shared ? "Контекст: общий рост канала"
@@ -88,17 +89,13 @@ function ContextRow({ window, signal, index, onShow }: {
       <span className="text-blue-500">● Этот {target === null ? "—" : `+${target.toFixed(1)}%`}</span>
       <span className="text-emerald-500">● Старые {peers === null ? "—" : `+${peers.toFixed(1)}%`}</span>
       <span className="text-muted-foreground tabular-nums">{window.positivePeerCount}/{window.peers.length} ↑</span>
-      <span className={cn("font-medium tabular-nums",
-        evidence === "residual_excess" ? "text-amber-600 dark:text-amber-300"
-          : evidence === "context_compatible" ? "text-blue-500" : "text-muted-foreground")}>
+      <span className="text-muted-foreground font-medium tabular-nums">
         {window.matchedContrast
-          ? evidence === "residual_excess"
-            ? `Остаточный рост ${approximate}+${window.matchedContrast.residualPerHour.toFixed(1)}/ч`
-            : evidence === "context_compatible" ? "Рост согласуется с соседями" : "Контраст неубедителен"
+          ? `Разница со старыми ${approximate}${window.matchedContrast.contrastPerHour >= 0 ? "+" : ""}${window.matchedContrast.contrastPerHour.toFixed(1)}/ч`
           : "Нет контрольных замеров"}
       </span>
       <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground rounded-full focus-visible:ring-2 focus-visible:ring-ring" aria-label="Основание и контраст M2" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
-        {window.originalFormula}. M2 вычитает ближайший тихий прирост этого поста и медиану таких же разностей соседей. Нет контроля — нет числа. Это описание сохранённых изменений, не вероятность накрутки.
+        {window.originalFormula}. Из прироста этого поста сверх его тихого периода вычитается медиана такого же прироста старых постов. Разница не учитывает положение постов в ленте и переходы от нового поста. Её знак не подтверждает и не опровергает аномалию.
       </TooltipContent></Tooltip>
     </div>
     {expanded ? <div className="border-border mt-3 border-t pt-3" data-testid="neighbor-event-chart">
@@ -158,7 +155,7 @@ function AnalysisNote({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
     <span className="grid gap-1.5">
       {analysis.quality ? <span className="block" data-testid="anomaly-quality">Данные: {analysis.quality.summary}.</span> : null}
       <span>Уровень зависит от силы и числа независимых признаков.</span>
-      <span>Сохранённый уровень показан в заголовке. Перепроверка соседних постов даёт отдельный предварительный вывод и не меняет его автоматически.</span>
+      <span>Сохранённый уровень показан в заголовке. Сравнение со старыми постами описывает наблюдения, но не устанавливает причину роста и не меняет уровень автоматически.</span>
       <span>Аномалия не доказывает накрутку.</span>
       <span className="text-foreground/70">{analysis.methodologyVersion}</span>
     </span>

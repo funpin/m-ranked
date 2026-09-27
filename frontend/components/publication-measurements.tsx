@@ -278,7 +278,7 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
   const settledAnalysis = useSettled(analysis);
   const shownAnalysis = settledAnalysis?.value ?? null;
   const evidenceIds = useMemo(()=>boundarySnapshotIds(shownAnalysis,rows),[shownAnalysis,rows]);
-  const markers = useMemo(()=>signalMarkers(shownAnalysis, settledAnalysis?.neighborContext?.windows ?? []),[shownAnalysis, settledAnalysis]);
+  const markers = useMemo(()=>signalMarkers(shownAnalysis),[shownAnalysis]);
   const contextEvents = useMemo(() => {
     const unique = new Map<string, ContextEvent>();
     for (const event of settledAnalysis?.neighborContext?.windows.flatMap((window) => window.events) ?? []) {
@@ -341,10 +341,8 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
     ) : null}
     <div ref={charts} data-testid="publication-chart-stack" className="grid scroll-mt-4 gap-4">
       {markers.length ? <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs" aria-label="Обозначения графиков">
-        {markers.some((marker) => marker.tone === "priority") ? <span><span className="text-destructive font-bold">●</span> Приоритетная проверка</span> : null}
-        {markers.some((marker) => marker.tone === "review") ? <span><span className="text-[var(--chart-3)] font-bold">●</span> Требует проверки</span> : null}
-        {markers.some((marker) => marker.tone === "context_views") ? <span><span className="text-[var(--chart-2)] font-bold">●</span> Сопоставимый рост просмотров</span> : null}
-        {markers.some((marker) => marker.tone === "context_comments") ? <span><span className="text-[var(--chart-1)] font-bold">●</span> Сопоставимый рост комментариев</span> : null}
+        {markers.some((marker) => marker.tone === "priority") ? <span><span className="text-destructive font-bold">●</span> Исходный сигнал · приоритетный</span> : null}
+        {markers.some((marker) => marker.tone === "review") ? <span><span className="text-[var(--chart-3)] font-bold">●</span> Исходный сигнал · проверка</span> : null}
       </div> : null}
       <Card>
         <CardHeader>

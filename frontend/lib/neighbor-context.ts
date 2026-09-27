@@ -41,11 +41,11 @@ export type ContextWindow = {
   omittedEventCount: number;
   positivePeerCount: number;
   medianPeerLogGrowth: number | null;
-  conditionalLogResidual: number | null;
+  relativeLogGrowth: number | null;
   matchedContrast: {
     targetExtraPerHour: number;
     peerExtraMedianPerHour: number;
-    residualPerHour: number;
+    contrastPerHour: number;
     matchedPeerCount: number;
     rounded: boolean;
   } | null;
@@ -53,23 +53,20 @@ export type ContextWindow = {
 };
 
 export type ContextAssessment = {
-  status: "residual_excess" | "context_compatible" | "insufficient_data" | "other_evidence";
+  status: "contrast_available" | "insufficient_data" | "other_evidence";
   contextualized: number;
   totalLateSpikes: number;
-  residualExcess: number;
-  compatible: number;
+  positiveContrast: number;
+  nonpositiveContrast: number;
   unevaluated: number;
 };
 
-/** Co-movement alone does not explain a late jump. The matched quiet-period
- * contrast must account for the target's excess before we call it compatible. */
-export function lateGrowthEvidence(window: ContextWindow): "residual_excess" | "context_compatible" | "unevaluated" {
+/** Direction of a descriptive comparison with older posts. It is not a
+ * verdict: feed position and spillover from a new post remain uncontrolled. */
+export function lateGrowthContrast(window: ContextWindow): "positive" | "nonpositive" | "unevaluated" {
   const contrast = window.matchedContrast;
   if (!contrast) return "unevaluated";
-  if (contrast.residualPerHour > 0) return "residual_excess";
-  return contrast.peerExtraMedianPerHour > 0
-    && (window.context === "neighbor_and_shared" || window.context === "shared_channel")
-    ? "context_compatible" : "unevaluated";
+  return contrast.contrastPerHour > 0 ? "positive" : "nonpositive";
 }
 
 function accepted(row: HistorySnapshot): row is HistorySnapshot {
@@ -254,7 +251,7 @@ export function evaluateNeighborContext(input: {
       const peerMedian = median(peerExtra.map((item) => item.value));
       const matchedContrast = events.length > 0 && targetExtra !== null && peerMedian !== null && peerExtra.length >= 2
         ? { targetExtraPerHour: targetExtra, peerExtraMedianPerHour: peerMedian,
-            residualPerHour: targetExtra - peerMedian, matchedPeerCount: peerExtra.length,
+            contrastPerHour: targetExtra - peerMedian, matchedPeerCount: peerExtra.length,
             rounded: !!(target?.rounded || quietTarget?.rounded || peerExtra.some((item) => item.rounded)) }
         : null;
       const near = events.some((event) => event.observedFeedDistance <= NEARBY_POSTS);
@@ -267,14 +264,14 @@ export function evaluateNeighborContext(input: {
         originalFormula: signal.formula, target, targetTrace, peers, peerTraces,
         events, eventTraces, omittedEventCount: selected.omitted, positivePeerCount,
         medianPeerLogGrowth,
-        conditionalLogResidual: target && medianPeerLogGrowth !== null ? target.logGrowth - medianPeerLogGrowth : null,
+        relativeLogGrowth: target && medianPeerLogGrowth !== null ? target.logGrowth - medianPeerLogGrowth : null,
         matchedContrast,
         context,
       };
     });
 }
 
-/** Descriptive local recheck. Never changes the persisted anomaly level. */
+/** Descriptive local comparison. Neither sign confirms nor excludes a signal. */
 export function assessNeighborContext(
   analysis: PublicationAnomalyAnalysis, windows: ContextWindow[], consistentRevision: boolean,
 ): ContextAssessment {
@@ -282,13 +279,12 @@ export function assessNeighborContext(
   const contextualized = windows.filter((window) =>
     window.context === "neighbor_and_shared" || window.context === "shared_channel").length;
   const evidence = consistentRevision && windows.length === totalLateSpikes
-    ? windows.map(lateGrowthEvidence) : [];
-  const residualExcess = evidence.filter((item) => item === "residual_excess").length;
-  const compatible = evidence.filter((item) => item === "context_compatible").length;
-  const unevaluated = totalLateSpikes - residualExcess - compatible;
+    ? windows.map(lateGrowthContrast) : [];
+  const positiveContrast = evidence.filter((item) => item === "positive").length;
+  const nonpositiveContrast = evidence.filter((item) => item === "nonpositive").length;
+  const unevaluated = totalLateSpikes - positiveContrast - nonpositiveContrast;
   const status = !consistentRevision ? "insufficient_data"
     : analysis.signals.length !== totalLateSpikes && totalLateSpikes > 0 ? "other_evidence"
-    : residualExcess > 0 ? "residual_excess"
-      : totalLateSpikes > 0 && compatible === totalLateSpikes ? "context_compatible" : "insufficient_data";
-  return { status, contextualized, totalLateSpikes, residualExcess, compatible, unevaluated };
+    : positiveContrast + nonpositiveContrast > 0 ? "contrast_available" : "insufficient_data";
+  return { status, contextualized, totalLateSpikes, positiveContrast, nonpositiveContrast, unevaluated };
 }
