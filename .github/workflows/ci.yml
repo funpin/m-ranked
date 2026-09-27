@@ -47,6 +47,33 @@ jobs:
             psql --username mranked_bootstrap --dbname mranked --no-psqlrc \
             --tuples-only --no-align --command \
             "SELECT to_regnamespace('flyway') IS NULL AND to_regnamespace('migration') IS NULL")" = t
+      - name: Rehearse the single in-place release package
+        run: |
+          set -euo pipefail
+          container="$(docker compose -f infra/compose.yaml ps -q postgres)"
+          db=mranked_release_ci
+          docker exec "$container" createdb -U mranked_bootstrap "$db"
+          trap 'docker exec "$container" dropdb -U mranked_bootstrap --force "$db"' EXIT
+          docker exec "$container" mkdir -p /tmp/mranked-release/operations/sql /tmp/mranked-release/db
+          docker exec "$container" ln -s /m-ranked-schema /tmp/mranked-release/db/migrations
+          docker cp operations/sql/release-schema-0038-to-0044.sql \
+            "$container":/tmp/mranked-release/operations/sql/release-schema-0038-to-0044.sql
+          for migration in db/migrations/*.sql; do
+            name="${migration##*/}"
+            if (( 10#${name:0:4} <= 38 )); then
+              docker exec "$container" psql -U mranked_bootstrap -d "$db" \
+                --no-psqlrc -v ON_ERROR_STOP=1 -f "/m-ranked-schema/$name" >/dev/null
+            fi
+          done
+          for attempt in 1 2; do
+            docker exec "$container" psql -U mranked_bootstrap -d "$db" \
+              --no-psqlrc -v ON_ERROR_STOP=1 \
+              -f /tmp/mranked-release/operations/sql/release-schema-0038-to-0044.sql >/dev/null
+          done
+          test "$(docker exec "$container" psql -U mranked_bootstrap -d "$db" -Atc \
+            "SELECT to_regclass('analytics.site_summary') IS NOT NULL AND \
+                    to_regclass('analytics.bounded_poll_growth_daily') IS NOT NULL AND \
+                    to_regclass('analytics.publication_history_page') IS NOT NULL")" = t
       - name: Python gates with a protected release-fixture directory
         run: |
           # Provenance tests validate every ancestor's permissions; /tmp is
