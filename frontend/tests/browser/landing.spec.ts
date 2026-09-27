@@ -90,3 +90,18 @@ test("в шапке — авторы проекта рядом с GitHub", async
   await expect(contributors.getByRole("link")).not.toHaveCount(0);
   await expect(contributors.getByRole("link").first()).toHaveAttribute("href", /^https:\/\/github\.com\//);
 });
+
+test("телефон показывает сравнение площадок, а появления проигрываются один раз", async ({ page }) => {
+  await page.goto("/");
+  const phone = page.getByTestId("phone-showcase");
+  await expect(phone.getByRole("img", { name: /Сравнение площадок за 30 дней/ })).toBeAttached();
+  await expect(phone.locator(".landing-phone-tracks li")).toHaveCount(4);
+  // Заголовок раздела проявился — и остаётся проявленным после прокрутки назад и снова вниз.
+  const heading = page.locator("#landing-rhythm");
+  await heading.scrollIntoViewIfNeeded();
+  await expect(heading).toHaveClass(/is-in/);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await heading.scrollIntoViewIfNeeded();
+  await expect(heading).toHaveClass(/is-in/);
+  await expect(heading).toHaveCSS("opacity", "1");
+});

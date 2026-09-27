@@ -6,7 +6,6 @@ import { PlatformLogo } from "@/components/platform-logo";
 import { COLLECTION_SCHEDULE, KNOWN_PLATFORMS, TRACKING_DAYS, countWithUnit, formatStat, isKnownPlatform, type SiteSummary } from "@/lib/landing";
 import { REPOSITORY_URL } from "@/lib/repository";
 import { cn } from "@/lib/utils";
-import { CountUp } from "./count-up";
 import { HeroScene } from "./hero-scene";
 import { Ribbon } from "./ribbon";
 
@@ -88,7 +87,7 @@ export function Stats({ summary }: { summary: SiteSummary }) {
         {items.map((item, index) => (
           <div key={item.label} className="landing-pop grid content-start gap-1.5 border-t pt-6" style={{ "--i": index } as CSSProperties}>
             <dt className="text-muted-foreground text-sm">{item.label}</dt>
-            <dd className="font-heading text-5xl font-bold tracking-tight tabular-nums sm:text-6xl"><CountUp value={item.value} /></dd>
+            <dd className="font-heading text-5xl font-bold tracking-tight tabular-nums sm:text-6xl" data-count={item.value}>{formatStat(item.value)}</dd>
             <dd className="text-muted-foreground text-sm">{item.caption}</dd>
           </div>
         ))}
@@ -97,39 +96,21 @@ export function Stats({ summary }: { summary: SiteSummary }) {
   );
 }
 
-/** Кольцо монет площадок: трёхмерное, поворачивается вместе с прокруткой
- *  раздела. Чистый CSS — без библиотек и без скрипта. */
-function PlatformOrbit({ platforms }: { platforms: readonly LandingPlatform[] }) {
-  const known = platforms.filter(({ platform }) => isKnownPlatform(platform));
-  return (
-    <div className="landing-orbit" aria-hidden="true">
-      <div className="landing-orbit-ring">
-        {known.map(({ platform }, index) => (
-          <div key={platform} className="landing-coin" style={{ ...brand(platform), "--i": index, "--n": known.length } as CSSProperties}>
-            {isKnownPlatform(platform) && <PlatformLogo platform={platform} size={64} decorative className="landing-coin-logo" />}
-          </div>
-        ))}
-      </div>
-      <div className="landing-orbit-floor" />
-    </div>
-  );
-}
-
-export function Platforms({ platforms }: { platforms: readonly LandingPlatform[] }) {
+export function Platforms({ platforms, phone }: { platforms: readonly LandingPlatform[]; phone: ReactNode }) {
   return (
     <section aria-labelledby="landing-platforms" className="grid grid-cols-1 gap-14 py-24 sm:py-36">
       <SectionHead id="landing-platforms" eyebrow="Площадки" title={<>Несколько площадок.<br />Одна шкала.</>}>
         У каждой площадки свои счётчики. Мы берём <b>только публичные цифры, которые видит любой читатель,</b> и
         приводим их к общему виду, чтобы вузы можно было честно сравнить.
       </SectionHead>
-      <PlatformOrbit platforms={platforms} />
-      <Ribbon label="Площадки">
+      {phone}
+      <Ribbon label="Площадки" fit>
         <ul role="list" className="contents" data-testid="landing-platforms">
           {platforms.map(({ platform, accounts }, index) => {
             const known = isKnownPlatform(platform) ? KNOWN_PLATFORMS[platform] : null;
             return (
               <li key={platform} style={{ ...brand(platform), "--i": index } as CSSProperties}
-                className="landing-ribbon-item landing-slide landing-tile landing-platform relative flex w-[min(78vw,330px)] shrink-0 snap-start flex-col gap-6 overflow-hidden p-7 sm:p-8">
+                className="landing-ribbon-item landing-slide landing-tile landing-platform relative flex w-[min(78vw,330px)] shrink-0 snap-start flex-col gap-6 overflow-hidden p-7 sm:p-8 lg:w-auto">
                 <div className="grid gap-5">
                   {isKnownPlatform(platform)
                     ? <PlatformLogo platform={platform} size={56} decorative className="landing-platform-logo rounded-2xl" />

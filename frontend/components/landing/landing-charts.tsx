@@ -5,7 +5,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlatformLogo } from "@/components/platform-logo";
 import type { Dashboard, Network } from "@/lib/compare-dashboard";
-import { KNOWN_PLATFORMS } from "@/lib/landing";
+import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Ribbon } from "./ribbon";
 import { useNear } from "./use-near";
@@ -96,7 +96,7 @@ export function LandingRhythm({ data }: { data: Dashboard }) {
         <Switcher label="Площадка" value={platform} onChange={setPlatform}
           options={[{ value: "all" as const, label: "Все" }, ...available.map((network) => ({
             value: network,
-            label: <><PlatformLogo platform={network} size={16} decorative /><span className="max-sm:sr-only">{KNOWN_PLATFORMS[network].name}</span></>,
+            label: <><PlatformLogo platform={network} size={16} decorative /><span className="max-sm:sr-only">{PLATFORM_LONG_LABELS[network]}</span></>,
           }))]} />
       </div>
       <Ribbon label="Ритм площадок">

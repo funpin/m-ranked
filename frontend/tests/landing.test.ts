@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CORRIDOR_SHAPES, corridorBand, corridorCrowd, corridorShapePath, countWithUnit, formatStat, landingDashboard, sceneCurves,
-  platformsFromSummary,
+  phoneSummary, platformsFromSummary,
 } from "../lib/landing";
 import type { Dashboard } from "../lib/compare-dashboard";
 
@@ -74,4 +74,22 @@ test("живые посты неровные, но не убывают и не �
     previous = value;
   }
   assert.equal(corridorCrowd().length, 5);
+});
+
+test("экран телефона: площадки со своими суммами и просмотрами по дням", () => {
+  const data = {
+    period: "30d", hours: [], datasetRevision: 1, asOf: "2026-09-26T00:00:00Z", institutions: [], curves: [], timing: [], types: [],
+    daily: [
+      { platform: "vk", day: "2026-09-25", posts: 10, viewsTotal: 1000, reactionsTotal: 5, analyzed: 10, anomalous: 1 },
+      { platform: "vk", day: "2026-09-24", posts: 5, viewsTotal: null, reactionsTotal: 1, analyzed: 5, anomalous: 0 },
+      { platform: "telegram", day: "2026-09-25", posts: 3, viewsTotal: 300, reactionsTotal: 2, analyzed: 3, anomalous: 0 },
+    ],
+    stats: [{ institutionId: null, platform: "vk", views24: 120, engagement24: 2.5, analyzed: 20, levels: [15, 2, 2, 1] }],
+  } as unknown as Dashboard;
+  const summary = phoneSummary(data);
+  assert.deepEqual(summary.days, ["2026-09-24", "2026-09-25"]);
+  assert.deepEqual(summary.networks.map((network) => network.platform), ["telegram", "vk"]);
+  const vk = summary.networks.find((network) => network.platform === "vk")!;
+  assert.deepEqual([vk.posts, vk.views, vk.daily, vk.views24, vk.anomalyShare], [15, 1000, [0, 1000], 120, 0.15]);
+  assert.equal(summary.networks.find((network) => network.platform === "telegram")!.anomalyShare, null);
 });

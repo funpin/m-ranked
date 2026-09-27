@@ -4,12 +4,14 @@ import type { Metadata } from "next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LandingReach, LandingRhythm } from "@/components/landing/landing-charts";
 import { LazyCorridor } from "@/components/landing/lazy-corridor";
+import { PhoneDashboard, PhoneShowcase } from "@/components/landing/phone-showcase";
+import { RevealObserver } from "@/components/landing/reveal-observer";
 import {
   Analysis, ChartUnavailable, Hero, LandingFooter, Pipeline, Platforms, Rhythm, Stats, Verify, type LandingPlatform,
 } from "@/components/landing/sections";
 import { api } from "@/lib/api";
 import { publicOrigin } from "@/lib/deployment";
-import { KNOWN_PLATFORMS, landingDashboard, platformsFromSummary, type SiteSummary } from "@/lib/landing";
+import { KNOWN_PLATFORMS, corridorModel, landingDashboard, phoneSummary, platformsFromSummary, type SiteSummary } from "@/lib/landing";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,12 @@ async function Reach() {
   return data ? <LandingReach data={data} /> : <ChartUnavailable />;
 }
 
+/** Экран телефона — сравнение площадок; пока данных нет, остаётся заставка. */
+async function PhoneScreen() {
+  const data = await dashboard();
+  return data ? <PhoneDashboard {...phoneSummary(data)} /> : null;
+}
+
 async function RhythmCharts() {
   const data = await dashboard();
   return data ? <LandingRhythm data={data} /> : <ChartUnavailable />;
@@ -63,12 +71,13 @@ export default async function HomePage() {
     <div className="landing" data-testid="landing">
       <Hero platforms={platforms} />
       {site && <Stats summary={site} />}
-      <Platforms platforms={platforms} />
+      <Platforms platforms={platforms} phone={<PhoneShowcase><Suspense fallback={null}><PhoneScreen /></Suspense></PhoneShowcase>} />
       <Pipeline chart={<Suspense fallback={chartFallback(340)}><Reach /></Suspense>} />
       <Rhythm chart={<Suspense fallback={chartFallback(380)}><RhythmCharts /></Suspense>} />
-      <Analysis corridor={<LazyCorridor />} />
+      <Analysis corridor={<LazyCorridor model={corridorModel()} />} />
       <Verify summary={site} origin={publicOrigin().origin} />
       <LandingFooter />
+      <RevealObserver />
     </div>
   );
 }
