@@ -289,26 +289,27 @@ Next.js добавляет его как `?dpl=<id>` к URL клиентских
 Не переключайте `current`, если после финализации отсутствует
 `frontend/server.js` или не прошёл пробный запуск web-контейнера.
 
-На проде Python 3.11: ставьте `requirements/py311/*.lock`, собранные под Linux
-x86_64 и проверенные отдельным CI-заданием. Корневые `requirements/*.lock`
-предназначены для Python 3.13 и не подходят для серверной 3.11. Устанавливайте
-зависимости в отдельную среду кандидата, проверяйте `pip check` и импорты до
-переключения `current`. Порядок выкатки анализа — [`ANOMALY.md`](ANOMALY.md).
+На Сервере 1 (Python 3.11) сборщикам и отправителю нужна только среда
+`collector`. Не объединяйте все `requirements/py311/*.lock` в одной среде:
+они проверяются в CI отдельно, а их объединение нарушает `pip check`.
+Корневые lock-файлы предназначены для Python 3.13. Порядок выкатки анализа —
+[`ANOMALY.md`](ANOMALY.md).
 
-Полная установка на проде:
+Среда Сервера 1 в отдельном каталоге кандидата:
 
 ```bash
 python3.11 -m venv .venv
 .venv/bin/pip install --require-hashes --no-deps --upgrade -r requirements/py311/tooling.lock
-.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/py311/api.lock
 .venv/bin/pip install --require-hashes --no-deps --no-build-isolation -r requirements/py311/collector.lock
-.venv/bin/pip install --require-hashes --no-deps --only-binary=:all: -r requirements/py311/anomaly.lock
 .venv/bin/pip install --no-deps -r requirements/pymax.txt
 .venv/bin/pip check
-.venv/bin/python -c 'import api.app, anomaly_analysis, collector_target'
+.venv/bin/python -c 'import collector_target.__main__, collector_target.transfer_sender'
 # Режим telegram_web дополнительно требует браузера:
 # .venv/bin/pip install -r requirements/telegram-web.txt
 ```
+
+На Сервере 2 с Python 3.13 установите корневые lock-файлы `tooling`, `api`,
+`collector`, `anomaly` и проверьте `pip check` и импорты до перезапуска служб.
 
 Lock-файлы правятся только пересозданием под соответствующей версией Python:
 
