@@ -13,10 +13,10 @@ def test_the_table_holds_one_row_readable_by_the_api_and_written_by_maintenance(
     assert "GRANT SELECT, INSERT, UPDATE ON TABLE analytics.site_summary TO maintenance;" in MIGRATION
 
 
-def test_counting_happens_only_when_the_row_is_older_than_the_limit():
-    # Подсчёт миллионов замеров не должен идти каждый час.
+def test_refresh_is_age_gated_and_does_not_scan_all_snapshots():
+    # Большую историю нельзя пересчитывать даже раз в сутки.
     assert "WHERE NOT EXISTS" in REFRESH and ":'max_age_hours'" in REFRESH
-    assert "count(*) FROM ingest.publication_metric_snapshot" in REFRESH
+    assert "count(*) FROM ingest.publication_metric_snapshot" not in REFRESH
     # Площадки берутся из данных, а не перечисляются.
     assert "jsonb_object_agg" in REFRESH and "'telegram'" not in REFRESH
 
