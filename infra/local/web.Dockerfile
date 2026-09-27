@@ -6,7 +6,6 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml 
 RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store
 COPY frontend ./
 COPY contracts /app/contracts
-COPY research/smart-engagement-2026-09/46_max_historical_m2_shadow_2026-09-27.json /app/research/smart-engagement-2026-09/46_max_historical_m2_shadow_2026-09-27.json
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
