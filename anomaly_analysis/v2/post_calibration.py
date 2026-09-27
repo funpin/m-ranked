@@ -30,6 +30,7 @@ class PostRankInput:
 class CalibratedPostRank:
     status: str
     upper_tail_rank: float | None
+    conservative_rank: float | None
     smallest_resolvable_rank: float | None
     calibration_blocks: int
     calibration_accounts: int
@@ -139,10 +140,15 @@ class PostTailCalibration:
         resolution = 1 / (blocks + 1)
         if (blocks < self.min_blocks or accounts < self.min_accounts
                 or days < self.min_days):
-            return CalibratedPostRank("insufficient_calibration", None, resolution,
-                                      blocks, accounts, days)
+            return CalibratedPostRank("insufficient_calibration", None, None,
+                                      resolution, blocks, accounts, days)
         tail = (1 + sum(bound <= row.score.minimum_interval_rank
                         for bound in self.block_minima.values())) / (blocks + 1)
         status = "research_ranked" if self.source == "complete_receipts" else "shadow_only"
-        return CalibratedPostRank(status, tail, resolution,
+        # Relative scarcity alone can look impressive when the interval model
+        # assigns weak evidence to every post in a small reference. Require
+        # both a rare calibrated post and a small raw interval rank. The max
+        # stays conservative whenever the empirical post rank is valid.
+        conservative = max(tail, row.score.minimum_interval_rank)
+        return CalibratedPostRank(status, tail, conservative, resolution,
                                   blocks, accounts, days)

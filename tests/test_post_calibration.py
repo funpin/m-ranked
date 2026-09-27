@@ -45,7 +45,9 @@ def test_calibrates_whole_posts_with_one_extreme_per_account_day():
     assert rare.calibration_accounts == 3
     assert rare.calibration_days == 8
     assert rare.upper_tail_rank == rare.smallest_resolvable_rank == 1 / 25
+    assert rare.conservative_rank == 1 / 25
     assert ordinary.upper_tail_rank == 1
+    assert ordinary.conservative_rank == 1
 
 
 def test_sparse_reference_abstains_and_rejects_leakage_or_shadow_scores():
@@ -53,6 +55,7 @@ def test_sparse_reference_abstains_and_rejects_leakage_or_shadow_scores():
     result = reference.rank(post(9999, 9, .01))
     assert result.status == "insufficient_calibration"
     assert result.upper_tail_rank is None
+    assert result.conservative_rank is None
     with pytest.raises(ValueError, match="later UTC day"):
         reference.rank(post(9998, 7, .01))
     with pytest.raises(ValueError, match="calibration cohort"):
@@ -107,6 +110,7 @@ def test_change_only_archive_stays_shadow_even_with_small_rank():
     result = reference.rank(test)
     assert result.status == "shadow_only"
     assert result.upper_tail_rank == 1 / 25
+    assert result.conservative_rank == 1 / 25
     with pytest.raises(ValueError, match="shadow_only scores for change_only_shadow"):
         reference.rank(replace(test, score=replace(test.score, status="research_ranked")))
 
@@ -125,6 +129,7 @@ def test_empirical_post_rank_keeps_information_lost_by_clipped_union_bound():
                                            minimum_interval_rank=.5,
                                            post_rank_bound=1.0))
     assert reference.rank(rare).upper_tail_rank == 1 / 25
+    assert reference.rank(rare).conservative_rank == .1
     assert reference.rank(ordinary).upper_tail_rank == 1.0
 
 

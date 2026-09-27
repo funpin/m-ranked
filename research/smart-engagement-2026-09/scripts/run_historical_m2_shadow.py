@@ -289,6 +289,8 @@ def _whole_post_shadow(selected, holdout, results, platform):
     ranks = [(row, reference.rank(row)) for row in test]
     scored = [rank.upper_tail_rank for _row, rank in ranks
               if rank.status == "shadow_only" and rank.upper_tail_rank is not None]
+    conservative = [rank.conservative_rank for _row, rank in ranks
+                    if rank.status == "shadow_only" and rank.conservative_rank is not None]
     most_unusual = sorted(
         ((row, rank) for row, rank in ranks if rank.upper_tail_rank is not None),
         key=lambda item: (item[1].upper_tail_rank, item[0].published_at),
@@ -302,6 +304,8 @@ def _whole_post_shadow(selected, holdout, results, platform):
         "post_rank_at_most_5pct": sum(rank <= .05 for rank in scored),
         "post_rank_at_most_10pct": sum(rank <= .10 for rank in scored),
         "post_rank_at_most_20pct": sum(rank <= .20 for rank in scored),
+        "conservative_rank_at_most_5pct": sum(rank <= .05 for rank in conservative),
+        "conservative_rank_at_most_10pct": sum(rank <= .10 for rank in conservative),
         "least_test_post_rank": min(scored) if scored else None,
         "median_test_post_rank": statistics.median(scored) if scored else None,
         "smallest_resolvable_rank": 1 / (len(reference.block_minima) + 1),
@@ -310,6 +314,7 @@ def _whole_post_shadow(selected, holdout, results, platform):
                 "publication_id": str(row.score.publication_id),
                 "published_at": row.published_at.isoformat(),
                 "empirical_post_rank": rank.upper_tail_rank,
+                "conservative_rank": rank.conservative_rank,
                 "best_interval_rank": row.score.minimum_interval_rank,
                 "context_reduced_checks": sum(
                     check.context_reduced for check in row.score.evidence),
