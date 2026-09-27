@@ -54,7 +54,7 @@ def test_stream_rate_cap_slows_the_reader(tmp_path):
 def test_dump_runs_in_a_named_container_that_the_exit_trap_stops():
     script = (SCRIPTS/'dump-backup.sh').read_text()
     assert 'docker exec -i -e PGPASSWORD' not in script
-    assert 'docker run --rm -i --name "$dumper"' in script
+    assert 'docker run --rm -i --log-driver=none --name "$dumper"' in script
     assert 'trap cleanup EXIT' in script and 'docker kill "$dumper"' in script
     assert "application_name = '$dumper'" in script
     assert '"$BACKUP_MAX_BYTES_PER_SECOND" &' in script and 'wait $!' in script
