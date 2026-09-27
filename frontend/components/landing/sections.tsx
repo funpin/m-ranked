@@ -60,7 +60,7 @@ export function Hero({ platforms }: { platforms: readonly LandingPlatform[] }) {
           показывает, как на самом деле набираются просмотры, — с открытым кодом и понятной методологией.
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/rating" prefetch={false} data-testid="landing-cta"
+          <Link href="/review" prefetch={false} data-testid="landing-cta"
             className="group bg-foreground text-background focus-visible:ring-ring/50 inline-flex h-12 items-center gap-2 rounded-full px-6 text-sm font-semibold shadow-lg shadow-black/10 transition-transform outline-none hover:-translate-y-0.5 focus-visible:ring-4 active:translate-y-0">
             Открыть рейтинг
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />

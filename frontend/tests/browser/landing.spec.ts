@@ -14,7 +14,7 @@ test("главная показывает сводку и площадки из 
 
   // Шапка не в счёт: в содержимом главной каждая страница — одной ссылкой.
   const main = page.locator("#main-content");
-  await expect(main.locator('a[href="/rating"]')).toHaveCount(1);
+  await expect(main.locator('a[href="/review"]')).toHaveCount(1);
   await expect(main.locator('a[href="/compare"]')).toHaveCount(1);
   await expect(main.locator('a[href="/methodology"]')).toHaveCount(1);
   await expect(main.locator('a[href="/methodology/api"]')).toHaveCount(1);

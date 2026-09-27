@@ -1,6 +1,7 @@
 import { duration } from "./format";
 import type { AccountAnomalyLevels, AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "./types";
 import type { NeighborContextLoad } from "./neighbor-context-loader";
+import { lateGrowthEvidence, type ContextWindow } from "./neighbor-context";
 
 /** Результат загрузки анализа. Сбой — не отсутствие признаков: карточка
  *  честно скажет, что результата нет. */
@@ -88,13 +89,25 @@ export function boundarySnapshotIds(analysis: PublicationAnomalyAnalysis | null,
   return ids;
 }
 
-export type SignalMarker = { id: string; pattern: number; title: string; from: number; to: number };
+export type SignalMarker = {
+  id: string; pattern: number; title: string; from: number; to: number;
+  tone: "review" | "priority" | "context_views" | "context_comments";
+};
 
-export function signalMarkers(analysis: PublicationAnomalyAnalysis | null): SignalMarker[] {
-  return (analysis?.signals ?? []).map((signal, index) => ({
-    id: markerId(signal, index), pattern: signal.pattern, title: signal.title,
-    from: Date.parse(signal.startAt), to: Date.parse(signal.endAt),
-  }));
+export function signalMarkers(analysis: PublicationAnomalyAnalysis | null, contextWindows: readonly ContextWindow[] = []): SignalMarker[] {
+  return (analysis?.signals ?? []).map((signal, index) => {
+    const context = signal.pattern === 2 ? contextWindows.find((window) =>
+      window.startAt === signal.startAt && window.endAt === signal.endAt) : undefined;
+    // Shared movement is evidence of context, not proof of a cause or a
+    // calibrated exclusion. Colour here describes the review state only.
+    const contextualized = context ? lateGrowthEvidence(context) === "context_compatible" : false;
+    return {
+      id: markerId(signal, index), pattern: signal.pattern, title: signal.title,
+      from: Date.parse(signal.startAt), to: Date.parse(signal.endAt),
+      tone: contextualized ? (signal.metric === "comments" ? "context_comments" : "context_views")
+        : analysis?.level === 3 ? "priority" : "review",
+    };
+  });
 }
 
 export function markerId(signal: AnomalySignal, index: number) {

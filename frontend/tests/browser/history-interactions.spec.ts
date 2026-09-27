@@ -82,16 +82,20 @@ test("publication shows a collapsed analysis card that expands and marks signals
   await expect(card.getByTestId("anomaly-signal")).toHaveCount(0);
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded","true");
-  await card.getByRole("button",{name:/Исходные сигналы/}).click();
   await expect(card.getByTestId("anomaly-signal")).toHaveCount(2);
-  await expect(card.locator("code").first()).toContainText("Δпросмотры ≈ 10·t");
+  await expect(card.getByRole("img", { name: /Линейная подача:/ })).toHaveCount(0);
+  await card.getByTestId("anomaly-signal").filter({hasText:"Линейная подача"})
+    .getByTestId("signal-detail-toggle").click();
   const firstMini = card.getByRole("img", { name: /Линейная подача:/ }).first();
   await expect(firstMini.locator("svg text").first()).toBeVisible();
   const miniTicks = (await firstMini.locator("svg text").allTextContents())
     .map((value) => Number(value.replace(/\s/g, "")));
   expect(miniTicks.length).toBeGreaterThan(1);
   expect(Math.min(...miniTicks)).toBeGreaterThan(0);
-  await expect(card).toContainText("пост долго показывался в рекомендациях");
+  await card.getByRole("button",{name:"Формула и возможные объяснения"}).hover();
+  await expect(page.locator('[data-slot="tooltip-content"]')).toContainText("Δпросмотры ≈ 10·t");
+  await expect(page.locator('[data-slot="tooltip-content"]')).toContainText("пост долго показывался в рекомендациях");
+  await page.mouse.move(0,0);
   // Справка — под значком «i», а не в теле карточки.
   await expect(card.getByTestId("anomaly-quality")).toHaveCount(0);
   await card.getByTestId("anomaly-note").getByRole("button").hover();
@@ -198,7 +202,6 @@ test("a confirmed account-cycle outage is marked in both charts and the table",a
 test("publication page with the expanded analysis card meets axe AA and exposes non-color boundary text",async({page})=>{
   await page.goto("/posts/1");
   await page.getByTestId("anomaly-toggle").click();
-  await page.getByRole("button",{name:/Исходные сигналы/}).click();
   await expect(page.getByTestId("anomaly-signal")).toHaveCount(2);
   await page.getByRole("link",{name:"загрузить всю историю"}).click();
   await expect(page).toHaveURL(/history_limit=3000$/);

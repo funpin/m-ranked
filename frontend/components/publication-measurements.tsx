@@ -112,7 +112,7 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>;
-  gaps: CollectorCoverage["gaps"]; markers: readonly SignalMarker[]; contextEvents?: readonly ContextEvent[]; highlight?: string;
+  gaps: CollectorCoverage["gaps"]; markers: readonly SignalMarker[]; highlight?: string;
   preferredDefault?: Metric["key"];
 }) {
   const { metrics, platform, delta, preferredDefault } = props;
@@ -278,11 +278,11 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
   const settledAnalysis = useSettled(analysis);
   const shownAnalysis = settledAnalysis?.value ?? null;
   const evidenceIds = useMemo(()=>boundarySnapshotIds(shownAnalysis,rows),[shownAnalysis,rows]);
-  const markers = useMemo(()=>signalMarkers(shownAnalysis),[shownAnalysis]);
+  const markers = useMemo(()=>signalMarkers(shownAnalysis, settledAnalysis?.neighborContext?.windows ?? []),[shownAnalysis, settledAnalysis]);
   const contextEvents = useMemo(() => {
     const unique = new Map<string, ContextEvent>();
     for (const event of settledAnalysis?.neighborContext?.windows.flatMap((window) => window.events) ?? []) {
-      if (event.observedFeedDistance <= 4) unique.set(event.publicationId, event);
+      unique.set(event.publicationId, event);
     }
     return [...unique.values()].sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
   }, [settledAnalysis]);
@@ -340,17 +340,23 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
       </Suspense>
     ) : null}
     <div ref={charts} data-testid="publication-chart-stack" className="grid scroll-mt-4 gap-4">
+      {markers.length ? <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs" aria-label="Обозначения графиков">
+        {markers.some((marker) => marker.tone === "priority") ? <span><span className="text-destructive font-bold">●</span> Приоритетная проверка</span> : null}
+        {markers.some((marker) => marker.tone === "review") ? <span><span className="text-[var(--chart-3)] font-bold">●</span> Требует проверки</span> : null}
+        {markers.some((marker) => marker.tone === "context_views") ? <span><span className="text-[var(--chart-2)] font-bold">●</span> Сопоставимый рост просмотров</span> : null}
+        {markers.some((marker) => marker.tone === "context_comments") ? <span><span className="text-[var(--chart-1)] font-bold">●</span> Сопоставимый рост комментариев</span> : null}
+      </div> : null}
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Накопление {phrase}
             <MethodNote title={`Накопление ${phrase}`}>
-              Точки — сохранённые замеры. Полоса — интервалы сигналов; ромбы — границы выбранного сигнала; ↗ — публикации рядом. Интервал между точками не означает простой сборщика.
+              Точки — сохранённые замеры. Полоса — интервалы сигналов; ромбы — границы выбранного сигнала. Новые публикации и их точное время показаны в строках анализа. Интервал между точками не означает простой сборщика.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={chartEvidenceIds} gaps={visibleGaps} markers={markers} contextEvents={contextEvents} preferredDefault={contextViews} highlight={highlight} />
+          <MetricChart rows={displayed} metrics={metrics} delta={false} selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={chartEvidenceIds} gaps={visibleGaps} markers={markers} preferredDefault={contextViews} highlight={highlight} />
         </CardContent>
       </Card>
       <Card>
@@ -358,12 +364,12 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
           <CardTitle as="h2" className="font-heading flex items-center gap-1.5 text-lg">
             Прирост между сохранёнными точками
             <MethodNote title="Прирост между сохранёнными точками">
-              Столбец — разница сохранённых замеров, иногда нескольких опросов. Обводка — граница выбранного сигнала; ↗ — новый пост рядом.
+              Столбец — разница сохранённых замеров, иногда нескольких опросов. Обводка — граница выбранного сигнала. Новые посты показаны в строках анализа.
             </MethodNote>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={chartEvidenceIds} gaps={visibleGaps} markers={markers} contextEvents={contextEvents} preferredDefault={contextViews} highlight={highlight} />
+          <MetricChart rows={displayed} metrics={metrics} delta selectedId={selectedId} onSelect={setSelectedId} onActivate={activate} platform={platform} publishedAt={publishedAt} evidenceIds={chartEvidenceIds} gaps={visibleGaps} markers={markers} preferredDefault={contextViews} highlight={highlight} />
         </CardContent>
       </Card>
     </div>

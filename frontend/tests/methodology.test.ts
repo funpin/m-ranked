@@ -10,7 +10,7 @@ test("у каждой статьи из списка есть файл, и ли�
 });
 
 test("внутренние ссылки статей ведут на существующие страницы", async () => {
-  const known = new Set(["/rating", "/statistics", "/compare", "/methodology", "/methodology/api",
+  const known = new Set(["/review", "/statistics", "/compare", "/methodology", "/methodology/api",
     ...ARTICLES.map((article) => `/methodology/${article.slug}`)]);
   for (const article of ARTICLES) {
     const source = await readFile(new URL(`../content/methodology/${article.slug}.mdx`, import.meta.url), "utf8");

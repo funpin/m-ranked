@@ -6,30 +6,31 @@ import { axisNumber, legacyDate } from "@/lib/format";
 import { elapsedSincePublication } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
+import { PatternIcon } from "@/components/anomaly-icons";
+import { clusterPixelMarks, gapPresentation, mergePixelIntervals } from "@/lib/plot-density";
 import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 import type { SignalMarker } from "@/lib/anomaly";
-import type { ContextEvent } from "@/lib/neighbor-context";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
 /** Больше этого числа столбцов прироста на экране уже не различить: при
  *  ширине графика около девятисот точек каждый столбец становится тоньше
  *  волоса, и картинка перестаёт читаться. */
 const MAX_BARS = 56;
-const GAP_MERGE_DISTANCE_PX = 2;
+const GAP_MERGE_DISTANCE_PX = 3;
 
 /** Draw confirmed collector gaps as subpaths of one SVG element.
  *
  * A noisy account can have hundreds of short gaps. Rendering each one as a
  * Recharts ReferenceArea created thousands of React/SVG nodes across the two
  * plots and made the whole page expensive to paint while scrolling. Gaps whose
- * visible separation is two pixels or less are merged at the current scale:
+ * visible separation is three pixels or less are merged at the current scale:
  * zooming in separates them again. The textual count and duration remain exact.
  * One path keeps the overlay at one DOM node per chart. */
 function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
   const scale = useXAxisScale();
   const plot = usePlotArea();
   const overlay = useMemo(() => {
-    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0 };
+    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0, mode: "bands" as const };
     const minX = plot.x;
     const maxX = plot.x + plot.width;
     const minY = plot.y;
@@ -43,28 +44,30 @@ function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
       if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return [];
       return [{ left, right }];
     }).sort((a,b) => a.left-b.left || a.right-b.right);
-    const blocks: {left:number;right:number}[] = [];
-    for (const range of projected) {
-      const previous = blocks.at(-1);
-      if (previous && range.left <= previous.right + GAP_MERGE_DISTANCE_PX) {
-        previous.right = Math.max(previous.right, range.right);
-      } else {
-        blocks.push({...range});
-      }
-    }
+    const blocks = mergePixelIntervals(projected, GAP_MERGE_DISTANCE_PX);
+    const mode = gapPresentation(blocks, plot.width);
     const path = blocks.map(({left,right}) =>
-      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${maxY.toFixed(2)}H${left.toFixed(2)}Z`,
+      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${(mode === "rail" ? minY + 4 : maxY).toFixed(2)}H${left.toFixed(2)}Z`,
     ).join("");
-    return {path,blocks:blocks.length};
+    return {path,blocks:blocks.length,mode};
   }, [gaps, plot, scale]);
-  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length}
-    d={overlay.path} fill="var(--destructive)" fillOpacity={0.13}
-    stroke="var(--destructive)" strokeOpacity={0.45} strokeWidth={1} pointerEvents="none" /> : null;
+  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length} data-gap-mode={overlay.mode}
+    d={overlay.path} fill="var(--destructive)" fillOpacity={overlay.mode === "rail" ? 0.8 : 0.11}
+    stroke="var(--destructive)" strokeOpacity={overlay.mode === "rail" ? 0 : 0.35} strokeWidth={1} pointerEvents="none" /> : null;
 }
 
-/** One quiet band for the union of signal intervals. Individual icons used to
- * collide with evidence diamonds and nearby-post marks; the signal list below
- * the context card remains the place to inspect each pattern. */
+const SIGNAL_COLORS: Record<SignalMarker["tone"], string> = {
+  priority: "var(--destructive)",
+  review: "var(--chart-3)",
+  context_views: "var(--chart-2)",
+  context_comments: "var(--chart-1)",
+};
+const SIGNAL_RANK: Record<SignalMarker["tone"], number> = {
+  priority: 3, review: 2, context_views: 1, context_comments: 1,
+};
+
+/** Pattern glyphs are the primary marks. Nearby intervals share a mark at the
+ * current pixel scale; their exact identity stays in the title and flat list. */
 function SignalOverlay({ markers, highlight }: { markers: readonly SignalMarker[]; highlight?: string }) {
   const scale = useXAxisScale();
   const plot = usePlotArea();
@@ -74,55 +77,32 @@ function SignalOverlay({ markers, highlight }: { markers: readonly SignalMarker[
       if (from === undefined || to === undefined) return [];
       const left = Math.max(plot.x, Math.min(from, to));
       const right = Math.min(plot.x + plot.width, Math.max(from, to, Math.min(from, to) + 2));
-      return Number.isFinite(left) && Number.isFinite(right) && right > left ? [{ left, right, id: marker.id }] : [];
+      return Number.isFinite(left) && Number.isFinite(right) && right > left
+        ? [{ left, right, x: (left + right) / 2, marker }] : [];
     }).sort((a, b) => a.left - b.left || a.right - b.right);
-  const merged: { left: number; right: number }[] = [];
-  for (const range of ranges) {
-    const previous = merged.at(-1);
-    if (previous && range.left <= previous.right + 2) previous.right = Math.max(previous.right, range.right);
-    else merged.push({ left: range.left, right: range.right });
-  }
-  const path = merged.map(({ left, right }) =>
-    `M${left.toFixed(2)},${plot.y.toFixed(2)}H${right.toFixed(2)}V${(plot.y + plot.height).toFixed(2)}H${left.toFixed(2)}Z`,
-  ).join("");
-  const active = ranges.find((range) => range.id === highlight);
-  return <g className="signal-markers" data-signal-count={markers.length} pointerEvents="none">
-    <path data-signal-band="" d={path} fill="var(--chart-3)" fillOpacity={0.07} />
-    {active ? <rect data-signal-highlight="" x={active.left} y={plot.y} width={active.right - active.left} height={plot.height}
-      fill="var(--chart-3)" fillOpacity={0.13} stroke="var(--chart-3)" strokeDasharray="4 3" strokeWidth={1.5} /> : null}
-  </g>;
-}
-
-/** New nearby publications stay on the same time axis as the measured growth.
- * Close marks share an icon at wide zoom; every underlying timestamp keeps its
- * own line. The icon describes chronology, never a causal conclusion. */
-function ContextEventOverlay({ events }: { events: readonly ContextEvent[] }) {
-  const scale = useXAxisScale();
-  const plot = usePlotArea();
-  if (!scale || !plot || !events.length) return null;
-  const projected = events.flatMap((event) => {
-    const x = scale(Date.parse(event.publishedAt));
-    return typeof x === "number" && Number.isFinite(x) && x >= plot.x && x <= plot.x + plot.width
-      ? [{ x, event }] : [];
-  }).sort((a, b) => a.x - b.x);
-  const groups: { marks: typeof projected; x: number }[] = [];
-  for (const mark of projected) {
-    const previous = groups.at(-1);
-    if (previous && mark.x - previous.marks.at(-1)!.x < 22) {
-      previous.marks.push(mark);
-      previous.x = previous.marks.reduce((sum, item) => sum + item.x, 0) / previous.marks.length;
-    } else groups.push({ marks: [mark], x: mark.x });
-  }
-  return <g className="context-event-markers">
-    {groups.map(({ marks, x }) => <g key={marks.map(({ event }) => event.publicationId).join("-")}
-      data-context-event-marker={marks.length} role="img"
-      aria-label={`Новый пост рядом: ${marks.map(({ event }) => `№${event.displayId}, ${legacyDate(event.publishedAt)}`).join("; ")}`}>
-      <title>Новый пост рядом: {marks.map(({ event }) => `№${event.displayId} · ${legacyDate(event.publishedAt)}`).join("; ")}</title>
-      {marks.map(({ x: exact, event }) => <line key={event.publicationId} x1={exact} x2={exact} y1={plot.y} y2={plot.y + plot.height}
-        stroke="var(--chart-2)" strokeOpacity={0.6} strokeWidth={1.5} strokeDasharray="4 4" pointerEvents="none" />)}
-      <circle cx={x} cy={plot.y - 12} r={8} fill="var(--chart-2)" stroke="var(--background)" strokeWidth={1.5} />
-      <text x={x} y={plot.y - 9} textAnchor="middle" fill="var(--background)" fontSize={10} fontWeight={700} pointerEvents="none">{marks.length > 1 ? marks.length : "↗"}</text>
-    </g>)}
+  const groups = clusterPixelMarks(ranges, 25);
+  return <g className="signal-markers" data-signal-count={markers.length} data-signal-groups={groups.length}>
+    {groups.map(({ x, marks }) => {
+      const lead = [...marks].sort((a, b) => SIGNAL_RANK[b.marker.tone] - SIGNAL_RANK[a.marker.tone])[0]!.marker;
+      const color = SIGNAL_COLORS[lead.tone];
+      const left = Math.min(...marks.map((mark) => mark.left));
+      const right = Math.max(...marks.map((mark) => mark.right));
+      const selected = marks.some((mark) => mark.marker.id === highlight);
+      const label = marks.map((mark) => mark.marker.title).join("; ");
+      return <g key={marks.map((mark) => mark.marker.id).join("-")} data-signal-marker={marks.length}
+        role="img" aria-label={`${marks.length > 1 ? `${marks.length} признака: ` : "Признак: "}${label}`}>
+        <title>{label}</title>
+        <rect data-signal-band="" x={left} y={plot.y} width={Math.max(2, right - left)} height={plot.height}
+          fill={color} fillOpacity={selected ? 0.13 : 0.055} pointerEvents="none" />
+        {selected ? <rect data-signal-highlight="" x={left} y={plot.y} width={Math.max(2, right - left)} height={plot.height}
+          fill="none" stroke={color} strokeOpacity={0.65} strokeWidth={1.5} pointerEvents="none" /> : null}
+        <circle cx={x} cy={plot.y - 13} r={10} fill="var(--background)" stroke={color} strokeWidth={2} pointerEvents="none" />
+        <PatternIcon pattern={lead.pattern} x={x - 6} y={plot.y - 19} width={12} height={12}
+          color={color} strokeWidth={2.2} pointerEvents="none" />
+        {marks.length > 1 ? <text x={x + 11} y={plot.y - 19} fill={color} fontSize={9} fontWeight={700}
+          pointerEvents="none">+{marks.length - 1}</text> : null}
+      </g>;
+    })}
   </g>;
 }
 
@@ -152,10 +132,10 @@ function TimeTick({ x, y, payload, index, visibleTicksCount }: {
   );
 }
 
-export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps, markers = [], contextEvents = [], highlight }: {
+export default function PublicationPlot({ rows, metrics, delta, selectedId, onSelect, onActivate, platform, publishedAt, evidenceIds, hidden, scale, gaps, markers = [], highlight }: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>; hidden: ReadonlySet<string>; scale: "shared" | "auto"; gaps: readonly CollectorGap[];
-  markers?: readonly SignalMarker[]; contextEvents?: readonly ContextEvent[]; highlight?: string;
+  markers?: readonly SignalMarker[]; highlight?: string;
 }) {
   const [tooltip, setTooltip] = useState<string | null>(null);
   const active = useRef(0);
@@ -272,7 +252,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
 
   const shared = {
     data,
-    margin: { left: 4, right: 4, top: contextEvents.length ? 28 : 8, bottom: 8 },
+    margin: { left: 4, right: 4, top: markers.length ? 30 : 8, bottom: 8 },
     onClick: (state: { activeLabel?: unknown }) => {
       const row = nearestRow(state?.activeLabel);
       if (row) onActivate(row.snapshotId);
@@ -288,7 +268,6 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       <CartesianGrid vertical={false} yAxisId={primaryAxis} stroke="var(--border)" />
       <CollectorGapOverlay gaps={gaps} />
       <SignalOverlay markers={markers} highlight={highlight} />
-      <ContextEventOverlay events={contextEvents} />
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
       <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}

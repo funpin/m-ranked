@@ -15,7 +15,7 @@ export type ApiOperation = {
 export const API_DIGEST = digest as { sourceSha256: string; version: string; operations: ApiOperation[] };
 
 export const API_SECTIONS = [
-  { id: "rating", title: "Рейтинг и статистика" },
+  { id: "overview", title: "Обзор и статистика" },
   { id: "comparison", title: "Сравнение" },
   { id: "accounts", title: "Вузы и аккаунты" },
   { id: "publications", title: "Публикации" },
@@ -28,12 +28,12 @@ type OperationText = { section: SectionId; title: string; text: string; example?
 /** Пример в запросе: `{uuid}` и подобное подставляется вместо параметров пути. */
 export const OPERATION_TEXT: Record<string, OperationText> = {
   getOverview: {
-    section: "rating", title: "Рейтинг вузов",
+    section: "overview", title: "Обзор вузов",
     text: "Карточки вузов с приростом просмотров, реакций, комментариев и репостов за период и медианами по публикациям. Постранично, с курсором.",
     example: "/api/v1/overview?platform=vk&period=7d&limit=10",
   },
   getStatistics: {
-    section: "rating", title: "Статистика публикаций и вузов",
+    section: "overview", title: "Статистика публикаций и вузов",
     text: "Накопленные показатели публикаций (view=publications) или вузов (view=entities) за период с сортировками и поиском.",
     example: "/api/v1/statistics?platform=telegram&period=30d&limit=20",
   },

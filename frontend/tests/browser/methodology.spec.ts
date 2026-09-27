@@ -24,7 +24,7 @@ test("оглавление статьи ведёт к её заголовкам"
 });
 
 test("меню ведёт в методологию без параметра площадки", async ({ page }) => {
-  await page.goto("/rating?platform=vk");
+  await page.goto("/review?platform=vk");
   await expect(page.locator('[data-testid="main-nav"] a[href="/methodology"], nav a[href="/methodology"]').first()).toBeAttached();
 });
 

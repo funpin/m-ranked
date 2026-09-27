@@ -1,10 +1,10 @@
 import { api } from "./api";
-import { assessNeighborContext, evaluateNeighborContext, selectContextPeers } from "./neighbor-context";
+import { assessNeighborContext, evaluateNeighborContext, selectContextPeers, selectWindowEvents } from "./neighbor-context";
 import type { PublicationAnomalyAnalysis, PublicationHistory } from "./types";
 
 /** Bounded read-only method on the real histories behind the ordinary post page. */
 export async function loadNeighborContext(targetHistory: PublicationHistory, analysis: PublicationAnomalyAnalysis) {
-  if (targetHistory.publication.platform !== "telegram" ||
+  if (!["telegram", "max"].includes(targetHistory.publication.platform) ||
       !analysis.signals.some((signal) => signal.pattern === 2 && signal.metric === "views")) return null;
   const account = targetHistory.publication;
   if (!account.accountLegacyId || !account.accountLegacyType) {
@@ -15,10 +15,19 @@ export async function loadNeighborContext(targetHistory: PublicationHistory, ana
     account.accountLegacyId, account.accountLegacyType, 200, undefined, targetHistory.datasetRevision,
   );
   const peers = selectContextPeers(publications.items, account.publicationId);
+  const eventIds = new Set(analysis.signals.filter((signal) => signal.pattern === 2 && signal.metric === "views")
+    .flatMap((signal) => selectWindowEvents(publications.items, account.publicationId,
+      signal.startAt, signal.endAt, signal.scaleSeconds).events.map((event) => event.publicationId)));
+  const peerIds = new Set(peers.map((post) => post.publicationId));
+  // Keep page load bounded while resolving later posts beyond the four closest
+  // feed neighbors. Missing event histories stay visibly unmeasured in the UI.
+  const extraEvents = publications.items.filter((post) => eventIds.has(post.publicationId) && !peerIds.has(post.publicationId))
+    .slice(0, 8);
+  const requested = [...peers, ...extraEvents];
   const peerHistories = new Map<string, PublicationHistory>();
-  // A maximum of six peer histories and two concurrent requests bounds API load.
-  for (let offset = 0; offset < peers.length; offset += 2) {
-    const batch = peers.slice(offset, offset + 2);
+  // At most fourteen histories and two concurrent requests bound API load.
+  for (let offset = 0; offset < requested.length; offset += 2) {
+    const batch = requested.slice(offset, offset + 2);
     const results = await Promise.allSettled(batch.map((post) => api.publicationHistory(post.publicationId, undefined, 500)));
     results.forEach((result, index) => {
       const post = batch[index]!;
@@ -41,7 +50,7 @@ export async function loadNeighborContext(targetHistory: PublicationHistory, ana
   const comparableReads = revisions.size === 1 || matureWindows;
   return { windows, assessment: assessNeighborContext(analysis, windows, comparableReads),
     revisionMatched: revisions.size === 1,
-    peersRequested: peers.length, peersLoaded: peerHistories.size };
+    peersRequested: requested.length, peersLoaded: peerHistories.size };
 }
 
 export type NeighborContextLoad = NonNullable<Awaited<ReturnType<typeof loadNeighborContext>>>;

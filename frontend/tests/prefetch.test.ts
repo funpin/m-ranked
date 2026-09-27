@@ -4,7 +4,7 @@ import test from "node:test";
 
 // Обзор сам по себе ссылок не содержит — навигация уходит через карточку,
 // поэтому страница проверяется только на отсутствие next/link.
-const linkFreeSources = ["app/rating/page.tsx"];
+const linkFreeSources = ["app/review/page.tsx"];
 const linkSources = [
   "app/manage/page.tsx",
   "components/landing/sections.tsx",

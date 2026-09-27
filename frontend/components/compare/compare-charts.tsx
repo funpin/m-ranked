@@ -38,7 +38,7 @@ function TooltipBox({ title, lines }: { title: string; lines: [string, string][]
   );
 }
 
-/** Рейтинг всех вузов по одной мере: горизонтальные полосы, высота растёт с
+/** Сортировка всех вузов по одной мере: горизонтальные полосы, высота растёт с
  *  числом вузов, поэтому ограничения на их число нет. Пунктир — медиана. */
 export function RankingChart({ rows, metric, highlights, descending = true }: {
   rows: readonly InstitutionRow[]; metric: Metric; highlights: Highlights; descending?: boolean;
@@ -52,7 +52,7 @@ export function RankingChart({ rows, metric, highlights, descending = true }: {
   const anyHighlight = highlights.size > 0;
   return (
     <ChartContainer config={config} className="aspect-auto w-full" style={{ height: Math.max(220, data.length * 22 + 48) }}
-      data-testid="ranking-chart" role="img" aria-label={`Рейтинг вузов: ${METRICS[metric].label}`}>
+      data-testid="ranking-chart" role="img" aria-label={`Вузы по показателю: ${METRICS[metric].label}`}>
       <BarChart data={data} layout="vertical" margin={{ left: 4, right: 48, top: 22, bottom: 8 }} barCategoryGap={3}>
         <CartesianGrid horizontal={false} />
         <XAxis type="number" tickFormatter={(value) => formatValue(value, metric)} tickLine={false} axisLine={false} />

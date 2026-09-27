@@ -49,7 +49,7 @@ export function NativeSegments({ name, options, value, legend, labelled = true }
   name: string;
   legend: string;
   value: string;
-  options: readonly { value: string; label: string }[];
+  options: readonly { value: string; label: string; title?: string }[];
   /** В компактной панели подпись мешает: набор и так читается по значениям. */
   labelled?: boolean;
 }) {
@@ -57,11 +57,11 @@ export function NativeSegments({ name, options, value, legend, labelled = true }
     <fieldset className="m-0 grid gap-1.5 border-0 p-0">
       <legend className="sr-only">{legend}</legend>
       {labelled ? <span className="text-muted-foreground text-sm font-medium" aria-hidden="true">{legend}</span> : null}
-      <div data-testid="platform-segments" className="bg-muted flex w-fit rounded-md p-0.5">
+      <div data-testid={`${name}-segments`} className="bg-muted flex h-8 w-fit max-w-full items-center overflow-x-auto rounded-lg p-[3px]">
         {options.map((option) => (
-          <label key={option.value} className="relative m-0 cursor-pointer">
+          <label key={option.value} className="relative m-0 shrink-0 cursor-pointer" title={option.title}>
             <input type="radio" name={name} value={option.value} defaultChecked={option.value === value} className="peer absolute opacity-0" />
-            <span className="text-muted-foreground peer-checked:bg-background peer-checked:text-foreground peer-focus-visible:ring-ring/50 grid h-8 min-w-12 place-items-center rounded-[calc(var(--radius)-4px)] px-3 text-xs font-bold whitespace-nowrap transition-colors peer-checked:shadow-sm peer-focus-visible:ring-[3px]">
+            <span className="text-muted-foreground peer-checked:bg-background peer-checked:text-foreground peer-focus-visible:ring-ring/50 grid min-h-7 min-w-10 place-items-center rounded-md px-2 text-sm font-medium whitespace-nowrap transition-colors peer-checked:shadow-sm peer-focus-visible:ring-[3px]">
               {option.label}
             </span>
           </label>

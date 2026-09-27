@@ -6,9 +6,9 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "m-ranked",
     description: "Сравнение активности, охвата и качества данных официальных соцсетей российских вузов.",
     id: "/",
-    // Установленное приложение открывается сразу на рейтинге, а не на
+    // Установленное приложение открывается сразу на обзоре, а не на
     // странице о проекте; id не меняется, чтобы не потерять установки.
-    start_url: "/rating",
+    start_url: "/review",
     scope: "/",
     display: "standalone",
     orientation: "any",

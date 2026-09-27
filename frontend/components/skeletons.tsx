@@ -2,9 +2,11 @@ import { CompareDashboardSkeleton } from "@/components/compare/compare-skeleton"
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui";
 import {
-  FILTER_CONTROL_CLASS,
+  FILTER_DIRECTION_CLASS,
+  FILTER_PERIOD_CLASS,
   FILTER_PLATFORM_CLASS,
   FILTER_SEARCH_CLASS,
+  FILTER_SORT_CLASS,
   FILTER_TOOLBAR_CLASS,
 } from "@/components/filter-toolbar";
 
@@ -23,13 +25,13 @@ function Chrome({ title, description, controls = 3 }: {
       <PageHeader title={title} description={description} />
       <div className={FILTER_TOOLBAR_CLASS}>
         <div className={FILTER_SEARCH_CLASS}>
-          <Skeleton className="h-9 min-w-0 flex-1" />
-          <Skeleton className="size-9 shrink-0" />
+          <Skeleton className="h-8 min-w-0 flex-1" />
+          <Skeleton className="size-8 shrink-0" />
         </div>
-        {Array.from({ length: controls }, (_, index) => (
-          <div key={index} className={FILTER_CONTROL_CLASS}><Skeleton className="h-9 w-full" /></div>
-        ))}
-        <div className={FILTER_PLATFORM_CLASS}><Skeleton className="h-9 w-full max-w-[21rem]" /></div>
+        <div className={FILTER_PLATFORM_CLASS}><Skeleton className="h-8 w-64" /></div>
+        {controls > 0 ? <div className={FILTER_PERIOD_CLASS}><Skeleton className="h-8 w-64" /></div> : null}
+        {controls > 1 ? <div className={FILTER_SORT_CLASS}><Skeleton className="h-8 w-full" /></div> : null}
+        {controls > 2 ? <div className={FILTER_DIRECTION_CLASS}><Skeleton className="h-8 w-full" /></div> : null}
       </div>
     </>
   );
@@ -236,7 +238,7 @@ export function AccountSkeleton({ chrome = true }: { chrome?: boolean }) {
 export function skeletonFor(href: string) {
   if (!href) return null;
   const path = href.split("?")[0] ?? "";
-  if (path === "/rating") return <CardGridSkeleton />;
+  if (path === "/review") return <CardGridSkeleton />;
   if (path.startsWith("/statistics")) {
     const view = new URL(href, "https://m-ranked.invalid").searchParams.get("view") === "entities" ? "entities" : "publications";
     return <StatisticsSkeleton view={view} />;
