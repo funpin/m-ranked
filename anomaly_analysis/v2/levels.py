@@ -21,6 +21,7 @@ import numpy as np
 from .detectors import (
     ABSOLUTE_DETECTORS, NORM_RELATIVE_DETECTORS, REPOST_DETECTORS, DetectorContext, SiblingActivity,
 )
+from .detectors.reactions_before_views import ENDPOINT_MODE
 from .domain import DataQuality, Family, Interval, Level, Metric, PostSeries, PostVerdict, Sign
 from .detectors.bounded_reaction_burst import MEASUREMENT_MODE as BOUNDED_REACTION_MODE
 from .norms import LOW_CONFIDENCE, NormSet
@@ -70,6 +71,7 @@ ALTERNATIVES = {
     "smoothed_large_audience": "крупная аудитория со сглаженным трафиком",
     "counter_update_delay": "площадка обновила счётчик просмотров позже счётчика реакций",
     "reaction_counter_batch_update": "площадка обновила счётчик реакций пакетно",
+    "returning_readers": "ранее увидевшие пост читатели вернулись и поставили реакции",
     "views_counter_delay": "счётчик просмотров отстал от счётчика реакций",
     "account_mentioned_externally": "аккаунт упомянули во внешнем источнике, и старые посты посмотрели заново",
     "counter_frozen": "площадка перестала обновлять счётчик",
@@ -93,7 +95,7 @@ QUALITY_TEXTS = {
     "repost_source_counter": "пост — репост: просмотры принадлежат источнику, проверяются только реакции",
     "no_norm": "нормы ещё нет: признаки относительно нормы не сильнее слабого сигнала",
     "young_norm": "норма молодая: признаки относительно нормы не сильнее слабого сигнала",
-    "gaps": "в замерах есть пробелы: форма роста недоступной метрики на этих участках неизвестна",
+    "gaps": "в замерах есть пробелы: форма роста недоступной метрики внутри них неизвестна; прирост между пригодными замерами проверяется отдельно",
 }
 DISCLAIMER = ("Сигнал сам по себе не доказывает искусственное происхождение активности "
               "или действия университета.")
@@ -147,7 +149,11 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         endpoint_reference = (sign.pattern in REFERENCE_PATTERNS
                               and sign.render.get("measurementMode") == "exact_quality_v1")
         relevant_gaps = _unanalyzable(prepared, required)
+        endpoint_comparison = (sign.pattern == 6 and sign.family is Family.CROSS_METRIC
+                               and sign.render.get("measurementMode") == "exact_quality_v1"
+                               and sign.render.get("comparisonMode") == ENDPOINT_MODE)
         if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_reactions
+                and not endpoint_comparison
                 and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:
@@ -204,10 +210,13 @@ def compact(verdict: PostVerdict) -> dict[str, Any]:
 
 
 def sign_payload(sign: Sign) -> dict[str, Any]:
+    title = TITLES[sign.pattern]
+    if sign.render.get("measurementMode") == BOUNDED_REACTION_MODE:
+        title = "Резкий прирост реакций с последующим замедлением"
+    elif sign.pattern == 6 and sign.render.get("comparisonMode") == ENDPOINT_MODE:
+        title = "Прирост реакций при малом приросте просмотров"
     return {
-        "pattern": sign.pattern, "symbol": SYMBOLS[sign.pattern],
-        "title": ("Резкий прирост реакций с последующим замедлением"
-                  if sign.render.get("measurementMode") == BOUNDED_REACTION_MODE else TITLES[sign.pattern]),
+        "pattern": sign.pattern, "symbol": SYMBOLS[sign.pattern], "title": title,
         "family": sign.family.value, "metric": sign.metric.value, "strength": round(sign.strength, 3),
         "startAt": sign.interval.start.isoformat(), "endAt": sign.interval.end.isoformat(),
         "scaleSeconds": int(sign.scale.total_seconds()), "formula": sign.formula,
