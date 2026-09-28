@@ -1,0 +1,39 @@
+{
+  "date": "2026-09-28",
+  "branch": "feat/smart-analizes",
+  "base_research_commit": "90ed65e",
+  "runtime": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1"
+  },
+  "seed": 20264228,
+  "inputs_uncompressed_sha256": {
+    "observable_panel": "9f0ff271628584b78ba3350587623826a1c96f1e696976a965307e356fa0df22",
+    "max_tail_panel": "1eadb3143f3ec42e3869ec2bdd315e1e9c176f3353d96feccf61622746c6cf2e"
+  },
+  "files_sha256": {
+    "scripts/platform_validation.py": "1529a18f5d3f5e3b7091276a519e6b925f5dd3a4ca9fe24aa87a8d62b3e15238",
+    "scripts/observable_validation.py": "f0e79e3309f2e777676caa4121238fe40082791340e32ea79b6d92b3dbfbb5dc",
+    "scripts/analyze_max_tail.py": "d8a217a849665f6cc9f914d9b7e0c59099e2e1237c385957fef2959e472c3705",
+    "PLATFORMS.md": "e04248034999c6e4a22870f1fec5982a15cb2b3aaa4b88a0670d8892ec5d93ef",
+    "evidence/platform_validation_2026-09-28.json": "45b7795510f8de4a6d77711742f9690f450422bf190ccfbf9c95103c73a112d9",
+    "evidence/platform_validation_2026-09-28.png": "564c8c04d32d44c4ff27616dbddf63c2f0a48a8f4f102d94f284c99948494a02"
+  },
+  "tests_sha256": "0336ee2d42448e1468f480b0a7ed0c2ad7a03437628a2038c6ca1f0db7c19414",
+  "initial_h26_h29_protocol_sha256": "41c10da407350a8995181a33c2ef4bf507dfd487f0a680ed61fa44b7985c398d",
+  "timing": "H26-H29 protocol before outcomes after coverage audit; H30 and H31 recorded after preceding outcomes and before their own outcomes; wider MAX audit reports coverage only",
+  "numeric_repeat_byte_identical": true,
+  "numerical_runs": 2,
+  "targeted_tests": 45,
+  "new_tests": 11,
+  "plot_runtime_separate": "matplotlib 3.11.2 / numpy 2.5.3 for saved JSON plotting only",
+  "limitations": [
+    "historical period reused",
+    "unknown activity origin",
+    "Telegram unknown display step",
+    "change-only archive and informative missingness",
+    "block exchangeability not established",
+    "no new production reads, writes, storage or polling"
+  ]
+}
