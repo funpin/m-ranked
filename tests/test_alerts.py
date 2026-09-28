@@ -3,6 +3,8 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import pytest
+
 SCRIPT = Path(__file__).parents[1] / "operations" / "scripts" / "alerts.py"
 SPEC = importlib.util.spec_from_file_location("alerts", SCRIPT)
 assert SPEC and SPEC.loader
@@ -132,3 +134,36 @@ def test_unreachable_telegram_does_not_break_the_run(tmp_path, monkeypatch, caps
     monkeypatch.setattr(alerts, "send", unreachable)
     assert alerts.main() == 0
     assert "telegram send failed" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("accounts", "remaining", "firing"), [
+    (16, 4 * 86400, False), (16, 3 * 86400, False),
+    (16, 3 * 86400 - 1, True), (16, 0, True), (16, -86400, True),
+    (0, -86400, False), (16, None, True), (16, float("nan"), True),
+])
+def test_active_max_reference_warns_before_expiry(accounts, remaining, firing):
+    now = 1_800_000_000.0
+    values, arguments = healthy(now)
+    values["mranked_anomaly_reference_accounts"] = accounts
+    if remaining is not None:
+        values["mranked_anomaly_reference_expires_at_unixtime"] = now + remaining
+    rule = next(rule for rule in alerts.evaluate(now, alerts.empty_bucket(), values, **arguments)
+                if rule.key == "analysis_reference")
+    assert rule.firing is firing
+    assert "MAX" in rule.text
+
+
+def test_renewed_reference_resolves_existing_alert():
+    now = 1_800_000_000.0
+    values, arguments = healthy(now)
+    values["mranked_anomaly_reference_accounts"] = 16
+    values["mranked_anomaly_reference_expires_at_unixtime"] = now + 2 * 86400
+    state = {}
+    first = alerts.evaluate(now, alerts.empty_bucket(), values, **arguments)
+    assert len(alerts.transitions(first, state, now)) == 1
+    assert alerts.transitions(first, state, now + 60) == []
+    values["mranked_anomaly_reference_expires_at_unixtime"] = now + 28 * 86400
+    renewed = alerts.evaluate(now + 120, alerts.empty_bucket(), values, **arguments)
+    messages = alerts.transitions(renewed, state, now + 120)
+    assert len(messages) == 1 and messages[0].startswith("🟢 Прошло:")
+    assert "analysis_reference" not in state["active"]

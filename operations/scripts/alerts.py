@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -167,6 +168,19 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], *, disk_free: 
     lag = values.get("mranked_anomaly_queue_lag_seconds")
     rules.append(Rule("analysis", lag is not None and lag > limits["analysis_lag_seconds"],
                       f"Очередь анализа отстаёт на {lag / 60:.0f} мин" if lag else "Анализ в порядке"))
+    reference_accounts = values.get("mranked_anomaly_reference_accounts", 0)
+    reference_expiry = values.get("mranked_anomaly_reference_expires_at_unixtime")
+    remaining = reference_expiry - now if reference_expiry is not None and math.isfinite(reference_expiry) else None
+    needs_reference = reference_accounts > 0 and (remaining is None or remaining < 3 * 86400)
+    if reference_accounts <= 0:
+        reference_text = "Ограниченный эталон MAX отключён"
+    elif remaining is None:
+        reference_text = "Неизвестен срок активного эталона MAX: нужна проверка"
+    elif remaining <= 0:
+        reference_text = "Окно новых публикаций эталона MAX завершилось: нужна проверенная замена"
+    else:
+        reference_text = f"До конца окна новых публикаций эталона MAX {remaining / 86400:.1f} сут; замена требует проверки"
+    rules.append(Rule("analysis_reference", needs_reference, reference_text))
     reclaimable = values.get("mranked_host_docker_reclaimable_bytes")
     rules.append(Rule("docker", reclaimable is not None and reclaimable > limits["docker_bytes"],
                       f"Docker может освободить {reclaimable / 1e9:.1f} ГБ — нужна ручная чистка"
