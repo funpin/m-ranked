@@ -1,8 +1,7 @@
-"""Реакций больше, чем просмотров, в замере — физически невозможно.
+"""Repeated counter ordering on platforms with comparable count semantics.
 
-Реакции предшествует просмотр. Разовое превышение в пределах запаса ещё
-объясняется задержкой счётчика просмотров; два замера подряд или превышение
-сверх запаса — уже признак.
+Telegram reaction totals can include paid Stars and multiple reactions per
+viewer. Its total has no R <= V contract, so this rule abstains there.
 """
 from __future__ import annotations
 
@@ -15,7 +14,7 @@ from ..series import PreparedSeries
 from .base import DetectorContext, make_sign, number
 
 ID = "reactions_exceed_views"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 PATTERN = 7
 FAMILY = Family.CROSS_METRIC
 NEEDS_NORM = False
@@ -27,6 +26,8 @@ MIN_CONSECUTIVE = 2
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
+    if prepared.series.platform == "telegram":
+        return ()
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
     if reactions is None or views is None:
         return ()

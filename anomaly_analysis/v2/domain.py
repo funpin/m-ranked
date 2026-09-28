@@ -67,10 +67,8 @@ class PostSeries:
     is_repost: bool
     observed_at: tuple[datetime, ...]
     values: Mapping[Metric, tuple[int | None, ...]]
-    # Начала успешных циклов сбора аккаунта. Сборщик пишет замер, только когда
-    # значения изменились (и контрольный — раз в сутки), поэтому долгое
-    # отсутствие замеров при идущем сборе значит «не менялось», а не «нет
-    # данных». Пусто — журнал сбора неизвестен, и такой интервал — пробел.
+    # Account-cycle metadata is retained for compatibility. It does not prove
+    # that this post or every metric was read and must not create zero deltas.
     collected: tuple[datetime, ...] = ()
 
     def __post_init__(self) -> None:

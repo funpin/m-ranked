@@ -69,8 +69,7 @@ class SiblingActivity:
             published = series.published_at.timestamp()
             instants = np.fromiter((item.timestamp() for item in series.observed_at), dtype=np.float64)
             collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64)
-            # Те же подтверждённые журналом участки «без изменений», что и в
-            # подготовке ряда: тихий час — ноль прироста, а не «нет данных».
+            # Legacy account logs never fill unobserved post intervals.
             ages_, source, covered = confirm_unchanged(instants - published, collected - published,
                                                       CollectionCadence(), series.platform)
             ages.append(edges[:-1] - published)
@@ -86,9 +85,9 @@ class SiblingActivity:
                     collected_hours: Collection[int] = ()) -> "SiblingActivity | None":
         """Из почасовых максимумов счётчиков: прирост часа — разность с предыдущим часом.
 
-        `collected_hours` — часы с успешным циклом сбора аккаунта. Сборщик пишет
-        замер только при изменении, поэтому такой час без замера несёт прежний
-        уровень поста; час без цикла остаётся «нет данных» и рвёт перенос."""
+        `collected_hours` is legacy account metadata, not evidence of a post
+        reading. Missing hourly values stay unknown; only actual adjacent
+        observations produce a difference."""
         posts: dict[UUID, list[Mapping[str, Any]]] = {}
         for row in rows:
             posts.setdefault(row["publication_id"], []).append(row)
@@ -105,14 +104,6 @@ class SiblingActivity:
                     position = int(row["hour"]) - first_hour + 1
                     if 0 <= position <= hours.size and row[key] is not None:
                         level[position] = float(row[key])
-                carry = np.nan
-                for position in range(level.size):
-                    if not np.isnan(level[position]):
-                        carry = level[position]
-                    elif first_hour - 1 + position in collected_hours:
-                        level[position] = carry
-                    else:
-                        carry = np.nan
                 target[index] = np.diff(level)
         return cls(hours, reactions, views, ages, tuple(posts))
 

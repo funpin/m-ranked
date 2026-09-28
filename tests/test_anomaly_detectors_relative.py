@@ -35,7 +35,6 @@ def run(detector, name, **options):
     (late_spike, "p03_multiscale_rise_vk"),
     (late_spike, "owner_vk_views_jump_second_day"),
     (gap_growth, "p04_gap_growth_telegram"),
-    (reactions_catch_up, "p05_reactions_catch_up_vk"),
 ])
 def test_detector_finds_its_pattern(detector, name):
     signs = run(detector, name)
@@ -44,6 +43,13 @@ def test_detector_finds_its_pattern(detector, name):
     assert sign.pattern == detector.PATTERN and sign.strength >= 0.7
     assert detector.NEEDS_NORM and sign.norm_confidence is not None and sign.norm_confidence >= 0.5
     assert re.search(r"\d", sign.formula)
+
+
+def test_conditional_underdispersion_is_only_an_exploratory_weak_sign():
+    signs = run(reactions_catch_up, "p05_reactions_catch_up_vk")
+    assert signs
+    assert all(sign.strength <= reactions_catch_up.EXPLORATORY_CAP for sign in signs)
+    assert all("conditional_count_variation" in sign.alternatives for sign in signs)
 
 
 @pytest.mark.parametrize("name,direction", [("p10_high_erv_vk", 1), ("p10_low_erv_vk", -1)])
