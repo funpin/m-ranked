@@ -1,10 +1,4 @@
-"""Журнал циклов сбора: «не менялось» против «нет данных» и то, что это открыло детекторам.
-
-Сборщик пишет замер поста, только когда значения изменились. Без журнала
-плато после рывка выглядело пробелом, и рывок не судился; синхронный вброс
-через час после простоя не находился; ночная тишина делала из утреннего
-оживления «подачу».
-"""
+"""Account cycles cannot substitute for successful per-post observations."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -35,16 +29,14 @@ def every(start_minutes: float, stop_minutes: float, step_minutes: float) -> lis
     return [float(item) for item in np.arange(start_minutes, stop_minutes, step_minutes)]
 
 
-def test_quiet_stretch_with_collection_is_confirmed_and_an_outage_stays_a_gap():
+def test_account_cycles_do_not_narrow_unknown_intervals():
     cadence = CollectionCadence()
     ages = np.array([0, 300, 600, 20 * HOUR, 20 * HOUR + 300, 30 * HOUR], dtype=float)
     runs = np.concatenate([np.arange(300, 20 * HOUR, 300), np.arange(20 * HOUR + 300, 24 * HOUR, 900)])
     out, rows, covered = confirm_unchanged(ages, runs.astype(float), cadence, "telegram")
-    # Перенесённая точка за шаг до последнего цикла перед новым замером.
-    assert rows.tolist() == [0, 1, 2, 2, 3, 4, 4, 5]
-    assert out[3] == 20 * HOUR - 300 - 300
-    # Всё до 24 ч подтверждено; последние шесть часов циклов не было — пробел.
-    assert covered.tolist() == [False, True, True, True, True, True, True, False]
+    assert np.array_equal(out, ages)
+    assert rows.tolist() == list(range(len(ages)))
+    assert not covered.any()
 
 
 def test_without_a_collection_log_nothing_changes():
@@ -61,11 +53,11 @@ def _jump_then_plateau(collected):
     return series(points, collected=collected)
 
 
-def test_jump_into_a_plateau_is_judged_when_collection_confirms_the_plateau():
+def test_account_cycles_cannot_extend_an_unobserved_plateau():
     subject = _jump_then_plateau(every(5, 26 * 60, 5))
     prepared = prepare(subject, PUBLISHED + timedelta(hours=26), CollectionCadence())
     signs = burst_plateau.detect(prepared, DetectorContext("max"))
-    assert any(sign.metric is Metric.REACTIONS and sign.strength >= 0.7 for sign in signs)
+    assert not [sign for sign in signs if sign.metric is Metric.REACTIONS]
 
 
 def test_the_same_plateau_without_a_collection_log_is_not_judged():
@@ -96,7 +88,7 @@ def test_organic_reactions_that_follow_views_are_not_an_early_plateau():
     assert not burst_plateau.detect(prepared, DetectorContext("telegram"))
 
 
-def test_hourly_activity_carries_quiet_hours_only_when_collection_ran():
+def test_hourly_activity_does_not_carry_values_from_account_cycles():
     first = int(PUBLISHED.timestamp() // HOUR)
     rows = [{"publication_id": UUID(int=7), "published_at": PUBLISHED, "hour": first + hour,
              "reactions": value, "views": value * 10} for hour, value in ((0, 5), (4, 9))]
@@ -104,7 +96,7 @@ def test_hourly_activity_carries_quiet_hours_only_when_collection_ran():
     silent = SiblingActivity.from_hourly(rows, first, first + 6)
     # Прирост первого часа окна неизвестен: уровня часа до него нет.
     assert np.isnan(carried.reactions[0][0])
-    assert carried.reactions[0].tolist()[1:5] == [0.0, 0.0, 0.0, 4.0]
+    assert np.isnan(carried.reactions[0]).all()
     assert np.isnan(silent.reactions[0][:5]).all()
 
 

@@ -178,3 +178,41 @@ def test_end_of_window_freezes_and_a_new_norm_triggers_a_recheck(tmp_path):
     text = path.read_text()
     assert 'mranked_anomaly_analyses_total{outcome="frozen"} 1' in text
     assert "mranked_anomaly_norm_version 7" in text and "mranked_anomaly_last_completion_unixtime" in text
+
+
+def test_72h_reference_checkpoint_runs_once_without_new_measurements():
+    from datetime import datetime, timezone
+    from anomaly_analysis.v2.domain import Metric, PostSeries
+    from anomaly_analysis.v2.mature_reference import bundled_reference
+    reference=bundled_reference();published=datetime(2026,9,21,tzinfo=timezone.utc)
+    subject=PostSeries(UUID(int=888),next(iter(reference.account_counts)),"max",published,False,
+        (published+timedelta(hours=24),published+timedelta(hours=70)),
+        {Metric.VIEWS:(100,10000000),Metric.REACTIONS:(10,100000)})
+    now=published+timedelta(hours=73)
+    row=DueRow(subject.publication_id,published,now,published+timedelta(hours=71),
+               subject.observed_at[-1],None,0,())
+    store=FakeStore({subject.publication_id:subject},[row])
+    worker=_worker(store,now);worker.run_once()
+    assert len(store.written)==1 and store.written[0].reason=="reference_checkpoint"
+    assert {11,12}<={s.pattern for s in store.written[0].verdict.signs}
+    worker.clock=lambda:now+timedelta(hours=2);worker.run_once()
+    assert len(store.written)==1 and len(store.series_reads)==1
+
+
+def test_reference_scope_and_expiry_are_exported_for_operator_review():
+    from anomaly_analysis.v2.mature_reference import bundled_reference
+    reference=bundled_reference()
+    worker=_worker(FakeStore({},[]),reference.available_at)
+    metrics={name:value for name,_,_,value in worker.metrics.samples()}
+    assert metrics["reference_accounts"]==len(reference.account_counts)
+    assert metrics["reference_expires_at_unixtime"]==reference.expires_at.timestamp()
+
+
+def test_reference_rollback_disables_the_model_without_changing_quality_processing():
+    from anomaly_analysis.v2.worker import WorkerConfig
+    from anomaly_analysis.v2.mature_reference import bundled_reference
+    reference=bundled_reference()
+    worker=Worker(FakeStore({},[]),ScheduleConfig(),CollectionCadence(),
+                  WorkerConfig(mature_reference_enabled=False),clock=lambda:reference.available_at)
+    assert worker.reference is None and worker.metrics.reference_accounts==0
+    worker.run_once()

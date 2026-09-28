@@ -1,0 +1,271 @@
+{
+  "hypotheses": [
+    "H39",
+    "H40",
+    "H41"
+  ],
+  "baseline_commit": "4e3719b9f8c82d82eb60c0d3d1f7d375c15379fb",
+  "scope": "existing non-repost V/R panel; no saved-level filtering, siblings, subscribers or C/S qualities; not live scores or fraud labels",
+  "fit_publications": [
+    "2026-09-06",
+    "2026-09-17"
+  ],
+  "fit_observed_before": "2026-09-20T00:00:00+00:00",
+  "replay_age_hours": 72,
+  "replay_publications_from": "2026-09-20",
+  "replay_available_through": "2026-09-27T17:00:00Z",
+  "panel_uncompressed_sha256": "9f0ff271628584b78ba3350587623826a1c96f1e696976a965307e356fa0df22",
+  "source_sha256": {
+    "anomaly_analysis/v2/norms.py": "353608166a496c0506072ba327ebee8bbb4afc9a1b3a0a3a69b138482837f57b",
+    "anomaly_analysis/v2/series.py": "3143add034d776a9f422bb3fc0f0a83018592fbc22b5770ef62d395cbb4a28ae",
+    "anomaly_analysis/v2/store.py": "89e280de2c12e5c2c8b530c0b838eeaea13b0ebdc6c0ad05f899a2fbe6d80949",
+    "anomaly_analysis/v2/detectors/base.py": "e4209e0ab57f56ff359cadcaedd66c8e2e4345b361fd3cbcf2daab3e862f5ca3",
+    "anomaly_analysis/v2/detectors/erv_outlier.py": "6ce3574304361b8b0d33b296bf21ad761b630c65dd83b04aff24524f28f7bf84",
+    "anomaly_analysis/v2/detectors/gap_growth.py": "08b453986f37f0041275bea1d1c7f052d1e89bc361b1869ced3431a1d680d871",
+    "anomaly_analysis/v2/detectors/late_spike.py": "197d9ae9d211806d9c59ab3a9a2022f0fd8a3da8ff6619b822d6cb1ba263bbe7",
+    "anomaly_analysis/v2/detectors/reactions_catch_up.py": "f36f918e16c2cf02ec7c8bbce3d00e95e0edb043ff24f8e1d125e23cdaf935c7",
+    "research/smart-engagement-2026-09/scripts/norm_support_audit.py": "7892247a79f87bd621c0682c3f074d59259035bc2b6fc4cc681b2c77a0b9e1c6"
+  },
+  "before": {
+    "norm_model": "2.1.0",
+    "norm_source_sha256": "cfddf3f15445cf4d2e3a1fbd040199b4f6e8dd812d18c09b9cd4c59356b218c5",
+    "selection": {
+      "rutube": {
+        "catalog": 350,
+        "accepted_rows": 329,
+        "no_precise_metrics": 0,
+        "contributed_posts": 329,
+        "empty": 21
+      },
+      "telegram": {
+        "catalog": 805,
+        "accepted_rows": 796,
+        "no_precise_metrics": 796,
+        "contributed_posts": 796,
+        "empty": 9
+      },
+      "max": {
+        "catalog": 932,
+        "accepted_rows": 890,
+        "no_precise_metrics": 0,
+        "contributed_posts": 890,
+        "absolute_signal": 21,
+        "empty": 21
+      },
+      "vk": {
+        "catalog": 934,
+        "accepted_rows": 820,
+        "no_precise_metrics": 0,
+        "contributed_posts": 820,
+        "absolute_signal": 16,
+        "empty": 98
+      }
+    },
+    "replay": {
+      "max": {
+        "posts": 393,
+        "levels": {
+          "0": 375,
+          "3": 2,
+          "1": 11,
+          "2": 5
+        },
+        "reference_transitions": {
+          "0->0": 375,
+          "3->3": 2,
+          "0->1": 2,
+          "1->1": 9,
+          "2->2": 5
+        },
+        "patterns": {
+          "6": 9,
+          "9": 3,
+          "10": 7,
+          "12": 2
+        }
+      },
+      "telegram": {
+        "posts": 332,
+        "levels": {
+          "0": 332
+        },
+        "reference_transitions": {
+          "0->0": 332
+        },
+        "patterns": {}
+      },
+      "vk": {
+        "posts": 335,
+        "levels": {
+          "0": 319,
+          "1": 10,
+          "3": 4,
+          "2": 2
+        },
+        "reference_transitions": {
+          "0->0": 319,
+          "1->1": 10,
+          "3->3": 4,
+          "2->2": 2
+        },
+        "patterns": {
+          "2": 5,
+          "10": 5,
+          "1": 7,
+          "6": 3,
+          "9": 4
+        }
+      },
+      "rutube": {
+        "posts": 110,
+        "levels": {
+          "0": 110
+        },
+        "reference_transitions": {
+          "0->0": 110
+        },
+        "patterns": {}
+      }
+    }
+  },
+  "after": {
+    "norm_model": "2.2.0",
+    "norm_source_sha256": "353608166a496c0506072ba327ebee8bbb4afc9a1b3a0a3a69b138482837f57b",
+    "selection": {
+      "rutube": {
+        "catalog": 350,
+        "accepted_rows": 329,
+        "no_precise_metrics": 0,
+        "contributed_posts": 137,
+        "empty": 21
+      },
+      "telegram": {
+        "catalog": 805,
+        "accepted_rows": 796,
+        "no_precise_metrics": 796,
+        "contributed_posts": 0,
+        "empty": 9
+      },
+      "max": {
+        "catalog": 932,
+        "accepted_rows": 890,
+        "no_precise_metrics": 0,
+        "contributed_posts": 774,
+        "absolute_signal": 21,
+        "empty": 21
+      },
+      "vk": {
+        "catalog": 934,
+        "accepted_rows": 820,
+        "no_precise_metrics": 0,
+        "contributed_posts": 670,
+        "absolute_signal": 16,
+        "empty": 98
+      }
+    },
+    "replay": {
+      "max": {
+        "posts": 393,
+        "levels": {
+          "0": 371,
+          "3": 2,
+          "1": 15,
+          "2": 5
+        },
+        "reference_transitions": {
+          "0->0": 371,
+          "3->3": 2,
+          "0->1": 2,
+          "1->1": 13,
+          "2->2": 5
+        },
+        "patterns": {
+          "6": 9,
+          "9": 3,
+          "10": 11,
+          "12": 2
+        }
+      },
+      "telegram": {
+        "posts": 332,
+        "levels": {
+          "0": 332
+        },
+        "reference_transitions": {
+          "0->0": 332
+        },
+        "patterns": {}
+      },
+      "vk": {
+        "posts": 335,
+        "levels": {
+          "0": 319,
+          "1": 10,
+          "3": 4,
+          "2": 2
+        },
+        "reference_transitions": {
+          "0->0": 319,
+          "1->1": 10,
+          "3->3": 4,
+          "2->2": 2
+        },
+        "patterns": {
+          "2": 5,
+          "10": 6,
+          "1": 7,
+          "6": 3,
+          "9": 4
+        }
+      },
+      "rutube": {
+        "posts": 110,
+        "levels": {
+          "0": 110
+        },
+        "reference_transitions": {
+          "0->0": 110
+        },
+        "patterns": {}
+      }
+    }
+  },
+  "before_after_level_transitions": {
+    "max": {
+      "0->0": 370,
+      "3->3": 2,
+      "1->1": 10,
+      "1->0": 1,
+      "2->2": 5,
+      "0->1": 5
+    },
+    "telegram": {
+      "0->0": 332
+    },
+    "vk": {
+      "0->0": 319,
+      "1->1": 10,
+      "3->3": 4,
+      "2->2": 2
+    },
+    "rutube": {
+      "0->0": 110
+    }
+  },
+  "conclusions": {
+    "H39": "confirmed bug; unusable rows no longer increase support; confidence scoped to metric and age",
+    "H40": "confirmed bug; no extrapolation or interpolation across untrusted anchors; missing reported engagement is unknown",
+    "H41": "1170 post operational replay completed; MAX five 0->1 and one 1->0 transitions from corrected norms, no additional strong levels"
+  },
+  "limitations": [
+    "existing retrospective V/R projection, not saved production scores or independent fraud labels",
+    "Telegram level 0 here is abstention: no precise metrics, not evidence of ordinary activity",
+    "MAX reference contributions on this older panel are not comparable to 9/193 on the refreshed endpoint/full-series export"
+  ],
+  "regression_validation": {
+    "norm_support_tests_passed": 15,
+    "full_local_python_passed_before_last_two_regressions": 863,
+    "full_local_python_optional_skipped": 115,
+    "mandatory_postgresql_integration": "separate CI gate"
+  }
+}

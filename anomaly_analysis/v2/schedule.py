@@ -110,7 +110,8 @@ def stretch_for_lag(config: ScheduleConfig, queue_lag_seconds: float) -> float:
 
 def plan(config: ScheduleConfig, *, platform: str, published_at: datetime, now: datetime,
          new_points: int, analyzed_before: bool, resumed_after_gap: bool = False,
-         norm_recheck: bool = False, stale: bool = False, stretch: float = 1.0) -> Plan:
+         norm_recheck: bool = False, stale: bool = False, stretch: float = 1.0,
+         reference_checkpoint: bool = False) -> Plan:
     """Решение по посту, срок которого наступил."""
     age = (now - published_at).total_seconds()
     if age >= config.track_seconds:
@@ -123,6 +124,8 @@ def plan(config: ScheduleConfig, *, platform: str, published_at: datetime, now: 
         return Plan(True, False, now + step, "resumed")
     if norm_recheck:
         return Plan(True, False, now + step, "norm_recheck")
+    if reference_checkpoint:
+        return Plan(True, False, now + step, "reference_checkpoint")
     if new_points >= config.min_new_points:
         return Plan(True, False, now + step, "scheduled")
     probe = timedelta(seconds=config.stale_probe_seconds) if stale else step

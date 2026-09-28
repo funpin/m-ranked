@@ -17,7 +17,7 @@ import numpy as np
 
 from ..domain import Family, Interval, Metric, PostSeries, Sign
 from ..norms import DECAY_EXPONENT_BOUNDS, DecayFit, Norm, fit_decay
-from ..series import DAY, HOUR, CollectionCadence, PreparedSeries, confirm_unchanged
+from ..series import DAY, HOUR, CollectionCadence, PreparedSeries, confirm_unchanged, age_band
 
 # Счётчики площадок обновляются с задержкой; реакция может «обогнать»
 # просмотр на эту величину без всякой аномалии. Telegram обновляет
@@ -69,13 +69,12 @@ class SiblingActivity:
             published = series.published_at.timestamp()
             instants = np.fromiter((item.timestamp() for item in series.observed_at), dtype=np.float64)
             collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64)
-            # Те же подтверждённые журналом участки «без изменений», что и в
-            # подготовке ряда: тихий час — ноль прироста, а не «нет данных».
+            # Legacy account logs never fill unobserved post intervals.
             ages_, source, covered = confirm_unchanged(instants - published, collected - published,
                                                       CollectionCadence(), series.platform)
             ages.append(edges[:-1] - published)
             for metric, bucket in rows.items():
-                column = series.values.get(metric)
+                column = series.exact_values(metric)
                 values = None if column is None else np.asarray(column, dtype=np.float64)[source]
                 bucket.append(_hourly(ages_ + published, values, edges, covered))
         return cls(edges[:-1] / HOUR, np.vstack(rows[Metric.REACTIONS]), np.vstack(rows[Metric.VIEWS]),
@@ -86,9 +85,9 @@ class SiblingActivity:
                     collected_hours: Collection[int] = ()) -> "SiblingActivity | None":
         """Из почасовых максимумов счётчиков: прирост часа — разность с предыдущим часом.
 
-        `collected_hours` — часы с успешным циклом сбора аккаунта. Сборщик пишет
-        замер только при изменении, поэтому такой час без замера несёт прежний
-        уровень поста; час без цикла остаётся «нет данных» и рвёт перенос."""
+        `collected_hours` is legacy account metadata, not evidence of a post
+        reading. Missing hourly values stay unknown; only actual adjacent
+        observations produce a difference."""
         posts: dict[UUID, list[Mapping[str, Any]]] = {}
         for row in rows:
             posts.setdefault(row["publication_id"], []).append(row)
@@ -105,14 +104,6 @@ class SiblingActivity:
                     position = int(row["hour"]) - first_hour + 1
                     if 0 <= position <= hours.size and row[key] is not None:
                         level[position] = float(row[key])
-                carry = np.nan
-                for position in range(level.size):
-                    if not np.isnan(level[position]):
-                        carry = level[position]
-                    elif first_hour - 1 + position in collected_hours:
-                        level[position] = carry
-                    else:
-                        carry = np.nan
                 target[index] = np.diff(level)
         return cls(hours, reactions, views, ages, tuple(posts))
 
@@ -131,6 +122,7 @@ def _hourly(instants: np.ndarray, column, edges: np.ndarray,
         return result
     values = np.asarray(column, dtype=np.float64)
     keep = ~np.isnan(values)
+    positions = np.flatnonzero(keep)
     # Подтверждение журналом годится только для соседних точек (как в series).
     confirmed = None
     if covered is not None:
@@ -146,7 +138,11 @@ def _hourly(instants: np.ndarray, column, edges: np.ndarray,
     left = np.clip(np.searchsorted(instants, edges[:-1], side="right") - 1, 0, spacing.size - 1)
     right = np.clip(np.searchsorted(instants, edges[1:], side="left") - 1, 0, spacing.size - 1)
     short = spacing <= 3 * HOUR if confirmed is None else (spacing <= 3 * HOUR) | confirmed
-    covered = short[left] & short[right]
+    # No interpolation across omitted/untrusted readings, corrections, or an
+    # interior gap hidden between two otherwise valid ends of the hour.
+    bad = ~short | (np.diff(positions) > 1) | (np.diff(values) < 0)
+    prefix = np.r_[0, np.cumsum(bad)]
+    covered = prefix[right + 1] == prefix[left]
     delta = np.diff(cumulative)
     result[inside & covered] = delta[inside & covered]
     return result
@@ -181,6 +177,12 @@ class DetectorContext:
     @property
     def norm_confidence(self) -> float:
         return 0.0 if self.norm is None else float(self.norm.confidence)
+
+    def confidence_for(self, metric: Metric | str, age: float) -> float:
+        if self.norm is None:
+            return 0.0
+        key = metric.value if isinstance(metric, Metric) else metric
+        return self.norm.confidence_for(key, int(age_band(np.array([age]))[0]))
 
     @property
     def counter_delay(self) -> float:

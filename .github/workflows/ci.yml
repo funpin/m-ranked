@@ -74,6 +74,22 @@ jobs:
             "SELECT to_regclass('analytics.site_summary') IS NOT NULL AND \
                     to_regclass('analytics.bounded_poll_growth_daily') IS NOT NULL AND \
                     to_regclass('analytics.publication_history_page') IS NOT NULL")" = t
+      - name: Anomaly worker and public API against disposable PostgreSQL roles
+        run: |
+          set -euo pipefail
+          container="$(docker compose -f infra/compose.yaml ps -q postgres)"
+          db=mranked_anomaly_it
+          docker exec "$container" createdb -U mranked_bootstrap "$db"
+          trap 'docker exec "$container" dropdb -U mranked_bootstrap --force "$db"' EXIT
+          for migration in db/migrations/*.sql; do
+            docker exec "$container" psql -U mranked_bootstrap -d "$db" \
+              --no-psqlrc -v ON_ERROR_STOP=1 -f "/m-ranked-schema/${migration##*/}" >/dev/null
+          done
+          export MRANKED_ANOMALY_TEST_ADMIN_DSN="postgresql://mranked_bootstrap:${POSTGRES_SUPERUSER_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/$db"
+          export MRANKED_ANOMALY_TEST_WORKER_DSN="postgresql://analytics_worker:${ANALYTICS_WORKER_DB_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/$db"
+          export MRANKED_ANOMALY_TEST_API_DSN="postgresql://api_read:${API_READ_DB_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/$db"
+          .venv/bin/pytest -q tests/test_anomaly_store_postgres.py \
+            tests/test_anomaly_worker_postgres.py tests/test_anomaly_norms_job_postgres.py
       - name: Python gates with a protected release-fixture directory
         run: |
           # Provenance tests validate every ancestor's permissions; /tmp is
@@ -119,7 +135,7 @@ jobs:
               if [ "$target" = api ]; then
                 "$venv/bin/python" -c 'import api.app'
               else
-                "$venv/bin/python" -c 'import anomaly_analysis'
+                "$venv/bin/python" -c 'import anomaly_analysis.v2.worker; from anomaly_analysis.v2.mature_reference import bundled_reference; bundled_reference()'
               fi
             fi
             "$venv/bin/pip" check

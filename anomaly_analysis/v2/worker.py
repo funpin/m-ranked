@@ -21,6 +21,7 @@ from .detectors.synchronous_rise import BASELINE_HOURS
 from .domain import PostSeries
 from .levels import assess, sign_from_payload
 from .norms import NormSet
+from .mature_reference import bundled_reference
 from .schedule import ScheduleConfig, plan, retry_after, stretch_for_lag
 from .series import GAP_FACTOR, HOUR, CollectionCadence
 from .store import DueRow, PostgresAnomalyStore, SeriesTarget, StateWrite
@@ -32,6 +33,7 @@ SYNCHRONY_PATTERN = 8
 @dataclass(frozen=True, slots=True)
 class WorkerConfig:
     batch_size: int = 50
+    mature_reference_enabled: bool = True
     seed_limit: int = 500
     # Синхронность смотрит на последние трое суток агрегатов аккаунта; агрегат
     # аккаунта и его подписчики живут в кэше час — они общие для всех его постов.
@@ -81,13 +83,15 @@ class WorkerMetrics:
     last_batch_size: int = 0
     last_batch_seconds: float = 0.0
     last_completion: float = 0.0
+    reference_accounts: int = 0
+    reference_expires_at: float = 0.0
 
     def samples(self):
         for outcome in ("analyzed", "postponed", "failed", "frozen"):
             yield "analyses_total", "counter", {"outcome": outcome}, self.outcomes[outcome]
         for level in range(4):
             yield "verdicts_total", "counter", {"level": str(level)}, self.levels[level]
-        for pattern in (1, 2, 4, 5, 6, 7, 8, 9, 10):
+        for pattern in (1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12):
             yield "signals_total", "counter", {"pattern": str(pattern)}, self.signals[pattern]
         yield "log_entries_total", "counter", {}, self.log_entries
         yield "seeded_total", "counter", {}, self.seeded
@@ -98,6 +102,8 @@ class WorkerMetrics:
         yield "last_batch_size", "gauge", {}, self.last_batch_size
         yield "last_batch_seconds", "gauge", {}, self.last_batch_seconds
         yield "last_completion_unixtime", "gauge", {}, self.last_completion
+        yield "reference_accounts", "gauge", {}, self.reference_accounts
+        yield "reference_expires_at_unixtime", "gauge", {}, self.reference_expires_at
 
 
 class Worker:
@@ -112,6 +118,9 @@ class Worker:
         self.clock = clock
         self.publish = publish
         self.metrics = WorkerMetrics()
+        self.reference = bundled_reference() if config.mature_reference_enabled else None
+        self.metrics.reference_accounts = len(self.reference.account_counts) if self.reference else 0
+        self.metrics.reference_expires_at = self.reference.expires_at.timestamp() if self.reference else 0.
         self.norm_version: int | None = None
         self.norms: dict[str, NormSet] = {}
         self._activity = _AccountCache(config.account_cache_seconds)
@@ -169,7 +178,7 @@ class Worker:
                     subject, norms=self.norms.get(subject.platform),
                     subscribers=self._subscribers.get(subject.account_id) or (), analyzed_at=now,
                     cadence=self.cadence, norm_version=self.norm_version,
-                    activity=self._activity.get(subject.account_id),
+                    activity=self._activity.get(subject.account_id), reference=self.reference,
                     carried=_carried(row, window_start + timedelta(hours=BASELINE_HOURS)))
                 writes.append(StateWrite(
                     row.publication_id, row.published_at, now, decision.next_due_at, verdict=verdict,
@@ -232,7 +241,11 @@ class Worker:
         return plan(self.schedule, platform=platform, published_at=published_at, now=now,
                     new_points=new_points, analyzed_before=row.analyzed_at is not None,
                     resumed_after_gap=resumed, stale=stale, stretch=stretch,
-                    norm_recheck=self._norm_recheck(row))
+                    norm_recheck=self._norm_recheck(row),
+                    reference_checkpoint=(self.reference is not None and platform == self.reference.platform
+                        and self.reference.available_at <= published_at < self.reference.expires_at
+                        and row.analyzed_at is not None
+                        and row.analyzed_at < published_at + timedelta(hours=72) <= now))
 
     def _norm_recheck(self, row: DueRow) -> bool:
         return self.norm_version is not None and row.norm_version_id != self.norm_version
@@ -254,7 +267,8 @@ def _carried(row: DueRow, detectable_from: datetime):
     """Признаки синхронности прежнего вывода, которые уже нельзя найти заново."""
     carried = []
     for payload in row.signals:
-        if int(payload.get("pattern", 0)) != SYNCHRONY_PATTERN:
+        if (int(payload.get("pattern", 0)) != SYNCHRONY_PATTERN
+                or payload.get("render", {}).get("measurementMode") != "exact_quality_v1"):
             continue
         sign = sign_from_payload(payload)
         if sign.interval.start < detectable_from:

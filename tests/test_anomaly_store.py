@@ -91,7 +91,7 @@ def test_state_write_carries_a_verdict_or_an_error():
 def test_series_rows_drop_failed_quality_and_absent_metrics():
     rows = [{"id": UUID(int=1), "primary_account_id": UUID(int=2), "platform": "telegram",
              "published_at": MOMENT, "is_repost": False,
-             "observed_at": MOMENT + timedelta(minutes=5 * index),
+             "observed_at": MOMENT + timedelta(minutes=5 * index), "interval_uncertain": False,
              "views_count": 100 + index, "views_quality": "exact",
              "reactions_count": 5, "reactions_quality": "invalid" if index == 1 else "exact",
              "comments_count": 0, "comments_quality": "exact",

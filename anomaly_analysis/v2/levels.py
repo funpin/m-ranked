@@ -4,7 +4,7 @@
 
 * слабый сигнал — один признак средней силы или несколько слабых;
 * выраженная аномалия — один сильный признак;
-* признаки искусственной активности — сильные признаки минимум из двух
+* несколько согласованных аномалий — сильные признаки минимум из двух
   разных семейств.
 
 Тексты здесь — единственное место, где вывод получает слова. Они проходят
@@ -23,7 +23,8 @@ from .detectors import (
 )
 from .domain import DataQuality, Family, Interval, Level, Metric, PostSeries, PostVerdict, Sign
 from .norms import LOW_CONFIDENCE, NormSet
-from .series import DAY, CollectionCadence, PreparedSeries, prepare
+from .mature_reference import MatureReference, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
+from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare
 
 # Пороги силы. Сильный признак — тот, что один даёт выраженную аномалию: у
 # детекторов это пуассоновский z в районе десяти и выше или физически
@@ -41,7 +42,7 @@ MAX_SIGNS = 6
 UNANALYZABLE_OVERLAP = 0.5
 GAP_PATTERN = 4
 
-SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇"}
+SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -52,13 +53,15 @@ TITLES = {
     8: "Синхронный подъём на постах аккаунта",
     9: "Рывок, обрывающийся в плато",
     10: "ERV вне нормы аккаунта",
+    11: "Отклик выше исторического диапазона",
+    12: "Продолжение отклика выше ожидаемого",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
     0: "нет признаков",
     1: "слабый сигнал",
     2: "выраженная аномалия",
-    3: "признаки искусственной активности",
+    3: "несколько согласованных аномалий",
 }
 ALTERNATIVES = {
     "recommendation_feed": "пост долго показывался в рекомендациях с ровным притоком",
@@ -67,16 +70,21 @@ ALTERNATIVES = {
     "views_counter_delay": "счётчик просмотров отстал от счётчика реакций",
     "account_mentioned_externally": "аккаунт упомянули во внешнем источнике, и старые посты посмотрели заново",
     "counter_frozen": "площадка перестала обновлять счётчик",
+    "audience_change": "изменилась аудитория или обычное продвижение аккаунта",
     "news_event": "новостной повод вернул внимание к посту",
     "pinned_post": "пост закрепили или подняли в ленте",
     "forward_by_large_channel": "похоже на пересылку крупным каналом",
     "recommendation_wave": "новая волна показов из рекомендаций площадки",
     "collection_outage_during_organic_wave": "во время пробела сбора у поста была живая волна",
+    "conditional_count_variation": "обычные реакции могут иметь разброс ниже пуассоновского",
     "evergreen_post": "пост-«вечнозелёнка» с живым поздним трафиком",
     "viral_post": "пост честно «выстрелил» и собрал больше реакций, чем обычно",
     "wide_reach_low_engagement": "пост разошёлся шире обычной аудитории, которая реагирует реже",
 }
 QUALITY_TEXTS = {
+    "no_precise_metrics": "недостаточно точных данных для проверки; отсутствие сигнала не подтверждает обычность статистики",
+    "non_exact_counters": "округлённые счётчики и значения без подтверждённой точности исключены из точных проверок",
+    "uncertain_observations": "замеры с неопределённым интервалом исключены из точных проверок",
     "truncated_start": "ряд начат позже публикации: ранняя волна не оценивается",
     "repost_source_counter": "пост — репост: просмотры принадлежат источнику, проверяются только реакции",
     "no_norm": "нормы ещё нет: признаки относительно нормы не сильнее слабого сигнала",
@@ -90,7 +98,8 @@ DISCLAIMER = ("Сигнал сам по себе не доказывает ис�
 def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: NormSet | None = None,
            subscribers: Iterable[tuple[datetime, int]] = (), analyzed_at: datetime | None = None,
            cadence: CollectionCadence | None = None, norm_version: int | None = None,
-           activity: SiblingActivity | None = None, carried: Sequence[Sign] = ()) -> PostVerdict:
+           activity: SiblingActivity | None = None, carried: Sequence[Sign] = (),
+           reference: MatureReference | None = None) -> PostVerdict:
     """Вывод по посту.
 
     `siblings` — другие посты того же аккаунта рядами; работник вместо них
@@ -102,6 +111,10 @@ def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: N
     prepared = prepare(subject, moment, cadence or CollectionCadence())
     context = _context(prepared, siblings, norms, subscribers, activity)
     signs, versions = run_detectors(prepared, context)
+    if reference is not None:
+        signs.extend(reference.detect(subject, moment))
+        versions["mature_reference"] = REFERENCE_VERSION
+        versions["mature_reference_model"] = reference.version
     return verdict(prepared, context, [*signs, *carried], versions, norm_version)
 
 
@@ -111,7 +124,9 @@ def run_detectors(prepared: PreparedSeries, context: DetectorContext) -> tuple[l
     signs: list[Sign] = []
     for detector in detectors:
         signs.extend(detector.detect(prepared, context))
-    return signs, {detector.ID: detector.VERSION for detector in detectors}
+    signs = [replace(sign, render={**sign.render, "measurementMode": "exact_quality_v1"}) for sign in signs]
+    return signs, {"preparation": PREPARATION_VERSION,
+                   **{detector.ID: detector.VERSION for detector in detectors}}
 
 
 def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[Sign],
@@ -119,7 +134,13 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
     unanalyzable = _unanalyzable(prepared)
     kept = []
     for sign in signs:
-        if sign.pattern != GAP_PATTERN and _overlap(sign.interval, unanalyzable) > UNANALYZABLE_OVERLAP:
+        required = (Metric.VIEWS, Metric.REACTIONS) if sign.family is Family.CROSS_METRIC else (sign.metric,)
+        if any(metric not in prepared.metrics for metric in required):
+            continue
+        # A validated endpoint model makes no claim about timing inside gaps.
+        endpoint_reference = (sign.pattern in REFERENCE_PATTERNS
+                              and sign.render.get("measurementMode") == "exact_quality_v1")
+        if sign.pattern != GAP_PATTERN and not endpoint_reference and _overlap(sign.interval, unanalyzable) > UNANALYZABLE_OVERLAP:
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:
             sign = replace(sign, strength=min(sign.strength, YOUNG_NORM_CAP))
@@ -240,7 +261,7 @@ def _overlap(interval: Interval, spans: Sequence[Interval]) -> float:
 
 def _quality(prepared: PreparedSeries, context: DetectorContext,
              unanalyzable: tuple[Interval, ...]) -> DataQuality:
-    codes = []
+    codes = list(prepared.quality_codes)
     if prepared.truncated_start:
         codes.append("truncated_start")
     if prepared.series.is_repost:

@@ -31,9 +31,10 @@ LEVEL_LABELS = {
     0: "нет признаков",
     1: "слабый сигнал",
     2: "выраженная аномалия",
-    3: "признаки искусственной активности",
+    3: "несколько согласованных аномалий",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
+INSUFFICIENT_DATA = "недостаточно точных данных"
 NOT_ANALYZED = "ещё не проанализирован"
 NOT_ANALYZED_SYMBOL = "·"
 
@@ -152,8 +153,8 @@ def levels_body(account_id: str, dataset_revision: int, rows: list[dict[str, Any
     return {
         "accountId": account_id, "datasetRevision": dataset_revision,
         "items": [{"publicationId": str(row["publication_id"]), "level": int(row["level"]),
-                   "levelLabel": LEVEL_LABELS[int(row["level"])],
-                   "levelSymbol": LEVEL_SYMBOLS[int(row["level"])]} for row in rows],
+                   "levelLabel": INSUFFICIENT_DATA if row.get("insufficient_data") and int(row["level"]) == 0 else LEVEL_LABELS[int(row["level"])],
+                   "levelSymbol": NOT_ANALYZED_SYMBOL if row.get("insufficient_data") and int(row["level"]) == 0 else LEVEL_SYMBOLS[int(row["level"])]} for row in rows],
     }
 
 
@@ -161,12 +162,13 @@ def analysis_body(publication_id: str, dataset_revision: int, row: dict[str, Any
     """Тело ответа. Пост без анализа — не ошибка, а «ещё не проанализирован»."""
     analyzed = row is not None and row["analyzed_at"] is not None
     level = int(row["level"]) if analyzed else None
+    insufficient = analyzed and level == 0 and "no_precise_metrics" in (row.get("quality") or {}).get("codes", [])
     return {
         "publicationId": publication_id, "datasetRevision": dataset_revision,
         "status": "analyzed" if analyzed else "pending",
         "level": level,
-        "levelLabel": LEVEL_LABELS[level] if level is not None else NOT_ANALYZED,
-        "levelSymbol": LEVEL_SYMBOLS[level] if level is not None else NOT_ANALYZED_SYMBOL,
+        "levelLabel": INSUFFICIENT_DATA if insufficient else LEVEL_LABELS[level] if level is not None else NOT_ANALYZED,
+        "levelSymbol": LEVEL_SYMBOLS[level] if level is not None and not insufficient else NOT_ANALYZED_SYMBOL,
         "originalLevel": int(row.get("original_level", level)) if analyzed else None,
         "recheckReason": row.get("recheck_reason") if analyzed else None,
         "recheckMethodVersion": row.get("recheck_method_version") if analyzed else None,

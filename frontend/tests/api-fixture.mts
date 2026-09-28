@@ -94,13 +94,25 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
     alternatives:[{code:"recommendation_feed",text:"пост долго показывался в рекомендациях с ровным притоком"}],normConfidence:null,
   });
   const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,
-    status:"analyzed",level:3,levelLabel:"признаки искусственной активности",levelSymbol:"●",
+    status:"analyzed",level:3,levelLabel:"несколько согласованных аномалий",levelSymbol:"●",
     originalLevel:3,recheckReason:null,recheckMethodVersion:null,recheckEvidence:null,
     signals:[signal(1,"views",39,40),signal(6,"reactions",36,38)],
     quality:{coverage:1,summary:"замеры полные, покрытие 100%",codes:[],unanalyzable:[]},
     analyzedAt:asOf,lagSeconds:40,normVersion:3,detectorVersions:{linear_feed:"2.0.0",reactions_before_views:"2.0.0"},
     reviewStatus:"unreviewed",methodologyVersion:"anomaly-dynamics-v2",
     disclaimer:"Сигнал аномальной динамики носит информационный характер и сам по себе не доказывает искусственное происхождение активности или действия университета."};
+  if(type==="platform_posts" && id===10) return {...base,level:1,originalLevel:1,
+    levelLabel:"слабый сигнал",levelSymbol:"◔",signals:([11,12] as const).map(pattern=>({
+      pattern,symbol:pattern===11?"↥":"↗",title:pattern===11?"Отклик выше исторического диапазона":"Продолжение отклика выше ожидаемого",
+      family:"velocity",metric:"views",strength:0.5,startAt:historyAt(pattern===11?0:24),endAt:historyAt(72),scaleSeconds:259200,
+      formula:"Y72=2791 > 2608 (верхняя целая граница); ожидание=2265; общая калибровка четырёх компонент: n=130",
+      render:{kind:"reference",startAge:pattern===11?0:86400,endAge:259200,observed:2791,expected:2265,upper:2608,
+        fitPosts:266,calibrationPosts:130,referenceStart:"2026-06-06T00:00:00Z",referenceEnd:"2026-06-17T00:00:00Z"},
+      alternatives:[{code:"news_event",text:"новостной повод вернул внимание к посту"}],normConfidence:null,
+    }))};
+  if(type==="posts" && id===11) return {...base,level:0,originalLevel:0,levelLabel:"недостаточно точных данных",
+    levelSymbol:"·",signals:[],quality:{coverage:0,summary:"недостаточно точных данных для проверки",
+      codes:["no_precise_metrics"],unanalyzable:[]}};
   // Провайдерские различия метрик: у ВК есть репосты, у RuTube и MAX их не выдумываем.
   if(type!=="posts") return {...base,signals:base.signals.map(item=>({...item,metric:id===21 ? "shares" : id===41 ? "views" : "comments"}))};
   if(id===2) return {...base,status:"pending",level:null,originalLevel:null,levelLabel:"ещё не проанализирован",levelSymbol:"·",signals:[],quality:null,analyzedAt:null,lagSeconds:null,normVersion:null,detectorVersions:{}};

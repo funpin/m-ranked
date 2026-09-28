@@ -15,7 +15,7 @@ import numpy as np
 
 from .domain import Metric, PostSeries
 
-PREPARATION_VERSION = "2.1.0"
+PREPARATION_VERSION = "2.3.0"
 
 MINUTE, HOUR, DAY = 60, 3600, 86400
 
@@ -100,6 +100,8 @@ class Gap:
     start_age: float
     end_age: float
     delta: float
+    # A missing/invalid intermediate reading cannot become a gap-growth sign.
+    count_change_trusted: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +148,7 @@ class PreparedSeries:
     unsupported: frozenset[Metric]
     truncated_start: bool
     stale_seconds: float
+    quality_codes: tuple[str, ...] = ()
 
 
 def age_band(ages: np.ndarray) -> np.ndarray:
@@ -164,7 +167,14 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
     instants = np.fromiter((item.timestamp() for item in series.observed_at),
                            dtype=np.float64, count=len(series.observed_at))
     keep = instants <= analyzed_at.timestamp()
-    columns = {metric: np.asarray(column, dtype=np.float64)[keep] for metric, column in series.values.items()}
+    columns = {metric: np.asarray(series.exact_values(metric), dtype=np.float64)[keep]
+               for metric in series.values}
+    quality_codes = []
+    if any(value is not None and quality != "exact" for metric, column in series.values.items()
+           for value, quality, active in zip(column, series.qualities[metric], keep) if active):
+        quality_codes.append("non_exact_counters")
+    if any(flag for flag, active in zip(series.interval_uncertain, keep) if active):
+        quality_codes.append("uncertain_observations")
     collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64,
                             count=len(series.collected))
     collected = collected[collected <= analyzed_at.timestamp()] - published
@@ -177,6 +187,8 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
         prepared = _metric(metric, ages, raw, series, cadence, scales, covered)
         if prepared is not None:
             metrics[metric] = prepared
+    if ages.size and not metrics:
+        quality_codes.append("no_precise_metrics")
     first_step = cadence.expected_step_seconds(series.platform, np.zeros(1))[0]
     return PreparedSeries(
         series, analyzed_at, ages, _frozen(age_band(ages)), steps, metrics,
@@ -184,71 +196,48 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
         # Ранняя часть затухания без первых замеров не оценивается.
         truncated_start=bool(ages.size) and float(ages[0]) > first_step,
         stale_seconds=float(analyzed_at.timestamp() - published - ages[-1]) if ages.size else 0.0,
+        quality_codes=tuple(quality_codes),
     )
+
+
+def value_at(data: MetricSeries | None, age: float) -> float | None:
+    """A known endpoint, or interpolation only inside one trusted interval.
+
+    Never extrapolate a delayed first/last read or bridge missing, rounded,
+    uncertain, corrected or temporally disconnected observations.
+    """
+    if data is None or not data.ages.size:
+        return None
+    right = int(np.searchsorted(data.ages, age))
+    if right < data.ages.size and data.ages[right] == age:
+        return float(data.values[right])
+    if right == 0 or right == data.ages.size or data.flags[right]:
+        return None
+    return float(np.interp(age, data.ages[right-1:right+1], data.values[right-1:right+1]))
+
+
+def engagement_at(prepared: PreparedSeries, age: float) -> float | None:
+    """Missing reported engagement is unknown, not an omitted zero term."""
+    required = [metric for metric, column in prepared.series.values.items()
+                if metric is not Metric.VIEWS and any(
+                    value is not None and at <= prepared.analyzed_at
+                    for value, at in zip(column, prepared.series.observed_at))]
+    if not required:
+        return None
+    values = [value_at(prepared.metrics.get(metric), age) for metric in required]
+    return None if any(value is None for value in values) else float(sum(values))
 
 
 def confirm_unchanged(ages: np.ndarray, collected: np.ndarray, cadence: CollectionCadence,
                       platform: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Отличить «не менялось» от «нет данных» по журналу сбора аккаунта.
+    """Keep actual post observations; account cycles do not confirm a post read.
 
-    Сборщик пишет замер, только когда значения изменились, поэтому плато —
-    именно тот участок, где замеров нет. Без журнала такой участок выглядел
-    пробелом, и рывок, обрывающийся в плато, не судился вовсе.
-
-    Интервал между замерами подтверждён, если успешные циклы сбора шли по
-    нему без разрыва длиннее трёх ожидаемых шагов. Цикл опрашивает пост, как
-    только тот должен по своему шагу, поэтому значение не менялось как минимум
-    до «последний цикл минус шаг»: там ставится перенесённая точка с прежним
-    значением. Прирост остаётся на последнем шаге перед новым замером, а не
-    размазывается по всему интервалу. Цикл, оборвавшийся на простое, делит
-    интервал: до простоя — подтверждено, дальше — пробел. После последнего
-    замера так же продлевается хвост до последнего цикла.
-
-    Возвращает возрасты точек, индекс исходной строки для каждой (перенесённая
-    точка берёт значения предыдущей) и `covered[k]` — участок от точки k−1 до
-    k подтверждён журналом.
+    Retained as an adapter for callers carrying legacy account-cycle metadata.
+    A successful account cycle can omit a post or metric. It cannot narrow the
+    unknown time of a change or extend a plateau. Actual unchanged per-post
+    receipts belong in the input observations with their measured values.
     """
-    size = ages.size
-    rows = np.arange(size)
-    covered = np.zeros(size, dtype=bool)
-    if size == 0 or not collected.size:
-        return ages, rows, covered
-    collected = np.sort(collected[collected > ages[0]])
-
-    def chain(start: float, stop: float, limit: float) -> float:
-        """Последний цикл непрерывной цепочки от start, не дальше stop."""
-        left, right = np.searchsorted(collected, (start, stop), side="right")
-        inside = collected[left:right]
-        if not inside.size:
-            return start
-        broken = np.flatnonzero(np.diff(np.concatenate(([start], inside))) > limit)
-        return float(inside[broken[0] - 1]) if broken.size else float(inside[-1])
-
-    steps = np.maximum(cadence.expected_step_seconds(platform, ages[:-1]),
-                       cadence.expected_step_seconds(platform, ages[1:]))
-    limits = GAP_FACTOR * steps
-    covered[1:] = np.diff(ages) <= limits
-    # Перенесённые точки: (позиция вставки, возраст, строка-источник).
-    inserts: list[tuple[int, float, int]] = []
-    for index in np.flatnonzero(~covered[1:]):
-        start, stop, step = float(ages[index]), float(ages[index + 1]), float(steps[index])
-        last = chain(start, stop, limits[index])
-        covered[index + 1] = stop - last <= limits[index]
-        if last - step > start + step / 2:
-            inserts.append((index + 1, last - step, index))
-    tail = float(ages[-1])
-    step = float(cadence.expected_step_seconds(platform, np.array((tail,)))[0])
-    last = chain(tail, np.inf, GAP_FACTOR * step)
-    if last - step > tail + step / 2:
-        inserts.append((size, last - step, size - 1))
-    if not inserts:
-        return ages, rows, covered
-    where = np.array([item[0] for item in inserts])
-    return (np.insert(ages, where, [item[1] for item in inserts]),
-            np.insert(rows, where, [item[2] for item in inserts]),
-            # Участок до перенесённой точки подтверждён; следующий за ней
-            # наследует прежний признак исходного интервала.
-            np.insert(covered, where, True))
+    return ages, np.arange(ages.size), np.zeros(ages.size, dtype=bool)
 
 
 def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostSeries,
@@ -280,12 +269,14 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
     flags[1:][negative] |= np.uint8(PointFlag.NEGATIVE_DELTA)
     flags[1:][reset] |= np.uint8(PointFlag.COUNTER_RESET)
     flags[1:][gap] |= np.uint8(PointFlag.AFTER_GAP)
-    gap_index = np.flatnonzero(gap)
-    gaps = tuple(Gap(float(ages[index]), float(ages[index + 1]), float(delta[index]))
-                 for index in gap_index)
-    span = float(ages[-1] - ages[0])
-    coverage = 1.0 if span <= 0 else 1.0 - float(elapsed[gap].sum()) / span
-    grids = {scale: _grid(scale, ages, values, gap, reset, negative) for scale in scales}
+    missing = (flags[1:] & np.uint8(PointFlag.MISSING)) != 0
+    unusable = gap | missing
+    gap_index = np.flatnonzero(unusable)
+    gaps = tuple(Gap(float(ages[index]), float(ages[index + 1]), float(delta[index]),
+                     count_change_trusted=not bool(missing[index])) for index in gap_index)
+    span = float(all_ages[-1] - all_ages[0])
+    coverage = 1.0 if span <= 0 else float(elapsed[~unusable].sum()) / span
+    grids = {scale: _grid(scale, ages, values, unusable, reset, negative) for scale in scales}
     return MetricSeries(
         metric, _frozen(ages), _frozen(values), _frozen(flags), gaps, grids, coverage,
         source_counter=series.is_repost and metric is Metric.VIEWS,

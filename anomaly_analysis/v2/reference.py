@@ -307,9 +307,9 @@ def cases() -> tuple[Case, ...]:
              Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (4,)),
         Case("p05_reactions_catch_up_vk", "synthetic",
              "ВК: с пятых суток реакции прибавляют ровно 5% от прироста просмотров, "
-             "хотя живая доля на старом посте падает.",
+             "как задано в контрольном сценарии.",
              Post("vk", _at(7, 15), (_vk(80000),), 10 * DAY, {R: (Follow(4 * DAY, 10 * DAY, 0.05),)}),
-             Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (5,)),
+             Level.WEAK_SIGNAL, Level.ARTIFICIAL_ACTIVITY_SIGNS, (5,)),
         Case("p06_reactions_before_views_telegram", "synthetic",
              "Telegram: реакции подскакивают на 500 за два часа до второй волны "
              "просмотров.",

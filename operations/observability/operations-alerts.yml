@@ -85,6 +85,13 @@ groups:
           severity: warning
         annotations:
           summary: A new anomaly norm version shifted sharply and waits for manual review; analysis stays on the previous accepted version.
+      - alert: MRankedAnomalyReferenceNeedsRenewal
+        expr: mranked_anomaly_reference_accounts > 0 and (mranked_anomaly_reference_expires_at_unixtime - time() < 3 * 86400)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: The frozen MAX reference needs a validated replacement; posts outside its publication window receive no new reference signals.
       - alert: MRankedAnomalyNormJobStale
         expr: time() - mranked_anomaly_norm_last_run_unixtime > 172800
         for: 1h

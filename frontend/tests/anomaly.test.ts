@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  SIGNAL_LEGEND, boundarySnapshotIds, intervalText, miniChart, scaleText, signalCount, signalMarkers, summaryLine,
+  SIGNAL_LEGEND, boundarySnapshotIds, intervalText, miniChart, referenceExplanation, scaleText, signalCount, signalMarkers, summaryLine,
 } from "../lib/anomaly";
 import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "../lib/types";
 
@@ -59,7 +59,7 @@ test("interval boundaries become the nearest saved points and markers keep their
   const [marker] = signalMarkers(analysis());
   assert.equal(marker!.pattern, 1);
   assert.equal(marker!.to - marker!.from, 24 * 3600_000);
-  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 9);
+  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 11);
 });
 
 test("linear signal draws its fitted line only inside the interval", () => {
@@ -89,4 +89,25 @@ test("cross-metric signals overlay reactions and views, ERV and synchrony are ba
   assert.deepEqual(erv.type === "bars" ? erv.bars.map((bar) => bar.value) : [], [0.13, 0.037]);
   const sync = miniChart(signal({ pattern: 8, render: { kind: "synchrony", startAge: 0, endAge: 3600, posts: 5, quiet: 2 } }), rows, PUBLISHED);
   assert.deepEqual(sync.type === "bars" ? sync.bars.map((bar) => bar.value) : [], [5, 2]);
+});
+
+test("endpoint references reuse bars with saved counts and explicit historical scope", () => {
+  const s = signal({ pattern: 12, render: { kind: "reference", startAge: 86400, endAge: 259200,
+    observed: 900, expected: 310, upper: 520, fitPosts: 266, calibrationPosts: 130,
+    referenceStart: "2026-09-06T00:00:00Z", referenceEnd: "2026-09-17T00:00:00Z" } });
+  const chart = miniChart(s, [], PUBLISHED);
+  assert.equal(chart.type, "bars");
+  assert.deepEqual(chart.type === "bars" ? chart.bars.map(bar => bar.value) : [], [900, 310, 520]);
+  assert.match(referenceExplanation(s)!, /первым суткам/);
+  assert.match(referenceExplanation(s)!, /130 для общей границы/);
+  assert.match(referenceExplanation(s)!, /не означает вероятность/);
+  assert.equal(referenceExplanation(signal()), null);
+});
+
+test("no precise metrics is an abstention, not a calm normality claim", () => {
+  const line = summaryLine(analysis({ level: 0, signals: [], quality: {
+    coverage: 0, codes: ["no_precise_metrics"], summary: "нет точных данных", unanalyzable: [] } }));
+  assert.equal(line.label, "недостаточно точных данных");
+  assert.equal(line.level, null);
+  assert.equal(line.tone, "neutral");
 });

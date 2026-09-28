@@ -12,7 +12,7 @@ import { NeighborContextTimeline } from "@/components/neighbor-context-timeline"
 import { LevelIcon, PatternIcon } from "@/components/anomaly-icons";
 import { legacyDate } from "@/lib/format";
 import { publicationHref } from "@/lib/entity-routes";
-import { FAMILY_NAMES, METRIC_NAMES, intervalText, markerId, miniChart, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
+import { FAMILY_NAMES, METRIC_NAMES, intervalText, markerId, miniChart, referenceExplanation, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
 import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
 import type { NeighborContextLoad } from "@/lib/neighbor-context-loader";
 import type { ContextWindow } from "@/lib/neighbor-context";
@@ -118,6 +118,7 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
             {signal.formula}. {signal.alternatives.map((item) => item.text).join("; ")}
           </TooltipContent></Tooltip>
         </div>
+        {referenceExplanation(signal) ? <p className="text-muted-foreground text-xs" data-testid="reference-explanation">{referenceExplanation(signal)}</p> : null}
         <MiniChart chart={miniChart(signal, rows, publishedAt)} label={title} />
         {onShow ? <button type="button" onClick={() => onShow(markerId(signal, index))}
           className="text-foreground hover:bg-accent focus-visible:ring-ring/50 inline-flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium focus-visible:ring-[3px] focus-visible:outline-none">
@@ -229,7 +230,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
               })}
             </ol>
           </> : (
-            <p className="text-muted-foreground">{analysis.status === "pending" ? "Пост ещё не проанализирован: анализ идёт по расписанию после первых замеров." : "Признаков аномальной динамики не найдено."}</p>
+            <p className="text-muted-foreground">{analysis.status === "pending" ? "Пост ещё не проанализирован: анализ идёт по расписанию после первых замеров." : analysis.quality?.codes.includes("no_precise_metrics") ? "Недостаточно точных данных для проверки. Отсутствие сигнала не подтверждает обычность статистики." : "Признаков аномальной динамики не найдено."}</p>
           )}
         </CollapsibleContent>
       </Collapsible>

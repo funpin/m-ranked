@@ -1,0 +1,65 @@
+{
+  "base_commit": "ea8326ebd896bf8db5d4264f2b66c50403881caf",
+  "branch": "codex/smart-engagement-research-20260928",
+  "release_source_verification": {
+    "api_web_actual_release": {
+      "checked": 442,
+      "matched": 442
+    },
+    "collectors_actual_workdir": {
+      "checked": 442,
+      "matched": 442
+    }
+  },
+  "local_database": {
+    "snapshot_latest_observed_at": "2026-09-27T16:30:30.029558+00:00",
+    "publication_latest_rows": 70811,
+    "poll_receipts": 44,
+    "receipt_min": "2026-09-27T16:29:20.578732+00:00",
+    "receipt_max": "2026-09-27T16:45:53.105084+00:00",
+    "note": "maximum timestamp does not establish uniform completeness"
+  },
+  "endpoint_refresh": {
+    "posts": 1175,
+    "points": 2298,
+    "latest_returned_observation": "2026-09-27T22:50:13.218202+00:00",
+    "read_only": true,
+    "statement_timeout_seconds": 60,
+    "raw_sha256": "bd3a32266499c048eb52bf60096f99ab5167d70718a04ffabe9733f8603f442d"
+  },
+  "input_hashes": {
+    "original_panel_uncompressed": "a43c6bf499c08218e04f969f5ef247c6060e49c9abcacdf1245b658ed3983b96",
+    "final_panel_uncompressed": "9f0ff271628584b78ba3350587623826a1c96f1e696976a965307e356fa0df22"
+  },
+  "runtime": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1"
+  },
+  "supplied_sources_sha256": {
+    "03074801211244940.pdf": "f8bef1fb8b0a091fe54044c275d3f2c35feefd95f50957f59d554501289a4403",
+    "1-s2.0-S0167404822004059-main.pdf": "257342f6231e5aa85defd263ec351c178429106db7b7f33badff669ddf95bf84",
+    "21-0917.pdf": "59792fdc46a731da310af54bfe4ac985d58d01ab4f181a9f29009d9fd777269b",
+    "2939672.2939747.pdf": "4bee62064152379a3902508ba50fbff1d9cc3c707fad611663abef85c631fa9a",
+    "3366423.3380256.pdf": "44ac51dc39a3f1c859e118bb4c50d017a4e8e96875be7ee65dbc9bc47231671d",
+    "83031481_2642987862604269_8519189131945836544_n.pdf": "e74dd3e5ea7b455b485589bc89cbd893bfe096639364797f313ea70d7c02cef0",
+    "J.TECHSOC.2021.101588.pdf": "416d32020cc46a54a40f8153666ed0ed26ab08338ed30c780d64441b6b5a8da9",
+    "j.jbusres.2016.01.025.pdf": "f6425bc69233f59f951191c0e3e30c83997a6a802f6df538f191a4114374ea5b",
+    "s10639-016-9558-x.pdf": "5ee6b6c8d6322d9a8b711a04c47b47a09511013088ae7323b44bb5e999ef7903",
+    "s11280-019-00727-4.pdf": "f36234a4bbc55f28f8736a4fb4fc7935d439aff49f26ad797bea760a95a8233d",
+    "s13278-014-0241-1.pdf": "10988d40dc8971e62a8ba4cf5906dcc08deea42e0ece3341752d0c5fdfa48ecb",
+    "s13278-022-00928-2.pdf": "906669bb7ff9241acf76c83d5fec7c6e3a2c75112fcfc346b2f7c0bf6421856b",
+    "research_keywords_smart_engagement_ru.md": "fd1835794e2a06c05e6ec6424ffe17c34b23d17a1996aeded4a2c822c026f23d"
+  },
+  "reproducibility": {
+    "full_rerun_byte_identical": true,
+    "result_sha256": "1b0775942319de8d1d1ec0b222de6693f0afaf57c2025955529513e2720ee9cb"
+  },
+  "method_files_sha256": {
+    "scripts/export_local_panel.py": "bfe8504adfeb3869ebb17efd19c8677eb744ded8689d8e982ceb6747f9778587",
+    "scripts/merge_endpoint_refresh.py": "3998aaace4b4147e5f5b4cb4f16e16e36adb985331405efcf04fd6c6d0fa5ee3",
+    "scripts/observable_validation.py": "f0e79e3309f2e777676caa4121238fe40082791340e32ea79b6d92b3dbfbb5dc",
+    "sql/holdout_endpoints.sql": "10dd72eb5bf2eb8174233a712f7caf9dd7dc41e21309256daac9b6e6b12d8193",
+    "sql/observable_panel.sql": "67c4c11d60dad0efa0f4fa298766e539243b10fd86f034df924f04014dea0d61"
+  }
+}

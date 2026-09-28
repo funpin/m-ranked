@@ -4237,7 +4237,7 @@ components:
       required: [pattern, symbol, title, family, metric, strength, startAt, endAt, scaleSeconds,
         formula, render, alternatives, normConfidence]
       properties:
-        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10] }
+        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12] }
         symbol: { type: string, maxLength: 4 }
         title: { type: string, maxLength: 120 }
         family: { type: string, enum: [velocity, shape, cross_metric, synchrony] }
@@ -4252,7 +4252,7 @@ components:
           type: object
           required: [kind, startAge, endAge]
           properties:
-            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, expected, gap, ratio, erv] }
+            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, expected, gap, ratio, erv, reference] }
             startAge: { type: integer }
             endAge: { type: integer }
           additionalProperties:
@@ -4280,7 +4280,7 @@ components:
           maxItems: 16
           items: { type: string }
         unanalyzable:
-          description: Intervals where incomplete measurements make any conclusion impossible.
+          description: Intervals where incomplete measurements prevent inference about within-interval dynamics; validated endpoint comparisons remain possible.
           type: array
           maxItems: 64
           items:

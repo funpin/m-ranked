@@ -15,7 +15,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "gap_growth"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 PATTERN = 4
 FAMILY = Family.SHAPE
 NEEDS_NORM = True
@@ -43,7 +43,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         if data is None or fit is None or data.source_counter:
             continue
         for gap in data.gaps:
-            if gap.start_age < MIN_GAP_AGE or gap.delta <= 0:
+            if not gap.count_change_trusted or gap.start_age < MIN_GAP_AGE or gap.delta <= 0:
                 continue
             model = float(fit.expected(np.array([gap.start_age]), np.array([gap.end_age]))[0])
             before = float(gap.start_age - BEFORE_WINDOW)
@@ -63,5 +63,5 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
                                    timedelta(seconds=duration), formula,
                                    {"kind": "gap", "actual": round(gap.delta), "expected": round(model, 1),
                                     "rateBefore": round(recent * HOUR, 2)},
-                                   ("collection_outage_during_organic_wave",), context.norm_confidence))
+                                   ("collection_outage_during_organic_wave",), context.confidence_for(metric, gap.start_age)))
     return tuple(signs)

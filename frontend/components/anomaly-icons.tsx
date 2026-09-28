@@ -1,5 +1,5 @@
 import {
-  ArrowDownUp, ArrowUpToLine, ChevronsUp, CircleAlert, CircleCheck, CircleDashed, Ellipsis,
+  ChartNoAxesCombined, TrendingUp, ArrowDownUp, ArrowUpToLine, ChevronsUp, CircleAlert, CircleCheck, CircleDashed, Ellipsis,
   FastForward, Layers, MoveUpRight, OctagonAlert, Percent, TriangleAlert, Zap, type LucideIcon,
   type LucideProps,
 } from "lucide-react";
@@ -9,7 +9,7 @@ import {
  *  других клиентов, но экран рисует только эти значки. */
 const PATTERN_ICONS: Readonly<Record<number, LucideIcon>> = {
   1: MoveUpRight, 2: Zap, 4: Ellipsis, 5: FastForward, 6: ArrowDownUp,
-  7: ChevronsUp, 8: Layers, 9: ArrowUpToLine, 10: Percent,
+  7: ChevronsUp, 8: Layers, 9: ArrowUpToLine, 10: Percent, 11: ChartNoAxesCombined, 12: TrendingUp,
 };
 
 const LEVEL_ICONS: Readonly<Record<number, LucideIcon>> = {

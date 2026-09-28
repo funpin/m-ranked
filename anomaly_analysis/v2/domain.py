@@ -42,7 +42,7 @@ class Level(IntEnum):
 
 # Паттерн 3 — свойство паттернов 1, 2 и 4 на другом масштабе, а не отдельный
 # признак: он виден в поле `scale`, собственного номера у признака нет.
-SIGN_PATTERNS = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10})
+SIGN_PATTERNS = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 
 
 def _utc(value: datetime, name: str) -> datetime:
@@ -67,11 +67,14 @@ class PostSeries:
     is_repost: bool
     observed_at: tuple[datetime, ...]
     values: Mapping[Metric, tuple[int | None, ...]]
-    # Начала успешных циклов сбора аккаунта. Сборщик пишет замер, только когда
-    # значения изменились (и контрольный — раз в сутки), поэтому долгое
-    # отсутствие замеров при идущем сборе значит «не менялось», а не «нет
-    # данных». Пусто — журнал сбора неизвестен, и такой интервал — пробел.
+    # Account-cycle metadata is retained for compatibility. It does not prove
+    # that this post or every metric was read and must not create zero deltas.
     collected: tuple[datetime, ...] = ()
+    # Omission is reserved for programmatic, already validated exact series
+    # (e.g. the synthetic generator). External loaders must provide qualities,
+    # including "unknown" when the source does not attest precision.
+    qualities: Mapping[Metric, tuple[str, ...]] | None = None
+    interval_uncertain: tuple[bool, ...] = ()
 
     def __post_init__(self) -> None:
         if self.platform not in PLATFORMS:
@@ -90,8 +93,32 @@ class PostSeries:
                 raise ValueError("cumulative counters must be non-negative")
             copied[Metric(metric)] = column
         object.__setattr__(self, "values", MappingProxyType(copied))
+        quality = ({metric: ("exact",) * len(instants) for metric in copied}
+                   if self.qualities is None else
+                   {Metric(metric): tuple(column) for metric, column in self.qualities.items()})
+        if any(len(column) != len(instants) for column in quality.values()):
+            raise ValueError("quality is not aligned with observed_at")
+        if any(not isinstance(item, str) for column in quality.values() for item in column):
+            raise ValueError("quality entries must be strings")
+        for metric in copied:
+            quality.setdefault(metric, ("unknown",) * len(instants))
+        uncertain = tuple(self.interval_uncertain) or (False,) * len(instants)
+        if len(uncertain) != len(instants) or any(type(item) is not bool for item in uncertain):
+            raise ValueError("interval_uncertain must be aligned booleans")
+        object.__setattr__(self, "qualities", MappingProxyType(quality))
+        object.__setattr__(self, "interval_uncertain", uncertain)
         object.__setattr__(self, "collected",
                            tuple(sorted(_utc(item, "collected") for item in self.collected)))
+
+
+    def exact_values(self, metric: Metric) -> tuple[int | None, ...] | None:
+        """Values usable by point-count detectors; rounded bounds are separate."""
+        column = self.values.get(metric)
+        if column is None:
+            return None
+        return tuple(value if quality == "exact" and not uncertain else None
+                     for value, quality, uncertain in zip(
+                         column, self.qualities[metric], self.interval_uncertain))
 
 
 @dataclass(frozen=True, slots=True)

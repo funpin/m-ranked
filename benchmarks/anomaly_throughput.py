@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 import json
 import platform as host
 import resource
@@ -32,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from anomaly_analysis.v2.detectors import DetectorContext  # noqa: E402
 from anomaly_analysis.v2.domain import Metric, PostSeries  # noqa: E402
 from anomaly_analysis.v2.levels import run_detectors, verdict  # noqa: E402
+from anomaly_analysis.v2.mature_reference import bundled_reference  # noqa: E402
 from anomaly_analysis.v2.norms import build_norms  # noqa: E402
 from anomaly_analysis.v2.schedule import ScheduleConfig, interval  # noqa: E402
 from anomaly_analysis.v2.series import DAY, HOUR, CollectionCadence, age_band, prepare  # noqa: E402
@@ -46,7 +48,7 @@ MAX_POINTS = 1200
 BUDGET_MS = 50.0
 BUDGET_CORES = 0.2
 BUDGET_MEMORY_MB = 384
-NOW = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 28, 3, tzinfo=timezone.utc)
 CADENCE = CollectionCadence()
 SCHEDULE = ScheduleConfig()
 
@@ -112,6 +114,9 @@ def main() -> int:
     platforms, ages = population(rng, arguments.posts)
     required = hourly_load(platforms, ages)
     norms = mature_norms(rng)
+    reference = bundled_reference()
+    reference_account = next(iter(reference.account_counts))
+    reference_eligible = 0
     chosen = rng.choice(arguments.posts, size=min(arguments.sample, arguments.posts), replace=False)
     timings = {"prepare": [], "detectors": [], "level": [], "total": []}
     by_band: dict[int, list[float]] = {}
@@ -120,6 +125,10 @@ def main() -> int:
     for order, index in enumerate(chosen):
         platform, age = str(platforms[index]), float(ages[index])
         series = synthetic(rng, int(index), platform, age, pumped=order % 20 == 0, account=int(index) % 400)
+        if platform == "max":
+            # Exercise supported accounts in the shipped reference's date window.
+            series = replace(series, account_id=reference_account)
+            reference_eligible += int(reference.available_at <= series.published_at < reference.expires_at and age >= 72 * HOUR)
         points.append(len(series.observed_at))
         # Работник держит в памяти пачку из 50 рядов — так же и здесь.
         batch.append(series)
@@ -131,6 +140,7 @@ def main() -> int:
         norm_set = norms[platform]
         context = DetectorContext(platform, norm_set.for_account(series.account_id))
         signs, versions = run_detectors(prepared, context)
+        signs.extend(reference.detect(series, NOW))
         detected_at = time.perf_counter()
         verdict(prepared, context, signs, versions)
         finished = time.perf_counter()
@@ -148,6 +158,7 @@ def main() -> int:
         "date": datetime.now(timezone.utc).date().isoformat(),
         "host": f"{host.machine()} · Python {host.python_version()} · numpy {np.__version__}",
         "posts": arguments.posts, "sample": int(chosen.size),
+        "reference_scope_cases": reference_eligible,
         "points_p50": float(np.median(points)), "points_max": int(max(points)),
         "required_analyses_per_hour": round(required),
         "ms": {stage: {"p50": round(float(np.percentile(np.array(values) * 1000, 50)), 2),

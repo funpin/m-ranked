@@ -1,0 +1,568 @@
+{
+  "input_sha256": "a64738765684947c754270768dbff4ae56d15962bf6dcaf74ac0838ca5871414",
+  "model": {
+    "version": "max-2026-09-v1",
+    "fit": 266,
+    "calibration": 130,
+    "accounts": 16,
+    "cutoff": 2.6462961943081322
+  },
+  "evaluation": {
+    "fit": {
+      "catalog": 349,
+      "coverage": {
+        "eligible": 266,
+        "missing_window": 51,
+        "known_decrease": 21,
+        "insufficient_account_history": 11
+      }
+    },
+    "cal": {
+      "catalog": 348,
+      "coverage": {
+        "missing_window": 89,
+        "eligible": 130,
+        "known_decrease": 100,
+        "insufficient_account_history": 29
+      }
+    },
+    "reused": {
+      "catalog": 489,
+      "coverage": {
+        "eligible": 193,
+        "insufficient_account_history": 50,
+        "known_decrease": 241,
+        "missing_window": 5
+      },
+      "observed_flags": {
+        "n": 193,
+        "hits": 9,
+        "fraction": 0.046632124352331605,
+        "accounts": 14,
+        "account_bootstrap95": [
+          0.01625688434303698,
+          0.09756556024206857
+        ]
+      },
+      "patterns": {
+        "12": 8,
+        "11": 3
+      },
+      "accounts": [
+        {
+          "account_id": "0e70f2df-9c22-5358-b567-05cf174c0964",
+          "n": 39,
+          "hits": 3,
+          "fraction": 0.07692307692307693,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "11504a4a-069e-5fac-b07a-e26b04220f05",
+          "n": 12,
+          "hits": 1,
+          "fraction": 0.08333333333333333,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "28f9015a-cef3-5051-94f8-d9c1d5746a95",
+          "n": 3,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "2d1406c4-9657-5129-880f-708552437cda",
+          "n": 33,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "3cbe83e5-8f02-5acf-96b3-c6804717063b",
+          "n": 3,
+          "hits": 2,
+          "fraction": 0.6666666666666666,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "4434e000-be29-55bb-9993-23c338a03ad3",
+          "n": 5,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "61e968a9-aee8-53bb-b690-9dcf08fa7339",
+          "n": 2,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "63179d57-cd8a-5f2d-ac22-3093c91e8add",
+          "n": 5,
+          "hits": 1,
+          "fraction": 0.2,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "7427f28c-ebc2-5f0f-acb3-b0bff15bf09a",
+          "n": 3,
+          "hits": 1,
+          "fraction": 0.3333333333333333,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "7722d51a-c0f3-5866-923b-d633de15370f",
+          "n": 1,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "7b2f5b7d-4146-5bc3-8449-1812211cb9f8",
+          "n": 29,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "9dbb9387-1c47-59a3-8983-a26bc206eb5f",
+          "n": 15,
+          "hits": 1,
+          "fraction": 0.06666666666666667,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "bace1ad7-cdb9-5537-8d51-a2ee7158a20a",
+          "n": 15,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "c4cde0cf-52e9-50f7-8b33-1c5a8f596d14",
+          "n": 28,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        }
+      ],
+      "injections": {
+        "early:0.1": {
+          "n": 184,
+          "hits": 2,
+          "fraction": 0.010869565217391304,
+          "accounts": 14,
+          "account_bootstrap95": [
+            0.0,
+            0.03076923076923077
+          ]
+        },
+        "early:0.3": {
+          "n": 184,
+          "hits": 2,
+          "fraction": 0.010869565217391304,
+          "accounts": 14,
+          "account_bootstrap95": [
+            0.0,
+            0.03076923076923077
+          ]
+        },
+        "early:1.0": {
+          "n": 184,
+          "hits": 26,
+          "fraction": 0.14130434782608695,
+          "accounts": 14,
+          "account_bootstrap95": [
+            0.07936507936507936,
+            0.25555764411027565
+          ]
+        },
+        "late:0.1": {
+          "n": 184,
+          "hits": 20,
+          "fraction": 0.10869565217391304,
+          "accounts": 14,
+          "account_bootstrap95": [
+            0.04716577971294953,
+            0.1826236309326252
+          ]
+        },
+        "late:0.3": {
+          "n": 184,
+          "hits": 180,
+          "fraction": 0.9782608695652174,
+          "accounts": 14,
+          "account_bootstrap95": [
+            0.9425768310636732,
+            1.0
+          ]
+        },
+        "late:1.0": {
+          "n": 184,
+          "hits": 184,
+          "fraction": 1.0,
+          "accounts": 14,
+          "account_bootstrap95": null
+        }
+      }
+    },
+    "fresh": {
+      "catalog": 9,
+      "coverage": {
+        "eligible": 4,
+        "known_decrease": 3,
+        "missing_window": 1,
+        "insufficient_account_history": 1
+      },
+      "observed_flags": {
+        "n": 4,
+        "hits": 0,
+        "fraction": 0.0,
+        "accounts": 4,
+        "account_bootstrap95": null
+      },
+      "patterns": {},
+      "accounts": [
+        {
+          "account_id": "0e70f2df-9c22-5358-b567-05cf174c0964",
+          "n": 1,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "2d1406c4-9657-5129-880f-708552437cda",
+          "n": 1,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "7b2f5b7d-4146-5bc3-8449-1812211cb9f8",
+          "n": 1,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        },
+        {
+          "account_id": "c4cde0cf-52e9-50f7-8b33-1c5a8f596d14",
+          "n": 1,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 1,
+          "account_bootstrap95": null
+        }
+      ],
+      "injections": {
+        "early:0.1": {
+          "n": 4,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        },
+        "early:0.3": {
+          "n": 4,
+          "hits": 1,
+          "fraction": 0.25,
+          "accounts": 4,
+          "account_bootstrap95": [
+            0.0,
+            0.75
+          ]
+        },
+        "early:1.0": {
+          "n": 4,
+          "hits": 1,
+          "fraction": 0.25,
+          "accounts": 4,
+          "account_bootstrap95": [
+            0.0,
+            0.75
+          ]
+        },
+        "late:0.1": {
+          "n": 4,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        },
+        "late:0.3": {
+          "n": 4,
+          "hits": 4,
+          "fraction": 1.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        },
+        "late:1.0": {
+          "n": 4,
+          "hits": 4,
+          "fraction": 1.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      }
+    }
+  },
+  "contamination": {
+    "target_accounts": 5,
+    "clear_target_posts": 54,
+    "scenarios": {
+      "0.1:none": {
+        "cutoff": 2.6462961943081322,
+        "new_flags": {
+          "n": 54,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      },
+      "0.1:fit": {
+        "cutoff": 2.7315209172121855,
+        "new_flags": {
+          "n": 54,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      },
+      "0.1:cal": {
+        "cutoff": 2.6462961943081322,
+        "new_flags": {
+          "n": 54,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      },
+      "0.1:fit_and_cal": {
+        "cutoff": 2.7315209172121855,
+        "new_flags": {
+          "n": 54,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      },
+      "0.3:none": {
+        "cutoff": 2.6462961943081322,
+        "new_flags": {
+          "n": 54,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      },
+      "0.3:fit": {
+        "cutoff": 2.5611133731885447,
+        "new_flags": {
+          "n": 54,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      },
+      "0.3:cal": {
+        "cutoff": 2.6462961943081322,
+        "new_flags": {
+          "n": 54,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      },
+      "0.3:fit_and_cal": {
+        "cutoff": 2.5611133731885447,
+        "new_flags": {
+          "n": 54,
+          "hits": 0,
+          "fraction": 0.0,
+          "accounts": 4,
+          "account_bootstrap95": null
+        }
+      },
+      "1.0:none": {
+        "cutoff": 2.6462961943081322,
+        "new_flags": {
+          "n": 54,
+          "hits": 8,
+          "fraction": 0.14814814814814814,
+          "accounts": 4,
+          "account_bootstrap95": [
+            0.09174311926605505,
+            1.0
+          ]
+        }
+      },
+      "1.0:fit": {
+        "cutoff": 2.2563915774362266,
+        "new_flags": {
+          "n": 54,
+          "hits": 4,
+          "fraction": 0.07407407407407407,
+          "accounts": 4,
+          "account_bootstrap95": [
+            0.03636363636363636,
+            0.6666666666666666
+          ]
+        }
+      },
+      "1.0:cal": {
+        "cutoff": 2.8090093341439215,
+        "new_flags": {
+          "n": 54,
+          "hits": 4,
+          "fraction": 0.07407407407407407,
+          "accounts": 4,
+          "account_bootstrap95": [
+            0.03636363636363636,
+            0.6666666666666666
+          ]
+        }
+      },
+      "1.0:fit_and_cal": {
+        "cutoff": 2.2563915774362266,
+        "new_flags": {
+          "n": 54,
+          "hits": 4,
+          "fraction": 0.07407407407407407,
+          "accounts": 4,
+          "account_bootstrap95": [
+            0.03636363636363636,
+            0.6666666666666666
+          ]
+        }
+      }
+    }
+  },
+  "archive_replay": {
+    "scope": "same_full_series_quality_fixed_v2_without_norms_or_sibling_context_not_live_scores",
+    "coverage": {
+      "eligible": 193,
+      "not_in_archive": 0
+    },
+    "level_transitions": {
+      "0->0": 183,
+      "0->1": 9,
+      "2->2": 1
+    },
+    "new_patterns": {
+      "12": 8,
+      "11": 3
+    },
+    "examples": [
+      {
+        "publication_id": "1378c38a-d2b1-5888-9722-acda7f8a014e",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          12
+        ]
+      },
+      {
+        "publication_id": "1c7b5d87-19bd-59b8-af69-b0910f780446",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          11,
+          12
+        ]
+      },
+      {
+        "publication_id": "4cb92e00-7085-564b-b92f-2272709270e3",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          11
+        ]
+      },
+      {
+        "publication_id": "7c1bc379-2499-5fa6-96d6-f0c9d37b9c00",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          12
+        ]
+      },
+      {
+        "publication_id": "97eac52d-e2ab-5ce5-ae7d-9c800d076fe0",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          12
+        ]
+      },
+      {
+        "publication_id": "a376381c-7870-5633-9e9e-1164ebc22c56",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          12
+        ]
+      },
+      {
+        "publication_id": "cbef125d-b01a-5690-a35d-1c01cd93f11d",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          12
+        ]
+      },
+      {
+        "publication_id": "e2b55cec-876f-5436-abb8-6cae4a69675b",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          12
+        ]
+      },
+      {
+        "publication_id": "eefe73c3-dab0-55ae-b856-ac60084bc2fb",
+        "old_level_without_norm": 0,
+        "new_level_without_norm": 1,
+        "new_patterns": [
+          11,
+          12
+        ]
+      }
+    ],
+    "runtime_ms": {
+      "n": 193,
+      "assess_p95": 2.0253497874364252,
+      "new_reference_p95": 0.14562455471605062
+    }
+  },
+  "limitations": [
+    "unlabeled_reference_not_fraud_precision",
+    "reused_control_not_independent",
+    "fresh_posts_clustered_small_window",
+    "counterfactual_not_real_manipulation_labels"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "production_base": "ea8326e",
+  "model": {
+    "version": "max-2026-09-v1",
+    "fit": 266,
+    "calibration": 130,
+    "accounts": 16,
+    "cutoff": 2.6462961943081322
+  },
+  "source_sha256": {
+    "research/smart-engagement-2026-09/sql/release_endpoints.sql": "5e1275f5f5b2d7c1805453a4e919e5f4ced60ea643287c2368192c21ac11f85d",
+    "research/smart-engagement-2026-09/sql/release_replay.sql": "438aa93c624b66827fca93efd3326dd38d41bc582c542b52484aafbdf39dc4cc",
+    "research/smart-engagement-2026-09/scripts/release_validation.py": "d6f118fcc8172148aa3ad51490cf2d26d12fec7f03f006cc7f45650a3f13d1bf",
+    "anomaly_analysis/v2/mature_reference.py": "0d802345e91049ea1f3f832aca67626d7dd6bce495ccd25be072b16ff0f2af96",
+    "anomaly_analysis/v2/references/max_2026_09.json": "099d2ea9c7ab61aa0387493f4c009861a6bc083afe2a27913f7815cf984b10f7"
+  },
+  "data_uncompressed_sha256": {
+    "release_endpoints": "a64738765684947c754270768dbff4ae56d15962bf6dcaf74ac0838ca5871414",
+    "release_replay": "42a21ca4ed353b94fc316cdcafd5be4cd95b35151462d64ee3484dd5fce09622"
+  },
+  "observation_cutoff": "2026-09-28T03:18:11Z",
+  "training_availability_cutoff": "2026-09-20T00:00:00Z",
+  "sql_correction_fix": "Exclude superseded rows as of availability, including successors outside endpoint age window; fit/cal coefficients unchanged.",
+  "constraints": {
+    "production_writes": false,
+    "new_tables": false,
+    "new_polling": false,
+    "retention_extended": false
+  },
+  "local_validation": {
+    "python_full_passed": 842,
+    "python_optional_skipped": 115,
+    "postgres_passed": 11,
+    "frontend_unit_passed": 159,
+    "browser_passed": 205,
+    "browser_viewport_skipped": 5,
+    "new_feature_browser_passed": 4,
+    "build": true,
+    "bundle_budgets": true,
+    "backfill_fail_closed": true,
+    "visual_desktop_mobile_reviewed": true
+  },
+  "precision_claim": "Historical deviation only; real fraud precision and real false-positive rate not estimated.",
+  "security_scan": "Intended public tree: five pre-existing reviewed false positives (public checkpoint names and test CSRF placeholders); no new findings. Git-history scan is a separate release gate."
+}

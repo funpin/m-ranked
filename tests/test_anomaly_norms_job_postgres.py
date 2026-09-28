@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from anomaly_analysis.norms_job import NormJob
-from anomaly_analysis.v2.norms import NormStatus
+from anomaly_analysis.v2.norms import ERV, NormStatus
 from anomaly_analysis.v2.series import CollectionCadence
 from anomaly_analysis.v2.store import PostgresAnomalyStore
 
@@ -23,6 +23,11 @@ def databases():
         pytest.skip("disposable anomaly PostgreSQL role DSNs are required")
     if "anomaly_it" not in values["admin"] or not any(host in values["admin"] for host in ("127.0.0.1", "localhost")):
         raise AssertionError("anomaly integration test requires the dedicated disposable local anomaly_it database")
+    # The live ingestion contract creates a revision before its first snapshot.
+    # A fresh database has no prior batch whose revision a fixture can inherit.
+    with psycopg.connect(values["admin"], autocommit=True) as connection:
+        connection.execute("INSERT INTO analytics.dataset_revision(cause,correlation_id) "
+                           "VALUES ('ingestion',gen_random_uuid())")
     yield values
 
 
@@ -65,5 +70,17 @@ def test_job_writes_a_version_that_the_worker_can_read(databases):
     assert status in {NormStatus.ACCEPTED, NormStatus.DRIFT_REVIEW}
     norms = store.read_norms(version, "max")
     assert norms is not None and norms.for_account(account).posts == 22
+    account_norm = norms.for_account(account)
+    assert account_norm.cells[(ERV, 0)].confidence == pytest.approx(22 / 50)
+    assert account_norm.confidence_for(ERV, 0) == pytest.approx(22 / 50)
     if status is NormStatus.ACCEPTED:
         assert store.latest_accepted_norm_version() == version
+
+
+def test_newer_incompatible_norm_cannot_replace_exact_quality_version(databases):
+    from anomaly_analysis.v2.norms import NORM_MODEL_VERSION
+    store=PostgresAnomalyStore(databases["worker"])
+    current=store.write_norm_version(NORM_MODEL_VERSION,NormStatus.ACCEPTED,[])
+    store.write_norm_version("2.0.0",NormStatus.ACCEPTED,[])
+    store.write_norm_version("2.1.0",NormStatus.ACCEPTED,[])
+    assert store.latest_accepted_norm_version()==current

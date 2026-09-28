@@ -26,10 +26,11 @@ function visibleDomain(chart: Extract<MiniChart, { type: "lines" }>, axis: "left
 export default function AnomalyMiniChart({ chart, label }: { chart: MiniChart; label: string }) {
   if (chart.type === "bars") {
     const config: ChartConfig = { value: { label, color: "var(--chart-2)" } };
+    const labelSpace = Math.max(32, ...chart.bars.map((bar) => format(bar.value, chart.percent).length * 7 + 8));
     return (
       <div role="img" aria-label={`${label}: ${chart.bars.map((bar) => `${bar.label} ${format(bar.value, chart.percent)}`).join(", ")}`}>
         <ChartContainer config={config} className="h-28 w-full max-w-sm">
-          <BarChart data={chart.bars} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+          <BarChart data={chart.bars} layout="vertical" margin={{ left: 8, right: labelSpace, top: 4, bottom: 4 }}>
             <XAxis type="number" hide />
             <YAxis type="category" dataKey="label" width={112} tickLine={false} axisLine={false} fontSize={11} />
             <Bar dataKey="value" radius={4} isAnimationActive={false} label={{ position: "right", fontSize: 11, formatter: (value: unknown) => format(Number(value), chart.percent) }}>

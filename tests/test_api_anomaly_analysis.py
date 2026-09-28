@@ -43,7 +43,7 @@ def test_stored_verdict_is_served_as_is_and_matches_the_contract():
            "review_status": "unreviewed"}
     body = analysis.analysis_body(str(case.subject.publication_id), 12, row)
     _validate(body)
-    assert body["level"] == 3 and body["levelLabel"] == "признаки искусственной активности"
+    assert body["level"] == 3 and body["levelLabel"] == "несколько согласованных аномалий"
     assert {item["pattern"] for item in body["signals"]} >= {1, 6}
     assert body["analyzedAt"] == moment.isoformat() and body["normVersion"] == 3
     # Признак без анализа тоже укладывается в схему: пост анализировался, но ничего нет.
@@ -89,4 +89,34 @@ def test_account_levels_carry_only_the_level_words():
     ])
     _validate(body, "AccountAnomalyLevels")
     assert [item["levelLabel"] for item in body["items"]] == [
-        "признаки искусственной активности", "нет признаков"]
+        "несколько согласованных аномалий", "нет признаков"]
+
+
+def test_new_reference_signals_use_the_public_contract():
+    from datetime import datetime, timezone
+    from uuid import UUID
+    from anomaly_analysis.v2.domain import PostSeries, Metric
+    from anomaly_analysis.v2.mature_reference import bundled_reference
+    reference=bundled_reference();published=datetime(2026,9,21,tzinfo=timezone.utc)
+    subject=PostSeries(UUID(int=199),next(iter(reference.account_counts)),"max",published,False,
+                      (published+timedelta(hours=24),published+timedelta(hours=72,microseconds=-1)),
+                      {Metric.VIEWS:(100,10000000),Metric.REACTIONS:(10,100000)})
+    result=levels.assess(subject,reference=reference,analyzed_at=published+timedelta(hours=72))
+    assert {11,12} <= {s.pattern for s in result.signs}
+    for sign in result.signs:
+        _validate(sign_payload(sign),"AnomalySignal")
+    _validate(quality_payload(result.quality),"AnomalyQuality")
+
+
+def test_missing_precision_is_visible_on_both_public_surfaces():
+    from datetime import datetime, timezone
+    row={"level":0,"analyzed_at":datetime(2026,9,28,tzinfo=timezone.utc),"signals":[],
+         "quality":{"coverage":0,"summary":"нет точных данных","codes":["no_precise_metrics"],"unanalyzable":[]},
+         "lag_seconds":0,"norm_version_id":None,"detector_versions":{},"review_status":"unreviewed"}
+    post=analysis.analysis_body("99269506-1466-5e18-a215-a3db2688d786",12,row)
+    _validate(post)
+    account=analysis.levels_body("99269506-1466-5e18-a215-a3db2688d786",12,[{
+        "publication_id":"99269506-1466-5e18-a215-a3db2688d786","level":0,"insufficient_data":True}])
+    _validate(account,"AccountAnomalyLevels")
+    assert post["levelLabel"]==account["items"][0]["levelLabel"]=="недостаточно точных данных"
+    assert post["levelSymbol"]==account["items"][0]["levelSymbol"]=="·"
