@@ -84,6 +84,28 @@ and fail2ban remain. Raw operational evidence and access details stay outside Gi
 See [COLLECTOR_WORKING_SET.md](COLLECTOR_WORKING_SET.md) for the rollout,
 verification and recovery contract.
 
+### MAX catalog follow-up — 2026-09-28
+
+The two repeated MAX `ApiError` failures were catalog reference errors. MAX
+returned `not.found` for both. The Orlovsky agricultural university's current
+[public channel](https://max.ru/channel_orel_sau/AaAqaTogXVU) was verified with
+the live provider client. Audited catalog commands corrected its public alias
+and stored its verified native channel ID on both hosts, preserving the account
+UUID, canonical key and institution assignment. The other reference was the
+admissions phone contact shown on [MGEU's official site](https://mgei.ru/),
+with no confirmed publication channel. Its collection was disabled on both
+hosts; the account record remains for correction and reactivation. Neither
+host had publication history or successful collection results for that record.
+
+The regular 02:40 UTC MAX cycle succeeded for 82 enabled accounts with zero
+errors. Orlovsky's 100 visible posts were collected with their original
+publication dates and current counters. Full destination comparison matched
+all 100 snapshots, 278 reaction rows and one account observation, including
+timestamps, fingerprints, quality, evidence and public identities. The source
+ACK matched the applied destination receipt; rejected/deferred counts were zero.
+This correction changed catalog data only. Earlier measurements that were
+never collected were not reconstructed. Raw evidence remains outside Git.
+
 ## Historical handoff — 2026-09-24
 
 ## Status and authority
