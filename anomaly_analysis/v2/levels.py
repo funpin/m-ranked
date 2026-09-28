@@ -22,6 +22,7 @@ from .detectors import (
     ABSOLUTE_DETECTORS, NORM_RELATIVE_DETECTORS, REPOST_DETECTORS, DetectorContext, SiblingActivity,
 )
 from .domain import DataQuality, Family, Interval, Level, Metric, PostSeries, PostVerdict, Sign
+from .detectors.bounded_reaction_burst import MEASUREMENT_MODE as BOUNDED_REACTION_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
 from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare
@@ -37,6 +38,7 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
+AGGREGATION_VERSION = "2.1.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
@@ -67,6 +69,7 @@ ALTERNATIVES = {
     "recommendation_feed": "пост долго показывался в рекомендациях с ровным притоком",
     "smoothed_large_audience": "крупная аудитория со сглаженным трафиком",
     "counter_update_delay": "площадка обновила счётчик просмотров позже счётчика реакций",
+    "reaction_counter_batch_update": "площадка обновила счётчик реакций пакетно",
     "views_counter_delay": "счётчик просмотров отстал от счётчика реакций",
     "account_mentioned_externally": "аккаунт упомянули во внешнем источнике, и старые посты посмотрели заново",
     "counter_frozen": "площадка перестала обновлять счётчик",
@@ -82,14 +85,15 @@ ALTERNATIVES = {
     "wide_reach_low_engagement": "пост разошёлся шире обычной аудитории, которая реагирует реже",
 }
 QUALITY_TEXTS = {
-    "no_precise_metrics": "недостаточно точных данных для проверки; отсутствие сигнала не подтверждает обычность статистики",
+    "no_precise_metrics": "недостаточно данных для точных проверок; отсутствие сигнала не подтверждает обычность статистики",
+    "bounded_reaction_counts": "крупные изменения реакций проверены с учётом точности каждого счётчика; форма роста между замерами неизвестна",
     "non_exact_counters": "округлённые счётчики и значения без подтверждённой точности исключены из точных проверок",
     "uncertain_observations": "замеры с неопределённым интервалом исключены из точных проверок",
-    "truncated_start": "ряд начат позже публикации: ранняя волна не оценивается",
+    "truncated_start": "начало истории отсутствует: рост до первого замера не оценивается",
     "repost_source_counter": "пост — репост: просмотры принадлежат источнику, проверяются только реакции",
     "no_norm": "нормы ещё нет: признаки относительно нормы не сильнее слабого сигнала",
     "young_norm": "норма молодая: признаки относительно нормы не сильнее слабого сигнала",
-    "gaps": "в замерах есть пробелы: на этих участках вывод невозможен",
+    "gaps": "в замерах есть пробелы: форма роста недоступной метрики на этих участках неизвестна",
 }
 DISCLAIMER = ("Сигнал сам по себе не доказывает искусственное происхождение активности "
               "или действия университета.")
@@ -124,8 +128,8 @@ def run_detectors(prepared: PreparedSeries, context: DetectorContext) -> tuple[l
     signs: list[Sign] = []
     for detector in detectors:
         signs.extend(detector.detect(prepared, context))
-    signs = [replace(sign, render={**sign.render, "measurementMode": "exact_quality_v1"}) for sign in signs]
-    return signs, {"preparation": PREPARATION_VERSION,
+    signs = [replace(sign, render={"measurementMode": "exact_quality_v1", **sign.render}) for sign in signs]
+    return signs, {"preparation": PREPARATION_VERSION, "aggregation": AGGREGATION_VERSION,
                    **{detector.ID: detector.VERSION for detector in detectors}}
 
 
@@ -134,22 +138,45 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
     unanalyzable = _unanalyzable(prepared)
     kept = []
     for sign in signs:
+        bounded_reactions = (sign.pattern == 9 and sign.metric is Metric.REACTIONS
+                             and sign.render.get("measurementMode") == BOUNDED_REACTION_MODE)
         required = (Metric.VIEWS, Metric.REACTIONS) if sign.family is Family.CROSS_METRIC else (sign.metric,)
-        if any(metric not in prepared.metrics for metric in required):
+        if not bounded_reactions and any(metric not in prepared.metrics for metric in required):
             continue
         # A validated endpoint model makes no claim about timing inside gaps.
         endpoint_reference = (sign.pattern in REFERENCE_PATTERNS
                               and sign.render.get("measurementMode") == "exact_quality_v1")
-        if sign.pattern != GAP_PATTERN and not endpoint_reference and _overlap(sign.interval, unanalyzable) > UNANALYZABLE_OVERLAP:
+        relevant_gaps = _unanalyzable(prepared, required)
+        if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_reactions
+                and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:
             sign = replace(sign, strength=min(sign.strength, YOUNG_NORM_CAP))
         if sign.strength >= WEAK:
             kept.append(sign)
-    level = level_for(kept)
-    ordered = sorted(kept, key=lambda item: (-item.strength, item.pattern))[:MAX_SIGNS]
+    # Two implementations/scales observing the same event are one signal.
+    unique = []
+    for sign in sorted(kept, key=lambda item: (-item.strength, item.pattern)):
+        if not any(sign.pattern == item.pattern and sign.metric is item.metric
+                   and sign.family is item.family and sign.interval.start < item.interval.end
+                   and item.interval.start < sign.interval.end for item in unique):
+            unique.append(sign)
+    level = level_for(unique)
+    # Keep the independent evidence that produced the level visible even when
+    # one family has more than six stronger events.
+    families = set()
+    required = []
+    for index, sign in enumerate(unique):
+        if sign.strength >= STRONG and sign.family not in families:
+            required.append(index)
+            families.add(sign.family)
+    chosen = (required + [i for i in range(len(unique)) if i not in required])[:MAX_SIGNS]
+    ordered = [unique[i] for i in sorted(chosen)]
+    quality = _quality(prepared, context, unanalyzable)
+    if any(sign.render.get("measurementMode") == BOUNDED_REACTION_MODE for sign in ordered):
+        quality = replace(quality, codes=(*quality.codes, "bounded_reaction_counts"))
     return PostVerdict(prepared.series.publication_id, level, tuple(ordered) if level else (),
-                       _quality(prepared, context, unanalyzable), versions, norm_version)
+                       quality, versions, norm_version)
 
 
 def level_for(signs: Iterable[Sign]) -> Level:
@@ -178,7 +205,9 @@ def compact(verdict: PostVerdict) -> dict[str, Any]:
 
 def sign_payload(sign: Sign) -> dict[str, Any]:
     return {
-        "pattern": sign.pattern, "symbol": SYMBOLS[sign.pattern], "title": TITLES[sign.pattern],
+        "pattern": sign.pattern, "symbol": SYMBOLS[sign.pattern],
+        "title": ("Резкий прирост реакций с последующим замедлением"
+                  if sign.render.get("measurementMode") == BOUNDED_REACTION_MODE else TITLES[sign.pattern]),
         "family": sign.family.value, "metric": sign.metric.value, "strength": round(sign.strength, 3),
         "startAt": sign.interval.start.isoformat(), "endAt": sign.interval.end.isoformat(),
         "scaleSeconds": int(sign.scale.total_seconds()), "formula": sign.formula,
@@ -238,9 +267,10 @@ def _context(prepared: PreparedSeries, siblings: Sequence[PostSeries], norms: No
     )
 
 
-def _unanalyzable(prepared: PreparedSeries) -> tuple[Interval, ...]:
+def _unanalyzable(prepared: PreparedSeries,
+                  metrics: Iterable[Metric] = (Metric.VIEWS, Metric.REACTIONS)) -> tuple[Interval, ...]:
     published = prepared.series.published_at
-    spans = sorted((gap.start_age, gap.end_age) for metric in (Metric.VIEWS, Metric.REACTIONS)
+    spans = sorted((gap.start_age, gap.end_age) for metric in metrics
                    if metric in prepared.metrics for gap in prepared.metrics[metric].gaps)
     merged: list[list[float]] = []
     for start, end in spans:

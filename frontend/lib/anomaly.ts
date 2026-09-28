@@ -132,6 +132,20 @@ function numberAt(render: AnomalySignal["render"], key: string) {
  *  синхронности (8) и шкала ERV «пост против медианы» (10). */
 export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[], publishedAt: string): MiniChart {
   const render = signal.render;
+  if (render.kind === "bounded_burst") {
+    // Show count ranges at observed endpoints. Joining them with a line would
+    // imply a known path through the unobserved interval.
+    const range = (key: string, index: number) => {
+      const item = (render as Record<string, unknown>)[key];
+      return Array.isArray(item) && typeof item[index] === "number" ? item[index] : 0;
+    };
+    return { type: "bars", percent: false, bars: [
+      { label: "до: минимум", value: range("beforeRange", 0), highlight: false },
+      { label: "до: максимум", value: range("beforeRange", 1), highlight: false },
+      { label: "после: минимум", value: range("afterRange", 0), highlight: true },
+      { label: "после: максимум", value: range("afterRange", 1), highlight: true },
+    ] };
+  }
   if (render.kind === "reference") {
     return { type: "bars", percent: false, bars: [
       { label: "этот пост", value: numberAt(render, "observed") ?? 0, highlight: true },

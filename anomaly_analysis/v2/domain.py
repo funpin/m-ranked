@@ -75,6 +75,9 @@ class PostSeries:
     # including "unknown" when the source does not attest precision.
     qualities: Mapping[Metric, tuple[str, ...]] | None = None
     interval_uncertain: tuple[bool, ...] = ()
+    # Individual displayed counters, when retained. Never infer rounding of a
+    # sum from its last digit: its components may have different precision.
+    reaction_breakdowns: tuple[Mapping[str, int] | None, ...] = ()
 
     def __post_init__(self) -> None:
         if self.platform not in PLATFORMS:
@@ -107,6 +110,14 @@ class PostSeries:
             raise ValueError("interval_uncertain must be aligned booleans")
         object.__setattr__(self, "qualities", MappingProxyType(quality))
         object.__setattr__(self, "interval_uncertain", uncertain)
+        breakdowns = tuple(self.reaction_breakdowns)
+        if breakdowns and len(breakdowns) != len(instants):
+            raise ValueError("reaction breakdowns are not aligned with observed_at")
+        if any(type(value) is not int or value < 0 for row in breakdowns if row is not None
+               for value in row.values()):
+            raise ValueError("reaction breakdown counts must be non-negative integers")
+        object.__setattr__(self, "reaction_breakdowns", tuple(
+            None if row is None else MappingProxyType(dict(row)) for row in breakdowns))
         object.__setattr__(self, "collected",
                            tuple(sorted(_utc(item, "collected") for item in self.collected)))
 

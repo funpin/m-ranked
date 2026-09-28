@@ -66,10 +66,11 @@ def test_signs_on_unanalyzable_intervals_are_dropped_except_the_gap_pattern():
     assert kept.level is Level.PRONOUNCED_ANOMALY
 
 
-def test_reposts_run_only_the_two_absolute_cross_metric_checks():
+def test_reposts_keep_reaction_shape_but_skip_source_view_shapes():
     prepared = _prepared("honest_repost_of_foreign_telegram")
     _, versions = run_detectors(prepared, DetectorContext("telegram"))
-    assert set(versions) == {"preparation", "reactions_before_views", "reactions_exceed_views"}
+    assert set(versions) == {"preparation", "aggregation", "linear_feed", "burst_plateau", "bounded_reaction_burst",
+                             "reactions_before_views", "reactions_exceed_views"}
     assert "repost_source_counter" in assess(prepared.series).quality.codes
 
 
@@ -83,6 +84,21 @@ def test_compact_output_is_bounded_sorted_and_worded():
     assert payload["levelLabel"] == LEVEL_LABELS[payload["level"]]
     assert all(item["symbol"] == SYMBOLS[item["pattern"]] for item in payload["signals"])
     assert isinstance(payload["quality"]["summary"], str) and payload["disclaimer"] == DISCLAIMER
+
+
+def test_duplicate_detectors_do_not_turn_one_weak_event_into_two():
+    event = sign(9, Family.SHAPE, .3)
+    result = verdict(_prepared(), DetectorContext("telegram"), [event, event], {})
+    assert result.level is Level.NONE
+
+
+def test_visible_signs_preserve_the_families_that_produced_the_level():
+    signs = [sign(9, Family.SHAPE, .9, hours=(30+i*2,31+i*2)) for i in range(7)]
+    signs.append(sign(1, Family.VELOCITY, .75))
+    result = verdict(_prepared(), DetectorContext("telegram"), signs, {})
+    assert len(result.signs) == MAX_SIGNS
+    assert result.level is Level.ARTIFICIAL_ACTIVITY_SIGNS
+    assert level_for(result.signs) is result.level
 
 
 def test_every_alternative_code_used_by_a_detector_has_a_text():

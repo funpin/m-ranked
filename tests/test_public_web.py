@@ -8,6 +8,8 @@ from collector_runtime.public_web import (
     parse_public_channel,
     parse_public_page,
     public_post_is_deleted,
+    public_count_quality,
+    public_reaction_quality,
     snapshot_interval_minutes,
     snapshot_is_due,
 )
@@ -22,6 +24,21 @@ def test_compact_public_counts():
     assert compact_count_display_unit("5.46K") == 10
     assert compact_count_display_unit("1M") == 1_000_000
     assert compact_count_display_unit("unknown") is None
+
+
+def test_public_precision_belongs_to_each_metric_and_component():
+    from collector_runtime.models import ReactionState
+    assert public_count_quality('57') == 'exact'
+    assert public_count_quality('👍 57') == 'exact'
+    assert public_count_quality('1.2K') == 'rounded'
+    assert public_count_quality(None) == public_count_quality('not available') == 'unknown'
+    exact = ReactionState({'👍': 53}, 53, [{'key':'👍', 'displayed_count':'👍 53', 'count':53}])
+    rounded = ReactionState({'👍': 1200}, 1200, [{'key':'👍', 'displayed_count':'👍 1.2K', 'count':1200}])
+    assert public_reaction_quality(exact) == 'exact'
+    assert public_reaction_quality(rounded) == 'rounded'
+    assert public_reaction_quality(ReactionState({}, 0, [])) == 'exact'
+    assert public_reaction_quality(ReactionState({'👍':53}, 53, None)) == 'unknown'
+    assert public_reaction_quality(ReactionState({'👍':53}, 54, exact.raw)) == 'unknown'
 
 
 def test_public_page_reactions_paid_custom_and_album():
@@ -43,6 +60,7 @@ def test_public_page_reactions_paid_custom_and_album():
     assert posts[0].post_type == "album"
     assert posts[0].reactions.reactions == {"paid:star": 3, "custom:123": 57}
     assert posts[0].reactions.total == 60
+    assert public_reaction_quality(posts[0].reactions) == 'unknown'
     assert posts[0].views_count == 3530
     assert posts[0].views_display == "3.53K"
     assert posts[0].views_display_unit == 10

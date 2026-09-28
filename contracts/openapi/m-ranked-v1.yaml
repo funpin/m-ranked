@@ -4252,7 +4252,7 @@ components:
           type: object
           required: [kind, startAge, endAge]
           properties:
-            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, expected, gap, ratio, erv, reference] }
+            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference] }
             startAge: { type: integer }
             endAge: { type: integer }
           additionalProperties:

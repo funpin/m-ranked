@@ -126,6 +126,64 @@ def test_batched_series_equal_single_reads(databases):
     assert series.values[Metric.VIEWS][:3] == (100, 200, 300)
 
 
+def test_rounded_reaction_evidence_survives_database_worker_export_and_api(databases):
+    import json
+    from pathlib import Path
+    from anomaly_analysis.tools.export_reference import export
+    from anomaly_analysis.tools.reference_format import parse_case
+    from anomaly_analysis.v2.levels import assess
+    from anomaly_analysis.v2.schedule import ScheduleConfig
+    from anomaly_analysis.v2.series import CollectionCadence
+    from anomaly_analysis.v2.worker import Worker
+    from api.routes.analysis import analysis_body
+    from api.sql.analysis import STATE
+
+    case = json.loads((Path(__file__).parent / 'fixtures/anomaly_reaction_bursts.json').read_text())[1]
+    source_start = datetime.fromisoformat(case['publication']['publishedAt'])
+    published = datetime.now(timezone.utc) - timedelta(days=1)
+    month = published.date().replace(day=1)
+    account, publication, run = uuid4(), uuid4(), uuid4()
+    # The database requires reaction rows and their snapshot in one transaction.
+    with psycopg.connect(databases['admin'],row_factory=dict_row) as connection:
+        assert connection.execute("SELECT has_table_privilege('analytics_worker',"
+                                  "'ingest.reaction_breakdown','SELECT') AS ok").fetchone()['ok']
+        assert not connection.execute("SELECT has_table_privilege('analytics_worker',"
+                                      "'ingest.reaction_breakdown','UPDATE') AS ok").fetchone()['ok']
+        connection.execute("INSERT INTO catalog.platform_account(id,institution_id,platform,canonical_external_id,access_mode) "
+                           "VALUES (%s,%s,'telegram',%s,'public_web')", (account,INSTITUTION,str(account)))
+        connection.execute("INSERT INTO ingest.collection_run(id,platform,partition_key,collector_version,started_at,status,correlation_id) "
+                           "VALUES (%s,'telegram','bounded','integration',%s,'succeeded',gen_random_uuid())",(run,published))
+        connection.execute("SELECT ops_and_admin.ensure_publication_metric_partition(%s)",(month,))
+        connection.execute("INSERT INTO ingest.publication(id,primary_account_id,published_at,discovered_at,publication_type,history_completeness) "
+                           "VALUES (%s,%s,%s,%s,'post','complete')",(publication,account,published,published))
+        for index, point in enumerate(case['points']):
+            age = datetime.fromisoformat(point['observed_at']) - source_start
+            observed = published + age
+            snapshot = connection.execute("INSERT INTO ingest.publication_metric_snapshot("
+                "published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,"
+                "views_count,reactions_count,quality,views_quality,reactions_quality,interval_uncertain,source_fingerprint,collected_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'rounded','rounded','rounded',false,%s,%s) RETURNING id",
+                (month,publication,run,observed,int(age.total_seconds()),index,point['v'],point['r'],uuid4().hex,observed)).fetchone()['id']
+            for key, count in point['breakdown'].items():
+                connection.execute("INSERT INTO ingest.reaction_breakdown VALUES (%s,%s,%s,%s)",
+                                   (month,snapshot,key,count))
+    store = PostgresAnomalyStore(databases['worker'])
+    series = store.read_series([SeriesTarget(publication,published)])[publication]
+    assert series.reaction_breakdowns[0] == case['points'][0]['breakdown']
+    now = series.observed_at[-1]
+    Worker(store,ScheduleConfig(),CollectionCadence(),clock=lambda:now)._analyze(
+        [DueRow(publication,published,now,None,None,None,0,())],now,1.)
+    with psycopg.connect(databases['api'],row_factory=dict_row) as connection:
+        body = analysis_body(str(publication),1,connection.execute(STATE,{'publication':publication}).fetchone())
+        restored = parse_case(export(connection,(publication,))[publication]).subject
+    assert body['level'] >= 2
+    assert any(s['render']['kind'] == 'bounded_burst' for s in body['signals'])
+    assert body['detectorVersions']['bounded_reaction_burst'] == '1.0.0'
+    assert restored.interval_uncertain == series.interval_uncertain
+    assert restored.reaction_breakdowns == series.reaction_breakdowns
+    assert assess(restored).level >= 2
+
+
 def test_progress_matches_the_series_it_stands_in_for(databases):
     base = datetime.now(timezone.utc) - timedelta(hours=6)
     targets = [_publication(databases["admin"], base + timedelta(minutes=index), 8 + index) for index in range(2)]

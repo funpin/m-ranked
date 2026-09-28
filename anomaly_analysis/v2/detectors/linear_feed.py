@@ -17,7 +17,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 PATTERN = 1
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -70,7 +70,8 @@ def _scan(prepared, context, metric, data, grid):
     steps = expected_step(prepared, starts)
     # Ячейка мельче шага сбора — интерполяция между двумя замерами, её
     # «ровность» ничего не говорит о подаче.
-    valid = grid.usable & (steps <= width) & (grid.rates > 0)
+    observed = grid.usable & ~grid.negative & (steps <= width)
+    valid = observed & (grid.rates > 0)
     rates = grid.rates * HOUR
     window = max(3, int(np.ceil(MIN_DURATION / width)))
     if rates.size < window:
@@ -90,7 +91,7 @@ def _scan(prepared, context, metric, data, grid):
         while index + 1 < flat.size and flat[index + 1] and abs(means[index + 1] / level - 1) <= 0.3:
             index += 1
         begin, end = _refine(rates, valid, first, index + window)
-        sign = _judge(prepared, metric, data, grid, rates, valid, begin, end)
+        sign = _judge(prepared, metric, data, grid, rates, observed, begin, end)
         if sign is not None:
             signs.append(sign)
         index += 1
@@ -142,7 +143,7 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end):
     background = _daytime_background(prepared, grid, rates, valid, begin)
     if cv > MAX_CV or not 1 / MAX_DRIFT <= drift <= MAX_DRIFT or not background.size:
         return None
-    if float(np.median(background)) * STEP_UP > mean:
+    if max(float(np.median(background)), 1.0) * STEP_UP > mean:
         return None
     start_value = float(grid.cumulative[begin])
     delta = float(grid.cumulative[end] - start_value)
@@ -162,4 +163,3 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end):
                                "intercept": round(float(intercept), 1), "r2": round(r_squared, 4),
                                "cv": round(cv, 3), "background": round(float(np.median(background)), 3)},
                      ("recommendation_feed", "smoothed_large_audience"))
-

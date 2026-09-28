@@ -34,12 +34,18 @@ SELECT publication.id, publication.primary_account_id, account.platform::text AS
 
 SNAPSHOTS = """
 SELECT DISTINCT ON (publication_id, observed_at)
-       publication_id, observed_at,
+       publication_id, observed_at, interval_uncertain,
        views_count, views_quality::text AS views_quality,
        reactions_count, reactions_quality::text AS reactions_quality,
        comments_count, comments_quality::text AS comments_quality,
-       shares_count, shares_quality::text AS shares_quality
-  FROM ingest.publication_metric_snapshot_active
+       shares_count, shares_quality::text AS shares_quality,
+       CASE WHEN reactions_quality = 'rounded'
+            THEN coalesce((SELECT jsonb_object_agg(reaction.reaction_key, reaction.reaction_count)
+                             FROM ingest.reaction_breakdown reaction
+                            WHERE reaction.snapshot_published_month = snapshot.published_month
+                              AND reaction.snapshot_id = snapshot.id), '{}'::jsonb)
+       END AS reaction_breakdown
+  FROM ingest.publication_metric_snapshot_active snapshot
  WHERE publication_id = ANY(%s) AND NOT synthetic
  ORDER BY publication_id, observed_at, correction_sequence DESC
 """

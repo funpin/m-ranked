@@ -22,6 +22,8 @@ from collector_runtime.public_web import (
     parse_public_channel,
     parse_public_page,
     public_post_is_deleted,
+    public_count_quality,
+    public_reaction_quality,
 )
 from collector_runtime.telegram_client import TelegramReader
 from collector_runtime.telegram_identity import (
@@ -260,6 +262,8 @@ def telegram_public_batch(
             reaction_breakdown=post.reactions.reactions,
             quality=ObservationQuality.ROUNDED,
             metric_quality={
+                "views": ObservationQuality(public_count_quality(getattr(post, "views_display", None))),
+                "reactions": ObservationQuality(public_reaction_quality(post.reactions)),
                 "comments": (
                     ObservationQuality.EXACT
                     if post.message_id in comment_counts

@@ -56,6 +56,35 @@ def compact_count_display_unit(value: str) -> int | None:
     return max(1, multiplier // 10 ** decimals)
 
 
+def public_count_quality(value: str | None) -> str:
+    """Precision of the displayed token, not of its containing page."""
+    if value is None:
+        return "unknown"
+    cleaned = value.strip().replace("\u00a0", "").upper()
+    match = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*([KMB]?)$", cleaned)
+    if not match:
+        return "unknown"
+    return "exact" if not match.group(2) and match.group(1).isdigit() else "rounded"
+
+
+def public_reaction_quality(state: ReactionState) -> str:
+    """All terms of the sum must be attested, including the empty list."""
+    if not isinstance(state.raw, list):
+        return "unknown"
+    # Paid stars are quantities, not a count of reacting readers. Unknown
+    # reaction types cannot attest the semantics of the summed metric either.
+    if any(key.startswith(("paid:", "unknown:")) for key in state.reactions):
+        return "unknown"
+    if any(not isinstance(item, dict) or not isinstance(item.get("displayed_count"), str)
+           or item.get("count") != parse_compact_count(item["displayed_count"])
+           for item in state.raw):
+        return "unknown"
+    if sum(item["count"] for item in state.raw) != state.total:
+        return "unknown"
+    qualities = {public_count_quality(item["displayed_count"]) for item in state.raw}
+    return "unknown" if "unknown" in qualities else "rounded" if "rounded" in qualities else "exact"
+
+
 def parse_exact_subscriber_count(html: str) -> int | None:
     soup = BeautifulSoup(html, "html.parser")
     extra = soup.select_one(".tgme_page_extra")

@@ -592,7 +592,8 @@ def test_telegram_public_timely_discovery_emits_synthetic_baseline_and_actual() 
         views_count=370,
         views_display="370",
         views_display_unit=1,
-        reactions=SimpleNamespace(total=173, raw="173", reactions={"👍": 173}),
+        reactions=SimpleNamespace(total=173, raw=[{"key":"👍", "displayed_count":"👍 173", "count":173}],
+                                  reactions={"👍": 173}),
         is_repost=False,
     )
 
@@ -635,8 +636,9 @@ def test_telegram_public_timely_discovery_emits_synthetic_baseline_and_actual() 
     assert canonical_baseline.synthetic_baseline_allowed is True
     assert canonical_actual.snapshot.synthetic is False
     assert canonical_actual.synthetic_baseline_allowed is False
-    assert PostgresCollectorRepository._metric_evidence(
-        canonical_actual.snapshot)["views"]["display_unit"] == 1
+    assert canonical_actual.snapshot.metric_quality['views'] == ObservationQuality.EXACT
+    assert canonical_actual.snapshot.metric_quality['reactions'] == ObservationQuality.EXACT
+    assert 'display_unit' not in PostgresCollectorRepository._metric_evidence(canonical_actual.snapshot)['views']
 
 
 def test_telegram_public_late_discovery_stays_incomplete_without_baseline() -> None:

@@ -111,3 +111,19 @@ test("no precise metrics is an abstention, not a calm normality claim", () => {
   assert.equal(line.level, null);
   assert.equal(line.tone, "neutral");
 });
+
+test("bounded reaction evidence stays visible without exact counters and uses endpoint bars", () => {
+  const bounded = signal({ pattern: 9, metric: "reactions", render: {
+    kind: "bounded_burst", startAge: 6 * 3600, endAge: 7 * 3600,
+    beforeRange: [25, 33], afterRange: [1063, 1089], timingUnknown: true,
+  } });
+  const line = summaryLine(analysis({ signals: [bounded], quality: {
+    coverage: 0, codes: ["no_precise_metrics", "bounded_reaction_counts"],
+    summary: "Оценка с допуском на округление", unanalyzable: [],
+  } }));
+  assert.equal(line.level, 2);
+  assert.equal(line.label, "выраженная аномалия");
+  const chart = miniChart(bounded, [], PUBLISHED);
+  assert.equal(chart.type, "bars");
+  assert.deepEqual(chart.type === "bars" ? chart.bars.map(item => item.value) : [], [25, 33, 1063, 1089]);
+});

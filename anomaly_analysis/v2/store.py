@@ -42,7 +42,13 @@ SELECT DISTINCT ON (target.id, snapshot.observed_at)
        snapshot.views_count, snapshot.views_quality::text AS views_quality,
        snapshot.reactions_count, snapshot.reactions_quality::text AS reactions_quality,
        snapshot.comments_count, snapshot.comments_quality::text AS comments_quality,
-       snapshot.shares_count, snapshot.shares_quality::text AS shares_quality
+       snapshot.shares_count, snapshot.shares_quality::text AS shares_quality,
+       CASE WHEN target.platform = 'telegram' AND snapshot.reactions_quality = 'rounded'
+            THEN coalesce((SELECT jsonb_object_agg(reaction.reaction_key, reaction.reaction_count)
+                    FROM ingest.reaction_breakdown reaction
+                   WHERE reaction.snapshot_published_month = snapshot.published_month
+                     AND reaction.snapshot_id = snapshot.id), '{}'::jsonb)
+       END AS reaction_breakdown
   FROM target
   JOIN ingest.publication_metric_snapshot_active snapshot
     ON snapshot.publication_id = target.id
@@ -231,7 +237,8 @@ def series_from_rows(rows: Sequence[Mapping[str, Any]],
                       tuple(item for item in collected if item >= first["published_at"]),
                       qualities={metric: tuple(row[f"{metric.value}_quality"] or "unknown" for row in rows)
                                  for metric in values},
-                      interval_uncertain=tuple(row.get("interval_uncertain", True) for row in rows))
+                      interval_uncertain=tuple(row.get("interval_uncertain", True) for row in rows),
+                      reaction_breakdowns=tuple(row.get("reaction_breakdown") for row in rows))
 
 
 def change_kind(previous: StoredState | None, level: int,
@@ -647,4 +654,3 @@ def _months(start: datetime, end: datetime) -> list:
 
 def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
-
