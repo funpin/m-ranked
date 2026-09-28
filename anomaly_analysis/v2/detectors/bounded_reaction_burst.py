@@ -30,7 +30,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number, strongest
 
 ID = "bounded_reaction_burst"
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 PATTERN = 9
 FAMILY = Family.SHAPE
 NEEDS_NORM = False

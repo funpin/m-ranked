@@ -126,7 +126,8 @@ def test_batched_series_equal_single_reads(databases):
     assert series.values[Metric.VIEWS][:3] == (100, 200, 300)
 
 
-def test_rounded_reaction_evidence_survives_database_worker_export_and_api(databases):
+@pytest.mark.parametrize('quality', ['rounded', 'unknown'])
+def test_reaction_evidence_survives_database_worker_export_and_api(databases, quality):
     import json
     from pathlib import Path
     from anomaly_analysis.tools.export_reference import export
@@ -138,7 +139,8 @@ def test_rounded_reaction_evidence_survives_database_worker_export_and_api(datab
     from api.routes.analysis import analysis_body
     from api.sql.analysis import STATE
 
-    case = json.loads((Path(__file__).parent / 'fixtures/anomaly_reaction_bursts.json').read_text())[1]
+    fixture, index = ('anomaly_reaction_bursts.json', 1) if quality == 'rounded' else ('anomaly_reported_shapes.json', 2)
+    case = json.loads((Path(__file__).parent / 'fixtures' / fixture).read_text())[index]
     source_start = datetime.fromisoformat(case['publication']['publishedAt'])
     published = datetime.now(timezone.utc) - timedelta(days=1)
     month = published.date().replace(day=1)
@@ -162,26 +164,30 @@ def test_rounded_reaction_evidence_survives_database_worker_export_and_api(datab
             snapshot = connection.execute("INSERT INTO ingest.publication_metric_snapshot("
                 "published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,"
                 "views_count,reactions_count,quality,views_quality,reactions_quality,interval_uncertain,source_fingerprint,collected_at) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'rounded','rounded','rounded',false,%s,%s) RETURNING id",
-                (month,publication,run,observed,int(age.total_seconds()),index,point['v'],point['r'],uuid4().hex,observed)).fetchone()['id']
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,false,%s,%s) RETURNING id",
+                (month,publication,run,observed,int(age.total_seconds()),index,point['v'],point['r'],
+                 quality,quality,quality,uuid4().hex,observed)).fetchone()['id']
             for key, count in point['breakdown'].items():
                 connection.execute("INSERT INTO ingest.reaction_breakdown VALUES (%s,%s,%s,%s)",
                                    (month,snapshot,key,count))
     store = PostgresAnomalyStore(databases['worker'])
     series = store.read_series([SeriesTarget(publication,published)])[publication]
     assert series.reaction_breakdowns[0] == case['points'][0]['breakdown']
+    assert all(q == quality for q in series.qualities[Metric.REACTIONS])
     now = series.observed_at[-1]
     Worker(store,ScheduleConfig(),CollectionCadence(),clock=lambda:now)._analyze(
         [DueRow(publication,published,now,None,None,None,0,())],now,1.)
     with psycopg.connect(databases['api'],row_factory=dict_row) as connection:
         body = analysis_body(str(publication),1,connection.execute(STATE,{'publication':publication}).fetchone())
         restored = parse_case(export(connection,(publication,))[publication]).subject
-    assert body['level'] >= 2
+    assert body['level'] >= 2 if quality == 'rounded' else body['level'] == 1
     assert any(s['render']['kind'] == 'bounded_burst' for s in body['signals'])
-    assert body['detectorVersions']['bounded_reaction_burst'] == '1.3.0'
+    assert body['detectorVersions']['bounded_reaction_burst'] == '1.3.1'
+    if quality == 'unknown':
+        assert any(s['render'].get('reportedOnly') for s in body['signals'])
     assert restored.interval_uncertain == series.interval_uncertain
     assert restored.reaction_breakdowns == series.reaction_breakdowns
-    assert assess(restored).level >= 2
+    assert assess(restored).level >= 2 if quality == 'rounded' else assess(restored).level == 1
 
 
 def test_progress_matches_the_series_it_stands_in_for(databases):

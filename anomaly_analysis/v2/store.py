@@ -43,7 +43,7 @@ SELECT DISTINCT ON (target.id, snapshot.observed_at)
        snapshot.reactions_count, snapshot.reactions_quality::text AS reactions_quality,
        snapshot.comments_count, snapshot.comments_quality::text AS comments_quality,
        snapshot.shares_count, snapshot.shares_quality::text AS shares_quality,
-       CASE WHEN target.platform = 'telegram' AND snapshot.reactions_quality = 'rounded'
+       CASE WHEN target.platform = 'telegram' AND snapshot.reactions_quality IN ('rounded', 'unknown')
             THEN coalesce((SELECT jsonb_object_agg(reaction.reaction_key, reaction.reaction_count)
                     FROM ingest.reaction_breakdown reaction
                    WHERE reaction.snapshot_published_month = snapshot.published_month
