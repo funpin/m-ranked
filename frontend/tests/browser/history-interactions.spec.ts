@@ -286,8 +286,18 @@ test("new reference methods keep shared cards, icons, charts and explanations",a
     await expect(signal.locator("svg.lucide").first()).toBeVisible();
     await signal.getByTestId("signal-detail-toggle").click();
     await expect(signal.getByTestId("reference-explanation")).toContainText("не означает вероятность");
-    await expect(signal.getByRole("img")).toHaveAccessibleName(/этот пост 720, ожидание 310, верхняя граница 520/);
+    await expect(signal.getByRole("img")).toHaveAccessibleName(/этот пост 2791, ожидание 2265, верхняя граница 2608/);
     await expect(signal.getByRole("img").locator("svg")).toBeVisible();
+    // Four-digit observed counts must remain inside the SVG on mobile too.
+    const labelsFit = await signal.getByRole("img").locator("svg").evaluate((svg) => {
+      const bounds = svg.getBoundingClientRect();
+      const labels = [...svg.querySelectorAll(".recharts-label")];
+      return labels.length === 3 && labels.every((label) => {
+        const box = label.getBoundingClientRect();
+        return box.left >= bounds.left && box.right <= bounds.right;
+      });
+    });
+    expect(labelsFit).toBe(true);
   }
   await card.getByRole("button",{name:"Формула и возможные объяснения"}).first().hover();
   await expect(page.locator('[data-slot="tooltip-content"]')).toContainText("общая калибровка четырёх компонент");

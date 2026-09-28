@@ -105,8 +105,8 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
     levelLabel:"слабый сигнал",levelSymbol:"◔",signals:([11,12] as const).map(pattern=>({
       pattern,symbol:pattern===11?"↥":"↗",title:pattern===11?"Отклик выше исторического диапазона":"Продолжение отклика выше ожидаемого",
       family:"velocity",metric:"views",strength:0.5,startAt:historyAt(pattern===11?0:24),endAt:historyAt(72),scaleSeconds:259200,
-      formula:"Y72=720 > 520 (верхняя целая граница); ожидание=310; общая калибровка четырёх компонент: n=130",
-      render:{kind:"reference",startAge:pattern===11?0:86400,endAge:259200,observed:720,expected:310,upper:520,
+      formula:"Y72=2791 > 2608 (верхняя целая граница); ожидание=2265; общая калибровка четырёх компонент: n=130",
+      render:{kind:"reference",startAge:pattern===11?0:86400,endAge:259200,observed:2791,expected:2265,upper:2608,
         fitPosts:266,calibrationPosts:130,referenceStart:"2026-06-06T00:00:00Z",referenceEnd:"2026-06-17T00:00:00Z"},
       alternatives:[{code:"news_event",text:"новостной повод вернул внимание к посту"}],normConfidence:null,
     }))};
