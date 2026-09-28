@@ -224,7 +224,7 @@ rtk proxy /Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python \
   --output /tmp/observable-reproduced.json
 ```
 
-`export_local_panel.py` выполняет локальный read-only SQL; принимает имя контейнера/БД аргументами. `holdout_endpoints.sql` принимает JSON-массив заранее отобранных UUID в psql-переменной `ids`; транспорт и доступы намеренно вынесены из репозитория. `merge_endpoint_refresh.py` добавляет точки, не заменяя исходную историю. Не запускать полную архивную выгрузку на проде.
+`export_local_panel.py` выполняет локальный read-only SQL через psycopg; принимает `--output` и подключение `MRANKED_RESEARCH_DATABASE_URL` только к loopback-БД. Пример: `python research/smart-engagement-2026-09/scripts/export_local_panel.py --output research/smart-engagement-2026-09/local_data/panel.jsonl.gz`. Параметры доступа хранятся только в локальном окружении. При подготовке выпуска прежний Docker/shell-транспорт заменён прямым подключением; SQL не менялся, прежний hash скрипта в provenance относится к использованной исторической версии. `holdout_endpoints.sql` принимает JSON-массив заранее отобранных UUID в psql-переменной `ids`; транспорт и доступы намеренно вынесены из репозитория. `merge_endpoint_refresh.py` добавляет точки, не заменяя исходную историю. Не запускать полную архивную выгрузку на проде.
 
 График строится функцией `render_figure` того же скрипта из агрегатов; необязательный аргумент `--figure <png>` требует matplotlib. Он не влияет на расчёт статистики.
 
