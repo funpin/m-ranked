@@ -1,0 +1,172 @@
+{
+  "date": "2026-09-28",
+  "branch": "feat/smart-analizes",
+  "baseline_commit": "ea8326ebd896bf8db5d4264f2b66c50403881caf",
+  "production_verification": {
+    "initial_api_and_actual_collector_source_files": 442,
+    "matched_each": 442,
+    "continuation_actual_max_collector_matched": 442,
+    "operational_access": "intentionally omitted"
+  },
+  "cohort": {
+    "catalog_accounts": 83,
+    "selected_accounts": 81,
+    "rule": "all nondeleted MAX accounts with >=15 original nondeleted posts Aug31-Sep27 UTC; no anomaly-label selection",
+    "posts": 9978,
+    "day_window_msk": [
+      "2026-09-14",
+      "2026-09-27"
+    ],
+    "snapshot_created_before_utc": "2026-09-28T00:00:00Z",
+    "extraction_seconds": 505.9,
+    "transport": "sequential read-only per-account queries; not retained"
+  },
+  "panel_uncompressed_bytes": 19243324,
+  "panel_uncompressed_sha256": "1eadb3143f3ec42e3869ec2bdd315e1e9c176f3353d96feccf61622746c6cf2e",
+  "cohort_json_sha256": "9b3eb27a1d70c6af6d53ff8c089aaa3a23617ce999d8d2c3691bded8d92b8861",
+  "original_extraction_template_sha256": "a3215302dbc98963da6252ea00ef34d12723018061a982f58a7148cab3eee7a6",
+  "protocol_before_daily_outcomes": "# MAX persistent reaction tails — prospective specification for retrospective extraction\n\nRecorded before inspecting daily outcomes, 2026-09-28. User-nominated examples:\nMSU Lomonosov, MIPT, Kuindzhi, Southwest State, Kursk State. These are case-study\nidentities, never fraud/organic labels. Screenshots show MAX and a partial Sep24\nday; full daily analysis must not claim an exact reproduction of their values.\n\nH18: repeated late reaction breadth differs across MAX accounts after accounting\nfor age, view opportunity, early reaction propensity, posting rate and observation\ncoverage. H19: a long smoothly decreasing tail alone identifies manipulation\n(seek a counterexample, not assume the claim). H20: the difference survives\nconditioning on baseline ER and view increments; H21: limited M0 selection can\nsupport an unbiased 4–14 day tail test (audit the existing age and selection cap).\n\nFrame: all nondeleted MAX accounts with >=15 original nondeleted posts in\nAug31–Sep27 UTC, selected by publication counts only; include nominated accounts.\nDaily window Sep14–27 Moscow, freeze input before Sep28 00:00 UTC. Each selected\naccount is queried separately, read only, statement timeout 60s. All publications\nAug30 21:00 UTC–Sep27 21:00 UTC, originals main and reposts sensitivity.\nExtract only last observed endpoints for each Moscow day Sep13–27 plus\npre-24h endpoint, with correction lineage. Keep NULL/missing/uncertain/negative\nas such. No interpolation or account-log zero fill. Primary daily endpoints\nmust both be exact, not uncertain, <=3h stale at midnight; sensitivity <=1h and\n<=6h; elapsed interval 18–30h. Post age at interval start >=1d for comparable\nfull days. Bins 1–2,2–4,4–7,7–14 days; late means start age >=4 and end age <=14.\n\nReport raw daily and pooled coverage, positive late reaction fraction, late\nreaction share, reactions per 1000 additional views, late/early reaction-to-view\nratio, adjusted breadth from count expectation, day-by-day repetition, cohort\nranks without certified p-values. Normalize by number of eligible observed\nposts. Do not count recurrent days as independent replications. Label all\nresults exploratory; cohort is not independently verified organic.\n\nModels: simple log-link count models with view exposure and baseline reaction\nratio; compare shared age curve vs account-specific aging, posting frequency\nand feed depth using chronological fit Sep14–20 / test Sep21–27. Estimate NB2\ndispersion on fit only. If insufficient eligible observations, report abstention.\nEvaluate test count deviance/MAE, not train fit as evidence; case deletion and\nleave-account-out peer curves for sensitivity. Baseline cumulative ER at 24h is\na covariate, not a trusted organic label; exclude future-informed baseline use.\n\nConstruct conventional decaying exposure + count-response scenarios to test\nwhether long repeated graded tails can arise without organized intervention;\ncompare alternative generation with equal observables. Assess coupled growth\nand randomized late additions only as sensitivity, never empirical fraud recall.\n",
+  "protocol_implementation_notes": [
+    "H22 conditional allocation is post-hoc; exploratory only",
+    "Negative-binomial held-out log likelihood used, rather than a fitted deviance proxy",
+    "Peer fit excludes the five nominated cases jointly; this is not full leave-one-account-out validation",
+    "Coupled smooth-addition and lag simulations H13-H17 are not completed in this cycle",
+    "Same posts can cross calendar train/test split; only conditional future-interval evaluation"
+  ],
+  "runtime": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1"
+  },
+  "reproducibility": "two numerical runs produced identical fields; final output additionally records runtime versions; plotting dependencies separate",
+  "bounded_receipt_audit": {
+    "rows": 1366,
+    "posts": 257,
+    "min_utc": "2026-09-27T22:08:06Z",
+    "max_utc": "2026-09-27T23:31:25Z",
+    "scope": "table slice at query time, not platform-wide verified collection completeness"
+  },
+  "product_regression_controls": {
+    "full_production_detector": {
+      "before": {
+        "aligned": {
+          "n": 500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            4.336808689942018e-19,
+            0.007624340461552241
+          ],
+          "usable_cells": {
+            "n": 500,
+            "p10": 40.0,
+            "median": 40.0,
+            "p90": 40.0
+          }
+        },
+        "shift_3h": {
+          "n": 500,
+          "hits": 118,
+          "rate": 0.236,
+          "wilson95": [
+            0.20088129547155886,
+            0.27514435629214073
+          ],
+          "usable_cells": {
+            "n": 500,
+            "p10": 39.0,
+            "median": 39.0,
+            "p90": 39.0
+          }
+        }
+      },
+      "after": {
+        "aligned": {
+          "n": 500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            4.336808689942018e-19,
+            0.007624340461552241
+          ],
+          "usable_cells": {
+            "n": 500,
+            "p10": 40.0,
+            "median": 40.0,
+            "p90": 40.0
+          }
+        },
+        "shift_3h": {
+          "n": 500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            4.336808689942018e-19,
+            0.007624340461552241
+          ],
+          "usable_cells": {
+            "n": 500,
+            "p10": 39.0,
+            "median": 39.0,
+            "p90": 39.0
+          }
+        }
+      }
+    },
+    "account_log_counterexample": {
+      "before": {
+        "raw_interval_h": 24,
+        "growth_interval_after_carry_h": 0.5,
+        "inserted_points": 1,
+        "hypothetical_speed_multiplier": 48.0
+      },
+      "after": {
+        "raw_interval_h": 24,
+        "growth_interval_after_carry_h": 24.0,
+        "inserted_points": 0,
+        "hypothetical_speed_multiplier": 1.0
+      }
+    },
+    "paid_reaction_semantics": {
+      "before": {
+        "parsed_breakdown": {
+          "paid:star": 200
+        },
+        "parsed_total": 200,
+        "views": 100,
+        "exceed_pattern_signs": 1,
+        "strengths": [
+          1.0
+        ],
+        "scope": "constructed paid-star donation supported by Telegram semantics, not an observed incident"
+      },
+      "after": {
+        "parsed_breakdown": {
+          "paid:star": 200
+        },
+        "parsed_total": 200,
+        "views": 100,
+        "exceed_pattern_signs": 0,
+        "strengths": [],
+        "scope": "constructed paid-star donation supported by Telegram semantics, not an observed incident"
+      }
+    }
+  },
+  "other_observable_experiment_fields_unchanged": true,
+  "validation": {
+    "pytest_passed": 220,
+    "pytest_skipped": 7,
+    "scope": "test_anomaly*.py including benchmarks and test_max_tail_research.py; no dedicated PostgreSQL DSNs"
+  },
+  "sha256": {
+    "scripts/analyze_max_tail.py": "d8a217a849665f6cc9f914d9b7e0c59099e2e1237c385957fef2959e472c3705",
+    "scripts/plot_max_tail.py": "f0fc94095e937fd8d04fed64e1209d06c5e869fbeffd8d972b95e658c746f820",
+    "sql/max_tail_catalog.sql": "52e832163bd3eaff37726c5251cdcc858d852c7872b087c8c61908cdb09c3c16",
+    "sql/max_tail_endpoints.sql": "1590b021e2800bbf0bc1561eaf472289245f269891930dc49dcabf831b658a75",
+    "evidence/max_tail_2026-09-28.json": "5e6fced2325e83a44e00a6b320cdeddfc158661d972f406d0326117449d5e3de",
+    "evidence/max_tail_2026-09-28.png": "2482846551be72a2b501546e8f208c87a4ba8240278919d668ae7fa4b406d48a"
+  },
+  "deployment": "not deployed; existing persisted norms/states require controlled reevaluation; not automatically invalidated by preparation version",
+  "product_regression_commit": "d1ffd99",
+  "final_product_simulation_recheck": "all simulations identical to recorded after values on d1ffd99"
+}
