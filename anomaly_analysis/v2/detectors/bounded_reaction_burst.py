@@ -17,6 +17,7 @@ time/shape of arrivals inside a polling gap or their artificial origin.
 """
 from __future__ import annotations
 
+from bisect import bisect_right
 from datetime import timedelta
 from typing import Mapping
 
@@ -88,12 +89,11 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     series = prepared.series
     if Metric.REACTIONS not in series.values:
         return ()
-    rows = [(at, value, quality, uncertain, breakdown)
-            for at, value, quality, uncertain, breakdown in zip(
-                series.observed_at, series.values[Metric.REACTIONS],
-                series.qualities[Metric.REACTIONS], series.interval_uncertain,
-                series.reaction_breakdowns or (None,) * len(series.observed_at))
-            if at <= prepared.analyzed_at]
+    count = bisect_right(series.observed_at, prepared.analyzed_at)
+    rows = list(zip(
+                series.observed_at[:count], series.values[Metric.REACTIONS][:count],
+                series.qualities[Metric.REACTIONS][:count], series.interval_uncertain[:count],
+                series.reaction_breakdowns[:count] or (None,) * count))
     if len(rows) < 3 or max((row[1] or 0 for row in rows), default=0) < MIN_DELTA:
         return ()
     ages = np.array([(row[0] - series.published_at).total_seconds() / HOUR for row in rows])
@@ -105,7 +105,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         if rows[i][1] is not None and rows[i-1][1] is not None and rows[i][1] < rows[i-1][1]:
             bad[i] = 1
     prefix = np.r_[0, np.cumsum(bad)]
-    view_bounds = _views(prepared)
+    view_bounds = None
     signs = []
     for begin, end in _candidate_pairs(ages, bounds, BURST_HOURS, max_duration=6, min_age=6):
         after = int(np.searchsorted(ages, ages[end] + AFTER_HOURS))
@@ -121,6 +121,14 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         duration = ages[end] - ages[begin]
         if burst < max(MIN_DELTA, MIN_SHARE * low[1]):
             continue
+        rate = burst / duration
+        background = max(0, low[1] - bounds[before][0]) / (ages[begin] - ages[before])
+        tail = max(0, bounds[after][1] - high[0]) / (ages[after] - ages[end])
+        immediate = max(0, bounds[first_after][1] - high[0]) / (ages[first_after] - ages[end])
+        if rate < 10 * max(background, 1) or max(tail, immediate) > .05 * rate:
+            continue
+        if view_bounds is None and not series.is_repost:
+            view_bounds = _views(prepared, count)
         if view_bounds and not series.is_repost:
             v0, v1 = view_bounds[begin], view_bounds[end]
             if v0 is not None and v1 is not None:
@@ -130,12 +138,6 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
                 compatible = 3 * low[1] / max(v0[0], 1) * max(0, v1[1] - v0[0])
                 if burst <= compatible:
                     continue
-        rate = burst / duration
-        background = max(0, low[1] - bounds[before][0]) / (ages[begin] - ages[before])
-        tail = max(0, bounds[after][1] - high[0]) / (ages[after] - ages[end])
-        immediate = max(0, bounds[first_after][1] - high[0]) / (ages[first_after] - ages[end])
-        if rate < 10 * max(background, 1) or max(tail, immediate) > .05 * rate:
-            continue
         start_age, end_age = float(ages[begin] * HOUR), float(ages[end] * HOUR)
         formula = (f"реакции: прирост не менее +{number(burst)} за {age_text(duration * HOUR)} "
                    f"с учётом точности счётчиков; средняя скорость ≥ {number(rate)}/ч, "
@@ -175,14 +177,14 @@ def _candidate_pairs(ages, bounds, hours_options, *, max_duration, min_age=0, ma
             yield int(begin[end]), int(end)
 
 
-def _views(prepared):
+def _views(prepared, count):
     series = prepared.series
     if Metric.VIEWS not in series.values:
         return []
     return [_view_bounds(value, quality, uncertain, compact_allowed=series.platform == "telegram")
-            for at, value, quality, uncertain in zip(
-                series.observed_at, series.values[Metric.VIEWS], series.qualities[Metric.VIEWS],
-                series.interval_uncertain) if at <= prepared.analyzed_at]
+            for value, quality, uncertain in zip(
+                series.values[Metric.VIEWS][:count], series.qualities[Metric.VIEWS][:count],
+                series.interval_uncertain[:count])]
 
 
 def _early(prepared, ages, bounds, reaction_bad_prefix):
@@ -195,17 +197,23 @@ def _early(prepared, ages, bounds, reaction_bad_prefix):
     series = prepared.series
     if series.is_repost or Metric.VIEWS not in series.values:
         return []
-    rows = [(value, quality, uncertain) for at, value, quality, uncertain in zip(
-        series.observed_at, series.values[Metric.VIEWS], series.qualities[Metric.VIEWS],
-        series.interval_uncertain) if at <= prepared.analyzed_at]
-    views = _views(prepared)
+    # A start before hour 6, at most two burst hours and four confirmation
+    # hours cannot use a later observation. Keep only these real readings;
+    # prepared.ages also contains confirmed unchanged points and is unsuitable.
+    count = int(np.searchsorted(ages, 6 + 2 + AFTER_HOURS + BOUNDARY_TOLERANCE_HOURS))
+    ages, bounds = ages[:count], bounds[:count]
+    candidates = tuple(_candidate_pairs(ages, bounds, (0, .25, .5, 1, 2), max_duration=2, max_age=6))
+    if not candidates:
+        return []
+    rows = series.values[Metric.VIEWS][:count]
+    views = _views(prepared, count)
     bad = np.array([v is None for v in views], dtype=int)
     for i in range(1, len(rows)):
-        if rows[i][0] is not None and rows[i-1][0] is not None and rows[i][0] < rows[i-1][0]:
+        if rows[i] is not None and rows[i-1] is not None and rows[i] < rows[i-1]:
             bad[i] = 1
     prefix = np.r_[0, np.cumsum(bad)]
     signs = []
-    for begin, end in _candidate_pairs(ages, bounds, (0, .25, .5, 1, 2), max_duration=2, max_age=6):
+    for begin, end in candidates:
         after = int(np.searchsorted(ages, ages[end] + AFTER_HOURS))
         if after >= len(ages) or ages[after] - ages[end] > AFTER_HOURS + BOUNDARY_TOLERANCE_HOURS:
             continue

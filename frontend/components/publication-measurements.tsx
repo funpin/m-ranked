@@ -116,6 +116,7 @@ function MetricChart(props: {
   preferredDefault?: Metric["key"];
 }) {
   const { metrics, platform, delta, preferredDefault } = props;
+  const hydrated = useSyncExternalStore(subscribeNever, () => true, () => false);
   const keys = useMemo(() => metrics.map((metric) => metric.key), [metrics]);
   const { hidden, setHidden, scale, setScale } = useHistoryPreferences(platform, delta, keys, preferredDefault);
 
@@ -139,6 +140,7 @@ function MetricChart(props: {
             <button
               key={metric.key}
               type="button"
+              disabled={!hydrated}
               aria-pressed={!isHidden}
               onClick={() => setHidden((old) => {
                 const next = new Set(old);
@@ -163,6 +165,7 @@ function MetricChart(props: {
       <div className="flex shrink-0 items-center gap-2" aria-label={delta ? "Режим масштаба прироста" : "Режим масштаба"}>
         <span className="text-muted-foreground text-xs font-medium">Масштаб</span>
         <ToggleGroup
+          disabled={!hydrated}
           size="sm"
           variant="outline"
           spacing={0}
