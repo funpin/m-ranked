@@ -327,8 +327,11 @@ test("шапка таблицы не участвует в волне", async ({
 test("управление — значок справа на широком экране и текст в мобильном меню", async ({ page }) => {
   await page.goto("/review?platform=vk");
   const width = page.viewportSize()!.width;
-  const icon = page.getByTestId("manage-link");
-  const textLink = page.getByTestId("main-nav").getByRole("link", { name: "Управление" });
+  // Streaming may retain the fallback alongside the resolved header briefly.
+  const header = page.getByTestId("header-inner");
+  await expect(header).toBeVisible();
+  const icon = header.getByTestId("manage-link");
+  const textLink = header.getByTestId("main-nav").getByRole("link", { name: "Управление" });
   if (width > 780) {
     await expect(icon).toBeVisible();
     await expect(icon).toHaveAttribute("href", "/manage?platform=vk");
@@ -336,7 +339,7 @@ test("управление — значок справа на широком э�
     await expect(textLink).toBeHidden();
   } else {
     await expect(icon).toBeHidden();
-    await page.getByTestId("menu-toggle").click();
+    await header.getByTestId("menu-toggle").click();
     await expect(textLink).toBeVisible();
   }
 });
