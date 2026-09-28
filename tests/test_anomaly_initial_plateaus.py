@@ -18,12 +18,16 @@ CASES = json.loads((Path(__file__).parent/'fixtures/anomaly_initial_plateaus.jso
 
 
 @pytest.mark.parametrize('case', CASES, ids=lambda c:c['account'])
-def test_real_early_packs_get_highest_level_without_an_account_norm(case):
+def test_real_early_packs_are_visible_without_an_account_norm(case):
     s = subject(case)
     result = assess(s)
-    assert result.level is Level.ARTIFICIAL_ACTIVITY_SIGNS
+    assert int(result.level) == case['expected_level']
     assert level_for(result.signs) is result.level
-    assert any(sign.render.get('plateauEvidence') for sign in result.signs)
+    if case['expected_level'] == 3:
+        assert any(sign.render.get('plateauEvidence') for sign in result.signs)
+    else:
+        assert all(sign.strength == .5 and sign.render.get('roundingLimited') for sign in result.signs)
+        assert not any(sign.render.get('plateauEvidence') or 'burstLower' in sign.render for sign in result.signs)
     assert all(sign.interval.start >= s.observed_at[0] for sign in result.signs)
     payload = compact(result)
     assert len(payload['quality']['summary']) <= 600

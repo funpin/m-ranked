@@ -187,9 +187,11 @@ test("statistics mobile uses cards and keeps zero distinct from unknown", async 
 test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/review?platform=vk");
-  const brand = page.getByTestId("brand");
-  const toggle = page.getByTestId("menu-toggle");
-  const actions = page.getByTestId("header-utility-actions");
+  const header = page.getByTestId("header-inner");
+  await expect(header).toBeVisible();
+  const brand = header.getByTestId("brand");
+  const toggle = header.getByTestId("menu-toggle");
+  const actions = header.getByTestId("header-utility-actions");
   const [brandBox, toggleBox, actionsBox] = await Promise.all([brand.boundingBox(), toggle.boundingBox(), actions.boundingBox()]);
   expect(brandBox?.height).toBeLessThanOrEqual(32);
   expect((toggleBox?.x ?? 0) + (toggleBox?.width ?? 0)).toBeGreaterThan(360);
@@ -220,7 +222,7 @@ test("header follows the same horizontal grid as page content", async ({ page })
     main.boundingBox(),
     brand.boundingBox(),
     heading.boundingBox(),
-    page.getByTestId("header-utility-actions").boundingBox(),
+    headerInner.getByTestId("header-utility-actions").boundingBox(),
     Promise.all([headerInner, main].map((element) => element.evaluate((node) => {
       const style = getComputedStyle(node);
       return { left: style.paddingLeft, right: style.paddingRight };

@@ -239,6 +239,8 @@ def sign_payload(sign: Sign) -> dict[str, Any]:
                  else "Резкий прирост реакций с последующим замедлением")
         if sign.render.get("mode") == "initial_plateau":
             title = "Ранние реакции с последующим плато"
+        if sign.render.get("roundingLimited"):
+            title = "Рывок с плато в округлённых счётчиках"
     elif sign.render.get("measurementMode") == VIEW_MEASUREMENT_MODE:
         title = "Резкий скачок просмотров с последующим плато"
     elif sign.pattern == 6 and sign.render.get("comparisonMode") == ENDPOINT_MODE:

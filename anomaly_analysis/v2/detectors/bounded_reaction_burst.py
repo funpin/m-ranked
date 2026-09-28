@@ -17,7 +17,8 @@ time/shape of arrivals inside a polling gap or their artificial origin.
 """
 from __future__ import annotations
 
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
+from dataclasses import replace
 from datetime import timedelta
 from math import log2
 from typing import Mapping
@@ -29,7 +30,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number, strongest
 
 ID = "bounded_reaction_burst"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 PATTERN = 9
 FAMILY = Family.SHAPE
 NEEDS_NORM = False
@@ -169,7 +170,10 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
              "confirmationEndAge": float(ages[after] * HOUR),
              "timingUnknown": True},
             ("reaction_counter_batch_update", "news_event", "pinned_post")))
-    signs.extend(_decoupled(prepared, ages, bounds, validity_prefix, np.r_[0, np.cumsum(withdrawals)]))
+    withdrawal_prefix = np.r_[0, np.cumsum(withdrawals)]
+    signs.extend(_decoupled(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
+    if not signs and series.platform == "telegram" and any(row[2] == "rounded" for row in rows):
+        signs.extend(_reported_plateau(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
     return tuple(strongest(signs))
 
 
@@ -201,7 +205,7 @@ def _views(prepared, count):
                 series.interval_uncertain[:count])]
 
 
-def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals):
+def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, views_override=None):
     """Reaction packs at any age, without a synthetic zero or an early model.
 
     Require observed subsequent viewers, a tenfold fall in reactions/view,
@@ -217,7 +221,7 @@ def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals):
     if not candidates and not initial:
         return []
     rows = series.values[Metric.VIEWS][:count]
-    views = _views(prepared, count)
+    views = _views(prepared, count) if views_override is None else views_override
     bad = np.array([v is None for v in views], dtype=int)
     for i in range(1, len(rows)):
         if rows[i] is not None and rows[i-1] is not None and rows[i] < rows[i-1]:
@@ -300,4 +304,42 @@ def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals):
             float(ages[first] * HOUR), float(ages[after if begin is None else end] * HOUR),
             timedelta(hours=duration), formula, render,
             ("reaction_counter_batch_update", "pinned_post")))
+    return signs
+
+
+def _reported_plateau(prepared, ages, bounds, validity_prefix, withdrawals):
+    """Retain an observable rounded-count candidate without claiming certainty.
+
+    Quality, breakdown validity, real readings and correction guards are
+    unchanged. Nominal arithmetic is used only to find a candidate; all its
+    lower/upper growth claims and highest-severity evidence are discarded.
+    """
+    series = prepared.series
+    if series.is_repost or Metric.VIEWS not in series.values:
+        return []
+    count = len(ages)
+    views = _views(prepared, count)
+    nominal_r = [None if bound is None else (value, value)
+                 for bound, value in zip(bounds, series.values[Metric.REACTIONS][:count])]
+    nominal_v = [None if bound is None else (value, value)
+                 for bound, value in zip(views, series.values[Metric.VIEWS][:count])]
+    candidates = _decoupled(prepared, ages, nominal_r, validity_prefix, withdrawals, views_override=nominal_v)
+    signs = []
+    for sign in candidates:
+        first = bisect_left(series.observed_at, sign.interval.start)
+        last = bisect_left(series.observed_at, sign.interval.end)
+        source = sign.render
+        initial = source.get('mode') == 'initial_plateau'
+        introduction = (f"в первом замере на {age_text(sign.scale.total_seconds())}: {number(source['burstLower'])} реакций"
+                        if initial else f"+{number(source['burstLower'])} реакций за {age_text(sign.scale.total_seconds())}")
+        formula = (f"По округлённым значениям: {introduction}; затем не более +{number(source['afterReactionsUpper'])} "
+                   f"при +{number(source['afterViewsLower'])} просмотрах за 3ч. "
+                   "Допуск округления не позволяет подтвердить величину рывка; показан слабый сигнал")
+        signs.append(replace(sign, strength=.5, formula=formula, render={
+            "kind": "bounded_burst", "measurementMode": MEASUREMENT_MODE,
+            "mode": "initial_plateau" if initial else "reported_plateau",
+            "roundingLimited": True, "reportedBurst": source['burstLower'],
+            "beforeRange": list(bounds[first]), "afterRange": list(bounds[last]),
+            "startAge": source['startAge'], "endAge": source['endAge'],
+            "confirmationEndAge": source['confirmationEndAge'], "timingUnknown": True}))
     return signs
