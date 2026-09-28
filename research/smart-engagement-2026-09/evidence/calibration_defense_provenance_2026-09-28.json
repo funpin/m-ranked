@@ -1,0 +1,64 @@
+{
+  "date": "2026-09-28",
+  "branch": "feat/smart-analizes",
+  "base_research_commit": "7ac0dff",
+  "runtime": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1"
+  },
+  "seed": 20265228,
+  "inputs_uncompressed_sha256": {
+    "observable_panel": "9f0ff271628584b78ba3350587623826a1c96f1e696976a965307e356fa0df22"
+  },
+  "initial_h32_h35_protocol_sha256": "7bbcef7d85af3622f492bd5f47be29e43c1795433203eb42ea34ad8f3d8df65c",
+  "timing": "H32-H35 protocol fixed before primary outcomes. Descriptive measurement audit, calibration-account counts and Monte Carlo standard errors added afterwards; no fitted method, split, threshold or primary outcome changed.",
+  "files_sha256": {
+    "scripts/calibration_defense.py": "f768a324683cc72806252f19e12cd0f9d24fcdca700d60b43e1dcd0023a2afeb",
+    "scripts/platform_validation.py": "1529a18f5d3f5e3b7091276a519e6b925f5dd3a4ca9fe24aa87a8d62b3e15238",
+    "scripts/observable_validation.py": "f0e79e3309f2e777676caa4121238fe40082791340e32ea79b6d92b3dbfbb5dc",
+    "MASKING.md": "707232bcaed42935931e91ce878eb6de0afc8954977ed65afcf335aea7389a33",
+    "evidence/calibration_defense_2026-09-28.json": "bc5e05091810463b867c93ab12adea2a8196fea9822295d603bff370263cef50",
+    "evidence/calibration_defense_2026-09-28.png": "8744afb2739a85744f6615e38690236b0c82d59f19f2eb2d3b0a97be614ee6f3"
+  },
+  "product_and_tests_sha256": {
+    "anomaly_analysis/tools/reference_format.py": "b1342d207276db6c17597b9f8d301f6e52a20697c6f0c9f8eb52a995a86a9357",
+    "anomaly_analysis/v2/domain.py": "ade564b85dec17e22c3d8c0afefe7c710a6a69bc4bc18ffac95197c7f02afbbb",
+    "anomaly_analysis/v2/series.py": "64604b37fd1a492b9fde41e67b0c6926f1716a87243d82edc8160b8969cceadd",
+    "anomaly_analysis/v2/store.py": "c20389b7288f80d2fc3b80680d0009d3a7c6f9963617f5f7d1ac44bac050e2bf",
+    "anomaly_analysis/v2/levels.py": "bea74db8f439165b0691fad494dd47d8a80a681e060faf982389ada9529b4c74",
+    "anomaly_analysis/v2/worker.py": "01a1d937d9e3269abbfd21a441f17a4b17c648fe53b9fe86fc03346fd6157c23",
+    "anomaly_analysis/v2/detectors/base.py": "e8660565b57ac64aeb164024357cee361a63613b436004d5e2acd0d780eafc66",
+    "anomaly_analysis/v2/detectors/gap_growth.py": "8e0057d9f8aecaca8586cd87cef3e439229748f807ab41bd1e1ab2541deb0a12",
+    "anomaly_analysis/v2/detectors/reactions_catch_up.py": "63691880e4c779175a2bb9f98db41b693306e2edb1a21cae074aeac16d17f697",
+    "tests/test_anomaly_measurement_quality.py": "68d130ca1368b2b314eba075b4b3f1d54b322a47ea8c278842bfa2389b140d96",
+    "tests/test_calibration_defense_research.py": "409fb082314eaa8072023365ce2ad012a944268ef3881626ebfcac177c9165e6",
+    "tests/test_anomaly_levels.py": "f3807f691cc46cd5cedea4e751a234984c891ae7a585986ab3b39d87c18c0001",
+    "tests/test_anomaly_store.py": "0a127bb88120d023fb7db21f81ee08570f9c52aedcf1737569db7e123f045637"
+  },
+  "numeric_repeat_byte_identical": true,
+  "final_numerical_runs": 2,
+  "earlier_runs": "Initial primary run; audit-extended run and repeat; final version adds only Monte Carlo standard errors. Earlier primary outcomes checked equal.",
+  "tests": {
+    "passed": 295,
+    "skipped": 7,
+    "new_tests": 17,
+    "command": "python -m pytest tests/test_anomaly*.py tests/test_calibration_defense_research.py tests/test_platform_research.py tests/test_robust_reference_research.py tests/test_masked_engagement_research.py tests/test_max_tail_research.py tests/test_research_baseline.py tests/test_post_tail.py tests/test_rounded_tail.py tests/test_event_adjusted_tail.py -q -p no:cacheprovider",
+    "skips": "Dedicated disposable PostgreSQL role DSNs unavailable; modified SQL not execution-verified this cycle.",
+    "test_correction": "Initial test incorrectly assumed trimming lowers every rank; finite-sample minimum rank rises when n shrinks. Corrected invariant; numerical experiment unchanged."
+  },
+  "reproduce": "python research/smart-engagement-2026-09/scripts/calibration_defense.py --panel research/smart-engagement-2026-09/local_data/observable_panel_2026-09-28.jsonl.gz --output /tmp/calibration_defense.json",
+  "plot_runtime_separate": "matplotlib 3.11.2 / numpy 2.5.3 used only to draw saved JSON; PNG visually inspected",
+  "measurement_preparation_version": "2.3.0",
+  "limitations": [
+    "reused unlabeled historical period, no fraud precision/recall",
+    "fixed-fit account bootstrap, few affected clusters, no zero-risk claim for zero observed hits",
+    "Huber not a guarantee against group or leverage contamination",
+    "account-balanced ranks are diagnostics, not established conformal p-values",
+    "known-null bounds require known m, iid inliers and independent test",
+    "Telegram exact counters unavailable here; display unit unknown; Stars separation pending",
+    "no new production reads, writes, storage, polling, migration or deployment",
+    "saved production norms and verdicts not recomputed"
+  ],
+  "measurement_fix_commit": "b130c00"
+}
