@@ -23,7 +23,7 @@ from ..series import DAY, HOUR, PreparedSeries
 from .base import DetectorContext, age_text, expected_step, make_sign, number, scale_text, strongest
 
 ID = "late_spike"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 PATTERN = 2
 FAMILY = Family.SHAPE
 NEEDS_NORM = True
@@ -83,9 +83,9 @@ def _scan(prepared, context, metric, fit, grid):
     fact = np.diff(grid.cumulative)
     expected = np.maximum(fit.expected(starts, ends), 0.0)
     sigma = np.sqrt(fit.sigma_model ** 2 + 1.0 / (expected + 0.5))
-    z = np.log((fact + 0.5) / (expected + 0.5)) / sigma
+    z = np.log((np.maximum(fact, 0.0) + 0.5) / (expected + 0.5)) / sigma
     # Ячейка мельче шага сбора — интерполяция, а не наблюдение.
-    valid = grid.usable & (starts >= LATE_AGE) & (expected_step(prepared, starts) <= width)
+    valid = grid.usable & ~grid.negative & (starts >= LATE_AGE) & (expected_step(prepared, starts) <= width)
     hot = valid & (z >= CANDIDATE_Z)
     edges = np.flatnonzero(np.diff(np.concatenate(([0], hot.astype(np.int8), [0]))))
     signs = []
@@ -113,7 +113,7 @@ def _scan(prepared, context, metric, fit, grid):
             {"kind": "expected", "actual": round(actual), "expected": round(model, 1),
              "shape": shape, "consistent": consistent,
              "decay": [round(fit.decay.a, 4), round(fit.decay.b, 4), round(fit.decay.c, 4)]},
-            alternatives, context.norm_confidence))
+            alternatives, context.confidence_for(metric, start_age)))
     return signs
 
 

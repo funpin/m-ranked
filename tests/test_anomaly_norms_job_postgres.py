@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from anomaly_analysis.norms_job import NormJob
-from anomaly_analysis.v2.norms import NormStatus
+from anomaly_analysis.v2.norms import ERV, NormStatus
 from anomaly_analysis.v2.series import CollectionCadence
 from anomaly_analysis.v2.store import PostgresAnomalyStore
 
@@ -70,6 +70,9 @@ def test_job_writes_a_version_that_the_worker_can_read(databases):
     assert status in {NormStatus.ACCEPTED, NormStatus.DRIFT_REVIEW}
     norms = store.read_norms(version, "max")
     assert norms is not None and norms.for_account(account).posts == 22
+    account_norm = norms.for_account(account)
+    assert account_norm.cells[(ERV, 0)].confidence == pytest.approx(22 / 50)
+    assert account_norm.confidence_for(ERV, 0) == pytest.approx(22 / 50)
     if status is NormStatus.ACCEPTED:
         assert store.latest_accepted_norm_version() == version
 
@@ -79,4 +82,5 @@ def test_newer_incompatible_norm_cannot_replace_exact_quality_version(databases)
     store=PostgresAnomalyStore(databases["worker"])
     current=store.write_norm_version(NORM_MODEL_VERSION,NormStatus.ACCEPTED,[])
     store.write_norm_version("2.0.0",NormStatus.ACCEPTED,[])
+    store.write_norm_version("2.1.0",NormStatus.ACCEPTED,[])
     assert store.latest_accepted_norm_version()==current

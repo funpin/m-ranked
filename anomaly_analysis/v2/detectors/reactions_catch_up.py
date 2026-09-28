@@ -17,7 +17,7 @@ from ..series import DAY, PointFlag, PreparedSeries
 from .base import DetectorContext, age_text, expected_step, make_sign
 
 ID = "reactions_catch_up"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 PATTERN = 5
 FAMILY = Family.CROSS_METRIC
 NEEDS_NORM = True
@@ -89,10 +89,12 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     formula = (f"Δреакции/Δпросмотры = {ratio:.3f} в {dr.size} окнах около 6 ч, разброс {dispersion:.2f} "
                f"от пуассоновского ориентира, доля поста {post_ratio:.3f}, "
                f"t ∈ [{age_text(start_age)}; {age_text(end_age)}]")
+    confidence = (min(context.norm.confidence_for(ERV, 1), context.norm.confidence_for(ERV, 3))
+                  if context.norm else 0.0)
     return (make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, strength, start_age, end_age, SCALE, formula,
                       {"kind": "ratio", "ratio": round(ratio, 4), "dispersion": round(dispersion, 3),
                        "postRatio": round(post_ratio, 4), "windows": int(dr.size), "observationMode": "actual_nonoverlapping_pairs"},
-                      alternatives, context.norm_confidence),)
+                      alternatives, confidence),)
 
 
 def _segment(dr: np.ndarray, dv: np.ndarray) -> tuple[int, float, float] | None:

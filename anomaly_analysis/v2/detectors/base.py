@@ -17,7 +17,7 @@ import numpy as np
 
 from ..domain import Family, Interval, Metric, PostSeries, Sign
 from ..norms import DECAY_EXPONENT_BOUNDS, DecayFit, Norm, fit_decay
-from ..series import DAY, HOUR, CollectionCadence, PreparedSeries, confirm_unchanged
+from ..series import DAY, HOUR, CollectionCadence, PreparedSeries, confirm_unchanged, age_band
 
 # Счётчики площадок обновляются с задержкой; реакция может «обогнать»
 # просмотр на эту величину без всякой аномалии. Telegram обновляет
@@ -177,6 +177,12 @@ class DetectorContext:
     @property
     def norm_confidence(self) -> float:
         return 0.0 if self.norm is None else float(self.norm.confidence)
+
+    def confidence_for(self, metric: Metric | str, age: float) -> float:
+        if self.norm is None:
+            return 0.0
+        key = metric.value if isinstance(metric, Metric) else metric
+        return self.norm.confidence_for(key, int(age_band(np.array([age]))[0]))
 
     @property
     def counter_delay(self) -> float:

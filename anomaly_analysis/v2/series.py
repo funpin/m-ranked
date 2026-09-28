@@ -200,6 +200,34 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
     )
 
 
+def value_at(data: MetricSeries | None, age: float) -> float | None:
+    """A known endpoint, or interpolation only inside one trusted interval.
+
+    Never extrapolate a delayed first/last read or bridge missing, rounded,
+    uncertain, corrected or temporally disconnected observations.
+    """
+    if data is None or not data.ages.size:
+        return None
+    right = int(np.searchsorted(data.ages, age))
+    if right < data.ages.size and data.ages[right] == age:
+        return float(data.values[right])
+    if right == 0 or right == data.ages.size or data.flags[right]:
+        return None
+    return float(np.interp(age, data.ages[right-1:right+1], data.values[right-1:right+1]))
+
+
+def engagement_at(prepared: PreparedSeries, age: float) -> float | None:
+    """Missing reported engagement is unknown, not an omitted zero term."""
+    required = [metric for metric, column in prepared.series.values.items()
+                if metric is not Metric.VIEWS and any(
+                    value is not None and at <= prepared.analyzed_at
+                    for value, at in zip(column, prepared.series.observed_at))]
+    if not required:
+        return None
+    values = [value_at(prepared.metrics.get(metric), age) for metric in required]
+    return None if any(value is None for value in values) else float(sum(values))
+
+
 def confirm_unchanged(ages: np.ndarray, collected: np.ndarray, cadence: CollectionCadence,
                       platform: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Keep actual post observations; account cycles do not confirm a post read.

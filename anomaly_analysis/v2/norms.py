@@ -27,9 +27,9 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from .domain import Level, Metric, PostSeries
-from .series import AGE_BAND_EDGES, DAY, HOUR, PreparedSeries, age_band
+from .series import AGE_BAND_EDGES, DAY, HOUR, PreparedSeries, age_band, engagement_at, value_at
 
-NORM_MODEL_VERSION = "2.1.0"
+NORM_MODEL_VERSION = "2.2.0"
 
 # Показатель затухания. Crane и Sornette (PNAS 2008) различают три класса
 # релаксации с показателями 1−2θ, 1−θ и 1+θ; на YouTube θ ≈ 0.4, то есть около
@@ -118,6 +118,7 @@ class NormCell:
     log_rate: Robust | None = None
     share: tuple[float, float, float] | None = None
     log_erv: Robust | None = None
+    confidence: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +130,13 @@ class Norm:
     confidence: float
     decay: Mapping[str, DecayFit] = field(default_factory=dict)
     cells: Mapping[tuple[str, int], NormCell] = field(default_factory=dict)
+
+    def confidence_for(self, metric: str, band: int) -> float:
+        cell = self.cells.get((metric, band))
+        if cell is None:
+            return 0.0
+        support = cell.confidence if cell.confidence is not None else min(1.0, cell.sample_size / FULL_CONFIDENCE_POSTS)
+        return min(self.confidence, support)
 
     @property
     def young(self) -> bool:
@@ -194,51 +202,43 @@ def _collect(posts: Sequence[PreparedSeries], excluded: frozenset[UUID], final_a
     ends = AGE_BAND_EDGES[1:]
     for index, prepared in enumerate(posts):
         series = prepared.series
-        # Просмотры репоста — счётчик источника, а не аудитория аккаунта.
         if series.publication_id in excluded or series.is_repost:
             continue
-        samples.posts += 1
+        contributed = False
         for metric in COUNTERS:
             data = prepared.metrics.get(metric)
-            if data is None or data.ages[-1] < NORMALIZATION_AGE:
-                continue
-            base = float(np.interp(NORMALIZATION_AGE, data.ages, data.values))
-            if base <= 0:
+            base = value_at(data, NORMALIZATION_AGE)
+            if data is None or base is None or base <= 0:
                 continue
             grid = data.grids.get(timedelta(seconds=RATE_GRID))
             if grid is not None and grid.rates.size:
-                # Ячейки до момента публикации — артефакт выравнивания сетки
-                # по границам часа; скорости «до поста» в норме нет.
-                keep = grid.usable & (grid.rates > 0) & (grid.edges[:-1] >= 0)
-                if not keep.any():
-                    continue
-                hours = (grid.edges[:-1][keep] + RATE_GRID / 2) / HOUR
-                # Доля значения в сутки, приходящая за час: сравнима между постами разного охвата.
-                logs = np.log(grid.rates[keep] * HOUR / base)
-                samples.rate_hours.setdefault(metric.value, []).append(hours)
-                samples.rate_logs.setdefault(metric.value, []).append(logs)
-                for band in np.unique(age_band(hours * HOUR)):
-                    samples.contributors.setdefault((metric.value, int(band)), set()).add(index)
-            if data.ages[-1] >= final_age:
-                final = float(np.interp(final_age, data.ages, data.values))
-                if final > 0:
-                    for band, end in enumerate(ends):
-                        if end <= final_age:
-                            share = float(np.interp(end, data.ages, data.values)) / final
-                            samples.shares.setdefault((metric.value, band), []).append(share)
+                keep = grid.usable & ~grid.negative & (grid.rates > 0) & (grid.edges[:-1] >= 0)
+                if keep.any():
+                    hours = (grid.edges[:-1][keep] + RATE_GRID / 2) / HOUR
+                    logs = np.log(grid.rates[keep] * HOUR / base)
+                    samples.rate_hours.setdefault(metric.value, []).append(hours)
+                    samples.rate_logs.setdefault(metric.value, []).append(logs)
+                    for band in np.unique(age_band(hours * HOUR)):
+                        samples.contributors.setdefault((metric.value, int(band)), set()).add(index)
+                    contributed = True
+            final = value_at(data, final_age)
+            if final is not None and final > 0:
+                for band, end in enumerate(ends):
+                    value = value_at(data, float(end)) if end <= final_age else None
+                    if value is not None and 0 <= value <= final:
+                        samples.shares.setdefault((metric.value, band), []).append(value / final)
+                        contributed = True
         views = prepared.metrics.get(Metric.VIEWS)
-        if views is None or views.source_counter:
-            continue
-        for band, end in enumerate(ends):
-            if views.ages[-1] < end:
-                break
-            seen = float(np.interp(end, views.ages, views.values))
-            engaged = sum(float(np.interp(end, item.ages, item.values))
-                          for metric, item in prepared.metrics.items()
-                          if metric is not Metric.VIEWS and item.ages[-1] >= end)
-            if seen > 0 and engaged > 0:
-                samples.ervs.setdefault(band, []).append(float(np.log(engaged / seen)))
-                samples.contributors.setdefault((ERV, band), set()).add(index)
+        if views is not None and not views.source_counter:
+            for band, end in enumerate(ends):
+                seen = value_at(views, float(end))
+                engaged = engagement_at(prepared, float(end))
+                if seen is not None and engaged is not None and seen > 0 and engaged > 0:
+                    samples.ervs.setdefault(band, []).append(float(np.log(engaged / seen)))
+                    samples.contributors.setdefault((ERV, band), set()).add(index)
+                    contributed = True
+        # Empty/unusable rows provide no evidence for the norm's maturity.
+        samples.posts += int(contributed)
     return samples
 
 
@@ -265,10 +265,14 @@ def _account_norm(platform: str, account_id: UUID | None, samples: _Samples) -> 
                                   log_rate=robust(logs[bands == band]))
     for key, shares in samples.shares.items():
         low, middle, high = (float(item) for item in np.quantile(shares, SHARE_QUANTILES))
-        cells[key] = replace(cells.get(key, NormCell(key[0], key[1], len(shares))),
-                             share=(low, middle, high))
+        prior = cells.get(key)
+        count = min(prior.sample_size, len(shares)) if prior is not None else len(shares)
+        cells[key] = replace(prior or NormCell(key[0], key[1], count),
+                             sample_size=count, share=(low, middle, high))
     for band, values in samples.ervs.items():
         cells[(ERV, band)] = NormCell(ERV, band, len(values), log_erv=robust(np.array(values)))
+    cells = {key: replace(cell, confidence=min(1.0, cell.sample_size / FULL_CONFIDENCE_POSTS))
+             for key, cell in cells.items()}
     confidence = min(1.0, samples.posts / FULL_CONFIDENCE_POSTS)
     return Norm(platform, account_id, "account", samples.posts, confidence, decay, cells)
 
@@ -287,6 +291,8 @@ def _median_norm(platform: str, norms: Sequence[Norm]) -> Norm:
             log_rate=_median_robust([cell.log_rate for cell in group]),
             share=_median_share([cell.share for cell in group]),
             log_erv=_median_robust([cell.log_erv for cell in group]),
+            confidence=min(1.0, len(group) / FULL_CONFIDENCE_ACCOUNTS,
+                           sum(cell.sample_size for cell in group) / FULL_CONFIDENCE_POSTS),
         )
     confidence = min(1.0, len(norms) / FULL_CONFIDENCE_ACCOUNTS)
     return Norm(platform, None, "platform", sum(norm.posts for norm in norms), confidence, decay, cells)
@@ -469,6 +475,7 @@ def norm_from_payload(payload: Mapping) -> Norm:
             log_rate=Robust(*item["rate"]) if "rate" in item else None,
             share=(*map(float, item["share"]),) if "share" in item else None,  # type: ignore[arg-type]
             log_erv=Robust(*item["erv"]) if "erv" in item else None,
+            confidence=float(item["confidence"]) if "confidence" in item else None,
         )
         cells[(cell.metric, cell.band)] = cell
     account = payload["account_id"]
@@ -479,6 +486,8 @@ def norm_from_payload(payload: Mapping) -> Norm:
 
 def _cell_payload(cell: NormCell) -> dict:
     payload: dict = {"m": cell.metric, "band": cell.band, "n": cell.sample_size}
+    if cell.confidence is not None:
+        payload["confidence"] = _round(cell.confidence)
     if cell.log_rate is not None:
         payload["rate"] = [_round(cell.log_rate.median), _round(cell.log_rate.mad)]
     if cell.share is not None:

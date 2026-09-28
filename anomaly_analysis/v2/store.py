@@ -257,7 +257,7 @@ def norm_rows(norm: Norm) -> list[dict[str, Any]]:
              "params": {"decay": values, "basis": norm.basis}}
             for metric, values in payload["decay"].items()]
     for cell in payload["cells"]:
-        params = {key: cell[key] for key in ("rate", "share", "erv") if key in cell}
+        params = {key: cell[key] for key in ("rate", "share", "erv", "confidence") if key in cell}
         rows.append({**common, "metric": cell["m"], "age_band": cell["band"],
                      "sample_size": cell["n"], "params": params})
     return rows

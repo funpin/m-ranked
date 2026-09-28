@@ -13,11 +13,11 @@ import numpy as np
 
 from ..domain import Family, Metric, Sign
 from ..norms import ERV
-from ..series import AGE_BAND_EDGES, PreparedSeries
+from ..series import AGE_BAND_EDGES, PreparedSeries, engagement_at, value_at
 from .base import DetectorContext, age_text, make_sign
 
 ID = "erv_outlier"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 PATTERN = 10
 FAMILY = Family.CROSS_METRIC
 NEEDS_NORM = True
@@ -43,10 +43,9 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     if cell is None or cell.log_erv is None:
         return ()
     end = float(ends[band])
-    seen = float(np.interp(end, views.ages, views.values))
-    engaged = sum(float(np.interp(end, item.ages, item.values)) for metric, item in prepared.metrics.items()
-                  if metric in ENGAGEMENT and item.ages[-1] >= end)
-    if seen <= 0 or engaged <= 0:
+    seen = value_at(views, end)
+    engaged = engagement_at(prepared, end)
+    if seen is None or engaged is None or seen <= 0 or engaged <= 0:
         return ()
     value = float(np.log(engaged / seen))
     spread = max(1.4826 * cell.log_erv.mad, SPREAD_FLOOR)
@@ -62,4 +61,4 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
                       timedelta(seconds=end - start), formula,
                       {"kind": "erv", "erv": round(float(np.exp(value)), 5),
                        "median": round(float(np.exp(cell.log_erv.median)), 5), "z": round(float(z), 2),
-                       "band": band}, alternatives, context.norm_confidence),)
+                       "band": band}, alternatives, context.norm.confidence_for(ERV, band)),)
