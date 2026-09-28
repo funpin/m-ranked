@@ -182,7 +182,8 @@ def test_reaction_evidence_survives_database_worker_export_and_api(databases, qu
         restored = parse_case(export(connection,(publication,))[publication]).subject
     assert body['level'] >= 2 if quality == 'rounded' else body['level'] == 1
     assert any(s['render']['kind'] == 'bounded_burst' for s in body['signals'])
-    assert body['detectorVersions']['bounded_reaction_burst'] == '1.3.1'
+    from anomaly_analysis.v2.detectors.bounded_reaction_burst import VERSION
+    assert body['detectorVersions']['bounded_reaction_burst'] == VERSION
     if quality == 'unknown':
         assert any(s['render'].get('reportedOnly') for s in body['signals'])
     assert restored.interval_uncertain == series.interval_uncertain
