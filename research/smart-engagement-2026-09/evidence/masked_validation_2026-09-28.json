@@ -1,0 +1,2951 @@
+{
+  "seed": 20262228,
+  "nominal_research_alpha": 0.05,
+  "runtime": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1"
+  },
+  "early_masking": {
+    "input_sha256": "9f0ff271628584b78ba3350587623826a1c96f1e696976a965307e356fa0df22",
+    "counts": {
+      "fit": 295,
+      "cal": 223,
+      "test": 382
+    },
+    "models": {
+      "conditional_v24": {
+        "base_alerts_unlabeled": {
+          "n": 382,
+          "hits": 16,
+          "rate": 0.041884816753926704,
+          "account_bootstrap": {
+            "clusters": 24,
+            "mean": 0.041884816753926704,
+            "ci95": [
+              0.008868689048917843,
+              0.10354681027340504
+            ]
+          }
+        },
+        "test_mae_log1p": 0.05151893308581815,
+        "log_v24_coefficient": 0.9088144781966707,
+        "injections": {
+          "0.1": {
+            "late_only": {
+              "all": {
+                "n": 382,
+                "hits": 106,
+                "rate": 0.2774869109947644,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.2774869109947644,
+                  "ci95": [
+                    0.175,
+                    0.4088184221438938
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 90,
+                "rate": 0.2459016393442623,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.2459016393442623,
+                  "ci95": [
+                    0.1523301463518855,
+                    0.3650232289544375
+                  ]
+                }
+              }
+            },
+            "already_in_v24": {
+              "all": {
+                "n": 382,
+                "hits": 17,
+                "rate": 0.04450261780104712,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.04450261780104712,
+                  "ci95": [
+                    0.009323107233323951,
+                    0.10861769099445139
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 1,
+                "rate": 0.00273224043715847,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.00273224043715847,
+                  "ci95": [
+                    0.0,
+                    0.010101649405446871
+                  ]
+                }
+              }
+            }
+          },
+          "0.3": {
+            "late_only": {
+              "all": {
+                "n": 382,
+                "hits": 380,
+                "rate": 0.9947643979057592,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.9947643979057592,
+                  "ci95": [
+                    0.979590095423835,
+                    1.0
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 364,
+                "rate": 0.994535519125683,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.994535519125683,
+                  "ci95": [
+                    0.9800982618081662,
+                    1.0
+                  ]
+                }
+              }
+            },
+            "already_in_v24": {
+              "all": {
+                "n": 382,
+                "hits": 22,
+                "rate": 0.05759162303664921,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.05759162303664921,
+                  "ci95": [
+                    0.019882625598086123,
+                    0.1250089031339031
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 6,
+                "rate": 0.01639344262295082,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.01639344262295082,
+                  "ci95": [
+                    0.004474023250239693,
+                    0.03540295405158565
+                  ]
+                }
+              }
+            }
+          },
+          "1.0": {
+            "late_only": {
+              "all": {
+                "n": 382,
+                "hits": 382,
+                "rate": 1.0,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 1.0,
+                  "ci95": [
+                    1.0,
+                    1.0
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 366,
+                "rate": 1.0,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 1.0,
+                  "ci95": [
+                    1.0,
+                    1.0
+                  ]
+                }
+              }
+            },
+            "already_in_v24": {
+              "all": {
+                "n": 382,
+                "hits": 49,
+                "rate": 0.12827225130890052,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.12827225130890052,
+                  "ci95": [
+                    0.07562419646350779,
+                    0.20312884221311472
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 33,
+                "rate": 0.09016393442622951,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.09016393442622951,
+                  "ci95": [
+                    0.053706211473982295,
+                    0.13737012987012984
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "historical_account_only": {
+        "base_alerts_unlabeled": {
+          "n": 382,
+          "hits": 16,
+          "rate": 0.041884816753926704,
+          "account_bootstrap": {
+            "clusters": 24,
+            "mean": 0.041884816753926704,
+            "ci95": [
+              0.0027397260273972603,
+              0.10659706672637699
+            ]
+          }
+        },
+        "test_mae_log1p": 0.2711594607001749,
+        "log_v24_coefficient": null,
+        "injections": {
+          "0.1": {
+            "late_only": {
+              "all": {
+                "n": 382,
+                "hits": 25,
+                "rate": 0.06544502617801047,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.06544502617801047,
+                  "ci95": [
+                    0.007535350449518061,
+                    0.15460588307591447
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 9,
+                "rate": 0.02459016393442623,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.02459016393442623,
+                  "ci95": [
+                    0.0,
+                    0.07118740644164373
+                  ]
+                }
+              }
+            },
+            "already_in_v24": {
+              "all": {
+                "n": 382,
+                "hits": 25,
+                "rate": 0.06544502617801047,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.06544502617801047,
+                  "ci95": [
+                    0.007535350449518061,
+                    0.15460588307591447
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 9,
+                "rate": 0.02459016393442623,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.02459016393442623,
+                  "ci95": [
+                    0.0,
+                    0.07118740644164373
+                  ]
+                }
+              }
+            }
+          },
+          "0.3": {
+            "late_only": {
+              "all": {
+                "n": 382,
+                "hits": 40,
+                "rate": 0.10471204188481675,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.10471204188481675,
+                  "ci95": [
+                    0.02202293521156671,
+                    0.2248798345629331
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 24,
+                "rate": 0.06557377049180328,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.06557377049180328,
+                  "ci95": [
+                    0.005493754879000781,
+                    0.15645354718705123
+                  ]
+                }
+              }
+            },
+            "already_in_v24": {
+              "all": {
+                "n": 382,
+                "hits": 40,
+                "rate": 0.10471204188481675,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.10471204188481675,
+                  "ci95": [
+                    0.02202293521156671,
+                    0.2248798345629331
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 24,
+                "rate": 0.06557377049180328,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.06557377049180328,
+                  "ci95": [
+                    0.005493754879000781,
+                    0.15645354718705123
+                  ]
+                }
+              }
+            }
+          },
+          "1.0": {
+            "late_only": {
+              "all": {
+                "n": 382,
+                "hits": 176,
+                "rate": 0.4607329842931937,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.4607329842931937,
+                  "ci95": [
+                    0.31231871308282017,
+                    0.6195416316232126
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 160,
+                "rate": 0.4371584699453552,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.4371584699453552,
+                  "ci95": [
+                    0.2931442584497281,
+                    0.595173943736811
+                  ]
+                }
+              }
+            },
+            "already_in_v24": {
+              "all": {
+                "n": 382,
+                "hits": 176,
+                "rate": 0.4607329842931937,
+                "account_bootstrap": {
+                  "clusters": 24,
+                  "mean": 0.4607329842931937,
+                  "ci95": [
+                    0.31231871308282017,
+                    0.6195416316232126
+                  ]
+                }
+              },
+              "new_among_base_clear": {
+                "n": 366,
+                "hits": 160,
+                "rate": 0.4371584699453552,
+                "account_bootstrap": {
+                  "clusters": 23,
+                  "mean": 0.4371584699453552,
+                  "ci95": [
+                    0.2931442584497281,
+                    0.595173943736811
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "scope": "actual held-out endpoints with specified additions; original posts are unlabeled; account bootstrap is not a population guarantee"
+  },
+  "history_contamination": {
+    "worlds": 1500,
+    "accounts_per_world": 10,
+    "target_and_two_peers_modified": true,
+    "fit_posts_per_account": 40,
+    "calibration_posts_per_account": 40,
+    "scope": "synthetic matched account populations; peer comparability is stipulated, not established for real universities",
+    "results": [
+      {
+        "contaminated_fraction": 0.0,
+        "calibration_also_contaminated": false,
+        "method": "own_mean",
+        "median_norm_multiplier": 0.9984131263417187,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 79,
+          "rate": 0.05266666666666667,
+          "wilson95": [
+            0.042462382108623964,
+            0.06515631524236508
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1067,
+          "rate": 0.7113333333333334,
+          "wilson95": [
+            0.687884684561638,
+            0.7337023093872987
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.0,
+        "calibration_also_contaminated": false,
+        "method": "own_median",
+        "median_norm_multiplier": 1.0012990501423586,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 73,
+          "rate": 0.048666666666666664,
+          "wilson95": [
+            0.03888362661591451,
+            0.06075550618083598
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1056,
+          "rate": 0.704,
+          "wilson95": [
+            0.6804013303941577,
+            0.7265564618720081
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.0,
+        "calibration_also_contaminated": false,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.0004135738422808,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 80,
+          "rate": 0.05333333333333334,
+          "wilson95": [
+            0.04306062753158088,
+            0.0658879972451146
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1085,
+          "rate": 0.7233333333333334,
+          "wilson95": [
+            0.7001459516555677,
+            0.7453797359560848
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.0,
+        "calibration_also_contaminated": true,
+        "method": "own_mean",
+        "median_norm_multiplier": 0.9984131263417187,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 79,
+          "rate": 0.05266666666666667,
+          "wilson95": [
+            0.042462382108623964,
+            0.06515631524236508
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1067,
+          "rate": 0.7113333333333334,
+          "wilson95": [
+            0.687884684561638,
+            0.7337023093872987
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.0,
+        "calibration_also_contaminated": true,
+        "method": "own_median",
+        "median_norm_multiplier": 1.0012990501423586,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 73,
+          "rate": 0.048666666666666664,
+          "wilson95": [
+            0.03888362661591451,
+            0.06075550618083598
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1056,
+          "rate": 0.704,
+          "wilson95": [
+            0.6804013303941577,
+            0.7265564618720081
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.0,
+        "calibration_also_contaminated": true,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.0004135738422808,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 80,
+          "rate": 0.05333333333333334,
+          "wilson95": [
+            0.04306062753158088,
+            0.0658879972451146
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1085,
+          "rate": 0.7233333333333334,
+          "wilson95": [
+            0.7001459516555677,
+            0.7453797359560848
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.25,
+        "calibration_also_contaminated": false,
+        "method": "own_mean",
+        "median_norm_multiplier": 1.1870799854397949,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 23,
+          "rate": 0.015333333333333332,
+          "wilson95": [
+            0.0102389148786146,
+            0.022903846632814653
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 842,
+          "rate": 0.5613333333333334,
+          "wilson95": [
+            0.5360963301380184,
+            0.5862569930269728
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.25,
+        "calibration_also_contaminated": false,
+        "method": "own_median",
+        "median_norm_multiplier": 1.1314881060864663,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 35,
+          "rate": 0.023333333333333334,
+          "wilson95": [
+            0.016824677337497887,
+            0.03227721328240847
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 896,
+          "rate": 0.5973333333333334,
+          "wilson95": [
+            0.5722962090091096,
+            0.6218731951440285
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.25,
+        "calibration_also_contaminated": false,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.021318490774092,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 86,
+          "rate": 0.05733333333333333,
+          "wilson95": [
+            0.04666002962225208,
+            0.07026815970868193
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1103,
+          "rate": 0.7353333333333333,
+          "wilson95": [
+            0.7124274795183936,
+            0.7570369017559742
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.25,
+        "calibration_also_contaminated": true,
+        "method": "own_mean",
+        "median_norm_multiplier": 1.1870799854397949,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 9,
+          "rate": 0.006,
+          "wilson95": [
+            0.0031598175797059123,
+            0.011363959971833398
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 616,
+          "rate": 0.4106666666666667,
+          "wilson95": [
+            0.3860297411040679,
+            0.4357599838512712
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.25,
+        "calibration_also_contaminated": true,
+        "method": "own_median",
+        "median_norm_multiplier": 1.1314881060864663,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 12,
+          "rate": 0.008,
+          "wilson95": [
+            0.0045822256095402435,
+            0.013931334219118342
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 647,
+          "rate": 0.43133333333333335,
+          "wilson95": [
+            0.40647687743703903,
+            0.4565405977151992
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.25,
+        "calibration_also_contaminated": true,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.021318490774092,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 13,
+          "rate": 0.008666666666666666,
+          "wilson95": [
+            0.005071820780159603,
+            0.014771666474205405
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 766,
+          "rate": 0.5106666666666667,
+          "wilson95": [
+            0.4853744676936894,
+            0.5359043711176136
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.5,
+        "calibration_also_contaminated": false,
+        "method": "own_mean",
+        "median_norm_multiplier": 1.4123559973189033,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 5,
+          "rate": 0.0033333333333333335,
+          "wilson95": [
+            0.0014246155236142537,
+            0.00777945232509936
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 582,
+          "rate": 0.388,
+          "wilson95": [
+            0.3636558962384205,
+            0.4129162962429002
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.5,
+        "calibration_also_contaminated": false,
+        "method": "own_median",
+        "median_norm_multiplier": 1.417653527843643,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 9,
+          "rate": 0.006,
+          "wilson95": [
+            0.0031598175797059123,
+            0.011363959971833398
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 571,
+          "rate": 0.38066666666666665,
+          "wilson95": [
+            0.3564291977920079,
+            0.4055137930065421
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.5,
+        "calibration_also_contaminated": false,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.04712589300583,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 99,
+          "rate": 0.066,
+          "wilson95": [
+            0.0545112274826468,
+            0.07970601838247074
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1119,
+          "rate": 0.746,
+          "wilson95": [
+            0.7233620979055541,
+            0.7673811221801167
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.5,
+        "calibration_also_contaminated": true,
+        "method": "own_mean",
+        "median_norm_multiplier": 1.4123559973189033,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 346,
+          "rate": 0.23066666666666666,
+          "wilson95": [
+            0.2100525128118286,
+            0.2526568072027758
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.5,
+        "calibration_also_contaminated": true,
+        "method": "own_median",
+        "median_norm_multiplier": 1.417653527843643,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 2,
+          "rate": 0.0013333333333333333,
+          "wilson95": [
+            0.00036572427558412626,
+            0.0048485612960102115
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 347,
+          "rate": 0.23133333333333334,
+          "wilson95": [
+            0.2106960376252335,
+            0.25334320981507735
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.5,
+        "calibration_also_contaminated": true,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.04712589300583,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 2,
+          "rate": 0.0013333333333333333,
+          "wilson95": [
+            0.00036572427558412626,
+            0.0048485612960102115
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 495,
+          "rate": 0.33,
+          "wilson95": [
+            0.30666508815309534,
+            0.3542034182917664
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.75,
+        "calibration_also_contaminated": false,
+        "method": "own_mean",
+        "median_norm_multiplier": 1.679722732073564,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 317,
+          "rate": 0.21133333333333335,
+          "wilson95": [
+            0.19142380773646023,
+            0.2327176169326579
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.75,
+        "calibration_also_contaminated": false,
+        "method": "own_median",
+        "median_norm_multiplier": 1.7691337326884808,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 247,
+          "rate": 0.16466666666666666,
+          "wilson95": [
+            0.14675893368093082,
+            0.18428757118873754
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.75,
+        "calibration_also_contaminated": false,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.076012924668654,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 107,
+          "rate": 0.07133333333333333,
+          "wilson95": [
+            0.05937394629575595,
+            0.08548271897501297
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1144,
+          "rate": 0.7626666666666667,
+          "wilson95": [
+            0.7404824965245076,
+            0.7835089092038239
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.75,
+        "calibration_also_contaminated": true,
+        "method": "own_mean",
+        "median_norm_multiplier": 1.679722732073564,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 178,
+          "rate": 0.11866666666666667,
+          "wilson95": [
+            0.10326688365908077,
+            0.13601462883684434
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.75,
+        "calibration_also_contaminated": true,
+        "method": "own_median",
+        "median_norm_multiplier": 1.7691337326884808,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 142,
+          "rate": 0.09466666666666666,
+          "wilson95": [
+            0.08086969103664647,
+            0.11053443413384732
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 0.75,
+        "calibration_also_contaminated": true,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.076012924668654,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 352,
+          "rate": 0.23466666666666666,
+          "wilson95": [
+            0.2139147760265805,
+            0.25677410854226246
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 1.0,
+        "calibration_also_contaminated": false,
+        "method": "own_mean",
+        "median_norm_multiplier": 1.9968262526834404,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 121,
+          "rate": 0.08066666666666666,
+          "wilson95": [
+            0.06793265072083973,
+            0.09554299850981915
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 1.0,
+        "calibration_also_contaminated": false,
+        "method": "own_median",
+        "median_norm_multiplier": 2.0025981002847173,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 109,
+          "rate": 0.07266666666666667,
+          "wilson95": [
+            0.06059296430671563,
+            0.08692355581546618
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 1.0,
+        "calibration_also_contaminated": false,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.1104220545301315,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 111,
+          "rate": 0.074,
+          "wilson95": [
+            0.06181325009801319,
+            0.08836312487558143
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 1169,
+          "rate": 0.7793333333333333,
+          "wilson95": [
+            0.7576483396942918,
+            0.7995912516767002
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 1.0,
+        "calibration_also_contaminated": true,
+        "method": "own_mean",
+        "median_norm_multiplier": 1.9968262526834404,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 79,
+          "rate": 0.05266666666666667,
+          "wilson95": [
+            0.042462382108623964,
+            0.06515631524236508
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 1.0,
+        "calibration_also_contaminated": true,
+        "method": "own_median",
+        "median_norm_multiplier": 2.0025981002847173,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 73,
+          "rate": 0.048666666666666664,
+          "wilson95": [
+            0.03888362661591451,
+            0.06075550618083598
+          ]
+        }
+      },
+      {
+        "contaminated_fraction": 1.0,
+        "calibration_also_contaminated": true,
+        "method": "peer_median",
+        "median_norm_multiplier": 1.1104220545301315,
+        "clean_test_alerts": {
+          "n": 1500,
+          "hits": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.002554430720181488
+          ]
+        },
+        "double_count_test_alerts": {
+          "n": 1500,
+          "hits": 267,
+          "rate": 0.178,
+          "wilson95": [
+            0.15947231647565113,
+            0.19817273690814569
+          ]
+        }
+      }
+    ]
+  },
+  "trajectory_stress": {
+    "templates": {
+      "panel_sha256": "1eadb3143f3ec42e3869ec2bdd315e1e9c176f3353d96feccf61622746c6cf2e",
+      "accounts": 59,
+      "intervals": 2425,
+      "audit_before_template_selection": {
+        "opportunities": 53388,
+        "eligible": 20097,
+        "stale_endpoint": 30838,
+        "missing_endpoint": 2441,
+        "negative_net_change": 10,
+        "actual_age_boundary": 2
+      },
+      "selection": "at least 6 posts and 24 late intervals, >=2 intervals/post, up to 12 posts by SHA256(id); no anomaly-label selection"
+    },
+    "fit_worlds": 1500,
+    "calibration_worlds": 1500,
+    "test_worlds": 1500,
+    "components": [
+      "views_volume",
+      "conditional_reactions",
+      "breadth",
+      "underdispersion",
+      "residual_coordination",
+      "reaction_lag"
+    ],
+    "joint_threshold": 0.9893404397068621,
+    "individual_thresholds": {
+      "views_volume": 0.9560293137908061,
+      "conditional_reactions": 0.9460359760159893,
+      "breadth": 0.9407061958694204,
+      "underdispersion": 0.9400399733510992,
+      "residual_coordination": 0.9433710859427049,
+      "reaction_lag": 0.9533644237175216
+    },
+    "clean_generator": {
+      "joint": {
+        "n": 1500,
+        "hits": 102,
+        "rate": 0.068,
+        "wilson95": [
+          0.05633216548816217,
+          0.08187486265407465
+        ]
+      },
+      "new_among_base_clear": {
+        "n": 1398,
+        "hits": 0,
+        "rate": 0.0,
+        "wilson95": [
+          0.0,
+          0.0027402947719393114
+        ]
+      },
+      "component_alerts": {
+        "views_volume": {
+          "n": 1500,
+          "hits": 64,
+          "rate": 0.042666666666666665,
+          "wilson95": [
+            0.03355366749284015,
+            0.054116118472552516
+          ]
+        },
+        "conditional_reactions": {
+          "n": 1500,
+          "hits": 93,
+          "rate": 0.062,
+          "wilson95": [
+            0.050879262338555414,
+            0.07535841897232357
+          ]
+        },
+        "breadth": {
+          "n": 1500,
+          "hits": 104,
+          "rate": 0.06933333333333333,
+          "wilson95": [
+            0.057547868080283275,
+            0.0833190149133664
+          ]
+        },
+        "underdispersion": {
+          "n": 1500,
+          "hits": 88,
+          "rate": 0.058666666666666666,
+          "wilson95": [
+            0.04786342768227863,
+            0.07172461650006824
+          ]
+        },
+        "residual_coordination": {
+          "n": 1500,
+          "hits": 94,
+          "rate": 0.06266666666666666,
+          "wilson95": [
+            0.05148363681474642,
+            0.07608397192183898
+          ]
+        },
+        "reaction_lag": {
+          "n": 1500,
+          "hits": 57,
+          "rate": 0.038,
+          "wilson95": [
+            0.029445029308207155,
+            0.04891526467724054
+          ]
+        }
+      },
+      "actual_added_views_fraction": 0.0,
+      "actual_added_reactions_fraction": 0.0
+    },
+    "uncorrected_component_union": {
+      "n": 1500,
+      "hits": 406,
+      "rate": 0.27066666666666667,
+      "wilson95": [
+        0.24878909703822205,
+        0.29371586851876785
+      ]
+    },
+    "scenarios": {
+      "smooth_joint": {
+        "0.1": {
+          "joint": {
+            "n": 1500,
+            "hits": 109,
+            "rate": 0.07266666666666667,
+            "wilson95": [
+              0.06059296430671563,
+              0.08692355581546618
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 26,
+            "rate": 0.01859799713876967,
+            "wilson95": [
+              0.01272298766894284,
+              0.02711137339187999
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 132,
+              "rate": 0.088,
+              "wilson95": [
+                0.07469568518530124,
+                0.10340916572812829
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 82,
+              "rate": 0.05466666666666667,
+              "wilson95": [
+                0.0442585691503609,
+                0.06734991047774742
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 122,
+              "rate": 0.08133333333333333,
+              "wilson95": [
+                0.0685461561187387,
+                0.09625942053762661
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 73,
+              "rate": 0.048666666666666664,
+              "wilson95": [
+                0.03888362661591451,
+                0.06075550618083598
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 95,
+              "rate": 0.06333333333333334,
+              "wilson95": [
+                0.05208839990254764,
+                0.07680913625974421
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 61,
+              "rate": 0.04066666666666666,
+              "wilson95": [
+                0.031788512536601546,
+                0.05189149115167184
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.10024758633969595,
+          "actual_added_reactions_fraction": 0.10103229762878169
+        },
+        "0.3": {
+          "joint": {
+            "n": 1500,
+            "hits": 179,
+            "rate": 0.11933333333333333,
+            "wilson95": [
+              0.10389237052800027,
+              0.13671906939363124
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 113,
+            "rate": 0.08082975679542204,
+            "wilson95": [
+              0.06766361799625928,
+              0.09629319564659686
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 560,
+              "rate": 0.37333333333333335,
+              "wilson95": [
+                0.349208419142554,
+                0.3981053699732254
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 67,
+              "rate": 0.04466666666666667,
+              "wilson95": [
+                0.03532481507788357,
+                0.05633475316462838
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 156,
+              "rate": 0.104,
+              "wilson95": [
+                0.08955014082427697,
+                0.12047296830610678
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 46,
+              "rate": 0.030666666666666665,
+              "wilson95": [
+                0.02306947388821145,
+                0.04066161841446556
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 101,
+              "rate": 0.06733333333333333,
+              "wilson95": [
+                0.055724832625160745,
+                0.08115226809136962
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 85,
+              "rate": 0.056666666666666664,
+              "wilson95": [
+                0.04605898663346571,
+                0.06953927527176187
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.298633984019755,
+          "actual_added_reactions_fraction": 0.2909341782502044
+        },
+        "1.0": {
+          "joint": {
+            "n": 1500,
+            "hits": 1494,
+            "rate": 0.996,
+            "wilson95": [
+              0.9913004908913017,
+              0.9981655138342782
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 1393,
+            "rate": 0.9964234620886981,
+            "wilson95": [
+              0.9916548522413319,
+              0.998471378700405
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 1500,
+              "rate": 1.0,
+              "wilson95": [
+                0.9974455692798185,
+                1.0
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 36,
+              "rate": 0.024,
+              "wilson95": [
+                0.017385620398415003,
+                0.03304619764719778
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 191,
+              "rate": 0.12733333333333333,
+              "wilson95": [
+                0.11141064622629665,
+                0.1451599228038119
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 11,
+              "rate": 0.007333333333333333,
+              "wilson95": [
+                0.004099723207137282,
+                0.01308390919581488
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 120,
+              "rate": 0.08,
+              "wilson95": [
+                0.0673194201867346,
+                0.09482630161821785
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 116,
+              "rate": 0.07733333333333334,
+              "wilson95": [
+                0.06486930993335295,
+                0.09195670216877382
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.9981371525912186,
+          "actual_added_reactions_fraction": 0.9851287816843827
+        }
+      },
+      "proportional_path": {
+        "0.1": {
+          "joint": {
+            "n": 1500,
+            "hits": 126,
+            "rate": 0.084,
+            "wilson95": [
+              0.07100286623041224,
+              0.09912242012877878
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 38,
+            "rate": 0.027181688125894134,
+            "wilson95": [
+              0.019866895220459112,
+              0.03708780412754073
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 156,
+              "rate": 0.104,
+              "wilson95": [
+                0.08955014082427697,
+                0.12047296830610678
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 102,
+              "rate": 0.068,
+              "wilson95": [
+                0.05633216548816217,
+                0.08187486265407465
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 67,
+              "rate": 0.04466666666666667,
+              "wilson95": [
+                0.03532481507788357,
+                0.05633475316462838
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 75,
+              "rate": 0.05,
+              "wilson95": [
+                0.040074440990789065,
+                0.062224546657374286
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 123,
+              "rate": 0.082,
+              "wilson95": [
+                0.06915993332947948,
+                0.09697557075259225
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 90,
+              "rate": 0.06,
+              "wilson95": [
+                0.04906852936100265,
+                0.07317936967275707
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.09998867723410071,
+          "actual_added_reactions_fraction": 0.10077677841373671
+        },
+        "0.3": {
+          "joint": {
+            "n": 1500,
+            "hits": 279,
+            "rate": 0.186,
+            "wilson95": [
+              0.1671197545168386,
+              0.20648442797543534
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 192,
+            "rate": 0.13733905579399142,
+            "wilson95": [
+              0.12028708835430875,
+              0.15637861901246275
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 589,
+              "rate": 0.39266666666666666,
+              "wilson95": [
+                0.3682577574338288,
+                0.4176239270274368
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 104,
+              "rate": 0.06933333333333333,
+              "wilson95": [
+                0.057547868080283275,
+                0.0833190149133664
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 27,
+              "rate": 0.018,
+              "wilson95": [
+                0.012399833223269055,
+                0.026062637990985904
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 62,
+              "rate": 0.04133333333333333,
+              "wilson95": [
+                0.032376206722410705,
+                0.05263372439156912
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 165,
+              "rate": 0.11,
+              "wilson95": [
+                0.09515100038087597,
+                0.1268414555808656
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 152,
+              "rate": 0.10133333333333333,
+              "wilson95": [
+                0.08706588865278152,
+                0.11763751077477654
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.3000093034191147,
+          "actual_added_reactions_fraction": 0.2975776778413737
+        },
+        "1.0": {
+          "joint": {
+            "n": 1500,
+            "hits": 1372,
+            "rate": 0.9146666666666666,
+            "wilson95": [
+              0.8994476527415375,
+              0.9277672060478587
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 1272,
+            "rate": 0.9098712446351931,
+            "wilson95": [
+              0.8937154147831781,
+              0.923780738429524
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 1470,
+              "rate": 0.98,
+              "wilson95": [
+                0.9715926317939492,
+                0.9859551147146766
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 103,
+              "rate": 0.06866666666666667,
+              "wilson95": [
+                0.056939845516550396,
+                0.08259711005139284
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 0,
+              "rate": 0.0,
+              "wilson95": [
+                0.0,
+                0.002554430720181488
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 28,
+              "rate": 0.018666666666666668,
+              "wilson95": [
+                0.01294606406020905,
+                0.02684633457975234
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 300,
+              "rate": 0.2,
+              "wilson95": [
+                0.18053525965222722,
+                0.22099739877988167
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 337,
+              "rate": 0.22466666666666665,
+              "wilson95": [
+                0.20426418360703744,
+                0.2464757895762091
+              ]
+            }
+          },
+          "actual_added_views_fraction": 1.0,
+          "actual_added_reactions_fraction": 1.0
+        }
+      },
+      "diffuse_reactions": {
+        "0.1": {
+          "joint": {
+            "n": 1500,
+            "hits": 136,
+            "rate": 0.09066666666666667,
+            "wilson95": [
+              0.07716248750222955,
+              0.1062620731140257
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 40,
+            "rate": 0.02861230329041488,
+            "wilson95": [
+              0.021081836182490758,
+              0.03872625288003858
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 131,
+              "rate": 0.08733333333333333,
+              "wilson95": [
+                0.07407958945830004,
+                0.1026953340294231
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 181,
+              "rate": 0.12066666666666667,
+              "wilson95": [
+                0.10514383374210151,
+                0.13812746103094287
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 66,
+              "rate": 0.044,
+              "wilson95": [
+                0.03473379071821657,
+                0.055595850098588945
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 110,
+              "rate": 0.07333333333333333,
+              "wilson95": [
+                0.06120295070979578,
+                0.08764349683809242
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 69,
+              "rate": 0.046,
+              "wilson95": [
+                0.03650872245690122,
+                0.05781070063702358
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.09893704006541292
+        },
+        "0.3": {
+          "joint": {
+            "n": 1500,
+            "hits": 245,
+            "rate": 0.16333333333333333,
+            "wilson95": [
+              0.1454899366830245,
+              0.182896713335231
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 157,
+            "rate": 0.1123032904148784,
+            "wilson95": [
+              0.09680332238184394,
+              0.1299280649806612
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 267,
+              "rate": 0.178,
+              "wilson95": [
+                0.15947231647565113,
+                0.19817273690814569
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 377,
+              "rate": 0.25133333333333335,
+              "wilson95": [
+                0.2300355085492321,
+                0.2739015616622715
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 49,
+              "rate": 0.03266666666666666,
+              "wilson95": [
+                0.02479710656901616,
+                0.042923768010780135
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 151,
+              "rate": 0.10066666666666667,
+              "wilson95": [
+                0.0864453274698467,
+                0.11692814453200492
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 94,
+              "rate": 0.06266666666666666,
+              "wilson95": [
+                0.05148363681474642,
+                0.07608397192183898
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.294358135731807
+        },
+        "1.0": {
+          "joint": {
+            "n": 1500,
+            "hits": 876,
+            "rate": 0.584,
+            "wilson95": [
+              0.5588729879930964,
+              0.608697867645913
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 791,
+            "rate": 0.5658082975679543,
+            "wilson95": [
+              0.5396811190971987,
+              0.5915748077711583
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 1052,
+              "rate": 0.7013333333333334,
+              "wilson95": [
+                0.6776818840817983,
+                0.723956198481542
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 1024,
+              "rate": 0.6826666666666666,
+              "wilson95": [
+                0.6586715335546549,
+                0.7057285810889053
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 8,
+              "rate": 0.005333333333333333,
+              "wilson95": [
+                0.0027049287623018017,
+                0.010488921363531084
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 338,
+              "rate": 0.22533333333333333,
+              "wilson95": [
+                0.2049070267983932,
+                0.24716287381055982
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 212,
+              "rate": 0.14133333333333334,
+              "wilson95": [
+                0.12461885109807794,
+                0.15988019387186556
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.963971790678659
+        }
+      },
+      "shared_reaction_pulses": {
+        "0.1": {
+          "joint": {
+            "n": 1500,
+            "hits": 128,
+            "rate": 0.08533333333333333,
+            "wilson95": [
+              0.07223279395214137,
+              0.10055234725846247
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 31,
+            "rate": 0.022174535050071532,
+            "wilson95": [
+              0.015665233962904934,
+              0.03130260138424165
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 112,
+              "rate": 0.07466666666666667,
+              "wilson95": [
+                0.06242385862064807,
+                0.089082443778653
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 131,
+              "rate": 0.08733333333333333,
+              "wilson95": [
+                0.07407958945830004,
+                0.1026953340294231
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 81,
+              "rate": 0.054,
+              "wilson95": [
+                0.04365935933562643,
+                0.06661919286677545
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 116,
+              "rate": 0.07733333333333334,
+              "wilson95": [
+                0.06486930993335295,
+                0.09195670216877382
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 70,
+              "rate": 0.04666666666666667,
+              "wilson95": [
+                0.03710158016621855,
+                0.05854777035341267
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.05406786590351594
+        },
+        "0.3": {
+          "joint": {
+            "n": 1500,
+            "hits": 222,
+            "rate": 0.148,
+            "wilson95": [
+              0.1309294076924961,
+              0.1668689115345116
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 137,
+            "rate": 0.09799713876967096,
+            "wilson95": [
+              0.08349623475578602,
+              0.11470125546142412
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 183,
+              "rate": 0.122,
+              "wilson95": [
+                0.10639594187299392,
+                0.13953520775146327
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 212,
+              "rate": 0.14133333333333334,
+              "wilson95": [
+                0.12461885109807794,
+                0.15988019387186556
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 67,
+              "rate": 0.04466666666666667,
+              "wilson95": [
+                0.03532481507788357,
+                0.05633475316462838
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 260,
+              "rate": 0.17333333333333334,
+              "wilson95": [
+                0.15501790231982127,
+                0.19331765908403065
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 112,
+              "rate": 0.07466666666666667,
+              "wilson95": [
+                0.06242385862064807,
+                0.089082443778653
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.17022690106295993
+        },
+        "1.0": {
+          "joint": {
+            "n": 1500,
+            "hits": 651,
+            "rate": 0.434,
+            "wilson95": [
+              0.4091184626227808,
+              0.45921872223228316
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 560,
+            "rate": 0.4005722460658083,
+            "wilson95": [
+              0.37519207192814047,
+              0.42649734291205926
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 531,
+              "rate": 0.354,
+              "wilson95": [
+                0.33020072058732436,
+                0.3785451731829686
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 369,
+              "rate": 0.246,
+              "wilson95": [
+                0.2248720716938531,
+                0.2684255791119991
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 46,
+              "rate": 0.030666666666666665,
+              "wilson95": [
+                0.02306947388821145,
+                0.04066161841446556
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 646,
+              "rate": 0.43066666666666664,
+              "wilson95": [
+                0.4058165963414815,
+                0.4558709513850503
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 237,
+              "rate": 0.158,
+              "wilson95": [
+                0.14041841416967205,
+                0.17732881644293208
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.553607931316435
+        }
+      },
+      "independent_reaction_pulses": {
+        "0.1": {
+          "joint": {
+            "n": 1500,
+            "hits": 124,
+            "rate": 0.08266666666666667,
+            "wilson95": [
+              0.06977397936285945,
+              0.0976914521449187
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 26,
+            "rate": 0.01859799713876967,
+            "wilson95": [
+              0.01272298766894284,
+              0.02711137339187999
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 112,
+              "rate": 0.07466666666666667,
+              "wilson95": [
+                0.06242385862064807,
+                0.089082443778653
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 139,
+              "rate": 0.09266666666666666,
+              "wilson95": [
+                0.0790150630259206,
+                0.10839927986745393
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 81,
+              "rate": 0.054,
+              "wilson95": [
+                0.04365935933562643,
+                0.06661919286677545
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 97,
+              "rate": 0.06466666666666666,
+              "wilson95": [
+                0.053299069453722925,
+                0.07825832155998175
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 65,
+              "rate": 0.043333333333333335,
+              "wilson95": [
+                0.03414340356776986,
+                0.054856309823329244
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.05478331970564186
+        },
+        "0.3": {
+          "joint": {
+            "n": 1500,
+            "hits": 170,
+            "rate": 0.11333333333333333,
+            "wilson95": [
+              0.09826902230507747,
+              0.1303730707851962
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 78,
+            "rate": 0.055793991416309016,
+            "wilson95": [
+              0.044934689374657846,
+              0.06908780426393203
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 181,
+              "rate": 0.12066666666666667,
+              "wilson95": [
+                0.10514383374210151,
+                0.13812746103094287
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 224,
+              "rate": 0.14933333333333335,
+              "wilson95": [
+                0.13219303734553373,
+                0.1682651367328869
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 68,
+              "rate": 0.04533333333333334,
+              "wilson95": [
+                0.03591646328500114,
+                0.05707303238321723
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 139,
+              "rate": 0.09266666666666666,
+              "wilson95": [
+                0.0790150630259206,
+                0.10839927986745393
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 80,
+              "rate": 0.05333333333333334,
+              "wilson95": [
+                0.04306062753158088,
+                0.0658879972451146
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.1649632052330335
+        },
+        "1.0": {
+          "joint": {
+            "n": 1500,
+            "hits": 420,
+            "rate": 0.28,
+            "wilson95": [
+              0.2578619957096014,
+              0.30326195380727855
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 329,
+            "rate": 0.23533619456366237,
+            "wilson95": [
+              0.2138432054209123,
+              0.25827969739113
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 526,
+              "rate": 0.3506666666666667,
+              "wilson95": [
+                0.32692784116097257,
+                0.37516841548078833
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 477,
+              "rate": 0.318,
+              "wilson95": [
+                0.2949232230438156,
+                0.34200658973833054
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 52,
+              "rate": 0.034666666666666665,
+              "wilson95": [
+                0.026533490787242278,
+                0.0451771660696733
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 302,
+              "rate": 0.20133333333333334,
+              "wilson95": [
+                0.18181498521786943,
+                0.2223775280656523
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 166,
+              "rate": 0.11066666666666666,
+              "wilson95": [
+                0.0957742468581943,
+                0.12754813652925368
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.5565719542109566
+        }
+      },
+      "common_exposure_event": {
+        "0.1": {
+          "joint": {
+            "n": 1500,
+            "hits": 111,
+            "rate": 0.074,
+            "wilson95": [
+              0.06181325009801319,
+              0.08836312487558143
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 16,
+            "rate": 0.011444921316165951,
+            "wilson95": [
+              0.007056939069971329,
+              0.018510473418203995
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 91,
+              "rate": 0.06066666666666667,
+              "wilson95": [
+                0.04967170257629275,
+                0.0739061238831734
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 92,
+              "rate": 0.06133333333333333,
+              "wilson95": [
+                0.05027528227407119,
+                0.07463247161110136
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 105,
+              "rate": 0.07,
+              "wilson95": [
+                0.05815622865824503,
+                0.08404058176111108
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 78,
+              "rate": 0.052,
+              "wilson95": [
+                0.04186463169739715,
+                0.06442413822788547
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 96,
+              "rate": 0.064,
+              "wilson95": [
+                0.0526935459511578,
+                0.07753391763684048
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 83,
+              "rate": 0.05533333333333333,
+              "wilson95": [
+                0.04485824885472669,
+                0.06808015819908805
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.05877813653236328,
+          "actual_added_reactions_fraction": 0.052892477514309075
+        },
+        "0.3": {
+          "joint": {
+            "n": 1500,
+            "hits": 160,
+            "rate": 0.10666666666666667,
+            "wilson95": [
+              0.09203752400499667,
+              0.1233052948282128
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 71,
+            "rate": 0.05078683834048641,
+            "wilson95": [
+              0.04045848264556639,
+              0.06357714699217024
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 226,
+              "rate": 0.15066666666666667,
+              "wilson95": [
+                0.13345716003552036,
+                0.16966086889431312
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 77,
+              "rate": 0.051333333333333335,
+              "wilson95": [
+                0.041267385200304804,
+                0.06369145729927139
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 100,
+              "rate": 0.06666666666666667,
+              "wilson95": [
+                0.05511785167024167,
+                0.0804293216205823
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 71,
+              "rate": 0.04733333333333333,
+              "wilson95": [
+                0.03769502441859292,
+                0.059284253526744726
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 92,
+              "rate": 0.06133333333333333,
+              "wilson95": [
+                0.05027528227407119,
+                0.07463247161110136
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 167,
+              "rate": 0.11133333333333334,
+              "wilson95": [
+                0.09639767368628424,
+                0.12825463712687019
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.17616492870624056,
+          "actual_added_reactions_fraction": 0.1634811937857727
+        },
+        "1.0": {
+          "joint": {
+            "n": 1500,
+            "hits": 799,
+            "rate": 0.5326666666666666,
+            "wilson95": [
+              0.5073663866472939,
+              0.5578000572123207
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 709,
+            "rate": 0.5071530758226037,
+            "wilson95": [
+              0.4809622330866824,
+              0.533304715485965
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 990,
+              "rate": 0.66,
+              "wilson95": [
+                0.6356459095554214,
+                0.6835366726141205
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 70,
+              "rate": 0.04666666666666667,
+              "wilson95": [
+                0.03710158016621855,
+                0.05854777035341267
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 123,
+              "rate": 0.082,
+              "wilson95": [
+                0.06915993332947948,
+                0.09697557075259225
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 69,
+              "rate": 0.046,
+              "wilson95": [
+                0.03650872245690122,
+                0.05781070063702358
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 86,
+              "rate": 0.05733333333333333,
+              "wilson95": [
+                0.04666002962225208,
+                0.07026815970868193
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 469,
+              "rate": 0.31266666666666665,
+              "wilson95": [
+                0.2897103498360883,
+                0.3365800435404063
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.5862531525248686,
+          "actual_added_reactions_fraction": 0.562244480784955
+        }
+      },
+      "reaction_delay": {
+        "0.5": {
+          "joint": {
+            "n": 1500,
+            "hits": 228,
+            "rate": 0.152,
+            "wilson95": [
+              0.13472177040485198,
+              0.17105611337639434
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 139,
+            "rate": 0.0994277539341917,
+            "wilson95": [
+              0.08482269980930479,
+              0.11622818012243485
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 64,
+              "rate": 0.042666666666666665,
+              "wilson95": [
+                0.03355366749284015,
+                0.054116118472552516
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 93,
+              "rate": 0.062,
+              "wilson95": [
+                0.050879262338555414,
+                0.07535841897232357
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 190,
+              "rate": 0.12666666666666668,
+              "wilson95": [
+                0.11078327061550243,
+                0.14445737098889977
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 74,
+              "rate": 0.04933333333333333,
+              "wilson95": [
+                0.03947876255528736,
+                0.061490297667169555
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 166,
+              "rate": 0.11066666666666666,
+              "wilson95": [
+                0.0957742468581943,
+                0.12754813652925368
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 293,
+              "rate": 0.19533333333333333,
+              "wilson95": [
+                0.1760589885739298,
+                0.21616417787823408
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0,
+          "actual_added_reactions_fraction": 0.0,
+          "actual_moved_reaction_fraction": 0.3617130008176615
+        }
+      },
+      "archive_reader_session": {
+        "one": {
+          "joint": {
+            "n": 1500,
+            "hits": 654,
+            "rate": 0.436,
+            "wilson95": [
+              0.41110013465394724,
+              0.46122683247823604
+            ]
+          },
+          "new_among_base_clear": {
+            "n": 1398,
+            "hits": 566,
+            "rate": 0.40486409155937053,
+            "wilson95": [
+              0.3794277165703339,
+              0.4308218674134543
+            ]
+          },
+          "component_alerts": {
+            "views_volume": {
+              "n": 1500,
+              "hits": 69,
+              "rate": 0.046,
+              "wilson95": [
+                0.03650872245690122,
+                0.05781070063702358
+              ]
+            },
+            "conditional_reactions": {
+              "n": 1500,
+              "hits": 358,
+              "rate": 0.23866666666666667,
+              "wilson95": [
+                0.21777968481400842,
+                0.26088876430907304
+              ]
+            },
+            "breadth": {
+              "n": 1500,
+              "hits": 511,
+              "rate": 0.3406666666666667,
+              "wilson95": [
+                0.31711696756709534,
+                0.36503037768906915
+              ]
+            },
+            "underdispersion": {
+              "n": 1500,
+              "hits": 43,
+              "rate": 0.028666666666666667,
+              "wilson95": [
+                0.02135141634283941,
+                0.03838989368271835
+              ]
+            },
+            "residual_coordination": {
+              "n": 1500,
+              "hits": 680,
+              "rate": 0.4533333333333333,
+              "wilson95": [
+                0.42829187818844594,
+                0.47861320201210433
+              ]
+            },
+            "reaction_lag": {
+              "n": 1500,
+              "hits": 125,
+              "rate": 0.08333333333333333,
+              "wilson95": [
+                0.07038829128773852,
+                0.09840706764574605
+              ]
+            }
+          },
+          "actual_added_views_fraction": 0.0037718513154962508,
+          "actual_added_reactions_fraction": 0.26727309893704004
+        }
+      }
+    },
+    "same_campaign_or_organized_observables_same_scores": true,
+    "scope": "known-reference synthetic generator on fixed historical observation masks; not a validated organic model or empirical manipulation recall",
+    "calibration_repeats": {
+      "design": "post-hoc diagnostic with 20 new independent calibration/test pairs; original result retained",
+      "worlds_per_calibration_and_test": 1500,
+      "tolerance_confidence": 0.95,
+      "tolerance_order_one_based": 1440,
+      "records": [
+        {
+          "repeat": 0,
+          "nominal_quantile_rate": 0.03133333333333333,
+          "tolerance_rate": 0.026
+        },
+        {
+          "repeat": 1,
+          "nominal_quantile_rate": 0.03133333333333333,
+          "tolerance_rate": 0.030666666666666665
+        },
+        {
+          "repeat": 2,
+          "nominal_quantile_rate": 0.05,
+          "tolerance_rate": 0.03666666666666667
+        },
+        {
+          "repeat": 3,
+          "nominal_quantile_rate": 0.043333333333333335,
+          "tolerance_rate": 0.042
+        },
+        {
+          "repeat": 4,
+          "nominal_quantile_rate": 0.058666666666666666,
+          "tolerance_rate": 0.04666666666666667
+        },
+        {
+          "repeat": 5,
+          "nominal_quantile_rate": 0.042,
+          "tolerance_rate": 0.03933333333333333
+        },
+        {
+          "repeat": 6,
+          "nominal_quantile_rate": 0.052,
+          "tolerance_rate": 0.042
+        },
+        {
+          "repeat": 7,
+          "nominal_quantile_rate": 0.04666666666666667,
+          "tolerance_rate": 0.030666666666666665
+        },
+        {
+          "repeat": 8,
+          "nominal_quantile_rate": 0.04133333333333333,
+          "tolerance_rate": 0.03266666666666666
+        },
+        {
+          "repeat": 9,
+          "nominal_quantile_rate": 0.043333333333333335,
+          "tolerance_rate": 0.034
+        },
+        {
+          "repeat": 10,
+          "nominal_quantile_rate": 0.052,
+          "tolerance_rate": 0.042
+        },
+        {
+          "repeat": 11,
+          "nominal_quantile_rate": 0.04066666666666666,
+          "tolerance_rate": 0.03933333333333333
+        },
+        {
+          "repeat": 12,
+          "nominal_quantile_rate": 0.05266666666666667,
+          "tolerance_rate": 0.03933333333333333
+        },
+        {
+          "repeat": 13,
+          "nominal_quantile_rate": 0.04733333333333333,
+          "tolerance_rate": 0.03333333333333333
+        },
+        {
+          "repeat": 14,
+          "nominal_quantile_rate": 0.054,
+          "tolerance_rate": 0.04133333333333333
+        },
+        {
+          "repeat": 15,
+          "nominal_quantile_rate": 0.037333333333333336,
+          "tolerance_rate": 0.030666666666666665
+        },
+        {
+          "repeat": 16,
+          "nominal_quantile_rate": 0.048666666666666664,
+          "tolerance_rate": 0.03866666666666667
+        },
+        {
+          "repeat": 17,
+          "nominal_quantile_rate": 0.051333333333333335,
+          "tolerance_rate": 0.043333333333333335
+        },
+        {
+          "repeat": 18,
+          "nominal_quantile_rate": 0.035333333333333335,
+          "tolerance_rate": 0.029333333333333333
+        },
+        {
+          "repeat": 19,
+          "nominal_quantile_rate": 0.04533333333333334,
+          "tolerance_rate": 0.030666666666666665
+        }
+      ],
+      "mean_nominal_quantile_rate": 0.045233333333333334,
+      "mean_tolerance_rate": 0.03643333333333333
+    },
+    "dose_caveat": "shared and independent reaction pulses use the same per-post expected dose and eligibility on fixed dates; realized doses still fluctuate"
+  }
+}

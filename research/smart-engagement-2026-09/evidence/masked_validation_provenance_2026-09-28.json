@@ -1,0 +1,105 @@
+{
+  "research_date": "2026-09-28",
+  "branch": "feat/smart-analizes",
+  "parent_commit": "3ff2c015b80211c1023615fa39f01f6c1a9dc1f6",
+  "previously_verified_production_base": "ea8326ebd896bf8db5d4264f2b66c50403881caf",
+  "production_changes_this_cycle": false,
+  "storage_constraint": "no increased polling, TTL, quotas, tables or new full database copy",
+  "input_uncompressed_sha256": {
+    "observable_panel_2026-09-28.jsonl.gz": "9f0ff271628584b78ba3350587623826a1c96f1e696976a965307e356fa0df22",
+    "max_tail_panel_2026-09-28.jsonl.gz": "1eadb3143f3ec42e3869ec2bdd315e1e9c176f3353d96feccf61622746c6cf2e"
+  },
+  "runtime": {
+    "python": "3.13.5",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1"
+  },
+  "seed": 20262228,
+  "initial_local_protocol_sha256": "704bee10f3a80de13a77aa92710b78ba8a954c0cb6a9b0eae984c2b177f7746f",
+  "initial_local_protocol_text": "# Проверка маскирующейся активности: протокол 28.09.2026\n\nОграничение владельца: рост хранения на рабочих узлах исключён. Не включать\nрасширенный сбор, не продлевать TTL, не создавать дополнительные таблицы.\nИспользуются замороженные локальные панели и read-only аудит существующих\npublication_poll_receipt. Никаких истинных меток происхождения реакций нет.\n\nДо расчёта новых исходов фиксируются три независимых эксперимента.\n\n1. H13: на прежних точных MAX V24/V72, с прежним разбиением fit/cal/test,\nсравнить воздействие +10/+30/+100% только после 24ч и пропорциональное\nвоздействие уже на V24. Два ориентира: условный на V24 и исторический\naccount-only с ridge=10. Верхние ранги по отдельной календарной калибровке,\nпорог 0.05 исследовательский. Считать полную долю сигналов и новые сигналы\nсреди первоначально не отмеченных; это не recall реальной накрутки.\n\n2. H14: контролируемые сопоставимые аккаунты, log-count ~ N(log(1000),0.3²).\n1500 независимых миров, по 10 аккаунтов, 40 обучающих и 40 калибровочных\nпостов. Три аккаунта, включая тестовый, получают +100% на 0/25/50/75/100%\nистории. Сравнить среднее своей истории, медиану своей истории и медиану\nостальных аккаунтов. Отдельно загрязнить только обучение и обучение вместе\nс калибровкой. Оценить чистый тест и +100% тест; не переносить преимущество\nсопоставимых peer-аккаунтов на неоднородные реальные вузы.\n\n3. H15-H17/H22: синтетические счётные траектории на фактических масках\nнаблюдения MAX (≤3ч, точные реальные концы). Шаблоны аккаунтов: до 12 постов,\nотобранных по хешу ID без anomaly-статуса; минимум 6 постов, 24 старых\nинтервала. Фиксированная условная модель: ожидаемые просмотры равны сохранённым\nΔV (нижний предел 0.1), ранний q24 с возрастным множителем. Это заданный\nгенератор с известным ориентиром, не доказанная органическая модель MAX.\nОбщие дневные и индивидуальные множители, NB-реакции с alpha=0.4. Фактическая\nзависимость пропусков от изменённых счётчиков здесь не восстанавливается.\n\nКомпоненты: объём просмотров, реакции относительно просмотров, ширина отклика,\nнедодисперсия, общие остаточные волны, задержка реакций относительно просмотров.\n1500 миров для шкал компонентов, 1500 отдельных для калибровки максимума,\n1500 контрольных; полная единица теста — один шаблон аккаунта за окно.\nУровень 5% относится только к заданному генератору, не публичным статусам.\nДобавки 10/30/100%: плавные стохастические V+R, пропорциональная траектория,\nреакции отдельно, общие и независимые по постам волны. Дополнительно перенос\nчасти реакций на следующий наблюдаемый календарный день и сессия чтения архива.\nОдинаковые наблюдения под названием кампании и организованной активности\nобязаны давать одинаковые оценки. Не объявлять синхронность атрибуцией.\n\nSeed 20260928+1300, отдельные фиксированные потоки случайности для обучения,\nкалибровки, теста и воздействий. Правила/пороги после просмотра таблиц не менять.\nВ отчёте показывать неудачные сценарии, калибровку совокупного правила,\nчувствительность только на синтетике, ограничения реального архива и диска.\n",
+  "protocol_status": "recorded locally before outcomes; not an external preregistration",
+  "implementation_corrections": [
+    "initial per-interval rounding erased sparse low doses; cumulative nearest rounding still biased totals on short sparse paths",
+    "final cumulative stochastic rounding is unbiased, discrepancy <1 per path; sparse-dose invariants tested",
+    "no primary features, thresholds or model parameters were tuned against sensitivity results"
+  ],
+  "post_hoc_diagnostic": "20 new calibration/test pairs after first 6.8% null result; original result and thresholds retained",
+  "receipt_audit": {
+    "rows": 2088,
+    "heap_bytes": 335872,
+    "by_platform": [
+      {
+        "posts": 92,
+        "accounts": 4,
+        "exact_vr": 0,
+        "platform": "telegram",
+        "receipts": 786,
+        "age_ge_4d": 245,
+        "age_ge_7d": 0,
+        "last_read": "2026-09-28T00:19:34.705622+00:00",
+        "first_read": "2026-09-27T22:08:06.254923+00:00",
+        "no_new_metric_snapshot": 703,
+        "consecutive_equal_v_and_r": 578
+      },
+      {
+        "posts": 53,
+        "accounts": 4,
+        "exact_vr": 530,
+        "platform": "vk",
+        "receipts": 530,
+        "age_ge_4d": 90,
+        "age_ge_7d": 0,
+        "last_read": "2026-09-28T00:20:06.264943+00:00",
+        "first_read": "2026-09-27T22:09:43.42708+00:00",
+        "no_new_metric_snapshot": 430,
+        "consecutive_equal_v_and_r": 298
+      },
+      {
+        "posts": 64,
+        "accounts": 4,
+        "exact_vr": 640,
+        "platform": "max",
+        "receipts": 640,
+        "age_ge_4d": 75,
+        "age_ge_7d": 0,
+        "last_read": "2026-09-28T00:16:28.206507+00:00",
+        "first_read": "2026-09-27T22:10:19.261247+00:00",
+        "no_new_metric_snapshot": 528,
+        "consecutive_equal_v_and_r": 380
+      },
+      {
+        "posts": 49,
+        "accounts": 4,
+        "exact_vr": 132,
+        "platform": "rutube",
+        "receipts": 132,
+        "age_ge_4d": 53,
+        "age_ge_7d": 0,
+        "last_read": "2026-09-28T00:16:01.590844+00:00",
+        "first_read": "2026-09-27T22:15:10.792809+00:00",
+        "no_new_metric_snapshot": 132,
+        "consecutive_equal_v_and_r": 83
+      }
+    ],
+    "index_bytes": 212992,
+    "total_bytes": 581632,
+    "row_cap_reached": false,
+    "bounded_to_last_7_days_and_100001_rows": true
+  },
+  "receipt_sql_sha256": "c002b20641ecf649ecf2bde2101f1590d25bf274f0abaf9d37cafd20b1bcc7cf",
+  "receipt_raw_result_sha256": "c6271fb46e8591103bb749d1ca5f23a070550d17703fd61a0778e435901ac770",
+  "validation": {
+    "pytest_passed": 24,
+    "command": "python -m pytest -q tests/test_masked_engagement_research.py tests/test_max_tail_research.py tests/test_research_baseline.py",
+    "numerical_rerun_byte_identical": true,
+    "gitleaks_changed_files": "passed; no leaks found",
+    "local_links_and_artifact_hashes": "passed"
+  },
+  "artifact_sha256": {
+    "research/smart-engagement-2026-09/scripts/masked_engagement_validation.py": "67818de5814ec9294d092fc084727ef231ae43754a1bf3a07a46fc782073615d",
+    "research/smart-engagement-2026-09/scripts/plot_masked_validation.py": "66d56d8494785486fffa7f6d892991b5bbe646f7e8e87d11d01bde899ad8f676",
+    "research/smart-engagement-2026-09/evidence/masked_validation_2026-09-28.json": "39b53d8f73c06d9ec4a19de07f47a95b9d863d35036529c3899595672547fb21",
+    "research/smart-engagement-2026-09/evidence/masked_validation_2026-09-28.png": "79f60b108db974b2cc46f699fbfbb2d01e6aba99cea8ae4ea3380fc5f5dbaddf",
+    "tests/test_masked_engagement_research.py": "92e25a9607c4e07f5182a062c59ac696e6ec5bf6a993377ad89bcbc3c4282c8f"
+  }
+}
