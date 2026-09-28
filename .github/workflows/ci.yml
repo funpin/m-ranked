@@ -177,9 +177,13 @@ jobs:
           install -d frontend/deploy/frontend/.next
           cp -a frontend/.next/standalone/. frontend/deploy/
           cp -a frontend/.next/static frontend/deploy/frontend/.next/static
+          cp -a frontend/public frontend/deploy/frontend/public
+          diff -qr frontend/public frontend/deploy/frontend/public
           tar -C frontend/deploy -czf frontend/m-ranked-web.tar.gz .
           tar -tzf frontend/m-ranked-web.tar.gz | grep -Fx './frontend/server.js'
           tar -tzf frontend/m-ranked-web.tar.gz | grep -q '^./frontend/.next/static/'
+          tar -tzf frontend/m-ranked-web.tar.gz | grep -Fx './frontend/public/brands/telegram.svg'
+          tar -tzf frontend/m-ranked-web.tar.gz | grep -Fx './frontend/public/contributors/funpin.jpg'
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: production-frontend-${{ github.sha }}

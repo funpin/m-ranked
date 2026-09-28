@@ -39,7 +39,7 @@ SELECT DISTINCT ON (publication_id, observed_at)
        reactions_count, reactions_quality::text AS reactions_quality,
        comments_count, comments_quality::text AS comments_quality,
        shares_count, shares_quality::text AS shares_quality,
-       CASE WHEN reactions_quality = 'rounded'
+       CASE WHEN reactions_quality IN ('rounded', 'unknown')
             THEN coalesce((SELECT jsonb_object_agg(reaction.reaction_key, reaction.reaction_count)
                              FROM ingest.reaction_breakdown reaction
                             WHERE reaction.snapshot_published_month = snapshot.published_month
