@@ -74,7 +74,7 @@ class SiblingActivity:
                                                       CollectionCadence(), series.platform)
             ages.append(edges[:-1] - published)
             for metric, bucket in rows.items():
-                column = series.values.get(metric)
+                column = series.exact_values(metric)
                 values = None if column is None else np.asarray(column, dtype=np.float64)[source]
                 bucket.append(_hourly(ages_ + published, values, edges, covered))
         return cls(edges[:-1] / HOUR, np.vstack(rows[Metric.REACTIONS]), np.vstack(rows[Metric.VIEWS]),
@@ -122,6 +122,7 @@ def _hourly(instants: np.ndarray, column, edges: np.ndarray,
         return result
     values = np.asarray(column, dtype=np.float64)
     keep = ~np.isnan(values)
+    positions = np.flatnonzero(keep)
     # Подтверждение журналом годится только для соседних точек (как в series).
     confirmed = None
     if covered is not None:
@@ -137,7 +138,11 @@ def _hourly(instants: np.ndarray, column, edges: np.ndarray,
     left = np.clip(np.searchsorted(instants, edges[:-1], side="right") - 1, 0, spacing.size - 1)
     right = np.clip(np.searchsorted(instants, edges[1:], side="left") - 1, 0, spacing.size - 1)
     short = spacing <= 3 * HOUR if confirmed is None else (spacing <= 3 * HOUR) | confirmed
-    covered = short[left] & short[right]
+    # No interpolation across omitted/untrusted readings, corrections, or an
+    # interior gap hidden between two otherwise valid ends of the hour.
+    bad = ~short | (np.diff(positions) > 1) | (np.diff(values) < 0)
+    prefix = np.r_[0, np.cumsum(bad)]
+    covered = prefix[right + 1] == prefix[left]
     delta = np.diff(cumulative)
     result[inside & covered] = delta[inside & covered]
     return result

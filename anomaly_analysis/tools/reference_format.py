@@ -44,6 +44,8 @@ def post_payload(series: PostSeries) -> dict[str, Any]:
         "published_at": series.published_at.isoformat(),
         "is_repost": series.is_repost,
         "age_seconds": [_age(series.published_at, item) for item in series.observed_at],
+        "qualities": {metric.value: list(column) for metric, column in series.qualities.items()},
+        "interval_uncertain": list(series.interval_uncertain),
         "values": {metric.value: list(series.values[metric])
                    for metric in Metric if metric in series.values},
     }
@@ -78,7 +80,11 @@ def parse_case(payload: Mapping[str, Any]) -> ReferenceCase:
         raise ValueError("unsupported reference format version")
     if payload["source"] not in SOURCES:
         raise ValueError("unknown reference source")
-    posts = {item.publication_id: item for item in map(_series, payload["posts"])}
+    # Legacy synthetic fixtures explicitly represent exact generated counts;
+    # unannotated exports/screenshots do not attest measurement precision.
+    default_quality = "exact" if payload["source"] == "synthetic" else "unknown"
+    posts = {item.publication_id: item for item in
+             (_series(post, default_quality=default_quality) for post in payload["posts"])}
     if len(posts) != len(payload["posts"]):
         raise ValueError("duplicate publication in a reference case")
     subject = posts.pop(UUID(payload["subject"]))
@@ -120,13 +126,16 @@ def _dump(value: Any, depth: int) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def _series(payload: Mapping[str, Any]) -> PostSeries:
+def _series(payload: Mapping[str, Any], *, default_quality: str = "unknown") -> PostSeries:
     published_at = datetime.fromisoformat(payload["published_at"])
     return PostSeries(
         UUID(payload["publication_id"]), UUID(payload["account_id"]), payload["platform"],
         published_at, bool(payload["is_repost"]),
         tuple(published_at + timedelta(seconds=age) for age in payload["age_seconds"]),
         {Metric(name): tuple(column) for name, column in payload["values"].items()},
+        qualities={Metric(name): tuple(payload.get("qualities", {}).get(name,
+                       [default_quality] * len(payload["age_seconds"]))) for name in payload["values"]},
+        interval_uncertain=tuple(payload.get("interval_uncertain", ())),
     )
 
 

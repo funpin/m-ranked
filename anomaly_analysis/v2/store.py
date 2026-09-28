@@ -38,7 +38,7 @@ WITH target AS (
 )
 SELECT DISTINCT ON (target.id, snapshot.observed_at)
        target.id, target.primary_account_id, target.platform, target.published_at, target.is_repost,
-       snapshot.observed_at,
+       snapshot.observed_at, snapshot.interval_uncertain,
        snapshot.views_count, snapshot.views_quality::text AS views_quality,
        snapshot.reactions_count, snapshot.reactions_quality::text AS reactions_quality,
        snapshot.comments_count, snapshot.comments_quality::text AS comments_quality,
@@ -115,7 +115,10 @@ WITH posts AS (
 ), observed AS (
     SELECT posts.primary_account_id, posts.id AS publication_id, posts.published_at,
            floor(extract(epoch FROM snapshot.observed_at) / 3600)::bigint AS hour,
-           snapshot.reactions_count, snapshot.views_count
+           CASE WHEN snapshot.reactions_quality = 'exact' AND NOT snapshot.interval_uncertain
+                THEN snapshot.reactions_count END AS reactions_count,
+           CASE WHEN snapshot.views_quality = 'exact' AND NOT snapshot.interval_uncertain
+                THEN snapshot.views_count END AS views_count
       FROM posts
       JOIN ingest.publication_metric_snapshot_active snapshot
         ON snapshot.publication_id = posts.id AND snapshot.published_month = posts.published_month
@@ -123,24 +126,28 @@ WITH posts AS (
        AND snapshot.observed_at >= %(since)s AND snapshot.observed_at < %(until)s
        AND NOT snapshot.synthetic
     UNION ALL
-    -- Уровень на начало окна: у тихого старого поста последний замер бывает
-    -- раньше окна (сборщик пишет только изменения), и без него ряд начинался
-    -- бы с «нет данных».
+    -- Keep the real time of the last reading before the window. A stale
+    -- reading is not a confirmed level at the start of the window.
     SELECT posts.primary_account_id, posts.id, posts.published_at,
-           floor(extract(epoch FROM %(since)s::timestamptz) / 3600)::bigint,
+           floor(extract(epoch FROM before.observed_at) / 3600)::bigint,
            before.reactions_count, before.views_count
       FROM posts
       JOIN LATERAL (
-          SELECT snapshot.reactions_count, snapshot.views_count
+          SELECT snapshot.observed_at,
+                 CASE WHEN snapshot.reactions_quality = 'exact' AND NOT snapshot.interval_uncertain
+                      THEN snapshot.reactions_count END AS reactions_count,
+                 CASE WHEN snapshot.views_quality = 'exact' AND NOT snapshot.interval_uncertain
+                      THEN snapshot.views_count END AS views_count
             FROM ingest.publication_metric_snapshot_active snapshot
            WHERE snapshot.publication_id = posts.id AND snapshot.published_month = posts.published_month
              AND snapshot.observed_at < %(since)s AND NOT snapshot.synthetic
-           ORDER BY snapshot.observed_at DESC
+           ORDER BY snapshot.observed_at DESC, snapshot.correction_sequence DESC
            LIMIT 1
       ) before ON true
 )
 SELECT primary_account_id, publication_id, published_at, hour,
-       max(reactions_count) AS reactions, max(views_count) AS views
+       CASE WHEN count(reactions_count) = count(*) THEN max(reactions_count) END AS reactions,
+       CASE WHEN count(views_count) = count(*) THEN max(views_count) END AS views
   FROM observed
  GROUP BY 1, 2, 3, 4
  ORDER BY 1, 2, 4
@@ -221,7 +228,10 @@ def series_from_rows(rows: Sequence[Mapping[str, Any]],
     return PostSeries(first["id"], first["primary_account_id"], first["platform"],
                       first["published_at"], bool(first["is_repost"]),
                       tuple(row["observed_at"] for row in rows), values,
-                      tuple(item for item in collected if item >= first["published_at"]))
+                      tuple(item for item in collected if item >= first["published_at"]),
+                      qualities={metric: tuple(row[f"{metric.value}_quality"] or "unknown" for row in rows)
+                                 for metric in values},
+                      interval_uncertain=tuple(row.get("interval_uncertain", True) for row in rows))
 
 
 def change_kind(previous: StoredState | None, level: int,

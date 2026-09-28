@@ -254,7 +254,8 @@ def _carried(row: DueRow, detectable_from: datetime):
     """Признаки синхронности прежнего вывода, которые уже нельзя найти заново."""
     carried = []
     for payload in row.signals:
-        if int(payload.get("pattern", 0)) != SYNCHRONY_PATTERN:
+        if (int(payload.get("pattern", 0)) != SYNCHRONY_PATTERN
+                or payload.get("render", {}).get("measurementMode") != "exact_quality_v1"):
             continue
         sign = sign_from_payload(payload)
         if sign.interval.start < detectable_from:

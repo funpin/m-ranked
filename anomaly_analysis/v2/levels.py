@@ -23,7 +23,7 @@ from .detectors import (
 )
 from .domain import DataQuality, Family, Interval, Level, Metric, PostSeries, PostVerdict, Sign
 from .norms import LOW_CONFIDENCE, NormSet
-from .series import DAY, CollectionCadence, PreparedSeries, prepare
+from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare
 
 # Пороги силы. Сильный признак — тот, что один даёт выраженную аномалию: у
 # детекторов это пуассоновский z в районе десяти и выше или физически
@@ -78,6 +78,9 @@ ALTERNATIVES = {
     "wide_reach_low_engagement": "пост разошёлся шире обычной аудитории, которая реагирует реже",
 }
 QUALITY_TEXTS = {
+    "no_precise_metrics": "недостаточно точных данных для проверки; отсутствие сигнала не подтверждает обычность статистики",
+    "non_exact_counters": "округлённые счётчики и значения без подтверждённой точности исключены из точных проверок",
+    "uncertain_observations": "замеры с неопределённым интервалом исключены из точных проверок",
     "truncated_start": "ряд начат позже публикации: ранняя волна не оценивается",
     "repost_source_counter": "пост — репост: просмотры принадлежат источнику, проверяются только реакции",
     "no_norm": "нормы ещё нет: признаки относительно нормы не сильнее слабого сигнала",
@@ -112,7 +115,9 @@ def run_detectors(prepared: PreparedSeries, context: DetectorContext) -> tuple[l
     signs: list[Sign] = []
     for detector in detectors:
         signs.extend(detector.detect(prepared, context))
-    return signs, {detector.ID: detector.VERSION for detector in detectors}
+    signs = [replace(sign, render={**sign.render, "measurementMode": "exact_quality_v1"}) for sign in signs]
+    return signs, {"preparation": PREPARATION_VERSION,
+                   **{detector.ID: detector.VERSION for detector in detectors}}
 
 
 def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[Sign],
@@ -120,6 +125,9 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
     unanalyzable = _unanalyzable(prepared)
     kept = []
     for sign in signs:
+        required = (Metric.VIEWS, Metric.REACTIONS) if sign.family is Family.CROSS_METRIC else (sign.metric,)
+        if any(metric not in prepared.metrics for metric in required):
+            continue
         if sign.pattern != GAP_PATTERN and _overlap(sign.interval, unanalyzable) > UNANALYZABLE_OVERLAP:
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:
@@ -241,7 +249,7 @@ def _overlap(interval: Interval, spans: Sequence[Interval]) -> float:
 
 def _quality(prepared: PreparedSeries, context: DetectorContext,
              unanalyzable: tuple[Interval, ...]) -> DataQuality:
-    codes = []
+    codes = list(prepared.quality_codes)
     if prepared.truncated_start:
         codes.append("truncated_start")
     if prepared.series.is_repost:

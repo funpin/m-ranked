@@ -15,7 +15,7 @@ import numpy as np
 
 from .domain import Metric, PostSeries
 
-PREPARATION_VERSION = "2.2.0"
+PREPARATION_VERSION = "2.3.0"
 
 MINUTE, HOUR, DAY = 60, 3600, 86400
 
@@ -100,6 +100,8 @@ class Gap:
     start_age: float
     end_age: float
     delta: float
+    # A missing/invalid intermediate reading cannot become a gap-growth sign.
+    count_change_trusted: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +148,7 @@ class PreparedSeries:
     unsupported: frozenset[Metric]
     truncated_start: bool
     stale_seconds: float
+    quality_codes: tuple[str, ...] = ()
 
 
 def age_band(ages: np.ndarray) -> np.ndarray:
@@ -164,7 +167,14 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
     instants = np.fromiter((item.timestamp() for item in series.observed_at),
                            dtype=np.float64, count=len(series.observed_at))
     keep = instants <= analyzed_at.timestamp()
-    columns = {metric: np.asarray(column, dtype=np.float64)[keep] for metric, column in series.values.items()}
+    columns = {metric: np.asarray(series.exact_values(metric), dtype=np.float64)[keep]
+               for metric in series.values}
+    quality_codes = []
+    if any(value is not None and quality != "exact" for metric, column in series.values.items()
+           for value, quality, active in zip(column, series.qualities[metric], keep) if active):
+        quality_codes.append("non_exact_counters")
+    if any(flag for flag, active in zip(series.interval_uncertain, keep) if active):
+        quality_codes.append("uncertain_observations")
     collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64,
                             count=len(series.collected))
     collected = collected[collected <= analyzed_at.timestamp()] - published
@@ -177,6 +187,8 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
         prepared = _metric(metric, ages, raw, series, cadence, scales, covered)
         if prepared is not None:
             metrics[metric] = prepared
+    if ages.size and not metrics:
+        quality_codes.append("no_precise_metrics")
     first_step = cadence.expected_step_seconds(series.platform, np.zeros(1))[0]
     return PreparedSeries(
         series, analyzed_at, ages, _frozen(age_band(ages)), steps, metrics,
@@ -184,6 +196,7 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
         # Ранняя часть затухания без первых замеров не оценивается.
         truncated_start=bool(ages.size) and float(ages[0]) > first_step,
         stale_seconds=float(analyzed_at.timestamp() - published - ages[-1]) if ages.size else 0.0,
+        quality_codes=tuple(quality_codes),
     )
 
 
@@ -228,12 +241,14 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
     flags[1:][negative] |= np.uint8(PointFlag.NEGATIVE_DELTA)
     flags[1:][reset] |= np.uint8(PointFlag.COUNTER_RESET)
     flags[1:][gap] |= np.uint8(PointFlag.AFTER_GAP)
-    gap_index = np.flatnonzero(gap)
-    gaps = tuple(Gap(float(ages[index]), float(ages[index + 1]), float(delta[index]))
-                 for index in gap_index)
-    span = float(ages[-1] - ages[0])
-    coverage = 1.0 if span <= 0 else 1.0 - float(elapsed[gap].sum()) / span
-    grids = {scale: _grid(scale, ages, values, gap, reset, negative) for scale in scales}
+    missing = (flags[1:] & np.uint8(PointFlag.MISSING)) != 0
+    unusable = gap | missing
+    gap_index = np.flatnonzero(unusable)
+    gaps = tuple(Gap(float(ages[index]), float(ages[index + 1]), float(delta[index]),
+                     count_change_trusted=not bool(missing[index])) for index in gap_index)
+    span = float(all_ages[-1] - all_ages[0])
+    coverage = 1.0 if span <= 0 else float(elapsed[~unusable].sum()) / span
+    grids = {scale: _grid(scale, ages, values, unusable, reset, negative) for scale in scales}
     return MetricSeries(
         metric, _frozen(ages), _frozen(values), _frozen(flags), gaps, grids, coverage,
         source_counter=series.is_repost and metric is Metric.VIEWS,

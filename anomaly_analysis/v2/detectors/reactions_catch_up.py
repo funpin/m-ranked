@@ -56,7 +56,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         duration = common[right] - common[left]
         # Net recovery after an observed counter correction is not a count
         # of independent reaction arrivals, even if both endpoints increased.
-        invalid = int(PointFlag.NEGATIVE_DELTA | PointFlag.COUNTER_RESET)
+        invalid = int(PointFlag.NEGATIVE_DELTA | PointFlag.COUNTER_RESET | PointFlag.MISSING)
         corrected = (np.any(reactions.flags[ri[left] + 1:ri[right] + 1] & invalid)
                      or np.any(views.flags[vi[left] + 1:vi[right] + 1] & invalid))
         dr = reactions.values[ri[right]] - reactions.values[ri[left]]

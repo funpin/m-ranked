@@ -69,7 +69,7 @@ def test_signs_on_unanalyzable_intervals_are_dropped_except_the_gap_pattern():
 def test_reposts_run_only_the_two_absolute_cross_metric_checks():
     prepared = _prepared("honest_repost_of_foreign_telegram")
     _, versions = run_detectors(prepared, DetectorContext("telegram"))
-    assert set(versions) == {"reactions_before_views", "reactions_exceed_views"}
+    assert set(versions) == {"preparation", "reactions_before_views", "reactions_exceed_views"}
     assert "repost_source_counter" in assess(prepared.series).quality.codes
 
 

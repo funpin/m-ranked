@@ -43,7 +43,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         if data is None or fit is None or data.source_counter:
             continue
         for gap in data.gaps:
-            if gap.start_age < MIN_GAP_AGE or gap.delta <= 0:
+            if not gap.count_change_trusted or gap.start_age < MIN_GAP_AGE or gap.delta <= 0:
                 continue
             model = float(fit.expected(np.array([gap.start_age]), np.array([gap.end_age]))[0])
             before = float(gap.start_age - BEFORE_WINDOW)
