@@ -52,3 +52,26 @@ def test_untrusted_or_missing_evidence_cannot_supply_reported_shape(issue):
         from test_anomaly_initial_plateaus import slice_series
         s = slice_series(s, [0, 13, len(s.observed_at) - 1])
     assert not detect(s)
+
+
+def test_paid_star_does_not_hide_ordinary_pack_or_supply_its_magnitude():
+    s = subject(CASES[-1])
+    signs = detect(s)
+    assert signs and all(sign.render['paidReactionsExcluded'] for sign in signs)
+    for sign in signs:
+        end = s.observed_at.index(sign.interval.end)
+        assert sign.render['reportedAfter'] == s.values[R][end] - 1
+
+
+def test_later_poll_gap_does_not_erase_a_directly_observed_weak_shape():
+    s = subject(CASES[2])
+    uncertain = tuple(i > 20 for i in range(len(s.observed_at)))
+    assert detect(replace(s, interval_uncertain=uncertain))
+    assert not detect(replace(s, interval_uncertain=(True,) * len(s.observed_at)))
+
+
+def test_paid_only_growth_cannot_supply_a_reaction_pack():
+    s = subject(CASES[-1])
+    breakdown = tuple({'👍': 1, 'paid:star': value - 1} if value > 1 else {'👍': 1}
+                      for value in s.values[R])
+    assert not detect(replace(s, reaction_breakdowns=breakdown))

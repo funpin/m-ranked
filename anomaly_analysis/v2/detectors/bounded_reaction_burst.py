@@ -30,7 +30,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number, strongest
 
 ID = "bounded_reaction_burst"
-VERSION = "1.3.1"
+VERSION = "1.3.2"
 PATTERN = 9
 FAMILY = Family.SHAPE
 NEEDS_NORM = False
@@ -175,12 +175,14 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     signs.extend(_decoupled(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
     if not signs and series.platform == "telegram" and any(row[2] == "rounded" for row in rows):
         signs.extend(_reported_plateau(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
-    if not signs and (series.is_repost or series.platform == "telegram" and any(row[2] == "unknown" for row in rows)):
-        signs.extend(_reported_own_shape(prepared, ages, rows, bounds, withdrawal_prefix))
+    if not signs and (series.is_repost or series.platform == "telegram" and any(
+            row[2] in {"rounded", "unknown"} or row[4] and any(k.startswith("paid:") for k in row[4])
+            for row in rows)):
+        signs.extend(_reported_own_shape(prepared, ages, rows))
     return tuple(strongest(signs))
 
 
-def _reported_own_shape(prepared, ages, rows, bounds, withdrawals):
+def _reported_own_shape(prepared, ages, rows):
     """A visible reaction-only candidate, without precision/audience claims.
 
     Source views cannot validate a repost's own reactions. Legacy Telegram
@@ -188,15 +190,28 @@ def _reported_own_shape(prepared, ages, rows, bounds, withdrawals):
     retained ordinary-reaction components match. Neither is sufficient for
     the confirmed, highest-severity pattern; keep this evidence weak.
     """
-    usable = []
-    for row, bound in zip(rows, bounds):
+    usable, ordinary, paid = [], [], []
+    for row in rows:
         _, value, quality, uncertain, breakdown = row
-        legacy = (prepared.series.platform == "telegram" and quality == "unknown"
+        retained = (prepared.series.platform == "telegram" and quality in {"exact", "rounded", "unknown"}
                   and breakdown is not None and value is not None
                   and sum(breakdown.values()) == value
-                  and all(type(v) is int and v > 0 and not k.startswith(("paid:", "unknown:"))
+                  and all(type(v) is int and v > 0 and not k.startswith("unknown:")
                           for k, v in breakdown.items()))
-        usable.append(not uncertain and (bound is not None or legacy))
+        excluded = sum(v for k, v in breakdown.items() if k.startswith("paid:")) if retained else 0
+        bound = (reaction_bounds(value, quality, breakdown)
+                 if quality == "exact" or prepared.series.platform == "telegram" else None)
+        usable.append(retained or bound is not None)
+        ordinary.append(None if value is None else value - excluded)
+        paid.append(excluded)
+    # Paid stars do not count as ordinary reactions, but their presence must
+    # not erase a separately retained ordinary-reaction pack.
+    rows = [(r[0], value, *r[2:]) for r, value in zip(rows, ordinary)]
+    withdrawals = np.zeros(len(rows))
+    for i in range(1, len(rows)):
+        if ordinary[i] is not None and ordinary[i-1] is not None:
+            withdrawals[i] = max(0, ordinary[i-1] - ordinary[i])
+    withdrawals = np.r_[0, np.cumsum(withdrawals)]
     # A correction's low point cannot become the baseline of a new pack
     # when the counter simply recovers on the following poll.
     for i in range(1, len(rows)):
@@ -205,6 +220,7 @@ def _reported_own_shape(prepared, ages, rows, bounds, withdrawals):
             usable[i] = False
     nominal = [(row[1], row[1]) if ok else None for row, ok in zip(rows, usable)]
     bad = np.r_[0, np.cumsum(~np.asarray(usable))]
+    uncertain = np.r_[0, np.cumsum([row[3] for row in rows])]
     signs = []
     for begin, end in _candidate_pairs(ages, nominal, (0, 1/6, .25, .5), max_duration=.5):
         duration = float(ages[end] - ages[begin])
@@ -214,6 +230,7 @@ def _reported_own_shape(prepared, ages, rows, bounds, withdrawals):
         after = int(np.searchsorted(ages, ages[end] + AFTER_HOURS))
         if (after >= len(rows) or ages[after] - ages[end] > 4 or after - end < 3
                 or bad[after+1] != bad[begin] or np.max(np.diff(ages[end:after+1])) > 1.5
+                or uncertain[end+1] != uncertain[begin]
                 or withdrawals[end+1] != withdrawals[begin+1]):
             continue
         withdrawn = float(withdrawals[after+1] - withdrawals[end+1])
@@ -227,6 +244,9 @@ def _reported_own_shape(prepared, ages, rows, bounds, withdrawals):
             continue
         reason = ("Просмотры репоста относятся к источнику и не подтверждают этот сигнал."
                   if prepared.series.is_repost else "Точность исторических счётчиков не подтверждена.")
+        excluded_paid = any(paid[begin:after+1])
+        if excluded_paid:
+            reason += " Платные звёзды исключены."
         formula = (f"По сохранённым значениям: {number(rows[begin][1])} → {number(rows[end][1])} реакций "
                    f"за {age_text(duration * HOUR)}, затем +{number(tail)} за {age_text((ages[after] - ages[end]) * HOUR)}. "
                    f"{reason} Показан слабый сигнал формы; величина и причина рывка требуют проверки")
@@ -236,6 +256,7 @@ def _reported_own_shape(prepared, ages, rows, bounds, withdrawals):
              "mode": "reported_own_shape", "reportedOnly": True,
              "reportedBefore": rows[begin][1], "reportedAfter": rows[end][1],
              "reportedBurst": burst, "confirmationEndAge": float(ages[after] * HOUR),
+             "paidReactionsExcluded": excluded_paid,
              "timingUnknown": True}, ("reaction_counter_batch_update", "pinned_post")))
     return signs
 
