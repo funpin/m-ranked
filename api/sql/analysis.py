@@ -36,7 +36,8 @@ SELECT coalesce(recheck.effective_level, state.level) AS level,
 # (аккаунт, дата публикации) и первичному ключу состояния, без признаков.
 ACCOUNT_LEVELS = """
 SELECT publication.id AS publication_id,
-       coalesce(recheck.effective_level, state.level) AS level
+       coalesce(recheck.effective_level, state.level) AS level,
+       coalesce(state.quality->'codes' ? 'no_precise_metrics', false) AS insufficient_data
   FROM ingest.publication publication
   JOIN analytics.post_anomaly_state state ON state.publication_id=publication.id
   LEFT JOIN analytics.post_anomaly_context_recheck recheck

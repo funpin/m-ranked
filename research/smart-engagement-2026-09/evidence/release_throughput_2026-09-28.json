@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-28",
+  "host": "arm64 · Python 3.13.5 · numpy 2.4.6",
+  "posts": 29000,
+  "sample": 3000,
+  "reference_scope_cases": 74,
+  "points_p50": 833.5,
+  "points_max": 1200,
+  "required_analyses_per_hour": 14982,
+  "ms": {
+    "prepare": {
+      "p50": 1.6,
+      "p95": 2.47
+    },
+    "detectors": {
+      "p50": 5.27,
+      "p95": 7.37
+    },
+    "level": {
+      "p50": 0.02,
+      "p95": 0.03
+    },
+    "total": {
+      "p50": 6.89,
+      "p95": 9.63
+    }
+  },
+  "mean_ms_by_age_band": {
+    "0": 3.22,
+    "1": 5.44,
+    "2": 6.13,
+    "3": 7.45
+  },
+  "analyses_per_hour_one_core": 514054,
+  "average_cores": 0.025,
+  "peak_rss_mb": 137.8,
+  "within_budget": true
+}

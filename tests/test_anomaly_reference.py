@@ -28,7 +28,9 @@ def test_generator_is_deterministic() -> None:
 
 def test_synthetic_reference_covers_every_pattern_and_honest_case() -> None:
     synthetic = list(synthetic_cases().values())
-    assert set().union(*(case.expected_patterns for case in synthetic)) == SIGN_PATTERNS
+    # Frozen empirical references have a separate artifact and boundary suite.
+    from anomaly_analysis.v2.mature_reference import PATTERNS as REFERENCE_PATTERNS
+    assert set().union(*(case.expected_patterns for case in synthetic)) == SIGN_PATTERNS - REFERENCE_PATTERNS
     honest = [case for case in synthetic if not case.expected_patterns]
     assert len(honest) >= 10
     assert all(case.expected_max_level <= Level.WEAK_SIGNAL for case in honest)

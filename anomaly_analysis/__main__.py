@@ -36,6 +36,13 @@ def _transient(error: Exception) -> bool:
     return isinstance(error, (psycopg.OperationalError, psycopg.InterfaceError))
 
 
+def _reference_enabled() -> bool:
+    value = os.environ.get("ANOMALY_MATURE_REFERENCE_ENABLED", "true").strip().lower()
+    if value not in {"true", "false"}:
+        raise SystemExit("ANOMALY_MATURE_REFERENCE_ENABLED must be true or false")
+    return value == "true"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="M-Ranked publication anomaly analysis worker")
     parser.add_argument("--once", action="store_true")
@@ -50,7 +57,8 @@ def main() -> None:
     worker = Worker(
         PostgresAnomalyStore(dsn), ScheduleConfig.from_environment(os.environ),
         CollectionCadence.from_environment(os.environ),
-        WorkerConfig(batch_size=_positive("ANOMALY_BATCH_SIZE", 50, 200)),
+        WorkerConfig(batch_size=_positive("ANOMALY_BATCH_SIZE", 50, 200),
+                     mature_reference_enabled=_reference_enabled()),
         publish=lambda metrics: write_textfile(metrics_path, metrics.samples()),
     )
     poll_seconds = _positive("ANOMALY_POLL_SECONDS", 5, 300)

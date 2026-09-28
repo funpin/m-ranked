@@ -29,7 +29,7 @@ from scipy.optimize import least_squares
 from .domain import Level, Metric, PostSeries
 from .series import AGE_BAND_EDGES, DAY, HOUR, PreparedSeries, age_band
 
-NORM_MODEL_VERSION = "2.0.0"
+NORM_MODEL_VERSION = "2.1.0"
 
 # Показатель затухания. Crane и Sornette (PNAS 2008) различают три класса
 # релаксации с показателями 1−2θ, 1−θ и 1+θ; на YouTube θ ≈ 0.4, то есть около

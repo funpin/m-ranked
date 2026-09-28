@@ -16,7 +16,7 @@ from uuid import UUID
 from .detectors import SiblingActivity
 from .domain import Metric, PostSeries, PostVerdict
 from .levels import quality_payload, sign_payload
-from .norms import Norm, NormSet, NormStatus, norm_from_payload, norm_to_payload
+from .norms import NORM_MODEL_VERSION, Norm, NormSet, NormStatus, norm_from_payload, norm_to_payload
 
 # Серия читается пачкой: 50 постов одним запросом (план, раздел 11).
 SERIES_BATCH = 50
@@ -587,7 +587,8 @@ class PostgresAnomalyStore:
         with self._factory() as connection:
             row = connection.execute(
                 """SELECT id FROM analytics.anomaly_norm_version
-                    WHERE status='accepted' ORDER BY id DESC LIMIT 1""").fetchone()
+                    WHERE status='accepted' AND model_version=%s ORDER BY id DESC LIMIT 1""",
+                (NORM_MODEL_VERSION,)).fetchone()
         return None if row is None else int(row["id"])
 
     def write_norm_version(self, model_version: str, status: NormStatus, norms: Sequence[NormSet], *,

@@ -119,7 +119,7 @@ jobs:
               if [ "$target" = api ]; then
                 "$venv/bin/python" -c 'import api.app'
               else
-                "$venv/bin/python" -c 'import anomaly_analysis'
+                "$venv/bin/python" -c 'import anomaly_analysis.v2.worker; from anomaly_analysis.v2.mature_reference import bundled_reference; bundled_reference()'
               fi
             fi
             "$venv/bin/pip" check

@@ -33,6 +33,11 @@ def databases():
         pytest.skip("disposable anomaly PostgreSQL role DSNs are required")
     if "anomaly_it" not in values["admin"] or not any(host in values["admin"] for host in ("127.0.0.1", "localhost")):
         raise AssertionError("anomaly integration test requires the dedicated disposable local anomaly_it database")
+    # The live ingestion contract creates a revision before its first snapshot.
+    # A fresh database has no prior batch whose revision a fixture can inherit.
+    with psycopg.connect(values["admin"], autocommit=True) as connection:
+        connection.execute("INSERT INTO analytics.dataset_revision(cause,correlation_id) "
+                           "VALUES ('ingestion',gen_random_uuid())")
     with _admin(values["admin"]) as connection:
         connection.execute("INSERT INTO catalog.institution(id,canonical_name) VALUES (%s,'Anomaly v2 fixture')",
                            (INSTITUTION,))
@@ -49,7 +54,7 @@ def _admin(dsn):
     return psycopg.connect(dsn, autocommit=True, row_factory=dict_row)
 
 
-def _publication(admin_dsn, published_at: datetime, points: int):
+def _publication(admin_dsn, published_at: datetime, points: int, *, bad_readings=False):
     publication = uuid4()
     with _admin(admin_dsn) as connection:
         month = published_at.astimezone(timezone.utc).date().replace(day=1)
@@ -62,10 +67,12 @@ def _publication(admin_dsn, published_at: datetime, points: int):
             connection.execute("""
                 INSERT INTO ingest.publication_metric_snapshot(
                   published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,
-                  views_count,reactions_count,comments_count,shares_count,quality,source_fingerprint,collected_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'exact',%s,%s)""",
+                  views_count,reactions_count,comments_count,shares_count,quality,source_fingerprint,collected_at,
+                  views_quality,reactions_quality,interval_uncertain)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'exact',%s,%s,%s,'exact',%s)""",
                 (month, publication, RUN, observed, 300 * (index + 1), index, 100 * (index + 1), 3 * index,
-                 index // 4, index // 8, uuid4().hex, observed))
+                 index // 4, index // 8, uuid4().hex, observed,
+                 "rounded" if bad_readings and index==14 else "exact",bad_readings and index==26))
     return SeriesTarget(publication, published_at)
 
 
@@ -87,6 +94,7 @@ def test_roles_receive_exactly_the_listed_privileges(databases):
         ("analytics_worker", "post_anomaly_state"): {"SELECT", "INSERT", "UPDATE"},
         ("analytics_worker", "post_anomaly_log"): {"INSERT"},
         ("api_read", "post_anomaly_state"): {"SELECT"},
+        ("api_write_admin", "post_anomaly_state"): {"SELECT"},
     }
     with _admin(databases["admin"]) as connection:
         roles = [row["rolname"] for row in connection.execute(
@@ -163,3 +171,96 @@ def test_log_is_written_only_when_the_verdict_changes(databases):
     assert changes == ["appeared", "level_changed"]
     # Неудачный анализ не стирает прежний вывод.
     assert state == {"level": 1, "attempts": 1, "error_code": "series_unavailable"}
+
+
+def test_actual_sql_excludes_rounded_and_uncertain_reads_per_metric(databases):
+    import numpy as np
+    base=datetime.now(timezone.utc).replace(minute=0,second=0,microsecond=0)-timedelta(hours=12)
+    target=_publication(databases["admin"],base,36,bad_readings=True)
+    # A bad read inside hour 1 must poison that metric's hourly aggregate;
+    # reactions in the same hour remain independently usable.
+    store=PostgresAnomalyStore(databases["worker"])
+    series=store.read_series([target])[target.publication_id]
+    assert series.exact_values(Metric.VIEWS)[14] is None
+    assert series.exact_values(Metric.REACTIONS)[14] is not None
+    assert series.exact_values(Metric.REACTIONS)[26] is None
+    activity=store.read_activity([ACCOUNT],base,base+timedelta(hours=4),base-timedelta(hours=1))[ACCOUNT]
+    i=activity.publications.index(target.publication_id)
+    assert np.isnan(activity.views[i,1]) and np.isnan(activity.views[i,2])
+    assert np.isfinite(activity.reactions[i,1]) and np.isnan(activity.reactions[i,2])
+
+
+def test_new_signs_survive_worker_database_and_public_api(databases):
+    from anomaly_analysis.v2.mature_reference import bundled_reference
+    from anomaly_analysis.v2.schedule import ScheduleConfig
+    from anomaly_analysis.v2.series import CollectionCadence
+    from anomaly_analysis.v2.worker import Worker
+    from api.routes.analysis import analysis_body
+    from api.sql.analysis import STATE
+    reference=bundled_reference();account=next(iter(reference.account_counts))
+    publication,run=uuid4(),uuid4()
+    published=reference.available_at+timedelta(days=1);now=published+timedelta(hours=73)
+    month=published.date().replace(day=1)
+    with _admin(databases["admin"]) as connection:
+        connection.execute("INSERT INTO catalog.platform_account(id,institution_id,platform,canonical_external_id,access_mode) "
+                           "VALUES (%s,%s,'max',%s,'public_web') ON CONFLICT(id) DO NOTHING",
+                           (account,INSTITUTION,f"reference-{account}"))
+        connection.execute("INSERT INTO ingest.collection_run(id,platform,partition_key,collector_version,started_at,status,correlation_id) "
+                           "VALUES (%s,'max','reference','integration',%s,'succeeded',gen_random_uuid())",(run,published))
+        connection.execute("SELECT ops_and_admin.ensure_publication_metric_partition(%s)",(month,))
+        connection.execute("INSERT INTO ingest.publication(id,primary_account_id,published_at,discovered_at,publication_type,history_completeness) "
+                           "VALUES (%s,%s,%s,%s,'post','complete')",(publication,account,published,published))
+        for hour,v,r in ((24,100,10),(72,10000000,100000)):
+            observed=published+timedelta(hours=hour)
+            connection.execute("INSERT INTO ingest.publication_metric_snapshot("
+                "published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,"
+                "views_count,reactions_count,quality,views_quality,reactions_quality,interval_uncertain,source_fingerprint,collected_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'exact','exact','exact',false,%s,%s)",
+                (month,publication,run,observed,hour*3600,hour,v,r,uuid4().hex,observed))
+    store=PostgresAnomalyStore(databases["worker"])
+    worker=Worker(store,ScheduleConfig(),CollectionCadence(),clock=lambda:now)
+    row=DueRow(publication,published,now,None,None,None,0,())
+    worker._analyze([row],now,1.)
+    with psycopg.connect(databases["api"],row_factory=dict_row) as connection:
+        stored=connection.execute(STATE,{"publication":publication}).fetchone()
+    body=analysis_body(str(publication),1,stored)
+    assert {11,12}<={s["pattern"] for s in body["signals"]}
+    assert body["level"]==1 and body["levelLabel"]=="слабый сигнал"
+    assert body["detectorVersions"]["mature_reference_model"]==reference.version
+    assert all(s["render"]["observed"]>s["render"]["upper"] for s in body["signals"] if s["pattern"] in (11,12))
+
+
+def test_research_endpoint_sql_matches_active_corrections_as_of_cutoff(databases):
+    import json
+    import pathlib
+    import re
+    base=datetime(2026,9,21,tzinfo=timezone.utc)
+    target=_publication(databases["admin"],base,1)
+    month=base.date().replace(day=1)
+    with _admin(databases["admin"]) as connection:
+        old=connection.execute("INSERT INTO ingest.publication_metric_snapshot("
+            "published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,"
+            "views_count,reactions_count,quality,source_fingerprint,collected_at) "
+            "VALUES (%s,%s,%s,%s,%s,72,1000,10,'exact',%s,%s) RETURNING id,created_at",
+            (month,target.publication_id,RUN,base+timedelta(hours=71),71*3600,uuid4().hex,base+timedelta(hours=71))).fetchone()
+        correction=connection.execute("INSERT INTO ingest.publication_metric_snapshot("
+            "published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,"
+            "views_count,reactions_count,quality,source_fingerprint,collected_at,"
+            "correction_sequence,supersedes_snapshot_id,correction_reason) "
+            "VALUES (%s,%s,%s,%s,%s,72,1100,11,'exact',%s,%s,1,%s,'provider_payload_changed') RETURNING created_at",
+            (month,target.publication_id,RUN,base+timedelta(hours=73),73*3600,uuid4().hex,base+timedelta(hours=73),old['id'])).fetchone()
+        query=(pathlib.Path(__file__).resolve().parents[1]/'research/smart-engagement-2026-09/sql/release_endpoints.sql').read_text()
+        query=query[query.index('WITH accounts'):query.rindex('COMMIT;')]
+        query=re.sub(r"jsonb_array_elements_text\(\s*'[^']+'::jsonb\)",
+                     'jsonb_array_elements_text(%(accounts)s::jsonb)',query,count=1)
+        query=query.replace("'2026-09-28 03:18:11+00'::timestamptz",'%(cutoff)s::timestamptz')
+        def endpoint_at(cutoff):
+            result=connection.execute(query,{'accounts':json.dumps([str(ACCOUNT)]),'cutoff':cutoff}).fetchall()
+            row=next(next(iter(r.values())) for r in result if next(iter(r.values()))['id']==str(target.publication_id))
+            return next(p for p in row['points'] if p['hours']==72)
+        before=endpoint_at(correction['created_at']-timedelta(microseconds=1))
+        after=endpoint_at(correction['created_at']+timedelta(microseconds=1))
+        assert before['v']==1000 and after['v'] is None
+    series=PostgresAnomalyStore(databases['worker']).read_series([target])[target.publication_id]
+    assert base+timedelta(hours=71) not in series.observed_at
+    assert base+timedelta(hours=73) in series.observed_at

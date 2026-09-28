@@ -23,6 +23,11 @@ def databases():
         pytest.skip("disposable anomaly PostgreSQL role DSNs are required")
     if "anomaly_it" not in values["admin"] or not any(host in values["admin"] for host in ("127.0.0.1", "localhost")):
         raise AssertionError("anomaly integration test requires the dedicated disposable local anomaly_it database")
+    # The live ingestion contract creates a revision before its first snapshot.
+    # A fresh database has no prior batch whose revision a fixture can inherit.
+    with psycopg.connect(values["admin"], autocommit=True) as connection:
+        connection.execute("INSERT INTO analytics.dataset_revision(cause,correlation_id) "
+                           "VALUES ('ingestion',gen_random_uuid())")
     yield values
 
 
@@ -67,3 +72,11 @@ def test_job_writes_a_version_that_the_worker_can_read(databases):
     assert norms is not None and norms.for_account(account).posts == 22
     if status is NormStatus.ACCEPTED:
         assert store.latest_accepted_norm_version() == version
+
+
+def test_newer_incompatible_norm_cannot_replace_exact_quality_version(databases):
+    from anomaly_analysis.v2.norms import NORM_MODEL_VERSION
+    store=PostgresAnomalyStore(databases["worker"])
+    current=store.write_norm_version(NORM_MODEL_VERSION,NormStatus.ACCEPTED,[])
+    store.write_norm_version("2.0.0",NormStatus.ACCEPTED,[])
+    assert store.latest_accepted_norm_version()==current

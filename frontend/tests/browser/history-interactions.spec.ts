@@ -77,7 +77,7 @@ test("publication shows a collapsed analysis card that expands and marks signals
   const card=page.getByTestId("anomaly-card");
   const toggle=page.getByTestId("anomaly-toggle");
   await expect(toggle).toHaveAttribute("aria-expanded","false");
-  await expect(toggle).toContainText("признаки искусственной активности");
+  await expect(toggle).toContainText("несколько согласованных аномалий");
   await expect(toggle).toContainText("2 признака");
   await expect(card.getByTestId("anomaly-signal")).toHaveCount(0);
   await toggle.click();
@@ -272,4 +272,37 @@ test("hidden labels deep in the history table do not stretch the page below it",
   const gap=await page.evaluate(()=>document.documentElement.scrollHeight-(document.querySelector("main")!.getBoundingClientRect().bottom+window.scrollY));
   // Под main — только подвал; тысяч пикселей пустоты быть не должно.
   expect(gap).toBeLessThan(200);
+});
+
+
+test("new reference methods keep shared cards, icons, charts and explanations",async({page},testInfo)=>{
+  await page.goto("/platform-posts/10");
+  const card=page.getByTestId("anomaly-card");
+  await expect(card.getByTestId("anomaly-toggle")).toContainText("слабый сигнал");
+  await card.getByTestId("anomaly-toggle").click();
+  await expect(card.getByTestId("anomaly-signal")).toHaveCount(2);
+  for(const pattern of [11,12]) {
+    const signal=card.locator(`[data-pattern="${pattern}"]`);
+    await expect(signal.locator("svg.lucide").first()).toBeVisible();
+    await signal.getByTestId("signal-detail-toggle").click();
+    await expect(signal.getByTestId("reference-explanation")).toContainText("не означает вероятность");
+    await expect(signal.getByRole("img")).toHaveAccessibleName(/этот пост 720, ожидание 310, верхняя граница 520/);
+    await expect(signal.getByRole("img").locator("svg")).toBeVisible();
+  }
+  await card.getByRole("button",{name:"Формула и возможные объяснения"}).first().hover();
+  await expect(page.locator('[data-slot="tooltip-content"]')).toContainText("общая калибровка четырёх компонент");
+  await page.mouse.move(0,0);
+  await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
+  await card.screenshot({path:testInfo.outputPath("mature-reference-card.png"), animations:"disabled",
+    style:".site-header-glass { visibility: hidden !important; }"});
+  expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
+});
+
+test("missing precise data is visible before expanding the analysis",async({page})=>{
+  await page.goto("/posts/11");
+  const toggle=page.getByTestId("anomaly-toggle");
+  await expect(toggle).toContainText("Недостаточно точных данных");
+  await toggle.click();
+  await expect(page.getByTestId("anomaly-card")).toContainText("не подтверждает обычность статистики");
+  await expect(page.getByTestId("anomaly-card")).not.toContainText("Признаков аномальной динамики не найдено");
 });

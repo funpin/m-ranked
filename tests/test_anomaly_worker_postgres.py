@@ -26,6 +26,11 @@ def databases():
         pytest.skip("disposable anomaly PostgreSQL role DSNs are required")
     if "anomaly_it" not in values["admin"] or not any(host in values["admin"] for host in ("127.0.0.1", "localhost")):
         raise AssertionError("anomaly integration test requires the dedicated disposable local anomaly_it database")
+    # The live ingestion contract creates a revision before its first snapshot.
+    # A fresh database has no prior batch whose revision a fixture can inherit.
+    with psycopg.connect(values["admin"], autocommit=True) as connection:
+        connection.execute("INSERT INTO analytics.dataset_revision(cause,correlation_id) "
+                           "VALUES ('ingestion',gen_random_uuid())")
     with psycopg.connect(values["admin"], autocommit=True) as connection:
         # Состояния прежних прогонов не должны попадать в очередь этого модуля.
         connection.execute("UPDATE analytics.post_anomaly_state SET frozen = true")

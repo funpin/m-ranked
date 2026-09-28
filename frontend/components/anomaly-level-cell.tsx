@@ -26,7 +26,7 @@ async function Level({ levels, publicationId }: { levels: Promise<AccountLevelsL
   const item = publicationId ? loaded.get(publicationId) : undefined;
   if (!item) return <span className="text-muted-foreground inline-flex items-center gap-1.5 whitespace-nowrap" title="Пост ещё не проанализирован"><LevelIcon level={null} className="size-3.5" />ожидает</span>;
   if (item.level === 0) {
-    return <span className="text-muted-foreground inline-flex items-center gap-1.5 whitespace-nowrap"><LevelIcon level={0} className="size-3.5" />нет аномалий</span>;
+    return <span className="text-muted-foreground inline-flex items-center gap-1.5 whitespace-nowrap"><LevelIcon level={item.levelSymbol === "·" ? null : 0} className="size-3.5" />{item.levelLabel}</span>;
   }
   const tone = item.level === 3 ? "red" : "amber";
   return (

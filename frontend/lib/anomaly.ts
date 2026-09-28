@@ -23,6 +23,8 @@ export const SIGNAL_LEGEND = [
   { pattern: 8, title: "синхронный подъём постов аккаунта" },
   { pattern: 9, title: "рывок, обрывающийся в плато" },
   { pattern: 10, title: "ERV вне нормы" },
+  { pattern: 11, title: "отклик выше исторического диапазона" },
+  { pattern: 12, title: "продолжение отклика выше ожидаемого" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;
@@ -36,11 +38,12 @@ export type Tone = "neutral" | "amber" | "red";
  *  спокойные: предупреждающий цвет там читался бы как обвинение. */
 export function summaryLine(analysis: PublicationAnomalyAnalysis) {
   const count = analysis.signals.length;
+  const insufficient = analysis.quality?.codes.includes("no_precise_metrics") && analysis.level === 0;
   const calm = analysis.level === null || analysis.level === 0;
   const tone: Tone = calm ? "neutral" : analysis.level === 3 ? "red" : "amber";
   return {
-    level: analysis.level,
-    label: analysis.levelLabel,
+    level: insufficient ? null : analysis.level,
+    label: insufficient ? "недостаточно точных данных" : analysis.levelLabel,
     count: calm ? null : signalCount(count),
     analyzedAt: analysis.analyzedAt,
     calm,
@@ -129,6 +132,13 @@ function numberAt(render: AnomalySignal["render"], key: string) {
  *  синхронности (8) и шкала ERV «пост против медианы» (10). */
 export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[], publishedAt: string): MiniChart {
   const render = signal.render;
+  if (render.kind === "reference") {
+    return { type: "bars", percent: false, bars: [
+      { label: "этот пост", value: numberAt(render, "observed") ?? 0, highlight: true },
+      { label: "ожидание", value: numberAt(render, "expected") ?? 0, highlight: false },
+      { label: "верхняя граница", value: numberAt(render, "upper") ?? 0, highlight: false },
+    ] };
+  }
   if (render.kind === "erv") {
     return { type: "bars", percent: true, bars: [
       { label: "этот пост", value: numberAt(render, "erv") ?? 0, highlight: true },
@@ -199,4 +209,19 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
   }
   return { type: "lines", series: [{ key: "actual", label: METRIC_NAMES[metric] }],
     points: window.map((row) => ({ t: Date.parse(row.observedAt), actual: value(row, metric) })) };
+}
+
+/** Same detail row as existing signals; no claim about causes or fraud odds. */
+export function referenceExplanation(signal: AnomalySignal): string | null {
+  if (signal.render.kind !== "reference") return null;
+  const r = signal.render as Record<string, unknown>;
+  const date = (key: string) => {
+    const value = r[key];
+    if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) return "—";
+    return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(value));
+  };
+  const basis = signal.pattern === 12
+    ? "Отклик к третьим суткам сравнивается с ожиданием по первым суткам и истории аккаунта."
+    : "Отклик к третьим суткам сравнивается с историческим диапазоном аккаунта.";
+  return `${basis} Референс: публикации с ${date("referenceStart")} до ${date("referenceEnd")}, ${numberAt(signal.render, "fitPosts") ?? 0} для обучения и ${numberAt(signal.render, "calibrationPosts") ?? 0} для общей границы. Превышение возможно и при обычном продвижении. Это слабый сигнал; его сила не означает вероятность накрутки.`;
 }

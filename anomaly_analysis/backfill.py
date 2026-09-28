@@ -21,6 +21,8 @@ import shutil
 import time
 
 from .v2.levels import assess
+from .v2.mature_reference import bundled_reference
+from uuid import UUID
 from .v2.schedule import ScheduleConfig, plan
 from .v2.series import CollectionCadence
 from .v2.store import SERIES_BATCH, PostgresAnomalyStore, SeriesTarget, StateWrite
@@ -32,7 +34,13 @@ PLATFORMS = ("telegram", "vk", "max", "rutube")
 def main() -> None:
     parser = argparse.ArgumentParser(description="Re-analyse every post of the window with full account activity")
     parser.add_argument("--days", type=int, default=35)
+    parser.add_argument("--max-accounts", type=int, default=0, help="Bound this run; 0 means all")
+    parser.add_argument("--after-account", type=UUID, help="Resume strictly after this completed account")
+    parser.add_argument("--disable-mature-reference", action="store_true",
+                        help="Remove new reference signals while preserving quality fixes")
     arguments = parser.parse_args()
+    if arguments.max_accounts < 0:
+        raise SystemExit("--max-accounts must be non-negative")
     if not 1 <= arguments.days <= 75:
         raise SystemExit("--days must be between 1 and 75")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -59,12 +67,18 @@ def main() -> None:
     since = now - timedelta(days=arguments.days)
     version = store.latest_accepted_norm_version()
     norms = {platform: store.read_norms(version, platform) for platform in PLATFORMS} if version else {}
+    reference = None if arguments.disable_mature_reference else bundled_reference()
     accounts = store.backfill_accounts(since)
+    if arguments.after_account is not None:
+        accounts = [a for a in accounts if a.int > arguments.after_account.int]
+    if arguments.max_accounts:
+        accounts = accounts[:arguments.max_accounts]
     log.info("backfill started accounts=%d days=%d norm_version=%s", len(accounts), arguments.days, version)
     analyzed = failed = 0
     for position, account in enumerate(accounts, 1):
         require_space()
         started = time.monotonic()
+        account_failed = 0
         rows = store.backfill_targets(account, since)
         # Агрегаты — с суток до самого старого поста: базе подъёма нужен хвост.
         activity = store.read_activity([account], since - timedelta(days=1), now,
@@ -79,13 +93,15 @@ def main() -> None:
             for row in chunk:
                 subject = series.get(row.publication_id)
                 if subject is None or not subject.observed_at:
+                    account_failed += 1
+                    log.error("backfill series unavailable publication=%s", row.publication_id)
                     continue
                 try:
                     verdict = assess(subject, norms=norms.get(subject.platform), subscribers=subscribers,
                                      analyzed_at=moment, cadence=cadence, norm_version=version,
-                                     activity=activity)
-                except Exception:  # один пост не останавливает перепроверку
-                    failed += 1
+                                     activity=activity, reference=reference)
+                except Exception:  # закончить аккаунт, но не продвигать курсор при ошибках
+                    account_failed += 1
                     log.exception("backfill post failed publication=%s", row.publication_id)
                     continue
                 decision = plan(schedule, platform=subject.platform, published_at=subject.published_at,
@@ -96,7 +112,12 @@ def main() -> None:
                     norm_version_id=version, frozen=decision.frozen, lag_seconds=0, reason="backfill"))
                 analyzed += 1
             store.write_states(writes)
-        log.info("backfill account %d/%d posts=%d seconds=%.1f", position, len(accounts), len(rows),
+        failed += account_failed
+        if account_failed:
+            log.error("backfill account incomplete account_id=%s failed=%d; retry from previous completed account",
+                      account, account_failed)
+            raise SystemExit(1)
+        log.info("backfill account %d/%d account_id=%s posts=%d seconds=%.1f", position, len(accounts), account, len(rows),
                  time.monotonic() - started)
     log.info("backfill finished analyzed=%d failed=%d", analyzed, failed)
 
