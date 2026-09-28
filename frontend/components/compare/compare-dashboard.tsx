@@ -474,7 +474,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         description="Выводы модуля анализа по постам периода. Сигнал информационный и сам по себе не доказывает накрутку.">
         <div className="grid gap-4 lg:grid-cols-3">
           <ChartCard title="Уровни анализа" description={`${formatInteger(summary.analyzed)} проанализированных постов`} testId="levels-card"
-            note="Уровень складывается из согласия независимых семейств методов. «С аномалиями» — уровни «выраженная аномалия» и «признаки искусственной активности».">
+            note="Высший уровень дают сильные признаки из разных семейств методов или подтверждённый короткий рывок с плато. «С аномалиями» — уровни «выраженная аномалия» и «признаки искусственной активности».">
             <LevelsDonut levels={summary.levels} />
             <ul className="mt-3 grid gap-1 text-xs">
               {LEVEL_NAMES.map((name, level) => (
