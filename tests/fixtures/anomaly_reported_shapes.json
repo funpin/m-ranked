@@ -1,0 +1,3334 @@
+[
+  {
+    "account": "early_repost_pack",
+    "publication": {
+      "publicationId": "00000000-0000-0000-0000-000000000014",
+      "platform": "telegram",
+      "publishedAt": "2026-01-01T00:00:00+00:00",
+      "repost": true
+    },
+    "points": [
+      {
+        "observed_at": "2026-01-01T00:04:11.485770+00:00",
+        "v": 7,
+        "r": 1,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "👏": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:09:09.274924+00:00",
+        "v": 19,
+        "r": 11,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 3,
+          "🎉": 1,
+          "👍": 1,
+          "👏": 4,
+          "🔥": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:14:11.050448+00:00",
+        "v": 19,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:24:16.359872+00:00",
+        "v": 80,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:29:03.060242+00:00",
+        "v": 132,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:44:05.929063+00:00",
+        "v": 156,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:49:02.497808+00:00",
+        "v": 172,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:54:02.281892+00:00",
+        "v": 202,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:59:00.573914+00:00",
+        "v": 206,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:04:11.981930+00:00",
+        "v": 208,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:09:05.261473+00:00",
+        "v": 263,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:14:11.149427+00:00",
+        "v": 269,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:19:12.871813+00:00",
+        "v": 271,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:24:12.138436+00:00",
+        "v": 301,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:29:02.542260+00:00",
+        "v": 304,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:34:01.644859+00:00",
+        "v": 306,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:39:02.952027+00:00",
+        "v": 310,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:44:06.333999+00:00",
+        "v": 312,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:49:01.988223+00:00",
+        "v": 329,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:54:04.867119+00:00",
+        "v": 332,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:59:00.923432+00:00",
+        "v": 347,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:04:09.509345+00:00",
+        "v": 392,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:09:05.624756+00:00",
+        "v": 397,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:14:11.558454+00:00",
+        "v": 400,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:19:18.419469+00:00",
+        "v": 403,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:24:20.148577+00:00",
+        "v": 413,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:29:03.582078+00:00",
+        "v": 423,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:34:04.894230+00:00",
+        "v": 426,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:39:03.622715+00:00",
+        "v": 433,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:44:06.695620+00:00",
+        "v": 436,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:49:10.333521+00:00",
+        "v": 456,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:54:06.874121+00:00",
+        "v": 458,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:59:03.095131+00:00",
+        "v": 461,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:04:14.593068+00:00",
+        "v": 495,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:19:18.154129+00:00",
+        "v": 501,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:24:17.281351+00:00",
+        "v": 515,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:29:05.195052+00:00",
+        "v": 516,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:34:07.831352+00:00",
+        "v": 517,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:44:07.861738+00:00",
+        "v": 533,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:49:14.150022+00:00",
+        "v": 534,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:54:07.650537+00:00",
+        "v": 535,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:04:15.072488+00:00",
+        "v": 552,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:09:12.238277+00:00",
+        "v": 559,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:19:26.883598+00:00",
+        "v": 561,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:24:28.851465+00:00",
+        "v": 564,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:29:06.043948+00:00",
+        "v": 573,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:34:10.162689+00:00",
+        "v": 576,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:49:12.256561+00:00",
+        "v": 586,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:54:07.718293+00:00",
+        "v": 588,
+        "r": 119,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 22,
+          "🎉": 21,
+          "👍": 22,
+          "👏": 27,
+          "🔥": 27
+        }
+      }
+    ]
+  },
+  {
+    "account": "repost_pack_tail",
+    "publication": {
+      "publicationId": "00000000-0000-0000-0000-000000000015",
+      "platform": "telegram",
+      "publishedAt": "2026-01-01T00:00:00+00:00",
+      "repost": true
+    },
+    "points": [
+      {
+        "observed_at": "2026-01-01T00:03:50.418797+00:00",
+        "v": 14,
+        "r": 0,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {}
+      },
+      {
+        "observed_at": "2026-01-01T00:08:58.462710+00:00",
+        "v": 27,
+        "r": 0,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {}
+      },
+      {
+        "observed_at": "2026-01-01T00:13:48.477842+00:00",
+        "v": 41,
+        "r": 0,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {}
+      },
+      {
+        "observed_at": "2026-01-01T00:18:50.789561+00:00",
+        "v": 96,
+        "r": 9,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "🎉": 3,
+          "👍": 3,
+          "🔥": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:23:56.118227+00:00",
+        "v": 101,
+        "r": 12,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 3,
+          "🎉": 3,
+          "👍": 3,
+          "👏": 2,
+          "🔥": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:28:45.561443+00:00",
+        "v": 103,
+        "r": 30,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 5,
+          "🎉": 5,
+          "👍": 8,
+          "👏": 9,
+          "🔥": 3
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:33:44.546793+00:00",
+        "v": 106,
+        "r": 49,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 8,
+          "🎉": 10,
+          "👍": 11,
+          "👏": 12,
+          "🔥": 8
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:38:43.899651+00:00",
+        "v": 118,
+        "r": 55,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 9,
+          "🎉": 10,
+          "👍": 14,
+          "👏": 13,
+          "🔥": 9
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:43:47.586365+00:00",
+        "v": 124,
+        "r": 66,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 10,
+          "🎉": 13,
+          "👍": 16,
+          "👏": 17,
+          "🔥": 10
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:48:43.866798+00:00",
+        "v": 132,
+        "r": 97,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 15,
+          "🎉": 20,
+          "👍": 22,
+          "👏": 25,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:53:43.702232+00:00",
+        "v": 136,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:58:42.224488+00:00",
+        "v": 182,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:03:54.433669+00:00",
+        "v": 187,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:09:00.289698+00:00",
+        "v": 189,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:13:50.366439+00:00",
+        "v": 190,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:18:53.031354+00:00",
+        "v": 251,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:23:58.781013+00:00",
+        "v": 253,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:28:48.726074+00:00",
+        "v": 255,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:33:46.451130+00:00",
+        "v": 259,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:38:46.403228+00:00",
+        "v": 267,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:43:46.118424+00:00",
+        "v": 273,
+        "r": 108,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:53:45.185282+00:00",
+        "v": 274,
+        "r": 109,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "👍": 24,
+          "👏": 29,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:58:43.096380+00:00",
+        "v": 310,
+        "r": 111,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "🏆": 1,
+          "👍": 24,
+          "👏": 30,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:04:03.338424+00:00",
+        "v": 321,
+        "r": 111,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "🏆": 1,
+          "👍": 24,
+          "👏": 30,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:09:04.132155+00:00",
+        "v": 332,
+        "r": 111,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "🏆": 1,
+          "👍": 24,
+          "👏": 30,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:13:53.526418+00:00",
+        "v": 334,
+        "r": 111,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "🏆": 1,
+          "👍": 24,
+          "👏": 30,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:18:57.831993+00:00",
+        "v": 375,
+        "r": 111,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "🏆": 1,
+          "👍": 24,
+          "👏": 30,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:23:58.672193+00:00",
+        "v": 380,
+        "r": 111,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 23,
+          "🏆": 1,
+          "👍": 24,
+          "👏": 30,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:28:45.143664+00:00",
+        "v": 381,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:33:46.973257+00:00",
+        "v": 387,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:38:47.030663+00:00",
+        "v": 407,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:43:50.069619+00:00",
+        "v": 412,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:48:44.581940+00:00",
+        "v": 415,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:53:47.598637+00:00",
+        "v": 427,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:58:43.993051+00:00",
+        "v": 448,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:04:00.773894+00:00",
+        "v": 457,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:09:12.643354+00:00",
+        "v": 464,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:13:51.423834+00:00",
+        "v": 491,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:18:59.811032+00:00",
+        "v": 532,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:24:01.755401+00:00",
+        "v": 535,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:28:56.244755+00:00",
+        "v": 539,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:33:55.572316+00:00",
+        "v": 552,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:38:46.919849+00:00",
+        "v": 555,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:43:48.973492+00:00",
+        "v": 557,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:48:54.408612+00:00",
+        "v": 561,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:53:49.477374+00:00",
+        "v": 577,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:58:43.834124+00:00",
+        "v": 585,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:04:05.656565+00:00",
+        "v": 590,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:08:54.824806+00:00",
+        "v": 592,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:14:06.033233+00:00",
+        "v": 612,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:19:03.363642+00:00",
+        "v": 615,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:24:01.114219+00:00",
+        "v": 616,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:28:51.285466+00:00",
+        "v": 617,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:33:55.350926+00:00",
+        "v": 626,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:38:51.286217+00:00",
+        "v": 628,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:43:50.454016+00:00",
+        "v": 630,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:48:51.265279+00:00",
+        "v": 633,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:53:51.953524+00:00",
+        "v": 641,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:58:50.225556+00:00",
+        "v": 643,
+        "r": 114,
+        "vq": "rounded",
+        "rq": "rounded",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 17,
+          "🎉": 24,
+          "🏆": 1,
+          "👍": 25,
+          "👏": 31,
+          "🔥": 15,
+          "😍": 1
+        }
+      }
+    ]
+  },
+  {
+    "account": "legacy_precision_pack",
+    "publication": {
+      "publicationId": "00000000-0000-0000-0000-000000000016",
+      "platform": "telegram",
+      "publishedAt": "2026-01-01T00:00:00+00:00",
+      "repost": false
+    },
+    "points": [
+      {
+        "observed_at": "2026-01-01T00:01:09.305708+00:00",
+        "v": 21,
+        "r": 2,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "👍": 1,
+          "👏": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:05:39.544979+00:00",
+        "v": 52,
+        "r": 4,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 1,
+          "👍": 2,
+          "👏": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:10:39.372941+00:00",
+        "v": 65,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:15:40.670880+00:00",
+        "v": 71,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:20:38.979309+00:00",
+        "v": 85,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:25:39.137233+00:00",
+        "v": 92,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:30:43.872471+00:00",
+        "v": 104,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:35:39.127590+00:00",
+        "v": 117,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:40:39.258575+00:00",
+        "v": 122,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:45:40.871565+00:00",
+        "v": 128,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:50:39.212353+00:00",
+        "v": 137,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:55:39.378018+00:00",
+        "v": 143,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:01:09.938775+00:00",
+        "v": 150,
+        "r": 7,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 2,
+          "👍": 3,
+          "👏": 2
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:05:39.214591+00:00",
+        "v": 250,
+        "r": 192,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 33,
+          "🎉": 40,
+          "👍": 39,
+          "👏": 43,
+          "🔥": 37
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:10:39.919476+00:00",
+        "v": 258,
+        "r": 206,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 46,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:15:45.102756+00:00",
+        "v": 275,
+        "r": 206,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 46,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:20:42.597286+00:00",
+        "v": 280,
+        "r": 206,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 46,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:25:42.710745+00:00",
+        "v": 385,
+        "r": 206,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 46,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:30:46.582001+00:00",
+        "v": 394,
+        "r": 206,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 46,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:35:42.568030+00:00",
+        "v": 403,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:40:42.469569+00:00",
+        "v": 407,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:45:44.279203+00:00",
+        "v": 502,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:50:42.632631+00:00",
+        "v": 506,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:55:42.599989+00:00",
+        "v": 530,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:01:13.089972+00:00",
+        "v": 534,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:05:42.511457+00:00",
+        "v": 669,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:10:42.492954+00:00",
+        "v": 670,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:15:43.929110+00:00",
+        "v": 684,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:20:42.745941+00:00",
+        "v": 695,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:25:42.621669+00:00",
+        "v": 739,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:30:46.810304+00:00",
+        "v": 741,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:35:42.716294+00:00",
+        "v": 744,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:40:42.748861+00:00",
+        "v": 750,
+        "r": 207,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 45,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:45:44.797696+00:00",
+        "v": 789,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:50:42.777845+00:00",
+        "v": 791,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:55:42.898878+00:00",
+        "v": 796,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:01:13.773791+00:00",
+        "v": 801,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:05:42.795103+00:00",
+        "v": 861,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:10:42.878784+00:00",
+        "v": 863,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:15:44.579124+00:00",
+        "v": 869,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:20:42.910079+00:00",
+        "v": 871,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:25:42.893681+00:00",
+        "v": 896,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:30:47.315952+00:00",
+        "v": 898,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:35:42.963745+00:00",
+        "v": 900,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:40:43.225286+00:00",
+        "v": 902,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:45:44.193257+00:00",
+        "v": 927,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:50:42.850521+00:00",
+        "v": 928,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:55:42.990680+00:00",
+        "v": 930,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:01:13.120471+00:00",
+        "v": 931,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:05:42.856809+00:00",
+        "v": 977,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:10:43.013611+00:00",
+        "v": 978,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:15:44.357895+00:00",
+        "v": 983,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:20:42.880068+00:00",
+        "v": 985,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:25:43.142649+00:00",
+        "v": 1000,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:30:47.147338+00:00",
+        "v": 1000,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:35:43.065414+00:00",
+        "v": 1010,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:40:43.036405+00:00",
+        "v": 1010,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:45:44.402750+00:00",
+        "v": 1030,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:50:43.007993+00:00",
+        "v": 1030,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:55:42.942546+00:00",
+        "v": 1030,
+        "r": 208,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 41,
+          "👍": 47,
+          "👏": 46,
+          "🔥": 38
+        }
+      }
+    ]
+  },
+  {
+    "account": "legacy_early_pack",
+    "publication": {
+      "publicationId": "00000000-0000-0000-0000-000000000017",
+      "platform": "telegram",
+      "publishedAt": "2026-01-01T00:00:00+00:00",
+      "repost": false
+    },
+    "points": [
+      {
+        "observed_at": "2026-01-01T00:03:21.476584+00:00",
+        "v": 17,
+        "r": 0,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {}
+      },
+      {
+        "observed_at": "2026-01-01T00:09:26.657042+00:00",
+        "v": 85,
+        "r": 0,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {}
+      },
+      {
+        "observed_at": "2026-01-01T00:15:31.875047+00:00",
+        "v": 96,
+        "r": 191,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 35,
+          "🎉": 43,
+          "👍": 38,
+          "👏": 36,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:21:38.709037+00:00",
+        "v": 104,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:27:47.108895+00:00",
+        "v": 162,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:33:53.380536+00:00",
+        "v": 168,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:40:05.950975+00:00",
+        "v": 175,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:46:12.546374+00:00",
+        "v": 181,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:52:19.789030+00:00",
+        "v": 240,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T00:58:30.832730+00:00",
+        "v": 241,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:04:37.709979+00:00",
+        "v": 247,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:10:41.424680+00:00",
+        "v": 329,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:16:47.270290+00:00",
+        "v": 332,
+        "r": 199,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 36,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 38,
+          "🔥": 39
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:22:53.023029+00:00",
+        "v": 345,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:28:57.186090+00:00",
+        "v": 371,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:35:05.812670+00:00",
+        "v": 373,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:41:15.195931+00:00",
+        "v": 377,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:47:22.388821+00:00",
+        "v": 379,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:53:32.850090+00:00",
+        "v": 404,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T01:59:45.085755+00:00",
+        "v": 407,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:05:59.440231+00:00",
+        "v": 415,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:12:10.084508+00:00",
+        "v": 444,
+        "r": 202,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:18:20.368038+00:00",
+        "v": 447,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:24:30.573387+00:00",
+        "v": 463,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:30:41.143881+00:00",
+        "v": 487,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:36:51.271134+00:00",
+        "v": 498,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:43:02.769740+00:00",
+        "v": 500,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:49:14.349839+00:00",
+        "v": 526,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T02:55:28.228746+00:00",
+        "v": 528,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:01:46.227305+00:00",
+        "v": 530,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:07:54.879461+00:00",
+        "v": 590,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:14:02.339847+00:00",
+        "v": 594,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:20:23.495706+00:00",
+        "v": 602,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:26:31.710819+00:00",
+        "v": 604,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:32:42.295093+00:00",
+        "v": 648,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:38:56.474804+00:00",
+        "v": 656,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:45:08.456864+00:00",
+        "v": 659,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:51:20.326598+00:00",
+        "v": 700,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T03:57:30.001802+00:00",
+        "v": 702,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:04:10.051328+00:00",
+        "v": 708,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:10:21.926936+00:00",
+        "v": 776,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:16:33.124349+00:00",
+        "v": 777,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:23:11.618170+00:00",
+        "v": 785,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:36:01.830070+00:00",
+        "v": 817,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": true,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:42:20.331037+00:00",
+        "v": 822,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:48:27.879780+00:00",
+        "v": 849,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      },
+      {
+        "observed_at": "2026-01-01T04:54:37.015523+00:00",
+        "v": 850,
+        "r": 204,
+        "vq": "unknown",
+        "rq": "unknown",
+        "uncertain": false,
+        "breakdown": {
+          "❤": 37,
+          "🎉": 45,
+          "👍": 41,
+          "👏": 39,
+          "🔥": 40,
+          "😎": 1,
+          "custom:5321481096972481073": 1
+        }
+      }
+    ]
+  }
+]

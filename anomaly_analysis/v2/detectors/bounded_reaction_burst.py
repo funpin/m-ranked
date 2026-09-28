@@ -30,11 +30,12 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number, strongest
 
 ID = "bounded_reaction_burst"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 PATTERN = 9
 FAMILY = Family.SHAPE
 NEEDS_NORM = False
 MEASUREMENT_MODE = "bounded_reaction_counts_v1"
+REPORTED_SHAPE_MODE = "reported_reaction_shape_v1"
 BURST_HOURS = (1, 2, 3, 6)
 BACKGROUND_HOURS = 6
 AFTER_HOURS = 3
@@ -174,7 +175,69 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     signs.extend(_decoupled(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
     if not signs and series.platform == "telegram" and any(row[2] == "rounded" for row in rows):
         signs.extend(_reported_plateau(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
+    if not signs and (series.is_repost or series.platform == "telegram" and any(row[2] == "unknown" for row in rows)):
+        signs.extend(_reported_own_shape(prepared, ages, rows, bounds, withdrawal_prefix))
     return tuple(strongest(signs))
+
+
+def _reported_own_shape(prepared, ages, rows, bounds, withdrawals):
+    """A visible reaction-only candidate, without precision/audience claims.
+
+    Source views cannot validate a repost's own reactions. Legacy Telegram
+    counts of unknown precision can still record an abrupt shape when their
+    retained ordinary-reaction components match. Neither is sufficient for
+    the confirmed, highest-severity pattern; keep this evidence weak.
+    """
+    usable = []
+    for row, bound in zip(rows, bounds):
+        _, value, quality, uncertain, breakdown = row
+        legacy = (prepared.series.platform == "telegram" and quality == "unknown"
+                  and breakdown is not None and value is not None
+                  and sum(breakdown.values()) == value
+                  and all(type(v) is int and v > 0 and not k.startswith(("paid:", "unknown:"))
+                          for k, v in breakdown.items()))
+        usable.append(not uncertain and (bound is not None or legacy))
+    # A correction's low point cannot become the baseline of a new pack
+    # when the counter simply recovers on the following poll.
+    for i in range(1, len(rows)):
+        previous, value = rows[i-1][1], rows[i][1]
+        if previous is not None and value is not None and previous - value > min(3, .05 * previous):
+            usable[i] = False
+    nominal = [(row[1], row[1]) if ok else None for row, ok in zip(rows, usable)]
+    bad = np.r_[0, np.cumsum(~np.asarray(usable))]
+    signs = []
+    for begin, end in _candidate_pairs(ages, nominal, (0, 1/6, .25, .5), max_duration=.5):
+        duration = float(ages[end] - ages[begin])
+        burst = rows[end][1] - rows[begin][1]
+        if burst < max(MIN_PACK, MIN_PACK_RATE * duration, MIN_SHARE * rows[begin][1]):
+            continue
+        after = int(np.searchsorted(ages, ages[end] + AFTER_HOURS))
+        if (after >= len(rows) or ages[after] - ages[end] > 4 or after - end < 3
+                or bad[after+1] != bad[begin] or np.max(np.diff(ages[end:after+1])) > 1.5
+                or withdrawals[end+1] != withdrawals[begin+1]):
+            continue
+        withdrawn = float(withdrawals[after+1] - withdrawals[end+1])
+        if withdrawn > min(3, .05 * burst):
+            continue
+        tail = max(0, rows[after][1] - rows[end][1]) + withdrawn
+        first_after = int(np.searchsorted(ages, ages[end] + 1))
+        immediate = max(0, rows[first_after][1] - rows[end][1]) + withdrawals[first_after+1] - withdrawals[end+1]
+        if (burst / (burst + tail) < MIN_PACK_SHARE or tail / (ages[after] - ages[end]) > .05 * burst / duration
+                or ages[first_after] - ages[end] > 1.5 or immediate / (ages[first_after] - ages[end]) > .1 * burst / duration):
+            continue
+        reason = ("Просмотры репоста относятся к источнику и не подтверждают этот сигнал."
+                  if prepared.series.is_repost else "Точность исторических счётчиков не подтверждена.")
+        formula = (f"По сохранённым значениям: {number(rows[begin][1])} → {number(rows[end][1])} реакций "
+                   f"за {age_text(duration * HOUR)}, затем +{number(tail)} за {age_text((ages[after] - ages[end]) * HOUR)}. "
+                   f"{reason} Показан слабый сигнал формы; величина и причина рывка требуют проверки")
+        signs.append(make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, .5,
+            float(ages[begin] * HOUR), float(ages[end] * HOUR), timedelta(hours=duration), formula,
+            {"kind": "bounded_burst", "measurementMode": REPORTED_SHAPE_MODE,
+             "mode": "reported_own_shape", "reportedOnly": True,
+             "reportedBefore": rows[begin][1], "reportedAfter": rows[end][1],
+             "reportedBurst": burst, "confirmationEndAge": float(ages[after] * HOUR),
+             "timingUnknown": True}, ("reaction_counter_batch_update", "pinned_post")))
+    return signs
 
 
 def _candidate_pairs(ages, bounds, hours_options, *, max_duration, min_age=0, max_age=np.inf, min_delta=MIN_DELTA):

@@ -178,7 +178,7 @@ def test_rounded_reaction_evidence_survives_database_worker_export_and_api(datab
         restored = parse_case(export(connection,(publication,))[publication]).subject
     assert body['level'] >= 2
     assert any(s['render']['kind'] == 'bounded_burst' for s in body['signals'])
-    assert body['detectorVersions']['bounded_reaction_burst'] == '1.2.0'
+    assert body['detectorVersions']['bounded_reaction_burst'] == '1.3.0'
     assert restored.interval_uncertain == series.interval_uncertain
     assert restored.reaction_breakdowns == series.reaction_breakdowns
     assert assess(restored).level >= 2

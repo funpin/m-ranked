@@ -133,6 +133,12 @@ function numberAt(render: AnomalySignal["render"], key: string) {
 export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[], publishedAt: string): MiniChart {
   const render = signal.render;
   if (render.kind === "bounded_burst") {
+    if (render.reportedOnly === true) {
+      return { type: "bars", percent: false, bars: [
+        { label: "сохранено до", value: numberAt(render, "reportedBefore") ?? 0, highlight: false },
+        { label: "сохранено после", value: numberAt(render, "reportedAfter") ?? 0, highlight: true },
+      ] };
+    }
     // Show count ranges at observed endpoints. Joining them with a line would
     // imply a known path through the unobserved interval.
     const range = (key: string, index: number) => {

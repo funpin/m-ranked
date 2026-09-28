@@ -65,7 +65,12 @@ def test_five_minute_burst_is_not_diluted_into_a_quiet_fifteen_minute_window():
 def test_unknown_or_failed_precision_is_never_promoted(quality):
     s = subject(CASES[0])
     s = replace(s, qualities={m: (quality,)*len(s.observed_at) for m in (V,R)})
-    assert detect(s) == ()
+    signs = detect(s)
+    if quality == 'unknown':
+        assert signs and all(sign.strength == .5 and sign.render.get('reportedOnly') for sign in signs)
+        assert all('burstLower' not in sign.render and 'plateauEvidence' not in sign.render for sign in signs)
+    else:
+        assert signs == ()
 
 
 def test_missing_breakdowns_uncertainty_and_mismatched_totals_abstain():

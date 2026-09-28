@@ -25,7 +25,7 @@ from .detectors import (
 from .detectors.reactions_before_views import ENDPOINT_MODE
 from .domain import DataQuality, Family, Interval, Level, Metric, PostSeries, PostVerdict, Sign
 from .detectors.bounded_reaction_burst import (
-    CONFIRMED_PLATEAU_MODE, MEASUREMENT_MODE as BOUNDED_REACTION_MODE,
+    CONFIRMED_PLATEAU_MODE, MEASUREMENT_MODE as BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE,
 )
 from .detectors.burst_plateau import RAPID_VIEW_MODE, VIEW_MEASUREMENT_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
@@ -44,7 +44,7 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
-AGGREGATION_VERSION = "2.2.0"
+AGGREGATION_VERSION = "2.3.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
@@ -93,6 +93,7 @@ ALTERNATIVES = {
     "multiple_reactions_per_viewer": "один читатель мог поставить несколько реакций; правило сравнения использует порог 1:1",
 }
 QUALITY_TEXTS = {
+    "reported_reaction_shape": "форма сохранённых реакций отмечена слабым сигналом без подтверждения точности или сопоставимой аудитории",
     "no_precise_metrics": "недостаточно данных для точных проверок; отсутствие сигнала не подтверждает обычность статистики",
     "bounded_reaction_counts": "крупные изменения реакций проверены с учётом точности каждого счётчика; форма роста между замерами неизвестна",
     "bounded_view_counts": "крупные изменения просмотров проверены с учётом точности счётчиков; форма роста между замерами неизвестна",
@@ -149,7 +150,7 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
     kept = []
     for sign in signs:
         bounded_counts = (sign.pattern == 9 and (
-            sign.metric is Metric.REACTIONS and sign.render.get("measurementMode") == BOUNDED_REACTION_MODE
+            sign.metric is Metric.REACTIONS and sign.render.get("measurementMode") in {BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE}
             or sign.metric is Metric.VIEWS and sign.render.get("measurementMode") == VIEW_MEASUREMENT_MODE)
             or sign.pattern == 7 and sign.family is Family.CROSS_METRIC
             and sign.render.get("measurementMode") == TELEGRAM_ORDER_MODE)
@@ -196,6 +197,8 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         quality = replace(quality, codes=(*quality.codes, "bounded_view_counts"))
     if any(sign.render.get("measurementMode") == TELEGRAM_ORDER_MODE for sign in ordered):
         quality = replace(quality, codes=(*quality.codes, "telegram_counter_order"))
+    if any(sign.render.get("measurementMode") == REPORTED_SHAPE_MODE for sign in ordered):
+        quality = replace(quality, codes=(*quality.codes, "reported_reaction_shape"))
     return PostVerdict(prepared.series.publication_id, level, tuple(ordered) if level else (),
                        quality, versions, norm_version)
 
@@ -234,7 +237,9 @@ def compact(verdict: PostVerdict) -> dict[str, Any]:
 
 def sign_payload(sign: Sign) -> dict[str, Any]:
     title = TITLES[sign.pattern]
-    if sign.render.get("measurementMode") == BOUNDED_REACTION_MODE:
+    if sign.render.get("measurementMode") == REPORTED_SHAPE_MODE:
+        title = "Рывок с плато: требуется проверка"
+    elif sign.render.get("measurementMode") == BOUNDED_REACTION_MODE:
         title = ("Рывок, переходящий в плато" if sign.render.get("plateauEvidence") == CONFIRMED_PLATEAU_MODE
                  else "Резкий прирост реакций с последующим замедлением")
         if sign.render.get("mode") == "initial_plateau":

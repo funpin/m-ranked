@@ -145,3 +145,15 @@ test("initial plateau shows the actual first count and highest status even witho
     assert.match(chart.bars[2].label, /плато/);
   }
 });
+
+test("unconfirmed shape shows reported counts without invented precision bounds", () => {
+  const candidate = signal({ pattern: 9, metric: "reactions", render: {
+    kind: "bounded_burst", reportedOnly: true, reportedBefore: 11, reportedAfter: 119,
+  } });
+  const chart = miniChart(candidate, [], PUBLISHED);
+  assert.equal(chart.type, "bars");
+  if (chart.type === "bars") {
+    assert.deepEqual(chart.bars.map(item => item.value), [11, 119]);
+    assert.deepEqual(chart.bars.map(item => item.label), ["сохранено до", "сохранено после"]);
+  }
+});
