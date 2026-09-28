@@ -148,7 +148,8 @@ test("initial plateau shows the actual first count and highest status even witho
 
 test("unconfirmed shape shows reported counts without invented precision bounds", () => {
   const candidate = signal({ pattern: 9, metric: "reactions", render: {
-    kind: "bounded_burst", reportedOnly: true, reportedBefore: 11, reportedAfter: 119,
+    kind: "bounded_burst", startAge: 552, endAge: 852,
+    reportedOnly: true, reportedBefore: 11, reportedAfter: 119,
   } });
   const chart = miniChart(candidate, [], PUBLISHED);
   assert.equal(chart.type, "bars");
