@@ -139,11 +139,12 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
       const item = (render as Record<string, unknown>)[key];
       return Array.isArray(item) && typeof item[index] === "number" ? item[index] : 0;
     };
+    const initial = render.mode === "initial_plateau";
     return { type: "bars", percent: false, bars: [
-      { label: "до: минимум", value: range("beforeRange", 0), highlight: false },
-      { label: "до: максимум", value: range("beforeRange", 1), highlight: false },
-      { label: "после: минимум", value: range("afterRange", 0), highlight: true },
-      { label: "после: максимум", value: range("afterRange", 1), highlight: true },
+      { label: initial ? "первый замер: минимум" : "до: минимум", value: range("beforeRange", 0), highlight: false },
+      { label: initial ? "первый замер: максимум" : "до: максимум", value: range("beforeRange", 1), highlight: false },
+      { label: initial ? "плато: минимум" : "после: минимум", value: range("afterRange", 0), highlight: true },
+      { label: initial ? "плато: максимум" : "после: максимум", value: range("afterRange", 1), highlight: true },
     ] };
   }
   if (render.kind === "reference") {

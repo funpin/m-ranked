@@ -211,4 +211,4 @@ def test_early_pack_before_the_first_grid_edge_is_found():
     signs = [sign for sign in burst_plateau.detect(prepared, DetectorContext("telegram"))
              if sign.metric is Metric.REACTIONS]
     assert signs and signs[0].render["mode"] == "early_plateau"
-    assert signs[0].interval.start == PUBLISHED
+    assert signs[0].interval.start == subject.observed_at[0]

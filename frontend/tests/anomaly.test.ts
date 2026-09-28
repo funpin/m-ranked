@@ -127,3 +127,21 @@ test("bounded reaction evidence stays visible without exact counters and uses en
   assert.equal(chart.type, "bars");
   assert.deepEqual(chart.type === "bars" ? chart.bars.map(item => item.value) : [], [25, 33, 1063, 1089]);
 });
+
+test("initial plateau shows the actual first count and highest status even without exact metrics", () => {
+  const initial = signal({ pattern: 9, metric: "reactions", render: {
+    kind: "bounded_burst", mode: "initial_plateau", startAge: 342, endAge: 11444,
+    beforeRange: [105,117], afterRange: [122,136], timingUnknown: true,
+  } });
+  const report = analysis({ level: 3, levelLabel: "признаки искусственной активности", signals: [initial],
+    quality: { coverage: 0, codes: ["no_precise_metrics"], summary: "Округлённые счётчики", unanalyzable: [] } });
+  assert.equal(summaryLine(report).level, 3);
+  assert.equal(signalMarkers(report)[0].tone, "priority");
+  const chart = miniChart(initial, [], PUBLISHED);
+  assert.equal(chart.type, "bars");
+  if (chart.type === "bars") {
+    assert.deepEqual(chart.bars.map(item => item.value), [105,117,122,136]);
+    assert.match(chart.bars[0].label, /первый замер/);
+    assert.match(chart.bars[2].label, /плато/);
+  }
+});

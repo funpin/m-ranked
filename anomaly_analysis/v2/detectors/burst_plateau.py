@@ -12,18 +12,23 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from bisect import bisect_right
+from math import log2
 
 import numpy as np
 
 from ..domain import Family, Metric, Sign
 from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number
+from .bounded_reaction_burst import _candidate_pairs, _views
 
 ID = "burst_plateau"
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 PATTERN = 9
 FAMILY = Family.SHAPE
 NEEDS_NORM = False
+RAPID_VIEW_MODE = "rapid_view_plateau_v1"
+VIEW_MEASUREMENT_MODE = "bounded_view_counts_v1"
 
 SCALE = timedelta(hours=1)
 METRICS = (Metric.VIEWS, Metric.REACTIONS)
@@ -54,7 +59,7 @@ EARLY_MIN_AFTER_VIEWS = 20       # зрители после рывка прод
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
-    signs = []
+    signs = list(_rapid_views(prepared))
     for metric in METRICS:
         data = prepared.metrics.get(metric)
         if data is None or data.source_counter:
@@ -93,20 +98,17 @@ def _early(prepared: PreparedSeries) -> Sign | None:
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
     if reactions is None or views is None or views.source_counter:
         return None
-    # Своя сетка от момента публикации, когда оба счётчика — ноль: пачка часто
-    # приходит в первые минуты, до первой границы общей сетки (СКФУ №16769 —
-    # 5 реакций на 2,5 минуте и 52 на 7,5). Первая ячейка годится, только если
-    # первый замер пришёл в пределах её ширины.
+    # Anchor to the first actual readings, never an invented publication-time
+    # zero. A pack already present there is checked by the endpoint detector.
     width = EARLY_SCALE.total_seconds()
+    first = max(float(reactions.ages[0]), float(views.ages[0]))
     last = min(float(reactions.ages[-1]), float(views.ages[-1]))
-    edges = np.arange(0.0, np.floor(last / width) * width + width / 2, width)
+    edges = np.arange(first, last + .001, width)
     if edges.size < EARLY_AFTER + 3:
         return None
-    r_cum = np.interp(edges, *_from_zero(reactions))
-    v_cum = np.interp(edges, *_from_zero(views))
+    r_cum = np.interp(edges, reactions.ages, reactions.values)
+    v_cum = np.interp(edges, views.ages, views.values)
     usable = ~(_touches_gap(edges, reactions) | _touches_gap(edges, views))
-    first = max(float(reactions.ages[0]), float(views.ages[0]))
-    usable &= edges[1:] >= first - width if first <= width else edges[:-1] >= first
     r_rate, v_rate = np.diff(r_cum), np.diff(v_cum)
     early = np.flatnonzero((edges[:-1] < MIN_ONSET_AGE) & usable)
     if not early.size:
@@ -190,11 +192,68 @@ def _judge(prepared, metric, grid, rates, usable, begin, end, floor):
                      ("counter_frozen",))
 
 
-def _from_zero(data) -> tuple[np.ndarray, np.ndarray]:
-    """Точки метрики с нулём в момент публикации, если первого замера там нет."""
-    if data.ages.size and data.ages[0] > 0:
-        return np.concatenate(([0.0], data.ages)), np.concatenate(([0.0], data.values))
-    return data.ages, data.values
+def _rapid_views(prepared: PreparedSeries) -> tuple[Sign, ...]:
+    """Large short late view bursts with observed abrupt plateau.
+
+    The initial audience ramp has no comparable pre-burst background and is
+    deliberately ineligible. No norm or guessed points are used.
+    """
+    series = prepared.series
+    if series.is_repost or Metric.VIEWS not in series.values:
+        return ()
+    count = bisect_right(series.observed_at, prepared.analyzed_at)
+    rows = series.values[Metric.VIEWS][:count]
+    if count < 5 or max((value or 0 for value in rows), default=0) < 500:
+        return ()
+    ages = np.array([(at - series.published_at).total_seconds() / HOUR for at in series.observed_at[:count]])
+    bounds = _views(prepared, count)
+    candidates = tuple(_candidate_pairs(ages, bounds, (0, 1/6, .25, .5), max_duration=.5, min_age=6, min_delta=500))
+    if not candidates:
+        return ()
+    bad = np.array([bound is None for bound in bounds], dtype=int)
+    for i in range(1, count):
+        if rows[i] is not None and rows[i-1] is not None and rows[i] < rows[i-1]:
+            bad[i] = 1
+    prefix = np.r_[0, np.cumsum(bad)]
+    signs = []
+    for begin, end in candidates:
+        before = int(np.searchsorted(ages, ages[begin] - 6, side="right")) - 1
+        after = int(np.searchsorted(ages, ages[end] + 3))
+        if (before < 0 or after >= count or ages[begin] - ages[before] > 7
+                or ages[after] - ages[end] > 4 or prefix[after+1] != prefix[before]):
+            continue
+        low, high = bounds[begin], bounds[end]
+        burst = high[0] - low[1]
+        duration = float(ages[end] - ages[begin])
+        if burst < max(500, .5 * low[1]):
+            continue
+        rate = burst / duration
+        background = max(max(0, bounds[i][1] - bounds[i-1][0]) / float(ages[i] - ages[i-1])
+                         for i in range(before+1, begin+1))
+        tail = max(0, bounds[after][1] - high[0]) / float(ages[after] - ages[end])
+        first_after = int(np.searchsorted(ages, ages[end] + 1))
+        immediate = max(0, bounds[first_after][1] - high[0]) / float(ages[first_after] - ages[end])
+        if (rate < 30 * max(background, 1) or max(tail, immediate) > .02 * rate
+                or after - end < 3 or ages[first_after] - ages[end] > 1.5
+                or np.max(np.diff(ages[end:after+1])) > 1.5):
+            continue
+        formula = (f"просмотры: прирост ≥ +{number(burst)} за {age_text(duration * HOUR)} "
+                   f"(не менее {burst / max(low[1], 1):.0%} прежнего значения); "
+                   f"скорость ≥ {number(rate)}/ч, до скачка ≤ {number(background)}/ч, "
+                   f"в первый час после ≤ {number(immediate)}/ч, за следующие 3ч ≤ {number(tail)}/ч. "
+                   "Границы учитывают точность счётчиков; время изменений между замерами неизвестно")
+        signs.append(make_sign(
+            PATTERN, FAMILY, prepared, Metric.VIEWS,
+            min(.99, .9 + .03 * log2(burst / 500) + .02 * log2(.5 / duration)),
+            float(ages[begin] * HOUR), float(ages[end] * HOUR), timedelta(hours=duration), formula,
+            {"kind": "bounded_burst", "measurementMode": VIEW_MEASUREMENT_MODE,
+             "plateauEvidence": RAPID_VIEW_MODE, "burstLower": burst,
+             "burstRateLower": round(rate, 2), "backgroundRateUpper": round(background, 2),
+             "afterRateUpper": round(tail, 2), "firstAfterRateUpper": round(immediate, 2),
+             "beforeRange": list(low), "afterRange": list(high),
+             "confirmationEndAge": float(ages[after] * HOUR), "timingUnknown": True},
+            ("counter_update_delay", "forward_by_large_channel", "counter_frozen")))
+    return tuple(signs)
 
 
 def _touches_gap(edges: np.ndarray, data) -> np.ndarray:

@@ -34,12 +34,14 @@ def test_half_cell_interpolation_cannot_turn_alternating_counts_into_low_dispers
                 assert signs == ()
 
 
-def test_telegram_total_reactions_have_no_views_upper_bound():
+def test_telegram_product_rule_uses_one_to_one_without_claiming_unique_people():
     start = datetime(2026, 8, 1, tzinfo=timezone.utc)
     series = PostSeries(UUID(int=1), UUID(int=2), "telegram", start, False,
                         (start+timedelta(hours=1),start+timedelta(hours=2)),
                         {Metric.VIEWS: (100,100), Metric.REACTIONS: (200,200)})
-    assert reactions_exceed_views.detect(prepare(series,start+timedelta(hours=2),CollectionCadence()), DetectorContext("telegram")) == ()
+    signs = reactions_exceed_views.detect(prepare(series,start+timedelta(hours=2),CollectionCadence()), DetectorContext("telegram"))
+    assert signs and signs[0].render['comparisonRatio'] == 1
+    assert 'multiple_reactions_per_viewer' in signs[0].alternatives
 
 
 def test_observed_resets_inside_a_pair_are_not_treated_as_smooth_arrivals():

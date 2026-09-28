@@ -4,8 +4,9 @@
 
 * слабый сигнал — один признак средней силы или несколько слабых;
 * выраженная аномалия — один сильный признак;
-* несколько согласованных аномалий — сильные признаки минимум из двух
-  разных семейств.
+* признаки искусственной активности — сильные признаки минимум из двух
+  разных семейств либо подтверждённый короткий рывок с плато и продолжающимся
+  притоком зрителей без сопоставимого отклика.
 
 Тексты здесь — единственное место, где вывод получает слова. Они проходят
 глоссарий ADR-006: система сообщает о признаках и сигналах, а не о намерении.
@@ -23,7 +24,11 @@ from .detectors import (
 )
 from .detectors.reactions_before_views import ENDPOINT_MODE
 from .domain import DataQuality, Family, Interval, Level, Metric, PostSeries, PostVerdict, Sign
-from .detectors.bounded_reaction_burst import MEASUREMENT_MODE as BOUNDED_REACTION_MODE
+from .detectors.bounded_reaction_burst import (
+    CONFIRMED_PLATEAU_MODE, MEASUREMENT_MODE as BOUNDED_REACTION_MODE,
+)
+from .detectors.burst_plateau import RAPID_VIEW_MODE, VIEW_MEASUREMENT_MODE
+from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
 from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare
@@ -39,7 +44,7 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
-AGGREGATION_VERSION = "2.1.0"
+AGGREGATION_VERSION = "2.2.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
@@ -64,7 +69,7 @@ LEVEL_LABELS = {
     0: "нет признаков",
     1: "слабый сигнал",
     2: "выраженная аномалия",
-    3: "несколько согласованных аномалий",
+    3: "признаки искусственной активности",
 }
 ALTERNATIVES = {
     "recommendation_feed": "пост долго показывался в рекомендациях с ровным притоком",
@@ -85,10 +90,13 @@ ALTERNATIVES = {
     "evergreen_post": "пост-«вечнозелёнка» с живым поздним трафиком",
     "viral_post": "пост честно «выстрелил» и собрал больше реакций, чем обычно",
     "wide_reach_low_engagement": "пост разошёлся шире обычной аудитории, которая реагирует реже",
+    "multiple_reactions_per_viewer": "один читатель мог поставить несколько реакций; правило сравнения использует порог 1:1",
 }
 QUALITY_TEXTS = {
     "no_precise_metrics": "недостаточно данных для точных проверок; отсутствие сигнала не подтверждает обычность статистики",
     "bounded_reaction_counts": "крупные изменения реакций проверены с учётом точности каждого счётчика; форма роста между замерами неизвестна",
+    "bounded_view_counts": "крупные изменения просмотров проверены с учётом точности счётчиков; форма роста между замерами неизвестна",
+    "telegram_counter_order": "реакции и просмотры сопоставлены по правилу 1:1; при пересечении диапазонов округления превышение показано слабым сигналом",
     "non_exact_counters": "округлённые счётчики и значения без подтверждённой точности исключены из точных проверок",
     "uncertain_observations": "замеры с неопределённым интервалом исключены из точных проверок",
     "truncated_start": "начало истории отсутствует: рост до первого замера не оценивается",
@@ -140,10 +148,13 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
     unanalyzable = _unanalyzable(prepared)
     kept = []
     for sign in signs:
-        bounded_reactions = (sign.pattern == 9 and sign.metric is Metric.REACTIONS
-                             and sign.render.get("measurementMode") == BOUNDED_REACTION_MODE)
+        bounded_counts = (sign.pattern == 9 and (
+            sign.metric is Metric.REACTIONS and sign.render.get("measurementMode") == BOUNDED_REACTION_MODE
+            or sign.metric is Metric.VIEWS and sign.render.get("measurementMode") == VIEW_MEASUREMENT_MODE)
+            or sign.pattern == 7 and sign.family is Family.CROSS_METRIC
+            and sign.render.get("measurementMode") == TELEGRAM_ORDER_MODE)
         required = (Metric.VIEWS, Metric.REACTIONS) if sign.family is Family.CROSS_METRIC else (sign.metric,)
-        if not bounded_reactions and any(metric not in prepared.metrics for metric in required):
+        if not bounded_counts and any(metric not in prepared.metrics for metric in required):
             continue
         # A validated endpoint model makes no claim about timing inside gaps.
         endpoint_reference = (sign.pattern in REFERENCE_PATTERNS
@@ -152,7 +163,7 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         endpoint_comparison = (sign.pattern == 6 and sign.family is Family.CROSS_METRIC
                                and sign.render.get("measurementMode") == "exact_quality_v1"
                                and sign.render.get("comparisonMode") == ENDPOINT_MODE)
-        if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_reactions
+        if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_counts
                 and not endpoint_comparison
                 and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
@@ -162,7 +173,7 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
             kept.append(sign)
     # Two implementations/scales observing the same event are one signal.
     unique = []
-    for sign in sorted(kept, key=lambda item: (-item.strength, item.pattern)):
+    for sign in sorted(kept, key=lambda item: (not _confirmed_plateau(item), -item.strength, item.pattern)):
         if not any(sign.pattern == item.pattern and sign.metric is item.metric
                    and sign.family is item.family and sign.interval.start < item.interval.end
                    and item.interval.start < sign.interval.end for item in unique):
@@ -181,14 +192,26 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
     quality = _quality(prepared, context, unanalyzable)
     if any(sign.render.get("measurementMode") == BOUNDED_REACTION_MODE for sign in ordered):
         quality = replace(quality, codes=(*quality.codes, "bounded_reaction_counts"))
+    if any(sign.render.get("measurementMode") == VIEW_MEASUREMENT_MODE for sign in ordered):
+        quality = replace(quality, codes=(*quality.codes, "bounded_view_counts"))
+    if any(sign.render.get("measurementMode") == TELEGRAM_ORDER_MODE for sign in ordered):
+        quality = replace(quality, codes=(*quality.codes, "telegram_counter_order"))
     return PostVerdict(prepared.series.publication_id, level, tuple(ordered) if level else (),
                        quality, versions, norm_version)
+
+
+def _confirmed_plateau(sign: Sign) -> bool:
+    return (sign.pattern == 9 and sign.family is Family.SHAPE and sign.strength >= .9
+            and (sign.metric, sign.render.get("measurementMode"), sign.render.get("plateauEvidence")) in {
+                (Metric.REACTIONS, BOUNDED_REACTION_MODE, CONFIRMED_PLATEAU_MODE),
+                (Metric.VIEWS, VIEW_MEASUREMENT_MODE, RAPID_VIEW_MODE),
+            })
 
 
 def level_for(signs: Iterable[Sign]) -> Level:
     signs = list(signs)
     strong_families = {sign.family for sign in signs if sign.strength >= STRONG}
-    if len(strong_families) >= 2:
+    if len(strong_families) >= 2 or any(_confirmed_plateau(sign) for sign in signs):
         return Level.ARTIFICIAL_ACTIVITY_SIGNS
     if strong_families:
         return Level.PRONOUNCED_ANOMALY
@@ -212,7 +235,12 @@ def compact(verdict: PostVerdict) -> dict[str, Any]:
 def sign_payload(sign: Sign) -> dict[str, Any]:
     title = TITLES[sign.pattern]
     if sign.render.get("measurementMode") == BOUNDED_REACTION_MODE:
-        title = "Резкий прирост реакций с последующим замедлением"
+        title = ("Рывок, переходящий в плато" if sign.render.get("plateauEvidence") == CONFIRMED_PLATEAU_MODE
+                 else "Резкий прирост реакций с последующим замедлением")
+        if sign.render.get("mode") == "initial_plateau":
+            title = "Ранние реакции с последующим плато"
+    elif sign.render.get("measurementMode") == VIEW_MEASUREMENT_MODE:
+        title = "Резкий скачок просмотров с последующим плато"
     elif sign.pattern == 6 and sign.render.get("comparisonMode") == ENDPOINT_MODE:
         title = "Прирост реакций при малом приросте просмотров"
     return {

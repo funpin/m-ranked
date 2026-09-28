@@ -120,6 +120,7 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
         </div>
         {referenceExplanation(signal) ? <p className="text-muted-foreground text-xs" data-testid="reference-explanation">{referenceExplanation(signal)}</p> : null}
         {signal.render.kind === "bounded_burst" ? <p className="text-muted-foreground text-xs" data-testid="bounded-burst-explanation">{signal.formula}</p> : null}
+        {signal.render.measurementMode === "telegram_counter_order_v1" ? <p className="text-muted-foreground text-xs">{signal.formula}</p> : null}
         <MiniChart chart={miniChart(signal, rows, publishedAt)} label={title} />
         {onShow ? <button type="button" onClick={() => onShow(markerId(signal, index))}
           className="text-foreground hover:bg-accent focus-visible:ring-ring/50 inline-flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium focus-visible:ring-[3px] focus-visible:outline-none">

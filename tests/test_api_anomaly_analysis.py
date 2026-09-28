@@ -43,7 +43,7 @@ def test_stored_verdict_is_served_as_is_and_matches_the_contract():
            "review_status": "unreviewed"}
     body = analysis.analysis_body(str(case.subject.publication_id), 12, row)
     _validate(body)
-    assert body["level"] == 3 and body["levelLabel"] == "несколько согласованных аномалий"
+    assert body["level"] == 3 and body["levelLabel"] == "признаки искусственной активности"
     assert {item["pattern"] for item in body["signals"]} >= {1, 6}
     assert body["analyzedAt"] == moment.isoformat() and body["normVersion"] == 3
     # Признак без анализа тоже укладывается в схему: пост анализировался, но ничего нет.
@@ -89,7 +89,7 @@ def test_account_levels_carry_only_the_level_words():
     ])
     _validate(body, "AccountAnomalyLevels")
     assert [item["levelLabel"] for item in body["items"]] == [
-        "несколько согласованных аномалий", "нет признаков"]
+        "признаки искусственной активности", "нет признаков"]
 
 
 def test_new_reference_signals_use_the_public_contract():

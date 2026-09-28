@@ -94,7 +94,7 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
     alternatives:[{code:"recommendation_feed",text:"пост долго показывался в рекомендациях с ровным притоком"}],normConfidence:null,
   });
   const base:Schema["PublicationAnomalyAnalysis"]={publicationId:uuid(type === "posts" ? 5 : 6,id),datasetRevision:revision,
-    status:"analyzed",level:3,levelLabel:"несколько согласованных аномалий",levelSymbol:"●",
+    status:"analyzed",level:3,levelLabel:"признаки искусственной активности",levelSymbol:"●",
     originalLevel:3,recheckReason:null,recheckMethodVersion:null,recheckEvidence:null,
     signals:[signal(1,"views",39,40),signal(6,"reactions",36,38)],
     quality:{coverage:1,summary:"замеры полные, покрытие 100%",codes:[],unanalyzable:[]},

@@ -77,7 +77,7 @@ test("publication shows a collapsed analysis card that expands and marks signals
   const card=page.getByTestId("anomaly-card");
   const toggle=page.getByTestId("anomaly-toggle");
   await expect(toggle).toHaveAttribute("aria-expanded","false");
-  await expect(toggle).toContainText("несколько согласованных аномалий");
+  await expect(toggle).toContainText("признаки искусственной активности");
   await expect(toggle).toContainText("2 признака");
   await expect(card.getByTestId("anomaly-signal")).toHaveCount(0);
   await toggle.click();
