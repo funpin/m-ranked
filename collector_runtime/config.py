@@ -125,6 +125,7 @@ class Settings:
     collector_persist_wait_seconds: float = 120.0
     collector_working_set_retention: str = "off"
     collector_working_set_months_per_run: int = 1
+    collector_compact_working_set: bool = False
     collector_disk_path: str = "/var/lib/m-ranked"
     collector_transfer_mode: str = "in-process"
     collector_transfer_producer_id: str = "local"
@@ -154,6 +155,11 @@ class Settings:
             raise ValueError(
                 "COLLECTOR_WORKING_SET_RETENTION requires COLLECTOR_DEPLOYMENT_PROFILE=b"
             )
+        if self.collector_compact_working_set:
+            if profile != "b" or self.collector_transfer_mode != "https-mtls":
+                raise ValueError("COLLECTOR_COMPACT_WORKING_SET requires profile b and https-mtls")
+            if retention != "off":
+                raise ValueError("compact working set requires monthly retention off")
         if not self.collector_server_id.strip():
             raise ValueError("COLLECTOR_SERVER_ID must not be blank")
         # Фактор репликации на площадку. Единица — чистый шардинг; больше
@@ -382,6 +388,7 @@ class Settings:
             collector_working_set_months_per_run=_int(
                 "COLLECTOR_WORKING_SET_MONTHS_PER_RUN", 1
             ),
+            collector_compact_working_set=_bool("COLLECTOR_COMPACT_WORKING_SET", False),
             collector_disk_path=(
                 os.getenv("COLLECTOR_DISK_PATH", "/var/lib/m-ranked").strip()
                 or "/var/lib/m-ranked"

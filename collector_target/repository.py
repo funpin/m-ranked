@@ -86,6 +86,7 @@ class PostgresCollectorRepository:
         pool_size: int = 3,
         transfer_producer_id: str | None = None,
         deployment_profile: str = "a",
+        compact_working_set: bool = False,
     ) -> None:
         if connection_factory is None and not dsn:
             raise ValueError("dsn or connection_factory is required")
@@ -125,6 +126,17 @@ class PostgresCollectorRepository:
         # Профиль B не обслуживает чтение, поэтому ни витрина публикаций, ни
         # события инвалидации кэша на этом хосте никому не нужны.
         self.deployment_profile = profile
+        if compact_working_set and (profile != "b" or not transfer_producer_id):
+            raise ValueError("compact working set requires profile b and a durable transfer producer")
+        self.compact_working_set = compact_working_set
+        self._publication_snapshot_read = (
+            "ingest.collector_publication_working_set" if compact_working_set
+            else "ingest.publication_metric_snapshot_active"
+        )
+        self._account_snapshot_read = (
+            "ingest.collector_account_working_set" if compact_working_set
+            else "ingest.account_metric_snapshot_active"
+        )
         self._transfer_sender: Any = None
 
     def configure_transfer_sender(self, sender: Any) -> None:
@@ -279,6 +291,15 @@ class PostgresCollectorRepository:
                 ).fetchone()
             if receipt is None or _row_value(receipt, "table_name", 0) is None:
                 raise RuntimeError("poll receipt cohort requires migration 0044")
+        if self.compact_working_set:
+            with self._connection() as connection:
+                seeded = connection.execute(
+                    "SELECT completed_at, to_regprocedure('ops_and_admin.prune_compact_collector_runtime(integer)') AS expiry_function FROM ops_and_admin.collector_working_set_seed WHERE singleton AND completed_at IS NOT NULL"
+                ).fetchone()
+            if seeded is None:
+                raise RuntimeError("compact working set must be seeded before enabling")
+            if _row_value(seeded, "expiry_function", 1) is None:
+                raise RuntimeError("compact working set requires runtime retention migration 0049")
 
     def start_run(self, context: CollectionContext) -> None:
         with self._connection() as connection, connection.transaction():
@@ -539,7 +560,7 @@ class PostgresCollectorRepository:
             return {}
         with self._connection() as connection:
             rows = connection.execute(
-                """WITH scope AS MATERIALIZED (
+                f"""WITH scope AS MATERIALIZED (
                        SELECT identity.publication_id, identity.external_id,
                               date_trunc('month', publication.published_at)::date
                                   AS published_month
@@ -580,13 +601,14 @@ class PostgresCollectorRepository:
                                 bool_or(recent_rows.shares_count>0) AS shares
                            FROM (SELECT snapshot.views_count, snapshot.reactions_count,
                                         snapshot.comments_count, snapshot.shares_count
-                                   FROM ingest.publication_metric_snapshot_active snapshot
+                                   FROM {self._publication_snapshot_read} snapshot
                                   WHERE snapshot.publication_id=scope.publication_id
                                     AND snapshot.published_month=scope.published_month
+                                    AND (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
                                   ORDER BY snapshot.observed_at DESC, snapshot.id DESC
                                   LIMIT 24) recent_rows
                      ) recent ON true""",
-                (account.id, list(requested)),
+                (account.id, list(requested), self.compact_working_set),
             ).fetchall()
         return {
             str(_row_value(row, "external_id", 0)): {
@@ -634,7 +656,7 @@ class PostgresCollectorRepository:
                     except ValueError:
                         cursor = None
             rows = connection.execute(
-                """SELECT publication.id,
+                f"""SELECT publication.id,
                           primary_identity.external_id,
                           primary_identity.source_external_id,
                           primary_identity.public_url,
@@ -668,10 +690,11 @@ class PostgresCollectorRepository:
                      -- строку выдачи.
                      LEFT JOIN LATERAL (
                          SELECT snapshot.observed_at, snapshot.sampling_bucket
-                           FROM ingest.publication_metric_snapshot_active AS snapshot
+                           FROM {self._publication_snapshot_read} AS snapshot
                           WHERE snapshot.publication_id=publication.id
                             AND snapshot.published_month
                                 =date_trunc('month', publication.published_at)::date
+                            AND (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
                           ORDER BY snapshot.observed_at DESC, snapshot.id DESC
                           LIMIT 1
                      ) AS latest ON true
@@ -687,6 +710,7 @@ class PostgresCollectorRepository:
                 (
                     account.id,
                     account.id,
+                    self.compact_working_set,
                     account.id,
                     cutoff,
                     cursor,
@@ -727,10 +751,7 @@ class PostgresCollectorRepository:
 
     def persist_account_batch(self, batch: CanonicalAccountBatch) -> IngestionResult:
         """Persist and, when configured, seal in the same account transaction."""
-        metric_evidence_ids = tuple(
-            self._metric_evidence_id(self._metric_evidence(item.snapshot))
-            for item in batch.publications
-        )
+        metric_evidence_ids = self._batch_evidence_ids(batch)
         with self._connection() as connection, connection.transaction():
             result, _ = self.persist_account_batch_in_transaction(
                 connection, batch, metric_evidence_ids=metric_evidence_ids,
@@ -745,6 +766,12 @@ class PostgresCollectorRepository:
                 pass
         return result
 
+    def _batch_evidence_ids(self, batch: CanonicalAccountBatch) -> tuple[int, ...]:
+        if self.compact_working_set:
+            return (0,) * len(batch.publications)
+        return tuple(self._metric_evidence_id(self._metric_evidence(item.snapshot))
+                     for item in batch.publications)
+
     def persist_account_batch_in_transaction(
         self,
         connection: Any,
@@ -755,6 +782,8 @@ class PostgresCollectorRepository:
         transfer_replay: bool = False,
     ) -> tuple[IngestionResult, TransferEnvelope | None]:
         """The single ingest path, reusable by DataAdapter's inbox transaction."""
+        if self.compact_working_set and not seal_transfer:
+            raise ValueError("compact working set requires transactional payload sealing")
         if batch.account.platform != batch.context.platform:
             raise ValueError("account platform does not match collection context")
         discovered_count = 0
@@ -763,18 +792,14 @@ class PostgresCollectorRepository:
         changed = False
         identity_receipt = None
         if metric_evidence_ids is None:
-            metric_evidence_ids = tuple(
-                self._metric_evidence_id(self._metric_evidence(item.snapshot))
-                for item in batch.publications
-            )
+            metric_evidence_ids = self._batch_evidence_ids(batch)
         revision_id = self._begin_revision(connection, batch)
-        for published_month in sorted({
-            publication.snapshot.published_month for publication in batch.publications
-        }):
-            connection.execute(
-                "SELECT ops_and_admin.ensure_publication_metric_partition(%s::date)",
-                (published_month,),
-            )
+        if not self.compact_working_set:
+            for published_month in sorted({item.snapshot.published_month for item in batch.publications}):
+                connection.execute(
+                    "SELECT ops_and_admin.ensure_publication_metric_partition(%s::date)",
+                    (published_month,),
+                )
         if batch.account_observation is not None:
             identity_changed = self._persist_account_identity(
                 connection, batch, batch.account_observation,
@@ -873,12 +898,12 @@ class PostgresCollectorRepository:
         if result is None:
             raise RuntimeError("collection account result was not started")
 
-        if changed:
+        if changed and revision_id is not None:
             self._finalize_revision(
                 connection, revision_id, batch, discovered_count, snapshot_count,
                 deletion_probe_count, completed_at, identity_receipt,
             )
-        else:
+        elif revision_id is not None:
             finalized = connection.execute(
                 """SELECT analytics.finalize_ingestion_dataset_revision(
                        %s,%s,'{}'::jsonb,false
@@ -891,6 +916,9 @@ class PostgresCollectorRepository:
                 raise RuntimeError("dataset revision was not discarded")
             revision_id = None
         envelope = self._seal_transfer(connection, batch) if seal_transfer else None
+        if self.compact_working_set:
+            from .working_set import prune
+            prune(connection, tuple(persisted_ids.values()))
         ingestion = IngestionResult(
             batch.context.run_id,
             batch.account.id,
@@ -1031,12 +1059,13 @@ class PostgresCollectorRepository:
         observation: CanonicalAccountObservation,
     ) -> bool:
         latest_state = connection.execute(
-            """SELECT semantic_fingerprint, observed_at
-                 FROM ingest.account_metric_snapshot_active
+            f"""SELECT semantic_fingerprint, observed_at
+                 FROM {self._account_snapshot_read}
                 WHERE platform_account_id=%s
+                  AND (NOT %s OR observed_at >= transaction_timestamp()-interval '31 days')
                 ORDER BY observed_at DESC, id DESC
                 LIMIT 1""",
-            (batch.account.id,),
+            (batch.account.id, self.compact_working_set),
         ).fetchone()
         unchanged = (
             latest_state is not None
@@ -1053,6 +1082,22 @@ class PostgresCollectorRepository:
         )
         if unchanged and not heartbeat_due:
             return False
+        if self.compact_working_set:
+            row = connection.execute(
+                """INSERT INTO ingest.collector_account_working_set AS current (
+                       platform_account_id,observed_at,source_fingerprint,semantic_fingerprint
+                   ) SELECT %s,%s,%s,%s
+                      WHERE %s >= transaction_timestamp()-interval '31 days'
+                   ON CONFLICT (platform_account_id) DO UPDATE SET
+                       id=DEFAULT,observed_at=excluded.observed_at,
+                       source_fingerprint=excluded.source_fingerprint,
+                       semantic_fingerprint=excluded.semantic_fingerprint
+                   WHERE excluded.observed_at >= current.observed_at
+                   RETURNING id""",
+                (batch.account.id,observation.observed_at,observation.source_fingerprint,
+                 observation.semantic_fingerprint,observation.observed_at),
+            ).fetchone()
+            return row is not None
         row = connection.execute(
             """INSERT INTO ingest.account_metric_snapshot(
                    platform_account_id, collection_run_id, observed_at,
@@ -1521,7 +1566,7 @@ class PostgresCollectorRepository:
             for publication_id, published_month, synthetic in snapshot_keys
         ]
         latest_rows = connection.execute(
-            """WITH input AS (
+            f"""WITH input AS (
                    SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
                        publication_id uuid, published_month date, synthetic boolean
                    )
@@ -1532,14 +1577,15 @@ class PostgresCollectorRepository:
                  FROM input
                  LEFT JOIN LATERAL (
                      SELECT snapshot.semantic_fingerprint, snapshot.observed_at
-                       FROM ingest.publication_metric_snapshot_active AS snapshot
+                       FROM {self._publication_snapshot_read} AS snapshot
                       WHERE snapshot.publication_id=input.publication_id
                         AND snapshot.published_month=input.published_month
                         AND snapshot.synthetic=input.synthetic
+                        AND (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
                       ORDER BY snapshot.observed_at DESC, snapshot.id DESC
                       LIMIT 1
                  ) AS latest ON true""",
-            (_json(snapshot_key_input),),
+            (_json(snapshot_key_input), self.compact_working_set),
         ).fetchall()
         latest_by_id = {
             (
@@ -1653,7 +1699,19 @@ class PostgresCollectorRepository:
             )
 
         inserted_snapshots: dict[tuple[Any, ...], tuple[Any, int]] = {}
-        if snapshots_to_insert:
+        if snapshots_to_insert and self.compact_working_set:
+            from .working_set import store_publications
+            snapshot_rows = store_publications(connection, _json(snapshots_to_insert))
+            inserted_snapshots = {
+                (_row_value(row, "publication_id", 0),
+                 _row_value(row, "published_month", 1),
+                 bool(_row_value(row, "synthetic", 2)),
+                 int(_row_value(row, "sampling_bucket", 3)),
+                 str(_row_value(row, "source_fingerprint", 4))):
+                    (_row_value(row, "published_month", 1), int(_row_value(row, "id", 5)))
+                for row in snapshot_rows
+            }
+        elif snapshots_to_insert:
             snapshot_rows = connection.execute(
                 """WITH input AS (
                        SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
@@ -1728,7 +1786,7 @@ class PostgresCollectorRepository:
             for reaction_key, reaction_count in
                 snapshots_by_key[snapshot_key].snapshot.reaction_breakdown.items()
         ]
-        if reaction_input:
+        if reaction_input and not self.compact_working_set:
             connection.execute(
                 """INSERT INTO ingest.reaction_breakdown(
                            snapshot_published_month, snapshot_id,
@@ -1767,7 +1825,7 @@ class PostgresCollectorRepository:
         self._persist_lineages(
             connection, batch.context.run_id, lineage_items,
         )
-        if inserted_snapshots:
+        if inserted_snapshots and not self.compact_working_set:
             # Numeric aliases remain part of the public URL compatibility
             # contract; unlike the retired CSV materialization they are not
             # duplicate observation storage.
@@ -1917,8 +1975,8 @@ class PostgresCollectorRepository:
                    updated_at=transaction_timestamp()""",
             (_json(states),),
         )
-        inserted_count = 0
-        if events:
+        inserted_count = len(events) if self.compact_working_set else 0
+        if events and not self.compact_working_set:
             inserted_rows = connection.execute(
                 """INSERT INTO ingest.publication_availability_event(
                        publication_id, collection_run_id, observed_at,
@@ -2083,7 +2141,7 @@ class PostgresCollectorRepository:
             )
         )
         inserted = None
-        if meaningful_event:
+        if meaningful_event and not self.compact_working_set:
             inserted = connection.execute(
                 """INSERT INTO ingest.publication_availability_event(
                        publication_id, collection_run_id, observed_at,
@@ -2118,7 +2176,7 @@ class PostgresCollectorRepository:
                     WHERE id=%s AND deleted_at IS NULL""",
                 (probe.observed_at, probe.publication_id),
             )
-        return inserted is not None
+        return meaningful_event if self.compact_working_set else inserted is not None
 
     def _persist_lineage(
         self,
@@ -2303,7 +2361,10 @@ class PostgresCollectorRepository:
         self,
         connection: Any,
         batch: CanonicalAccountBatch,
-    ) -> int:
+    ) -> int | None:
+        if self.compact_working_set:
+            connection.execute("SELECT set_config('mranked.deployment_profile','b',true)")
+            return None
         row = connection.execute(
             """INSERT INTO analytics.dataset_revision(
                    cause, correlation_id, source_run_id, metadata

@@ -159,3 +159,21 @@ def test_retention_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """The one irreversible step in the plan must never start by accident."""
     monkeypatch.delenv("COLLECTOR_WORKING_SET_RETENTION", raising=False)
     assert Settings.load().collector_working_set_retention == "off"
+
+
+def test_compact_buffer_requires_split_transport_and_no_monthly_drop(monkeypatch):
+    monkeypatch.setenv("COLLECTOR_COMPACT_WORKING_SET", "true")
+    monkeypatch.setenv("COLLECTOR_DEPLOYMENT_PROFILE", "a")
+    with pytest.raises(ValueError, match="profile b"):
+        Settings.load()
+    monkeypatch.setenv("COLLECTOR_DEPLOYMENT_PROFILE", "b")
+    monkeypatch.setenv("COLLECTOR_TRANSFER_MODE", "https-mtls")
+    monkeypatch.setenv("COLLECTOR_TRANSFER_HTTPS_ENDPOINT", "https://example.test/transfer")
+    monkeypatch.setenv("COLLECTOR_TRANSFER_CLIENT_CERTIFICATE", "client.pem")
+    monkeypatch.setenv("COLLECTOR_TRANSFER_PRIVATE_KEY", "key.pem")
+    monkeypatch.setenv("COLLECTOR_TRANSFER_CA_BUNDLE", "ca.pem")
+    monkeypatch.setenv("COLLECTOR_WORKING_SET_RETENTION", "on")
+    with pytest.raises(ValueError, match="monthly retention off"):
+        Settings.load()
+    monkeypatch.setenv("COLLECTOR_WORKING_SET_RETENTION", "off")
+    assert Settings.load().collector_compact_working_set is True

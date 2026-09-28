@@ -366,6 +366,17 @@ def _maintain_working_set(
         logger.warning(
             "collector disk probe failed code=%s", sanitize_error_code(error),
         )
+    if getattr(retention.repository, "compact_working_set", False):
+        try:
+            from .working_set import prune
+            with retention.repository._connection() as connection, connection.transaction():
+                connection.execute("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='1s'")
+                connection.execute("SELECT set_config('mranked.deployment_profile','b',true)")
+                prune(connection, ())
+                connection.execute("SELECT ops_and_admin.prune_compact_collector_runtime(1000)")
+        except Exception as error:
+            logger.error("compact working set expiry skipped code=%s", sanitize_error_code(error))
+        return
     if not retention.policy.enabled:
         return
     try:
@@ -466,6 +477,7 @@ async def _run(args: argparse.Namespace) -> int:
             ),
             transfer_producer_id=producer_id,
             deployment_profile=deployment_profile,
+            compact_working_set=settings.collector_compact_working_set,
         )
         repository.assert_schema_contract()
         lease_provider = PostgresAdvisoryLeaseProvider(dsn)

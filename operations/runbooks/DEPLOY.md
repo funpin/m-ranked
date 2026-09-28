@@ -84,7 +84,9 @@ private-range deny, не открывая collector'у остальную вну
 
 1. Установите collector service, slice, watchdog service/timer и target B S1.
 2. Создайте обычные collector env, затем `/etc/m-ranked/collector-profile.env`
-   из `collector-profile-b.env.example`; retention оставьте `off`.
+из `collector-profile-b.env.example`; retention оставьте `off`.
+   Компактный буфер включают только после миграции и заполнения по
+   [COLLECTOR_WORKING_SET.md](COLLECTOR_WORKING_SET.md).
 3. Установите collector DB/platform credentials и три mTLS credentials. Скопируйте
    отрендеренный drop-in в
    `/etc/systemd/system/m-ranked-target-collector@.service.d/20-transfer-network.conf`.

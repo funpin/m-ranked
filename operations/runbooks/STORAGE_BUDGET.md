@@ -1,4 +1,90 @@
-# Storage optimization handoff — 2026-09-24
+# Storage optimization
+
+## Collector working-buffer rollout — 2026-09-28
+
+Owner chose the working buffer: last 24 effective publication observations,
+current account state and durable delivery queue, with a 31-day observation
+horizon. The existing 720-hour publication tracking policy remains. Publication
+identities, account credentials, current cursors, necessary FK anchors and
+unacknowledged packages remain working state. Full history belongs to S2.
+This request authorizes the S1 rollout and retirement of copies whose full
+coverage on S2 is proved. The September 24 stages below remain a dated record.
+
+S1 originally had 5,723,762,688 available bytes (82% used) and an
+18,472,507,071-byte database. Full publication snapshots and indexes occupied
+12.24 GB; reactions occupied another 2.32 GB. Monthly partitioning used the
+publication month and had no enabled age limit on observations. No API or
+analysis service ran there. Unconsumed cache notifications occupied 490 MB,
+and obsolete derived projections also remained in the collector database.
+
+Executed:
+
+- Migrations 0047 and 0049, completed seed and compact mode on all four
+  collectors. Source and buffer matched for all 28,923 tracked publications
+  (678,580 effective observations); the full seed was 1,188,439 observations
+  and 330 account states. The working buffer occupies about 431 MB.
+- Transactional payload sealing precedes pruning. ACK cleanup remains 26 hours;
+  undelivered packages have no age-based deletion. Runtime expiry uses small
+  batches and preserves referenced working state.
+- Cache-notification cleanup released 489,902,080 measured filesystem bytes;
+  all 762 other domain/admin events remained identical.
+- Independent complete snapshot/reaction coverage was proved for all 64 frozen
+  source months: 14,948,795 snapshots and 22,082,545 reaction rows. Source copies
+  were retired with generation/count/ID/cluster certificates; the four full
+  history roots now contain zero rows.
+- All 174,535 source account observations and 56,525 availability events were
+  compared by canonical key and full-field hash. Two missing account observations
+  and 111 availability events were restored on S2 and checked transactionally.
+  The repeated full comparison had zero missing or changed source records;
+  only then were the two frozen S1 history copies truncated.
+- September inventories covered all 27,312 publications. Counts alone concealed
+  91 missing observations from two September 25 runs, alongside different extra
+  destination observations. All 91 snapshots and their 19 reaction rows were
+  restored on S2, preserving timestamps, provenance, evidence and quality.
+  The 105 differing publications were then read completely again: zero missing
+  facts and zero differences outside local correction ordering. The 121 reviewed
+  lineage differences were normalized individually, and the complete September
+  digest matched for 10,678,216 snapshots and 15,933,069 reactions. All 102 extra
+  destination observations remained. Source retirement followed this proof.
+- Explicit derived caches were cleared on S1 after verifying collector-only
+  use; the transport sender's `outbox_worker` sessions are legitimate and use
+  `transfer_outbox`, a separate queue.
+
+Final S1 audit at 02:07 UTC:
+
+| Measurement | Before | After |
+|---|---:|---:|
+| Available filesystem bytes | 5,723,762,688 | 20,546,764,800 |
+| Filesystem used (`df`) | 82% | 34% |
+| Database bytes | 18,472,507,071 | 3,620,034,239 |
+
+The buffer had 1,188,577 observations in 432,775,168 allocated bytes, at most
+24 per publication, and zero expired observations. All 330 account states were
+within 31 days; expired closed account results and availability states were zero.
+The catalog retained 74,527 publication identities, including 28,924 currently
+tracked publications. All four collectors and the sender use the final release,
+with zero automatic restarts and no storage/schema/delivery errors. At the audit
+the queue had only acknowledged envelopes; fresh target ingestion had zero
+rejected/deferred records. MAX's two pre-existing `ApiError` account failures
+remain outside this storage change. Large temporary hash inventories were removed
+on both hosts after coverage was certified; small receipts and recovery config
+remain private. Neither a 24-hour observation nor a new backup cycle is claimed.
+
+Validation: 742 Python tests passed, 119 fixture-dependent tests skipped;
+23 real PostgreSQL tests passed, including pruning before delivery, tracking
+continuity, NULL/zero semantics, complete reactions, runtime expiry, independent
+destination/fence checks and full source coverage with extra destination facts.
+The final compact entry point also rejects writes without transactional payload
+sealing. Runtime configuration and local documentation links passed. The failed
+source host-GC unit was repaired and its control run removed zero objects;
+prior/current rollout releases are pinned and removals require an explicit list.
+SSH key-only access
+and fail2ban remain. Raw operational evidence and access details stay outside Git.
+
+See [COLLECTOR_WORKING_SET.md](COLLECTOR_WORKING_SET.md) for the rollout,
+verification and recovery contract.
+
+## Historical handoff — 2026-09-24
 
 ## Status and authority
 
