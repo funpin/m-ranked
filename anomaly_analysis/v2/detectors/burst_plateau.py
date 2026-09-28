@@ -206,6 +206,16 @@ def _rapid_views(prepared: PreparedSeries) -> tuple[Sign, ...]:
     if count < 5 or max((value or 0 for value in rows), default=0) < 500:
         return ()
     ages = np.array([(at - series.published_at).total_seconds() / HOUR for at in series.observed_at[:count]])
+    # A conservative bounded rise cannot exceed the displayed rise. Inspect
+    # the widest eligible window first; ordinary gradual curves then avoid
+    # constructing bounds and enumerating all four burst scales.
+    nominal = np.array([np.nan if value is None else value for value in rows])
+    earliest = np.maximum(0, np.searchsorted(ages, ages - .5))
+    # Corrections may put the minimum inside the window rather than at its
+    # beginning. Keep the full path for those histories.
+    if (np.all(np.diff(nominal) >= 0)
+            and not np.any((ages >= 6) & (nominal - nominal[earliest] >= 500))):
+        return ()
     bounds = _views(prepared, count)
     candidates = tuple(_candidate_pairs(ages, bounds, (0, 1/6, .25, .5), max_duration=.5, min_age=6, min_delta=500))
     if not candidates:

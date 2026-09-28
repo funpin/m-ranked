@@ -232,14 +232,21 @@ def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, view
     # It is a concentration by that age, never a measured rise from zero.
     for begin, end in candidates + (((None, 0),) if initial else ()):
         first = end if begin is None else begin
+        if views[first] is None or views[end] is None:
+            continue
+        burst = bounds[end][0] if begin is None else bounds[end][0] - bounds[begin][1]
+        burst_views = max(1, views[end][1] if begin is None else views[end][1] - views[begin][0])
+        # Reject compatible audience growth before searching the plateau.
+        # This is the same necessary ratio gate used below, just evaluated
+        # before the more expensive tail and quality-window checks.
+        if burst / burst_views < .25:
+            continue
         after = int(np.searchsorted(ages, ages[end] + AFTER_HOURS))
         if after >= len(ages) or ages[after] - ages[end] > AFTER_HOURS + BOUNDARY_TOLERANCE_HOURS:
             continue
         if (prefix[after+1] != prefix[first]
                     or reaction_bad_prefix[after+1] != reaction_bad_prefix[first]):
             continue
-        burst = bounds[end][0] if begin is None else bounds[end][0] - bounds[begin][1]
-        burst_views = max(1, views[end][1] if begin is None else views[end][1] - views[begin][0])
         withdrawn = float(withdrawals[after+1] - withdrawals[end+1])
         # Reactions can be withdrawn. A few removals do not erase a real pack;
         # add every observed removal back to the upper growth bound. A reset
@@ -251,7 +258,7 @@ def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, view
         duration = float(ages[end] if begin is None else ages[end] - ages[begin])
         rate = burst / duration
         tail = after_reactions / float(ages[after] - ages[end])
-        if (burst < MIN_EARLY_DELTA or after_views < 20 or burst / burst_views < .25 or tail > .05 * rate):
+        if (burst < MIN_EARLY_DELTA or after_views < 20 or tail > .05 * rate):
             continue
         # Lower the ratio-drop threshold only with additional concentration,
         # scale and observation-density evidence. A mild/long burst still

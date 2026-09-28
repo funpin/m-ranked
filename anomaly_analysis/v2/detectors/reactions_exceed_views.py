@@ -68,6 +68,12 @@ def _telegram_order(prepared: PreparedSeries, context: DetectorContext) -> tuple
     if Metric.REACTIONS not in series.values or Metric.VIEWS not in series.values:
         return ()
     count = bisect_right(series.observed_at, prepared.analyzed_at)
+    # Bounds can only confirm or weaken an observed excess. Skip their
+    # construction when no actual reading meets the necessary raw condition.
+    if not any(r is not None and v is not None and r >= 20 and r > v
+               for r, v in zip(series.values[Metric.REACTIONS][:count],
+                               series.values[Metric.VIEWS][:count])):
+        return ()
     views = _views(prepared, count)
     reactions = [None if uncertain else reaction_bounds(value, quality, breakdown)
                  for value, quality, uncertain, breakdown in zip(

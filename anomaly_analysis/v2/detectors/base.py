@@ -283,6 +283,27 @@ def pelt(values: np.ndarray, penalty: float) -> list[int]:
     n = values.size
     first = np.concatenate(([0.0], np.cumsum(values)))
     second = np.concatenate(([0.0], np.cumsum(values * values)))
+    if n <= 64:
+        # The usual refinement window has only a few dozen cells. Python
+        # scalars avoid several tiny NumPy allocations per cell, retaining
+        # the same costs, pruning rule and first-minimum tie breaking.
+        sums, squares = first.tolist(), second.tolist()
+        costs, previous = [-penalty] + [0.0] * n, [0] * (n + 1)
+        candidates = [0]
+        for end in range(1, n + 1):
+            scores = []
+            for start in candidates:
+                total = sums[end] - sums[start]
+                cost = squares[end] - squares[start] - total * total / (end - start)
+                scores.append(costs[start] + cost + penalty)
+            choice = min(range(len(scores)), key=scores.__getitem__)
+            costs[end], previous[end] = scores[choice], candidates[choice]
+            candidates = [start for start, score in zip(candidates, scores)
+                          if score - penalty <= costs[end]] + [end]
+        bounds = [n]
+        while bounds[-1] > 0:
+            bounds.append(previous[bounds[-1]])
+        return bounds[::-1]
     best = np.zeros(n + 1)
     best[0] = -penalty
     previous = np.zeros(n + 1, dtype=np.int64)
