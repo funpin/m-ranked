@@ -132,6 +132,13 @@ function numberAt(render: AnomalySignal["render"], key: string) {
  *  синхронности (8) и шкала ERV «пост против медианы» (10). */
 export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[], publishedAt: string): MiniChart {
   const render = signal.render;
+  // Production can return this newer detector before its schema reaches main.
+  if (String(render.kind) === "late_engagement") {
+    return { type: "bars", percent: true, bars: [
+      { label: "ранний отклик", value: numberAt(render, "earlyRate") ?? 0, highlight: false },
+      { label: "поздний отклик", value: numberAt(render, "lateRate") ?? 0, highlight: true },
+    ] };
+  }
   if (render.kind === "bounded_burst") {
     if (render.reportedOnly === true) {
       return { type: "bars", percent: false, bars: [

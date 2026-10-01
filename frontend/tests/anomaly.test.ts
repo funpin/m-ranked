@@ -91,6 +91,17 @@ test("cross-metric signals overlay reactions and views, ERV and synchrony are ba
   assert.deepEqual(sync.type === "bars" ? sync.bars.map((bar) => bar.value) : [], [5, 2]);
 });
 
+test("a production late-engagement signal renders saved rates without age fields", () => {
+  const late = signal({ pattern: 13, metric: "reactions", render: {
+    kind: "late_engagement", earlyRate: 0.02, lateRate: 0.12, ratio: 6,
+  } } as unknown as Partial<AnomalySignal>);
+  const chart = miniChart(late, [], PUBLISHED);
+  assert.equal(chart.type, "bars");
+  if (chart.type !== "bars") return;
+  assert.equal(chart.percent, true);
+  assert.deepEqual(chart.bars.map(({ value, highlight }) => [value, highlight]), [[0.02, false], [0.12, true]]);
+});
+
 test("endpoint references reuse bars with saved counts and explicit historical scope", () => {
   const s = signal({ pattern: 12, render: { kind: "reference", startAge: 86400, endAge: 259200,
     observed: 900, expected: 310, upper: 520, fitPosts: 266, calibrationPosts: 130,
