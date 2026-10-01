@@ -4,6 +4,11 @@ packages:
 # CVE-2026-84375; 4.3.2 — исправленный выпуск той же линии.
 overrides:
   js-yaml@4: 4.3.2
+  # Закрывают переполнение стека GHSA-qhr7-859c-m2p7 и GHSA-6j4f-fj2g-mc7p,
+  # сохраняя основную версию, которую ожидает каждый транзитивный потребитель.
+  brace-expansion@1: 1.1.20
+  brace-expansion@2: 2.1.6
+  brace-expansion@5: 5.0.11
 allowBuilds:
   esbuild: true
   unrs-resolver: false
