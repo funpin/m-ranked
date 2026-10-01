@@ -299,8 +299,13 @@ test("new reference methods keep shared cards, icons, charts and explanations",a
     });
     expect(labelsFit).toBe(true);
   }
-  await card.getByRole("button",{name:"Формула и возможные объяснения"}).first().hover();
-  await expect(page.locator('[data-slot="tooltip-content"]')).toContainText("общая калибровка четырёх компонент");
+  const help=card.getByRole("button",{name:"Формула и возможные объяснения"}).first();
+  // Expanding the second chart scrolls the first help button above the viewport.
+  // Center it explicitly so automatic scrolling cannot put it under the header.
+  await page.mouse.move(0,0);
+  await help.evaluate((button)=>button.scrollIntoView({block:"center",behavior:"instant"}));
+  await help.hover();
+  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("общая калибровка четырёх компонент");
   await page.mouse.move(0,0);
   await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
   await card.screenshot({path:testInfo.outputPath("mature-reference-card.png"), animations:"disabled",
@@ -315,4 +320,36 @@ test("missing precise data is visible before expanding the analysis",async({page
   await toggle.click();
   await expect(page.getByTestId("anomaly-card")).toContainText("не подтверждает обычность статистики");
   await expect(page.getByTestId("anomaly-card")).not.toContainText("Признаков аномальной динамики не найдено");
+});
+
+test("an open explanation tooltip leaves its trigger reachable below the sticky header",async({page})=>{
+  await page.goto("/platform-posts/10");
+  const card=page.getByTestId("anomaly-card");
+  await card.getByTestId("anomaly-toggle").click();
+  const signal=card.locator('[data-pattern="11"]');
+  await signal.getByTestId("signal-detail-toggle").click();
+  const help=signal.getByRole("button",{name:"Формула и возможные объяснения"});
+  await page.mouse.move(0,0);
+  await help.evaluate((button)=>{
+    button.scrollIntoView({block:"center",behavior:"instant"});
+    const header=document.querySelector('nav[aria-label="Основная навигация"]')!;
+    window.scrollBy({top:button.getBoundingClientRect().top-header.getBoundingClientRect().bottom-24,behavior:"instant"});
+  });
+  // Keyboard focus opens the popup without bypassing pointer hit testing.
+  await page.keyboard.press("Tab");
+  await help.focus();
+  const tooltip=page.locator('[data-slot="tooltip-content"][data-open]');
+  await expect(tooltip).toContainText("общая калибровка четырёх компонент");
+  await expect(tooltip).toHaveAttribute("data-side","bottom");
+  await expect.poll(()=>help.evaluate((button)=>{
+    const box=button.getBoundingClientRect();
+    const x=box.left+box.width/2;
+    return [box.top+1,box.top+box.height/2,box.bottom-1].every((y)=>{
+      const target=document.elementFromPoint(x,y);
+      return target!==null&&button.contains(target);
+    });
+  })).toBe(true);
+  await help.hover({timeout:3000});
+  await page.keyboard.press("Escape");
+  await expect(tooltip).toHaveCount(0);
 });
