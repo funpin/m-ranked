@@ -130,6 +130,7 @@ ADMIN_GROUP = {
     ("/api/v1/admin/jobs/{jobId}", "GET"),
     ("/api/v1/admin/platform-accounts/{accountId}", "GET"),
     ("/api/v1/admin/platform-accounts/{accountId}/enabled", "PUT"),
+    ("/api/v1/admin/visitors", "GET"),
 }
 
 

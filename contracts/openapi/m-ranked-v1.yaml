@@ -925,6 +925,68 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/visit:
+    post:
+      tags: [Operations]
+      operationId: recordVisit
+      summary: Count a page view without cookies
+      description: >-
+        Page beacon sent on load and once a minute while the tab is visible. The visitor is a
+        BLAKE2b hash of a daily salt, the client address and the user agent; the address is never
+        stored and the salt is deleted after the day is summed up. Robots are ignored. The response
+        is always 204 and does not depend on whether the signal was counted.
+      security: []
+      requestBody:
+        required: false
+        content:
+          text/plain:
+            schema:
+              type: string
+              maxLength: 256
+              description: 'JSON object {"view": true} for a page view; anything else marks an open tab.'
+      responses:
+        '204':
+          description: Accepted.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+  /api/v1/admin/visitors:
+    get:
+      tags:
+      - Admin
+      operationId: getVisitors
+      summary: getVisitors
+      description: Requires VIEWER, EDITOR or ADMIN. Unique visitors per Moscow day and visitors seen in the last five minutes.
+      security:
+      - adminSession: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - week
+          - month
+          default: week
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminVisitors'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/catalog/institutions:
     get:
       tags:
@@ -2658,6 +2720,52 @@ components:
           type: boolean
         canDelete:
           type: boolean
+    AdminVisitorDay:
+      type: object
+      additionalProperties: false
+      required:
+      - day
+      - visitors
+      - views
+      properties:
+        day:
+          type: string
+          format: date
+        visitors:
+          type: integer
+          minimum: 0
+        views:
+          type: integer
+          minimum: 0
+    AdminVisitors:
+      type: object
+      additionalProperties: false
+      required:
+      - range
+      - online
+      - onlineWindowSeconds
+      - today
+      - days
+      properties:
+        range:
+          type: string
+          enum:
+          - week
+          - month
+        online:
+          type: integer
+          minimum: 0
+          description: Distinct visitors with a signal inside the window; signals reach the database within 30 seconds.
+        onlineWindowSeconds:
+          type: integer
+          minimum: 1
+        today:
+          $ref: '#/components/schemas/AdminVisitorDay'
+        days:
+          type: array
+          description: Oldest first, zero-filled, the last item is today.
+          items:
+            $ref: '#/components/schemas/AdminVisitorDay'
     AdminCatalogStatus:
       type: object
       additionalProperties: false

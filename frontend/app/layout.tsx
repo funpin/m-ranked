@@ -13,6 +13,7 @@ import { Geologica, JetBrains_Mono, Onest } from "next/font/google";
 import { RouteBoundary } from "@/components/navigation-boundary";
 import { SiteHeaderFallback } from "@/components/site-header-fallback";
 import { readContributors } from "@/lib/contributors.server";
+import { VisitBeacon } from "@/components/visit-beacon";
 import { IconSprite } from "@/components/icon-sprite";
 import { cn } from "@/lib/utils";
 
@@ -159,6 +160,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           {localSnapshotLabel}
         </div> : null}
         <main id="main-content" tabIndex={-1} className="safe-page-inset mx-auto w-full max-w-[1400px] min-w-0 py-6"><RouteBoundary>{children}</RouteBoundary></main>
+        <VisitBeacon />
       </body>
     </html>
   );

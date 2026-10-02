@@ -199,6 +199,7 @@ const server = createServer(async (request, response) => {
   // Сессия вместо Basic: роль носит непрозрачная кука, как на проде.
   const sessionRole=/(?:^|;\s*)__Host-mranked-admin=fixture-(viewer|editor|admin)(?:;|$)/
     .exec(request.headers.cookie??"")?.[1]??null;
+  if(url.pathname==="/api/v1/visit") { response.writeHead(204,{"Cache-Control":"no-store"}); response.end(); return; }
   if(url.pathname==="/api/v1/admin/session") {
     if(request.method==="DELETE") {
       response.setHeader("Set-Cookie","__Host-mranked-admin=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict");
