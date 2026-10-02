@@ -34,6 +34,7 @@ def test_profile_a_target_is_complete_single_host_runtime() -> None:
         "m-ranked-target-anomaly-norms.timer",
         "m-ranked-target-anomaly-tail.timer",
         "m-ranked-target-ops-sample.timer",
+        "m-ranked-target-contributors.timer",
         "m-ranked-target-maintenance.timer",
         "m-ranked-target-official-rating.timer",
         "m-ranked-target-overview-metrics.timer",
@@ -62,6 +63,7 @@ def test_profile_b_targets_split_collection_and_presentation() -> None:
         "m-ranked-target-anomaly-norms.timer",
         "m-ranked-target-anomaly-tail.timer",
         "m-ranked-target-ops-sample.timer",
+        "m-ranked-target-contributors.timer",
         "m-ranked-target-maintenance.timer",
         "m-ranked-target-official-rating.timer",
         "m-ranked-target-overview-metrics.timer",
@@ -100,6 +102,7 @@ def test_new_services_keep_hardening_and_bounds() -> None:
         "m-ranked-target-anomaly-norms.service",
         "m-ranked-target-anomaly-tail.service",
         "m-ranked-target-ops-sample.service",
+        "m-ranked-target-contributors.service",
     ):
         unit = text(name)
         for directive in required:
@@ -188,3 +191,11 @@ def test_ops_sample_reads_only_and_stays_small() -> None:
                       "RuntimeDirectory=m-ranked-ops-sample"):
         assert directive in unit, directive
     assert "OnCalendar=*:0/5" in text("m-ranked-target-ops-sample.timer")
+
+
+def test_contributors_refresh_every_three_days_into_a_directory_the_web_reads() -> None:
+    unit = text("m-ranked-target-contributors.service")
+    assert "python -m api.tools.refresh_contributors" in unit
+    assert "StateDirectory=m-ranked/contributors" in unit and "User=m-ranked-web" in unit
+    assert "OnCalendar=*-*-01/3" in text("m-ranked-target-contributors.timer")
+    assert "MRANKED_CONTRIBUTORS_DIR=/var/lib/m-ranked/contributors" in text("m-ranked-target-web.service")

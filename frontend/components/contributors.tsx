@@ -1,19 +1,20 @@
-import contributors from "@/lib/contributors.generated.json";
+import type { Contributor } from "@/lib/contributor";
 import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /** Авторы проекта рядом со знаком GitHub. Аватары сложены стопкой и
  *  раздвигаются при наведении; подсказка с именем и числом коммитов — на CSS:
  *  всплывающие подсказки Base UI тянули в каждую страницу ~40 КиБ скрипта.
- *  Список обновляет pnpm generate:contributors, файлы лежат в самом сайте. */
-export function Contributors({ className }: { className?: string }) {
-  if (!contributors.length) return null;
+ *  Список раз в трое суток обновляет таймер на сервере (api/tools/
+ *  refresh_contributors.py); аватары отдаёт сам сайт. */
+export function Contributors({ people, className }: { people: Contributor[]; className?: string }) {
+  if (!people.length) return null;
   return (
     // Разметка AvatarGroup из shadcn: сам модуль ui/avatar тянет примитив Base UI
     // в каждую страницу, а стопке нужен только этот класс.
     <div data-slot="avatar-group" role="group" data-testid="contributors" aria-label="Авторы проекта"
       className={cn("group/avatar-group flex -space-x-2 items-center *:transition-[margin,translate,scale] *:duration-300 hover:space-x-1 focus-within:space-x-1 motion-reduce:*:transition-none", className)}>
-      {contributors.map((person) => {
+      {people.map((person) => {
         const label = `${person.login} · ${person.contributions} ${plural(person.contributions, "коммит", "коммита", "коммитов")}`;
         return (
           <a key={person.login} href={person.url} target="_blank" rel="noopener noreferrer" aria-label={`${label} — профиль на GitHub`}

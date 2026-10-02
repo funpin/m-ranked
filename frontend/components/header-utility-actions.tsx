@@ -9,18 +9,19 @@ import { HEADER_BUTTON } from "@/components/header-button";
 import { Contributors } from "@/components/contributors";
 import { GithubMark } from "@/components/github-mark";
 import { REPOSITORY_URL } from "@/lib/repository";
+import type { Contributor } from "@/lib/contributor";
 
 /**
  * Правая часть шапки общая для живого варианта и серверной заготовки.
  * Иначе при медленной гидратации пользователь видит прежнюю урезанную шапку.
  */
-export function HeaderUtilityActions({ menuToggle, manageHref, manageActive = false }: {
-  menuToggle?: ReactNode; manageHref: string; manageActive?: boolean;
+export function HeaderUtilityActions({ menuToggle, manageHref, manageActive = false, contributors }: {
+  menuToggle?: ReactNode; manageHref: string; manageActive?: boolean; contributors: Contributor[];
 }) {
   return (
     <div data-testid="header-utility-actions" className="ml-auto flex shrink-0 items-center gap-1">
       {/* Авторы и знак GitHub — одна группа, без разделителя между ними. */}
-      <Contributors className="mr-1.5 max-[780px]:hidden" />
+      <Contributors people={contributors} className="mr-1.5 max-[780px]:hidden" />
       <a href={REPOSITORY_URL} target="_blank" rel="noopener noreferrer" aria-label="Исходный код на GitHub"
         title="Исходный код на GitHub" className={cn(buttonVariants({ variant: "ghost", size: "icon" }), HEADER_BUTTON)}>
         <GithubMark className="size-[1.15rem]" />

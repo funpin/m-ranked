@@ -1,7 +1,8 @@
 // Контрибуторы репозитория для шапки сайта. Список и аватары кладутся в сам
 // сайт (lib/contributors.generated.json, public/contributors/): посетители не
 // ходят на GitHub, а сборка не зависит от его доступности.
-// Запуск: pnpm generate:contributors — после заметных изменений состава.
+// Это список для сборки: на сервере его раз в трое суток заменяет свежий
+// (api/tools/refresh_contributors.py). Запуск: pnpm generate:contributors.
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 
 const REPOSITORY = "funpin/m-ranked";

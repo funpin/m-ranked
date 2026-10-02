@@ -12,6 +12,7 @@ import "./globals.css";
 import { Geologica, JetBrains_Mono, Onest } from "next/font/google";
 import { RouteBoundary } from "@/components/navigation-boundary";
 import { SiteHeaderFallback } from "@/components/site-header-fallback";
+import { readContributors } from "@/lib/contributors.server";
 import { IconSprite } from "@/components/icon-sprite";
 import { cn } from "@/lib/utils";
 
@@ -114,6 +115,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   // nonce выдаёт прокси на каждый ответ; свой инлайн-скрипт обязан его нести.
   const nonce = incoming.get("x-nonce") ?? undefined;
   const localSnapshotLabel = process.env.MRANKED_LOCAL_SNAPSHOT_LABEL?.trim();
+  const contributors = await readContributors();
   let activePlatform: Platform = path.startsWith("/institutions/") ? "all" : "telegram";
   const identity = /^\/(accounts|publications)\/([0-9a-f-]{36})$/i.exec(path);
   if (identity) {
@@ -151,7 +153,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             него вместо того, чтобы возить свои контуры сотнями копий. */}
         <IconSprite />
         <a className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[300] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring" href="#main-content">Перейти к содержимому</a>
-        <Suspense fallback={<SiteHeaderFallback platform={activePlatform} />}><SiteHeader initialPlatform={activePlatform} /></Suspense>
+        <Suspense fallback={<SiteHeaderFallback platform={activePlatform} contributors={contributors} />}><SiteHeader initialPlatform={activePlatform} contributors={contributors} /></Suspense>
         {localSnapshotLabel ? <div className="border-border bg-amber-500/5 text-muted-foreground border-b px-4 py-2 text-center text-xs">
           <Badge className="mr-2 h-auto bg-amber-500/15 text-[length:inherit] font-semibold text-amber-700 dark:text-amber-300">Локальный срез</Badge>
           {localSnapshotLabel}

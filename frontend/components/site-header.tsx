@@ -12,6 +12,7 @@ import { HEADER_BUTTON } from "@/components/header-button";
 import { HeaderUtilityActions } from "@/components/header-utility-actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
+import type { Contributor } from "@/lib/contributor";
 
 
 function subscribePlatform(notify: () => void) {
@@ -21,7 +22,7 @@ function subscribePlatform(notify: () => void) {
   return () => observer.disconnect();
 }
 
-export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platform}) {
+export function SiteHeader({initialPlatform="telegram",contributors}:{initialPlatform?:Platform;contributors:Contributor[]}) {
   const pathname = usePathname();
   const search = useSearchParams();
   const detailPlatform = useSyncExternalStore(subscribePlatform, () => normalizePlatform(document.querySelector<HTMLElement>("main [data-active-platform]")?.dataset.activePlatform, initialPlatform), () => initialPlatform);
@@ -107,7 +108,7 @@ export function SiteHeader({initialPlatform="telegram"}:{initialPlatform?:Platfo
           })}
         </div>
 
-        <HeaderUtilityActions manageHref={queryHref(MANAGE_LINK.href, { platform })}
+        <HeaderUtilityActions manageHref={queryHref(MANAGE_LINK.href, { platform })} contributors={contributors}
           manageActive={pathname.startsWith(MANAGE_LINK.href)} menuToggle={
           <Button
             data-testid="menu-toggle"
