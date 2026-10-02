@@ -223,35 +223,24 @@ def pipeline(values: dict[str, float]) -> dict[str, float | None]:
     }
 
 
-def directory_bytes(root: Path) -> int | None:
-    """Занятое место дерева без перехода по ссылкам.
+def directory_bytes(root: Path, run: Any = subprocess.run) -> int | None:
+    """Занятое место дерева — как du: жёсткие ссылки один раз, по ссылкам не ходит.
 
-    Недоступный подкаталог пропускается, а не обрывает весь счёт: из-за такого
-    обрыва панель и писала «размер не предоставлен сервером».
+    du на C в разы быстрее обхода из Python: страничный кэш nginx — сотни
+    тысяч файлов, и обход в Python съедал полминуты процессора и весь лимит
+    памяти службы. Недоступный подкаталог du пропускает с ненулевым кодом
+    выхода, итог при этом печатает — его и берём: из-за обрыва счёта на таком
+    каталоге панель раньше писала «размер не предоставлен сервером».
     """
     if not root.is_dir():
         return None
-    total, stack, seen = 0, [root], set()
-    while stack:
-        try:
-            with os.scandir(stack.pop()) as entries:
-                for entry in entries:
-                    try:
-                        if entry.is_symlink():
-                            continue
-                        stat = entry.stat(follow_symlinks=False)
-                        if entry.is_dir(follow_symlinks=False):
-                            stack.append(Path(entry.path))
-                        elif (stat.st_dev, stat.st_ino) not in seen:
-                            # Жёсткие ссылки считаются один раз, как в du.
-                            if stat.st_nlink > 1:
-                                seen.add((stat.st_dev, stat.st_ino))
-                            total += stat.st_blocks * 512
-                    except OSError:
-                        continue
-        except OSError:
-            continue
-    return total
+    try:
+        result = run(["du", "-s", "-x", "--block-size=1", str(root)],
+                     capture_output=True, text=True, check=False, timeout=600)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    first = result.stdout.split("\t", 1)[0].strip()
+    return int(first) if first.isdecimal() else None
 
 
 def size_paths(raw: str) -> dict[str, Path]:
@@ -280,7 +269,7 @@ def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: 
     sample["load"] = [float(value) for value in sample["load"]]
     measured = state.get("sizesAt")
     if sizes and (measured is None or now - measured >= SIZE_INTERVAL_SECONDS):
-        sample["sizes"] = {name: directory_bytes(path) for name, path in sizes.items()}
+        sample["sizes"] = {name: directory_bytes(path, run) for name, path in sizes.items()}
         state["sizesAt"] = now
     return sample
 

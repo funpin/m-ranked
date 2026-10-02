@@ -69,19 +69,15 @@ def test_pipeline_metrics_pick_latest_and_sum_labels() -> None:
     assert result["analysisLag"] == 60.0 and result["backupAt"] is None
 
 
-def test_directory_size_skips_unreadable_parts(tmp_path: Path) -> None:
-    (tmp_path / "a").mkdir()
-    (tmp_path / "a" / "file").write_bytes(b"x" * 10_000)
-    locked = tmp_path / "locked"
-    locked.mkdir()
-    (locked / "hidden").write_bytes(b"y" * 10_000)
-    locked.chmod(0)
-    try:
-        size = ops_sample.directory_bytes(tmp_path)
-    finally:
-        locked.chmod(0o700)
-    assert size is not None and size >= 10_000
-    assert ops_sample.directory_bytes(tmp_path / "missing") is None
+def test_directory_size_takes_du_total_even_when_parts_are_unreadable(tmp_path: Path) -> None:
+    def run(command, **_):
+        assert command[:4] == ["du", "-s", "-x", "--block-size=1"]
+        # du пропустил нечитаемый каталог: код 1, но итог напечатан.
+        return subprocess.CompletedProcess(command, 1, f"123456\t{command[-1]}\n", "du: cannot read directory")
+
+    assert ops_sample.directory_bytes(tmp_path, run) == 123456
+    assert ops_sample.directory_bytes(tmp_path / "missing", run) is None
+    assert ops_sample.directory_bytes(tmp_path, lambda *a, **k: subprocess.CompletedProcess(a, 1, "", "")) is None
 
 
 def test_build_measures_sizes_once_an_hour(tmp_path: Path) -> None:
