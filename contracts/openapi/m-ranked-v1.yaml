@@ -194,11 +194,12 @@ paths:
           description: >-
             Legacy sort key. `coverage` and `accounts` apply only to `all`; `posts` and
             `subscribers` apply only to a concrete platform. Unsupported combinations normalize
-            to `m_rating` for `all` and `median_reactions` otherwise.
+            to `anomalies`. `anomalies` orders by the sum of level 2 and level 3
+            publication counts for the selected platform and period.
           schema:
             type: string
-            enum: [name, median_reactions, m_rating, reactions, views, posts, subscribers, coverage, accounts]
-            default: median_reactions
+            enum: [anomalies, name, median_reactions, m_rating, reactions, views, posts, subscribers, coverage, accounts]
+            default: anomalies
         - name: direction
           in: query
           description: Defaults to ascending for `name`, descending otherwise.
@@ -3630,6 +3631,24 @@ components:
           type: [integer, 'null']
           format: int64
           minimum: 0
+        anomalyCounts:
+          type: object
+          additionalProperties: false
+          description: >-
+            Counts of publications published within the selected platform and period,
+            grouped by their current effective anomaly level (including context rechecks).
+            Each publication is counted once. Missing on older API versions; absence
+            does not mean that analysis found no anomalies.
+          required: [level2, level3]
+          properties:
+            level2:
+              type: integer
+              minimum: 0
+              description: Publications with a pronounced anomaly (level 2).
+            level3:
+              type: integer
+              minimum: 0
+              description: Publications with signs of artificial activity (level 3).
         views:
           $ref: '#/components/schemas/OverviewMetric'
         reactions:
@@ -3687,6 +3706,47 @@ components:
           - null
           description: Safe deployment warning for an explicitly missing integration. Null when configured or unknown;
             does not contain credential values and does not override missing/disabled account state.
+    InstitutionStudentCount:
+      type: object
+      additionalProperties: false
+      required: [value, referenceYear, approximate, sourceUrl, sourceLabel, scope, verifiedAt]
+      properties:
+        value:
+          type: integer
+          minimum: 0
+        referenceYear:
+          type: [integer, 'null']
+          description: Year of the reported data, not the publication or retrieval year. Null when the source does not specify it.
+        referenceDate:
+          type: [string, 'null']
+          format: date
+          description: Exact census date when explicitly given in the source. Retrieval date is not a substitute.
+        approximate:
+          type: boolean
+        sourceUrl:
+          type: string
+          format: uri
+        sourceLabel:
+          type: string
+        scope:
+          type: string
+          description: Programmes, forms of study and institution/branch coverage counted by the source.
+        verifiedAt:
+          type: string
+          format: date
+    InstitutionProfile:
+      type: object
+      additionalProperties: false
+      required: [trackingStartedAt, students]
+      properties:
+        trackingStartedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Earliest recorded institution or associated account catalogue created_at, including deleted accounts and pre-migration enrollment. Independent of selected platform, retention and publication dates; does not assert uninterrupted collection.
+        students:
+          oneOf:
+            - $ref: '#/components/schemas/InstitutionStudentCount'
+            - type: 'null'
     Institution:
       type: object
       additionalProperties: false
@@ -3711,6 +3771,8 @@ components:
           type: string
         shortName:
           type: [string, 'null']
+        institutionProfile:
+          $ref: '#/components/schemas/InstitutionProfile'
         platform:
           $ref: '#/components/schemas/PlatformValue'
         period:
@@ -4418,6 +4480,8 @@ components:
           type:
           - string
           - 'null'
+        institutionProfile:
+          $ref: '#/components/schemas/InstitutionProfile'
         platform:
           type: string
           enum:

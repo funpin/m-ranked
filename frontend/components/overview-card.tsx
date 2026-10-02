@@ -4,7 +4,7 @@ import Link from "@/components/native-link";
 import { ExternalLink } from "lucide-react";
 import { Icon, type IconName } from "@/components/icon-sprite";
 import { DeltaBadge } from "@/components/delta-badge";
-import { legacyDate, legacyNumber, PERIOD_SHORT, PLATFORM_LABELS } from "@/lib/format";
+import { formatMetric, formatStat, legacyDate, legacyNumber, PERIOD_SHORT, PLATFORM_LABELS, plural } from "@/lib/format";
 import { metricNumber, queryHref } from "@/lib/params";
 import type { OverviewItem, OverviewMetric, OverviewPage } from "@/lib/types";
 import { overviewStatus } from "@/lib/overview-status";
@@ -12,6 +12,33 @@ import { metricEvidence, type AggregateMetric } from "@/lib/metric-evidence";
 import { AnimatedNumber } from "@/components/animated-number";
 import { MethodNote } from "@/components/method-note";
 import { cn } from "@/lib/utils";
+import { LevelIcon } from "@/components/anomaly-icons";
+
+function CardBadges({ item }: { item: OverviewItem }) {
+  const counts = item.anomalyCounts;
+  const platform = item.platform === "all" ? "Все площадки" : PLATFORM_LABELS[item.platform];
+  if (!item.ratingRank && !counts?.level2 && !counts?.level3) return null;
+  return <div className="pointer-events-none relative z-[3] -mx-[26px] -mt-[34px] mb-4 flex flex-wrap items-start justify-between gap-1.5">
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Замечания анализа за выбранный период">
+      {([3, 2] as const).map(level => {
+        const count = level === 3 ? counts?.level3 : counts?.level2;
+        if (!count || !Number.isSafeInteger(count) || count < 0) return null;
+        const label = level === 3 ? "Признаки искусственной активности" : "Выраженная аномалия";
+        const description = `${label}: ${legacyNumber(count)} ${plural(count, "публикация", "публикации", "публикаций")}. ${platform}, ${PERIOD_SHORT[item.period]}. Учитываются публикации, вышедшие за выбранный период, по текущему итоговому уровню анализа.`;
+        return <Badge key={level} data-testid={`overview-anomaly-level-${level}`} tabIndex={0}
+          aria-label={description} title={description}
+          className={cn("pointer-events-auto h-auto cursor-help px-2 py-1 text-[10px] font-extrabold shadow-sm tabular",
+            level === 3 ? "bg-destructive/12 text-destructive" : "bg-warning/15 text-warning")}>
+          <LevelIcon level={level} /><span>{legacyNumber(count)}</span>
+        </Badge>;
+      })}
+    </div>
+    {item.ratingRank ? <Badge className="pointer-events-auto ml-auto h-auto cursor-help bg-chart-2 px-2 py-1 text-[10px] font-extrabold text-background shadow-sm"
+      tabIndex={0} title={`Официальное место в М‑Рейтинге ${item.platform === "all" ? "Общий" : platform}.`}>
+      М‑Рейтинг {item.platform === "all" ? "Общий" : platform} · №{item.ratingRank}
+    </Badge> : null}
+  </div>;
+}
 
 /** Каждая площадка узнаётся по своему цвету: строка аккаунта, её метка и
  *  полоса слева красятся одной краской, поэтому в общем режиме карточка
@@ -67,55 +94,64 @@ function accountName(item: OverviewItem): string {
   return account.title || account.canonicalExternalId;
 }
 
-/** The slot keeps its height whether or not there is a change to report, so a
- *  grid of cards does not shift as values load. */
-/**
- * Изменение против предыдущего такого же периода.
- *
- * Место под плашкой держится всегда, даже когда её нет: иначе карточки в
- * сетке разъезжались бы по высоте в зависимости от того, у кого есть с чем
- * сравнивать. За месяц сравнения нет ни у кого — истории наблюдений пока
- * семнадцать суток, а нужно шестьдесят.
- */
-function Trend({ value, label, suffix }: {
-  value: OverviewMetric["totalTrend"]; label: string; suffix: string;
-}) {
-  return (
-    <span className="mt-1 block min-h-[22px]">
-      <DeltaBadge value={metricNumber(value)} label={`${label} против предыдущего периода (${suffix})`} />
-    </span>
-  );
-}
-
-function MetricCell({ value, label, trend, evidence, suffix }: {
+function MetricCell({ value, label, description, trend, evidence, suffix }: {
   value: OverviewMetric["total"];
   label: string;
+  description: string;
   trend: OverviewMetric["totalTrend"];
   evidence: AggregateMetric;
   suffix:string;
 }) {
-  const text = metricEvidence(evidence);
+  const number = metricNumber(value);
+  const exact = formatMetric(value);
   return (
-    <span className="grid min-w-0 content-start">
-      <b className="font-heading tabular text-[27px] leading-none font-extrabold tracking-tight">
-        <AnimatedNumber value={metricNumber(value)} />
+    <div className="grid min-w-0 content-start justify-items-start gap-1.5">
+      <div className="text-muted-foreground flex w-full items-center justify-between gap-1 text-xs leading-none">
+        <span>{label}</span>
+        <span className="relative z-[2] shrink-0"><MethodNote title={description}>{metricEvidence(evidence)}</MethodNote></span>
+      </div>
+      <b className={cn("font-heading tabular whitespace-nowrap leading-none font-extrabold tracking-tight",
+        exact.length >= 7 ? "text-[22px]" : "text-[27px]")} title={exact} aria-label={`${description}: ${exact}`}>
+        {number !== null && Math.abs(number) >= 1_000_000 ? formatStat(number) : <AnimatedNumber value={number} />}
       </b>
-      {/* Пояснение открывается нажатием на значок, а не наведением на само
-          число: под курсором-вопросом было неочевидно, что там что-то есть. */}
-      <small className="text-muted-foreground mt-1 flex min-h-[2.7em] items-start gap-1 text-[10px] leading-snug font-medium tracking-wide uppercase">
-        {label}
-        <span className="relative z-[2] -mt-1 shrink-0"><MethodNote title={label}>{text}</MethodNote></span>
-      </small>
-      <Trend value={trend} label={label} suffix={suffix} />
-    </span>
+      <DeltaBadge value={metricNumber(trend)} label={`${description} против предыдущего периода (${suffix})`} />
+    </div>
   );
+}
+
+const pollTimestamp = new Intl.DateTimeFormat("ru-RU", {
+  timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+});
+
+function StatusFooter({ item, integrationWarning }: { item: OverviewItem; integrationWarning?: OverviewPage["integrationWarning"] }) {
+  const status = overviewStatus(item, integrationWarning);
+  const label = item.platform === "all" ? status.text
+    : status.kind === "ok" ? "Активен"
+    : status.kind === "bad" ? "Ошибка опроса"
+    : !item.accountCount ? "Нет аккаунта"
+    : !item.enabledAccountCount ? "Отключён"
+    : status.kind === "warn" ? "Нужна настройка" : "Ожидание опроса";
+  const date = item.lastCheckedAt ? new Date(item.lastCheckedAt) : null;
+  const validDate = date && Number.isFinite(date.getTime());
+  const fullPoll = validDate ? `Последний опрос: ${legacyDate(item.lastCheckedAt, true)}` : "Опрос ещё не выполнялся";
+  return <footer data-testid="overview-status" className="border-border mt-auto flex items-center justify-between gap-2 border-t pt-3 text-[11px] leading-5 whitespace-nowrap">
+    <span title={status.text} className={cn("inline-flex items-center gap-1.5 font-medium",
+      status.kind === "ok" ? "text-success" : status.kind === "warn" ? "text-warning" : status.kind === "bad" ? "text-destructive" : "text-muted-foreground")}>
+      <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />{label}
+    </span>
+    {item.platform !== "all" ? validDate
+      ? <time dateTime={item.lastCheckedAt!} title={fullPoll} aria-label={fullPoll} className="text-muted-foreground tabular text-[10px]">
+          {pollTimestamp.format(date).replace(", ", " · ")} МСК
+        </time>
+      : <span className="text-muted-foreground text-[10px]" title={fullPoll}>Опросов нет</span>
+      : null}
+  </footer>;
 }
 
 function ActivityBody({ item, integrationWarning, href }: { item: OverviewItem; integrationWarning: OverviewPage["integrationWarning"]; href: string }) {
   const short = PERIOD_SHORT[item.period];
   const primary = item.platform === "vk" || item.platform === "rutube" ? "лайков" : "реакций";
-  const suffix=short;
-  const status=overviewStatus(item,integrationWarning);
+  const primaryLabel = item.platform === "vk" || item.platform === "rutube" ? "Лайки" : "Реакции";
   const badges = <div className="mt-3">
     <div className="flex flex-wrap gap-1.5" aria-label={`Публикации ${short}`}>
     {[
@@ -131,40 +167,43 @@ function ActivityBody({ item, integrationWarning, href }: { item: OverviewItem; 
     <ActivityMeter active={item.activityPublicationCount} total={item.totalPublicationCount} period={short} />
   </div>;
   return <>
-    {item.ratingRank ? <Badge className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] h-auto cursor-help px-2 py-1 text-[10px] font-extrabold shadow-sm" tabIndex={0} title={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[item.platform]}.`}>М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</Badge> : null}
-    <div className="min-h-[116px]">
-      <h3 className="font-heading flex min-h-[2.7em] items-start gap-1 text-base leading-snug font-bold">
+    <CardBadges item={item} />
+    <div>
+      <h3 className="font-heading flex items-start gap-1 text-base leading-snug font-bold">
         <Link className="line-clamp-2 no-underline outline-none after:absolute after:inset-0 hover:underline focus-visible:underline" href={href} prefetch={false}>
           {item.shortName || item.canonicalName}
         </Link>
         <span className="relative z-[2] shrink-0"><MethodNote title="Полное название">{item.canonicalName}</MethodNote></span>
       </h3>
       <div className="text-muted-foreground mt-1 truncate text-xs">{accountName(item)}{item.accounts.length ? <> · {legacyNumber(item.subscriberCount)} подписчиков{item.accountCount > 1 ? ` · ещё ${item.accountCount - 1}` : ""}</> : null}</div>
-      {/* Бейджи стоят внутри блока фиксированной высоты для всех площадок:
-          когда они выносились наружу, у ВК, MAX и RuTube тот же блок
-          резервировал 116 пикселей и оставался пустым. */}
       {badges}
     </div>
-    <div className="my-4 grid flex-1 grid-cols-2 content-center gap-x-5 gap-y-3">
-      <MetricCell suffix={suffix} value={item.reactions.total} label={`${primary} ${short}`} trend={item.reactions.totalTrend} evidence={item.reactions.totalMetadata} />
-      <MetricCell suffix={suffix} value={item.views.total} label={`просмотров ${short}`} trend={item.views.totalTrend} evidence={item.views.totalMetadata} />
-      <MetricCell suffix={suffix} value={item.reactions.median} label={`медиана прироста ${primary}`} trend={item.reactions.medianTrend} evidence={item.reactions.medianMetadata} />
-      <MetricCell suffix={suffix} value={item.views.median} label="медиана прироста просмотров" trend={item.views.medianTrend} evidence={item.views.medianMetadata} />
+    <div className="my-4 grid flex-1 content-start gap-4">
+      <section aria-label={`Прирост ${short}`} className="grid gap-1">
+        <h4 className="text-muted-foreground text-[11px] font-medium">Прирост {short}</h4>
+        <div className="grid grid-cols-2 gap-x-5">
+          <MetricCell suffix={short} value={item.reactions.total} label={primaryLabel} description={`Прирост ${primary} ${short}`} trend={item.reactions.totalTrend} evidence={item.reactions.totalMetadata} />
+          <MetricCell suffix={short} value={item.views.total} label="Просмотры" description={`Прирост просмотров ${short}`} trend={item.views.totalTrend} evidence={item.views.totalMetadata} />
+        </div>
+      </section>
+      <section aria-label="Медиана прироста" className="border-border/60 grid gap-1 border-t pt-3">
+        <h4 className="text-muted-foreground text-[11px] font-medium">Медиана прироста</h4>
+        <div className="grid grid-cols-2 gap-x-5">
+          <MetricCell suffix={short} value={item.reactions.median} label={primaryLabel} description={`Медиана прироста ${primary}`} trend={item.reactions.medianTrend} evidence={item.reactions.medianMetadata} />
+          <MetricCell suffix={short} value={item.views.median} label="Просмотры" description="Медиана прироста просмотров" trend={item.views.medianTrend} evidence={item.views.medianMetadata} />
+        </div>
+      </section>
     </div>
-    <div className="border-border mt-auto min-h-[67px] border-t pt-3.5">
-      <div className={cn("font-semibold", status.kind === "ok" ? "text-success" : status.kind === "warn" ? "text-warning" : status.kind === "bad" ? "text-destructive" : "text-muted-foreground")}>{status.text}</div>
-      <div className="text-muted-foreground mt-0.5 text-xs">Последний опрос: {item.lastCheckedAt ? legacyDate(item.lastCheckedAt, true) : "ещё не выполнялся"}</div>
-    </div>
+    <StatusFooter item={item} integrationWarning={integrationWarning} />
   </>;
 }
 
 function AllPlatformsBody({ item }: { item: OverviewItem }) {
-  const status=overviewStatus(item);
   return (
     <>
-      {item.ratingRank ? <Badge className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] h-auto cursor-help px-2 py-1 text-[10px] font-extrabold shadow-sm" tabIndex={0} title="Официальное место в М‑Рейтинге: Общий.">М‑Рейтинг Общий · №{item.ratingRank}</Badge> : null}
+      <CardBadges item={item} />
       <div>
-        <h3 className="font-heading flex min-h-[2.7em] items-start gap-1 text-base leading-snug font-bold">
+        <h3 className="font-heading flex items-start gap-1 text-base leading-snug font-bold">
           <span className="line-clamp-2">{item.shortName || item.canonicalName}</span>
           <span className="shrink-0"><MethodNote title="Полное название">{item.canonicalName}</MethodNote></span>
         </h3>
@@ -188,9 +227,7 @@ function AllPlatformsBody({ item }: { item: OverviewItem }) {
         <span className="grid min-w-0 gap-0.5"><b className="font-heading tabular text-[27px] leading-none font-extrabold tracking-tight">{item.connectedPlatformCount}/4</b><small className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">площадок подключено</small><CoverageMeter connected={item.connectedPlatformCount} /></span>
         <span className="grid min-w-0 gap-0.5"><b className="font-heading tabular text-[27px] leading-none font-extrabold tracking-tight">{item.accountCount}</b><small className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">аккаунтов добавлено</small></span>
       </div>
-      <div className="border-border mt-auto min-h-[67px] border-t pt-3.5">
-        <div className={cn("font-semibold", status.kind === "ok" ? "text-success" : status.kind === "warn" ? "text-warning" : status.kind === "bad" ? "text-destructive" : "text-muted-foreground")}>{status.text}</div>
-      </div>
+      <StatusFooter item={item} />
     </>
   );
 }
@@ -205,7 +242,7 @@ function activityHref(item: OverviewItem): string {
   return queryHref("/review", { platform: item.platform });
 }
 
-const CARD = "bg-card text-card-foreground relative z-[1] flex min-h-[470px] min-w-0 flex-col rounded-xl border p-5 pt-6 shadow-sm transition-[transform,box-shadow] duration-200";
+const CARD = "bg-card text-card-foreground relative z-[1] flex min-w-0 flex-col rounded-xl border p-5 pt-6 shadow-sm transition-[transform,box-shadow] duration-200";
 
 export function OverviewCard({ item, integrationWarning }: { item: OverviewItem; integrationWarning: OverviewPage["integrationWarning"] }) {
   if (item.platform === "all") {

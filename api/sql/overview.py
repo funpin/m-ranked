@@ -116,6 +116,21 @@ WITH params AS (
     -- Публикации, вышедшие внутри окна.
     SELECT scope_platform, entity_id, count(*)::bigint AS new_count
       FROM publication_scope GROUP BY 1,2
+), publication_anomalies AS (
+    -- Один итоговый уровень на публикацию выбранной площадки и периода.
+    -- Контекстная перепроверка применяется так же, как в таблице постов.
+    SELECT scope.scope_platform, scope.entity_id,
+           count(*) FILTER (WHERE coalesce(recheck.effective_level, state.level)=2)::integer AS level2_count,
+           count(*) FILTER (WHERE coalesce(recheck.effective_level, state.level)=3)::integer AS level3_count
+      FROM publication_scope scope
+      JOIN analytics.post_anomaly_state state ON state.publication_id=scope.publication_id
+       AND state.analyzed_at IS NOT NULL
+      LEFT JOIN analytics.post_anomaly_context_recheck recheck
+        ON recheck.publication_id=state.publication_id
+       AND recheck.source_analyzed_at=state.analyzed_at
+       AND recheck.source_level=state.level
+       AND state.review_status='unreviewed'
+     GROUP BY 1,2
 ), account_summary AS (
     SELECT scope_platform, entity_id, count(*)::integer AS account_count,
            count(*) FILTER(WHERE enabled)::integer AS enabled_account_count,
@@ -148,6 +163,8 @@ WITH params AS (
            coalesce(totals.total_count,0) AS total_publication_count,
            coalesce(active.active_count,0) AS activity_publication_count,
            coalesce(fresh.new_count,0) AS new_publication_count,
+           coalesce(anomalies.level2_count,0) AS anomaly_level2_count,
+           coalesce(anomalies.level3_count,0) AS anomaly_level3_count,
            metrics.total_views, metrics.median_views,
            metrics.total_reactions, metrics.median_reactions,
            metrics.total_comments, metrics.median_comments,
@@ -187,6 +204,8 @@ WITH params AS (
         AND totals.entity_id=dimension.entity_id
       LEFT JOIN publication_new fresh ON fresh.scope_platform=dimension.scope_platform
         AND fresh.entity_id=dimension.entity_id
+      LEFT JOIN publication_anomalies anomalies ON anomalies.scope_platform=dimension.scope_platform
+        AND anomalies.entity_id=dimension.entity_id
       LEFT JOIN publication_active active ON active.scope_platform=dimension.scope_platform
         AND active.entity_id=dimension.entity_id
       LEFT JOIN LATERAL (
@@ -208,6 +227,7 @@ WITH params AS (
         CASE WHEN %(sort)s='name' AND %(direction)s='asc' THEN card.sort_name END ASC NULLS LAST,
         CASE WHEN %(sort)s='name' AND %(direction)s='desc' THEN card.sort_name END DESC NULLS LAST,
         CASE WHEN %(sort)s<>'name' AND %(direction)s='asc' THEN CASE %(sort)s
+            WHEN 'anomalies' THEN (card.anomaly_level2_count + card.anomaly_level3_count)::numeric
             WHEN 'm_rating' THEN card.rating_rank::numeric
             WHEN 'coverage' THEN card.connected_platform_count::numeric
             WHEN 'accounts' THEN card.account_count::numeric
@@ -217,6 +237,7 @@ WITH params AS (
             WHEN 'reactions' THEN card.total_reactions
             ELSE card.median_reactions END END ASC NULLS LAST,
         CASE WHEN %(sort)s<>'name' AND %(direction)s='desc' THEN CASE %(sort)s
+            WHEN 'anomalies' THEN (card.anomaly_level2_count + card.anomaly_level3_count)::numeric
             WHEN 'm_rating' THEN card.rating_rank::numeric
             WHEN 'coverage' THEN card.connected_platform_count::numeric
             WHEN 'accounts' THEN card.account_count::numeric

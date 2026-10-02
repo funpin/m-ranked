@@ -18,9 +18,9 @@ from .errors import BadRequest
 PLATFORMS = ("all", "telegram", "vk", "max", "rutube")
 PERIODS = ("3h", "1d", "7d", "30d")
 
-SORTS_ALL = frozenset({"name", "m_rating", "coverage", "accounts"})
+SORTS_ALL = frozenset({"anomalies", "name", "m_rating", "coverage", "accounts"})
 SORTS_PLATFORM = frozenset({"name", "subscribers", "posts", "views", "reactions",
-                            "median_reactions", "m_rating"})
+                            "median_reactions", "m_rating", "anomalies"})
 
 STATISTICS_VIEWS = frozenset({"publications", "entities"})
 STATISTICS_PUBLICATION_SORTS = frozenset({
@@ -117,7 +117,7 @@ def overview_query(platform_value: str | None, period_value: str | None,
         raise BadRequest("поисковый фрагмент длиннее 200 символов")
 
     supported = SORTS_ALL if resolved_platform == "all" else SORTS_PLATFORM
-    fallback = "m_rating" if resolved_platform == "all" else "median_reactions"
+    fallback = "anomalies"
     resolved_sort = sort if sort in supported else fallback
     resolved_direction = (direction if direction in ("asc", "desc")
                           else ("asc" if resolved_sort == "name" else "desc"))

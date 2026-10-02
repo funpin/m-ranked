@@ -9,7 +9,6 @@ import { ChannelSwitch } from "@/components/channel-switch";
 import { DeltaBadge, type DeltaTone } from "@/components/delta-badge";
 import { WeeklyTrend } from "@/components/weekly-trend";
 import { NavigationBoundary } from "@/components/navigation-boundary";
-import { MethodNote } from "@/components/method-note";
 import { AccountSkeleton } from "@/components/skeletons";
 import { DaySpotlight } from "@/components/day-spotlight";
 import { RowLink } from "@/components/row-link";
@@ -17,30 +16,19 @@ import { AnomalyLevelCell } from "@/components/anomaly-level-cell";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
 import type { TailProfileLoad } from "@/lib/account-tail";
 import { AccountTailCard } from "@/components/account-tail-card";
+import { InstitutionFacts } from "@/components/institution-facts";
+import { SummaryTile } from "@/components/summary-tile";
+import { FileText, History, Heart, MessageCircle, Eye, Trophy } from "lucide-react";
+import type { ReactNode } from "react";
 
 
-/**
- * Плитка сводки: крупное число, подпись и изменение под ними.
- *
- * Место под плашкой держится всегда, даже когда её нет: иначе шесть плиток
- * разъезжались бы по высоте в зависимости от того, у кого есть с чем
- * сравнивать.
- */
-function Tile({ value, label, note, delta, tone, deltaLabel }: {
-  value: string; label: string; note?: string;
-  delta?: number | null; tone?: DeltaTone; deltaLabel?: string;
+function Tile({ value, label, icon, note, delta, tone, deltaLabel, footer }: {
+  value: string; label: string; icon: ReactNode; note?: string;
+  delta?: number | null; tone?: DeltaTone; deltaLabel?: string; footer?: ReactNode;
 }) {
   return (
-    <div className="grid min-w-0 content-start gap-1 rounded-lg border p-4">
-      <b data-slot="account-summary-value" className="font-heading tabular text-3xl leading-none font-extrabold tracking-tight sm:text-4xl">{value}</b>
-      <small className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1">
-        {label}
-        {note ? <MethodNote title={label}>{note}</MethodNote> : null}
-      </small>
-      <span className="mt-1 block min-h-[22px]">
-        <DeltaBadge value={delta} tone={tone} label={deltaLabel ?? label} />
-      </span>
-    </div>
+    <SummaryTile value={value} label={label} icon={icon} note={note} footer={footer}
+      trailing={<DeltaBadge value={delta} tone={tone} label={deltaLabel ?? label} />} />
   );
 }
 
@@ -78,37 +66,40 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
         данными подменяются заготовкой — так же, как при смене фильтра в
         обзоре и при переходе между постами. */}
     <NavigationBoundary fallback={<AccountSkeleton chrome={false} />}>
-    <Card className="block p-5 text-sm">
-      {stats ? <><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{telegram ? `Данные ниже — по всем публикациям, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней.` : `Данные ниже — по всем публикациям ${PLATFORM_LONG_LABELS[account.platform]}, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Недоступные площадке метрики показываются прочерком.`}</p>
-      {/* Слева шесть чисел, справа один график за неделю. Линии внутри плиток
-          соперничали с самими числами и ничего толком не показывали: на ста
-          пикселях ширины форма недели не читается. */}
-      <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <Tile value={String(stats.postCount)} label="публикаций в базе"
+    <Card className="block p-4 text-sm sm:p-5">
+      <p className="text-xs leading-relaxed text-muted-foreground">{stats ? `Публикации ${PLATFORM_LONG_LABELS[account.platform]} в базе за последние ${stats.retentionDays} дней.${telegram ? "" : " Недоступные метрики — прочерк."}` : "Сводка публикаций ещё не рассчитана."}</p>
+      <div className="mt-3 grid min-w-0 items-stretch gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <section aria-label="Сводка вуза" className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-2">
+          {stats ? <>
+          <Tile value={String(stats.postCount)} label="публикаций в базе" icon={<FileText />}
             delta={change(stats.postCount, previous.postCount)} deltaLabel="публикаций за сутки" />
-          <Tile value={String(stats.monitored)} label={`с полной историей${telegram ? "" : " ⓘ"}`}
+          <Tile value={String(stats.monitored)} label="с полной историей" icon={<History />}
+            note="Публикации, для которых в базе отмечена полная история наблюдений. Показатель относится к аккаунту на выбранной площадке."
             delta={change(stats.monitored, previous.monitored)} deltaLabel="с полной историей за сутки" />
           <Tile value={stats.medianReactions.value === null ? "—" : String(Math.trunc(stats.medianReactions.value))}
-            label={`медиана ${primary}`} note={metricEvidence(stats.medianReactions)}
+            label={`медиана ${primary}`} icon={<Heart />} note={metricEvidence(stats.medianReactions)}
             delta={change(stats.medianReactions.value, previous.medianReactions)} />
           <Tile value={stats.medianComments.value === null ? "—" : String(Math.trunc(stats.medianComments.value))}
-            label="медиана комментариев" note={metricEvidence(stats.medianComments)}
+            label="медиана комментариев" icon={<MessageCircle />} note={metricEvidence(stats.medianComments)}
             delta={change(stats.medianComments.value, previous.medianComments)} />
           <Tile value={stats.medianViews.value === null ? "—" : String(Math.trunc(stats.medianViews.value))}
-            label="медиана просмотров" note={metricEvidence(stats.medianViews)}
+            label="медиана просмотров" icon={<Eye />} note={metricEvidence(stats.medianViews)}
             delta={change(stats.medianViews.value, previous.medianViews)} />
           {/* Место в рейтинге сравнивается с прошлым опубликованным месяцем, а
               не с прошлыми сутками: рейтинг выходит раз в месяц. И знак у него
               читается наоборот — подняться значит уменьшить номер. */}
           <Tile value={stats.ratingRank ? `№${stats.ratingRank}` : "—"}
-            label={`М‑Рейтинг ${PLATFORM_LABELS[account.platform]}${stats.ratingPeriod ? ` · ${stats.ratingPeriod}` : ""}`}
-            note={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[account.platform]}.`}
+            icon={<Trophy />}
+            label={`М‑Рейтинг ${PLATFORM_LABELS[account.platform]}`}
+            footer={stats.ratingPeriod ?? undefined}
+            note={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[account.platform]}${stats.ratingPeriod ? ` за период «${stats.ratingPeriod}»` : ""}.`}
             delta={change(stats.ratingRank, previous.ratingRank)} tone="rank"
             deltaLabel={previous.ratingPeriod ? `место против периода «${previous.ratingPeriod}»` : "место в рейтинге"} />
-        </div>
-        <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} />
-      </div></> : <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Сводка публикаций ещё не рассчитана.</p>}
+          </> : null}
+          <InstitutionFacts profile={account.institutionProfile} />
+        </section>
+        {stats ? <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} /> : null}
+      </div>
     </Card>
     {tailProfile ? <AccountTailCard profile={tailProfile} /> : null}
     <Card className="block p-5 text-sm mt-5 min-w-0 overflow-x-auto">

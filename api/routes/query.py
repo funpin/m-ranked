@@ -26,8 +26,8 @@ router = APIRouter(prefix="/api/v1", tags=["Query"])
 
 NO_STORE = {"Cache-Control": "no-store"}
 
-# Обзор и списки затрагиваются записью публикаций и справочника.
-OVERVIEW_TAGS = frozenset({"publications", "overview"})
+# Счётчики замечаний также меняются после анализа и контекстной перепроверки.
+OVERVIEW_TAGS = frozenset({"publications", "overview", "analysis"})
 DETAIL_TAGS = frozenset({"publications", "catalog"})
 COLLECTOR_INTERVAL_SECONDS = {"telegram": 300, "vk": 300, "max": 300, "rutube": 3600}
 
@@ -75,7 +75,7 @@ async def overview(
     platform: str = Query("all"),
     period: str = Query("1d"),
     q: str = Query(""),
-    sort: str = Query("median_reactions"),
+    sort: str = Query("anomalies"),
     direction: str | None = Query(None),
     limit: int = Query(50),
     cursor: str | None = Query(None),

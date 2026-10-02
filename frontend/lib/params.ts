@@ -9,6 +9,7 @@ export type SearchValue = string | string[] | undefined;
 export type SearchParams = Record<string, SearchValue>;
 
 export type OverviewSort =
+  | "anomalies"
   | "name"
   | "median_reactions"
   | "reactions"
@@ -57,11 +58,11 @@ export function normalizeSort(value: SearchValue, platform: Platform): OverviewS
     // расставляли вузы по величине, которая ничего не говорит об
     // активности. Прежние ссылки на них не ломаются — значение не из
     // списка приводится к сортировке по умолчанию ниже.
-    ? ["name", "m_rating"]
-    : ["name", "median_reactions", "m_rating", "reactions", "views", "posts", "subscribers"];
+    ? ["anomalies", "name", "m_rating"]
+    : ["anomalies", "name", "median_reactions", "m_rating", "reactions", "views", "posts", "subscribers"];
   return accepted.includes(normalized as OverviewSort)
     ? (normalized as OverviewSort)
-    : platform === "all" ? "m_rating" : "median_reactions";
+    : "anomalies";
 }
 
 export function normalizeDirection(value: SearchValue, sort: OverviewSort): "asc" | "desc" {

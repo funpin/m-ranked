@@ -531,7 +531,7 @@ def test_overview_rejects_broken_cursor(client) -> None:
 def test_overview_normalizes_unsupported_sort(client) -> None:
     """Неподдерживаемая сортировка не ошибка: прежний HTML откатывался к умолчанию."""
     fallback = client.get("/api/v1/overview?platform=all&sort=posts&limit=3")
-    default = client.get("/api/v1/overview?platform=all&sort=m_rating&limit=3")
+    default = client.get("/api/v1/overview?platform=all&sort=anomalies&limit=3")
     assert fallback.status_code == 200
     assert fallback.headers["etag"] == default.headers["etag"]
 

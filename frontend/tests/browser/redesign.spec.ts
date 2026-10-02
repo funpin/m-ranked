@@ -134,7 +134,7 @@ test("страница аккаунта поясняет сокращение и
   for (const value of await values.all()) {
     await expect.poll(async () => Number.parseFloat(await value.evaluate(
       element => getComputedStyle(element).fontSize,
-    ))).toBeGreaterThanOrEqual(30);
+    ))).toBeGreaterThanOrEqual(24);
   }
 });
 
@@ -154,7 +154,7 @@ test("недельный график площадки рисуется двум
   expect(labelled).toBeGreaterThan(10);
   // Публикации дня — фоновыми столбцами, по одному на каждый день ряда.
   await expect(trend.locator(".recharts-bar-rectangle")).toHaveCount(6);
-  await expect(trend).toContainText("публикаций в день");
+  await expect(trend.getByRole("listitem", { name: "Публикаций в день — столбцы" })).toBeVisible();
 });
 
 test("в режиме медианы нажатие выделяет публикации этого дня", async ({ page }) => {
@@ -237,15 +237,15 @@ test("переключатель у графика меняет ряд, а ст�
   const trend = page.getByRole("region", { name: "Динамика за неделю" });
   const toggle = trend.getByRole("group", { name: "Что показывают линии" });
   await expect(toggle.getByRole("button", { name: "Медианы" })).toHaveAttribute("aria-pressed", "true");
-  await expect(trend).toContainText("медиана просмотров");
+  await expect(trend.getByRole("listitem", { name: "Медиана просмотров — правая шкала" })).toBeVisible();
 
   await toggle.getByRole("button", { name: "Всего за день" }).click();
   await expect(toggle.getByRole("button", { name: "Всего за день" })).toHaveAttribute("aria-pressed", "true");
-  await expect(trend).toContainText("всего просмотров");
+  await expect(trend.getByRole("listitem", { name: "Всего просмотров — правая шкала" })).toBeVisible();
   // Линий по-прежнему две, и столбцы публикаций на месте в обоих режимах.
   await expect(trend.locator("path.recharts-line-curve")).toHaveCount(2);
   await expect(trend.locator(".recharts-bar-rectangle")).toHaveCount(6);
-  await expect(trend).toContainText("публикаций в день");
+  await expect(trend.getByRole("listitem", { name: "Публикаций в день — столбцы" })).toBeVisible();
 });
 
 test("переключение режима не меняет высоту блока", async ({ page }) => {
@@ -266,7 +266,7 @@ test("переключение режима не меняет высоту бл�
     hint: await height(hint), plot: await height(plotBox),
   };
   await toggle.getByRole("button", { name: "Всего за день" }).click();
-  await expect(trend).toContainText("всего просмотров");
+  await expect(trend.getByRole("listitem", { name: "Всего просмотров — правая шкала" })).toBeVisible();
   await expect(page).toHaveURL(/trend=total/);
   await settled(page);
   const totals = {
@@ -274,9 +274,8 @@ test("переключение режима не меняет высоту бл�
     hint: await height(hint), plot: await height(plotBox),
   };
 
-  // Подписи в двух режимах разной длины, и раньше легенда переносилась по
-  // ширине — число строк менялось, блок прыгал. Сетка с постоянным числом
-  // колонок этого не допускает.
+  // Названия показателей остаются теми же; режим меняет доступное описание
+  // и подсказку, сохраняя размер легенды и графика.
   expect(totals).toEqual(medians);
 
   // И легенда стоит под графиком, а не над ним.

@@ -117,7 +117,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                 </InputGroup>
               </div>
               <div className={FILTER_SORT_CLASS}>
-                <NativeSelect name="sort" defaultValue={sort} aria-label="Сортировка" title="Порядок карточек в списке" className={FILTER_SELECT_CLASS}>
+                <NativeSelect name="sort" defaultValue={sort} aria-label="Сортировка" title={sort === "anomalies" ? "Сумма красных и оранжевых счётчиков за выбранный период" : "Порядок карточек в списке"} className={FILTER_SELECT_CLASS}>
+                  <NativeSelectOption value="anomalies">Количество аномалий</NativeSelectOption>
                   <NativeSelectOption value="name">Название вуза · алфавит</NativeSelectOption>
                   {platform === "all" ? (
                     <>

@@ -11,7 +11,11 @@ from __future__ import annotations
 INSTITUTION = """
 WITH selected AS (
     SELECT institution.id AS institution_id, alias.legacy_id,
-           institution.canonical_name, institution.short_name
+           institution.canonical_name, institution.short_name,
+           least(institution.created_at, (
+               SELECT min(enrollment.created_at) FROM catalog.platform_account enrollment
+                WHERE enrollment.institution_id=institution.id
+           )) AS institution_tracking_started_at
       FROM catalog.legacy_entity_alias alias
       JOIN catalog.visible_institution institution ON institution.id=alias.target_uuid
      WHERE alias.entity_type='institutions' AND alias.legacy_id=%(legacy_id)s
@@ -80,7 +84,7 @@ SELECT selected.*,
        %(as_of)s::timestamptz AS as_of
   FROM selected CROSS JOIN metadata LEFT JOIN metric ON true
  GROUP BY selected.institution_id,selected.legacy_id,selected.canonical_name,
-          selected.short_name,metadata.body
+          selected.short_name,selected.institution_tracking_started_at,metadata.body
 """
 
 
@@ -106,7 +110,11 @@ WITH target AS (
 SELECT account.id AS account_id, canonical.legacy_id, canonical.entity_type,
        aliases.channel_legacy_id, aliases.platform_account_legacy_id,
        institution.id AS institution_id, institution_alias.legacy_id AS institution_legacy_id,
-       institution.canonical_name, institution.short_name, account.platform::text AS platform,
+       institution.canonical_name, institution.short_name,
+       least(institution.created_at, (
+               SELECT min(enrollment.created_at) FROM catalog.platform_account enrollment
+                WHERE enrollment.institution_id=institution.id
+           )) AS institution_tracking_started_at, account.platform::text AS platform,
        account.canonical_external_id, account.current_username, account.current_title,
        account.current_url, native.external_id AS native_external_id,
        account.access_mode::text AS access_mode, account.enabled,
@@ -296,6 +304,10 @@ SELECT count(*)::bigint AS total
 INSTITUTION_ACCOUNTS = """
 WITH page AS (
     SELECT account.*, institution.canonical_name, institution.short_name,
+           least(institution.created_at, (
+               SELECT min(enrollment.created_at) FROM catalog.platform_account enrollment
+                WHERE enrollment.institution_id=institution.id
+           )) AS institution_tracking_started_at,
            institution_alias.legacy_id AS institution_legacy_id
       FROM catalog.legacy_entity_alias institution_alias
       JOIN catalog.visible_institution institution ON institution.id=institution_alias.target_uuid

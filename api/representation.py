@@ -13,6 +13,7 @@ import pathlib
 
 CONTRACT = pathlib.Path(__file__).resolve().parents[1] / "contracts/openapi/m-ranked-v1.yaml"
 BUILD_INFO = pathlib.Path(__file__).resolve().parent / "build_info.txt"
+STUDENT_COUNTS = pathlib.Path(__file__).resolve().parent / "data/institution-student-counts.json"
 
 
 def _build_identity() -> bytes:
@@ -33,4 +34,7 @@ def representation_version() -> str:
     digest.update(CONTRACT.read_bytes())
     digest.update(b"\x00")
     digest.update(_build_identity())
+    # Reviewed external facts can change independently of a DB revision.
+    digest.update(b"\x00")
+    digest.update(STUDENT_COUNTS.read_bytes())
     return digest.hexdigest()

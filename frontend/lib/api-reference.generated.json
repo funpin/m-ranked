@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "6ca39188fc1882432ca6b54c784bde0403096434459336641e012fb8f66f0c49",
+  "sourceSha256": "f3d1c042dc633a2d56426e35909a82281b73482d8776cd830e71e89858b7033c",
   "version": "1.0.0",
   "operations": [
     {
@@ -68,6 +68,7 @@
           "required": false,
           "type": "string",
           "enum": [
+            "anomalies",
             "name",
             "median_reactions",
             "m_rating",
@@ -78,7 +79,7 @@
             "coverage",
             "accounts"
           ],
-          "default": "median_reactions"
+          "default": "anomalies"
         },
         {
           "name": "direction",
@@ -191,6 +192,10 @@
         {
           "name": "shortName",
           "type": "string | null"
+        },
+        {
+          "name": "institutionProfile",
+          "type": "object"
         },
         {
           "name": "platform",
@@ -1106,6 +1111,10 @@
         {
           "name": "institutionShortName",
           "type": "string | null"
+        },
+        {
+          "name": "institutionProfile",
+          "type": "object"
         },
         {
           "name": "platform",

@@ -21,7 +21,7 @@ export type TrendMode = "median" | "total";
 // публикации: в первой загрузке страницы площадки ей делать нечего.
 const AccountTrendPlot = dynamic(() => import("@/components/account-trend-plot"), {
   ssr: false,
-  loading: () => <Skeleton className="h-[280px] w-full" role="status" aria-label="Загрузка графика" />,
+  loading: () => <Skeleton className="h-[280px] w-full sm:h-[320px]" role="status" aria-label="Загрузка графика" />,
 });
 
 const MODES: { id: TrendMode; label: string; hint: string }[] = [
@@ -50,47 +50,46 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend }: { p
   const published = points.reduce((total, point) => total + point.publishedCount, 0);
   const totals = mode === "total";
   return (
-    <section className="grid min-w-0 content-start gap-3 rounded-lg border p-4" aria-label="Динамика за неделю">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <b className="text-sm font-semibold">Неделя</b>
-        <span className="text-muted-foreground text-xs">
+    <section className="grid min-w-0 content-start gap-2 rounded-lg border border-border/70 bg-background/30 p-3" aria-label="Динамика за неделю">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold leading-5">Неделя</h2>
+          <span className="block text-xs leading-4 text-muted-foreground">
           {published ? <>вышло <b className="text-foreground tabular">{published}</b> публикаций за 7 дней</> : "за 7 дней публикаций не было"}
-        </span>
-      </div>
-      <ToggleGroup aria-label="Что показывают линии" variant="outline" spacing={0} value={[mode]}
+          </span>
+        </div>
+        <ToggleGroup aria-label="Что показывают линии" spacing={1} value={[mode]}
+          className="shrink-0 rounded-lg bg-muted/70 p-0.5"
         onValueChange={(next) => {
           // Base UI reports an empty selection when the pressed item is toggled off.
           const selected = MODES.find((option) => option.id === next[0]);
           if (selected) chooseMode(selected.id);
         }}>
-        {MODES.map((option) => <ToggleGroupItem key={option.id} value={option.id} title={option.hint}>{option.label}</ToggleGroupItem>)}
-      </ToggleGroup>
+          {MODES.map((option) => <ToggleGroupItem key={option.id} value={option.id} title={option.hint}
+            className="px-2.5 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm">{option.label}</ToggleGroupItem>)}
+        </ToggleGroup>
+      </div>
       {points.length > 1
         ? <>
             <AccountTrendPlot points={points} primary={primary} mode={mode} selectedDay={selectedDay} />
-            {/* Легенда под графиком и всегда в три колонки на широком экране,
-                в три строки на узком. Раньше она переносилась по ширине, а
-                подписи в двух режимах разной длины — «медиана лайков» против
-                «всего лайков», — поэтому при переключении менялось число строк
-                и блок прыгал по высоте. Сетка с постоянным числом колонок этого
-                не допускает: от режима высота больше не зависит. */}
-            <ul className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-3" aria-hidden="true">
+            {/* Режим указан в переключателе; легенда связывает цвет с
+                показателем и шкалой и сохраняет высоту при смене режима. */}
+            <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground" aria-label="Легенда графика">
               {[
-                { color: "var(--muted-foreground)", faded: true, name: "публикаций в день", side: "фоном" },
-                { color: "var(--chart-1)", name: totals ? `всего ${primary}` : `медиана ${primary}`, side: "слева" },
-                { color: "var(--chart-2)", name: totals ? "всего просмотров" : "медиана просмотров", side: "справа" },
+                { color: "var(--muted-foreground)", faded: true, name: "Публикации", side: "", description: "Публикаций в день — столбцы" },
+                { color: "var(--chart-1)", name: primary === "лайков" ? "Лайки" : "Реакции", side: "слева", description: `${totals ? "Всего" : "Медиана"} ${primary} — левая шкала` },
+                { color: "var(--chart-2)", name: "Просмотры", side: "справа", description: `${totals ? "Всего" : "Медиана"} просмотров — правая шкала` },
               ].map((item) => (
-                <li key={item.side} className="flex min-w-0 items-center gap-1.5">
-                  <span className={cn("size-2.5 shrink-0 rounded-[2px]", item.faded && "opacity-40")}
+                <li key={item.name} className="flex items-center gap-1.5 whitespace-nowrap" aria-label={item.description} title={item.description}>
+                  <span aria-hidden="true" className={cn("shrink-0 rounded-[2px]", item.faded ? "size-2 opacity-40" : "h-0.5 w-3")}
                     style={{ background: item.color }} />
-                  <span className="truncate">{item.name}</span>
-                  <span className="text-muted-foreground shrink-0">· {item.side}</span>
+                  <span>{item.name}{item.side && <> <span className="text-muted-foreground">· {item.side}</span></>}</span>
                 </li>
               ))}
             </ul>
-            <p className="text-muted-foreground min-h-[3.25rem] text-xs">{totals
-              ? "Нажмите на день — покажем прирост каждой публикации за эти сутки в таблице ниже."
-              : "Нажмите на день — покажем публикации, вышедшие в этот день."}</p>
+            <p className="min-h-8 text-xs leading-4 text-muted-foreground sm:min-h-4">{totals
+              ? "Выберите день на графике — покажем суточный прирост."
+              : "Выберите день на графике — покажем его публикации."}</p>
           </>
         : <p className="text-muted-foreground py-10 text-center text-sm">Недельного ряда ещё нет.</p>}
     </section>

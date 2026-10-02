@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { createApiClient } from "../lib/api";
-import { forgetAuthoritativeState, publicCacheKey, revisionCachedResponse, type PublicRepresentation, type PublicResponseCache } from "../lib/revision-cache";
+import { FRESHNESS_MS, forgetAuthoritativeState, publicCacheKey, revisionCachedResponse, type PublicRepresentation, type PublicResponseCache } from "../lib/revision-cache";
 
 function memory() {
   const entries = new Map<string, PublicRepresentation>();
@@ -13,7 +13,11 @@ function memory() {
   return { cache, entries };
 }
 
-test.beforeEach(() => forgetAuthoritativeState());
+test.beforeEach(() => {
+  forgetAuthoritativeState();
+  mock.method(Date, "now", () => 200_000);
+});
+test.afterEach(() => mock.restoreAll());
 
 test("public cache keys include full canonical query, origin, domain and revision; private routes excluded", () => {
   const url = new URL("https://api.test/api/v1/compare?platform=vk&institutions=9&institutions=1&period=1d");
@@ -77,6 +81,28 @@ test("real generated transport asks for the authoritative revision once per wind
   await client.overview({ platform: "vk", period: "1d" });
   await client.overview({ platform: "vk", period: "1d" });
   assert.deepEqual(requests, ["/api/v1/revision", "/api/v1/overview"]);
+});
+
+test("overview reuses its freshness window and revalidates changed analysis at the same dataset revision", async (t) => {
+  const { cache, entries } = memory();
+  let level3 = 1, now = 200_000;
+  t.mock.method(Date, "now", () => now);
+  const validators: (string | null)[] = [];
+  const client = createApiClient({ baseUrl: "https://api.test", publicCache: cache, fetcher: async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/api/v1/revision") return Response.json({ datasetRevision: 17, representationVersion: "a".repeat(64) });
+    assert.equal(path, "/api/v1/overview");
+    validators.push(new Headers(init?.headers).get("If-None-Match"));
+    return Response.json({ items: [{ anomalyCounts: { level2: 0, level3 } }], datasetRevision: 17 }, { headers: { ETag: `"analysis-${level3}"` } });
+  } });
+  assert.equal((await client.overview({ platform: "vk", period: "1d" })).items[0].anomalyCounts?.level3, 1);
+  level3 = 2;
+  assert.equal((await client.overview({ platform: "vk", period: "1d" })).items[0].anomalyCounts?.level3, 1);
+  assert.equal(validators.length, 1, "repeated readers do not query the API within the window");
+  now += FRESHNESS_MS;
+  assert.equal((await client.overview({ platform: "vk", period: "1d" })).items[0].anomalyCounts?.level3, 2);
+  assert.deepEqual(validators, [null, '"analysis-1"']);
+  assert.equal(entries.size, 2, "a changed time window cannot reuse counts indefinitely");
 });
 
 test("a representation deployment at unchanged PG revision cannot reuse an earlier DTO", async () => {

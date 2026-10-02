@@ -6,6 +6,8 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from .institution_profile import institution_profile
+
 
 def iso(value: Any) -> Any:
     return value.isoformat() if hasattr(value, "isoformat") else value
@@ -129,6 +131,10 @@ def overview_row(card: dict[str, Any], accounts: list[dict[str, Any]], revision:
         "totalPublicationCount": card["total_publication_count"] or 0,
         "activityPublicationCount": card["activity_publication_count"] or 0,
         "newPublicationCount": card["new_publication_count"] or 0,
+        "anomalyCounts": {
+            "level2": card.get("anomaly_level2_count") or 0,
+            "level3": card.get("anomaly_level3_count") or 0,
+        },
         "views": metric(card["total_views"], card["median_views"], as_of, revision,
                         card["views_samples"], denominator,
                         card["previous_total_views"], card["previous_median_views"],
@@ -195,6 +201,7 @@ def institution(row: dict[str, Any], platform: str, period: str, revision: int) 
         "canonicalName": row["canonical_name"],
         "shortName": row["short_name"],
         "platform": platform,
+        "institutionProfile": institution_profile(row),
         "period": period,
         "metrics": {
             "totalReactions": number(row["total_reactions"]),
@@ -287,6 +294,7 @@ def account(row: dict[str, Any], revision: int, stats: dict[str, Any] | None = N
         "institutionLegacyId": row["institution_legacy_id"],
         "institutionName": row["canonical_name"],
         "institutionShortName": row["short_name"],
+        "institutionProfile": institution_profile(row),
         "platform": row["platform"],
         "canonicalExternalId": row["canonical_external_id"],
         "username": row["current_username"],
