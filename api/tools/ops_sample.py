@@ -285,16 +285,50 @@ def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: 
     return sample
 
 
-def store(dsn: str, sample: dict[str, Any]) -> None:
+# Итоги сбора по аккаунтам, завершённым с прошлого снимка. Сначала — циклы
+# последних двух часов по индексу (platform, started_at): цикл Rutube длинный.
+# Их десятки, и результаты аккаунтов подтягиваются по уникальному индексу
+# (collection_run_id, platform_account_id), а не просмотром всей таблицы.
+COLLECTION = """
+WITH runs AS MATERIALIZED (
+  SELECT id, platform FROM ingest.collection_run
+  WHERE platform IN ('telegram','vk','max','rutube')
+    AND started_at >= to_timestamp(%(since)s) - interval '2 hours'
+)
+SELECT runs.platform::text AS platform,
+  count(*) FILTER (WHERE result.status='succeeded') AS ok,
+  count(*) FILTER (WHERE result.status IN ('failed','partial')) AS failed,
+  count(*) FILTER (WHERE result.status NOT IN ('succeeded','failed','partial')) AS other,
+  extract(epoch FROM max(result.completed_at) FILTER (WHERE result.status='succeeded')) AS last_ok
+FROM runs
+CROSS JOIN LATERAL (
+  SELECT status, completed_at FROM ingest.collection_account_result
+  WHERE collection_run_id=runs.id
+    AND completed_at > to_timestamp(%(since)s) AND completed_at <= to_timestamp(%(until)s)
+) result
+GROUP BY runs.platform
+"""
+
+
+def collection(connection: Any, since: float, until: float) -> dict[str, dict[str, Any]]:
+    rows = connection.execute(COLLECTION, {"since": since, "until": until}).fetchall()
+    return {row[0]: {"ok": row[1], "failed": row[2], "other": row[3],
+                     "lastOk": float(row[4]) if row[4] is not None else None} for row in rows}
+
+
+def store(dsn: str, sample: dict[str, Any], state: dict[str, Any], now: float) -> None:
     import psycopg
 
     with psycopg.connect(dsn, connect_timeout=10) as connection:
         connection.execute("SET statement_timeout = '10s'")
+        since = state.get("collectionAt") or now - 300
+        sample["collection"] = collection(connection, since, now)
         connection.execute("INSERT INTO ops_and_admin.host_sample(sample) VALUES (%s::jsonb)",
                            (json.dumps(sample),))
         connection.execute(
             "DELETE FROM ops_and_admin.host_sample WHERE observed_at < now() - make_interval(days => %s)",
             (RETENTION_DAYS,))
+    state["collectionAt"] = now
 
 
 def main() -> int:
@@ -321,7 +355,7 @@ def main() -> int:
             "OPS_SAMPLE_SIZE_PATHS",
             "releases=/opt/m-ranked,state=/var/lib/m-ranked,pageCache=/var/cache/nginx")))
     try:
-        store(dsn, sample)
+        store(dsn, sample, state, now)
     except Exception as error:  # noqa: BLE001 — снимок необязателен, причина в журнал
         logger.error("снимок не записан: %s", type(error).__name__)
         return 1

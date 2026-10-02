@@ -102,3 +102,22 @@ def test_build_measures_sizes_once_an_hour(tmp_path: Path) -> None:
     assert "sizes" not in ops_sample.build(state, 1300.0, **kwargs)
     assert "sizes" in ops_sample.build(state, 1000.0 + 3600, **kwargs)
     json.dumps(first)
+
+
+def test_collection_window_starts_where_the_previous_sample_ended() -> None:
+    calls = []
+
+    class Connection:
+        def execute(self, sql, params):
+            calls.append(params)
+
+            class Cursor:
+                @staticmethod
+                def fetchall():
+                    return [("vk", 80, 2, 0, 1000.5), ("rutube", 0, 1, 0, None)]
+            return Cursor()
+
+    result = ops_sample.collection(Connection(), 700.0, 1000.0)
+    assert calls == [{"since": 700.0, "until": 1000.0}]
+    assert result == {"vk": {"ok": 80, "failed": 2, "other": 0, "lastOk": 1000.5},
+                      "rutube": {"ok": 0, "failed": 1, "other": 0, "lastOk": None}}

@@ -987,6 +987,46 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/system:
+    get:
+      tags:
+      - Admin
+      operationId: getSystemOverview
+      summary: getSystemOverview
+      description: >-
+        Requires VIEWER, EDITOR or ADMIN. Server state from the five-minute samples of the ops-sample
+        timer: health checks, host resources, pipeline timestamps, collection outcomes and chart series
+        (five-minute points for a day, hourly points for a week). Cached for a minute per API process.
+      security:
+      - adminSession: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - day
+          - week
+          default: day
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSystem'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/catalog/institutions:
     get:
       tags:
@@ -2766,6 +2806,276 @@ components:
           description: Oldest first, zero-filled, the last item is today.
           items:
             $ref: '#/components/schemas/AdminVisitorDay'
+    AdminSystemCheck:
+      type: object
+      additionalProperties: false
+      required:
+      - key
+      - label
+      - state
+      - detail
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        state:
+          type: string
+          enum:
+          - ok
+          - warn
+          - fail
+          - unknown
+        detail:
+          type: string
+    AdminSystemPoint:
+      type: object
+      additionalProperties: false
+      required:
+      - at
+      - cpu
+      - memory
+      - load
+      - requestsPerMinute
+      - humanErrors
+      - botRejected
+      - hitRatio
+      - p95Ms
+      - analysisLagMinutes
+      - ingestDelayMinutes
+      - collectedOk
+      - collectedFailed
+      properties:
+        at:
+          type: string
+          format: date-time
+        cpu:
+          type:
+          - number
+          - 'null'
+        memory:
+          type:
+          - number
+          - 'null'
+        load:
+          type:
+          - number
+          - 'null'
+        requestsPerMinute:
+          type:
+          - number
+          - 'null'
+        humanErrors:
+          type: integer
+          minimum: 0
+        botRejected:
+          type: integer
+          minimum: 0
+        hitRatio:
+          type:
+          - number
+          - 'null'
+        p95Ms:
+          type:
+          - number
+          - 'null'
+        analysisLagMinutes:
+          type:
+          - number
+          - 'null'
+        ingestDelayMinutes:
+          type:
+          - number
+          - 'null'
+        collectedOk:
+          type: integer
+          minimum: 0
+        collectedFailed:
+          type: integer
+          minimum: 0
+    AdminSystem:
+      type: object
+      additionalProperties: false
+      required:
+      - range
+      - sampledAt
+      - checks
+      - host
+      - pipeline
+      - restarts
+      - collection
+      - series
+      properties:
+        range:
+          type: string
+          enum:
+          - day
+          - week
+        sampledAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminSystemCheck'
+        host:
+          type:
+          - object
+          - 'null'
+          additionalProperties: false
+          required:
+          - cpuPercent
+          - cores
+          - load
+          - memoryTotalBytes
+          - memoryUsedBytes
+          - swapUsedBytes
+          - diskTotalBytes
+          - diskFreeBytes
+          - unitsActive
+          - unitsTotal
+          - failedUnits
+          properties:
+            cpuPercent:
+              type:
+              - number
+              - 'null'
+            cores:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            load:
+              type: array
+              items:
+                type: number
+            memoryTotalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            memoryUsedBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            swapUsedBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            diskTotalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            diskFreeBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            unitsActive:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            unitsTotal:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            failedUnits:
+              type: array
+              items:
+                type: string
+        pipeline:
+          type:
+          - object
+          - 'null'
+          additionalProperties: false
+          required:
+          - ingestAcceptedAt
+          - analysisLagSeconds
+          - analysisBacklog
+          - analysisCompletedAt
+          - normsRunAt
+          - tailRunAt
+          - backupAt
+          properties:
+            ingestAcceptedAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            analysisLagSeconds:
+              type:
+              - number
+              - 'null'
+            analysisBacklog:
+              type:
+              - number
+              - 'null'
+            analysisCompletedAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            normsRunAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            tailRunAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            backupAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+        restarts:
+          type: object
+          description: Automatic restarts of long-running services during the period.
+          additionalProperties:
+            type: integer
+            minimum: 1
+        collection:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - platform
+            - ok
+            - failed
+            - lastOkAt
+            properties:
+              platform:
+                type: string
+                enum:
+                - telegram
+                - vk
+                - max
+                - rutube
+              ok:
+                type: integer
+                minimum: 0
+              failed:
+                type: integer
+                minimum: 0
+              lastOkAt:
+                type:
+                - string
+                - 'null'
+                format: date-time
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminSystemPoint'
     AdminCatalogStatus:
       type: object
       additionalProperties: false
