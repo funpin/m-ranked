@@ -621,6 +621,7 @@ API master перед каждым стартом удаляет только
 
 - `HEALTH.md` — что означает каждый health-endpoint;
 - `BACKUP_RESTORE.md` — резервные копии и проверка восстановления;
+- `ADMIN_PANEL.md` — снимки сервера, посетители без cookie и авторы в шапке;
 - `docs/architecture/security/dependency-policy.md` — пороги выпуска по CVE.
 
 ## Storage rollout gate
