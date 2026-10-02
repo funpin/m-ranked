@@ -143,7 +143,7 @@ function Storage({ status }: { status: CatalogStatus | null }) {
   ];
   return (
     <Section title="Использование хранилища" className="mt-5"
-      description="Проект — релизы, данные служб, кэш страниц nginx и база. Каталоги меряются раз в час, доли считаются от занятого места на разделе."
+      description="Проект — релизы, данные служб, кэш страниц nginx и база. Каталоги меряются раз в 6 часов, доли считаются от занятого места на разделе."
       action={<Pill>Свободно {bytes(free)}</Pill>}>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((row) => (
@@ -151,7 +151,7 @@ function Storage({ status }: { status: CatalogStatus | null }) {
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-xs"><span>{row.name}</span><b>{row.value}</b></div>
             <Progress className="my-2 [&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-track]]:rounded-full" aria-label={row.name}
               value={row.percent === null ? null : Math.min(100, row.percent)} />
-            <small className="text-muted-foreground block text-xs">{row.percent === null ? row.kind === "project" ? "Первый замер каталогов — в течение часа после запуска снимков" : "Размер не предоставлен сервером" : `${row.percent}% ${row.note}`}</small>
+            <small className="text-muted-foreground block text-xs">{row.percent === null ? row.kind === "project" ? "Первый замер каталогов — с первым снимком сервера" : "Размер не предоставлен сервером" : `${row.percent}% ${row.note}`}</small>
             {"detail" in row && row.detail ? <small className="text-muted-foreground mt-1 block text-xs">{row.detail}</small> : null}
           </article>
         ))}

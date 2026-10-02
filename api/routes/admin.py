@@ -366,7 +366,7 @@ async def catalog_accounts(id: uuid.UUID, request: Request,
 
 
 def _project_size(row: Any, database_bytes: int | None) -> tuple[int | None, dict[str, Any] | None]:
-    """Весь проект: каталоги из часового замера снимка сервера плюс база.
+    """Весь проект: каталоги из последнего замера снимка сервера плюс база.
 
     Раньше API сам обходил дерево релиза и сдавался на первом нечитаемом
     каталоге (.next/cache принадлежит веб-службе) — панель писала «размер не

@@ -102,7 +102,7 @@ SELECT (SELECT count(*) FROM catalog.visible_platform_account account
           AND value->>'present'='true') THEN 'legacy_source_error' ELSE NULL END)) AS rating
 """
 
-# Последний снимок сервера с часовым замером каталогов: просмотр идёт по
+# Последний снимок сервера с замером каталогов: просмотр идёт по
 # первичному ключу с конца и останавливается на первой подходящей строке.
 PROJECT_SIZES = """
 SELECT observed_at, sample->'sizes' AS sizes FROM ops_and_admin.host_sample

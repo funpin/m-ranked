@@ -6,7 +6,7 @@
 node_exporter. Снимок — одна строка JSON в ops_and_admin.host_sample; панель
 читает готовые строки и ничего не считает на запрос.
 
-Размеры каталогов проекта меряются раз в час: обход дерева страничного кэша
+Размеры каталогов проекта меряются раз в шесть часов: обход страничного кэша
 стоит заметно дороже всего остального снимка. Хранится 30 суток — около
 8 640 строк по килобайту.
 """
@@ -28,7 +28,7 @@ logger = logging.getLogger("ops-sample")
 
 VERSION = 1
 RETENTION_DAYS = 30
-SIZE_INTERVAL_SECONDS = 3600
+SIZE_INTERVAL_SECONDS = 6 * 3600
 BOT_CLASSES = frozenset({"ai_user", "ai_search", "ai_training", "crawler"})
 CACHE_HITS = frozenset({"HIT", "STALE", "UPDATING", "REVALIDATED"})
 # Не больше 64 МБ журнала за проход и 20 000 времён ответа на перцентили:

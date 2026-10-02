@@ -47,7 +47,7 @@ StateDirectoryMode=0700
 RuntimeDirectory=m-ranked-ops-sample
 RuntimeDirectoryMode=0700
 UMask=0077
-# Снимок — доли секунды; раз в час обход каталогов на несколько секунд.
+# Снимок — доли секунды; раз в 6 часов du по каталогам проекта (~15 с).
 CPUQuota=25%
 Nice=15
 IOSchedulingClass=idle

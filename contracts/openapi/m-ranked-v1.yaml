@@ -3177,7 +3177,7 @@ components:
               - object
               - 'null'
               additionalProperties: false
-              description: Размеры каталогов из последнего часового замера снимка сервера.
+              description: Размеры каталогов из последнего замера снимка сервера (раз в 6 часов).
               required:
               - releasesBytes
               - stateBytes

@@ -80,7 +80,7 @@ def test_directory_size_takes_du_total_even_when_parts_are_unreadable(tmp_path: 
     assert ops_sample.directory_bytes(tmp_path, lambda *a, **k: subprocess.CompletedProcess(a, 1, "", "")) is None
 
 
-def test_build_measures_sizes_once_an_hour(tmp_path: Path) -> None:
+def test_build_measures_sizes_on_schedule(tmp_path: Path) -> None:
     proc = tmp_path / "proc"
     proc.mkdir()
     (proc / "stat").write_text("cpu  1 2 3 4 5 6 7 8\n")
@@ -96,7 +96,7 @@ def test_build_measures_sizes_once_an_hour(tmp_path: Path) -> None:
     first = ops_sample.build(state, 1000.0, **kwargs)
     assert first["load"] == [0.1, 0.2, 0.3] and "sizes" in first and first["traffic"] is None
     assert "sizes" not in ops_sample.build(state, 1300.0, **kwargs)
-    assert "sizes" in ops_sample.build(state, 1000.0 + 3600, **kwargs)
+    assert "sizes" in ops_sample.build(state, 1000.0 + ops_sample.SIZE_INTERVAL_SECONDS, **kwargs)
     json.dumps(first)
 
 
