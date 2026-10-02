@@ -110,3 +110,32 @@ test("catalog forms submit with JavaScript disabled", async ({ browser }) => {
     expect(posted?.get("expected_row_version")).toBe("0");
   } finally { await context.close(); }
 });
+
+test("admin tabs show visitors and system state and the table scrolls inside its card",async({page})=>{
+  await signIn(page,"viewer");
+  const scroll=page.getByTestId("platform-table-scroll");
+  await expect(scroll).toHaveCSS("overflow-y","auto");
+  await expect(page.getByTestId("platform-table").locator("thead")).toHaveCSS("position","sticky");
+  await expect(page.getByRole("button",{name:"Отключить",exact:true}).first()).toBeVisible();
+
+  await page.getByRole("link",{name:"Посетители"}).click();
+  await expect(page.getByRole("heading",{name:"Посетители сайта"})).toBeVisible();
+  await expect(page.getByTestId("online-now")).toContainText("3");
+  await expect(page.locator('[data-slot="chart"]')).toHaveCount(1);
+  await page.getByRole("link",{name:"Месяц"}).click();
+  await expect(page).toHaveURL(/tab=visitors&range=month/);
+
+  await page.getByRole("link",{name:"Система"}).click();
+  await expect(page.getByRole("heading",{name:"Состояние системы"})).toBeVisible();
+  await expect(page.getByTestId("system-checks").locator("li")).toHaveCount(11);
+  await expect(page.getByText("1 требует внимания")).toBeVisible();
+  await expect(page.locator('[data-slot="chart"]')).toHaveCount(5);
+  await expect(page.locator('[data-storage="project"]')).toContainText("релизы 1.0 ГБ");
+});
+
+for(const tab of ["visitors","system"]) test(`admin ${tab} tab passes accessibility checks`,async({page})=>{
+  await signIn(page,"admin");
+  await page.goto(`/manage?tab=${tab}`);
+  await expect(page.locator('[data-slot="chart"]').first()).toBeVisible();
+  expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
+});

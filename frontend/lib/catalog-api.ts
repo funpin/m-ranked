@@ -4,6 +4,9 @@ export type ManagedAccount=components["schemas"]["AdminManagedAccount"];
 export type ManagedInstitution=components["schemas"]["AdminManagedInstitution"];
 export type OfficialRating=components["schemas"]["AdminOfficialRating"];
 export type CatalogStatus=components["schemas"]["AdminCatalogStatus"];
+export type Visitors=components["schemas"]["AdminVisitors"];
+export type SystemOverview=components["schemas"]["AdminSystem"];
+export type SystemPoint=components["schemas"]["AdminSystemPoint"];
 export class CatalogApiError extends Error {constructor(readonly status:number,message:string){super(message);}}
 type Fetcher=(input:string|URL,init?:RequestInit)=>Promise<Response>;
 
@@ -57,5 +60,7 @@ export function catalogReader(incoming:Headers,fetcher:Fetcher=fetch,base=proces
       throw new CatalogApiError(502,"Каталог превысил допустимый размер чтения. Полный список не загружен.");
     },
     status:()=>request(client.GET("/api/v1/admin/catalog/status")),
+    visitors:(range:"week"|"month")=>request(client.GET("/api/v1/admin/visitors",{params:{query:{range}}})),
+    system:(range:"day"|"week")=>request(client.GET("/api/v1/admin/system",{params:{query:{range}}})),
   };
 }

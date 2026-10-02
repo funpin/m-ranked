@@ -215,6 +215,30 @@ const server = createServer(async (request, response) => {
     response.setHeader("Set-Cookie",`__Host-mranked-admin=fixture-${role}; Path=/; Secure; HttpOnly; SameSite=Strict`);
     return json({headerName:"X-XSRF-TOKEN",parameterName:"_csrf",token:"fixture-csrf-token",expiresAt:asOf,canEdit:role!=="viewer",canDelete:role==="admin"},201);
   }
+  if(url.pathname==="/api/v1/admin/visitors") {
+    if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
+    const length=url.searchParams.get("range")==="month"?30:7;
+    const days=Array.from({length},(_,index)=>{const day=new Date(Date.UTC(2026,8,30-length+1+index));return {day:day.toISOString().slice(0,10),visitors:40+((index*37)%55),views:120+((index*53)%140)};});
+    return json({range:length===30?"month":"week",online:3,onlineWindowSeconds:300,today:days[days.length-1],days});
+  }
+  if(url.pathname==="/api/v1/admin/system") {
+    if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
+    const week=url.searchParams.get("range")==="week";
+    const count=week?168:288,step=week?3600_000:300_000,end=Date.parse("2026-09-30T12:00:00Z");
+    const series=Array.from({length:count},(_,index)=>({at:new Date(end-(count-1-index)*step).toISOString(),cpu:20+(index*7)%35,memory:55+(index*3)%20,load:0.4+((index*11)%30)/20,
+      requestsPerMinute:30+(index*13)%60,humanErrors:index%41===0?2:0,botRejected:index%17===0?5:0,hitRatio:80+(index*5)%18,p95Ms:120+(index*29)%400,
+      analysisLagMinutes:3+(index*7)%25,ingestDelayMinutes:(index*3)%6,collectedOk:200+(index*17)%90,collectedFailed:index%9===0?3:0}));
+    const checks=[["collection.telegram","Сбор · Telegram","ok","последний аккаунт 2 мин назад"],["collection.vk","Сбор · ВКонтакте","ok","последний аккаунт 4 мин назад"],
+      ["collection.max","Сбор · MAX","warn","последний аккаунт 52 мин назад"],["collection.rutube","Сбор · Rutube","ok","последний аккаунт 31 мин назад"],
+      ["ingest","Приём с Сервера 1","ok","последний пакет 1 мин назад"],["analysis","Очередь анализа","ok","отставание 6 мин, в очереди 12"],
+      ["units","Службы","ok","все службы работают"],["disk","Диск","ok","свободно 14.4 ГБ (27%)"],["memory","Память","ok","занято 61%"],
+      ["backup","Резервная копия","ok","последняя 9.2 ч назад"],["errors","Ошибки для людей","ok","0 ответов 5xx за час"]].map(([key,label,state,detail])=>({key,label,state,detail}));
+    return json({range:week?"week":"day",sampledAt:asOf,checks,
+      host:{cpuPercent:23.5,cores:2,load:[0.42,0.51,0.48],memoryTotalBytes:4*1024**3,memoryUsedBytes:2.5*1024**3,swapUsedBytes:0,diskTotalBytes:49*1024**3,diskFreeBytes:13.4*1024**3,unitsActive:24,unitsTotal:27,failedUnits:[]},
+      pipeline:{ingestAcceptedAt:asOf,analysisLagSeconds:360,analysisBacklog:12,analysisCompletedAt:asOf,normsRunAt:asOf,tailRunAt:asOf,backupAt:asOf},
+      restarts:{"m-ranked-target-web.service":1},
+      collection:["telegram","vk","max","rutube"].map((platform,index)=>({platform,ok:5000+index*700,failed:index*12,lastOkAt:asOf})),series});
+  }
   if(url.pathname.startsWith("/api/v1/admin/catalog/")) {
     const role=sessionRole;
     if(!role) return json({detail:"Требуется вход администратора"},401);
@@ -222,7 +246,7 @@ const server = createServer(async (request, response) => {
     const uuid=(index:number)=>`00000000-0000-4000-8000-${String(index).padStart(12,"0")}`;
     const ratings=Object.fromEntries(["all","telegram","vk","max","rutube"].map((platform)=>[platform,{rank:platform==="all"?2:null,score:platform==="all"?50:null}]));
     if(url.pathname.endsWith("/institutions")) return json({items:[1,2].map((id)=>({id:uuid(id),legacyId:id,name:names[id-1],shortName:id===1?"Альфа":"Бета",rowVersion:4,officialRatings:ratings,nextAccountAfter:null,accounts:["telegram","vk","max","rutube"].map((platform,index)=>({id:uuid(id*10+index),legacyId:id*10+index,channelId:platform==="telegram"?id:null,institutionId:uuid(id),platform,externalKey:`${platform}_${id}`,username:`${platform}_${id}`,title:`${platform} ${id}`,url:`https://example.test/${platform}/${id}`,accessMode:"public_api",legacyAccessMode:"public",lastErrorCode:null,enabled:true,rowVersion:7,nativeId:platform==="max"?`-123${id}`:null,subscribers:100}))})),nextAfter:null});
-    if(url.pathname.endsWith("/status")) return json({channelCount:2,platformCount:8,institutionCount:2,mRating:{period:"2026-Q2",updatedAt:asOf,error:null},integrations:["telegram","vk","max","rutube"].map((platform)=>({platform,status:platform==="vk"?"missing":"configured",detail:`Источник ${platform}`})),storage:{diskTotalBytes:100*1024**3,diskFreeBytes:40*1024**3,projectBytes:4*1024**3,databaseBytes:3*1024**3}});
+    if(url.pathname.endsWith("/status")) return json({channelCount:2,platformCount:8,institutionCount:2,mRating:{period:"2026-Q2",updatedAt:asOf,error:null},integrations:["telegram","vk","max","rutube"].map((platform)=>({platform,status:platform==="vk"?"missing":"configured",detail:`Источник ${platform}`})),storage:{diskTotalBytes:100*1024**3,diskFreeBytes:40*1024**3,projectBytes:4*1024**3,projectParts:{releasesBytes:1024**3,stateBytes:0.5*1024**3,pageCacheBytes:0.5*1024**3,measuredAt:asOf},databaseBytes:3*1024**3}});
     return json({detail:"Unknown fixture catalog route"},404);
   }
   const accountId=/^\/api\/v1\/accounts\/(\d+)$/.exec(url.pathname);
