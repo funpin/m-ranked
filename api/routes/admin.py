@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import json
 import hashlib
+import logging
 import os
 import re
 import shutil
-import time
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -27,6 +27,7 @@ from ..sessions import SessionRecord
 from ..sql import admin as sql
 
 router = APIRouter(tags=["Admin"])
+logger = logging.getLogger(__name__)
 READ = require_roles("VIEWER", "EDITOR", "ADMIN")
 WRITE = require_roles("EDITOR", "ADMIN")
 ADMIN = require_roles("ADMIN")
@@ -364,50 +365,34 @@ async def catalog_accounts(id: uuid.UUID, request: Request,
                       if len(items) == limit else None})
 
 
-_PROJECT_SIZE: tuple[float, int | None] = (0.0, None)
-_PROJECT_SIZE_TTL = 300.0
+def _project_size(row: Any, database_bytes: int | None) -> tuple[int | None, dict[str, Any] | None]:
+    """Весь проект: каталоги из часового замера снимка сервера плюс база.
 
-
-def _project_bytes() -> int | None:
-    """Размер дерева релиза. Пересчитывается не чаще раза в пять минут.
-
-    Поле возвращалось пустым, и панель писала «размер не предоставлен
-    сервером» — при том, что рядом размер базы показывался. Дерево релиза
-    неизменяемо, поэтому считать его на каждый запрос незачем, а обход сорока
-    тысяч файлов на одном ядре стоит заметно дороже самого ответа.
+    Раньше API сам обходил дерево релиза и сдавался на первом нечитаемом
+    каталоге (.next/cache принадлежит веб-службе) — панель писала «размер не
+    предоставлен сервером». Теперь меряет таймер ops-sample с правом чтения, а
+    запрос только читает готовое число.
     """
-    global _PROJECT_SIZE
-    cached_at, cached = _PROJECT_SIZE
-    now = time.monotonic()
-    if cached is not None and now - cached_at < _PROJECT_SIZE_TTL:
-        return cached
-    total = 0
-    try:
-        # После атомарного переключения current старый релиз могут удалить до
-        # перезапуска процесса. В таком процессе getcwd() возвращает ENOENT;
-        # необязательный размер проекта не должен из-за этого ронять весь
-        # endpoint состояния админки.
-        stack = [Path.cwd()]
-        while stack:
-            with os.scandir(stack.pop()) as entries:
-                for entry in entries:
-                    # По символическим ссылкам не идём: иначе счёт уйдёт за
-                    # пределы дерева, а то и закольцуется.
-                    if entry.is_symlink():
-                        continue
-                    if entry.is_dir(follow_symlinks=False):
-                        stack.append(Path(entry.path))
-                    elif entry.is_file(follow_symlinks=False):
-                        total += entry.stat(follow_symlinks=False).st_size
-    except OSError:
-        return cached
-    _PROJECT_SIZE = (now, total)
-    return total
+    if row is None or not isinstance(row["sizes"], dict):
+        return None, None
+    sizes = row["sizes"]
+    parts = {"releasesBytes": sizes.get("releases"), "stateBytes": sizes.get("state"),
+             "pageCacheBytes": sizes.get("pageCache"),
+             "measuredAt": row["observed_at"].isoformat()}
+    known = [value for value in (*(parts[key] for key in ("releasesBytes", "stateBytes", "pageCacheBytes")),
+                                 database_bytes) if isinstance(value, int)]
+    return (sum(known) if known else None), parts
 
 
 @router.get("/api/v1/admin/catalog/status")
 async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)]) -> Response:
     row = await request.app.state.db.admin_fetch_one(sql.CATALOG_STATUS)
+    try:
+        sizes = await request.app.state.db.admin_fetch_one(sql.PROJECT_SIZES)
+    except Exception:  # noqa: BLE001 — до миграции 0052 таблицы снимков нет
+        logger.warning("размеры проекта недоступны", exc_info=True)
+        sizes = None
+    project, parts = _project_size(sizes, row["database_bytes"])
     try:
         usage = shutil.disk_usage(Path.cwd())
         total, free = usage.total, usage.free
@@ -433,7 +418,7 @@ async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)
                           "detail": details[platform]}
                          for platform in ("telegram", "vk", "max", "rutube")],
         "storage": {"diskTotalBytes": total, "diskFreeBytes": free,
-                    "projectBytes": _project_bytes(),
+                    "projectBytes": project, "projectParts": parts,
                     "databaseBytes": row["database_bytes"]},
     })
 

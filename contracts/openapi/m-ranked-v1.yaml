@@ -2753,6 +2753,40 @@ components:
               - 'null'
               format: int64
               minimum: 0
+              description: Релизы, данные служб, страничный кэш nginx и база вместе.
+            projectParts:
+              type:
+              - object
+              - 'null'
+              additionalProperties: false
+              description: Размеры каталогов из последнего часового замера снимка сервера.
+              required:
+              - releasesBytes
+              - stateBytes
+              - pageCacheBytes
+              - measuredAt
+              properties:
+                releasesBytes:
+                  type:
+                  - integer
+                  - 'null'
+                  format: int64
+                  minimum: 0
+                stateBytes:
+                  type:
+                  - integer
+                  - 'null'
+                  format: int64
+                  minimum: 0
+                pageCacheBytes:
+                  type:
+                  - integer
+                  - 'null'
+                  format: int64
+                  minimum: 0
+                measuredAt:
+                  type: string
+                  format: date-time
             databaseBytes:
               type:
               - integer
