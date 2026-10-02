@@ -6,8 +6,8 @@
 from __future__ import annotations
 
 from . import (
-    bounded_reaction_burst, burst_plateau, erv_outlier, gap_growth, late_spike, linear_feed, reactions_before_views,
-    reactions_catch_up, reactions_exceed_views, synchronous_rise,
+    bounded_reaction_burst, burst_plateau, erv_outlier, gap_growth, late_engagement, late_spike, linear_feed,
+    reactions_before_views, reactions_catch_up, reactions_exceed_views, synchronous_rise,
 )
 from .base import Detector, DetectorContext, SiblingActivity
 
@@ -15,7 +15,7 @@ from .base import Detector, DetectorContext, SiblingActivity
 # раздельно: первые обязаны отработать до расчёта нормы — помеченное ими в
 # норму не попадает.
 ABSOLUTE_DETECTORS = (linear_feed, reactions_before_views, reactions_exceed_views,
-                      synchronous_rise, burst_plateau, bounded_reaction_burst)
+                      synchronous_rise, burst_plateau, bounded_reaction_burst, late_engagement)
 NORM_RELATIVE_DETECTORS = (late_spike, gap_growth, reactions_catch_up, erv_outlier)
 # Счётчик просмотров репоста принадлежит источнику: остаются только проверки,
 # которым безразлично, чья это аудитория.

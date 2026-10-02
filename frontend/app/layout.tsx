@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { headers } from "next/headers";
 import { api } from "@/lib/api";
 import type { Platform } from "@/lib/types";
@@ -152,7 +153,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <a className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[300] focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-foreground focus:ring-2 focus:ring-ring" href="#main-content">Перейти к содержимому</a>
         <Suspense fallback={<SiteHeaderFallback platform={activePlatform} />}><SiteHeader initialPlatform={activePlatform} /></Suspense>
         {localSnapshotLabel ? <div className="border-border bg-amber-500/5 text-muted-foreground border-b px-4 py-2 text-center text-xs">
-          <span className="mr-2 rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-700 dark:text-amber-300">Локальный срез</span>
+          <Badge className="mr-2 h-auto bg-amber-500/15 text-[length:inherit] font-semibold text-amber-700 dark:text-amber-300">Локальный срез</Badge>
           {localSnapshotLabel}
         </div> : null}
         <main id="main-content" tabIndex={-1} className="safe-page-inset mx-auto w-full max-w-[1400px] min-w-0 py-6"><RouteBoundary>{children}</RouteBoundary></main>

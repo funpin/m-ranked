@@ -215,12 +215,15 @@ UNITS_COMMON_PRESENTATION = [
     "m-ranked-target-dump-backup.timer",
 ]
 
-# Анализ аномальной динамики: работник и ночной пересчёт норм. Живёт там же,
+# Анализ аномальной динамики: работник, ночной пересчёт норм и профиль позднего
+# отклика аккаунтов. Живёт там же,
 # где база с полной историей, — в профиле A и на Сервере 2 профиля B.
 UNITS_ANOMALY = [
     "m-ranked-target-anomaly-analysis.service",
     "m-ranked-target-anomaly-norms.service",
     "m-ranked-target-anomaly-norms.timer",
+    "m-ranked-target-anomaly-tail.service",
+    "m-ranked-target-anomaly-tail.timer",
 ]
 
 UNITS_COLLECTORS = [

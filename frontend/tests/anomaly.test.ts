@@ -59,7 +59,7 @@ test("interval boundaries become the nearest saved points and markers keep their
   const [marker] = signalMarkers(analysis());
   assert.equal(marker!.pattern, 1);
   assert.equal(marker!.to - marker!.from, 24 * 3600_000);
-  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 11);
+  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 12);
 });
 
 test("linear signal draws its fitted line only inside the interval", () => {
@@ -168,4 +168,16 @@ test("unconfirmed shape shows reported counts without invented precision bounds"
     assert.deepEqual(chart.bars.map(item => item.value), [11, 119]);
     assert.deepEqual(chart.bars.map(item => item.label), ["сохранено до", "сохранено после"]);
   }
+});
+
+test("late engagement compares the same post's early and late reaction shares", () => {
+  const chart = miniChart(signal({
+    pattern: 13, family: "cross_metric", metric: "reactions", strength: 0.6,
+    render: { kind: "late_engagement", startAge: 96 * 3600, endAge: 13 * 86400, earlyRate: 0.013, lateRate: 0.33 },
+  }), rows, PUBLISHED);
+  assert.equal(chart.type, "bars");
+  if (chart.type !== "bars") return;
+  assert.equal(chart.percent, true);
+  assert.deepEqual(chart.bars.map((bar) => [bar.label, bar.value, bar.highlight]),
+    [["первые сутки", 0.013, false], ["после 4 суток", 0.33, true]]);
 });

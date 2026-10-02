@@ -120,3 +120,58 @@ def test_missing_precision_is_visible_on_both_public_surfaces():
     _validate(account,"AccountAnomalyLevels")
     assert post["levelLabel"]==account["items"][0]["levelLabel"]=="недостаточно точных данных"
     assert post["levelSymbol"]==account["items"][0]["levelSymbol"]=="·"
+
+
+def test_late_engagement_signal_uses_the_public_contract():
+    case = synthetic_cases()["p13_late_engagement_max"]
+    result = levels.assess(case.subject, case.siblings, norms=norms_for(case))
+    [sign] = [item for item in result.signs if item.pattern == 13]
+    payload = sign_payload(sign)
+    _validate(payload, "AnomalySignal")
+    assert payload["title"] == "Поздняя вовлечённость выше ранней"
+    assert not any(word in payload["formula"].lower() for word in FORBIDDEN)
+
+
+def _tail_rows():
+    from datetime import date, datetime, timezone
+    from uuid import UUID
+    from anomaly_analysis.v2.account_tail import PostLedger, profiles
+    from anomaly_analysis.v2.tail_ledger import DAY, Point, TailLedger
+    rows = []
+    for offset, computed_for in enumerate((date(2026, 9, 28), date(2026, 9, 29))):
+        posts, accounts = [], {}
+        for account in range(1, 17):
+            accounts[UUID(int=account)] = "max"
+            for index in range(10):
+                published = datetime(2026, 9, 20, tzinfo=timezone.utc) - timedelta(days=2 * index)
+                late = (200, 40 if account == 1 else 1 + account % 3)
+                ledger = TailLedger(Point(DAY, 1000, 30), Point(4 * DAY, 1100, 32),
+                                    Point(13 * DAY, 1100 + late[0], 32 + late[1]))
+                posts.append(PostLedger(UUID(int=account * 100 + index), UUID(int=account), "max", published,
+                                        ledger))
+        [profile] = [item for item in profiles(posts, accounts, computed_for) if item.account_id == UUID(int=1)]
+        rows.append({"computed_for": computed_for, "platform": profile.platform, "status": profile.status,
+                     "abstain_reason": profile.abstain_reason, "metrics": profile.metrics,
+                     "method_version": profile.metrics["methodVersion"],
+                     "computed_at": datetime(2026, 9, 29, 2, offset, tzinfo=timezone.utc)})
+    return list(reversed(rows))
+
+
+def test_account_tail_profile_matches_the_contract_and_keeps_history_in_time_order():
+    rows = _tail_rows()
+    body = analysis.tail_profile_body("99269506-1466-5e18-a215-a3db2688d786", 12, rows)
+    _validate(body, "AccountTailProfile")
+    assert body["status"] == "computed" and body["level"] == 1 and body["levelLabel"] == "необычный"
+    assert [item["computedFor"] for item in body["history"]] == ["2026-09-28", "2026-09-29"]
+    pending = analysis.tail_profile_body("99269506-1466-5e18-a215-a3db2688d786", 12, [])
+    _validate(pending, "AccountTailProfile")
+    assert pending["status"] == "pending" and pending["metrics"] is None
+
+
+def test_account_tail_words_match_the_module_and_the_glossary():
+    from anomaly_analysis.v2 import account_tail
+    assert analysis.TAIL_LABELS == account_tail.STATUS_LABELS
+    assert analysis.TAIL_METHODOLOGY_VERSION == account_tail.METHOD_VERSION
+    for text in (*analysis.TAIL_LABELS.values(), analysis.TAIL_DISCLAIMER, analysis.TAIL_ABSTAINED,
+                 *account_tail.ABSTAIN_TEXTS.values()):
+        assert not any(word in text.lower() for word in FORBIDDEN), text

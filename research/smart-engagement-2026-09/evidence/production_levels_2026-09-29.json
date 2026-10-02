@@ -1,0 +1,248 @@
+{
+ "asOf": "2026-09-29T09:06:35Z",
+ "window": "публикации последних 30 суток, проанализированные посты",
+ "levels": [
+  {
+   "platform": "max",
+   "level": 0,
+   "n": 10285
+  },
+  {
+   "platform": "max",
+   "level": 1,
+   "n": 165
+  },
+  {
+   "platform": "max",
+   "level": 2,
+   "n": 165
+  },
+  {
+   "platform": "max",
+   "level": 3,
+   "n": 156
+  },
+  {
+   "platform": "rutube",
+   "level": 0,
+   "n": 1673
+  },
+  {
+   "platform": "rutube",
+   "level": 1,
+   "n": 10
+  },
+  {
+   "platform": "rutube",
+   "level": 2,
+   "n": 12
+  },
+  {
+   "platform": "rutube",
+   "level": 3,
+   "n": 1
+  },
+  {
+   "platform": "telegram",
+   "level": 0,
+   "n": 7827
+  },
+  {
+   "platform": "telegram",
+   "level": 1,
+   "n": 245
+  },
+  {
+   "platform": "telegram",
+   "level": 2,
+   "n": 75
+  },
+  {
+   "platform": "telegram",
+   "level": 3,
+   "n": 162
+  },
+  {
+   "platform": "vk",
+   "level": 0,
+   "n": 8204
+  },
+  {
+   "platform": "vk",
+   "level": 1,
+   "n": 520
+  },
+  {
+   "platform": "vk",
+   "level": 2,
+   "n": 300
+  },
+  {
+   "platform": "vk",
+   "level": 3,
+   "n": 454
+  }
+ ],
+ "insufficient": [
+  {
+   "platform": "rutube",
+   "n": 8
+  },
+  {
+   "platform": "telegram",
+   "n": 80
+  }
+ ],
+ "signals": [
+  {
+   "platform": "max",
+   "pattern": 1,
+   "family": "velocity",
+   "n": 9
+  },
+  {
+   "platform": "max",
+   "pattern": 2,
+   "family": "shape",
+   "n": 64
+  },
+  {
+   "platform": "max",
+   "pattern": 4,
+   "family": "shape",
+   "n": 1
+  },
+  {
+   "platform": "max",
+   "pattern": 6,
+   "family": "cross_metric",
+   "n": 179
+  },
+  {
+   "platform": "max",
+   "pattern": 7,
+   "family": "cross_metric",
+   "n": 1
+  },
+  {
+   "platform": "max",
+   "pattern": 8,
+   "family": "synchrony",
+   "n": 131
+  },
+  {
+   "platform": "max",
+   "pattern": 9,
+   "family": "shape",
+   "n": 279
+  },
+  {
+   "platform": "max",
+   "pattern": 10,
+   "family": "cross_metric",
+   "n": 100
+  },
+  {
+   "platform": "max",
+   "pattern": 11,
+   "family": "velocity",
+   "n": 3
+  },
+  {
+   "platform": "max",
+   "pattern": 12,
+   "family": "velocity",
+   "n": 13
+  },
+  {
+   "platform": "rutube",
+   "pattern": 1,
+   "family": "velocity",
+   "n": 10
+  },
+  {
+   "platform": "rutube",
+   "pattern": 2,
+   "family": "shape",
+   "n": 7
+  },
+  {
+   "platform": "rutube",
+   "pattern": 4,
+   "family": "shape",
+   "n": 2
+  },
+  {
+   "platform": "rutube",
+   "pattern": 9,
+   "family": "shape",
+   "n": 3
+  },
+  {
+   "platform": "rutube",
+   "pattern": 10,
+   "family": "cross_metric",
+   "n": 7
+  },
+  {
+   "platform": "telegram",
+   "pattern": 7,
+   "family": "cross_metric",
+   "n": 64
+  },
+  {
+   "platform": "telegram",
+   "pattern": 8,
+   "family": "synchrony",
+   "n": 23
+  },
+  {
+   "platform": "telegram",
+   "pattern": 9,
+   "family": "shape",
+   "n": 459
+  },
+  {
+   "platform": "vk",
+   "pattern": 1,
+   "family": "velocity",
+   "n": 291
+  },
+  {
+   "platform": "vk",
+   "pattern": 2,
+   "family": "shape",
+   "n": 1036
+  },
+  {
+   "platform": "vk",
+   "pattern": 4,
+   "family": "shape",
+   "n": 15
+  },
+  {
+   "platform": "vk",
+   "pattern": 6,
+   "family": "cross_metric",
+   "n": 349
+  },
+  {
+   "platform": "vk",
+   "pattern": 8,
+   "family": "synchrony",
+   "n": 445
+  },
+  {
+   "platform": "vk",
+   "pattern": 9,
+   "family": "shape",
+   "n": 512
+  },
+  {
+   "platform": "vk",
+   "pattern": 10,
+   "family": "cross_metric",
+   "n": 223
+  }
+ ]
+}

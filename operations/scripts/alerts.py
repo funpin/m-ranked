@@ -181,6 +181,12 @@ def evaluate(now: float, traffic: dict, values: dict[str, float], *, disk_free: 
     else:
         reference_text = f"До конца окна новых публикаций эталона MAX {remaining / 86400:.1f} сут; замена требует проверки"
     rules.append(Rule("analysis_reference", needs_reference, reference_text))
+    # Профиль позднего отклика считается раз в сутки; метрики нет до первого запуска.
+    tail_run = values.get("mranked_anomaly_tail_last_run_unixtime")
+    tail_age = (now - tail_run) / 86400 if tail_run is not None else None
+    rules.append(Rule("analysis_tail", tail_age is not None and tail_age > 2,
+                      f"Профиль позднего отклика не обновлялся {tail_age:.1f} сут" if tail_age is not None
+                      else "Профиль позднего отклика ещё не считался"))
     reclaimable = values.get("mranked_host_docker_reclaimable_bytes")
     rules.append(Rule("docker", reclaimable is not None and reclaimable > limits["docker_bytes"],
                       f"Docker может освободить {reclaimable / 1e9:.1f} ГБ — нужна ручная чистка"

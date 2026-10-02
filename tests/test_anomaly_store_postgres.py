@@ -291,7 +291,8 @@ def test_new_signs_survive_worker_database_and_public_api(databases):
     body=analysis_body(str(publication),1,stored)
     assert {11,12}<={s["pattern"] for s in body["signals"]}
     assert body["level"]==1 and body["levelLabel"]=="слабый сигнал"
-    assert body["detectorVersions"]["mature_reference_model"]==reference.version
+    assert body["detectorVersions"]["mature_reference_model"]==next(
+        item.version for item in reversed(reference.references) if item.available_at<=published<item.expires_at)
     assert all(s["render"]["observed"]>s["render"]["upper"] for s in body["signals"] if s["pattern"] in (11,12))
 
 
@@ -329,3 +330,58 @@ def test_research_endpoint_sql_matches_active_corrections_as_of_cutoff(databases
     series=PostgresAnomalyStore(databases['worker']).read_series([target])[target.publication_id]
     assert base+timedelta(hours=71) not in series.observed_at
     assert base+timedelta(hours=73) in series.observed_at
+
+
+def test_tail_ledgers_and_account_profiles_flow_from_worker_to_public_api(databases):
+    """Сводка поста пишется работником, профиль — ночным заданием, читает — api_read."""
+    from datetime import date
+    from anomaly_analysis.account_tail_job import run
+    from anomaly_analysis.v2.levels import assess
+    from anomaly_analysis.v2.tail_ledger import VERSION, build_ledger
+    from api.routes.analysis import tail_profile_body
+    from api.sql.analysis import TAIL_PROFILE
+    base = datetime.now(timezone.utc) - timedelta(days=12)
+    target = _publication(databases["admin"], base, 20)
+    store = PostgresAnomalyStore(databases["worker"])
+    series = store.read_series([target])[target.publication_id]
+    now = datetime.now(timezone.utc)
+    ledger = build_ledger(series, now).payload()
+    store.write_states([StateWrite(target.publication_id, target.published_at, now, now + timedelta(hours=1),
+                                   verdict=assess(series, analyzed_at=now), analyzed_points=20,
+                                   last_point_observed_at=series.observed_at[-1], tail_ledger=ledger)])
+    with _admin(databases["admin"]) as connection:
+        row = connection.execute("SELECT tail_ledger, tail_ledger_version FROM analytics.post_anomaly_state "
+                                 "WHERE publication_id=%s", (target.publication_id,)).fetchone()
+    assert row["tail_ledger"] == ledger and row["tail_ledger_version"] == VERSION
+    # A write without a ledger (analysis error path aside) keeps the stored one.
+    store.write_states([StateWrite(target.publication_id, target.published_at, now, now + timedelta(hours=2),
+                                   verdict=assess(series, analyzed_at=now), analyzed_points=20,
+                                   last_point_observed_at=series.observed_at[-1])])
+    [due] = [item for item in store.backfill_targets(ACCOUNT, base - timedelta(days=1))
+             if item.publication_id == target.publication_id]
+    assert due.tail_ledger_version == VERSION and not due.tail_ledger_stale
+
+    today = datetime.now(timezone.utc).date()
+    old = today - timedelta(days=120)
+    with _admin(databases["admin"]) as connection:
+        connection.execute("INSERT INTO analytics.account_tail_profile(account_id,computed_for,platform,status,"
+                           "abstain_reason,metrics,method_version) VALUES (%s,%s,'vk',NULL,'few_posts','{}','old')",
+                           (ACCOUNT, old))
+    profiles, posts = run(store, today)
+    assert posts >= 1 and any(item.account_id == ACCOUNT for item in profiles)
+    with psycopg.connect(databases["api"], row_factory=dict_row) as connection:
+        rows = connection.execute(TAIL_PROFILE, {"account": ACCOUNT, "limit": 28}).fetchall()
+        # The public role reads, but never writes, the profile.
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            connection.execute("DELETE FROM analytics.account_tail_profile")
+    assert [row["computed_for"] for row in rows] == [today]
+    body = tail_profile_body(str(ACCOUNT), 1, rows)
+    assert body["status"] == "computed" and body["platform"] == "vk"
+    assert body["metrics"]["methodVersion"] == "account-tail-v1"
+    # Rerunning the same day replaces the row instead of adding one.
+    run(store, today)
+    with _admin(databases["admin"]) as connection:
+        count = connection.execute("SELECT count(*) AS n FROM analytics.account_tail_profile "
+                                   "WHERE account_id=%s", (ACCOUNT,)).fetchone()["n"]
+    assert count == 1
+    assert isinstance(today, date)

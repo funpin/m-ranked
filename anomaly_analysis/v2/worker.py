@@ -25,6 +25,7 @@ from .mature_reference import bundled_reference
 from .schedule import ScheduleConfig, plan, retry_after, stretch_for_lag
 from .series import GAP_FACTOR, HOUR, CollectionCadence
 from .store import DueRow, PostgresAnomalyStore, SeriesTarget, StateWrite
+from .tail_ledger import build_ledger
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
 SYNCHRONY_PATTERN = 8
@@ -91,7 +92,7 @@ class WorkerMetrics:
             yield "analyses_total", "counter", {"outcome": outcome}, self.outcomes[outcome]
         for level in range(4):
             yield "verdicts_total", "counter", {"level": str(level)}, self.levels[level]
-        for pattern in (1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12):
+        for pattern in (1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
             yield "signals_total", "counter", {"pattern": str(pattern)}, self.signals[pattern]
         yield "log_entries_total", "counter", {}, self.log_entries
         yield "seeded_total", "counter", {}, self.seeded
@@ -184,7 +185,8 @@ class Worker:
                     row.publication_id, row.published_at, now, decision.next_due_at, verdict=verdict,
                     analyzed_points=len(subject.observed_at), last_point_observed_at=subject.observed_at[-1],
                     norm_version_id=self.norm_version, frozen=decision.frozen,
-                    lag_seconds=max(0, int((now - row.next_due_at).total_seconds())), reason=decision.reason))
+                    lag_seconds=max(0, int((now - row.next_due_at).total_seconds())), reason=decision.reason,
+                    tail_ledger=build_ledger(subject, now).payload()))
                 self.metrics.outcomes["frozen" if decision.frozen else "analyzed"] += 1
                 self.metrics.levels[int(verdict.level)] += 1
                 for sign in verdict.signs:
@@ -206,7 +208,7 @@ class Worker:
         решилось в пользу анализа или не нашлось, идёт обычным путём.
         """
         candidates = [row for row in due if row.analyzed_at is not None and row.last_point_observed_at is not None
-                      and not self._norm_recheck(row)]
+                      and not self._norm_recheck(row) and not row.tail_ledger_stale]
         if not candidates:
             return list(due)
         progress = self.store.read_progress(candidates)
@@ -241,7 +243,7 @@ class Worker:
         return plan(self.schedule, platform=platform, published_at=published_at, now=now,
                     new_points=new_points, analyzed_before=row.analyzed_at is not None,
                     resumed_after_gap=resumed, stale=stale, stretch=stretch,
-                    norm_recheck=self._norm_recheck(row),
+                    norm_recheck=self._norm_recheck(row), tail_ledger_stale=row.tail_ledger_stale,
                     reference_checkpoint=(self.reference is not None and platform == self.reference.platform
                         and self.reference.available_at <= published_at < self.reference.expires_at
                         and row.analyzed_at is not None

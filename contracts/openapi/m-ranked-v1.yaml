@@ -404,6 +404,42 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/accounts/{accountId}/tail-profile:
+    get:
+      tags: [Query]
+      operationId: getAccountTailProfile
+      summary: Read the account's late-engagement profile relative to other accounts of its platform
+      description: >-
+        Ratio of the reaction share on views that reached posts aged 4-14 days to the share in
+        their first day, for posts published 4-28 days ago, compared with other accounts of the same platform
+        (the account itself excluded). Level 0 is ordinary for the platform, 1 unusual, 2
+        persistently unusual; null level means the method abstained and abstainReason says why.
+        The profile is recomputed nightly; history holds up to 28 latest days.
+      security: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: The latest profile, or status pending when none has been computed yet.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountTailProfile'
+        '304':
+          description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/statistics:
     get:
       tags: [Query]
@@ -4237,7 +4273,7 @@ components:
       required: [pattern, symbol, title, family, metric, strength, startAt, endAt, scaleSeconds,
         formula, render, alternatives, normConfidence]
       properties:
-        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12] }
+        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] }
         symbol: { type: string, maxLength: 4 }
         title: { type: string, maxLength: 120 }
         family: { type: string, enum: [velocity, shape, cross_metric, synchrony] }
@@ -4252,7 +4288,7 @@ components:
           type: object
           required: [kind, startAge, endAge]
           properties:
-            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference] }
+            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement] }
             startAge: { type: integer }
             endAge: { type: integer }
           additionalProperties:
@@ -4466,6 +4502,120 @@ components:
               level: { type: integer, minimum: 0, maximum: 3 }
               levelLabel: { type: string }
               levelSymbol: { type: string, maxLength: 4 }
+    TailTotals:
+      type: object
+      additionalProperties: false
+      required: [posts, earlyViews, earlyReactions, lateViews, lateReactions, earlyRate, lateRate, ratio]
+      properties:
+        posts: { type: integer, minimum: 0 }
+        earlyViews: { type: integer, minimum: 0 }
+        earlyReactions: { type: integer, minimum: 0 }
+        lateViews: { type: integer, minimum: 0 }
+        lateReactions: { type: integer, minimum: 0 }
+        earlyRate: { type: number, minimum: 0 }
+        lateRate: { type: number, minimum: 0 }
+        ratio: { type: [number, 'null'], minimum: 0 }
+    AccountTailMetrics:
+      type: object
+      additionalProperties: false
+      required: [methodVersion, windowStart, windowEnd, posts, earlyViews, earlyReactions, lateViews,
+                 lateReactions, earlyRate, lateRate, ratio, halves, days, activeDays, activeWeeks, wideDays,
+                 breadth, roundedPosts, cohort]
+      properties:
+        methodVersion: { type: string }
+        windowStart: { type: string, format: date }
+        windowEnd: { type: string, format: date }
+        posts: { type: integer, minimum: 0 }
+        earlyViews: { type: integer, minimum: 0 }
+        earlyReactions: { type: integer, minimum: 0 }
+        lateViews: { type: integer, minimum: 0 }
+        lateReactions: { type: integer, minimum: 0 }
+        earlyRate: { type: number, minimum: 0 }
+        lateRate: { type: number, minimum: 0 }
+        ratio: { type: [number, 'null'], minimum: 0 }
+        halves:
+          type: object
+          additionalProperties: false
+          required: [earlier, recent]
+          properties:
+            earlier: { $ref: '#/components/schemas/TailTotals' }
+            recent: { $ref: '#/components/schemas/TailTotals' }
+        days:
+          type: array
+          maxItems: 28
+          items:
+            type: object
+            additionalProperties: false
+            required: [day, observed, active, reactions]
+            properties:
+              day: { type: string, format: date }
+              observed: { type: integer, minimum: 0 }
+              active: { type: integer, minimum: 0 }
+              reactions: { type: integer, minimum: 0 }
+        activeDays: { type: integer, minimum: 0 }
+        activeWeeks: { type: integer, minimum: 0 }
+        wideDays: { type: integer, minimum: 0 }
+        roundedPosts:
+          description: Posts whose endpoints came from counters the platform marks as rounded (Telegram only).
+          type: integer
+          minimum: 0
+        breadth:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [observed, expected, excess]
+              properties:
+                observed: { type: integer, minimum: 0 }
+                expected: { type: number, minimum: 0 }
+                excess: { type: number, minimum: 0 }
+        cohort:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [accounts, median, p90, threshold]
+              properties:
+                accounts: { type: integer, minimum: 0 }
+                median: { type: number, minimum: 0 }
+                p90: { type: number, minimum: 0 }
+                threshold: { type: number, minimum: 0 }
+                rank: { type: number, minimum: 0, maximum: 1 }
+        abstainText: { type: string }
+    AccountTailProfile:
+      type: object
+      additionalProperties: false
+      required: [accountId, datasetRevision, status, computedFor, computedAt, platform, level, levelLabel,
+                 abstainReason, metrics, history, methodologyVersion, disclaimer]
+      properties:
+        accountId: { type: string, format: uuid }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        status: { type: string, enum: [computed, pending] }
+        computedFor: { type: [string, 'null'], format: date }
+        computedAt: { type: [string, 'null'], format: date-time }
+        platform: { type: [string, 'null'], enum: [telegram, vk, max, rutube, null] }
+        level: { type: [integer, 'null'], minimum: 0, maximum: 2 }
+        levelLabel: { type: string }
+        abstainReason:
+          type: [string, 'null']
+          enum: [few_posts, few_early_views, few_early_reactions, small_cohort, null]
+        metrics:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/AccountTailMetrics'
+        history:
+          type: array
+          maxItems: 28
+          items:
+            type: object
+            additionalProperties: false
+            required: [computedFor, level, ratio]
+            properties:
+              computedFor: { type: string, format: date }
+              level: { type: [integer, 'null'], minimum: 0, maximum: 2 }
+              ratio: { type: [number, 'null'], minimum: 0 }
+        methodologyVersion: { type: string }
+        disclaimer: { type: string }
     CreateManualAnomalySignalRequest:
       type: object
       additionalProperties: false

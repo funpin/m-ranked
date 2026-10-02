@@ -300,7 +300,7 @@ test("web app manifest exposes current install icons", async ({ request }) => {
   }
 });
 
-test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page }) => {
+test("PWA shell exposes iOS metadata and an opaque sticky header", async ({ page }) => {
   await page.goto("/review?platform=telegram");
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
   await expect(page.locator('meta[name="mobile-web-app-capable"]')).toHaveAttribute("content", "yes");
@@ -310,9 +310,11 @@ test("PWA shell exposes iOS metadata and a frosted sticky header", async ({ page
   const header = page.getByRole("navigation", { name: "Основная навигация" });
   await expect(header).toHaveCSS("position", "sticky");
   expect(await header.evaluate((node) => {
-    const style = getComputedStyle(node);
-    return style.backdropFilter || style.getPropertyValue("-webkit-backdrop-filter");
-  })).toContain("blur");
+    const probe = document.createElement("canvas").getContext("2d")!;
+    probe.fillStyle = getComputedStyle(node).backgroundColor;
+    probe.fillRect(0, 0, 1, 1);
+    return probe.getImageData(0, 0, 1, 1).data[3];
+  })).toBe(255);
 });
 
 test("retired export is absent from navigation and raw quality codes are absent from tables", async ({ page }) => {

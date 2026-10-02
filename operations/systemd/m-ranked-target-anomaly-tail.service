@@ -1,0 +1,61 @@
+[Unit]
+Description=M-Ranked nightly account late-engagement profile
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-anomaly
+Group=m-ranked-anomaly
+SupplementaryGroups=node-exporter
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/anomaly-analysis.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/anomaly-pgpass
+# systemd 252 отдаёт credential как 0400 во владении службы, а начиная с
+# 257 — как 0440 root:root с ACL. libpq молча игнорирует pgpass с
+# групповым доступом и уходит в "password authentication failed" при
+# верном пароле. Копия в приватный файл работает на обеих версиях.
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-anomaly -g m-ranked-anomaly %d/pgpass /run/m-ranked-anomaly-tail/pgpass
+Environment=PGPASSFILE=/run/m-ranked-anomaly-tail/pgpass
+Environment=TZ=Europe/Moscow
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m anomaly_analysis.account_tail_job
+# Читает только сводки постов (~200 байт на пост), замеров не читает:
+# на данных Сервера 2 — секунды; десять минут с запасом.
+TimeoutStartSec=10min
+TimeoutStopSec=30s
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/node_exporter/textfile_collector
+# Свой каталог: systemd удаляет RuntimeDirectory при остановке юнита, и общий
+# с работником каталог унёс бы его pgpass после каждого ночного запуска.
+RuntimeDirectory=m-ranked-anomaly-tail
+RuntimeDirectoryMode=0700
+UMask=0077
+# Те же лимиты процессора, что у работника. В памяти — сводки постов шести
+# недель: единицы мегабайт.
+CPUQuota=50%
+Nice=10
+MemoryMax=256M
+LimitNOFILE=4096
+TasksMax=32

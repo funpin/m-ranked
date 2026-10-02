@@ -1,8 +1,9 @@
 "use client";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 
 import Link from "@/components/native-link";
 import { RowLink } from "@/components/row-link";
-import { NativeButton } from "@/components/native-field";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -66,15 +67,17 @@ function ResultPanel({ children }: { children: ReactNode }) {
 
 function RevealButton({ shown, total, onClick }: { shown: number; total: number; onClick: () => void }) {
   if (shown >= total) return null;
-  return <div className="flex justify-center"><NativeButton type="button" variant="outline" onClick={onClick}>Показать ещё <span className="sr-only">до {total} строк</span></NativeButton></div>;
+  return <div className="flex justify-center"><Button type="button" variant="outline" onClick={onClick}>Показать ещё <span className="sr-only">до {total} строк</span></Button></div>;
 }
 
 function EmptyState({ searched }: { searched: boolean }) {
-  return <section className="rounded-xl border bg-card px-5 py-10 text-center" role="status">
-    <h2 className="font-heading text-lg font-semibold">{searched ? "Ничего не найдено" : "Нет данных за выбранный период"}</h2>
-    <p className="mt-1 text-sm text-muted-foreground">{searched ? "Измените запрос или очистите поиск." : "Попробуйте выбрать более длинный период."}</p>
-    {searched ? <Link className="mt-4 inline-flex min-h-9 items-center rounded-md border px-3 text-sm font-medium" href="/statistics">Сбросить поиск и фильтры</Link> : null}
-  </section>;
+  return <Empty role="status" className="bg-card border py-10">
+    <EmptyHeader>
+      <EmptyTitle><h2 className="font-heading text-lg font-semibold">{searched ? "Ничего не найдено" : "Нет данных за выбранный период"}</h2></EmptyTitle>
+      <EmptyDescription className="text-sm">{searched ? "Измените запрос или очистите поиск." : "Попробуйте выбрать более длинный период."}</EmptyDescription>
+    </EmptyHeader>
+    {searched ? <EmptyContent><Link className={buttonVariants({ variant: "outline" })} href="/statistics">Сбросить поиск и фильтры</Link></EmptyContent> : null}
+  </Empty>;
 }
 
 function publicationColumns(query: ParsedStatisticsQuery) {
@@ -179,11 +182,11 @@ function MetricPair({ label, value }: { label: ReactNode; value: ReactNode }) {
 }
 
 function EntityErvHelp() {
-  return <Tooltip><TooltipTrigger render={<button type="button" className="relative z-10 inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" aria-label="Как считается ERV вузов" />}><CircleHelp className="size-3.5" aria-hidden="true" /></TooltipTrigger><TooltipContent className="max-w-sm whitespace-normal leading-relaxed">ERV вуза = сумма взаимодействий ÷ сумма просмотров × 100%. До 20 последних публикаций; без просмотров не учитываются.</TooltipContent></Tooltip>;
+  return <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground relative z-10 rounded-full" aria-label="Как считается ERV вузов" />}><CircleHelp className="size-3.5" aria-hidden="true" /></TooltipTrigger><TooltipContent className="max-w-sm whitespace-normal leading-relaxed">ERV вуза = сумма взаимодействий ÷ сумма просмотров × 100%. До 20 последних публикаций; без просмотров не учитываются.</TooltipContent></Tooltip>;
 }
 
 function EntityMedianHelp({ compact = false }: { compact?: boolean }) {
-  return <Tooltip><TooltipTrigger render={<button type="button" className={`relative z-10 inline-flex items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring ${compact ? "size-5" : "size-6"}`} aria-label="Что означает медиана взаимодействий" />}><CircleHelp className="size-3.5" aria-hidden="true" /></TooltipTrigger><TooltipContent className="max-w-sm whitespace-normal leading-relaxed">Медиана: у половины публикаций взаимодействий меньше, у половины — больше. До 20 последних публикаций.</TooltipContent></Tooltip>;
+  return <Tooltip><TooltipTrigger render={<Button variant="ghost" size={compact ? "icon-xs" : "icon-sm"} className="text-muted-foreground relative z-10 rounded-full" aria-label="Что означает медиана взаимодействий" />}><CircleHelp className="size-3.5" aria-hidden="true" /></TooltipTrigger><TooltipContent className="max-w-sm whitespace-normal leading-relaxed">Медиана: у половины публикаций взаимодействий меньше, у половины — больше. До 20 последних публикаций.</TooltipContent></Tooltip>;
 }
 
 function EntityErvValue({ row, prominent = false }: { row: StatisticsEntity; prominent?: boolean }) {

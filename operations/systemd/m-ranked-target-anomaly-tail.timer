@@ -1,0 +1,14 @@
+[Unit]
+Description=Build M-Ranked account late-engagement profiles nightly
+
+[Timer]
+# После московской полуночи сутки профиля закрыты; ночью трафик API
+# минимален, разброс — чтобы не совпасть с нормами и резервным копированием.
+OnCalendar=*-*-* 04:45:00 Europe/Moscow
+RandomizedDelaySec=30min
+Persistent=true
+AccuracySec=1min
+Unit=m-ranked-target-anomaly-tail.service
+
+[Install]
+WantedBy=timers.target

@@ -1,6 +1,8 @@
 import type { MDXComponents } from "mdx/types";
 import { Children, isValidElement, type ReactNode } from "react";
 import Link from "@/components/native-link";
+import { Figure } from "@/components/methodology/figure";
+import { Sources } from "@/components/methodology/sources";
 import { slugify } from "@/lib/methodology";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +60,8 @@ const components: MDXComponents = {
   th: ({ children }) => <th className="text-muted-foreground px-4 py-2.5 text-left text-xs font-medium tracking-wide uppercase">{children}</th>,
   td: ({ children }) => <td className="border-t px-4 py-2.5 align-top tabular-nums">{children}</td>,
   hr: () => <hr className="my-10" />,
+  // Рисунки и основания методов: <Figure chart="…" title="…">подпись</Figure>, <Sources>список</Sources>.
+  Figure, Sources,
 };
 
 export function useMDXComponents(): MDXComponents {

@@ -123,6 +123,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
         params: { path: { accountId } },
       }).then(unwrap);
     },
+    accountTailProfile(accountId: string) {
+      return analysisClient.GET("/api/v1/accounts/{accountId}/tail-profile", {
+        params: { path: { accountId } },
+      }).then(unwrap);
+    },
     siteSummary() {
       return client.GET("/api/v1/site/summary", {}).then(unwrap);
     },

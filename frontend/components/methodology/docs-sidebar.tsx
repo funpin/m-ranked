@@ -28,7 +28,7 @@ export function DocsSidebar() {
             return (
               <li key={article.slug}>
                 <Link href={href} prefetch={false} aria-current={pathname === href ? "page" : undefined} className={itemClass(pathname === href)}>
-                  <span className="text-muted-foreground/70 mr-2 font-mono text-xs tabular-nums">{index + 1}</span>{article.title}
+                  <span className="text-muted-foreground mr-2 font-mono text-xs tabular-nums">{index + 1}</span>{article.title}
                 </Link>
               </li>
             );

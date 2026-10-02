@@ -50,6 +50,16 @@ SELECT publication.id AS publication_id,
  LIMIT %(limit)s
 """
 
+# Профиль позднего отклика аккаунта: последняя строка и короткая история
+# по первичному ключу (аккаунт, сутки).
+TAIL_PROFILE = """
+SELECT computed_for, platform, status, abstain_reason, metrics, method_version, computed_at
+  FROM analytics.account_tail_profile
+ WHERE account_id=%(account)s::uuid
+ ORDER BY computed_for DESC
+ LIMIT %(limit)s
+"""
+
 CREATE_MANUAL = """
 SELECT analytics.create_manual_anomaly_signal(
   %(publication)s,%(metric)s,%(severity)s,%(explanation)s,%(start_at)s,%(end_at)s,

@@ -77,6 +77,11 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
     text: "Уровни анализа динамики проанализированных публикаций аккаунта.",
     example: "/api/v1/accounts/{uuid}/anomaly-levels",
   },
+  getAccountTailProfile: {
+    section: "accounts", title: "Отклик на старые публикации",
+    text: "Доля реакций на просмотры постов в возрасте 4–14 суток относительно первых суток — в сравнении с другими аккаунтами площадки за 28 суток. Уровень null — метод воздержался, причина в abstainReason.",
+    example: "/api/v1/accounts/{uuid}/tail-profile",
+  },
   getPublication: {
     section: "publications", title: "Публикация",
     text: "Публикация и последние значения её счётчиков с отметками качества.",

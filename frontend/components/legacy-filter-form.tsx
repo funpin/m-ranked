@@ -4,6 +4,7 @@ import { useEffect, useRef, useTransition, type ComponentProps } from "react";
 import { beginNavigation } from "@/lib/navigation-pending";
 import { useRouter, useSearchParams } from "next/navigation";
 import { normalizePeriod, normalizePlatform } from "@/lib/params";
+import { useStuck } from "@/components/use-stuck";
 
 /** Hydrates only form interaction; all labels, values and results are SSR. */
 export function LegacyFilterForm({ action = "/review", ...props }: ComponentProps<"form">) {
@@ -11,6 +12,7 @@ export function LegacyFilterForm({ action = "/review", ...props }: ComponentProp
   const query=useSearchParams();
   const router=useRouter();
   const [pending,startTransition]=useTransition();
+  useStuck(form);
   useEffect(() => {
     // Browser bfcache restores edited native control properties, while the URL
     // still describes the server-rendered defaults of that history entry.

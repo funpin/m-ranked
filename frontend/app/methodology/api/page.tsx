@@ -6,6 +6,7 @@ import { API_DIGEST, PARAMETER_TEXT, operationAnchor, operationsBySection, type 
 import { publicOrigin } from "@/lib/deployment";
 import type { TocEntry } from "@/lib/methodology";
 import { REPOSITORY_URL } from "@/lib/repository";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const DESCRIPTION = "Публичные методы API m-ranked с параметрами и примерами запросов: обзор, сравнение, аккаунты, публикации и история замеров.";
 export const metadata: Metadata = {
@@ -34,7 +35,7 @@ export default function ApiReferencePage() {
     ...section.operations.map((operation) => ({ id: operationAnchor(operation.operationId), text: operation.title, level: 3 as const })),
   ]);
   return (
-    <div className="grid min-w-0 gap-12 2xl:grid-cols-[minmax(0,1fr)_208px]">
+    <div className="grid min-w-0 gap-12 xl:grid-cols-[minmax(0,1fr)_200px] xl:gap-10">
       <article data-article className="w-full max-w-[80ch] min-w-0" data-testid="api-reference">
         <header className="mb-10 grid gap-4 border-b pb-8">
           <p className="text-muted-foreground font-mono text-xs">Методология / API · версия {API_DIGEST.version}</p>
@@ -78,32 +79,32 @@ export default function ApiReferencePage() {
                   </div>
                   {operation.parameters.length > 0 && (
                     <div className="ring-foreground/10 focus-visible:ring-ring/60 overflow-x-auto rounded-xl ring-1 outline-none focus-visible:ring-2" tabIndex={0} role="region" aria-label={`Параметры: ${operation.title}`}>
-                      <table className="w-full border-collapse text-sm">
-                        <caption className="sr-only">Параметры: {operation.title}</caption>
-                        <thead className="bg-muted/50">
-                          <tr>
+                      <Table className="text-sm">
+                        <TableCaption className="sr-only">Параметры: {operation.title}</TableCaption>
+                        <TableHeader className="bg-muted/50">
+                          <TableRow className="hover:bg-transparent">
                             {["Параметр", "Тип", "Значения", "Описание"].map((label) => (
-                              <th key={label} scope="col" className="text-muted-foreground px-3 py-2 text-left text-xs font-medium tracking-wide uppercase">{label}</th>
+                              <TableHead key={label} scope="col" className="text-muted-foreground px-3 text-xs font-medium tracking-wide uppercase">{label}</TableHead>
                             ))}
-                          </tr>
-                        </thead>
-                        <tbody>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {operation.parameters.map((parameter) => (
-                            <tr key={`${parameter.in}-${parameter.name}`}>
-                              <td className="border-t px-3 py-2 align-top font-mono text-xs whitespace-nowrap">
+                            <TableRow key={`${parameter.in}-${parameter.name}`}>
+                              <TableCell className="px-3 py-2 align-top font-mono text-xs">
                                 {parameter.name}{parameter.in === "path" && <span className="text-muted-foreground"> · путь</span>}
                                 {parameter.required && <span className="text-destructive" title="обязательный"> *</span>}
-                              </td>
-                              <td className="text-muted-foreground border-t px-3 py-2 align-top font-mono text-xs">{parameter.type}</td>
-                              <td className="border-t px-3 py-2 align-top font-mono text-xs">
+                              </TableCell>
+                              <TableCell className="text-muted-foreground px-3 py-2 align-top font-mono text-xs whitespace-normal">{parameter.type}</TableCell>
+                              <TableCell className="px-3 py-2 align-top font-mono text-xs whitespace-normal">
                                 {constraint(parameter)}
                                 {parameter.default !== undefined && <span className="text-muted-foreground block">по умолчанию {String(parameter.default)}</span>}
-                              </td>
-                              <td className="text-muted-foreground border-t px-3 py-2 align-top text-xs">{PARAMETER_TEXT[parameter.name] ?? ""}</td>
-                            </tr>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground px-3 py-2 align-top text-xs whitespace-normal">{PARAMETER_TEXT[parameter.name] ?? ""}</TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
                   )}
                   <div className="bg-muted/60 ring-foreground/10 flex items-center gap-2 rounded-xl py-1.5 pr-1.5 pl-4 ring-1">
@@ -134,8 +135,8 @@ export default function ApiReferencePage() {
           настоящие — они есть в адресах страниц аккаунтов и публикаций.
         </p>
       </article>
-      <aside className="max-2xl:hidden">
-        <div className="sticky top-20 max-h-[calc(100svh-6rem)] overflow-y-auto"><ArticleToc entries={toc} /></div>
+      <aside className="max-xl:hidden">
+        <div data-toc-scroll className="sticky top-20 max-h-[calc(100svh-6rem)] overflow-y-auto overscroll-contain pb-6"><ArticleToc entries={toc} /></div>
       </aside>
     </div>
   );

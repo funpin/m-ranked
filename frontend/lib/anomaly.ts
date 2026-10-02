@@ -25,6 +25,7 @@ export const SIGNAL_LEGEND = [
   { pattern: 10, title: "ERV вне нормы" },
   { pattern: 11, title: "отклик выше исторического диапазона" },
   { pattern: 12, title: "продолжение отклика выше ожидаемого" },
+  { pattern: 13, title: "поздняя вовлечённость выше ранней" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;
@@ -129,16 +130,10 @@ function numberAt(render: AnomalySignal["render"], key: string) {
 /** Данные мини-графика по типу признака: какая картинка объясняет его лучше.
  *  Прямая аппроксимации поверх точек (1), кривая против полосы модели (2, 4),
  *  совмещённые реакции и просмотры (5, 6, 7), обрыв в плато (9), столбцы для
- *  синхронности (8) и шкала ERV «пост против медианы» (10). */
+ *  синхронности (8), шкала ERV «пост против медианы» (10) и ранняя против
+ *  поздней доли реакций (13). */
 export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[], publishedAt: string): MiniChart {
   const render = signal.render;
-  // Production can return this newer detector before its schema reaches main.
-  if (String(render.kind) === "late_engagement") {
-    return { type: "bars", percent: true, bars: [
-      { label: "ранний отклик", value: numberAt(render, "earlyRate") ?? 0, highlight: false },
-      { label: "поздний отклик", value: numberAt(render, "lateRate") ?? 0, highlight: true },
-    ] };
-  }
   if (render.kind === "bounded_burst") {
     if (render.reportedOnly === true) {
       return { type: "bars", percent: false, bars: [
@@ -165,6 +160,14 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
       { label: "этот пост", value: numberAt(render, "observed") ?? 0, highlight: true },
       { label: "ожидание", value: numberAt(render, "expected") ?? 0, highlight: false },
       { label: "верхняя граница", value: numberAt(render, "upper") ?? 0, highlight: false },
+    ] };
+  }
+  if (render.kind === "late_engagement") {
+    // Доли реакций на просмотры одного и того же поста: в первые сутки и на
+    // просмотрах, пришедших после четырёх суток.
+    return { type: "bars", percent: true, bars: [
+      { label: "первые сутки", value: numberAt(render, "earlyRate") ?? 0, highlight: false },
+      { label: "после 4 суток", value: numberAt(render, "lateRate") ?? 0, highlight: true },
     ] };
   }
   if (render.kind === "erv") {

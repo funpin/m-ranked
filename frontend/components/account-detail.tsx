@@ -1,3 +1,4 @@
+import { Card } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { publicationHref } from "@/lib/entity-routes";
 import Link from "@/components/native-link";
@@ -14,6 +15,8 @@ import { DaySpotlight } from "@/components/day-spotlight";
 import { RowLink } from "@/components/row-link";
 import { AnomalyLevelCell } from "@/components/anomaly-level-cell";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
+import type { TailProfileLoad } from "@/lib/account-tail";
+import { AccountTailCard } from "@/components/account-tail-card";
 
 
 /**
@@ -53,7 +56,7 @@ function MetricWithGrowth({ value, quality, growth, label }: { value: number | n
   return <TableCell title={qualityHint(quality)}><span className="flex items-center gap-2 whitespace-nowrap"><span>{legacyNumber(value)}</span><DeltaBadge value={growth} compact={false} label={`${label} за выбранные сутки`} /></span></TableCell>;
 }
 
-export function AccountDetail({ account, posts, truncated = false, siblings = [], selectedDay, selectedTrend, anomalyLevels = null }: { account: AccountView; posts: PublicationListItem[]; truncated?: boolean; siblings?: readonly AccountView[]; selectedDay?: string; selectedTrend?: "median" | "total"; anomalyLevels?: Promise<AccountLevelsLoad> | null }) {
+export function AccountDetail({ account, posts, truncated = false, siblings = [], selectedDay, selectedTrend, anomalyLevels = null, tailProfile = null }: { account: AccountView; posts: PublicationListItem[]; truncated?: boolean; siblings?: readonly AccountView[]; selectedDay?: string; selectedTrend?: "median" | "total"; anomalyLevels?: Promise<AccountLevelsLoad> | null; tailProfile?: Promise<TailProfileLoad> | null }) {
   const name = account.title || account.institutionShortName || account.institutionName;
   const institutionName = account.institutionName.trim();
   const showInstitutionName = institutionName !== name.trim();
@@ -75,7 +78,7 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
         данными подменяются заготовкой — так же, как при смене фильтра в
         обзоре и при переходе между постами. */}
     <NavigationBoundary fallback={<AccountSkeleton chrome={false} />}>
-    <div className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
+    <Card className="block p-5 text-sm">
       {stats ? <><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{telegram ? `Данные ниже — по всем публикациям, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней.` : `Данные ниже — по всем публикациям ${PLATFORM_LONG_LABELS[account.platform]}, которые сейчас хранятся в базе: за последние ${stats.retentionDays} дней. Недоступные площадке метрики показываются прочерком.`}</p>
       {/* Слева шесть чисел, справа один график за неделю. Линии внутри плиток
           соперничали с самими числами и ничего толком не показывали: на ста
@@ -106,8 +109,9 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
         </div>
         <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} />
       </div></> : <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Сводка публикаций ещё не рассчитана.</p>}
-    </div>
-    <div className="rounded-xl border bg-card p-5 text-card-foreground shadow-sm mt-5 min-w-0 overflow-x-auto">
+    </Card>
+    {tailProfile ? <AccountTailCard profile={tailProfile} /> : null}
+    <Card className="block p-5 text-sm mt-5 min-w-0 overflow-x-auto">
       <DaySpotlight day={selectedDay} mode={selectedTrend} />{truncated ? <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Показаны первые 100 публикаций. Более старые записи доступны через API с курсором.</p> : null}<Table className="reveal"><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead>{anomalyLevels ? <TableHead>Анализ динамики</TableHead> : null}</TableRow></TableHeader><TableBody>
       {posts.map((post) => {
         const observedAt = post.reactions.observedAt ?? post.views.observedAt;
@@ -124,7 +128,7 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
           : <TableRow key={post.publicationId} data-published-day={publishedDay}>{cells}</TableRow>;
       })}
       {!posts.length ? <TableRow><TableCell colSpan={anomalyLevels ? 9 : 8} className="space-y-3 py-10 text-center text-muted-foreground">Публикации ещё не собраны.</TableCell></TableRow> : null}
-    </TableBody></Table></div>
+    </TableBody></Table></Card>
     </NavigationBoundary>
   </>;
 }

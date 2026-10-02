@@ -39,7 +39,7 @@ from .v2.series import DAY, CollectionCadence, prepare
 from .v2.store import SERIES_BATCH, PostgresAnomalyStore, SeriesTarget
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
-ABSOLUTE_PATTERNS = frozenset({1, 6, 7, 8, 9})
+ABSOLUTE_PATTERNS = frozenset({1, 6, 7, 8, 9, 13})
 NORM_RELATIVE_PATTERNS = frozenset({2, 4, 5, 10})
 # Шестьдесят суток публикаций: посты второй половины окна отслежены целиком,
 # на них считается доля итога за тридцать дней.

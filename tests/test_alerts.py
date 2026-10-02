@@ -167,3 +167,14 @@ def test_renewed_reference_resolves_existing_alert():
     messages = alerts.transitions(renewed, state, now + 120)
     assert len(messages) == 1 and messages[0].startswith("🟢 Прошло:")
     assert "analysis_reference" not in state["active"]
+
+
+@pytest.mark.parametrize(("age_days", "firing"), [(None, False), (1.0, False), (2.5, True)])
+def test_stale_account_tail_profile_warns(age_days, firing):
+    now = 1_800_000_000.0
+    values, arguments = healthy(now)
+    if age_days is not None:
+        values["mranked_anomaly_tail_last_run_unixtime"] = now - age_days * 86400
+    rule = next(rule for rule in alerts.evaluate(now, alerts.empty_bucket(), values, **arguments)
+                if rule.key == "analysis_tail")
+    assert rule.firing is firing

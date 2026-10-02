@@ -1,5 +1,6 @@
 "use client";
 
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -56,24 +57,14 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend }: { p
           {published ? <>вышло <b className="text-foreground tabular">{published}</b> публикаций за 7 дней</> : "за 7 дней публикаций не было"}
         </span>
       </div>
-      {/* Переключатель в том же виде, что сегменты площадок в шапке обзора:
-          два состояния, подсвечено выбранное. */}
-      <div role="group" aria-label="Что показывают линии"
-        className="bg-muted text-muted-foreground inline-flex w-fit rounded-lg p-0.5">
-        {MODES.map((option) => (
-          <button key={option.id} type="button" title={option.hint}
-            aria-pressed={mode === option.id}
-            onClick={() => chooseMode(option.id)}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-              mode === option.id
-                ? "bg-background text-foreground shadow-sm"
-                : "bg-transparent hover:text-foreground",
-            )}>
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <ToggleGroup aria-label="Что показывают линии" variant="outline" spacing={0} value={[mode]}
+        onValueChange={(next) => {
+          // Base UI reports an empty selection when the pressed item is toggled off.
+          const selected = MODES.find((option) => option.id === next[0]);
+          if (selected) chooseMode(selected.id);
+        }}>
+        {MODES.map((option) => <ToggleGroupItem key={option.id} value={option.id} title={option.hint}>{option.label}</ToggleGroupItem>)}
+      </ToggleGroup>
       {points.length > 1
         ? <>
             <AccountTrendPlot points={points} primary={primary} mode={mode} selectedDay={selectedDay} />

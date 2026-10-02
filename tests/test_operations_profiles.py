@@ -32,6 +32,7 @@ def test_profile_a_target_is_complete_single_host_runtime() -> None:
         "m-ranked-target-web-cache-gc.timer",
         "m-ranked-target-anomaly-analysis.service",
         "m-ranked-target-anomaly-norms.timer",
+        "m-ranked-target-anomaly-tail.timer",
         "m-ranked-target-maintenance.timer",
         "m-ranked-target-official-rating.timer",
         "m-ranked-target-overview-metrics.timer",
@@ -58,6 +59,7 @@ def test_profile_b_targets_split_collection_and_presentation() -> None:
         "m-ranked-target-redis.service",
         "m-ranked-target-anomaly-analysis.service",
         "m-ranked-target-anomaly-norms.timer",
+        "m-ranked-target-anomaly-tail.timer",
         "m-ranked-target-maintenance.timer",
         "m-ranked-target-official-rating.timer",
         "m-ranked-target-overview-metrics.timer",
@@ -94,6 +96,7 @@ def test_new_services_keep_hardening_and_bounds() -> None:
         "m-ranked-target-redis.service",
         "m-ranked-target-anomaly-analysis.service",
         "m-ranked-target-anomaly-norms.service",
+        "m-ranked-target-anomaly-tail.service",
     ):
         unit = text(name)
         for directive in required:
@@ -138,7 +141,8 @@ def test_anomaly_units_keep_the_server_two_budget() -> None:
     # Работнику — 384 МиБ круглосуточно; ночному заданию норм — 768: оно держит
     # ряды всех аккаунтов площадки и на реальных данных упёрлось в 384.
     for name, memory in (("m-ranked-target-anomaly-analysis.service", "MemoryMax=384M"),
-                         ("m-ranked-target-anomaly-norms.service", "MemoryMax=768M")):
+                         ("m-ranked-target-anomaly-norms.service", "MemoryMax=768M"),
+                         ("m-ranked-target-anomaly-tail.service", "MemoryMax=256M")):
         unit = text(name)
         for directive in ("CPUQuota=50%", memory, "Nice=10"):
             assert directive in unit, (name, directive)
@@ -148,6 +152,9 @@ def test_anomaly_units_keep_the_server_two_budget() -> None:
     assert "RuntimeDirectory=m-ranked-anomaly\n" in text("m-ranked-target-anomaly-analysis.service")
     timer = text("m-ranked-target-anomaly-norms.timer")
     assert "Europe/Moscow" in timer and "RandomizedDelaySec=" in timer
+    assert "python -m anomaly_analysis.account_tail_job" in text("m-ranked-target-anomaly-tail.service")
+    assert "RuntimeDirectory=m-ranked-anomaly-tail" in text("m-ranked-target-anomaly-tail.service")
+    assert "Europe/Moscow" in text("m-ranked-target-anomaly-tail.timer")
 
 
 def test_installer_ships_the_anomaly_units_where_the_full_history_lives() -> None:
@@ -165,3 +172,4 @@ def test_installer_ships_the_anomaly_units_where_the_full_history_lives() -> Non
         assert (SYSTEMD / name).is_file(), name
     assert set(installer.UNITS_ANOMALY) <= set(installer.UNITS_SERVER2)
     assert "m-ranked-target-anomaly-norms.timer" in installer.UNITS_ANOMALY
+    assert "m-ranked-target-anomaly-tail.timer" in installer.UNITS_ANOMALY

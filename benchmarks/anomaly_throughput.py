@@ -37,6 +37,7 @@ from anomaly_analysis.v2.mature_reference import bundled_reference  # noqa: E402
 from anomaly_analysis.v2.norms import build_norms  # noqa: E402
 from anomaly_analysis.v2.schedule import ScheduleConfig, interval  # noqa: E402
 from anomaly_analysis.v2.series import DAY, HOUR, CollectionCadence, age_band, prepare  # noqa: E402
+from anomaly_analysis.v2.tail_ledger import build_ledger  # noqa: E402
 
 PLATFORM_SHARES = {"telegram": 0.40, "vk": 0.35, "max": 0.15, "rutube": 0.10}
 METRICS = {"telegram": (Metric.VIEWS, Metric.REACTIONS, Metric.COMMENTS),
@@ -143,6 +144,8 @@ def main() -> int:
         signs.extend(reference.detect(series, NOW))
         detected_at = time.perf_counter()
         verdict(prepared, context, signs, versions)
+        # Работник строит сводку позднего отклика при каждом анализе.
+        build_ledger(series, NOW).payload()
         finished = time.perf_counter()
         timings["prepare"].append(prepared_at - started)
         timings["detectors"].append(detected_at - prepared_at)

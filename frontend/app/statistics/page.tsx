@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Link from "@/components/native-link";
 import { MethodNote } from "@/components/method-note";
 import { NavigationBoundary } from "@/components/navigation-boundary";
-import { NativeButton, NativeInput, NativeSegments, NativeSelect } from "@/components/native-field";
+import { NativeSegments } from "@/components/native-field";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatisticsFilterForm } from "@/components/statistics-filter-form";
 import { StatisticsResults } from "@/components/statistics-results";
 import { ApiFailureState, PageHeader } from "@/components/ui";
@@ -10,7 +13,7 @@ import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { first, queryHref, type SearchParams } from "@/lib/params";
 import { normalizeStatisticsQuery, statisticsHrefQuery } from "@/lib/statistics";
-import { Search, X } from "lucide-react";
+import { ArrowRight, Search, X } from "lucide-react";
 import { StatisticsSkeleton } from "@/components/skeletons";
 import {
   FILTER_DIRECTION_CLASS,
@@ -19,6 +22,7 @@ import {
   FILTER_PLATFORM_CLASS,
   FILTER_PLATFORM_OPTIONS,
   FILTER_SEARCH_CLASS,
+  FILTER_SELECT_CLASS,
   FILTER_SORT_CLASS,
   FILTER_TOOLBAR_CLASS,
 } from "@/components/filter-toolbar";
@@ -70,19 +74,34 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
         options={FILTER_PLATFORM_OPTIONS} /></div>
       <div className={FILTER_PERIOD_CLASS}><NativeSegments name="period" legend="Период" value={query.period}
         options={FILTER_PERIOD_OPTIONS} labelled={false} /></div>
-      <div className={FILTER_SEARCH_CLASS}><NativeInput name="q" type="search" defaultValue={query.q} maxLength={200} placeholder="Вуз, аккаунт, ID или URL" aria-label="Поиск публикаций" className="h-8" />{query.q ? <Link className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border" href={queryHref("/statistics", { ...statisticsHrefQuery(query), q: undefined })} aria-label="Очистить поиск" prefetch={false}><X className="size-4" aria-hidden="true" /></Link> : null}<NativeButton type="submit" variant="outline" className="size-8 min-h-8 shrink-0 px-0" aria-label="Найти" title="Найти"><Search className="size-4" aria-hidden="true" /></NativeButton></div>
+      <div className={FILTER_SEARCH_CLASS}>
+        <InputGroup className="h-8">
+          <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
+          <InputGroupInput name="q" type="search" defaultValue={query.q} maxLength={200} placeholder="Вуз, аккаунт, ID или URL" aria-label="Поиск публикаций" className="text-sm md:text-sm" />
+          <InputGroupAddon align="inline-end">
+            {query.q ? <InputGroupButton size="icon-sm" className="size-6" nativeButton={false} aria-label="Очистить поиск" title="Очистить поиск"
+              render={<Link role="link" href={queryHref("/statistics", { ...statisticsHrefQuery(query), q: undefined })} prefetch={false} />}><X className="size-3.5" aria-hidden="true" /></InputGroupButton> : null}
+            <InputGroupButton type="submit" variant="secondary" size="icon-sm" className="size-6" aria-label="Найти" title="Найти"><ArrowRight className="size-3.5" aria-hidden="true" /></InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+      </div>
       <div className={FILTER_SORT_CLASS}>{query.view === "publications"
-        ? <NativeSelect name="publication_sort" defaultValue={query.publicationSort} aria-label="Сортировка публикаций" className="h-8">{PUBLICATION_SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</NativeSelect>
-        : <NativeSelect name="entity_sort" defaultValue={query.entitySort} aria-label="Сортировка вузов" className="h-8">{ENTITY_SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</NativeSelect>}</div>
+        ? <NativeSelect name="publication_sort" defaultValue={query.publicationSort} aria-label="Сортировка публикаций" className={FILTER_SELECT_CLASS}>{PUBLICATION_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect>
+        : <NativeSelect name="entity_sort" defaultValue={query.entitySort} aria-label="Сортировка вузов" className={FILTER_SELECT_CLASS}>{ENTITY_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect>}</div>
       <div className={FILTER_DIRECTION_CLASS}>{query.view === "publications"
-        ? <NativeSelect name="publication_direction" defaultValue={query.publicationDirection} aria-label="Направление сортировки публикаций" className="h-8"><option value="desc">По убыванию</option><option value="asc">По возрастанию</option></NativeSelect>
-        : <NativeSelect name="entity_direction" defaultValue={query.entityDirection} aria-label="Направление сортировки вузов" className="h-8"><option value="desc">По убыванию</option><option value="asc">По возрастанию</option></NativeSelect>}</div>
+        ? <NativeSelect name="publication_direction" defaultValue={query.publicationDirection} aria-label="Направление сортировки публикаций" className={FILTER_SELECT_CLASS}><NativeSelectOption value="desc">По убыванию</NativeSelectOption><NativeSelectOption value="asc">По возрастанию</NativeSelectOption></NativeSelect>
+        : <NativeSelect name="entity_direction" defaultValue={query.entityDirection} aria-label="Направление сортировки вузов" className={FILTER_SELECT_CLASS}><NativeSelectOption value="desc">По убыванию</NativeSelectOption><NativeSelectOption value="asc">По возрастанию</NativeSelectOption></NativeSelect>}</div>
       {query.view === "publications" ? <><input type="hidden" name="entity_sort" value={query.entitySort} /><input type="hidden" name="entity_direction" value={query.entityDirection} /></> : <><input type="hidden" name="publication_sort" value={query.publicationSort} /><input type="hidden" name="publication_direction" value={query.publicationDirection} /></>}
     </StatisticsFilterForm>
 
-    {query.platform !== "all" ? <nav className="mb-5 flex w-fit rounded-md bg-muted p-0.5" aria-label="Вид статистики" role="tablist">
-      {(["publications", "entities"] as const).map((view) => <Link key={view} role="tab" aria-selected={query.view === view} className={`rounded px-4 py-2 text-sm font-medium ${query.view === view ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} href={queryHref("/statistics", { ...statisticsHrefQuery(query), view })} scroll={false} prefetch={false}>{view === "publications" ? "Публикации" : "Вузы"}</Link>)}
-    </nav> : null}
+    {query.platform !== "all" ? <Tabs value={query.view} className="mb-5">
+      <TabsList aria-label="Вид статистики" className="h-9">
+        {(["publications", "entities"] as const).map((view) => <TabsTrigger key={view} value={view} nativeButton={false} className="px-4 text-sm"
+          render={<Link href={queryHref("/statistics", { ...statisticsHrefQuery(query), view })} scroll={false} prefetch={false} />}>
+          {view === "publications" ? "Публикации" : "Вузы"}
+        </TabsTrigger>)}
+      </TabsList>
+    </Tabs> : null}
 
     <NavigationBoundary fallback={<StatisticsSkeleton chrome={false} view={query.view} />}>
       {failed || !page ? <ApiFailureState retryHref={queryHref("/statistics", statisticsHrefQuery(query))} /> : <StatisticsResults key={selectionKey} page={page} query={query} />}

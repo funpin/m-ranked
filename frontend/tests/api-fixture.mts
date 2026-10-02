@@ -184,7 +184,7 @@ function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
 }
 const server = createServer(async (request, response) => {
   const url = new URL(request.url!, "http://127.0.0.1");
-  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis|anomaly-levels))?$/.exec(url.pathname);
+  const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis|anomaly-levels|tail-profile))?$/.exec(url.pathname);
   if (canonical) {
     const id = Number(canonical[2]!.slice(-12));
     const kind = Number(canonical[2]!.slice(0,8));
@@ -232,6 +232,26 @@ const server = createServer(async (request, response) => {
   // Уровни аккаунта: первый пост с выраженной аномалией, второй ещё не проанализирован.
   const levelsId=/^\/api\/v1\/accounts\/(\d+)\/anomaly-levels$/.exec(url.pathname);
   if(levelsId) {const type=url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts";return json({accountId:uuid(1,Number(levelsId[1])),datasetRevision:revision,items:[{publicationId:publication(1,type).publicationId,level:2,levelLabel:"выраженная аномалия",levelSymbol:"◑"}]} satisfies Schema["AccountAnomalyLevels"]);}
+  // Профиль позднего отклика: канал 1 — устойчиво необычный, остальные — воздержание.
+  const tailId=/^\/api\/v1\/accounts\/(\d+)\/tail-profile$/.exec(url.pathname);
+  if(tailId) {
+    const accountNumber=Number(tailId[1]);
+    const totals={posts:18,earlyViews:24000,earlyReactions:1300,lateViews:3100,lateReactions:520,earlyRate:0.0542,lateRate:0.1679,ratio:3.1};
+    const days=Array.from({length:21},(_,index)=>({day:new Date(Date.parse("2026-09-08T00:00:00Z")+index*86400000).toISOString().slice(0,10),
+      observed:index===5?0:12,active:index===5?0:index%3===0?2:9,reactions:index===5?0:index%3===0?2:14}));
+    const computed=accountNumber===1;
+    return json({accountId:uuid(1,accountNumber),datasetRevision:revision,status:"computed",computedFor:"2026-09-29",
+      computedAt:asOf,platform:"telegram",level:computed?2:null,levelLabel:computed?"устойчиво необычный":"недостаточно данных",
+      abstainReason:computed?null:"few_posts",
+      metrics:{methodVersion:"account-tail-v1",windowStart:days[0]!.day,windowEnd:days[20]!.day,...totals,
+        halves:{earlier:{...totals,ratio:2.8},recent:{...totals,ratio:3.4}},days,activeDays:19,activeWeeks:3,wideDays:12,
+        breadth:{observed:120,expected:84.5,excess:1.42},roundedPosts:computed?18:0,
+        cohort:{accounts:65,median:0.166,p90:0.736,threshold:0.736,rank:0.98},
+        ...(computed?{}:{abstainText:"мало постов с точными замерами в первые сутки и после четырёх суток"})},
+      history:[{computedFor:"2026-09-28",level:2,ratio:3.0},{computedFor:"2026-09-29",level:computed?2:null,ratio:3.1}],
+      methodologyVersion:"account-tail-v1",
+      disclaimer:"Поздний отклик сравнивается с другими аккаунтами площадки."} satisfies Schema["AccountTailProfile"]);
+  }
   const historyId=/^\/api\/v1\/publications\/(\d+)\/history$/.exec(url.pathname);
   if(historyId) {
     const p=publication(Number(historyId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts");

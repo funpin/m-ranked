@@ -111,7 +111,7 @@ def stretch_for_lag(config: ScheduleConfig, queue_lag_seconds: float) -> float:
 def plan(config: ScheduleConfig, *, platform: str, published_at: datetime, now: datetime,
          new_points: int, analyzed_before: bool, resumed_after_gap: bool = False,
          norm_recheck: bool = False, stale: bool = False, stretch: float = 1.0,
-         reference_checkpoint: bool = False) -> Plan:
+         reference_checkpoint: bool = False, tail_ledger_stale: bool = False) -> Plan:
     """Решение по посту, срок которого наступил."""
     age = (now - published_at).total_seconds()
     if age >= config.track_seconds:
@@ -126,6 +126,9 @@ def plan(config: ScheduleConfig, *, platform: str, published_at: datetime, now: 
         return Plan(True, False, now + step, "norm_recheck")
     if reference_checkpoint:
         return Plan(True, False, now + step, "reference_checkpoint")
+    if tail_ledger_stale:
+        # Сводки позднего отклика нет или она старого формата: один анализ её строит.
+        return Plan(True, False, now + step, "tail_ledger")
     if new_points >= config.min_new_points:
         return Plan(True, False, now + step, "scheduled")
     probe = timedelta(seconds=config.stale_probe_seconds) if stale else step

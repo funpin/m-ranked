@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "1aa457abe12a6dcab1003b9b330d10de89f8e4e47e9ca14b452738202d52784f",
+  "sourceSha256": "40d3224c5cecfaec300a068e4c8216641b9162f79a8168a6d77e1067ff76d0db",
   "version": "1.0.0",
   "operations": [
     {
@@ -492,6 +492,74 @@
         {
           "name": "items",
           "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getAccountTailProfile",
+      "path": "/api/v1/accounts/{accountId}/tail-profile",
+      "summary": "Read the account's late-engagement profile relative to other accounts of its platform",
+      "parameters": [
+        {
+          "name": "accountId",
+          "in": "path",
+          "required": true,
+          "type": "uuid"
+        }
+      ],
+      "response": "AccountTailProfile",
+      "fields": [
+        {
+          "name": "accountId",
+          "type": "uuid"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        },
+        {
+          "name": "computedFor",
+          "type": "string | null"
+        },
+        {
+          "name": "computedAt",
+          "type": "string | null"
+        },
+        {
+          "name": "platform",
+          "type": "string | null"
+        },
+        {
+          "name": "level",
+          "type": "integer | null"
+        },
+        {
+          "name": "levelLabel",
+          "type": "string"
+        },
+        {
+          "name": "abstainReason",
+          "type": "string | null"
+        },
+        {
+          "name": "metrics",
+          "type": "null | object"
+        },
+        {
+          "name": "history",
+          "type": "object[]"
+        },
+        {
+          "name": "methodologyVersion",
+          "type": "string"
+        },
+        {
+          "name": "disclaimer",
+          "type": "string"
         }
       ]
     },

@@ -9,6 +9,7 @@ import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import type { AccountView } from "@/lib/types";
 import { anomalyReportVisible } from "@/lib/anomaly-visibility";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
+import type { TailProfileLoad } from "@/lib/account-tail";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ day?: string | string[]; trend?: string | string[] }> };
@@ -42,6 +43,9 @@ export default async function AccountPage({ params, searchParams }: Props) {
     ? api.accountAnomalyLevels(id).then(
       (body) => new Map(body.items.map((item) => [item.publicationId, item])), () => null)
     : null;
+  const tail: Promise<TailProfileLoad> | null = anomalyReportVisible()
+    ? api.accountTailProfile(id).catch(() => null)
+    : null;
   try {
     account = await api.account(id);
     const requestedDay = typeof query.day === "string" ? query.day : undefined;
@@ -66,5 +70,5 @@ export default async function AccountPage({ params, searchParams }: Props) {
     reportDetailFailure(`account:${id}`, error);
     return <ApiFailureState retryHref={accountHref(id)} />;
   }
-  return <AccountDetail account={account} posts={posts.items} truncated={Boolean(posts.nextCursor)} siblings={siblings} selectedDay={selectedDay} selectedTrend={selectedTrend} anomalyLevels={levels} />;
+  return <AccountDetail account={account} posts={posts.items} truncated={Boolean(posts.nextCursor)} siblings={siblings} selectedDay={selectedDay} selectedTrend={selectedTrend} anomalyLevels={levels} tailProfile={tail} />;
 }

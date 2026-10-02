@@ -1,4 +1,5 @@
 "use client";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 
 import { useMemo } from "react";
 import {
@@ -404,5 +405,5 @@ export function ReachAreaChart({ data, platform }: { data: Dashboard; platform: 
 }
 
 function EmptyChart({ text = "Недостаточно данных за выбранный период." }: { text?: string }) {
-  return <div className="text-muted-foreground flex h-[200px] items-center justify-center rounded-lg border border-dashed text-sm">{text}</div>;
+  return <Empty className="h-[200px] rounded-lg border p-0"><EmptyDescription className="text-sm">{text}</EmptyDescription></Empty>;
 }

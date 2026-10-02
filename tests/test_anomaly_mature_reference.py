@@ -124,6 +124,27 @@ def test_corrupt_or_uncalibrated_artifact_is_rejected(mutate):
 
 
 def test_release_artifact_is_loadable_and_cached():
-    ref=bundled_reference()
-    assert ref is bundled_reference() and ref.fit_count>=100 and ref.calibration_count>=100
-    assert ref.platform=='max' and len(ref.components)==4
+    bundle=bundled_reference()
+    assert bundle is bundled_reference() and bundle.platform=='max'
+    for ref in bundle.references:
+        assert ref.fit_count>=100 and ref.calibration_count>=100
+        assert ref.platform=='max' and len(ref.components)==4
+        # Each artifact is valid for 28 days after its reference became available.
+        assert ref.expires_at-ref.available_at<=timedelta(days=28)
+
+
+def test_a_post_uses_the_newest_artifact_that_covers_its_publication():
+    from anomaly_analysis.v2.mature_reference import ReferenceSet
+    old=MatureReference.from_payload(reference_payload())
+    payload=deepcopy(reference_payload())
+    payload.update(reference_version='renewed',fit_start='2026-09-13T00:00:00+00:00',
+                   calibration_end='2026-09-24T00:00:00+00:00',available_at='2026-09-27T00:00:00+00:00',
+                   expires_at='2026-10-25T00:00:00+00:00')
+    bundle=ReferenceSet((MatureReference.from_payload(payload),old))
+    def post(day):
+        return PostSeries(UUID(int=5),A,'max',datetime(2026,9,day,tzinfo=timezone.utc),False,(),{})
+    assert bundle.available_at==old.available_at and bundle.version=='renewed'
+    assert bundle.for_post(post(21)) is old and bundle.version_for(post(21))==old.version
+    assert bundle.for_post(post(28)).version=='renewed'
+    with pytest.raises(ValueError):
+        ReferenceSet((old,old))

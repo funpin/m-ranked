@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { API_DIGEST, OPERATION_TEXT, operationAnchor, operationsBySection } from "../lib/api-reference";
 import { ARTICLES, editUrl, headingsOf, neighbours, slugify } from "../lib/methodology";
+import { CHART_NAMES } from "../lib/methodology-charts";
 
 test("у каждой статьи из списка есть файл, и лишних файлов нет", async () => {
   const files = (await readdir(new URL("../content/methodology/", import.meta.url))).filter((name) => name.endsWith(".mdx"));
@@ -54,4 +55,29 @@ test("справочник API: только публичные чтения, и
   const analysis = API_DIGEST.operations.find((operation) => operation.operationId === "getPublicationAnomalyAnalysis");
   assert.ok(analysis?.fields.some((field) => field.name === "originalLevel"));
   assert.ok(analysis?.fields.some((field) => field.name === "recheckMethodVersion"));
+});
+
+test("каждый рисунок статей — известный график, и каждый график где-то показан", async () => {
+  const used = new Set<string>();
+  for (const article of ARTICLES) {
+    const source = await readFile(new URL(`../content/methodology/${article.slug}.mdx`, import.meta.url), "utf8");
+    for (const [, name] of source.matchAll(/<Figure chart="([^"]+)"/g)) {
+      assert.ok((CHART_NAMES as readonly string[]).includes(name!), `${article.slug}: ${name}`);
+      used.add(name!);
+    }
+  }
+  assert.deepEqual([...used].sort(), [...CHART_NAMES].sort());
+});
+
+test("у каждого анализатора есть основания со ссылками", async () => {
+  // Признаки публикации — по подразделу на проверку; ориентиры и поздний отклик — по разделу на метод.
+  for (const [slug, heading] of [["signals", "\n### "], ["late-response", "\n## "]] as const) {
+    const source = await readFile(new URL(`../content/methodology/${slug}.mdx`, import.meta.url), "utf8");
+    const sections = source.split(heading).slice(1).map((section) => section.split(/\n## /)[0]!)
+      .filter((section) => section.includes("<Figure"));
+    assert.ok(sections.length >= 2, slug);
+    for (const section of sections) {
+      assert.match(section, /<Sources>[\s\S]*\]\(https?:\/\//, `${slug}: «${section.split("\n")[0]}» без оснований`);
+    }
+  }
 });

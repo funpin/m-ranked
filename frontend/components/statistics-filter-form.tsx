@@ -3,11 +3,13 @@
 import { beginNavigation } from "@/lib/navigation-pending";
 import { useRouter } from "next/navigation";
 import { useRef, useTransition, type ComponentProps } from "react";
+import { useStuck } from "@/components/use-stuck";
 
 export function StatisticsFilterForm(props: ComponentProps<"form">) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, startTransition] = useTransition();
+  useStuck(formRef);
 
   function navigate(form: HTMLFormElement) {
     const query = new URLSearchParams();

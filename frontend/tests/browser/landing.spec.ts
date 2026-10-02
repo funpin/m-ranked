@@ -30,7 +30,7 @@ test("главная ведёт в обзор, а якорь и ссылка API
   await page.getByRole("link", { name: "Как это устроено" }).click();
   await expect(page).toHaveURL(/#how$/);
   const heading = page.locator("#how");
-  const header = page.locator(".site-header-glass");
+  const header = page.getByRole("navigation", { name: "Основная навигация" });
   await expect(heading).toBeInViewport();
   expect((await heading.boundingBox())!.y).toBeGreaterThan((await header.boundingBox())!.height);
   await expect(page.locator('#main-content a[href="/methodology/api"]')).toHaveCount(1);

@@ -345,6 +345,13 @@ def cases() -> tuple[Case, ...]:
              Post("vk", _at(12, 12), (_vk(60000),), 2 * DAY,
                   ratios={R: 0.003, C: 0.0003, S: 0.0004}),
              Level.WEAK_SIGNAL, Level.WEAK_SIGNAL, (10,), siblings=_account_background(_at(12, 12))),
+        Case("p13_late_engagement_max", "synthetic",
+             "MAX: с пятых суток до двенадцатых затухший пост ровно получает ещё 60 "
+             "реакций, а просмотров за это время почти не прибавилось: доля реакций на "
+             "поздние просмотры в десятки раз выше, чем в первые сутки.",
+             Post("max", _at(1, 12), (Wave(0, 3000, 3 * HOUR, 0.6),), 13 * DAY,
+                  {R: (Ramp(4 * DAY + 6 * HOUR, 12 * DAY, 60),)}),
+             Level.WEAK_SIGNAL, Level.ARTIFICIAL_ACTIVITY_SIGNS, (13,)),
         Case("strong_linear_views_reaction_burst_telegram", "synthetic",
              "Telegram: сутки линейной подачи просмотров, затем +900 реакций за два часа "
              "и тишина. Сильные признаки двух семейств — скорость и форма.",
@@ -390,6 +397,12 @@ def cases() -> tuple[Case, ...]:
              "ВК: вторая органическая волна из рекомендаций на вторые сутки — со своим "
              "затуханием и реакциями в норме.",
              Post("vk", _at(21, 12), (_vk(9000), Wave(40 * HOUR, 5000, 2 * HOUR, 0.7)), 5 * DAY),
+             **HONEST),
+        Case("honest_late_recommendation_wave_vk", "synthetic",
+             "ВК: на шестые сутки пост снова попал в рекомендации — новая волна просмотров "
+             "с обычной, более низкой долей реакций. Поздний отклик есть, но поздние "
+             "зрители реагируют не охотнее ранних.",
+             Post("vk", _at(28, 12), (_vk(9000), Wave(6 * DAY, 6000, 3 * HOUR, 0.6)), 12 * DAY),
              **HONEST),
         Case("honest_forward_large_channel_telegram", "synthetic",
              "Telegram: пересылка крупным каналом на третьи сутки — резкий подъём со "

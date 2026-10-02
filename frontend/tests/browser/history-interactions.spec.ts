@@ -126,6 +126,18 @@ test("account table shows the analysis level without waiting for it",async({page
   await expect(cells.nth(1)).toContainText("ожидает");
 });
 
+test("account page explains late engagement against the platform without waiting for it",async({page})=>{
+  await page.goto("/channels/1");
+  const card=page.getByTestId("account-tail-card");
+  await expect(card.getByRole("heading",{name:"Отклик на старые публикации"})).toBeVisible();
+  await expect(card.getByTestId("account-tail-status")).toContainText("устойчиво необычный");
+  await expect(card).toContainText("3,10×");
+  await expect(card).toContainText("выше, чем у 98 % аккаунтов");
+  await expect(card).toContainText("Счётчики площадки округлены");
+  await expect(card.getByRole("img",{name:/Сутки с поздними реакциями: 20 из 21/})).toBeVisible();
+  await expect(card).not.toContainText(/накрут|мошен/);
+});
+
 test("a post without signals reads calmly and an unanalyzed post says so",async({page})=>{
   await page.goto("/posts/3");
   await expect(page.getByTestId("anomaly-toggle")).toContainText("Нет признаков");
@@ -309,7 +321,7 @@ test("new reference methods keep shared cards, icons, charts and explanations",a
   await page.mouse.move(0,0);
   await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
   await card.screenshot({path:testInfo.outputPath("mature-reference-card.png"), animations:"disabled",
-    style:".site-header-glass { visibility: hidden !important; }"});
+    style:"nav[aria-label='Основная навигация'] { visibility: hidden !important; }"});
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
 });
 

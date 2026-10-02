@@ -65,6 +65,7 @@ class FakeStore:
     def read_activity(self, accounts, since, until, published_since):
         return {}
 
+
     def read_subscribers(self, accounts, since, until):
         return {}
 
@@ -216,3 +217,17 @@ def test_reference_rollback_disables_the_model_without_changing_quality_processi
                   WorkerConfig(mature_reference_enabled=False),clock=lambda:reference.available_at)
     assert worker.reference is None and worker.metrics.reference_accounts==0
     worker.run_once()
+
+
+def test_a_post_without_a_current_tail_ledger_is_analyzed_once_even_without_new_points():
+    subject = synthetic_cases()["p13_late_engagement_max"].subject
+    now = subject.observed_at[-1]
+    row = DueRow(subject.publication_id, subject.published_at, now, now - timedelta(hours=1),
+                 subject.observed_at[-2], None, 0, (), None)
+    store = FakeStore({subject.publication_id: subject}, [row])
+    _worker(store, now).run_once()
+    [write] = store.written
+    assert write.reason == "tail_ledger"
+    assert write.tail_ledger["v"] == 1 and write.tail_ledger["start"] and write.tail_ledger["growth"]
+    assert 13 in {sign.pattern for sign in write.verdict.signs}
+

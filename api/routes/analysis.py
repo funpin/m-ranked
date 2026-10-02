@@ -148,6 +148,53 @@ async def account_levels(accountId: str, request: Request) -> Response:
     return await serve(request, "account-anomaly-levels", {"id": str(account)}, ANALYSIS_TAGS, build)
 
 
+# Профиль позднего отклика: названия — те же, что пишет модуль анализа
+# (anomaly_analysis/v2/account_tail.py); совпадение проверяет тест.
+TAIL_METHODOLOGY_VERSION = "account-tail-v1"
+TAIL_LABELS = {0: "обычный для площадки", 1: "необычный", 2: "устойчиво необычный"}
+TAIL_ABSTAINED = "недостаточно данных"
+TAIL_HISTORY_DAYS = 28
+TAIL_DISCLAIMER = ("Поздний отклик сравнивается с другими аккаунтами площадки. Необычный отклик "
+                   "бывает и у живой увлечённой аудитории; сам по себе он не доказывает искусственное "
+                   "происхождение активности или действия университета.")
+
+
+@router.get("/api/v1/accounts/{accountId}/tail-profile", tags=["Query"])
+async def account_tail_profile(accountId: str, request: Request) -> Response:
+    account = _uuid(accountId, "accountId")
+
+    async def build(dataset_revision: int, committed_at: Any) -> dict[str, Any]:
+        rows = await request.app.state.db.fetch_all(sql.TAIL_PROFILE, {
+            "account": account, "limit": TAIL_HISTORY_DAYS,
+        })
+        return tail_profile_body(str(account), dataset_revision, rows)
+
+    return await serve(request, "account-tail-profile", {"id": str(account)}, ANALYSIS_TAGS, build)
+
+
+def tail_profile_body(account_id: str, dataset_revision: int, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Последний профиль и история отношения; аккаунт без профиля — «ещё не рассчитан»."""
+    latest = rows[0] if rows else None
+    status = None if latest is None else latest["status"]
+    metrics = dict(latest["metrics"]) if latest is not None else None
+    return {
+        "accountId": account_id, "datasetRevision": dataset_revision,
+        "status": "computed" if latest is not None else "pending",
+        "computedFor": latest["computed_for"].isoformat() if latest is not None else None,
+        "computedAt": dto.iso(latest["computed_at"]) if latest is not None else None,
+        "platform": latest["platform"] if latest is not None else None,
+        "level": status,
+        "levelLabel": (TAIL_LABELS[status] if status is not None else TAIL_ABSTAINED) if latest is not None
+        else NOT_ANALYZED,
+        "abstainReason": latest["abstain_reason"] if latest is not None else None,
+        "metrics": metrics,
+        "history": [{"computedFor": row["computed_for"].isoformat(), "level": row["status"],
+                     "ratio": (row["metrics"] or {}).get("ratio")} for row in reversed(rows)],
+        "methodologyVersion": latest["method_version"] if latest is not None else TAIL_METHODOLOGY_VERSION,
+        "disclaimer": TAIL_DISCLAIMER,
+    }
+
+
 def levels_body(account_id: str, dataset_revision: int, rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Только уровень: признаки и качество читает страница поста."""
     return {

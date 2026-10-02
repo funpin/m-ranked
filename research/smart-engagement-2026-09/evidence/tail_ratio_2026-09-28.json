@@ -1,0 +1,780 @@
+{
+ "computedFor": "2026-09-28",
+ "posts": 29226,
+ "input_sha256": "ef7d149d9f1f14bf1210704b2fb292620b730cc99e1c40de5471dacd982b2cf2",
+ "method": "account-tail-v1 / late_engagement 1.0.0 / tail ledger v1",
+ "platforms": {
+  "max": {
+   "accounts": 81,
+   "statuses": {
+    "0": 71,
+    "1": 7,
+    "2": 2,
+    "abstain:few_posts": 1
+   },
+   "cohort": {
+    "accounts": 80,
+    "median": 0.1776,
+    "p90": 0.7942,
+    "threshold": 0.7942,
+    "rank": 0.8608
+   },
+   "postsWithLedger": 4729,
+   "pattern13Posts": 105,
+   "pattern13Accounts": 6,
+   "pattern13Top": [
+    [
+     "КГУ (Курск)",
+     49,
+     2
+    ],
+    [
+     "МАИ",
+     23,
+     1
+    ],
+    [
+     "other",
+     19,
+     1
+    ],
+    [
+     "other",
+     8,
+     1
+    ],
+    [
+     "other",
+     3,
+     0
+    ],
+    [
+     "other",
+     3,
+     1
+    ]
+   ],
+   "flagged": [
+    {
+     "ratio": 7.1947,
+     "account": "МАИ",
+     "status": 1,
+     "lateReactions": 1654,
+     "activeDays": 10,
+     "activeWeeks": 3,
+     "earlierRatio": 0.1556,
+     "recentRatio": 11.9909
+    },
+    {
+     "ratio": 2.9654,
+     "account": "КГУ (Курск)",
+     "status": 2,
+     "lateReactions": 1366,
+     "activeDays": 11,
+     "activeWeeks": 2,
+     "earlierRatio": 5.0425,
+     "recentRatio": 2.491
+    },
+    {
+     "ratio": 2.2091,
+     "account": "max-3",
+     "status": 1,
+     "lateReactions": 642,
+     "activeDays": 5,
+     "activeWeeks": 2,
+     "earlierRatio": 4.6624,
+     "recentRatio": 0.3313
+    },
+    {
+     "ratio": 1.5922,
+     "account": "max-4",
+     "status": 1,
+     "lateReactions": 819,
+     "activeDays": 13,
+     "activeWeeks": 3,
+     "earlierRatio": 3.5306,
+     "recentRatio": 0.3127
+    },
+    {
+     "ratio": 1.2445,
+     "account": "ЮЗГУ",
+     "status": 2,
+     "lateReactions": 1077,
+     "activeDays": 14,
+     "activeWeeks": 3,
+     "earlierRatio": 0.8087,
+     "recentRatio": 1.6035
+    },
+    {
+     "ratio": 1.052,
+     "account": "max-6",
+     "status": 1,
+     "lateReactions": 39,
+     "activeDays": 2,
+     "activeWeeks": 1,
+     "earlierRatio": null,
+     "recentRatio": 1.052
+    },
+    {
+     "ratio": 0.985,
+     "account": "max-7",
+     "status": 1,
+     "lateReactions": 46,
+     "activeDays": 4,
+     "activeWeeks": 2,
+     "earlierRatio": null,
+     "recentRatio": 0.985
+    },
+    {
+     "ratio": 0.8696,
+     "account": "max-8",
+     "status": 1,
+     "lateReactions": 119,
+     "activeDays": 9,
+     "activeWeeks": 3,
+     "earlierRatio": 0.3563,
+     "recentRatio": 1.3148
+    },
+    {
+     "ratio": 0.7753,
+     "account": "max-9",
+     "status": 1,
+     "lateReactions": 177,
+     "activeDays": 12,
+     "activeWeeks": 3,
+     "earlierRatio": 1.0817,
+     "recentRatio": 0.5565
+    }
+   ],
+   "named": {
+    "МАИ": {
+     "status": 1,
+     "reason": null,
+     "ratio": 7.1947,
+     "rank": 1.0
+    },
+    "ЮЗГУ": {
+     "status": 2,
+     "reason": null,
+     "ratio": 1.2445,
+     "rank": 0.9494
+    },
+    "МГУ им. А.И. Куинджи": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.5691,
+     "rank": 0.8354
+    },
+    "КГУ (Курск)": {
+     "status": 2,
+     "reason": null,
+     "ratio": 2.9654,
+     "rank": 0.9873
+    },
+    "МГУ им. М.В. Ломоносова": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.1755,
+     "rank": 0.481
+    },
+    "МФТИ - Физтех": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.175,
+     "rank": 0.4684
+    }
+   },
+   "histogram": [
+    {
+     "bin": "0–0.05",
+     "from": 0,
+     "accounts": 13
+    },
+    {
+     "bin": "0.05–0.1",
+     "from": 0.05,
+     "accounts": 7
+    },
+    {
+     "bin": "0.1–0.2",
+     "from": 0.1,
+     "accounts": 25
+    },
+    {
+     "bin": "0.2–0.3",
+     "from": 0.2,
+     "accounts": 12
+    },
+    {
+     "bin": "0.3–0.5",
+     "from": 0.3,
+     "accounts": 7
+    },
+    {
+     "bin": "0.5–0.75",
+     "from": 0.5,
+     "accounts": 7
+    },
+    {
+     "bin": "0.75–1",
+     "from": 0.75,
+     "accounts": 3
+    },
+    {
+     "bin": "1–1.5",
+     "from": 1,
+     "accounts": 2
+    },
+    {
+     "bin": "1.5–2",
+     "from": 1.5,
+     "accounts": 1
+    },
+    {
+     "bin": "2–3",
+     "from": 2,
+     "accounts": 2
+    },
+    {
+     "bin": "3–5",
+     "from": 3,
+     "accounts": 0
+    },
+    {
+     "bin": "≥5",
+     "from": 5,
+     "accounts": 1
+    }
+   ]
+  },
+  "rutube": {
+   "accounts": 67,
+   "statuses": {
+    "abstain:few_early_reactions": 12,
+    "abstain:few_early_views": 8,
+    "abstain:few_posts": 40,
+    "abstain:small_cohort": 7
+   },
+   "cohort": null,
+   "postsWithLedger": 745,
+   "pattern13Posts": 2,
+   "pattern13Accounts": 1,
+   "pattern13Top": [
+    [
+     "other",
+     2,
+     null
+    ]
+   ],
+   "flagged": [],
+   "named": {
+    "МФТИ - Физтех": {
+     "status": null,
+     "reason": "few_early_reactions",
+     "ratio": 1.8167,
+     "rank": null
+    },
+    "МАИ": {
+     "status": null,
+     "reason": "few_early_views",
+     "ratio": 1.9211,
+     "rank": null
+    },
+    "МГУ им. А.И. Куинджи": {
+     "status": null,
+     "reason": "few_posts",
+     "ratio": 2.7,
+     "rank": null
+    },
+    "ЮЗГУ": {
+     "status": null,
+     "reason": "few_early_views",
+     "ratio": 0.7611,
+     "rank": null
+    },
+    "КГУ (Курск)": {
+     "status": null,
+     "reason": "few_posts",
+     "ratio": null,
+     "rank": null
+    }
+   }
+  },
+  "telegram": {
+   "accounts": 75,
+   "statuses": {
+    "0": 59,
+    "1": 4,
+    "2": 2,
+    "abstain:few_early_reactions": 1,
+    "abstain:few_posts": 9
+   },
+   "cohort": {
+    "accounts": 65,
+    "median": 0.166,
+    "p90": 0.736,
+    "threshold": 0.736,
+    "rank": 0.6094
+   },
+   "postsWithLedger": 3681,
+   "pattern13Posts": 0,
+   "pattern13Accounts": 0,
+   "pattern13Top": [],
+   "flagged": [
+    {
+     "ratio": 10.8946,
+     "account": "telegram-1",
+     "status": 2,
+     "lateReactions": 4128,
+     "activeDays": 13,
+     "activeWeeks": 3,
+     "earlierRatio": 14.7251,
+     "recentRatio": 5.7425
+    },
+    {
+     "ratio": 1.516,
+     "account": "telegram-2",
+     "status": 1,
+     "lateReactions": 21,
+     "activeDays": 1,
+     "activeWeeks": 1,
+     "earlierRatio": null,
+     "recentRatio": 1.516
+    },
+    {
+     "ratio": 1.2537,
+     "account": "МГУ им. А.И. Куинджи",
+     "status": 2,
+     "lateReactions": 2607,
+     "activeDays": 18,
+     "activeWeeks": 3,
+     "earlierRatio": 0.5527,
+     "recentRatio": 1.7265
+    },
+    {
+     "ratio": 1.0033,
+     "account": "telegram-4",
+     "status": 1,
+     "lateReactions": 2107,
+     "activeDays": 8,
+     "activeWeeks": 3,
+     "earlierRatio": 1.7643,
+     "recentRatio": 0.0746
+    },
+    {
+     "ratio": 0.8362,
+     "account": "telegram-5",
+     "status": 1,
+     "lateReactions": 108,
+     "activeDays": 5,
+     "activeWeeks": 2,
+     "earlierRatio": 0.9899,
+     "recentRatio": 0.6775
+    },
+    {
+     "ratio": 0.7952,
+     "account": "telegram-6",
+     "status": 1,
+     "lateReactions": 89,
+     "activeDays": 6,
+     "activeWeeks": 3,
+     "earlierRatio": 0.1337,
+     "recentRatio": 1.5876
+    }
+   ],
+   "named": {
+    "МАИ": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.2163,
+     "rank": 0.6094
+    },
+    "МГУ им. А.И. Куинджи": {
+     "status": 2,
+     "reason": null,
+     "ratio": 1.2537,
+     "rank": 0.9531
+    },
+    "КГУ (Курск)": {
+     "status": null,
+     "reason": "few_posts",
+     "ratio": 0.2938,
+     "rank": null
+    },
+    "МГУ им. М.В. Ломоносова": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.1676,
+     "rank": 0.5
+    },
+    "ЮЗГУ": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.308,
+     "rank": 0.7656
+    },
+    "МФТИ - Физтех": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.1244,
+     "rank": 0.3438
+    }
+   },
+   "histogram": [
+    {
+     "bin": "0–0.05",
+     "from": 0,
+     "accounts": 7
+    },
+    {
+     "bin": "0.05–0.1",
+     "from": 0.05,
+     "accounts": 12
+    },
+    {
+     "bin": "0.1–0.2",
+     "from": 0.1,
+     "accounts": 18
+    },
+    {
+     "bin": "0.2–0.3",
+     "from": 0.2,
+     "accounts": 11
+    },
+    {
+     "bin": "0.3–0.5",
+     "from": 0.3,
+     "accounts": 6
+    },
+    {
+     "bin": "0.5–0.75",
+     "from": 0.5,
+     "accounts": 4
+    },
+    {
+     "bin": "0.75–1",
+     "from": 0.75,
+     "accounts": 2
+    },
+    {
+     "bin": "1–1.5",
+     "from": 1,
+     "accounts": 3
+    },
+    {
+     "bin": "1.5–2",
+     "from": 1.5,
+     "accounts": 1
+    },
+    {
+     "bin": "2–3",
+     "from": 2,
+     "accounts": 0
+    },
+    {
+     "bin": "3–5",
+     "from": 3,
+     "accounts": 0
+    },
+    {
+     "bin": "≥5",
+     "from": 5,
+     "accounts": 1
+    }
+   ]
+  },
+  "vk": {
+   "accounts": 84,
+   "statuses": {
+    "0": 75,
+    "1": 4,
+    "2": 1,
+    "abstain:few_posts": 4
+   },
+   "cohort": {
+    "accounts": 80,
+    "median": 0.4614,
+    "p90": 1.0336,
+    "threshold": 1.3841,
+    "rank": 0.5063
+   },
+   "postsWithLedger": 4670,
+   "pattern13Posts": 176,
+   "pattern13Accounts": 16,
+   "pattern13Top": [
+    [
+     "ЮЗГУ",
+     57,
+     1
+    ],
+    [
+     "КГУ (Курск)",
+     56,
+     2
+    ],
+    [
+     "other",
+     24,
+     1
+    ],
+    [
+     "other",
+     15,
+     1
+    ],
+    [
+     "МГУ им. М.В. Ломоносова",
+     4,
+     0
+    ],
+    [
+     "other",
+     4,
+     0
+    ],
+    [
+     "other",
+     4,
+     0
+    ],
+    [
+     "other",
+     2,
+     0
+    ]
+   ],
+   "flagged": [
+    {
+     "ratio": 3.0275,
+     "account": "vk-1",
+     "status": 1,
+     "lateReactions": 4162,
+     "activeDays": 10,
+     "activeWeeks": 3,
+     "earlierRatio": 11.8652,
+     "recentRatio": 1.3742
+    },
+    {
+     "ratio": 2.3626,
+     "account": "ЮЗГУ",
+     "status": 1,
+     "lateReactions": 4971,
+     "activeDays": 19,
+     "activeWeeks": 3,
+     "earlierRatio": 1.12,
+     "recentRatio": 3.2879
+    },
+    {
+     "ratio": 2.3015,
+     "account": "КГУ (Курск)",
+     "status": 2,
+     "lateReactions": 5693,
+     "activeDays": 19,
+     "activeWeeks": 3,
+     "earlierRatio": 3.5235,
+     "recentRatio": 1.9024
+    },
+    {
+     "ratio": 2.2015,
+     "account": "vk-4",
+     "status": 1,
+     "lateReactions": 141,
+     "activeDays": 12,
+     "activeWeeks": 3,
+     "earlierRatio": 0.9377,
+     "recentRatio": 3.4269
+    },
+    {
+     "ratio": 1.468,
+     "account": "vk-5",
+     "status": 1,
+     "lateReactions": 1071,
+     "activeDays": 19,
+     "activeWeeks": 3,
+     "earlierRatio": 0.6729,
+     "recentRatio": 2.3521
+    }
+   ],
+   "named": {
+    "МАИ": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.4511,
+     "rank": 0.4684
+    },
+    "КГУ (Курск)": {
+     "status": 2,
+     "reason": null,
+     "ratio": 2.3015,
+     "rank": 0.9747
+    },
+    "ЮЗГУ": {
+     "status": 1,
+     "reason": null,
+     "ratio": 2.3626,
+     "rank": 0.9873
+    },
+    "МГУ им. А.И. Куинджи": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.7309,
+     "rank": 0.7468
+    },
+    "МГУ им. М.В. Ломоносова": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.839,
+     "rank": 0.8354
+    },
+    "МФТИ - Физтех": {
+     "status": 0,
+     "reason": null,
+     "ratio": 0.7213,
+     "rank": 0.7342
+    }
+   },
+   "histogram": [
+    {
+     "bin": "0–0.05",
+     "from": 0,
+     "accounts": 2
+    },
+    {
+     "bin": "0.05–0.1",
+     "from": 0.05,
+     "accounts": 1
+    },
+    {
+     "bin": "0.1–0.2",
+     "from": 0.1,
+     "accounts": 3
+    },
+    {
+     "bin": "0.2–0.3",
+     "from": 0.2,
+     "accounts": 5
+    },
+    {
+     "bin": "0.3–0.5",
+     "from": 0.3,
+     "accounts": 30
+    },
+    {
+     "bin": "0.5–0.75",
+     "from": 0.5,
+     "accounts": 19
+    },
+    {
+     "bin": "0.75–1",
+     "from": 0.75,
+     "accounts": 11
+    },
+    {
+     "bin": "1–1.5",
+     "from": 1,
+     "accounts": 5
+    },
+    {
+     "bin": "1.5–2",
+     "from": 1.5,
+     "accounts": 0
+    },
+    {
+     "bin": "2–3",
+     "from": 2,
+     "accounts": 3
+    },
+    {
+     "bin": "3–5",
+     "from": 3,
+     "accounts": 1
+    },
+    {
+     "bin": "≥5",
+     "from": 5,
+     "accounts": 0
+    }
+   ]
+  }
+ },
+ "sensitivity": {
+  "max": {
+   "accounts": 20,
+   "daily_2": {
+    "0": 9,
+    "1": 5,
+    "2": 6
+   },
+   "daily_3": {
+    "0": 6,
+    "1": 2,
+    "2": 12
+   },
+   "daily_5": {
+    "0": 2,
+    "2": 18
+   },
+   "daily_10": {
+    "0": 2,
+    "2": 18
+   },
+   "session_once": {
+    "0": 20
+   }
+  },
+  "telegram": {
+   "accounts": 20,
+   "daily_2": {
+    "0": 13,
+    "1": 3,
+    "2": 4
+   },
+   "daily_3": {
+    "0": 10,
+    "1": 4,
+    "2": 6
+   },
+   "daily_5": {
+    "0": 7,
+    "1": 4,
+    "2": 9
+   },
+   "daily_10": {
+    "0": 3,
+    "1": 6,
+    "2": 11
+   },
+   "session_once": {
+    "0": 16,
+    "1": 4
+   }
+  },
+  "vk": {
+   "accounts": 20,
+   "daily_2": {
+    "0": 15,
+    "1": 3,
+    "2": 2
+   },
+   "daily_3": {
+    "0": 13,
+    "1": 4,
+    "2": 3
+   },
+   "daily_5": {
+    "0": 12,
+    "1": 3,
+    "2": 5
+   },
+   "daily_10": {
+    "0": 12,
+    "1": 2,
+    "2": 6
+   },
+   "session_once": {
+    "0": 19,
+    "1": 1
+   }
+  }
+ }
+}

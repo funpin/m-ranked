@@ -245,17 +245,6 @@
     max-width: 100%;
     overflow-x: clip;
   }
-  /* Полупрозрачная шапка смягчает содержимое при прокрутке, не создавая
-     сплошной полосы между ней и плавающей панелью фильтров. */
-  .site-header-glass {
-    background: var(--background);
-    background: color-mix(in oklab, var(--background) 72%, transparent);
-    -webkit-backdrop-filter: saturate(140%) blur(18px);
-    backdrop-filter: saturate(140%) blur(18px);
-  }
-  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .site-header-glass { background: var(--background); }
-  }
   /* Полоса-индикатор вырастает при появлении. Анимируется трансформация, а не
      ширина, поэтому раскладка не пересчитывается; тем, кто просил меньше
      движения, полоса показывается сразу. */

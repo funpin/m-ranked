@@ -4,7 +4,9 @@ import { use, useState } from "react";
 import { ChevronRight, CircleHelp, LocateFixed } from "lucide-react";
 import Link from "@/components/native-link";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPill } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
@@ -38,18 +40,14 @@ function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
 const windowDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
 const windowTime = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
 
-function SignalHeading({ signal, expanded, onToggle }: {
-  signal: AnomalySignal; expanded: boolean; onToggle: () => void;
-}) {
+function SignalHeading({ signal, expanded }: { signal: AnomalySignal; expanded: boolean }) {
   return <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
     <span className="inline-flex items-center gap-1.5 font-semibold"><PatternIcon pattern={signal.pattern} className="text-chart-3 size-4 shrink-0" />{signal.title}</span>
     <span className="text-muted-foreground text-xs tabular-nums">{windowDate.format(new Date(signal.startAt))}</span>
     <span className="text-muted-foreground text-xs">{METRIC_NAMES[signal.metric]}</span>
-    <button type="button" aria-expanded={expanded} onClick={onToggle}
-      className="text-muted-foreground hover:bg-accent hover:text-foreground ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:ring-ring"
-      data-testid="signal-detail-toggle">
-      График <ChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} aria-hidden="true" />
-    </button>
+    <CollapsibleTrigger render={<Button variant="ghost" size="sm" className="text-muted-foreground ml-auto" />} data-testid="signal-detail-toggle">
+      График <ChevronRight data-icon="inline-end" className={cn("transition-transform", expanded && "rotate-90")} aria-hidden="true" />
+    </CollapsibleTrigger>
   </div>;
 }
 
@@ -65,28 +63,29 @@ function ContextRow({ window, signal, index, onShow }: {
         : window.events.length ? "Новый пост · общего роста нет"
           : "Контекст не найден";
   const activeEvent = window.events.find((event) => event.publicationId === selectedEvent) ?? window.events[0];
-  return <li className="border-border border-b py-3 last:border-b-0" data-testid="anomaly-signal" data-pattern={signal.pattern}>
-    <SignalHeading signal={signal} expanded={expanded} onToggle={() => setExpanded(!expanded)} />
+  return <Collapsible open={expanded} onOpenChange={setExpanded} render={<li className="border-border border-b py-3 last:border-b-0" data-testid="anomaly-signal" data-pattern={signal.pattern} />}>
+    <SignalHeading signal={signal} expanded={expanded} />
     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-[22px] text-xs" data-testid="neighbor-context-window">
       <span className={cn("font-medium", shared ? "text-emerald-600 dark:text-emerald-300" : "text-muted-foreground")}>{explanation}</span>
       {window.events.length ? <span className="text-amber-600 dark:text-amber-300 tabular-nums">
         №{window.events[0]!.displayId}{window.events.length > 1 ? ` +${window.events.length - 1}` : ""} · позиция +{window.events[0]!.observedFeedDistance}
       </span> : null}
       {window.peers.length ? <span className="text-muted-foreground tabular-nums">Старые выросли: {window.positivePeerCount}/{window.peers.length}</span> : null}
-      <Tooltip><TooltipTrigger render={<button type="button" className="text-muted-foreground hover:text-foreground rounded-full focus-visible:ring-2 focus-visible:ring-ring" aria-label="Что означает контекст" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
+      <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" className="text-muted-foreground rounded-full" aria-label="Что означает контекст" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
         Порядок в ленте и рост старых постов видны по данным. Источник переходов счётчики не раскрывают.
       </TooltipContent></Tooltip>
     </div>
-    {expanded ? <div className="border-border mt-3 border-t pt-3" data-testid="neighbor-event-chart">
+    <CollapsibleContent className="border-border mt-3 border-t pt-3" data-testid="neighbor-event-chart">
       {window.events.length ? <>
-        <div className="mb-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Новые публикации в окне">
-          {window.events.map((event) => <button key={event.publicationId} type="button"
-            aria-pressed={event.publicationId === activeEvent?.publicationId}
-            onClick={() => setSelectedEvent(event.publicationId)}
-            className={cn("rounded-md border px-2 py-1 text-xs tabular-nums focus-visible:ring-2 focus-visible:ring-ring",
-              event.publicationId === activeEvent?.publicationId ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-300" : "text-muted-foreground hover:bg-accent")}>
-            ↗ №{event.displayId} · {windowTime.format(new Date(event.publishedAt))}
-          </button>)}
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <ToggleGroup aria-label="Новые публикации в окне" variant="outline" spacing={1.5} className="flex-wrap"
+            value={activeEvent ? [activeEvent.publicationId] : []}
+            onValueChange={(next) => { if (next[0]) setSelectedEvent(next[0]); }}>
+            {window.events.map((event) => <ToggleGroupItem key={event.publicationId} value={event.publicationId}
+              className="text-muted-foreground tabular-nums data-pressed:border-amber-500/50 data-pressed:bg-amber-500/10 data-pressed:text-amber-600 dark:data-pressed:text-amber-300">
+              ↗ №{event.displayId} · {windowTime.format(new Date(event.publishedAt))}
+            </ToggleGroupItem>)}
+          </ToggleGroup>
           {activeEvent ? <Link href={publicationHref(activeEvent.publicationId)} className="text-muted-foreground ml-auto text-xs underline-offset-2 hover:underline">Открыть пост ↗</Link> : null}
         </div>
         {activeEvent && !window.eventTraces.some((trace) => trace.publicationId === activeEvent.publicationId && trace.points.length)
@@ -94,12 +93,11 @@ function ContextRow({ window, signal, index, onShow }: {
         {window.omittedEventCount ? <p className="text-muted-foreground text-xs">Ещё {window.omittedEventCount} постов за пределом графика</p> : null}
       </> : <p className="text-muted-foreground mb-2 text-xs">Нового поста в окне не найдено</p>}
       <NeighborContextTimeline window={window} event={activeEvent} />
-      {onShow ? <button type="button" onClick={() => onShow(markerId(signal, index))}
-        className="text-foreground hover:bg-accent focus-visible:ring-ring/50 mt-2 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium focus-visible:ring-[3px] focus-visible:outline-none">
+      {onShow ? <Button variant="outline" size="sm" className="mt-2" onClick={() => onShow(markerId(signal, index))}>
         <LocateFixed className="size-3.5" aria-hidden="true" />Показать на общем графике
-      </button> : null}
-    </div> : null}
-  </li>;
+      </Button> : null}
+    </CollapsibleContent>
+  </Collapsible>;
 }
 
 function Signal({ signal, index, rows, publishedAt, onShow }: {
@@ -108,13 +106,13 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
   const [expanded, setExpanded] = useState(false);
   const title = signal.title;
   return (
-    <li className="border-border border-b py-3 last:border-b-0" data-testid="anomaly-signal" data-pattern={signal.pattern}>
-      <SignalHeading signal={signal} expanded={expanded} onToggle={() => setExpanded(!expanded)} />
-      {expanded ? <div className="border-border mt-3 grid gap-2 border-t pt-3">
+    <Collapsible open={expanded} onOpenChange={setExpanded} render={<li className="border-border border-b py-3 last:border-b-0" data-testid="anomaly-signal" data-pattern={signal.pattern} />}>
+      <SignalHeading signal={signal} expanded={expanded} />
+      <CollapsibleContent className="border-border mt-3 grid gap-2 border-t pt-3">
         <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
           <span>{FAMILY_NAMES[signal.family]} · сила {signal.strength.toFixed(2)}</span>
           <span>{intervalText(signal, publishedAt)} · масштаб {scaleText(signal.scaleSeconds)}</span>
-          <Tooltip><TooltipTrigger render={<button type="button" className="rounded-full focus-visible:ring-2 focus-visible:ring-ring" aria-label="Формула и возможные объяснения" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
+          <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" className="rounded-full" aria-label="Формула и возможные объяснения" />}><CircleHelp className="size-3.5" /></TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
             {signal.formula}. {signal.alternatives.map((item) => item.text).join("; ")}
           </TooltipContent></Tooltip>
         </div>
@@ -122,12 +120,11 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
         {signal.render.kind === "bounded_burst" ? <p className="text-muted-foreground text-xs" data-testid="bounded-burst-explanation">{signal.formula}</p> : null}
         {signal.render.measurementMode === "telegram_counter_order_v1" ? <p className="text-muted-foreground text-xs">{signal.formula}</p> : null}
         <MiniChart chart={miniChart(signal, rows, publishedAt)} label={title} />
-        {onShow ? <button type="button" onClick={() => onShow(markerId(signal, index))}
-          className="text-foreground hover:bg-accent focus-visible:ring-ring/50 inline-flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium focus-visible:ring-[3px] focus-visible:outline-none">
+        {onShow ? <Button variant="outline" size="sm" className="w-fit" onClick={() => onShow(markerId(signal, index))}>
           <LocateFixed className="size-3.5" aria-hidden="true" />Показать на графике
-        </button> : null}
-      </div> : null}
-    </li>
+        </Button> : null}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

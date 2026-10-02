@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem,
   PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { NativeButton, NativeInput, NativeSegments, NativeSelect } from "@/components/native-field";
+import { NativeSegments } from "@/components/native-field";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { LegacyFilterForm } from "@/components/legacy-filter-form";
 import { OverviewCard } from "@/components/overview-card";
 import { CoverageSummary } from "@/components/coverage-summary";
@@ -10,7 +12,7 @@ import { NavigationBoundary } from "@/components/navigation-boundary";
 import { CardGridSkeleton } from "@/components/skeletons";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
-import { Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import {
   FILTER_DIRECTION_CLASS,
   FILTER_PERIOD_CLASS,
@@ -18,6 +20,7 @@ import {
   FILTER_PLATFORM_CLASS,
   FILTER_PLATFORM_OPTIONS,
   FILTER_SEARCH_CLASS,
+  FILTER_SELECT_CLASS,
   FILTER_SORT_CLASS,
   FILTER_TOOLBAR_CLASS,
 } from "@/components/filter-toolbar";
@@ -105,34 +108,37 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
               <div className={FILTER_PERIOD_CLASS}><NativeSegments name="period" legend="Период" value={period}
                 options={FILTER_PERIOD_OPTIONS} labelled={false} /></div>
               <div className={FILTER_SEARCH_CLASS}>
-                <NativeInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" className="h-8" />
-                <NativeButton type="submit" variant="outline" aria-label="Применить фильтры" title="Применить фильтры" className="size-8 min-h-8 shrink-0 px-0">
-                  <Search className="size-4" aria-hidden="true" />
-                </NativeButton>
+                <InputGroup className="h-8">
+                  <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
+                  <InputGroupInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" className="text-sm md:text-sm" />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton type="submit" variant="secondary" size="icon-sm" aria-label="Применить фильтры" title="Применить фильтры" className="size-6"><ArrowRight className="size-3.5" aria-hidden="true" /></InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
               </div>
               <div className={FILTER_SORT_CLASS}>
-                <NativeSelect name="sort" defaultValue={sort} aria-label="Сортировка" title="Порядок карточек в списке" className="h-8">
-                  <option value="name">Название вуза · алфавит</option>
+                <NativeSelect name="sort" defaultValue={sort} aria-label="Сортировка" title="Порядок карточек в списке" className={FILTER_SELECT_CLASS}>
+                  <NativeSelectOption value="name">Название вуза · алфавит</NativeSelectOption>
                   {platform === "all" ? (
                     <>
-                      <option value="m_rating">Общий М‑Рейтинг · место</option>
+                      <NativeSelectOption value="m_rating">Общий М‑Рейтинг · место</NativeSelectOption>
                     </>
                   ) : (
                     <>
-                      <option value="median_reactions">Медиана прироста реакций</option>
-                      <option value="m_rating">М‑Рейтинг {PLATFORM_LABELS[platform]} · место</option>
-                      <option value="reactions">Прирост реакций</option>
-                      <option value="views">Прирост просмотров</option>
-                      <option value="posts">Новые публикации</option>
-                      <option value="subscribers">Подписчики</option>
+                      <NativeSelectOption value="median_reactions">Медиана прироста реакций</NativeSelectOption>
+                      <NativeSelectOption value="m_rating">М‑Рейтинг {PLATFORM_LABELS[platform]} · место</NativeSelectOption>
+                      <NativeSelectOption value="reactions">Прирост реакций</NativeSelectOption>
+                      <NativeSelectOption value="views">Прирост просмотров</NativeSelectOption>
+                      <NativeSelectOption value="posts">Новые публикации</NativeSelectOption>
+                      <NativeSelectOption value="subscribers">Подписчики</NativeSelectOption>
                     </>
                   )}
                 </NativeSelect>
               </div>
               <div className={FILTER_DIRECTION_CLASS}>
-                <NativeSelect name="direction" defaultValue={direction} aria-label="Порядок" title="Порядок" className="h-8">
-                  <option value="desc">По убыванию</option>
-                  <option value="asc">По возрастанию</option>
+                <NativeSelect name="direction" defaultValue={direction} aria-label="Порядок" title="Порядок" className={FILTER_SELECT_CLASS}>
+                  <NativeSelectOption value="desc">По убыванию</NativeSelectOption>
+                  <NativeSelectOption value="asc">По возрастанию</NativeSelectOption>
                 </NativeSelect>
               </div>
       </LegacyFilterForm>
@@ -156,17 +162,17 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         const nextHref = page.nextCursor ? queryHref("/review", { ...common,
           cursor: page.nextCursor, from: pagination.nextTrail }) : null;
         const currentHref = queryHref("/review", { ...common, cursor, from: pagination.trail });
-        return <div className="border-border bg-card mt-6 rounded-xl border px-3 py-3 shadow-sm" data-testid="overview-pagination">
-          <Pagination><PaginationContent>
-            {previousHref ? <PaginationItem><PaginationPrevious href={previousHref} rel="prev" /></PaginationItem> : null}
+        return <Pagination aria-label="Страницы обзора" data-testid="overview-pagination" className="mt-8">
+          <PaginationContent>
+            {previousHref ? <PaginationItem><PaginationPrevious href={previousHref} rel="prev" text="Назад" aria-label="Предыдущая страница" /></PaginationItem> : null}
             {pagination.page > 1 ? <PaginationItem><PaginationLink href={firstHref}>1</PaginationLink></PaginationItem> : null}
             {pagination.page > 3 ? <PaginationItem><PaginationEllipsis /></PaginationItem> : null}
             {previousHref && pagination.page > 2 ? <PaginationItem><PaginationLink href={previousHref}>{pagination.page - 1}</PaginationLink></PaginationItem> : null}
             <PaginationItem><PaginationLink href={currentHref} isActive aria-label={`Страница ${pagination.page}`}>{pagination.page}</PaginationLink></PaginationItem>
             {nextHref ? <PaginationItem><PaginationLink href={nextHref}>{pagination.page + 1}</PaginationLink></PaginationItem> : null}
-            {nextHref ? <PaginationItem><PaginationNext href={nextHref} rel="next" /></PaginationItem> : null}
-          </PaginationContent></Pagination>
-        </div>;
+            {nextHref ? <PaginationItem><PaginationNext href={nextHref} rel="next" text="Далее" aria-label="Следующая страница" /></PaginationItem> : null}
+          </PaginationContent>
+        </Pagination>;
       })()}
     </>
   );

@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { accountHref } from "@/lib/entity-routes";
 import Link from "@/components/native-link";
 import { ExternalLink } from "lucide-react";
@@ -130,7 +131,7 @@ function ActivityBody({ item, integrationWarning, href }: { item: OverviewItem; 
     <ActivityMeter active={item.activityPublicationCount} total={item.totalPublicationCount} period={short} />
   </div>;
   return <>
-    {item.ratingRank ? <span className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[item.platform]}.`}>М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</span> : null}
+    {item.ratingRank ? <Badge className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] h-auto cursor-help px-2 py-1 text-[10px] font-extrabold shadow-sm" tabIndex={0} title={`Официальное место в М‑Рейтинге ${PLATFORM_LABELS[item.platform]}.`}>М‑Рейтинг {PLATFORM_LABELS[item.platform]} · №{item.ratingRank}</Badge> : null}
     <div className="min-h-[116px]">
       <h3 className="font-heading flex min-h-[2.7em] items-start gap-1 text-base leading-snug font-bold">
         <Link className="line-clamp-2 no-underline outline-none after:absolute after:inset-0 hover:underline focus-visible:underline" href={href} prefetch={false}>
@@ -161,7 +162,7 @@ function AllPlatformsBody({ item }: { item: OverviewItem }) {
   const status=overviewStatus(item);
   return (
     <>
-      {item.ratingRank ? <span className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] cursor-help rounded-full px-2 py-1 text-[10px] font-extrabold whitespace-nowrap shadow-sm" tabIndex={0} title="Официальное место в М‑Рейтинге: Общий.">М‑Рейтинг Общий · №{item.ratingRank}</span> : null}
+      {item.ratingRank ? <Badge className="bg-chart-2 text-background absolute -top-2.5 -right-1.5 z-[3] h-auto cursor-help px-2 py-1 text-[10px] font-extrabold shadow-sm" tabIndex={0} title="Официальное место в М‑Рейтинге: Общий.">М‑Рейтинг Общий · №{item.ratingRank}</Badge> : null}
       <div>
         <h3 className="font-heading flex min-h-[2.7em] items-start gap-1 text-base leading-snug font-bold">
           <span className="line-clamp-2">{item.shortName || item.canonicalName}</span>

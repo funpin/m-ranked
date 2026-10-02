@@ -28,6 +28,7 @@ anomaly worker и PostgreSQL 18.
 - [ADR-012: collect и persist как разные фазы](adr/ADR-012-collect-persist-phases.md);
 - [ADR-013: размещение сборщиков и слияние наблюдений](adr/ADR-013-collector-placement-and-merge.md);
 - [ADR-014: анализ аномальной динамики v2](adr/ADR-014-anomaly-analysis-v2.md).
+- [ADR-015: поздний отклик — пост против себя, аккаунт против площадки](adr/ADR-015-late-engagement-profile.md).
 
 ## Планы
 

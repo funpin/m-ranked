@@ -21,7 +21,10 @@ VERSION = "1.0.0"
 PATTERNS = frozenset({11, 12})
 HOUR = 3600
 METRICS = (Metric.VIEWS, Metric.REACTIONS)
-ARTIFACT = Path(__file__).with_name("references") / "max_2026_09.json"
+REFERENCES = Path(__file__).with_name("references")
+# Every bundled artifact; renewals are added next to the old ones, never replace them:
+# stored verdicts keep pointing at the version that produced them.
+ARTIFACTS = "max_*.json"
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,7 +189,67 @@ class MatureReference:
         return tuple(selected[p][1] for p in sorted(selected))
 
 
+    def version_for(self, series: PostSeries) -> str:
+        return self.version
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceSet:
+    """Frozen artifacts of one platform. A post uses the newest artifact whose
+    scope [available_at, expires_at) covers its publication; overlapping scopes
+    let a renewal start before the previous artifact expires."""
+
+    references: tuple[MatureReference, ...]
+
+    def __post_init__(self) -> None:
+        if not self.references or len({item.platform for item in self.references}) != 1:
+            raise ValueError("a reference set needs artifacts of one platform")
+        if len({item.version for item in self.references}) != len(self.references):
+            raise ValueError("reference versions must be unique")
+        object.__setattr__(self, "references", tuple(sorted(self.references, key=lambda item: item.available_at)))
+
+    @property
+    def platform(self) -> str:
+        return self.references[0].platform
+
+    @property
+    def available_at(self) -> datetime:
+        return self.references[0].available_at
+
+    @property
+    def expires_at(self) -> datetime:
+        return max(item.expires_at for item in self.references)
+
+    @property
+    def account_counts(self) -> Mapping[UUID, int]:
+        merged: dict[UUID, int] = {}
+        for item in self.references:
+            merged.update(item.account_counts)
+        return MappingProxyType(merged)
+
+    @property
+    def version(self) -> str:
+        return self.references[-1].version
+
+    def for_post(self, series: PostSeries) -> MatureReference | None:
+        return next((item for item in reversed(self.references)
+                     if item.available_at <= series.published_at < item.expires_at), None)
+
+    def detect(self, series: PostSeries, analyzed_at: datetime) -> tuple[Sign, ...]:
+        reference = self.for_post(series)
+        return () if reference is None else reference.detect(series, analyzed_at)
+
+    def version_for(self, series: PostSeries) -> str:
+        reference = self.for_post(series)
+        return self.version if reference is None else reference.version
+
+
+def load_references(directory: Path = REFERENCES) -> ReferenceSet:
+    return ReferenceSet(tuple(MatureReference.from_payload(json.loads(path.read_text(encoding="utf-8")))
+                              for path in sorted(directory.glob(ARTIFACTS))))
+
+
 @lru_cache(maxsize=1)
-def bundled_reference() -> MatureReference:
-    """Fail clearly at startup if the release artifact is absent or corrupt."""
-    return MatureReference.from_payload(json.loads(ARTIFACT.read_text(encoding="utf-8")))
+def bundled_reference() -> ReferenceSet:
+    """Fail clearly at startup if a release artifact is absent or corrupt."""
+    return load_references()

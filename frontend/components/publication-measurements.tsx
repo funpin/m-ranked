@@ -1,8 +1,8 @@
 "use client";
 
-import { type ReactNode, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
+import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Clock, Eye, Heart, Hourglass, MessageCircle, Share2, Smile, Timer, Users, type LucideIcon } from "lucide-react";
 import Link from "@/components/native-link";
@@ -12,6 +12,8 @@ import { chronological, historyReactionEntries, sampleHistory, signedDuration } 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import { Toggle } from "@/components/ui/toggle";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
@@ -60,48 +62,13 @@ function ColumnHead({ icon: Icon, label, delta = false, align = "text-center" }:
 }
 
 function InlineHint({ children, content, testId }: { children: ReactNode; content: ReactNode; testId: string }) {
-  const tooltipId = useId();
-  const trigger = useRef<HTMLButtonElement>(null);
-  const [position, setPosition] = useState<{ left: number; top: number; above: boolean }>();
-  const show = useCallback(() => {
-    const box = trigger.current?.getBoundingClientRect();
-    if (!box) return;
-    const above = box.bottom + 96 > window.innerHeight;
-    setPosition({
-      left: Math.max(16, Math.min(window.innerWidth - 336, box.left + box.width / 2 - 160)),
-      top: above ? box.top - 6 : box.bottom + 6,
-      above,
-    });
-  }, []);
-  useEffect(() => {
-    if (!position) return;
-    const reposition = () => show();
-    window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
-    return () => {
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
-    };
-  }, [position, show]);
-  return <>
-    <button
-      ref={trigger}
-      type="button"
-      data-testid={testId}
-      aria-describedby={tooltipId}
-      onMouseEnter={show}
-      onMouseLeave={() => setPosition(undefined)}
-      onFocus={show}
-      onBlur={() => setPosition(undefined)}
-      className="inline-flex cursor-help items-center border-0 bg-transparent p-0 font-inherit text-inherit outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2"
-    >{children}</button>
-    {position ? createPortal(<span
-      id={tooltipId}
-      role="tooltip"
-      className="bg-popover text-popover-foreground pointer-events-none fixed z-50 w-[calc(100vw-2rem)] max-w-80 rounded-md border px-3 py-1.5 text-left text-xs leading-relaxed whitespace-normal shadow-md"
-      style={{ left: position.left, top: position.top, transform: position.above ? "translateY(-100%)" : undefined }}
-    >{content}</span>, document.body) : null}
-  </>;
+  return <TooltipProvider><Tooltip>
+    <TooltipTrigger data-testid={testId}
+      className="inline-flex cursor-help items-center border-0 bg-transparent p-0 font-inherit text-inherit outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2">
+      {children}
+    </TooltipTrigger>
+    <TooltipContent className="max-w-80 text-left whitespace-normal">{content}</TooltipContent>
+  </Tooltip></TooltipProvider>;
 }
 
 const PublicationPlot = dynamic(() => import("./publication-plot"), {
@@ -137,28 +104,24 @@ function MetricChart(props: {
         {metrics.map((metric) => {
           const isHidden = hidden.has(metric.key);
           return (
-            <button
+            <Toggle
               key={metric.key}
-              type="button"
+              variant="outline"
               disabled={!hydrated}
-              aria-pressed={!isHidden}
-              onClick={() => setHidden((old) => {
+              pressed={!isHidden}
+              onPressedChange={() => setHidden((old) => {
                 const next = new Set(old);
                 if (next.has(metric.key)) { next.delete(metric.key); return scale === "auto" ? capped(next, metric) : next; }
                 next.add(metric.key);
                 return next;
               })}
-              className={cn(
-                "text-foreground flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-xs font-semibold transition-colors",
-                "hover:bg-accent focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
-                // Выключенная метрика приглушается цветом, а не прозрачностью:
-                // размытый текст проваливался под порог контраста на светлой теме.
-                isHidden && "text-muted-foreground",
-              )}
+              // Выключенная метрика приглушается цветом, а не прозрачностью:
+              // размытый текст проваливался под порог контраста на светлой теме.
+              className={cn("text-foreground gap-2 px-2.5 font-semibold", isHidden && "text-muted-foreground")}
             >
               <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", isHidden && "opacity-40")} style={{ background: metric.color }} />
               <span className={cn(isHidden && "line-through")}>{delta ? "Прирост" : "Всего"} {noun(metric,platform)}</span>
-            </button>
+            </Toggle>
           );
         })}
       </div>
@@ -411,10 +374,10 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span data-testid="sparse-history-note" className="text-muted-foreground">● Изменения + контроль</span>
           {visibleGaps.length
-            ? <span data-testid="collector-gap-summary" className="bg-destructive/10 text-destructive inline-flex items-center rounded-full px-2.5 py-1 font-medium tabular-nums">● Пропуски {visibleGaps.length} · {duration(missingSeconds)}</span>
+            ? <Badge variant="destructive" data-testid="collector-gap-summary" className="h-auto px-2.5 py-1 text-[length:inherit] tabular-nums">● Пропуски {visibleGaps.length} · {duration(missingSeconds)}</Badge>
             : coverageComplete
-              ? <span data-testid="collector-gap-summary" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 inline-flex items-center rounded-full px-2.5 py-1">● Без пропусков</span>
-              : <span data-testid="collector-gap-summary" className="bg-muted text-muted-foreground inline-flex items-center rounded-full px-2.5 py-1">◌ Неполный журнал</span>}
+              ? <Badge data-testid="collector-gap-summary" className="h-auto bg-emerald-500/10 px-2.5 py-1 text-[length:inherit] font-normal text-emerald-700 dark:text-emerald-300">● Без пропусков</Badge>
+              : <Badge variant="secondary" data-testid="collector-gap-summary" className="bg-muted text-muted-foreground h-auto px-2.5 py-1 text-[length:inherit] font-normal">◌ Неполный журнал</Badge>}
           <span className="text-muted-foreground tabular-nums">Циклы {collectorCoverage.successfulPolls.toLocaleString("ru-RU")} / {collectorCoverage.failedPolls.toLocaleString("ru-RU")} ошибок</span>
           {!coverageComplete && visibleGaps.length ? <span className="text-muted-foreground">◌ Часть вне журнала</span> : null}
           {fullState === "loading" ? <p data-testid="full-history-loading" className="text-muted-foreground text-sm" role="status">Загружаем все сохранённые точки…</p> : null}
@@ -431,7 +394,7 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
         </CardTitle>
         <div data-testid="saved-history-note" className="text-muted-foreground mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="tabular-nums">{tableRows.length} / {Math.max(total, rows.length)} точек</span>
-          {fullHistoryHref && total > tableRows.length ? <Link className="text-foreground font-medium underline underline-offset-2" href={fullHistoryHref} aria-label="загрузить всю историю">Вся история →</Link> : rows.length > tableRows.length ? <button type="button" className="bg-transparent text-foreground font-medium underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>Показать все →</button> : rows.length > 100 ? <button type="button" aria-label="свернуть историю" className="bg-transparent text-foreground font-medium underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:100})}>Свернуть</button> : null}
+          {fullHistoryHref && total > tableRows.length ? <Link className="text-foreground font-medium underline underline-offset-2" href={fullHistoryHref} aria-label="загрузить всю историю">Вся история →</Link> : rows.length > tableRows.length ? <Button variant="link" className="text-foreground h-auto p-0 text-xs underline underline-offset-2" onClick={() => setTableOverride({base:historyLimit,limit:rows.length})}>Показать все →</Button> : rows.length > 100 ? <Button variant="link" className="text-foreground h-auto p-0 text-xs underline underline-offset-2" aria-label="свернуть историю" onClick={() => setTableOverride({base:historyLimit,limit:100})}>Свернуть</Button> : null}
         </div>
       </CardHeader>
       <CardContent>

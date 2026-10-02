@@ -42,7 +42,7 @@ class Level(IntEnum):
 
 # Паттерн 3 — свойство паттернов 1, 2 и 4 на другом масштабе, а не отдельный
 # признак: он виден в поле `scale`, собственного номера у признака нет.
-SIGN_PATTERNS = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+SIGN_PATTERNS = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13})
 
 
 def _utc(value: datetime, name: str) -> datetime:

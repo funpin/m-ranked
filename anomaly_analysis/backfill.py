@@ -22,6 +22,7 @@ import time
 
 from .v2.levels import assess
 from .v2.mature_reference import bundled_reference
+from .v2.tail_ledger import build_ledger
 from uuid import UUID
 from .v2.schedule import ScheduleConfig, plan
 from .v2.series import CollectionCadence
@@ -109,7 +110,8 @@ def main() -> None:
                 writes.append(StateWrite(
                     row.publication_id, row.published_at, moment, decision.next_due_at, verdict=verdict,
                     analyzed_points=len(subject.observed_at), last_point_observed_at=subject.observed_at[-1],
-                    norm_version_id=version, frozen=decision.frozen, lag_seconds=0, reason="backfill"))
+                    norm_version_id=version, frozen=decision.frozen, lag_seconds=0, reason="backfill",
+                    tail_ledger=build_ledger(subject, moment).payload()))
                 analyzed += 1
             store.write_states(writes)
         failed += account_failed

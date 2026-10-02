@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity, ArrowDownUp, CalendarClock, ChartBar, ChartNetwork, ChartScatter, Clock, Eye, Heart, LayoutGrid, Newspaper,
   Search, ShieldAlert, Sparkles, Table2, TrendingUp, University, X,
@@ -9,7 +9,12 @@ import {
 import Link from "@/components/native-link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useStuck } from "@/components/use-stuck";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MethodNote } from "@/components/method-note";
@@ -115,16 +120,14 @@ function Segmented<T extends string>({ value, options, onChange, label }: {
   value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void; label: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="bg-muted text-muted-foreground inline-flex flex-wrap rounded-lg p-[3px]">
-      {options.map((option) => (
-        <button key={option.value} type="button" role="radio" aria-checked={value === option.value}
-          onClick={() => onChange(option.value)}
-          className={cn("rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
-            value === option.value ? "bg-background text-foreground shadow-sm" : "hover:text-foreground")}>
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <ToggleGroup aria-label={label} variant="outline" spacing={0} className="flex-wrap" value={[value]}
+      onValueChange={(next) => {
+        // Base UI reports an empty selection when the pressed item is toggled off.
+        const selected = options.find((option) => option.value === next[0]);
+        if (selected) onChange(selected.value);
+      }}>
+      {options.map((option) => <ToggleGroupItem key={option.value} value={option.value}>{option.label}</ToggleGroupItem>)}
+    </ToggleGroup>
   );
 }
 
@@ -148,15 +151,17 @@ function HighlightPicker({ rows, highlights, onToggle, onClear }: {
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
       <div className="relative w-full sm:w-64">
-        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" aria-hidden="true" />
-        <Input value={query} disabled={full} placeholder={full ? `Выделено ${MAX_HIGHLIGHTS} из ${MAX_HIGHLIGHTS}` : "Выделить вуз на графиках…"}
-          aria-label="Найти вуз для выделения" className="pl-8" data-testid="highlight-search"
+        <InputGroup className="h-8">
+        <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
+        <InputGroupInput value={query} disabled={full} placeholder={full ? `Выделено ${MAX_HIGHLIGHTS} из ${MAX_HIGHLIGHTS}` : "Выделить вуз на графиках…"}
+          aria-label="Найти вуз для выделения" className="text-sm md:text-sm" data-testid="highlight-search"
           onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && matches[0]) { event.preventDefault(); onToggle(matches[0].id); setQuery(""); }
             if (event.key === "Escape") setOpen(false);
           }} />
+        </InputGroup>
         {open && !full && matches.length ? (
           <ul role="listbox" aria-label="Вузы" className="bg-popover text-popover-foreground ring-foreground/10 absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-lg p-1 text-sm shadow-md ring-1">
             {matches.map((row) => (
@@ -176,11 +181,11 @@ function HighlightPicker({ rows, highlights, onToggle, onClear }: {
         <Badge key={id} variant="outline" className="gap-1.5 rounded-full py-1 pr-1 pl-2" data-testid="highlight-chip">
           <span className="size-2.5 rounded-full" style={{ background: color }} aria-hidden="true" />
           {names.get(id) ?? "вуз"}
-          <button type="button" onClick={() => onToggle(id)} aria-label={`Снять выделение: ${names.get(id) ?? "вуз"}`}
-            className="hover:bg-muted rounded-full p-0.5"><X className="size-3" /></button>
+          <Button variant="ghost" size="icon-xs" className="rounded-full" onClick={() => onToggle(id)} aria-label={`Снять выделение: ${names.get(id) ?? "вуз"}`}>
+            <X aria-hidden="true" /></Button>
         </Badge>
       ))}
-      {highlights.size ? <button type="button" onClick={onClear} className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4">Сбросить</button> : null}
+      {highlights.size ? <Button variant="link" size="sm" className="text-muted-foreground hover:text-foreground px-1" onClick={onClear}>Сбросить</Button> : null}
     </div>
   );
 }
@@ -291,6 +296,8 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
   data: Dashboard; period: DashboardPeriod; initialPlatform: DashboardPlatform; initialHighlights: readonly string[];
 }) {
   const [platform, setPlatform] = useState(initialPlatform);
+  const toolbar = useRef<HTMLDivElement>(null);
+  useStuck(toolbar);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("summary");
   const [rankingMetric, setRankingMetric] = useState<Metric>("views24");
   const [scatter, setScatter] = useState(SCATTER_PRESETS[0]!.id);
@@ -373,45 +380,35 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     // min-w-0: секции — элементы сетки, и без него широкая таблица вузов
     // растягивала колонку, а с ней всю страницу за край окна.
     <div className="grid min-w-0 grid-cols-1 gap-8" data-testid="compare-dashboard">
-      <div className={cn("rounded-xl border px-3 py-3", STICKY_CONTROL_SURFACE_CLASS)}>
+      <div ref={toolbar} className={cn("px-3 py-3", STICKY_CONTROL_SURFACE_CLASS)}>
         <div className="flex flex-wrap items-center gap-3 md:flex-nowrap md:overflow-x-auto">
-          {/* Лёгкий список вкладок вместо компонента Tabs: переключение не
-              меняет панель под ним, а меняет разрез данных, и библиотечная
-              машинерия панелей здесь была бы лишним весом первой загрузки. */}
-          <div role="tablist" aria-label="Соцсеть" data-testid="platform-tabs"
-            className="bg-muted text-muted-foreground grid h-8 w-full grid-cols-5 items-center rounded-lg p-[3px] sm:inline-flex sm:w-auto"
-            onKeyDown={(event) => {
-              if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-              const index = DASHBOARD_PLATFORMS.indexOf(platform);
-              const next = DASHBOARD_PLATFORMS[(index + (event.key === "ArrowRight" ? 1 : -1) + DASHBOARD_PLATFORMS.length) % DASHBOARD_PLATFORMS.length]!;
-              changePlatform(next);
-              (event.currentTarget.querySelector(`[data-value="${next}"]`) as HTMLElement | null)?.focus();
-            }}>
-            {DASHBOARD_PLATFORMS.map((value) => (
-              <button key={value} type="button" role="tab" data-value={value} aria-selected={platform === value}
-                tabIndex={platform === value ? 0 : -1} onClick={() => changePlatform(value)}
-                className={cn("rounded-md px-2 py-0.5 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
-                  platform === value ? "bg-background text-foreground shadow-sm" : "hover:text-foreground")}>
-                <span title={PLATFORM_NAMES[value]}>{SHORT_PLATFORM_NAMES[value]}</span>
-              </button>
-            ))}
-          </div>
-          <nav aria-label="Период" className="bg-muted text-muted-foreground inline-flex h-8 items-center rounded-lg p-[3px]">
-            {(["7d", "30d"] as const).map((value) => (
-              <Link key={value} href={periodHref(value)} prefetch={false} aria-current={period === value ? "page" : undefined}
-                className={cn("rounded-md px-2 py-0.5 text-sm font-medium", period === value ? "bg-background text-foreground shadow-sm" : "hover:text-foreground")}>
-                {value === "7d" ? "7 дней" : "30 дней"}
-              </Link>
-            ))}
-          </nav>
+          <Tabs value={platform} onValueChange={(value) => changePlatform(value as DashboardPlatform)} className="w-full sm:w-auto">
+            <TabsList aria-label="Соцсеть" data-testid="platform-tabs" activateOnFocus className="grid w-full grid-cols-5 sm:inline-flex sm:w-auto">
+              {DASHBOARD_PLATFORMS.map((value) => (
+                <TabsTrigger key={value} value={value} data-value={value} className="px-2.5 text-sm">
+                  <span title={PLATFORM_NAMES[value]}>{SHORT_PLATFORM_NAMES[value]}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <Tabs value={period}>
+            <TabsList aria-label="Период">
+              {(["7d", "30d"] as const).map((value) => (
+                <TabsTrigger key={value} value={value} nativeButton={false} className="px-2.5 text-sm"
+                  render={<Link href={periodHref(value)} prefetch={false} />}>
+                  {value === "7d" ? "7 дней" : "30 дней"}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           <HighlightPicker rows={rows} highlights={highlights} onToggle={toggle} onClear={() => setHighlightIds([])} />
         </div>
         <nav aria-label="Разделы страницы" data-testid="compare-section-nav" className="mt-2 hidden gap-1 whitespace-nowrap md:flex md:flex-nowrap md:overflow-x-auto">
           {SECTIONS.map(({ id, label, icon: Icon }) => (
             <a key={id} href={`#${id}`} aria-current={activeSection === id ? "location" : undefined}
-              className={cn("hover:bg-muted hover:text-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors",
-                activeSection === id ? "bg-muted text-foreground font-medium" : "text-muted-foreground")}>
-              <Icon className="size-3.5" aria-hidden="true" />{label}
+              className={cn(buttonVariants({ variant: activeSection === id ? "secondary" : "ghost", size: "sm" }),
+                activeSection === id ? "text-foreground" : "text-muted-foreground")}>
+              <Icon aria-hidden="true" />{label}
             </a>
           ))}
         </nav>
@@ -432,10 +429,9 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
 
       <Section id="ranking" title="Вузы по показателю" icon={ChartBar} description={`${activeRows.length} участников · одна шкала`}>
         <ChartCard title={METRICS[rankingMetric].label} note={METRICS[rankingMetric].hint} testId="ranking-card"
-          action={<select value={rankingMetric} onChange={(event) => setRankingMetric(event.target.value as Metric)} aria-label="Мера рейтинга"
-            className="border-input bg-transparent dark:bg-input/30 h-8 rounded-md border px-2 text-sm shadow-xs focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none">
-            {RANKING_METRICS.map((metric) => <option key={metric} value={metric}>{METRICS[metric].short}</option>)}
-          </select>}
+          action={<NativeSelect value={rankingMetric} onChange={(event) => setRankingMetric(event.target.value as Metric)} aria-label="Мера рейтинга">
+            {RANKING_METRICS.map((metric) => <NativeSelectOption key={metric} value={metric}>{METRICS[metric].short}</NativeSelectOption>)}
+          </NativeSelect>}
           footer="Пунктир — медиана по вузам. Выделенные вузы подсвечены цветом, остальные приглушены.">
           <RankingChart rows={activeRows} metric={rankingMetric} highlights={highlights} />
         </ChartCard>

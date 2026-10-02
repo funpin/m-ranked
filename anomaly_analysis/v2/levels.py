@@ -28,9 +28,10 @@ from .detectors.bounded_reaction_burst import (
     CONFIRMED_PLATEAU_MODE, MEASUREMENT_MODE as BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE,
 )
 from .detectors.burst_plateau import RAPID_VIEW_MODE, VIEW_MEASUREMENT_MODE
+from .detectors.late_engagement import MEASUREMENT_MODE as LATE_ENGAGEMENT_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
-from .mature_reference import MatureReference, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
+from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
 from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare
 
 # Пороги силы. Сильный признак — тот, что один даёт выраженную аномалию: у
@@ -50,7 +51,7 @@ AGGREGATION_VERSION = "2.3.0"
 UNANALYZABLE_OVERLAP = 0.5
 GAP_PATTERN = 4
 
-SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗"}
+SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -63,6 +64,7 @@ TITLES = {
     10: "ERV вне нормы аккаунта",
     11: "Отклик выше исторического диапазона",
     12: "Продолжение отклика выше ожидаемого",
+    13: "Поздняя вовлечённость выше ранней",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
@@ -90,6 +92,7 @@ ALTERNATIVES = {
     "evergreen_post": "пост-«вечнозелёнка» с живым поздним трафиком",
     "viral_post": "пост честно «выстрелил» и собрал больше реакций, чем обычно",
     "wide_reach_low_engagement": "пост разошёлся шире обычной аудитории, которая реагирует реже",
+    "interested_audience_found_post": "пост нашла заинтересованная аудитория: подборка, профильный чат или новый увлечённый читатель архива",
     "multiple_reactions_per_viewer": "один читатель мог поставить несколько реакций; правило сравнения использует порог 1:1",
 }
 QUALITY_TEXTS = {
@@ -114,7 +117,7 @@ def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: N
            subscribers: Iterable[tuple[datetime, int]] = (), analyzed_at: datetime | None = None,
            cadence: CollectionCadence | None = None, norm_version: int | None = None,
            activity: SiblingActivity | None = None, carried: Sequence[Sign] = (),
-           reference: MatureReference | None = None) -> PostVerdict:
+           reference: MatureReference | ReferenceSet | None = None) -> PostVerdict:
     """Вывод по посту.
 
     `siblings` — другие посты того же аккаунта рядами; работник вместо них
@@ -129,7 +132,7 @@ def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: N
     if reference is not None:
         signs.extend(reference.detect(subject, moment))
         versions["mature_reference"] = REFERENCE_VERSION
-        versions["mature_reference_model"] = reference.version
+        versions["mature_reference_model"] = reference.version_for(subject)
     return verdict(prepared, context, [*signs, *carried], versions, norm_version)
 
 
@@ -164,8 +167,10 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         endpoint_comparison = (sign.pattern == 6 and sign.family is Family.CROSS_METRIC
                                and sign.render.get("measurementMode") == "exact_quality_v1"
                                and sign.render.get("comparisonMode") == ENDPOINT_MODE)
+        # Late engagement compares exact endpoints of a days-long window.
+        late_endpoints = sign.pattern == 13 and sign.render.get("measurementMode") == LATE_ENGAGEMENT_MODE
         if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_counts
-                and not endpoint_comparison
+                and not endpoint_comparison and not late_endpoints
                 and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:

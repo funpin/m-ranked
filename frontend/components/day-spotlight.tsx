@@ -1,4 +1,5 @@
 "use client";
+import { Badge } from "@/components/ui/badge";
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -40,9 +41,9 @@ export function DaySpotlight({ day, mode = "median" }: { day?: string; mode?: "m
       [data-published-day]:not([data-published-day="${day}"])>td{opacity:.45}
       [data-published-day="${day}"]>td{background:var(--accent)}`}</style> : null}
     <div className="mb-3 flex flex-wrap items-center gap-2 text-sm" role="status">
-      <span className="bg-accent text-accent-foreground inline-flex items-center rounded-full px-2.5 py-0.5 font-medium tabular">
+      <Badge className="bg-accent text-accent-foreground tabular h-auto px-2.5 text-[length:inherit]">
         {dayLabel(day)}
-      </span>
+      </Badge>
       <span className="text-muted-foreground">{mode === "median" ? "публикации этого дня" : "прирост за сутки показан рядом с реакциями и просмотрами"}</span>
       <Link href={selectedDayHref(pathname, search.toString(), undefined, mode)} scroll={false}
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-md bg-transparent underline underline-offset-4">

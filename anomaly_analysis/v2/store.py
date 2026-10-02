@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 from typing import Any, Mapping, Sequence
 from uuid import UUID
@@ -17,6 +17,7 @@ from .detectors import SiblingActivity
 from .domain import Metric, PostSeries, PostVerdict
 from .levels import quality_payload, sign_payload
 from .norms import NORM_MODEL_VERSION, Norm, NormSet, NormStatus, norm_from_payload, norm_to_payload
+from .tail_ledger import VERSION as TAIL_LEDGER_VERSION
 
 # Серия читается пачкой: 50 постов одним запросом (план, раздел 11).
 SERIES_BATCH = 50
@@ -186,6 +187,12 @@ class DueRow:
     norm_version_id: int | None
     attempts: int
     signals: tuple[Mapping[str, Any], ...]
+    # Строка из базы несёт версию сводки поста; по умолчанию — текущая.
+    tail_ledger_version: int | None = TAIL_LEDGER_VERSION
+
+    @property
+    def tail_ledger_stale(self) -> bool:
+        return self.tail_ledger_version != TAIL_LEDGER_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +219,7 @@ class StateWrite:
     lag_seconds: int | None = None
     error_code: str | None = None
     reason: str = "scheduled"
+    tail_ledger: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if (self.verdict is None) == (self.error_code is None):
@@ -386,9 +394,9 @@ class PostgresAnomalyStore:
                            publication_id, published_at, level, signals, quality, analyzed_at,
                            analyzed_points, last_point_observed_at, norm_version_id,
                            detector_versions, next_due_at, frozen, error_code, attempts,
-                           lag_seconds, updated_at)
+                           lag_seconds, tail_ledger, tail_ledger_version, updated_at)
                        VALUES (%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s,%s,NULL,0,%s,
-                               transaction_timestamp())
+                               %s::jsonb,%s,transaction_timestamp())
                        ON CONFLICT (publication_id) DO UPDATE SET
                            published_at=excluded.published_at, level=excluded.level,
                            signals=excluded.signals, quality=excluded.quality,
@@ -398,11 +406,15 @@ class PostgresAnomalyStore:
                            detector_versions=excluded.detector_versions,
                            next_due_at=excluded.next_due_at, frozen=excluded.frozen,
                            error_code=NULL, attempts=0, lag_seconds=excluded.lag_seconds,
+                           tail_ledger=coalesce(excluded.tail_ledger, state.tail_ledger),
+                           tail_ledger_version=coalesce(excluded.tail_ledger_version, state.tail_ledger_version),
                            updated_at=excluded.updated_at""",
                     (item.publication_id, item.published_at, int(verdict.level), _json(signals),
                      _json(quality_payload(verdict.quality)), item.analyzed_at, item.analyzed_points,
                      item.last_point_observed_at, item.norm_version_id, _json(versions),
-                     item.next_due_at, item.frozen, item.lag_seconds))
+                     item.next_due_at, item.frozen, item.lag_seconds,
+                     None if item.tail_ledger is None else _json(item.tail_ledger),
+                     None if item.tail_ledger is None else TAIL_LEDGER_VERSION))
                 keys = frozenset((sign.pattern, sign.metric.value) for sign in verdict.signs)
                 kind = change_kind(before, int(verdict.level), keys)
                 if kind is None:
@@ -467,7 +479,8 @@ class PostgresAnomalyStore:
                 """SELECT publication.id AS publication_id, publication.published_at,
                           coalesce(state.next_due_at, %(now)s) AS next_due_at, state.analyzed_at,
                           state.last_point_observed_at, state.norm_version_id,
-                          coalesce(state.attempts, 0) AS attempts, coalesce(state.signals, '[]'::jsonb) AS signals
+                          coalesce(state.attempts, 0) AS attempts, coalesce(state.signals, '[]'::jsonb) AS signals,
+                          state.tail_ledger_version
                      FROM ingest.visible_publication publication
                      LEFT JOIN analytics.post_anomaly_state state ON state.publication_id = publication.id
                     WHERE publication.primary_account_id = %(account)s AND publication.published_at >= %(since)s
@@ -476,21 +489,21 @@ class PostgresAnomalyStore:
                 {"account": account, "since": since, "now": datetime.now(timezone.utc)}).fetchall()
         return [DueRow(row["publication_id"], row["published_at"], row["next_due_at"], row["analyzed_at"],
                        row["last_point_observed_at"], row["norm_version_id"], int(row["attempts"]),
-                       tuple(row["signals"] or ())) for row in rows]
+                       tuple(row["signals"] or ()), row["tail_ledger_version"]) for row in rows]
 
     def claim_due(self, now: datetime, limit: int) -> list[DueRow]:
         """Просроченные незамороженные посты, свежие первыми."""
         with self._factory() as connection:
             rows = connection.execute(
                 """SELECT publication_id, published_at, next_due_at, analyzed_at, last_point_observed_at,
-                          norm_version_id, attempts, signals
+                          norm_version_id, attempts, signals, tail_ledger_version
                      FROM analytics.post_anomaly_state
                     WHERE NOT frozen AND next_due_at <= %s
                     ORDER BY published_at DESC
                     LIMIT %s""", (now, limit)).fetchall()
         return [DueRow(row["publication_id"], row["published_at"], row["next_due_at"], row["analyzed_at"],
                        row["last_point_observed_at"], row["norm_version_id"], int(row["attempts"]),
-                       tuple(row["signals"] or ())) for row in rows]
+                       tuple(row["signals"] or ()), row["tail_ledger_version"]) for row in rows]
 
     def queue_state(self, now: datetime) -> tuple[float, int]:
         """Отставание самой старой просрочки и размер очереди."""
@@ -510,6 +523,41 @@ class PostgresAnomalyStore:
                 """UPDATE analytics.post_anomaly_state
                       SET next_due_at = %s, updated_at = transaction_timestamp()
                     WHERE publication_id = %s""", [(due, publication_id) for publication_id, due in items])
+
+    def read_tail_accounts(self) -> dict[UUID, str]:
+        """Видимые аккаунты площадок: у каждого будет профиль позднего отклика."""
+        with self._factory() as connection:
+            rows = connection.execute(
+                """SELECT id, platform::text AS platform FROM catalog.visible_platform_account""").fetchall()
+        return {row["id"]: row["platform"] for row in rows}
+
+    def read_tail_ledgers(self, published_after: datetime, published_until: datetime) -> list[dict[str, Any]]:
+        """Сводки позднего отклика постов окна — без чтения замеров."""
+        with self._factory() as connection:
+            return connection.execute(
+                """SELECT state.publication_id, publication.primary_account_id AS account_id,
+                          state.published_at, state.tail_ledger
+                     FROM analytics.post_anomaly_state state
+                     JOIN ingest.visible_publication publication ON publication.id = state.publication_id
+                    WHERE state.published_at > %s AND state.published_at <= %s
+                      AND state.tail_ledger_version = %s AND NOT publication.is_repost
+                      AND publication.deleted_at IS NULL""",
+                (published_after, published_until, TAIL_LEDGER_VERSION)).fetchall()
+
+    def write_tail_profiles(self, profiles: Sequence[Any], keep_since: date) -> None:
+        """Профили суток одной транзакцией; строки старше `keep_since` удаляются."""
+        with self._factory() as connection, connection.transaction(), connection.cursor() as cursor:
+            cursor.executemany(
+                """INSERT INTO analytics.account_tail_profile(
+                       account_id, computed_for, platform, status, abstain_reason, metrics, method_version)
+                   VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s)
+                   ON CONFLICT (account_id, computed_for) DO UPDATE SET
+                       platform=excluded.platform, status=excluded.status,
+                       abstain_reason=excluded.abstain_reason, metrics=excluded.metrics,
+                       method_version=excluded.method_version, computed_at=transaction_timestamp()""",
+                [(item.account_id, item.computed_for, item.platform, item.status, item.abstain_reason,
+                  _json(item.metrics), item.metrics["methodVersion"]) for item in profiles])
+            cursor.execute("DELETE FROM analytics.account_tail_profile WHERE computed_for < %s", (keep_since,))
 
     def read_activity(self, accounts: Sequence[UUID], since: datetime, until: datetime,
                       published_since: datetime) -> dict[UUID, SiblingActivity]:

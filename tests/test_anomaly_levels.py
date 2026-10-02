@@ -121,6 +121,6 @@ def test_glossary_of_adr_006_holds_for_every_text_and_formula():
 
 
 def test_all_symbols_from_the_plan_are_distinct():
-    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 11
+    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 12
     assert np.all([pattern in TITLES for pattern in SYMBOLS])
     assert levels.STRONG > YOUNG_NORM_CAP >= levels.MEDIUM
