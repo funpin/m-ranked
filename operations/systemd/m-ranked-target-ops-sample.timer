@@ -1,0 +1,11 @@
+[Unit]
+Description=Sample M-Ranked server state every five minutes
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*:0/5
+AccuracySec=30s
+Unit=m-ranked-target-ops-sample.service
+
+[Install]
+WantedBy=timers.target

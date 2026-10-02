@@ -207,6 +207,8 @@ UNITS_COMMON_PRESENTATION = [
     "m-ranked-target-web-cache-gc.timer",
     "m-ranked-target-maintenance.service",
     "m-ranked-target-maintenance.timer",
+    "m-ranked-target-ops-sample.service",
+    "m-ranked-target-ops-sample.timer",
     "m-ranked-target-official-rating.service",
     "m-ranked-target-official-rating.timer",
     "m-ranked-target-overview-metrics.service",
