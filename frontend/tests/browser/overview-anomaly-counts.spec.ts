@@ -50,13 +50,12 @@ test("overview counters follow the selected platform and period", async ({ page 
 test("anomaly sort is the default and switching direction reverses the cards", async ({ page }) => {
   await page.goto("/review?platform=vk&period=7d");
   await expect(page.getByRole("combobox", {name:"Сортировка",exact:true})).toHaveValue("anomalies");
-  await expect(page.getByRole("combobox", {name:"Порядок",exact:true})).toHaveValue("desc");
+  await expect(page.getByRole("radio", {name:"По убыванию",exact:true})).toBeChecked();
   const cards = page.getByTestId("platform-overview-card");
   await expect(cards.first()).toContainText("Альфа Университет");
-  await page.getByRole("combobox", {name:"Порядок",exact:true}).selectOption("asc");
-  await page.getByRole("button", {name:"Применить фильтры",exact:true}).click();
+  await page.getByRole("radio", {name:"По возрастанию",exact:true}).check();
   await expect(cards.first()).toContainText("Бета Институт");
-  await expect(page).toHaveURL(/sort=anomalies.*direction=asc/);
+  await expect(page).toHaveURL(/direction=asc/);
 });
 
 test("large monthly metrics stay inside narrow columns and retain their exact values", async ({ page }, testInfo) => {

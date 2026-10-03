@@ -2343,6 +2343,8 @@ components:
       additionalProperties: false
       required: [available, institutions, accounts, accountsByPlatform, publications, snapshots, computedAt]
       properties:
+        trackedInstitutions: { type: integer, minimum: 0, description: 'All catalog institutions with at least one enabled official account, independent of filters and pagination.' }
+        ratingInstitutions: { type: integer, minimum: 1, description: 'Social M-Rating institution count, initially 233; refreshed only by the administrative M-Rating update action.' }
         available: { type: boolean }
         institutions: { type: ['integer', 'null'], minimum: 0 }
         accounts: { type: ['integer', 'null'], minimum: 0 }

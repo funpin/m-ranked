@@ -41,6 +41,7 @@ test("MAX fits its selection and comparison tabs have a visible selected surface
       const platforms = page.getByTestId("platform-tabs");
       await expect(platforms.getByRole("tab", { name: "MAX", exact: true })).toHaveAttribute("aria-selected", "true");
       const selectedSurface = platforms.locator('[data-slot="motion-highlight"]');
+      await expect(selectedSurface).toHaveCount(1);
       await expect(selectedSurface).toBeVisible();
       const surface = await selectedSurface.evaluate(el => ({ width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height, background: getComputedStyle(el).backgroundColor, border: getComputedStyle(el).borderTopStyle }));
       expect(surface.width).toBeGreaterThan(30);

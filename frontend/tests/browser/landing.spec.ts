@@ -79,6 +79,7 @@ for (const theme of ["light", "dark"]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(page.getByTestId("landing-rhythm")).toHaveCount(1);
       await page.getByTestId("landing-rhythm").scrollIntoViewIfNeeded();
       await expect(page.getByTestId("hourly-chart")).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBe(0);

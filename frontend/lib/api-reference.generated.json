@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "7ccfae3002b320ce2cd36957c359a9573dc9cb5386e17fc0a0def89f0842ab92",
+  "sourceSha256": "9182c04ec29889d56e977e91d7d8af6415caa90a795e086f7d370472b6b68f6a",
   "version": "1.0.0",
   "operations": [
     {
@@ -871,6 +871,14 @@
       "parameters": [],
       "response": "SiteSummary",
       "fields": [
+        {
+          "name": "trackedInstitutions",
+          "type": "integer"
+        },
+        {
+          "name": "ratingInstitutions",
+          "type": "integer"
+        },
         {
           "name": "available",
           "type": "boolean"

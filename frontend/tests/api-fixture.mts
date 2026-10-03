@@ -347,7 +347,7 @@ const server = createServer(async (request, response) => {
     }
     return json({ items, nextCursor: null, datasetRevision: revision, asOf, integrationStatus: "unknown", integrationWarning: null } satisfies Schema["OverviewPage"]);
   }
-  if (url.pathname === "/api/v1/site/summary") return json({ available: true, institutions: 12, accounts: 40,
+  if (url.pathname === "/api/v1/site/summary") return json({ available: true, trackedInstitutions: 84, ratingInstitutions: 233, institutions: 12, accounts: 40,
     accountsByPlatform: { telegram: 11, vk: 12, max: 9, rutube: 8 }, publications: 1234, snapshots: 98765, computedAt: asOf });
   if (url.pathname === "/api/v1/sitemap") return json({ publicationPages: 1, publications: 2, datasetRevision: revision, asOf,
     accounts: [{ accountId: uuid(1,1), lastModified: "2026-07-07T00:00:00Z" }], institutions: [{ legacyId: 1 }, { legacyId: 2 }] });

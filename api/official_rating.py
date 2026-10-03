@@ -113,7 +113,7 @@ def _parse_month(config: str, selected: dict[str, Any], source: bytes,
             "evidence": {"year": int(year_match.group(1)), "month": name, "items": evidence}}
 
 
-async def refresh(request, actor: str, correlation: uuid.UUID) -> None:
+async def refresh(request, actor: str, correlation: uuid.UUID, *, update_coverage: bool = False) -> None:
     """Забирает официальный рейтинг и записывает все новые для базы периоды.
 
     Проверка идёт ежедневно, а источник обновляется раз в месяц, поэтому почти
@@ -151,11 +151,40 @@ async def refresh(request, actor: str, correlation: uuid.UUID) -> None:
             # отвергает повторное использование одного и того же.
             await _import_month(database, codes, month, actor,
                                 uuid.uuid5(correlation, month["period"]))
+        if update_coverage:
+            await _update_coverage(database, parsed[-1], actor, correlation)
     except ApiProblem:
         raise
     except Exception:
         await _report_failure(database, actor, correlation)
         raise
+
+
+async def _update_coverage(database: Any, parsed: dict[str, Any], actor: str,
+                           correlation: uuid.UUID) -> None:
+    """Only the admin button updates coverage, including an already imported month."""
+    count = len(parsed["rankings"]["social"])
+    if not 1 <= count <= 9999:
+        raise ValueError("invalid official coverage count")
+    value = json.dumps({"institutions": count, "period": parsed["period"],
+                        "sourceUrl": parsed["sourceUrl"],
+                        "updatedAt": parsed["fetchedAt"].isoformat()})
+    async with database.admin() as connection:
+        async with connection.transaction():
+            await connection.execute("SELECT pg_advisory_xact_lock(782194601)")
+            await connection.execute("""
+                INSERT INTO ops_and_admin.operational_checkpoint(
+                  checkpoint_key,scope_type,value,source_observed_at,correlation_id)
+                VALUES('admin.m_rating.coverage','system',%(value)s::jsonb,%(at)s,%(id)s)
+                ON CONFLICT(checkpoint_key,scope_type,scope_id,platform) DO UPDATE SET
+                  value=EXCLUDED.value,source_observed_at=EXCLUDED.source_observed_at,
+                  updated_at=transaction_timestamp(),correlation_id=EXCLUDED.correlation_id
+                """, {"value": value, "at": parsed["fetchedAt"], "id": correlation})
+            await connection.execute("""
+                INSERT INTO ops_and_admin.audit_log(subject,action,target_type,correlation_id,
+                  after_state,outcome) VALUES(%(actor)s,'official_rating.coverage.refresh',
+                  'official_rating_coverage',%(id)s,%(value)s::jsonb,'success')
+                """, {"actor": actor, "id": correlation, "value": value})
 
 
 async def _import_month(database: Any, codes: dict[str, Any], parsed: dict[str, Any],

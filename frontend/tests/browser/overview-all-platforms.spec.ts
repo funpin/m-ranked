@@ -1,6 +1,17 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+test("overview defaults to all platforms and coverage does not depend on the page or search", async ({page}) => {
+  await page.goto("/review");
+  await expect(page.getByRole("radio",{name:"Все",exact:true})).toBeChecked();
+  await expect(page.getByRole("heading",{level:1,name:/Обзор вузов/})).toBeVisible();
+  await expect(page.getByText("84 из 233 вузов",{exact:true})).toBeVisible();
+  await page.getByRole("searchbox",{name:"Поиск вуза",exact:true}).fill("Альфа");
+  await page.getByRole("button",{name:"Применить фильтры",exact:true}).click();
+  await expect(page.getByText("84 из 233 вузов",{exact:true})).toBeVisible();
+  await expect(page.getByRole("meter",{name:"Доля отслеживаемых вузов от М‑Рейтинга"})).toHaveAttribute("aria-valuenow","36");
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`all-platform overview shows totals, compact account links and honest missing values in ${theme} theme`, async ({page}) => {
     await page.addInitScript(value => localStorage.setItem("m-ranked-theme",value),theme);
@@ -20,7 +31,8 @@ for (const theme of ["light", "dark"] as const) {
     await expect(card.getByTestId("overview-status")).toContainText("4/4 площадки");
     await expect(cards.nth(1).getByTestId("overview-status")).toContainText("1/4 площадки");
     await expect(cards.nth(1).getByRole("group",{name:"Официальные соцсети вуза"}).getByRole("link")).toHaveCount(1);
-    await expect(page.getByRole("meter",{name:"Доля подключённых соцсетей на этой странице"})).toHaveAttribute("aria-valuenow","63");
+    await expect(page.getByRole("meter",{name:"Доля отслеживаемых вузов от М‑Рейтинга"})).toHaveAttribute("aria-valuenow","36");
+    await expect(page.getByText("84 из 233 вузов",{exact:true})).toBeVisible();
     const layout = await page.evaluate(() => {
       const footers = [...document.querySelectorAll('[data-testid="overview-status"]')];
       return {

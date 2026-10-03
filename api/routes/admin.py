@@ -566,7 +566,7 @@ async def _legacy_execute(body: LegacyCommand, request: Request, user: Principal
     if path == "/manage/m-rating/update":
         from ..official_rating import refresh
         try:
-            await refresh(request, user.username, correlation)
+            await refresh(request, user.username, correlation, update_coverage=True)
             return "/manage?m_rating_status=updated"
         except ApiProblem:
             raise

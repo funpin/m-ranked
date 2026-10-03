@@ -79,8 +79,8 @@ export default function ApiReferencePage() {
                     <p className="text-muted-foreground text-sm leading-relaxed">{operation.text}</p>
                   </div>
                   {operation.parameters.length > 0 && (
-                    <div className="ring-foreground/10 focus-visible:ring-ring/60 overflow-x-auto rounded-xl ring-1 outline-none focus-visible:ring-2" tabIndex={0} role="region" aria-label={`Параметры: ${operation.title}`}>
-                      <Table className="text-sm">
+                    <div className="ring-foreground/10 focus-within:ring-ring/60 rounded-xl ring-1 focus-within:ring-2">
+                      <Table className="text-sm" containerProps={{ tabIndex: 0, role: "region", "aria-label": `Параметры: ${operation.title}` }}>
                         <TableCaption className="sr-only">Параметры: {operation.title}</TableCaption>
                         <TableHeader className="bg-muted/50">
                           <TableRow className="hover:bg-transparent">

@@ -57,12 +57,13 @@ export const metadata: Metadata = {
 export default async function OverviewPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const period = normalizePeriod(params.period, "1d");
-  const platform = normalizePlatform(params.platform, "telegram");
+  const platform = normalizePlatform(params.platform, "all");
   const sort = normalizeSort(params.sort, platform);
   const direction = normalizeDirection(params.direction, sort);
   const q = (first(params.q) ?? "").trim();
   const cursor = first(params.cursor);
   const pagination = overviewPagination(cursor, params.from);
+  const summaryPromise = platform === "all" ? api.siteSummary().catch(() => null) : Promise.resolve(null);
 
   let page;
   try {
@@ -79,6 +80,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
   }
 
   const items = page.items;
+  const summary = await summaryPromise;
   return (
     <>
       <PageHeader
@@ -147,7 +149,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       {/* Заготовка стоит только вокруг списка: заголовок и фильтры остаются
           видимыми и рабочими, пока едет новая выборка. */}
       <NavigationBoundary fallback={<CardGridSkeleton chrome={false} />}>
-        {platform === "all" ? <CoverageSummary items={items} /> : null}
+        {platform === "all" ? <CoverageSummary items={items} trackedInstitutions={summary?.trackedInstitutions ?? null} referenceInstitutions={summary?.ratingInstitutions ?? 233} /> : null}
 
         <section className="reveal grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
           items.map((item) => <OverviewCard item={item} integrationWarning={page.integrationWarning} key={item.entityId} />)

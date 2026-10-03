@@ -22,7 +22,7 @@ export function LegacyFilterForm({ action = "/review", ...props }: ComponentProp
       form.current?.reset();
       // Chrome can restore a radio's changed checked property after hydration.
       // Read the current URL, which is authoritative for this history entry.
-      const platform=normalizePlatform(new URL(location.href).searchParams.getAll("platform"));
+      const platform=normalizePlatform(new URL(location.href).searchParams.getAll("platform"), "all");
       form.current?.querySelectorAll<HTMLInputElement>('input[name="platform"]').forEach((radio) => {radio.checked=radio.value===platform;});
       const period=normalizePeriod(new URL(location.href).searchParams.getAll("period"), "1d");
       form.current?.querySelectorAll<HTMLInputElement>('input[name="period"]').forEach((radio) => {radio.checked=radio.value===period;});

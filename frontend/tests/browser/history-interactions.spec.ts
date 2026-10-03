@@ -176,9 +176,9 @@ test("a long interval between saved changes is spaced by time without claiming c
   await expect(longIntervalRow).not.toContainText("Успешных циклов:");
   expect((await longIntervalRow.boundingBox())!.height).toBeLessThan(45);
   await longInterval.hover();
-  await expect(page.getByRole("tooltip").filter({hasText:"Это не простой: опросы без изменений не сохраняются"})).toBeVisible();
+  await expect(page.locator('[data-slot="tooltip-content"]').filter({hasText:"Это не простой: опросы без изменений не сохраняются"})).toBeVisible();
   await longIntervalRow.getByTestId("collector-status-trigger").hover();
-  await expect(page.getByRole("tooltip").filter({hasText:"успешных циклов — 732, с ошибкой — 0"})).toBeVisible();
+  await expect(page.locator('[data-slot="tooltip-content"]').filter({hasText:"успешных циклов — 732, с ошибкой — 0"})).toBeVisible();
   await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
   // Neighbouring samples across the break are placed far apart, not side by
   // side: the plotted geometry leaves a wide horizontal stretch between two

@@ -4,34 +4,32 @@ import type { OverviewItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** Компактная сводка текущей страницы; основные показатели — в карточках вузов. */
-export function CoverageSummary({ items }: { items: readonly OverviewItem[] }) {
-  if (!items.length) return null;
-  const counts = [4, 3, 2, 1, 0].map((platforms) => ({
-    platforms,
-    institutions: items.filter((item) => (item.connectedPlatformCount ?? 0) === platforms).length,
-  })).filter((bucket) => bucket.institutions);
+export function CoverageSummary({ items, trackedInstitutions, referenceInstitutions }: {
+  items: readonly OverviewItem[]; trackedInstitutions: number | null; referenceInstitutions: number;
+}) {
   const accounts = items.reduce((total, item) => total + (item.accountCount ?? 0), 0);
-  const connected = items.reduce((total, item) => total + (item.connectedPlatformCount ?? 0), 0);
-  const share = Math.round((connected / (items.length * 4)) * 100);
+  const share = trackedInstitutions === null ? null : Math.round(trackedInstitutions / referenceInstitutions * 100);
 
   return (
-    <section className="bg-card mb-5 grid grid-cols-2 gap-3 rounded-xl border p-3 shadow-sm sm:grid-cols-3 sm:gap-4" aria-label="Покрытие площадок на этой странице">
+    <section className="bg-card mb-5 grid grid-cols-2 gap-3 rounded-xl border p-3 shadow-sm sm:grid-cols-3 sm:gap-4" aria-label="Выборка и покрытие вузов М‑Рейтинга">
       <Tile icon={Landmark} value={String(items.length)} label="вузов на странице" hint="Число вузов в текущей странице с учётом фильтров." />
       <Tile icon={Link2} value={String(accounts)} label="аккаунтов в выборке" hint="Число официальных аккаунтов вузов на этой странице, включая отключённые." divider />
       <div className="col-span-2 grid content-center gap-2 border-t pt-3 sm:col-span-1 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
         <div className="flex items-center gap-2">
           <PieChart className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-          <b className="font-heading tabular text-xl leading-none font-extrabold tracking-tight">{share}%</b>
-          <span className="text-muted-foreground text-[11px] leading-snug">покрытие соцсетей</span>
-          <MethodNote title="Покрытие соцсетей на этой странице">
-            <p>Подключено {connected} из {items.length * 4} возможных площадок. Для каждого вуза учитываются только соцсети с включённым отслеживанием; несколько аккаунтов одной соцсети считаются одной площадкой.</p>
-            <ul className="mt-2 grid gap-1">{counts.map(bucket => <li key={bucket.platforms}>{bucket.platforms} из 4 площадок: {bucket.institutions} вузов</li>)}</ul>
+          <b className="font-heading tabular text-xl leading-none font-extrabold tracking-tight">{share === null ? "—" : `${share}%`}</b>
+          <span className="text-muted-foreground text-[11px] leading-snug">покрытие вузов</span>
+          <MethodNote title="Покрытие вузов М‑Рейтинга">
+            <p>Число вузов с включённым отслеживанием хотя бы одной официальной соцсети в нашем каталоге, делённое на {referenceInstitutions} вузов раздела «Социальные сети» М‑Рейтинга. Фильтры, поиск и страницы не меняют этот показатель.</p>
+            <p className="mt-2">Число вузов М‑Рейтинга обновляется только кнопкой «Обновить М‑Рейтинг» в админке.</p>
+            <a href="https://m-rating.ru/#rating" target="_blank" rel="noopener noreferrer" className="mt-2 inline-block underline underline-offset-2">Официальный М‑Рейтинг</a>
           </MethodNote>
         </div>
-        <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full" role="meter"
-          aria-label="Доля подключённых соцсетей на этой странице" aria-valuenow={share} aria-valuemin={0} aria-valuemax={100}>
-          <div className="bg-chart-2 meter-fill h-full rounded-full" style={{width:`${share}%`}} />
-        </div>
+        {share !== null ? <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full" role="meter"
+          aria-label="Доля отслеживаемых вузов от М‑Рейтинга" aria-valuenow={share} aria-valuemin={0} aria-valuemax={Math.max(100,share)}>
+          <div className="bg-chart-2 meter-fill h-full rounded-full" style={{width:`${Math.min(100,share)}%`}} />
+        </div> : null}
+        <small className="text-muted-foreground tabular text-[10px]">{trackedInstitutions ?? "—"} из {referenceInstitutions} вузов</small>
       </div>
     </section>
   );

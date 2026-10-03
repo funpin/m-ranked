@@ -97,7 +97,7 @@ test("legacy validation returns 422 and repeated scalar chooses last", async ({ 
   await page.goto("/review?platform=telegram&platform=vk");
   await expect(page.locator('input[name="platform"][value="vk"]')).toBeChecked();
   await page.goto("/review?platform=invalid");
-  await expect(page.locator('input[name="platform"][value="telegram"]')).toBeChecked();
+  await expect(page.locator('input[name="platform"][value="all"]')).toBeChecked();
 });
 
 test("statistics all-platform mode has four independent publication slices", async ({ page }) => {
