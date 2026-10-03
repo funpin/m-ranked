@@ -73,6 +73,7 @@ function ComboboxInput({
             variant="ghost"
             render={<ComboboxTrigger />}
             data-slot="input-group-button"
+            aria-label="Открыть список"
             className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent"
             disabled={disabled}
           />

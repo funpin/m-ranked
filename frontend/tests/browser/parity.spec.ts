@@ -109,9 +109,26 @@ test("findings list shows posts above norm with one badge and hidden-anomaly not
   await expect(rows).toHaveCount(20);
   await expect(rows.first()).toContainText("Вуз 001");
   await expect(rows.first()).toContainText("×5,0");
+  // Один значок на строку: возраст важнее уровня анализа.
   await expect(rows.nth(1)).toContainText("предварительно, 6 ч");
-  await expect(rows.nth(3)).toContainText("—");
+  await expect(rows.nth(1)).not.toContainText("слабый сигнал");
   await expect(rows.nth(4)).toContainText("слабый сигнал");
+  await expect(rows.nth(5)).toContainText("не проверен");
+  await expect(rows.nth(6)).toContainText("по 12-му часу");
+  await expect(rows.nth(6)).not.toContainText("предварительно");
+  // Ноль — это значение, а не «нет данных».
+  const zero = rows.nth(2);
+  const mobile = info.project.name === "mobile";
+  const zeroInteractions = mobile ? zero.locator("dd").nth(0) : zero.locator("td").nth(2);
+  const zeroErv = mobile ? zero.locator("dd").nth(2) : zero.locator("td").nth(4);
+  await expect(zeroInteractions).toHaveText("0");
+  await expect(zeroErv).toHaveText("0,00%");
+  await expect(zeroInteractions).not.toContainText("—");
+  await expect(zeroErv).not.toContainText("—");
+  // Неизвестный индекс — прочерк без «×».
+  const unknownIndex = rows.nth(3).getByRole("button", { name: /^Индекс/ });
+  await expect(unknownIndex).toHaveText("—");
+  await expect(unknownIndex).not.toContainText("×");
   await expect(page.getByTestId("findings-hidden-note")).toContainText("3");
   await page.getByRole("button", { name: "Показать ещё" }).click();
   await expect(rows).toHaveCount(30);
@@ -151,6 +168,24 @@ test("institution mode without a choice asks for one and unknown id is not an er
   await page.goto("/statistics?mode=institution&institution=999");
   await expect(page.getByText("Вуз не найден — выберите другой")).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Вуз" })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Не удалось загрузить данные" })).toHaveCount(0);
+  await expect(page.getByText("Не удалось загрузить данные")).toHaveCount(0);
+  await expect(page.getByTestId("findings-table")).toHaveCount(0);
+  await expect(page.getByTestId("findings-cards")).toHaveCount(0);
+});
+
+test("institution choice works when localStorage throws", async ({ page }) => {
+  await page.addInitScript(() => {
+    const fail = () => { throw new DOMException("denied", "SecurityError"); };
+    Object.defineProperty(window, "localStorage", { configurable: true, get: fail });
+  });
+  await page.goto("/statistics?mode=institution");
+  await expect(page.getByText("Выберите вуз, чтобы увидеть его посты")).toBeVisible();
+  await page.getByRole("combobox", { name: "Вуз" }).fill("002");
+  await page.getByRole("option", { name: /Вуз 002/ }).click();
+  await expect(page).toHaveURL(/institution=2/);
+  await expect(page.getByTestId(/findings-(table|cards)/).first()).toBeAttached();
+  await expect(page.getByRole("alert").filter({ hasText: "Не удалось загрузить данные" })).toHaveCount(0);
 });
 
 test("findings filters popover applies publication types once on close", async ({ page }) => {
