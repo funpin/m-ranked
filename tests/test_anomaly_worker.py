@@ -10,7 +10,7 @@ from anomaly_analysis.v2.domain import Level
 from anomaly_analysis.v2.schedule import ScheduleConfig
 from anomaly_analysis.v2.series import CollectionCadence
 from anomaly_analysis.v2.store import DueRow, Progress
-from anomaly_analysis.v2.worker import Worker
+from anomaly_analysis.v2.worker import final_analysis_days, Worker
 from anomaly_reference.mature_norms import synthetic_cases
 
 
@@ -22,6 +22,10 @@ class FakeStore:
         self.written, self.postponed, self.rechecks = [], [], []
         self.series_reads: list = []
         self.progress_enabled = True
+        self.analysis_policy = None
+
+    def read_runtime_policy(self, name):
+        return self.analysis_policy if name == "analysis" else None
 
     def seed_new(self, now, window, limit):
         return 0
@@ -231,3 +235,22 @@ def test_a_post_without_a_current_tail_ledger_is_analyzed_once_even_without_new_
     assert write.tail_ledger["v"] == 1 and write.tail_ledger["start"] and write.tail_ledger["growth"]
     assert 13 in {sign.pattern for sign in write.verdict.signs}
 
+
+
+def test_panel_final_analysis_age_replaces_the_environment_window():
+    subject = synthetic_cases()["honest_organic_rutube"].subject
+    now = subject.published_at + timedelta(days=21)
+    store = FakeStore({subject.publication_id: subject}, [_row(subject, now)])
+    store.analysis_policy = {"finalAnalysisDays": 20}
+    worker = _worker(store, now)
+    worker.run_once()
+    # Окружение — 30 суток, панель — 20: пост 21 суток получает финальный анализ.
+    assert worker.schedule.track_post_for_hours == 480
+    assert store.written[0].frozen and store.written[0].reason == "final"
+
+
+def test_an_invalid_or_empty_analysis_policy_keeps_the_environment_value():
+    assert final_analysis_days({"finalAnalysisDays": 20}) == 20
+    for policy in (None, {}, {"finalAnalysisDays": None}, {"finalAnalysisDays": True},
+                   {"finalAnalysisDays": "20"}, {"finalAnalysisDays": 1}):
+        assert final_analysis_days(policy) is None

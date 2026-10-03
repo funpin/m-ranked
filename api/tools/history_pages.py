@@ -7,6 +7,9 @@
 DTO, что и API, и складывает её в analytics.publication_history_page
 (миграция 0043). API берёт её, пока отпечаток снимков совпадает.
 
+Месяцы в холодном архиве (ADR-016) пропускаются: их замеров в базе нет,
+готовая выдача лежит в файле просмотра архива, и пересчёт записал бы пустую.
+
 Каждый прогон ограничен по времени и идёт вполсилы: после каждого поста
 пауза не меньше времени его расчёта, чтобы база оставалась людям. Сначала —
 посты без готовой выдачи (свежезамороженные первыми), затем сверка самых
@@ -37,6 +40,9 @@ SELECT publication.id, publication.published_at
    AND NOT EXISTS (SELECT 1 FROM analytics.publication_history_page page
                     WHERE page.publication_id = publication.id)
    AND publication.id <> ALL(%(skip)s::uuid[])
+   AND NOT EXISTS (SELECT 1 FROM ops_and_admin.cold_archive_generation generation
+                    WHERE generation.state = 'cold'
+                      AND generation.published_month = date_trunc('month', publication.published_at AT TIME ZONE 'UTC')::date)
  ORDER BY publication.published_at DESC
  LIMIT %(limit)s
 """
@@ -46,6 +52,8 @@ SELECT page.publication_id AS id, publication.published_at,
        page.snapshot_count, page.max_snapshot_id
   FROM analytics.publication_history_page page
   JOIN ingest.visible_publication publication ON publication.id = page.publication_id
+ WHERE NOT EXISTS (SELECT 1 FROM ops_and_admin.cold_archive_generation generation
+                    WHERE generation.state = 'cold' AND generation.published_month = page.published_month)
  ORDER BY page.computed_at
  LIMIT %(limit)s
 """
