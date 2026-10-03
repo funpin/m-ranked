@@ -365,3 +365,29 @@ test("an open explanation tooltip leaves its trigger reachable below the sticky 
   await page.keyboard.press("Escape");
   await expect(tooltip).toHaveCount(0);
 });
+
+test("dragging the time range back and forth never breaks the page",async({page}) => {
+  test.setTimeout(90_000);
+  const errors:string[]=[];
+  page.on("pageerror",(error)=>errors.push(error.message));
+  await page.route("**/api/v1/**",(route)=>route.continue({url:route.request().url().replace(/^http:\/\/[^/]+/,"http://127.0.0.1:18091")}));
+  await page.goto("/posts/99");
+  const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
+  await expect(chart).toHaveAttribute("data-chart-ready","true",{timeout:30_000});
+  // Как у пользователя: на графике прироста показана одна метрика, масштаб «Авто».
+  await page.getByRole("button",{name:"Прирост просмотров",exact:true}).click();
+  await page.getByRole("button",{name:"Авто",exact:true}).last().click();
+  const thumbs=page.locator('[data-slot="slider-thumb"]');
+  await thumbs.nth(1).scrollIntoViewIfNeeded();
+  for(let round=0;round<10;round++){
+    const box=(await thumbs.nth(round%2).boundingBox())!;
+    const target=box.x+(round%2 ? -60 : 50);
+    await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+    await page.mouse.down();
+    for(let step=1;step<=12;step++) await page.mouse.move(box.x+(target-box.x)*step/12,box.y+box.height/2);
+    await page.mouse.up();
+  }
+  await expect(page.getByTestId("chart-range-head")).not.toContainText("1205 сохранённых точек");
+  await expect(page.getByText("Страница временно недоступна")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

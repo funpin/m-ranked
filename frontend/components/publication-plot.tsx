@@ -115,6 +115,18 @@ function SampleDot(props: { cx?: number; cy?: number; fill?: string; evidence?: 
   return <circle cx={cx} cy={cy} r={3} fill={fill} stroke="var(--background)" strokeWidth={1} />;
 }
 
+// Всё, что уходит в recharts, держится одной ссылкой между отрисовками.
+// recharts 3 переносит настройки осей, подсказки и точек в свой store
+// эффектами: новый объект на каждую отрисовку — новая запись в store и новая
+// отрисовка. Пока ползунок масштаба двигается, это превращалось в каскад и
+// заканчивалось ошибкой React #185 («Maximum update depth exceeded»).
+const ACTIVE_DOT = { r: 5 } as const;
+const TOOLTIP_CURSOR = { strokeDasharray: "4 4" } as const;
+const LABEL_STYLE = { textAnchor: "middle" } as const;
+const BAR_PADDING = { left: 18, right: 18 } as const;
+const LINE_PADDING = { left: 4, right: 4 } as const;
+const renderTimeTick = (props: Parameters<typeof TimeTick>[0]) => <TimeTick {...props} />;
+
 /** Keep the axis to one compact line; sample age stays in the chart tooltip. */
 function TimeTick({ x, y, payload, index, visibleTicksCount }: {
   x?: number | string; y?: number | string; payload?: { value?: number };
@@ -175,6 +187,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
 
   const firstAt = rows.length ? at(rows[0]!) : 0;
   const lastAt = rows.length ? at(rows[rows.length - 1]!) : 1;
+  const domain = useMemo(() => [firstAt, lastAt === firstAt ? firstAt + 1 : lastAt], [firstAt, lastAt]);
 
   const config = useMemo(() => {
     const value: ChartConfig = {};
@@ -230,41 +243,52 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   // слева, вторая справа. Раньше сторона выбиралась по месту метрики в полном
   // списке, и при двух показанных метриках левая шкала доставалась скрытой —
   // на экране оставалась только правая.
-  const visible = metrics.filter((metric) => !hidden.has(metric.key)).slice(0, 2);
+  const visible = useMemo(() => metrics.filter((metric) => !hidden.has(metric.key)).slice(0, 2), [metrics, hidden]);
   // Сетка и линия выбранной точки привязываются к одной шкале — левой, а при
   // общем масштабе к единственной.
   const primaryAxis = scale === "shared" ? "y" : visible[0]?.key ?? "y";
   // Скрытая метрика всё равно должна ссылаться на существующую шкалу.
   const axisFor = (metric: Metric) =>
     scale === "shared" || !visible.includes(metric) ? primaryAxis : metric.key;
-  const axes = scale === "shared" || !visible.length
+  const axes = useMemo(() => scale === "shared" || !visible.length
     ? [<YAxis key="y" yAxisId="y" tickLine={false} axisLine={false} width={72} allowDecimals={false}
         tickFormatter={axisNumber} tickMargin={6} hide={!visible.length}
-        label={{ value: axisTitle, angle: -90, position: "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />]
+        label={{ value: axisTitle, angle: -90, position: "insideLeft", style: LABEL_STYLE, fill: "var(--muted-foreground)" }} />]
     : visible.map((metric, index) => (
         <YAxis key={metric.key} yAxisId={metric.key} orientation={index ? "right" : "left"}
           tickLine={false} axisLine={false} width={72} allowDecimals={false}
           tickFormatter={axisNumber} tickMargin={6}
-          label={{ value: metricLabel(metric, platform), angle: -90, position: index ? "insideRight" : "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />
-      ));
+          label={{ value: metricLabel(metric, platform), angle: -90, position: index ? "insideRight" : "insideLeft", style: LABEL_STYLE, fill: "var(--muted-foreground)" }} />
+      )), [scale, visible, axisTitle, platform]);
 
-  const shared = {
-    data,
-    margin: { left: 4, right: 4, top: markers.length ? 30 : 8, bottom: 8 },
-    onClick: (state: { activeLabel?: unknown }, event: ReactMouseEvent<SVGGraphicsElement>) => {
-      let row = nearestRow(state?.activeLabel);
-      // Recharts has no active label when the click lands between sparse
-      // points. Resolve that click by its position in the visible time axis.
-      if (!row && rows.length) {
-        const bounds = event.currentTarget.getBoundingClientRect();
-        const left = bounds.left + 76;
-        const width = Math.max(1, bounds.width - 80 - (scale === "auto" && visible.length > 1 ? 72 : 0));
-        const fraction = Math.max(0, Math.min(1, (event.clientX - left) / width));
-        row = nearestRow(firstAt + fraction * (lastAt - firstAt));
-      }
-      if (row) onActivate(row.snapshotId);
-    },
-  };
+  const margin = useMemo(() => ({ left: 4, right: 4, top: markers.length ? 30 : 8, bottom: 8 }), [markers.length]);
+  const onClick = useCallback((state: { activeLabel?: unknown }, event: ReactMouseEvent<SVGGraphicsElement>) => {
+    let row = nearestRow(state?.activeLabel);
+    // Recharts has no active label when the click lands between sparse
+    // points. Resolve that click by its position in the visible time axis.
+    if (!row && rows.length) {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const left = bounds.left + 76;
+      const width = Math.max(1, bounds.width - 80 - (scale === "auto" && visible.length > 1 ? 72 : 0));
+      const fraction = Math.max(0, Math.min(1, (event.clientX - left) / width));
+      row = nearestRow(firstAt + fraction * (lastAt - firstAt));
+    }
+    if (row) onActivate(row.snapshotId);
+  }, [nearestRow, rows.length, scale, visible.length, firstAt, lastAt, onActivate]);
+  const tooltipContent = useCallback((props: { active?: boolean; label?: unknown; payload?: unknown }) => (
+    <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} publishedAt={publishedAt} delta={delta} nearestRow={nearestRow} />
+  ), [metrics, hidden, platform, publishedAt, delta, nearestRow]);
+  // Точка остаётся только там, где она что-то означает — на границе
+  // опубликованного сигнала; кружок на каждом замере превращал линию в пунктир.
+  const dots = useMemo(() => new Map(metrics.map((metric) => [metric.key, (props: unknown) => {
+    // Recharts types the per-point dot props loosely; the shape this chart
+    // supplies is narrowed at the boundary.
+    const dot = props as { cx?: number; cy?: number; payload?: { evidence?: boolean }; key?: string };
+    if (!dot.payload?.evidence) return <g key={dot.key} />;
+    return <SampleDot key={dot.key} cx={dot.cx} cy={dot.cy} fill={metric.color} evidence />;
+  }])), [metrics]);
+
+  const shared = { data, margin, onClick };
 
   const children = (
     <>
@@ -277,17 +301,12 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       <SignalOverlay markers={markers} highlight={highlight} />
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
-      <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}
-        padding={delta ? { left: 18, right: 18 } : { left: 4, right: 4 }}
+      <XAxis dataKey="t" type="number" domain={domain}
+        padding={delta ? BAR_PADDING : LINE_PADDING}
         scale="time" tickLine={false} axisLine={false} height={30} tickCount={3} minTickGap={80} interval="preserveStartEnd"
-        tick={(props) => <TimeTick {...props} />} />
+        tick={renderTimeTick} />
       {axes}
-      <ChartTooltip
-        cursor={{ strokeDasharray: "4 4" }}
-        content={(props) => (
-          <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} publishedAt={publishedAt} delta={delta} nearestRow={nearestRow} />
-        )}
-      />
+      <ChartTooltip cursor={TOOLTIP_CURSOR} content={tooltipContent} />
       {selectedAt ? (
         <ReferenceLine x={Date.parse(selectedAt)} yAxisId={primaryAxis} stroke="var(--foreground)" strokeOpacity={0.45} strokeDasharray="3 3" />
       ) : null}
@@ -337,17 +356,8 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
               <Line key={metric.key} dataKey={metric.key} yAxisId={axisFor(metric)} hide={hidden.has(metric.key)}
                 type="monotone" stroke={metric.color} strokeWidth={2.5}
                 connectNulls={false} isAnimationActive animationDuration={420}
-                activeDot={{ r: 5 }}
-                dot={(props) => {
-                  // Recharts types the per-point dot props loosely; the shape
-                  // this chart supplies is narrowed at the boundary. Точка
-                  // остаётся только там, где она что-то означает — на границе
-                  // опубликованного сигнала; кружок на каждом замере превращал
-                  // линию в пунктир и ничего не добавлял к чтению.
-                  const dot = props as unknown as { cx?: number; cy?: number; payload?: { evidence?: boolean }; key?: string };
-                  if (!dot.payload?.evidence) return <g key={dot.key} />;
-                  return <SampleDot key={dot.key} cx={dot.cx} cy={dot.cy} fill={metric.color} evidence />;
-                }}
+                activeDot={ACTIVE_DOT}
+                dot={dots.get(metric.key)}
               />
             ))}
           </LineChart>
