@@ -112,6 +112,8 @@ class PostgresCollectorRepository:
         self.raw_retention = timedelta(days=raw_retention_days)
         self.statement_timeout_seconds = statement_timeout_seconds
         self.snapshot_heartbeat = timedelta(hours=snapshot_heartbeat_hours)
+        # Задаётся политикой сбора из панели (runtime_policy.py); None — без предела.
+        self.heartbeat_max_age: timedelta | None = None
         self.poll_receipt_policy = poll_receipt_policy or PollReceiptPolicy()
         self._last_poll_receipt_prune: datetime | None = None
         self.evidence_store = evidence_store or ImmutableEvidenceStore(
@@ -1661,6 +1663,13 @@ class PostgresCollectorRepository:
                     latest_observed_at, "snapshot.observed_at",
                 ) >= self.snapshot_heartbeat
             )
+            # Контрольный замер без изменений у поста старше предела политики
+            # не пишется: он лишь подтверждает прежние значения, а каждая такая
+            # строка открывает уже архивированный месяц заново (ADR-016).
+            if (unchanged and latest_observed_at is not None
+                    and self.heartbeat_max_age is not None
+                    and snapshot.age_seconds >= self.heartbeat_max_age.total_seconds()):
+                continue
             if unchanged and not heartbeat_due:
                 continue
             snapshot_input = {

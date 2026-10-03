@@ -40,6 +40,7 @@ from .retention import (
     disk_state,
 )
 from .repository import PostgresCollectorRepository
+from .runtime_policy import RuntimeOverlay, RuntimeSettings
 from .tracking import validate_tracking_policy
 from .transfer import (
     HttpsMtlsTransport,
@@ -433,6 +434,14 @@ async def _run(args: argparse.Namespace) -> int:
             os.getenv("COLLECTOR_PLATFORM_AUTH_FILE", "").strip() or None,
         )
         validate_tracking_policy(settings)
+        # Политика сбора из панели накладывается поверх окружения и меняется
+        # без перезапуска (runtime_policy.py).
+        base_settings = settings
+        settings = RuntimeSettings(base_settings)
+        runtime = RuntimeOverlay(
+            os.getenv("COLLECTOR_RUNTIME_POLICY_FILE", "/var/lib/m-ranked/node-agent/runtime.json").strip() or None,
+            base_settings,
+        )
         dsn = (
             os.getenv("COLLECTOR_DATABASE_URL", "").strip()
             or os.getenv("DATABASE_URL", "").strip()
@@ -485,16 +494,14 @@ async def _run(args: argparse.Namespace) -> int:
         # Размещение строится один раз при старте. Список участников приходит
         # с Сервера 2 конфигурацией; при его отсутствии хост считает себя
         # единственным и собирает всё, как раньше.
+        replication = {
+            Platform.TELEGRAM: settings.collector_replication_telegram,
+            Platform.VK: settings.collector_replication_vk,
+            Platform.MAX: settings.collector_replication_max,
+            Platform.RUTUBE: settings.collector_replication_rutube,
+        }
         placement = (
-            Placement(
-                parse_membership(settings.collector_membership),
-                {
-                    Platform.TELEGRAM: settings.collector_replication_telegram,
-                    Platform.VK: settings.collector_replication_vk,
-                    Platform.MAX: settings.collector_replication_max,
-                    Platform.RUTUBE: settings.collector_replication_rutube,
-                },
-            )
+            Placement(parse_membership(settings.collector_membership), replication)
             if settings.collector_membership else None
         )
         if placement is not None:
@@ -531,6 +538,30 @@ async def _run(args: argparse.Namespace) -> int:
             server_id=settings.collector_server_id if placement else None,
             pilot_account_ids=pilot_account_ids,
         )
+
+        def refresh_runtime(target: PollCycleCoordinator) -> None:
+            if not runtime.refresh():
+                return
+            state = runtime.state
+            settings.apply(state.overrides if state else {})
+            validate_tracking_policy(settings)
+            heartbeat = state.heartbeat_hours if state and state.heartbeat_hours else (
+                base_settings.publication_snapshot_heartbeat_hours)
+            repository.snapshot_heartbeat = timedelta(hours=heartbeat)
+            max_age = state.heartbeat_max_age_days if state else None
+            repository.heartbeat_max_age = timedelta(days=max_age) if max_age else None
+            membership = (state.membership if state else None) or base_settings.collector_membership
+            # Состав из панели: новый сервер получает свою долю аккаунтов, а
+            # выведенный отдаёт её остальным с ближайшего цикла.
+            target.placement = Placement(parse_membership(membership), replication) if membership else None
+            target.server_id = base_settings.collector_server_id if target.placement else None
+            logger.info(
+                "collector runtime policy applied platform=%s version=%s members=%s",
+                platform.value, state.version if state else "-",
+                len(parse_membership(membership)) if membership else 0,
+            )
+
+        coordinator.runtime_refresh = refresh_runtime
         if transfer_mode == "in-process":
             data_adapter = PostgresDataAdapter(repository)
             repository.configure_transfer_sender(PostgresTransferProducer(

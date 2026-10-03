@@ -86,6 +86,7 @@ class PollCycleCoordinator:
         placement: Any = None,
         server_id: str | None = None,
         pilot_account_ids: frozenset[UUID] | None = None,
+        runtime_refresh: Any = None,
     ) -> None:
         if adapter.platform != platform:
             raise ValueError("adapter platform does not match coordinator platform")
@@ -108,6 +109,9 @@ class PollCycleCoordinator:
         self.placement = placement
         self.server_id = server_id
         self.pilot_account_ids = pilot_account_ids
+        # Вызывается в начале цикла: перечитывает политику сбора и состав
+        # сборщиков из файла агента узла и может заменить placement.
+        self.runtime_refresh = runtime_refresh
         self.clock = clock or SystemUtcClock()
         output = os.environ.get("COLLECTOR_METRICS_FILE")
         self.metrics = metrics or CollectorMetrics(Path(output) if output else None)
@@ -122,6 +126,11 @@ class PollCycleCoordinator:
             scheduled,
             started_at,
         )
+        if self.runtime_refresh is not None:
+            try:
+                self.runtime_refresh(self)
+            except Exception as error:  # noqa: BLE001 — прежняя политика остаётся в силе
+                logger.warning("collector runtime refresh failed code=%s", sanitize_error_code(error))
         lease = self.lease_provider.acquire(self.platform, self.partition_key)
         if lease is None:
             summary = self.repository.record_skipped_run(context)
