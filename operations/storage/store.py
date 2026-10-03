@@ -45,12 +45,15 @@ def ensure_layout(root: Path, group: int | None = None) -> None:
     for directory, mode in (("backups", 0o2770), ("archive", 0o2775), ("incoming", 0o2770)):
         path = root / directory
         path.mkdir(parents=True, exist_ok=True)
-        os.chmod(path, mode)
-        if group is not None:
-            try:
+        # Каталоги создаёт агент (root); остальные службы только пользуются
+        # ими и менять чужие права не могут — и не должны.
+        try:
+            if group is not None and path.stat().st_gid != group:
                 os.chown(path, -1, group)
-            except PermissionError:
-                pass
+            if path.stat().st_mode & 0o7777 != mode:
+                os.chmod(path, mode)
+        except PermissionError:
+            pass
 
 
 def sha256_file(path: Path) -> str:
