@@ -152,17 +152,19 @@ def test_gap_at_24h_falls_back_without_preliminary(dsn) -> None:
 def test_norm_excludes_level_two_and_three_but_recheck_restores(dsn) -> None:
     world = World(dsn)
     world.baseline(reactions=20)
-    for number in range(5):
+    for number in range(MIN_NORM_SAMPLE + 2):  # more level-3 posts than baseline: inclusion would shift the median
         world.post(AS_OF - timedelta(days=15, minutes=number), {24: (1000, 900)}, level=3)
     restored = world.post(AS_OF - timedelta(days=1), {24: (1000, 60)}, level=2, recheck_to=1)
     hidden = world.post(AS_OF - timedelta(days=1, hours=1), {24: (1000, 80)}, level=2)
-    rows = run(dsn, world, mode="all", institution_legacy_id=None)
-    mine = [row for row in posts(rows) if row["institution_legacy_id"] == world.legacy_id]
+    rows = run(dsn, world, mode="all")
+    mine = posts(rows)
     assert {row["publication_id"] for row in mine} == {restored}
     assert Decimal(str(mine[0]["interaction_norm"])) == Decimal(20)
-    assert rows[0]["hidden_anomalous"] >= 1
+    assert mine[0]["norm_sample"] == MIN_NORM_SAMPLE + 1  # baseline + restored; level 2/3 excluded
+    assert rows[0]["hidden_anomalous"] == 1
     included = posts(run(dsn, world, exclude_anomalies=False))
     assert hidden in {row["publication_id"] for row in included}
+    assert included[0]["hidden_anomalous"] == 0
 
 
 def test_small_history_has_no_index_and_sorts_last(dsn) -> None:

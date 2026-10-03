@@ -150,7 +150,7 @@ WITH params AS (
      WHERE (%(group)s='none' AND rank<=%(cap)s) OR (%(group)s='institution' AND institution_rank<=3)
 ), summary AS (
     -- Посты, которые попали бы в выдачу, если бы не аномалия 2–3.
-    SELECT count(*) FILTER (WHERE above_norm AND level>=2)::integer AS hidden_anomalous FROM eligible
+    SELECT count(*) FILTER (WHERE %(exclude_anomalies)s AND above_norm AND level>=2)::integer AS hidden_anomalous FROM eligible
 )
 SELECT page.*,summary.hidden_anomalous,identity.external_id,identity.public_url
   FROM summary
