@@ -100,7 +100,7 @@ test("локальные заготовки не дублируют постоя
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
   await expect(page).toHaveURL(/period=7d/);
-  await page.goto("/statistics?platform=telegram");
+  await page.goto("/statistics?platform=telegram&period=30d");
   await page.locator('label:has(input[name="period"][value="7d"])').click();
 
   await expect(page.getByText("Загрузка статистики")).toBeVisible();

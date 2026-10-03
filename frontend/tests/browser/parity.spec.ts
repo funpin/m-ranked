@@ -100,88 +100,69 @@ test("legacy validation returns 422 and repeated scalar chooses last", async ({ 
   await expect(page.locator('input[name="platform"][value="all"]')).toBeChecked();
 });
 
-test("statistics all-platform mode has four independent publication slices", async ({ page }) => {
-  await page.goto("/statistics?platform=all");
-  await expect(page.getByRole("heading", { level: 1, name: "Статистика публикаций" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Вузы" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Telegram", "ВКонтакте", "MAX", "Rutube"]);
-  const tables = page.getByTestId("statistics-publications-table");
-  await expect(tables).toHaveCount(4);
-  await expect(tables.nth(0).locator("tbody tr")).toHaveCount(10);
-  await expect(tables.nth(1).locator("tbody tr")).toHaveCount(10);
-  await page.getByRole("button", { name: /Показать ещё/ }).first().click();
-  await expect(tables.nth(0).locator("tbody tr")).toHaveCount(50);
-  await expect(tables.nth(1).locator("tbody tr")).toHaveCount(10);
+test("findings list shows posts above norm with one badge and hidden-anomaly note", async ({ page }, info) => {
+  await page.goto("/statistics?platform=vk");
+  await expect(page.getByRole("heading", { level: 1, name: "Находки: посты выше нормы" })).toBeVisible();
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("findings-cards").locator("article")
+    : page.getByTestId("findings-table").locator("tbody tr");
+  await expect(rows).toHaveCount(20);
+  await expect(rows.first()).toContainText("Вуз 001");
+  await expect(rows.first()).toContainText("×5,0");
+  await expect(rows.nth(1)).toContainText("предварительно, 6 ч");
+  await expect(rows.nth(3)).toContainText("—");
+  await expect(rows.nth(4)).toContainText("слабый сигнал");
+  await expect(page.getByTestId("findings-hidden-note")).toContainText("3");
+  await page.getByRole("button", { name: "Показать ещё" }).click();
+  await expect(rows).toHaveCount(30);
 });
 
-test("statistics concrete platform restores URL state, tabs, search and sorting", async ({ page }, info) => {
-  await page.goto("/statistics?platform=vk&q=alpha&publication_sort=views&publication_direction=asc");
-  await page.getByRole("button",{name:"Как считается: Как считается статистика"}).click();
-  const statisticsNote=page.getByText(/Период — по дате публикации/);
-  await expect(statisticsNote).toContainText("ERV = взаимодействия ÷ просмотры × 100%");
-  await expect(statisticsNote).not.toContainText("последние накопленные счётчики");
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("tab", { name: "Публикации" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("tab", { name: "Вузы" })).toBeVisible();
+test("findings restores URL state and searches", async ({ page }) => {
+  await page.goto("/statistics?platform=vk&period=30d&sort=views24&direction=asc&q=alpha");
+  await expect(page.locator('input[name="period"][value="30d"]')).toBeChecked();
+  await expect(page.locator('select[name="sort"]')).toHaveValue("views24");
+  await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
   await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
-  await expect(page.getByTestId("statistics-results-panel")).toHaveCount(1);
-  await expect(page.getByTestId("statistics-results-panel")).toHaveClass(/md:bg-card/);
-  const publicationTarget=info.project.name==="mobile"
-    ? page.getByTestId("statistics-publication-cards").locator("article").first()
-    : page.getByTestId("statistics-publications-table").locator("tbody tr").first();
-  await expect(publicationTarget.getByText("Вуз 001",{exact:true})).toBeVisible();
-  await expect(publicationTarget.getByText("№1",{exact:true})).toBeVisible();
-  await expect(publicationTarget.getByText("Полное название университета 001",{exact:true})).toBeVisible();
-  await expect(publicationTarget).not.toContainText("Аккаунт 1");
-  if (info.project.name === "mobile") {
-    await expect(page.locator('input[name="publication_direction"][value="asc"]')).toBeChecked();
-  } else {
-    await expect(page.getByRole("columnheader", { name: /Просмотры/ })).toHaveAttribute("aria-sort", "ascending");
-  }
   await page.locator('input[name="q"]').fill("missing");
   await page.locator('input[name="q"]').press("Enter");
   await expect(page).toHaveURL(/q=missing/);
   await expect(page.getByText("Ничего не найдено")).toBeVisible();
   await page.goBack();
   await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
-  await page.getByRole("tab", { name: "Вузы" }).click();
-  await expect(page).toHaveURL(/view=entities/);
-  await expect(page.getByTestId("statistics-entities-table").locator("tbody tr")).toHaveCount(20);
-  const entityTarget=info.project.name==="mobile"
-    ? page.getByTestId("statistics-entity-cards").locator("article").first()
-    : page.getByTestId("statistics-entities-table").locator("tbody tr").first();
-  await expect(entityTarget.getByText("Вуз 001",{exact:true})).toBeVisible();
-  await expect(entityTarget.getByText("Полное название университета 001",{exact:true})).toBeVisible();
-  await expect(entityTarget).not.toContainText(/выборка|для ERV/i);
-  await entityTarget.getByRole("button",{name:/ERV .*Подробнее о расчёте/}).first().hover();
-  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("ERV по сумме");
-  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("20 из 20");
-  await page.keyboard.press("Escape");
-  if(info.project.name==="desktop"){
-    await page.getByRole("button",{name:"Как считается ERV вузов"}).hover();
-    await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("сумма взаимодействий");
-    await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("20 последних публикаций");
-    await page.keyboard.press("Escape");
-  }
-  const medianHelp = info.project.name === "mobile"
-    ? entityTarget.getByRole("button",{name:"Что означает медиана взаимодействий"})
-    : page.getByRole("button",{name:"Что означает медиана взаимодействий"});
-  await medianHelp.first().hover();
-  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("у половины публикаций");
-  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("20 последних публикаций");
-  await page.keyboard.press("Escape");
-  await entityTarget.getByRole("link").first().click();
-  await expect(page).toHaveURL(/\/accounts\/00000002-0000-4000-8000-000000000001$/);
 });
 
-test("statistics mobile uses cards and keeps zero distinct from unknown", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/statistics?platform=telegram");
-  await expect(page.getByTestId("statistics-publication-cards").locator("article")).toHaveCount(20);
-  await expect(page.getByTestId("statistics-publications-table")).toBeHidden();
-  const cards = page.getByTestId("statistics-publication-cards");
-  await expect(cards.getByText("—").first()).toBeVisible();
-  await expect(cards.getByText("1,00%").first()).toBeVisible();
+test("findings groups by institution and links into institution mode", async ({ page }) => {
+  await page.goto("/statistics?group=institution");
+  const groups = page.getByTestId("findings-groups").locator("section");
+  await expect(groups).toHaveCount(2);
+  await expect(groups.first().getByRole("heading", { level: 2 })).toHaveText("Вуз 001");
+  await groups.first().getByRole("link", { name: "Все посты вуза →" }).click();
+  await expect(page).toHaveURL(/mode=institution/);
+  await expect(page).toHaveURL(/institution=1/);
+  await expect(page.getByRole("combobox", { name: "Вуз" })).toHaveValue("Вуз 001");
+});
+
+test("institution mode without a choice asks for one and unknown id is not an error", async ({ page }) => {
+  await page.goto("/statistics?mode=institution");
+  await expect(page.getByText("Выберите вуз, чтобы увидеть его посты")).toBeVisible();
+  await page.getByRole("combobox", { name: "Вуз" }).fill("002");
+  await page.getByRole("option", { name: /Вуз 002/ }).click();
+  await expect(page).toHaveURL(/institution=2/);
+  await page.goto("/statistics?mode=institution&institution=999");
+  await expect(page.getByText("Вуз не найден — выберите другой")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Вуз" })).toBeVisible();
+});
+
+test("findings filters popover applies publication types once on close", async ({ page }) => {
+  await page.goto("/statistics");
+  const trigger = page.getByRole("button", { name: /Фильтры/ });
+  await trigger.click();
+  await page.getByRole("checkbox", { name: "Видео" }).check();
+  await expect(page).not.toHaveURL(/types=/);
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/types=video/);
+  await expect(page.getByRole("button", { name: /Фильтры · 1/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Фильтры/ })).toBeFocused();
 });
 
 test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({ page }) => {
