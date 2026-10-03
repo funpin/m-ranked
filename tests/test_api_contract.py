@@ -93,6 +93,8 @@ DETAIL_GROUP = {
 
 STATISTICS_GROUP = {("/api/v1/statistics", "GET")}
 
+FINDINGS_GROUP = {("/api/v1/findings", "GET")}
+
 COMPARE_GROUP = {
     ("/api/v1/compare/candidates", "GET"),
     ("/api/v1/compare", "GET"),
@@ -151,6 +153,7 @@ def test_entity_and_list_group_is_implemented(contract: dict, app) -> None:
 def test_statistics_group_is_implemented(contract: dict, app) -> None:
     implemented = implemented_operations(app)
     assert STATISTICS_GROUP <= implemented
+    assert FINDINGS_GROUP <= implemented
     assert ("/api/v1/rating", "GET") not in implemented
 
 
