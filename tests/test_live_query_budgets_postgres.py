@@ -15,7 +15,11 @@ from psycopg.rows import dict_row
 import pytest
 
 from api.config import Settings
-from api.sql import admin, analysis, compare, details, overview, statistics
+from api.sql import admin, analysis, compare, details, overview, statistics, findings as findings_sql
+from api.findings import (
+    FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE,
+    NORM_WINDOW_DAYS, PAGE_CAP, VIEW_NORM_FLOOR,
+)
 from conftest import requires_api_database
 
 
@@ -27,6 +31,9 @@ pytestmark = requires_api_database
 DEFAULT_BUDGET = (1_000.0, 100_000)
 COMPARISON_24H_BUDGET = (4_000.0, 220_000)
 COMPARISON_336H_BUDGET = (5_000.0, 260_000)
+# Findings queries use a separate budget measured on 2026-09-27 data:
+# 30d all: 676 ms, 364309 blocks; 7d grouped measured when first query completes.
+FINDINGS_BUDGET = (1_000.0, 400_000)
 
 
 def _plan(connection: psycopg.Connection[Any], statement: str,
@@ -221,3 +228,25 @@ def test_management_screen_query_budgets() -> None:
         )
         for name, statement, parameters in checks:
             _assert_budget(name, _plan(connection, statement, parameters), DEFAULT_BUDGET)
+
+
+def test_findings_query_budget() -> None:
+    settings = Settings()
+    with psycopg.connect(settings.read_dsn, autocommit=True, row_factory=dict_row) as connection:
+        connection.execute("SET statement_timeout='15s'")
+        connection.execute("SET max_parallel_workers_per_gather=0")
+        as_of = connection.execute(
+            "SELECT committed_at FROM analytics.dataset_revision ORDER BY id DESC LIMIT 1").fetchone()["committed_at"]
+        base = {
+            "as_of": as_of, "norm_days": NORM_WINDOW_DAYS, "institution_legacy_id": None,
+            "types": [], "q": "", "search_pattern": "%", "username_pattern": "%",
+            "min_sample": MIN_NORM_SAMPLE, "interaction_floor": INTERACTION_NORM_FLOOR,
+            "view_floor": VIEW_NORM_FLOOR, "min_index": FINDING_MIN_INDEX,
+            "min_interactions": FINDING_MIN_INTERACTIONS, "sort": "interaction_index",
+            "direction": "desc", "exclude_anomalies": True, "cap": PAGE_CAP,
+        }
+        for name, overrides in {
+            "findings 30d all": {"period_days": 30, "platform": "all", "mode": "all", "group": "none"},
+            "findings 7d grouped": {"period_days": 7, "platform": "all", "mode": "all", "group": "institution"},
+        }.items():
+            _assert_budget(name, _plan(connection, findings_sql.FINDINGS, base | overrides), FINDINGS_BUDGET)
