@@ -1,5 +1,25 @@
 import { expect, test } from "@playwright/test";
 
+test("official rating defaults to first place on every platform and permits manual direction", async ({page}) => {
+  for(const platform of ["all","telegram","vk","max","rutube"]) {
+    await page.goto(`/review?platform=${platform}`);
+    const form=page.getByTestId("filter-toolbar");
+    const ascending=form.getByRole("radio",{name:"По возрастанию",exact:true});
+    const descending=form.getByRole("radio",{name:"По убыванию",exact:true});
+    await form.getByRole("combobox",{name:"Сортировка",exact:true}).selectOption("m_rating");
+    await expect(ascending).toBeChecked();
+    await form.getByRole("button",{name:"Применить фильтры",exact:true}).click();
+    await expect(page).toHaveURL(/sort=m_rating/);
+    await expect(page).toHaveURL(/direction=asc/);
+    await descending.check();
+    await expect(page).toHaveURL(/direction=desc/);
+    await page.goto(`/review?platform=${platform}&sort=m_rating`);
+    await expect(ascending).toBeChecked();
+    await form.getByRole("combobox",{name:"Сортировка",exact:true}).selectOption("anomalies");
+    await expect(descending).toBeChecked();
+  }
+});
+
 test("MAX fits its selection and comparison tabs have a visible selected surface", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "The test checks every viewport itself");
   for (const theme of ["light", "dark"] as const) {
@@ -103,10 +123,10 @@ test("contributor image failures leave readable fallbacks", async ({ page }) => 
   await expect(contributors.locator("a").first()).toContainText(/\w{2}/);
 });
 
-test("comparison controls stay inside the toolbar on tablet widths", async ({ page }, info) => {
+test("comparison controls fill their rows and stay inside the toolbar at all widths", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "The test checks every viewport itself");
   await page.goto("/compare");
-  for (const width of [390,640,768,1024,1440]) {
+  for (const width of [320,390,640,768,1024,1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBe(0);
     const inside=await page.getByTestId("highlight-search").evaluate(input => {
@@ -115,5 +135,16 @@ test("comparison controls stay inside the toolbar on tablet widths", async ({ pa
       return search.right <= toolbar.right;
     });
     expect(inside, `search outside toolbar at ${width}px`).toBe(true);
+    await expect(page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "7 д", exact: true })).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "30 д", exact: true })).toBeVisible();
+    const layout = await page.getByTestId("compare-filter-row").evaluate(row => {
+      const bounds=row.getBoundingClientRect();
+      const boxes=[...row.children].map(el=>{const b=el.getBoundingClientRect();return {y:Math.round(b.top),right:b.right};});
+      return {right:bounds.right,boxes};
+    });
+    for (const y of new Set(layout.boxes.map(box=>box.y))) {
+      expect(Math.max(...layout.boxes.filter(box=>box.y===y).map(box=>box.right))).toBeCloseTo(layout.right,0);
+    }
+    if(width>=768) expect(new Set(layout.boxes.map(box=>box.y)).size).toBe(1);
   }
 });

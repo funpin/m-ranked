@@ -150,8 +150,8 @@ function HighlightPicker({ rows, highlights, onToggle, onClear }: {
   const names = new Map(rows.map((row) => [row.id, row.name]));
   const full = highlights.size >= MAX_HIGHLIGHTS;
   return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-      <div className="relative w-full sm:w-64">
+    <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 md:col-span-1">
+      <div className="relative w-full">
         <InputGroup className="h-8">
         <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
         <InputGroupInput value={query} disabled={full} placeholder={full ? `Выделено ${MAX_HIGHLIGHTS} из ${MAX_HIGHLIGHTS}` : "Выделить вуз на графиках…"}
@@ -179,9 +179,9 @@ function HighlightPicker({ rows, highlights, onToggle, onClear }: {
         ) : null}
       </div>
       {[...highlights].map(([id, color]) => (
-        <Badge key={id} variant="outline" className="gap-1.5 rounded-full py-1 pr-1 pl-2" data-testid="highlight-chip">
+        <Badge key={id} variant="outline" className="max-w-full gap-1.5 rounded-full py-1 pr-1 pl-2" data-testid="highlight-chip">
           <span className="size-2.5 rounded-full" style={{ background: color }} aria-hidden="true" />
-          {names.get(id) ?? "вуз"}
+          <span className="min-w-0 truncate" title={names.get(id)}>{names.get(id) ?? "вуз"}</span>
           <Button variant="ghost" size="icon-xs" className="rounded-full" onClick={() => onToggle(id)} aria-label={`Снять выделение: ${names.get(id) ?? "вуз"}`}>
             <X aria-hidden="true" /></Button>
         </Badge>
@@ -398,23 +398,23 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     // min-w-0: секции — элементы сетки, и без него широкая таблица вузов
     // растягивала колонку, а с ней всю страницу за край окна.
     <div className="grid min-w-0 grid-cols-1 gap-8" data-testid="compare-dashboard">
-      <div ref={toolbar} className={cn("px-3 py-3", STICKY_CONTROL_SURFACE_CLASS)}>
-        <div className="flex flex-wrap items-center gap-3 md:flex-nowrap md:overflow-x-auto">
-          <Tabs value={platform} onValueChange={(value) => changePlatform(value as DashboardPlatform)} className="w-full sm:w-auto">
-            <TabsList aria-label="Соцсеть" data-testid="platform-tabs" activateOnFocus className="grid w-full grid-cols-5 sm:inline-flex sm:w-auto">
+      <div ref={toolbar} className={cn("p-2.5", STICKY_CONTROL_SURFACE_CLASS)}>
+        <div data-testid="compare-filter-row" className="grid grid-cols-2 items-start gap-2 sm:grid-cols-[minmax(240px,1fr)_minmax(140px,1fr)] md:grid-cols-[240px_140px_minmax(0,1fr)]">
+          <Tabs value={platform} onValueChange={(value) => changePlatform(value as DashboardPlatform)} className="col-span-2 min-w-0 w-full sm:col-span-1">
+            <TabsList aria-label="Соцсеть" data-testid="platform-tabs" activateOnFocus className="grid w-full grid-cols-5">
               {DASHBOARD_PLATFORMS.map((value) => (
-                <TabsTrigger key={value} value={value} data-value={value} className="px-2.5 text-sm">
+                <TabsTrigger key={value} value={value} data-value={value} className="px-1.5 text-sm">
                   <span title={PLATFORM_NAMES[value]}>{SHORT_PLATFORM_NAMES[value]}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
           </Tabs>
-          <Tabs value={period}>
-            <TabsList aria-label="Период">
+          <Tabs value={period} className="col-span-2 min-w-0 w-full sm:col-span-1">
+            <TabsList aria-label="Период" className="grid w-full grid-cols-2">
               {(["7d", "30d"] as const).map((value) => (
-                <TabsTrigger key={value} value={value} nativeButton={false} className="px-2.5 text-sm"
+                <TabsTrigger key={value} value={value} nativeButton={false} className="px-1.5 text-sm" title={value === "7d" ? "7 дней" : "30 дней"}
                   render={<Link href={periodHref(value)} prefetch={false} />}>
-                  {value === "7d" ? "7 дней" : "30 дней"}
+                  {value === "7d" ? "7 д" : "30 д"}
                 </TabsTrigger>
               ))}
             </TabsList>

@@ -68,7 +68,7 @@ export function normalizeSort(value: SearchValue, platform: Platform): OverviewS
 export function normalizeDirection(value: SearchValue, sort: OverviewSort): "asc" | "desc" {
   const normalized = first(value);
   if (normalized === "asc" || normalized === "desc") return normalized;
-  return sort === "name" ? "asc" : "desc";
+  return sort === "name" || sort === "m_rating" ? "asc" : "desc";
 }
 
 export function normalizeHistoryLimit(value: SearchValue): number {

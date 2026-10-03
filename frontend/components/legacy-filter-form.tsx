@@ -54,10 +54,12 @@ export function LegacyFilterForm({ action = "/review", ...props }: ComponentProp
   }} onChange={(event) => {
     const field = event.target;
     if (field instanceof HTMLSelectElement && field.name === "sort") {
+      const platform = normalizePlatform(String(new FormData(event.currentTarget).get("platform") ?? "all"));
+      const defaultDirection = normalizeDirection(undefined, normalizeSort(field.value, platform));
       const direction = event.currentTarget.elements.namedItem("direction");
-      if (direction instanceof HTMLSelectElement) direction.value = field.value === "name" ? "asc" : "desc";
+      if (direction instanceof HTMLSelectElement) direction.value = defaultDirection;
       event.currentTarget.querySelectorAll<HTMLInputElement>('input[name="direction"]').forEach(radio => {
-        radio.checked = radio.value === (field.value === "name" ? "asc" : "desc");
+        radio.checked = radio.value === defaultDirection;
       });
       event.currentTarget.dispatchEvent(new Event("segments-sync"));
     }

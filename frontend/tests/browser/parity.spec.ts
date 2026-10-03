@@ -45,7 +45,7 @@ test("comparison dashboard: platform tabs, highlight, ranking metric, table sort
   const table = page.getByTestId("compare-table");
   await table.getByRole("button", { name: /Публикаций/ }).click();
   await expect(table.getByRole("columnheader", { name: /Публикаций/ })).toHaveAttribute("aria-sort", "descending");
-  await page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "7 дней" }).click();
+  await page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "7 д", exact: true }).click();
   await expect(page).toHaveURL(/period=7d/);
   await expect(page).toHaveURL(/platform=vk/);
   await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
