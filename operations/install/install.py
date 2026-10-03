@@ -217,6 +217,7 @@ UNITS_COMMON_PRESENTATION = [
     "m-ranked-target-overview-metrics.timer",
     "m-ranked-target-dump-backup.service",
     "m-ranked-target-dump-backup.timer",
+    "m-ranked-target-dump-backup-request.path",
 ]
 
 # Анализ аномальной динамики: работник, ночной пересчёт норм и профиль позднего

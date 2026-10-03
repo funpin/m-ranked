@@ -144,6 +144,10 @@ test("admin tabs show visitors and system state and the table scrolls inside its
   await expect(page.getByText("1 требует внимания")).toBeVisible();
   await expect(page.locator('[data-slot="chart"]')).toHaveCount(5);
   await expect(page.locator('[data-storage="project"]')).toContainText("релизы 1.0 ГБ");
+  // Резервные копии: список с отметкой проверки; кнопка обновления — только ADMIN.
+  await expect(page.getByTestId("backup-state")).toHaveText("готова");
+  await expect(page.getByText("проверена восстановлением")).toHaveCount(1);
+  await expect(page.getByRole("button",{name:"Обновить резервную копию"})).toBeDisabled();
 });
 
 for(const tab of ["visitors","system"]) test(`admin ${tab} tab passes accessibility checks`,async({page})=>{

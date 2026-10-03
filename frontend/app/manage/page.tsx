@@ -97,7 +97,7 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
   if (tab === "system") {
     const range = first(query.range) === "week" ? "week" : "day";
     const [overview, status] = await Promise.all([reader.system(range).catch(() => null), reader.status().catch(() => null)]);
-    return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} status={status} range={range} now={now} /></>;
+    return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} status={status} range={range} now={now} csrf={csrf} canRefreshBackup={canDelete} backupOutcome={first(query.backup_status)} /></>;
   }
 
   const [catalogResult, statusResult] = await Promise.allSettled([reader.institutions(), reader.status()]);

@@ -99,3 +99,13 @@ esac
     assert not list(backups.glob('mranked-*.dump'))
     # Недоснятый файл этого запуска тоже убран, а не ждёт суток на диске.
     assert not list(backups.glob('mranked-*.dump.partial'))
+
+def test_refresh_keeps_only_the_restore_verified_copy_before_a_new_dump(tmp_path):
+    verified=tmp_path/'mranked-20260927T010000Z.dump'
+    newer=tmp_path/'mranked-20260928T010000Z.dump'
+    for f in [verified,newer]:f.write_bytes(f.name.encode())
+    verified.with_suffix('.restore-verified.json').write_text(json.dumps(dict(dump=verified.name,restore_exit_code=0,sha256=hashlib.sha256(verified.read_bytes()).hexdigest())))
+    cmd=[sys.executable,str(SCRIPTS/'rotate-dumps.py'),str(tmp_path),'1','--refresh']
+    assert subprocess.run(cmd,capture_output=True).returncode == 0
+    # После нового снимка копий будет ровно две: проверенная и новая.
+    assert verified.exists() and not newer.exists()

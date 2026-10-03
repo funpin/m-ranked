@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 
 const SESSION_COOKIE = "__Host-mranked-admin";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTION = /^\/manage\/(?:channels|institutions|platform-accounts|m-rating\/update|institutions\/[^/]+(?:\/accounts)?|channels\/[^/]+\/(?:enable|disable|delete)|platform-accounts\/[^/]+\/(?:enable|disable|delete|native-id))$/;
+const ACTION = /^\/manage\/(?:channels|institutions|platform-accounts|m-rating\/update|backup\/refresh|institutions\/[^/]+(?:\/accounts)?|channels\/[^/]+\/(?:enable|disable|delete)|platform-accounts\/[^/]+\/(?:enable|disable|delete|native-id))$/;
 // Native same-origin form navigations must retain their Origin. no-referrer
 // makes Chromium send Origin:null; same-origin still withholds cross-site URLs.
 const NO_STORE = { "Cache-Control": "no-store", "Referrer-Policy": "same-origin" };
@@ -180,7 +180,8 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
   const session = await boundedJson(authentication);
   if (session?.headerName !== "X-XSRF-TOKEN" || typeof session.token !== "string" || !/^[A-Za-z0-9_-]{1,4096}$/.test(session.token))
     return failure(502, "Некорректный ответ сервиса управления");
-  if (session.canEdit !== true || (path.endsWith("/delete") && session.canDelete !== true))
+  // Удаление и обновление резервной копии — только роль ADMIN (canDelete).
+  if (session.canEdit !== true || ((path.endsWith("/delete") || path === "/manage/backup/refresh") && session.canDelete !== true))
     return failure(403, "Доступ к управлению недоступен");
   const origin = request.headers.get("origin");
   if (origin && origin !== requestOrigin(request)) return failure(403, "Недопустимый источник запроса");

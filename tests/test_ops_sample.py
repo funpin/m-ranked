@@ -117,3 +117,22 @@ def test_collection_window_starts_where_the_previous_sample_ended() -> None:
     assert calls == [{"since": 700.0, "until": 1000.0}]
     assert result == {"vk": {"ok": 80, "failed": 2, "other": 0, "lastOk": 1000.5},
                       "rutube": {"ok": 0, "failed": 1, "other": 0, "lastOk": None}}
+
+
+def test_backups_list_copies_running_state_and_request(tmp_path: Path) -> None:
+    backups_dir = tmp_path / "backups"
+    backups_dir.mkdir()
+    (backups_dir / "mranked-20260927T010000Z.dump").write_bytes(b"a" * 10)
+    (backups_dir / "mranked-20260927T010000Z.restore-verified.json").write_text("{}")
+    (backups_dir / "mranked-20260928T010000Z.dump").write_bytes(b"b" * 20)
+    request = tmp_path / "refresh"
+    request.write_text("{}")
+
+    def run(command, **_):
+        return subprocess.CompletedProcess(command, 0, "ActiveState=activating\nResult=success\nExecMainStatus=0\n", "")
+
+    result = ops_sample.backups(backups_dir, request, run)
+    assert [item["name"] for item in result["files"]] == ["mranked-20260928T010000Z.dump", "mranked-20260927T010000Z.dump"]
+    assert result["files"][1]["verified"] and not result["files"][0]["verified"]
+    assert result["running"] and result["requested"] and result["lastExitStatus"] == 0
+    assert ops_sample.backups(tmp_path / "none", request, run) is None

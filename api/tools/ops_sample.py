@@ -153,8 +153,10 @@ def read_traffic(path: Path, state: dict[str, Any], now: float) -> dict[str, Any
 
 def unit_states(run: Any = subprocess.run) -> dict[str, Any]:
     """Состояние служб проекта и веб-сервера, перезапуски долгоживущих служб."""
+    # Только службы проекта (m-ranked-target-*): временные кандидаты выкатки
+    # (systemd-run) не службы сайта и не должны краснить панель.
     listing = run(["systemctl", "list-units", "--all", "--plain", "--no-legend",
-                   "m-ranked-*", "nginx.service", "docker.service"],
+                   "m-ranked-target-*", "nginx.service", "docker.service"],
                   capture_output=True, text=True, check=False, timeout=20)
     failed, active, total = [], 0, 0
     for line in listing.stdout.splitlines():
@@ -243,6 +245,33 @@ def directory_bytes(root: Path, run: Any = subprocess.run) -> int | None:
     return int(first) if first.isdecimal() else None
 
 
+def backups(directory: Path, request: Path, run: Any = subprocess.run) -> dict[str, Any] | None:
+    """Резервные копии для панели: файлы, проверка восстановлением, идёт ли
+    дамп сейчас, ждёт ли запрос из панели и чем кончился последний запуск."""
+    if not directory.is_dir():
+        return None
+    files = []
+    for path in sorted(directory.glob("mranked-*.dump"), reverse=True):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        files.append({"name": path.name, "bytes": stat.st_size, "at": stat.st_mtime,
+                      "verified": path.with_suffix(".restore-verified.json").is_file()})
+    partial = next(iter(directory.glob("mranked-*.dump.partial")), None)
+    shown = run(["systemctl", "show", "-p", "ActiveState,Result,ExecMainStatus,InactiveEnterTimestampMonotonic",
+                 "m-ranked-target-dump-backup.service"], capture_output=True, text=True, check=False, timeout=20)
+    state = dict(line.split("=", 1) for line in shown.stdout.splitlines() if "=" in line)
+    return {
+        "files": files[:10],
+        "running": state.get("ActiveState") in ("activating", "active", "deactivating"),
+        "partialBytes": partial.stat().st_size if partial is not None and partial.exists() else None,
+        "requested": request.exists(),
+        "lastResult": state.get("Result"),
+        "lastExitStatus": int(state["ExecMainStatus"]) if state.get("ExecMainStatus", "").isdecimal() else None,
+    }
+
+
 def size_paths(raw: str) -> dict[str, Path]:
     paths = {}
     for item in raw.split(","):
@@ -253,7 +282,8 @@ def size_paths(raw: str) -> dict[str, Path]:
 
 
 def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: Path,
-          disk: Path, sizes: dict[str, Path], run: Any = subprocess.run) -> dict[str, Any]:
+          disk: Path, sizes: dict[str, Path], run: Any = subprocess.run,
+          backup_dir: Path | None = None, backup_request: Path = Path("/nonexistent")) -> dict[str, Any]:
     usage = shutil.disk_usage(disk)
     sample: dict[str, Any] = {
         "v": VERSION,
@@ -265,6 +295,7 @@ def build(state: dict[str, Any], now: float, *, proc: Path, log: Path, metrics: 
         "units": unit_states(run),
         "traffic": read_traffic(log, state, now),
         "pipeline": pipeline(textfile_metrics(metrics)),
+        "backups": backups(backup_dir, backup_request, run) if backup_dir else None,
     }
     sample["load"] = [float(value) for value in sample["load"]]
     measured = state.get("sizesAt")
@@ -342,7 +373,9 @@ def main() -> int:
         disk=Path(os.environ.get("OPS_SAMPLE_DISK_PATH", "/")),
         sizes=size_paths(os.environ.get(
             "OPS_SAMPLE_SIZE_PATHS",
-            "releases=/opt/m-ranked,state=/var/lib/m-ranked,pageCache=/var/cache/nginx")))
+            "releases=/opt/m-ranked,state=/var/lib/m-ranked,pageCache=/var/cache/nginx")),
+        backup_dir=Path(os.environ.get("OPS_SAMPLE_BACKUP_DIR", "/var/backups/m-ranked")),
+        backup_request=Path("/var/lib/m-ranked/backup-request/refresh"))
     try:
         store(dsn, sample, state, now)
     except Exception as error:  # noqa: BLE001 — снимок необязателен, причина в журнал

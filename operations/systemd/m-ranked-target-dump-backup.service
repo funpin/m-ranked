@@ -11,6 +11,8 @@ Group=root
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/dump-backup.env
 Environment=TZ=Europe/Moscow
+# Запрос «Обновить резервную копию» из панели (см. m-ranked-target-dump-backup-request.path).
+Environment=BACKUP_REFRESH_REQUEST=/var/lib/m-ranked/backup-request/refresh
 ExecStart=/usr/local/libexec/m-ranked/dump-backup.sh
 # Страховка на случай, если скрипт убит без ловушки (SIGKILL, OOM): контейнер
 # дампа живёт вне cgroup юнита и сам не остановится.

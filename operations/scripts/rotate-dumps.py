@@ -8,6 +8,9 @@ import sys
 
 root = Path(sys.argv[1])
 keep = int(sys.argv[2])
+# --refresh: перед снимком по запросу из панели остаётся только проверенная
+# восстановлением копия; новый снимок станет второй.
+refresh = sys.argv[3:] == ['--refresh']
 if not 1 <= keep <= 90:
     raise SystemExit("BACKUP_KEEP must be between 1 and 90")
 files = sorted((p for p in root.iterdir() if re.fullmatch(r'mranked-[0-9]{8}T[0-9]{6}Z\.dump',p.name)
@@ -31,7 +34,7 @@ for dump in files:
 if not verified:
     print('rotation refused: no restore-verified copy; operator action required')
     raise SystemExit(75)
-protected = set(files[:keep] + verified)
+protected = set(verified if refresh else files[:keep] + verified)
 for dump in files:
     if dump not in protected:
         dump.unlink()

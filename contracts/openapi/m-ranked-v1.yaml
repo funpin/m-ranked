@@ -2905,6 +2905,7 @@ components:
       - restarts
       - collection
       - series
+      - backups
       properties:
         range:
           type: string
@@ -3076,6 +3077,63 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AdminSystemPoint'
+        backups:
+          type:
+          - object
+          - 'null'
+          additionalProperties: false
+          description: Database dumps on the server; the newest first.
+          required:
+          - files
+          - running
+          - partialBytes
+          - requested
+          - lastResult
+          - lastExitStatus
+          properties:
+            files:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - name
+                - bytes
+                - at
+                - verified
+                properties:
+                  name:
+                    type: string
+                  bytes:
+                    type: integer
+                    format: int64
+                    minimum: 0
+                  at:
+                    type:
+                    - string
+                    - 'null'
+                    format: date-time
+                  verified:
+                    type: boolean
+                    description: A full restore of this dump was checked.
+            running:
+              type: boolean
+            partialBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            requested:
+              type: boolean
+              description: A refresh requested from the panel waits to start.
+            lastResult:
+              type:
+              - string
+              - 'null'
+            lastExitStatus:
+              type:
+              - integer
+              - 'null'
     AdminCatalogStatus:
       type: object
       additionalProperties: false

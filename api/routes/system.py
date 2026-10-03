@@ -60,6 +60,7 @@ async def system(request: Request, _: Annotated[Principal, Depends(READ)],
         "restarts": overview.restarts(period_rows),
         "collection": overview.collection(period_rows),
         "series": overview.series(period_rows, bucket, since=start),
+        "backups": overview.backups(latest["sample"] if latest else None),
     }
     _CACHE[period] = (time.monotonic(), body)
     return JSONResponse(body, headers=NO_STORE)
