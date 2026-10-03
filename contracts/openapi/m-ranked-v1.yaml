@@ -1035,6 +1035,35 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/storage:
+    get:
+      tags:
+      - Admin
+      operationId: getStorageOverview
+      summary: getStorageOverview
+      description: >-
+        Requires VIEWER, EDITOR or ADMIN. Server registry with disk and memory from each node agent's last
+        report, runtime policies (collection, storage, analysis), recent database backups and cold archive
+        months with their copies per server, and the latest panel jobs (ADR-016). Changes are submitted as
+        panel forms to /manage/servers, /manage/policies/{name} and /manage/archive/{run|analysis} (ADMIN).
+      security:
+      - adminSession: []
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStorage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/catalog/institutions:
     get:
       tags:
@@ -2903,6 +2932,465 @@ components:
         collectedFailed:
           type: integer
           minimum: 0
+    AdminStorageReplica:
+      type: object
+      additionalProperties: false
+      required:
+      - node
+      - state
+      - bytesDone
+      - error
+      - verifiedAt
+      properties:
+        node:
+          type: string
+        state:
+          type: string
+          enum:
+          - wanted
+          - transferring
+          - verified
+          - deleting
+          - deleted
+          - failed
+        bytesDone:
+          type: integer
+          format: int64
+        error:
+          type:
+          - string
+          - 'null'
+        verifiedAt:
+          type:
+          - string
+          - 'null'
+    AdminStorageFile:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      - sizeBytes
+      - replicas
+      properties:
+        name:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        replicas:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageReplica'
+    AdminStorageBackup:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - kind
+      - name
+      - sizeBytes
+      - createdAt
+      - retired
+      - replicas
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - backup
+          - archive_full
+          - archive_browse
+        name:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        retired:
+          type: boolean
+        replicas:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageReplica'
+    AdminStorageServer:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - displayName
+      - role
+      - platforms
+      - state
+      - storesObjects
+      - reserveBytes
+      - lastSeenAt
+      - online
+      - agentVersion
+      - disk
+      - memory
+      - load1
+      - cpus
+      - units
+      - copies
+      - updatedAt
+      - updatedBy
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+          enum:
+          - main
+          - collector
+          - storage
+        platforms:
+          type: array
+          items:
+            type: string
+            enum:
+            - telegram
+            - vk
+            - max
+            - rutube
+        state:
+          type: string
+          enum:
+          - pending
+          - active
+          - draining
+          - disabled
+        storesObjects:
+          type: boolean
+        reserveBytes:
+          type: integer
+          format: int64
+        lastSeenAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        online:
+          type: boolean
+        agentVersion:
+          type:
+          - string
+          - 'null'
+        disk:
+          type: object
+          additionalProperties: false
+          required:
+          - totalBytes
+          - freeBytes
+          - storeBytes
+          - rootTotalBytes
+          - rootFreeBytes
+          properties:
+            totalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            freeBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            storeBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            rootTotalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            rootFreeBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+        memory:
+          type: object
+          additionalProperties: false
+          required:
+          - totalBytes
+          - availableBytes
+          properties:
+            totalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            availableBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+        load1:
+          type:
+          - number
+          - 'null'
+        cpus:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        units:
+          type: object
+          additionalProperties:
+            type: string
+        copies:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: false
+            required:
+            - objects
+            - bytes
+            properties:
+              objects:
+                type: integer
+              bytes:
+                type: integer
+                format: int64
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type:
+          - string
+          - 'null'
+    AdminStoragePolicy:
+      type: object
+      additionalProperties: false
+      required:
+      - value
+      - version
+      - updatedAt
+      - updatedBy
+      properties:
+        value:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type:
+          - string
+          - 'null'
+    AdminStorageGeneration:
+      type: object
+      additionalProperties: false
+      required:
+      - generation
+      - state
+      - rowCount
+      - publications
+      - hotBytes
+      - error
+      - startedAt
+      - finishedAt
+      - full
+      - browse
+      properties:
+        generation:
+          type: integer
+        state:
+          type: string
+          enum:
+          - preparing
+          - exporting
+          - replicating
+          - dropping
+          - cold
+          - failed
+        rowCount:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        publications:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        hotBytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        error:
+          type:
+          - string
+          - 'null'
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        full:
+          oneOf:
+          - $ref: '#/components/schemas/AdminStorageFile'
+          - type: 'null'
+        browse:
+          oneOf:
+          - $ref: '#/components/schemas/AdminStorageFile'
+          - type: 'null'
+    AdminStorageMonth:
+      type: object
+      additionalProperties: false
+      required:
+      - month
+      - hotBytes
+      - fence
+      - coldFrom
+      - generations
+      properties:
+        month:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
+        hotBytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        fence:
+          type: string
+          enum:
+          - active
+          - archiving
+          - archived
+        coldFrom:
+          type: string
+          format: date
+        generations:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageGeneration'
+    AdminStorageJob:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - kind
+      - params
+      - state
+      - requestedBy
+      - requestedAt
+      - startedAt
+      - finishedAt
+      - progress
+      - result
+      - error
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - archive_now
+          - archive_analysis
+        params:
+          type: object
+          additionalProperties: true
+        state:
+          type: string
+          enum:
+          - queued
+          - running
+          - done
+          - failed
+          - cancelled
+        requestedBy:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        finishedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        progress:
+          type: object
+          additionalProperties: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+        error:
+          type:
+          - string
+          - 'null'
+    AdminStorage:
+      type: object
+      additionalProperties: false
+      required:
+      - servers
+      - policies
+      - limits
+      - backups
+      - archive
+      - jobs
+      properties:
+        servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageServer'
+        policies:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AdminStoragePolicy'
+        limits:
+          type: object
+          additionalProperties: false
+          required:
+          - collection
+          - finalAnalysisDays
+          properties:
+            collection:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: integer
+            finalAnalysisDays:
+              type: array
+              items:
+                type: integer
+        backups:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageBackup'
+        archive:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageMonth'
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageJob'
     AdminSystem:
       type: object
       additionalProperties: false

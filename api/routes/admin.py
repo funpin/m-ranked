@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from psycopg import errors as pg_errors
 
 from ..errors import ApiProblem, BadRequest, NotFound
-from .. import dto
+from .. import dto, storage_admin
 from ..identity_receipts import persist_admin_envelope
 from ..security import (SESSION_COOKIE, Principal, csrf_token, current_session,
                         require_csrf, require_roles, same_origin, source_address,
@@ -77,7 +77,8 @@ class LegacyCommand(BaseModel):
     @field_validator("fields")
     @classmethod
     def fields_are_bounded(cls, value: dict[str, str]) -> dict[str, str]:
-        if len(value) > 20 or any(len(key) > 100 or len(item) > 131072
+        # Форма политики хранения несёт по флажку на сервер для копий и архива.
+        if len(value) > 40 or any(len(key) > 100 or len(item) > 131072
                                   for key, item in value.items()):
             raise ValueError("invalid legacy fields")
         return value
@@ -557,6 +558,11 @@ def _required(fields: dict[str, str], name: str) -> str:
 async def _legacy_execute(body: LegacyCommand, request: Request, user: Principal,
                           correlation: uuid.UUID) -> str:
     path, fields = body.path, body.fields
+    if storage_admin.is_storage_path(path):
+        async with request.app.state.db.admin() as connection:
+            location = await storage_admin.execute(connection, path, fields, user.username)
+        logger.info("команда хранения из панели: %s → %s (%s)", path, location, correlation)
+        return location
     if path == "/manage/backup/refresh":
         from ..backup_request import request_refresh
         if request_refresh(user.username, str(correlation)):
@@ -685,6 +691,9 @@ async def legacy_command(body: LegacyCommand, request: Request,
     if body.path.endswith("/delete") and "ADMIN" not in user.roles:
         raise ApiProblem(403, "Forbidden", "Для удаления требуется роль ADMIN",
                          "urn:m-ranked:problem:forbidden")
+    if storage_admin.is_storage_path(body.path) and "ADMIN" not in user.roles:
+        raise ApiProblem(403, "Forbidden", "Серверы и политики меняет роль ADMIN",
+                         "urn:m-ranked:problem:forbidden")
     if body.path == "/manage/backup/refresh" and "ADMIN" not in user.roles:
         raise ApiProblem(403, "Forbidden", "Резервную копию обновляет роль ADMIN",
                          "urn:m-ranked:problem:forbidden")
@@ -710,6 +719,14 @@ def _platform_account(row: dict[str, Any]) -> dict[str, Any]:
     return {"accountId": str(row["id"]), "platform": row["platform"],
             "enabled": row["enabled"], "rowVersion": row["row_version"],
             "updatedAt": dto.iso(row["updated_at"])}
+
+
+@router.get("/api/v1/admin/storage")
+async def storage(request: Request, _: Annotated[Principal, Depends(READ)]) -> Response:
+    """Серверы, политики, резервные копии и холодный архив для вкладки «Серверы»."""
+    async with request.app.state.db.admin() as connection:
+        body = await storage_admin.overview(connection, storage_admin.utc_now())
+    return _no_store(body)
 
 
 @router.get("/api/v1/admin/jobs")
