@@ -46,3 +46,34 @@ def test_verify_rejects_a_tampered_or_mislabelled_file(tmp_path):
     connection.close()
     with pytest.raises(ValueError):
         browse.verify(path, "2026-08")
+
+
+def test_api_and_analysis_import_the_archive_reader_without_pyarrow():
+    # В окружении API и анализа на основном сервере pyarrow нет: импорт пакета
+    # архива не должен тянуть выгрузку Parquet.
+    import subprocess
+    import sys
+
+    code = ("import builtins; real = builtins.__import__\n"
+            "def guard(name, *args, **kwargs):\n"
+            "    if name.split('.')[0] == 'pyarrow': raise ImportError('pyarrow is not installed')\n"
+            "    return real(name, *args, **kwargs)\n"
+            "builtins.__import__ = guard\n"
+            "import api.app, api.cold_archive, anomaly_analysis.v2.store, anomaly_analysis.v2.archive_job\n")
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_missing_browse_file_is_a_temporary_503_not_a_server_error(tmp_path):
+    import asyncio
+    from datetime import date
+
+    from api.cold_archive import ColdArchiveReader
+    from api.errors import ApiProblem
+
+    class Db:
+        async def fetch_all(self, sql, params):
+            return [{"generation": 1, "name": "browse-2026-08-g1.sqlite"}]
+
+    with pytest.raises(ApiProblem) as problem:
+        asyncio.run(ColdArchiveReader(tmp_path).history(Db(), date(2026, 8, 1), "post"))
+    assert problem.value.status == 503

@@ -11,13 +11,19 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import date
+import logging
 import os
 from pathlib import Path
+import sqlite3
 import time
 from typing import Any
 
 from operations.cold_archive.browse import BrowseReader
 from operations.storage import store
+
+from .errors import ApiProblem
+
+logger = logging.getLogger(__name__)
 
 GENERATIONS = """
 SELECT generation.generation, object.name
@@ -96,4 +102,11 @@ class ColdArchiveReader:
                     coverage = record.coverage or coverage
             return ArchivedHistory(merge(parts), coverage, len(paths))
 
-        return await asyncio.to_thread(read)
+        try:
+            return await asyncio.to_thread(read)
+        except (OSError, sqlite3.Error, ValueError) as error:
+            # Файл просмотра должен лежать на основном сервере всегда; если его
+            # нет, агент основного сервера уже заказал копию — это временно.
+            logger.error("cold archive file unreadable month=%s class=%s", month, type(error).__name__)
+            raise ApiProblem(503, "Service Unavailable", "архив этого месяца временно недоступен",
+                             headers={"Retry-After": "300"}) from error

@@ -14,15 +14,18 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import errno
 import grp
 import json
 import logging
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 from typing import Any
+import uuid
 
 from . import reconcile, store
 from .agent import unit_states
@@ -90,11 +93,19 @@ def register_backups(connection: Any, node: str, root: Path, backup_dir: Path, c
         cache[key] = digest
         target = store.object_path(root, "backup", dump.name)
         if not target.exists():
-            os.link(dump, target)
+            try:
+                os.link(dump, target)
+            except OSError as error:
+                # Дампы на другом разделе: ссылку не сделать, нужна копия.
+                if error.errno != errno.EXDEV:
+                    raise
+                partial = store.incoming_path(root, str(uuid.uuid4()))
+                shutil.copyfile(dump, partial)
+                store.publish(partial, target, "backup")
         os.chmod(target, 0o640)
         if group is not None:
             os.chown(target, -1, group)
-        created = datetime.strptime(dump.name[8:24], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+        created = datetime.strptime(dump.name[8:24], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
         row = connection.execute("""
             INSERT INTO ops_and_admin.storage_object (kind, name, size_bytes, sha256, origin_node, created_at)
             VALUES ('backup', %(name)s, %(size)s, %(sha)s, %(node)s, %(created)s)

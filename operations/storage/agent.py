@@ -230,7 +230,9 @@ class Agent:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    endpoint = os.getenv("NODE_AGENT_HUB_URL", "").strip() or os.getenv("TRANSFER_HTTPS_ENDPOINT", "").strip()
+    # По умолчанию — адрес приёмника из окружения отправителя переноса.
+    endpoint = (os.getenv("NODE_AGENT_HUB_URL", "").strip()
+                or os.getenv("COLLECTOR_TRANSFER_HTTPS_ENDPOINT", "").strip())
     parsed = urlsplit(endpoint)
     hub = Hub(f"{parsed.scheme}://{parsed.netloc}",
               os.environ["NODE_AGENT_CERTIFICATE"], os.environ["NODE_AGENT_PRIVATE_KEY"],

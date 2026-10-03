@@ -149,11 +149,14 @@ VALUES ('server-2', 'Сервер 2 · основной', 'main', '{}', 'active'
        ('server-1', 'Сервер 1 · сбор', 'collector', ARRAY['telegram', 'vk', 'max', 'rutube'], 'active')
 ON CONFLICT (id) DO NOTHING;
 
+-- Сбор и анализ начинают с пустых политик: пустое значение — значение
+-- окружения службы, поэтому миграция и первый отчёт агента ничего не меняют,
+-- пока администратор не задаст политику в панели.
 INSERT INTO ops_and_admin.runtime_policy (name, value) VALUES
-('collection', '{"trackPostDays": 30, "snapshotHeartbeatHours": 24, "heartbeatMaxAgeDays": null}'),
+('collection', '{}'),
 ('storage', '{"coldAfterDays": 30, "backupCopies": 1, "backupNodes": ["server-2", "server-1"],
               "archiveNodes": ["server-2", "server-1"], "browseCacheBytes": 2147483648}'),
-('analysis', '{"finalAnalysisDays": 30}')
+('analysis', '{"finalAnalysisDays": null}')
 ON CONFLICT (name) DO NOTHING;
 
 -- Порог горячего хранения задаёт политика storage; таблица остаётся источником
@@ -265,7 +268,8 @@ GRANT SELECT, UPDATE ON ops_and_admin.server_node TO collector_ingest;
 GRANT SELECT, INSERT, DELETE ON ops_and_admin.server_node_sample TO maintenance, collector_ingest;
 GRANT SELECT ON ops_and_admin.server_node_sample TO api_write_admin;
 GRANT SELECT, INSERT, UPDATE ON ops_and_admin.storage_object TO maintenance;
-GRANT SELECT ON ops_and_admin.storage_object TO api_write_admin, collector_ingest, api_read;
+-- Работник анализа читает файлы просмотра архивных месяцев (повторный анализ).
+GRANT SELECT ON ops_and_admin.storage_object TO api_write_admin, collector_ingest, api_read, analytics_worker;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ops_and_admin.storage_replica TO maintenance;
 GRANT SELECT, UPDATE ON ops_and_admin.storage_replica TO collector_ingest;
 GRANT SELECT ON ops_and_admin.storage_replica TO api_write_admin, api_read;
@@ -277,5 +281,9 @@ GRANT SELECT, INSERT, UPDATE ON ops_and_admin.admin_job TO api_write_admin;
 GRANT SELECT, UPDATE ON ops_and_admin.admin_job TO maintenance, analytics_worker;
 GRANT SELECT, UPDATE ON ops_and_admin.retention_policy TO api_write_admin;
 GRANT SELECT ON ops_and_admin.publication_partition_fence TO api_read, api_write_admin;
+-- Конвейер архива (maintenance): месяц уходит в архив, только когда анализ
+-- всех его постов окончен; после удаления партиции готовые страницы месяца
+-- больше не сверить с базой — они удаляются.
+GRANT SELECT ON analytics.post_anomaly_state TO maintenance;
 
 COMMIT;

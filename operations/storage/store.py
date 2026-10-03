@@ -3,9 +3,12 @@
 Только стандартная библиотека: модуль работает и в агенте любого сервера, где
 нет окружения проекта, и в службах Сервера 2.
 
-    <root>/backups/   дампы базы (0750, только root и группа хранилища)
-    <root>/archive/   полные и просмотровые файлы холодного архива (0755)
-    <root>/incoming/  недокачанные копии <id>.partial
+    <root>/backups/   дампы базы (2770: root и группа хранилища, без остальных)
+    <root>/archive/   полные и просмотровые файлы холодного архива (2775)
+    <root>/incoming/  недокачанные копии <id>.partial (2770)
+
+Группа хранилища пишет во все три каталога: приёмник переноса на основном
+сервере работает не от root и кладёт сюда файлы, присланные агентами.
 
 Файлы неизменяемы: копия появляется под окончательным именем только после
 сверки SHA-256, а до того лежит в incoming.
@@ -39,7 +42,7 @@ def incoming_path(root: Path, object_id: str) -> Path:
 
 
 def ensure_layout(root: Path, group: int | None = None) -> None:
-    for directory, mode in (("backups", 0o2750), ("archive", 0o2755), ("incoming", 0o2770)):
+    for directory, mode in (("backups", 0o2770), ("archive", 0o2775), ("incoming", 0o2770)):
         path = root / directory
         path.mkdir(parents=True, exist_ok=True)
         os.chmod(path, mode)
