@@ -99,7 +99,7 @@ export function metricNumber(value: number | string | null | undefined): number 
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-type QueryValue = string | number | readonly (string | number)[] | undefined;
+export type QueryValue = string | number | readonly (string | number)[] | undefined;
 
 export function queryHref(pathname: string, values: Record<string, QueryValue>): string {
   const query = new URLSearchParams();

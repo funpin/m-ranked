@@ -140,39 +140,26 @@ test("analysis client uses its independent endpoint and keeps an unanalyzed post
   assert.match(seenUrl,/\/api\/v1\/publications\/10000000-0000-4000-8000-000000000001\/anomaly-analysis$/);
 });
 
-test("statistics client sends every result dimension and bounds the limit", async () => {
+test("findings client sends every dimension and bounds the limit", async () => {
   let seenUrl = "";
   const client = createApiClient({
     baseUrl: "https://api.example.test",
     fetcher: async (input) => {
       seenUrl = String(input);
-      return Response.json({ sections: [], entities: [], datasetRevision: 17, asOf: "2026-01-01T00:00:00Z" });
+      return Response.json({ items: [], groups: [], institutions: [], datasetRevision: 17, asOf: "2026-01-01T00:00:00Z" });
     },
   });
 
-  await client.statistics({
-    view: "entities",
-    platform: "vk",
-    period: "7d",
-    q: "  @alpha  ",
-    publicationSort: "interactions",
-    publicationDirection: "asc",
-    entitySort: "views",
-    entityDirection: "desc",
-    limit: 500,
+  await client.findings({
+    mode: "institution", institution: 12, platform: "vk", period: "30d", types: ["photo", "video"],
+    sort: "view_index", direction: "asc", group: "none", q: "  мгу ", anomalies: "include", limit: 500,
   });
 
   const url = new URL(seenUrl);
-  assert.equal(url.pathname, "/api/v1/statistics");
-  assert.deepEqual(Object.fromEntries(url.searchParams), {
-    view: "entities",
-    platform: "vk",
-    period: "7d",
-    q: "@alpha",
-    publication_sort: "interactions",
-    publication_direction: "asc",
-    entity_sort: "views",
-    entity_direction: "desc",
-    limit: "50",
-  });
+  assert.equal(url.pathname, "/api/v1/findings");
+  assert.deepEqual(url.searchParams.getAll("types"), ["photo", "video"]);
+  assert.equal(url.searchParams.get("institution"), "12");
+  assert.equal(url.searchParams.get("q"), "мгу");
+  assert.equal(url.searchParams.get("anomalies"), "include");
+  assert.equal(url.searchParams.get("limit"), "50");
 });

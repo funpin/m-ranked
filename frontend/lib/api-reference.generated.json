@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "0653690c6d1cad3e72cd8f10d2a86c04818fa18b177272a7171a580787734843",
+  "sourceSha256": "cb14adaa0fe32808874c08740375d8a0dc4c5293f87ef71ef02982922e2fb7f4",
   "version": "1.0.0",
   "operations": [
     {
@@ -727,6 +727,219 @@
         },
         {
           "name": "entities",
+          "type": "object[]"
+        },
+        {
+          "name": "limit",
+          "type": "integer"
+        },
+        {
+          "name": "offset",
+          "type": "integer"
+        },
+        {
+          "name": "hasMore",
+          "type": "boolean"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
+      "operationId": "getFindings",
+      "path": "/api/v1/findings",
+      "summary": "Read publications that performed above their account norm",
+      "parameters": [
+        {
+          "name": "mode",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "institution"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "institution",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "period",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "1d",
+            "7d",
+            "30d"
+          ],
+          "default": "7d"
+        },
+        {
+          "name": "types",
+          "in": "query",
+          "required": false,
+          "type": "string[]"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "interaction_index",
+            "view_index",
+            "interactions24",
+            "views24",
+            "erv24",
+            "published_at"
+          ],
+          "default": "interaction_index"
+        },
+        {
+          "name": "direction",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "desc"
+        },
+        {
+          "name": "group",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "none",
+            "institution"
+          ],
+          "default": "none"
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "anomalies",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "exclude",
+            "include"
+          ],
+          "default": "exclude"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 50
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "Findings",
+      "fields": [
+        {
+          "name": "mode",
+          "type": "string"
+        },
+        {
+          "name": "institution",
+          "type": "integer | null"
+        },
+        {
+          "name": "platform",
+          "type": "string"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "types",
+          "type": "string[]"
+        },
+        {
+          "name": "sort",
+          "type": "string"
+        },
+        {
+          "name": "direction",
+          "type": "string"
+        },
+        {
+          "name": "group",
+          "type": "string"
+        },
+        {
+          "name": "q",
+          "type": "string"
+        },
+        {
+          "name": "anomalies",
+          "type": "string"
+        },
+        {
+          "name": "items",
+          "type": "object[]"
+        },
+        {
+          "name": "groups",
+          "type": "object[]"
+        },
+        {
+          "name": "total",
+          "type": "integer"
+        },
+        {
+          "name": "hiddenAnomalous",
+          "type": "integer"
+        },
+        {
+          "name": "institutions",
           "type": "object[]"
         },
         {
