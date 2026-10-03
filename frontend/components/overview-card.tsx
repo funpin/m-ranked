@@ -75,9 +75,10 @@ function accountName(item: OverviewItem): string {
   return account.title || account.canonicalExternalId;
 }
 
-function MetricCell({ value, label, description, trend, evidence, suffix, note }: {
+function MetricCell({ value, label, icon, description, trend, evidence, suffix, note }: {
   value: OverviewMetric["total"];
   label: string;
+  icon: IconName;
   description: string;
   trend: OverviewMetric["totalTrend"];
   evidence: AggregateMetric;
@@ -87,9 +88,11 @@ function MetricCell({ value, label, description, trend, evidence, suffix, note }
   const number = metricNumber(value);
   const exact = formatMetric(value);
   return (
-    <div className="grid min-w-0 content-start justify-items-start gap-1.5">
-      <div className="text-muted-foreground flex w-full items-center justify-between gap-1 text-xs leading-none">
-        <span>{label}</span>
+    <div className="@container grid min-w-0 content-start justify-items-start gap-1.5">
+      <div className="text-muted-foreground flex w-full items-center justify-between gap-1 text-[11px] leading-none">
+        <span className="inline-flex min-w-0 items-center gap-1" title={description}>
+          <Icon name={icon} className={cn("size-3.5 shrink-0", label !== "Медиана" && "hidden @min-[128px]:block")} /><span>{label}</span>
+        </span>
         <span className="relative z-[2] shrink-0"><MethodNote title={description}>
           {note ? <><p>{note}</p><p>{metricEvidence(evidence)}</p></> : metricEvidence(evidence)}
         </MethodNote></span>
@@ -166,18 +169,16 @@ function ActivityBody({ item, integrationWarning, href }: { item: OverviewItem; 
       <PublicationActivity item={item} />
     </div>
     <div className="my-4 grid flex-1 content-start gap-4">
-      <section aria-label={`Прирост ${short}`} className="grid gap-1">
-        <h4 className="text-muted-foreground text-[11px] font-medium">Прирост {short}</h4>
+      <section aria-label={`Прирост ${short}`}>
         <div className="grid grid-cols-2 gap-x-5">
-          <MetricCell suffix={short} value={item.reactions.total} label={primaryLabel} description={`Прирост ${primary} ${short}`} trend={item.reactions.totalTrend} evidence={item.reactions.totalMetadata} />
-          <MetricCell suffix={short} value={item.views.total} label="Просмотры" description={`Прирост просмотров ${short}`} trend={item.views.totalTrend} evidence={item.views.totalMetadata} />
+          <MetricCell icon="heart" suffix={short} value={item.reactions.total} label={primaryLabel} description={`Прирост ${primary} ${short}`} trend={item.reactions.totalTrend} evidence={item.reactions.totalMetadata} />
+          <MetricCell icon="eye" suffix={short} value={item.views.total} label="Просмотры" description={`Прирост просмотров ${short}`} trend={item.views.totalTrend} evidence={item.views.totalMetadata} />
         </div>
       </section>
-      <section aria-label="Медиана прироста" className="border-border/60 grid gap-1 border-t pt-3">
-        <h4 className="text-muted-foreground text-[11px] font-medium">Медиана прироста</h4>
+      <section aria-label="Медиана прироста" className="border-border/60 border-t pt-3">
         <div className="grid grid-cols-2 gap-x-5">
-          <MetricCell suffix={short} value={item.reactions.median} label={primaryLabel} description={`Медиана прироста ${primary}`} trend={item.reactions.medianTrend} evidence={item.reactions.medianMetadata} />
-          <MetricCell suffix={short} value={item.views.median} label="Просмотры" description="Медиана прироста просмотров" trend={item.views.medianTrend} evidence={item.views.medianMetadata} />
+          <MetricCell icon="heart" suffix={short} value={item.reactions.median} label="Медиана" description={`Медиана прироста ${primary} ${short}`} trend={item.reactions.medianTrend} evidence={item.reactions.medianMetadata} />
+          <MetricCell icon="eye" suffix={short} value={item.views.median} label="Медиана" description={`Медиана прироста просмотров ${short}`} trend={item.views.medianTrend} evidence={item.views.medianMetadata} />
         </div>
       </section>
     </div>
@@ -221,15 +222,14 @@ function AllPlatformsBody({ item }: { item: OverviewItem }) {
         </div>
       ) : <p className="text-muted-foreground mt-2.5 text-xs">Официальные аккаунты пока не добавлены.</p>}
       <PublicationActivity item={item} />
-      <section aria-label={`Прирост ${short}`} className="my-4 grid flex-1 content-start gap-1">
-        <h4 className="text-muted-foreground text-[11px] font-medium">Суммарный прирост {short}</h4>
+      <section aria-label={`Прирост ${short}`} className="my-4 flex-1">
         <div className="grid grid-cols-2 gap-x-5 gap-y-4">
           {([
-            ["views", "Просмотры", "просмотров"],
-            ["reactions", "Реакции", "лайков и реакций"],
-            ["comments", "Комментарии", "комментариев"],
-            ["shares", "Репосты", "репостов"],
-          ] as const).map(([key,label,description]) => <MetricCell key={key} suffix={short}
+            ["views", "Просмотры", "просмотров", "eye"],
+            ["reactions", "Реакции", "лайков и реакций", "heart"],
+            ["comments", "Комментарии", "комментариев", "message-circle"],
+            ["shares", "Репосты", "репостов", "repeat-2"],
+          ] as const).map(([key,label,description,icon]) => <MetricCell key={key} icon={icon} suffix={short}
             value={item[key].total} label={label} description={`Прирост ${description} ${short} · все соцсети`}
             trend={item[key].totalTrend} evidence={item[key].totalMetadata} note={note} />)}
         </div>
