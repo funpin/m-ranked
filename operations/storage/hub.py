@@ -243,6 +243,10 @@ class NodeHub:
         with path.open("rb") as handle:
             handle.seek(offset)
             data = handle.read(length)
+            # Прочитанное не нужно в кэше: страницы файла засчитываются в
+            # потолок памяти приёмника, а дамп — гигабайты.
+            if hasattr(os, "posix_fadvise"):
+                os.posix_fadvise(handle.fileno(), offset, len(data), os.POSIX_FADV_DONTNEED)
         return NodeResponse(200, None, data)
 
     def write_chunk(self, identities: tuple[str, ...], object_id: str, offset: int, data: bytes) -> NodeResponse:
