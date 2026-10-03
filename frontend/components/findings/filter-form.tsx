@@ -29,7 +29,12 @@ export function FindingsFilterForm(props: ComponentProps<"form">) {
 
   function navigate(form: HTMLFormElement) {
     const query = new URLSearchParams();
-    new FormData(form).forEach((value, key) => {
+    const data = new FormData(form);
+    // Вуз осмыслен только в режиме «Мой вуз»: после возврата к «Все вузы»
+    // скрытое поле ещё в форме, но в адрес попадать не должно.
+    const institutionMode = data.get("mode") === "institution";
+    data.forEach((value, key) => {
+      if (key === "institution" && !institutionMode) return;
       if (typeof value === "string" && value !== "") query.append(key, value);
     });
     const replace = replacing.delete(form);

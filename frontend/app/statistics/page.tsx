@@ -12,7 +12,7 @@ import { NativeSegments } from "@/components/native-field";
 import { NavigationBoundary } from "@/components/navigation-boundary";
 import { StatisticsSkeleton } from "@/components/skeletons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { ApiFailureState, PageHeader } from "@/components/ui";
@@ -53,8 +53,9 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
       limit: choosing ? 1 : 50, cursor: choosing ? undefined : cursor });
     institutions = page.institutions;
   } catch (error) {
-    if (error instanceof ApiError && error.status === 400 && cursor) staleCursor = true;
-    else if (error instanceof ApiError && error.status === 404) {
+    // Курсор при выборе вуза не отправляется: 400 тогда — обычная ошибка.
+    if (error instanceof ApiError && error.status === 400 && cursor && !choosing) staleCursor = true;
+    else if (error instanceof ApiError && error.status === 404 && query.mode === "institution") {
       unknownInstitution = true;
       institutions = await api.findings({ ...query, mode: "all", institution: null, group: "none", anomalies, limit: 1 })
         .then((body) => body.institutions, () => []);
@@ -73,7 +74,7 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
   return <>
     <PageHeader
       title="Находки: посты выше нормы"
-      titleNote={<MethodNote title="Как считается индекс"><p>Индекс — взаимодействия поста на 24-м часу (у свежих — на последнем замере), делённые на типичное значение его аккаунта на том же часу за 30 дней.</p><p>Посты с выраженной аномалией не входят ни в норму, ни в выдачу.</p><p><Link href="/methodology/findings" prefetch={false} className="underline underline-offset-4">Подробнее о методике</Link></p></MethodNote>}
+      titleNote={<MethodNote title="Как считается индекс"><p>Индекс — взаимодействия поста на 24-м часу (у свежих — на последнем замере), делённые на типичное значение его аккаунта на том же часу за 30 дней.</p>{anomaliesVisible ? <p>Посты с выраженной аномалией не входят ни в норму, ни в выдачу.</p> : null}<p><Link href="/methodology/findings" prefetch={false} className="underline underline-offset-4">Подробнее о методике</Link></p></MethodNote>}
       description="Посты, которые сработали лучше обычного для своего аккаунта."
       meta={page ? <span className="text-muted-foreground text-xs" title={`${formatDate(page.asOf)} · datasetRevision ${page.datasetRevision}`}>Обновлено {updated}</span> : null}
     />
@@ -82,7 +83,7 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
     <FindingsFilterForm key={selectionKey} id="findings-filters" action="/statistics" method="get" aria-label="Фильтры находок"
       data-testid="filter-toolbar" className={`mb-6 flex min-w-0 flex-wrap items-center gap-2 p-2.5 ${STICKY_CONTROL_SURFACE_CLASS}`}>
       <NativeSegments name="mode" legend="Режим" value={institutionMode ? "institution" : "all"} options={MODE_OPTIONS} labelled={false} />
-      {institutionMode ? <InstitutionPicker institutions={institutions} value={query.institution} /> : null}
+      {query.mode === "institution" && !unknownInstitution ? <InstitutionPicker institutions={institutions} value={query.institution} /> : null}
       <NativeSegments name="platform" legend="Площадка" value={query.platform} options={FILTER_PLATFORM_OPTIONS} labelled={false} />
       <NativeSegments name="period" legend="Период" value={query.period} options={FINDINGS_PERIOD_OPTIONS} labelled={false} />
       <NativeSelect name="sort" defaultValue={query.sort} aria-label="Сортировка" className={`${FILTER_SELECT_CLASS} w-auto`}>
@@ -105,7 +106,12 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
 
     <NavigationBoundary fallback={<StatisticsSkeleton chrome={false} />}>
       {failed ? <ApiFailureState retryHref={queryHref("/statistics", findingsHrefQuery(query))} />
-        : choosing || unknownInstitution || !page ? <Empty role="status" className="bg-card border py-10"><EmptyHeader><EmptyTitle><h2 className="font-heading text-lg font-semibold">{unknownInstitution ? "Вуз не найден — выберите другой" : "Выберите вуз, чтобы увидеть его посты"}</h2></EmptyTitle></EmptyHeader></Empty>
+        : choosing || unknownInstitution || !page ? <Empty key={selectionKey} role="status" className="bg-card border py-10">
+            <EmptyHeader><EmptyTitle><h2 className="font-heading text-lg font-semibold">{unknownInstitution ? "Вуз не найден — выберите другой" : "Выберите вуз, чтобы увидеть его посты"}</h2></EmptyTitle></EmptyHeader>
+            {choosing || unknownInstitution ? <EmptyContent className="w-full max-w-64">
+              <InstitutionPicker institutions={institutions} value={query.institution} form="findings-filters" />
+            </EmptyContent> : null}
+          </Empty>
         : <FindingsResults key={selectionKey} page={page} query={query} anomaliesVisible={anomaliesVisible} />}
     </NavigationBoundary>
   </>;

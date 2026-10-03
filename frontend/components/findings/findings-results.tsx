@@ -76,8 +76,8 @@ function FindingRows({ rows, query, anomaliesVisible, showInstitution }: {
     <div className="hidden overflow-x-auto md:block"><Table data-testid="findings-table" className="tabular">
       <caption className="sr-only">Посты выше нормы своего аккаунта. Сортировка: {SORT_LABELS[query.sort]}</caption>
       <TableHeader><TableRow>
-        <TableHead>Пост</TableHead><TableHead>Индекс</TableHead><TableHead>Взаимодействия</TableHead>
-        <TableHead>Просмотры</TableHead><TableHead>ERV</TableHead><TableHead className="w-12"><span className="sr-only">Оригинал</span></TableHead>
+        <TableHead>Пост</TableHead><TableHead>Индекс</TableHead><TableHead>Взаимодействия · 24 ч</TableHead>
+        <TableHead>Просмотры · 24 ч</TableHead><TableHead>ERV · 24 ч</TableHead><TableHead className="w-12"><span className="sr-only">Оригинал</span></TableHead>
       </TableRow></TableHeader>
       <TableBody>{rows.map((row) => (
         <RowLink key={row.publicationId} href={publicationHref(row.publicationId)} className="hover:bg-muted/50 focus-within:bg-muted/50 cursor-pointer">

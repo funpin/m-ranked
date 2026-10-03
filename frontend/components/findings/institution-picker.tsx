@@ -19,8 +19,15 @@ function browserStorage(): Storage | null {
 }
 
 /** Вуз режима «Мой вуз». Значение уходит в форму скрытым полем; выбор
- *  запоминается в localStorage только как удобство следующего визита. */
-export function InstitutionPicker({ institutions, value }: { institutions: FindingInstitution[]; value: number | null }) {
+ *  запоминается в localStorage только как удобство следующего визита.
+ *  На странице одновременно стоит ровно один экземпляр: в панели, когда вуз
+ *  выбран, или в пустом состоянии, когда его ещё нет, — поэтому и поле
+ *  institution, и восстановление из localStorage существуют в одном месте. */
+export function InstitutionPicker({ institutions, value, form }: {
+  institutions: FindingInstitution[]; value: number | null;
+  /** id формы, когда выбор стоит вне её (в пустом состоянии под панелью). */
+  form?: string;
+}) {
   const hidden = useRef<HTMLInputElement>(null);
   const restored = useRef(false);
 
@@ -45,7 +52,7 @@ export function InstitutionPicker({ institutions, value }: { institutions: Findi
   }, []);
 
   return <>
-    <input ref={hidden} type="hidden" name="institution" defaultValue={value ?? ""} />
+    <input ref={hidden} type="hidden" name="institution" form={form} defaultValue={value ?? ""} />
     <InstitutionCombobox institutions={institutions} value={value} onChoose={(item) => submit(item)} />
   </>;
 }
