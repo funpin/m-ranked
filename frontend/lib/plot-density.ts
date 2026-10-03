@@ -11,14 +11,6 @@ export function mergePixelIntervals(ranges: readonly PixelInterval[], distance: 
   return merged;
 }
 
-/** Dense confirmed gaps become a small rail on the plot edge. Zooming in
- * naturally projects fewer gaps and restores full-height bands. */
-export function gapPresentation(blocks: readonly PixelInterval[], plotWidth: number): "rail" | "bands" {
-  // A narrow screen reaches visual saturation with fewer full-height bars.
-  // Recompute after projection so zooming can restore individual bands.
-  return blocks.length > Math.max(2, Math.floor(plotWidth / 180)) ? "rail" : "bands";
-}
-
 export function clusterPixelMarks<T extends { x: number }>(marks: readonly T[], distance: number):
   { x: number; marks: T[] }[] {
   const groups: { x: number; marks: T[] }[] = [];

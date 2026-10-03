@@ -7,7 +7,7 @@ import { elapsedSincePublication } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
 import { PatternIcon } from "@/components/anomaly-icons";
-import { clusterPixelMarks, gapPresentation, mergePixelIntervals } from "@/lib/plot-density";
+import { clusterPixelMarks, mergePixelIntervals } from "@/lib/plot-density";
 import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 import type { SignalMarker } from "@/lib/anomaly";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
@@ -25,16 +25,16 @@ const GAP_MERGE_DISTANCE_PX = 3;
  * plots and made the whole page expensive to paint while scrolling. Gaps whose
  * visible separation is three pixels or less are merged at the current scale:
  * zooming in separates them again. The textual count and duration remain exact.
- * One path keeps the overlay at one DOM node per chart. */
+ * Gaps are always a thin rail along the top edge: full-height bands hid the
+ * curve under them. One path keeps the overlay at one DOM node per chart. */
 function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
   const scale = useXAxisScale();
   const plot = usePlotArea();
   const overlay = useMemo(() => {
-    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0, mode: "bands" as const };
+    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0 };
     const minX = plot.x;
     const maxX = plot.x + plot.width;
     const minY = plot.y;
-    const maxY = plot.y + plot.height;
     const projected = gaps.flatMap((gap) => {
       const from = scale(Date.parse(gap.from));
       const to = scale(Date.parse(gap.to));
@@ -45,15 +45,13 @@ function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
       return [{ left, right }];
     }).sort((a,b) => a.left-b.left || a.right-b.right);
     const blocks = mergePixelIntervals(projected, GAP_MERGE_DISTANCE_PX);
-    const mode = gapPresentation(blocks, plot.width);
     const path = blocks.map(({left,right}) =>
-      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${(mode === "rail" ? minY + 4 : maxY).toFixed(2)}H${left.toFixed(2)}Z`,
+      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${(minY + 4).toFixed(2)}H${left.toFixed(2)}Z`,
     ).join("");
-    return {path,blocks:blocks.length,mode};
+    return {path,blocks:blocks.length};
   }, [gaps, plot, scale]);
-  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length} data-gap-mode={overlay.mode}
-    d={overlay.path} fill="var(--destructive)" fillOpacity={overlay.mode === "rail" ? 0.8 : 0.11}
-    stroke="var(--destructive)" strokeOpacity={overlay.mode === "rail" ? 0 : 0.35} strokeWidth={1} pointerEvents="none" /> : null;
+  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length}
+    d={overlay.path} fill="var(--destructive)" fillOpacity={0.8} pointerEvents="none" /> : null;
 }
 
 const SIGNAL_COLORS: Record<SignalMarker["tone"], string> = {
