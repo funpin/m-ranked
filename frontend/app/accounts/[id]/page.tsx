@@ -70,5 +70,5 @@ export default async function AccountPage({ params, searchParams }: Props) {
     reportDetailFailure(`account:${id}`, error);
     return <ApiFailureState retryHref={accountHref(id)} />;
   }
-  return <AccountDetail account={account} posts={posts.items} truncated={Boolean(posts.nextCursor)} siblings={siblings} selectedDay={selectedDay} selectedTrend={selectedTrend} anomalyLevels={levels} tailProfile={tail} />;
+  return <AccountDetail account={account} posts={posts.items} nextCursor={posts.nextCursor ?? null} siblings={siblings} selectedDay={selectedDay} selectedTrend={selectedTrend} anomalyLevels={levels} tailProfile={tail} />;
 }

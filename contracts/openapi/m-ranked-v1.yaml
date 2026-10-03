@@ -382,12 +382,17 @@ paths:
       description: >-
         Level only, newest publications first, at most 1000. Publications not analyzed yet are
         absent. Signals and data quality are served per publication by anomaly-analysis.
+        With before, only publications published at or before that instant are returned.
       security: []
       parameters:
         - name: accountId
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: before
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
         - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':

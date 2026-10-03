@@ -131,21 +131,27 @@ async def publication_analysis(legacyId: str, request: Request, legacyType: str 
 
 
 # Столько постов аккаунта вмещает окно отслеживания с запасом; таблица
-# аккаунта показывает первые сто.
+# аккаунта показывает первые сто, а более старые страницы просят уровни с
+# параметром before.
 ACCOUNT_LEVELS_LIMIT = 1000
 
 
 @router.get("/api/v1/accounts/{accountId}/anomaly-levels", tags=["Query"])
-async def account_levels(accountId: str, request: Request) -> Response:
+async def account_levels(accountId: str, request: Request,
+                         before: Annotated[datetime | None, Query()] = None) -> Response:
     account = _uuid(accountId, "accountId")
+    if before is not None and before.tzinfo is None:
+        raise BadRequest("before должен содержать часовой пояс")
 
     async def build(dataset_revision: int, committed_at: Any) -> dict[str, Any]:
         rows = await request.app.state.db.fetch_all(sql.ACCOUNT_LEVELS, {
-            "account": account, "limit": ACCOUNT_LEVELS_LIMIT,
+            "account": account, "limit": ACCOUNT_LEVELS_LIMIT, "before": before,
         })
         return levels_body(str(account), dataset_revision, rows)
 
-    return await serve(request, "account-anomaly-levels", {"id": str(account)}, ANALYSIS_TAGS, build)
+    return await serve(request, "account-anomaly-levels", {
+        "id": str(account), "before": before.isoformat() if before else "",
+    }, ANALYSIS_TAGS, build)
 
 
 # Профиль позднего отклика: названия — те же, что пишет модуль анализа

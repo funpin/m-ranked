@@ -1,8 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { publicationHref } from "@/lib/entity-routes";
-import Link from "@/components/native-link";
-import { deletedPublicationArchiveUrl, duration, legacyDate, legacyNumber, moscowDay, PLATFORM_LABELS, PLATFORM_LONG_LABELS, postTypeLabel, publicationLabel, qualityHint } from "@/lib/format";
+import { PLATFORM_LABELS, PLATFORM_LONG_LABELS } from "@/lib/format";
 import { metricEvidence } from "@/lib/metric-evidence";
 import type { AccountView, PublicationListItem } from "@/lib/types";
 import { ChannelSwitch } from "@/components/channel-switch";
@@ -11,8 +9,9 @@ import { WeeklyTrend } from "@/components/weekly-trend";
 import { NavigationBoundary } from "@/components/navigation-boundary";
 import { AccountSkeleton } from "@/components/skeletons";
 import { DaySpotlight } from "@/components/day-spotlight";
-import { RowLink } from "@/components/row-link";
 import { AnomalyLevelCell } from "@/components/anomaly-level-cell";
+import { PublicationRow } from "@/components/account-publication-row";
+import { AccountMorePublications } from "@/components/account-more-publications";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
 import type { TailProfileLoad } from "@/lib/account-tail";
 import { AccountTailCard } from "@/components/account-tail-card";
@@ -41,11 +40,7 @@ function change(current: number | null | undefined,
   return current - previous;
 }
 
-function MetricWithGrowth({ value, quality, growth, label }: { value: number | null; quality: string | null; growth?: number | null; label: string }) {
-  return <TableCell title={qualityHint(quality)}><span className="flex items-center gap-2 whitespace-nowrap"><span>{legacyNumber(value)}</span><DeltaBadge value={growth} compact={false} label={`${label} за выбранные сутки`} /></span></TableCell>;
-}
-
-export function AccountDetail({ account, posts, truncated = false, siblings = [], selectedDay, selectedTrend, anomalyLevels = null, tailProfile = null }: { account: AccountView; posts: PublicationListItem[]; truncated?: boolean; siblings?: readonly AccountView[]; selectedDay?: string; selectedTrend?: "median" | "total"; anomalyLevels?: Promise<AccountLevelsLoad> | null; tailProfile?: Promise<TailProfileLoad> | null }) {
+export function AccountDetail({ account, posts, nextCursor = null, siblings = [], selectedDay, selectedTrend, anomalyLevels = null, tailProfile = null }: { account: AccountView; posts: PublicationListItem[]; nextCursor?: string | null; siblings?: readonly AccountView[]; selectedDay?: string; selectedTrend?: "median" | "total"; anomalyLevels?: Promise<AccountLevelsLoad> | null; tailProfile?: Promise<TailProfileLoad> | null }) {
   const name = account.title || account.institutionShortName || account.institutionName;
   const institutionName = account.institutionName.trim();
   const showInstitutionName = institutionName !== name.trim();
@@ -104,21 +99,11 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
     </Card>
     {tailProfile ? <AccountTailCard profile={tailProfile} /> : null}
     <Card className="block p-5 text-sm mt-5 min-w-0 overflow-x-auto">
-      <DaySpotlight day={selectedDay} mode={selectedTrend} />{truncated ? <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Показаны первые 100 публикаций. Более старые записи доступны через API с курсором.</p> : null}<Table className="reveal"><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead>{anomalyLevels ? <TableHead>Анализ динамики</TableHead> : null}</TableRow></TableHeader><TableBody>
-      {posts.map((post) => {
-        const observedAt = post.reactions.observedAt ?? post.views.observedAt;
-        const complete = post.historyCompleteness === "complete";
-        const archiveUrl = deletedPublicationArchiveUrl(account.platform, post.deletedAt, post.displayExternalId ?? post.externalId, account.username, account.archiveUrl);
-        const externalUrl = archiveUrl ?? post.publicUrl;
-        const archiveLabel = archiveUrl ? (telegram ? "TGStat" : "MAXSTAT") : null;
-        const archiveHint = archiveLabel === "MAXSTAT" ? `На MAXSTAT выберите в фильтрах дату ${legacyDate(post.publishedAt).slice(0, 10)}` : undefined;
-        const detail = post.publicationId ? publicationHref(post.publicationId) : null;
-        const publishedDay = moscowDay(post.publishedAt) ?? undefined;
-        const cells = <><TableCell>{post.publicationId ? <Link href={publicationHref(post.publicationId)} prefetch={false}>{publicationLabel(post.displayExternalId ?? post.externalId,account.platform)}</Link> : publicationLabel(post.displayExternalId ?? post.externalId,account.platform)}{externalUrl?.startsWith("https://") ? <> · <a className="text-muted-foreground text-xs underline underline-offset-4" href={externalUrl} target="_blank" rel="noopener noreferrer" title={archiveHint}>{archiveLabel ?? PLATFORM_LONG_LABELS[account.platform]}</a></> : null}{post.deletedAt ? <> <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive">удалена</span></> : null}{post.repost ? <> · <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">репост</span></> : null}{post.joint ? <> · <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">+{post.additionalAuthorCount} авт.</span></> : null}</TableCell><TableCell>{legacyDate(post.publishedAt)}</TableCell><TableCell>{duration(observedAt ? (Date.parse(observedAt)-Date.parse(post.publishedAt))/1000 : null)}</TableCell><TableCell>{observedAt || telegram ? <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${complete ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>{complete ? "полная" : "неполная"}</span> : <span className="text-muted-foreground" title="В этом снимке данных замера ещё нет. Ответ отдаётся из кэша и может отставать на несколько минут.">ожидает замера</span>}</TableCell><MetricWithGrowth value={post.reactions.value} quality={post.reactions.quality} growth={post.dailyGrowth?.reactions} label={telegram ? "реакции" : primary} /><MetricWithGrowth value={post.views.value} quality={post.views.quality} growth={post.dailyGrowth?.views} label="просмотры" /><TableCell title={qualityHint(post.comments.quality)}>{legacyNumber(post.comments.value)}</TableCell><TableCell>{postTypeLabel(post.publicationType)}</TableCell>{anomalyLevels ? <AnomalyLevelCell levels={anomalyLevels} publicationId={post.publicationId} /> : null}</>;
-        return detail
-          ? <RowLink key={post.publicationId} href={detail} data-published-day={publishedDay} className="cursor-pointer">{cells}</RowLink>
-          : <TableRow key={post.publicationId} data-published-day={publishedDay}>{cells}</TableRow>;
-      })}
+      <DaySpotlight day={selectedDay} mode={selectedTrend} /><Table className="reveal"><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead>{anomalyLevels ? <TableHead>Анализ динамики</TableHead> : null}</TableRow></TableHeader><TableBody>
+      {posts.map((post) => <PublicationRow key={post.publicationId} post={post} account={account} primary={primary}
+        level={anomalyLevels ? <AnomalyLevelCell levels={anomalyLevels} publicationId={post.publicationId} /> : null} />)}
+      {nextCursor ? <AccountMorePublications account={account} primary={primary} cursor={nextCursor} shown={posts.length}
+        day={selectedTrend === "total" ? selectedDay : undefined} columns={anomalyLevels ? 9 : 8} withLevels={Boolean(anomalyLevels)} /> : null}
       {!posts.length ? <TableRow><TableCell colSpan={anomalyLevels ? 9 : 8} className="space-y-3 py-10 text-center text-muted-foreground">Публикации ещё не собраны.</TableCell></TableRow> : null}
     </TableBody></Table></Card>
     </NavigationBoundary>

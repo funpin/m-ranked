@@ -46,6 +46,7 @@ SELECT publication.id AS publication_id,
    AND recheck.source_level=state.level
    AND state.review_status='unreviewed'
  WHERE publication.primary_account_id=%(account)s::uuid AND state.analyzed_at IS NOT NULL
+   AND (%(before)s::timestamptz IS NULL OR publication.published_at<=%(before)s::timestamptz)
  ORDER BY publication.published_at DESC, publication.id DESC
  LIMIT %(limit)s
 """

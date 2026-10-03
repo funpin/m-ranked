@@ -347,7 +347,7 @@ WITH page AS (
     SELECT publication.*
       FROM ingest.visible_publication publication
      WHERE publication.primary_account_id=%(account_id)s::uuid
-       AND publication.published_at>=%(as_of)s::timestamptz-make_interval(days=>%(days)s)
+       -- Список не ограничен окном сводки: курсор доводит до первой публикации в базе.
        AND publication.published_at<=%(as_of)s::timestamptz
        AND EXISTS (SELECT 1 FROM catalog.legacy_entity_alias alias
                     WHERE alias.target_uuid=publication.id AND alias.entity_type=%(publication_legacy_type)s)

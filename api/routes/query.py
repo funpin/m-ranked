@@ -325,8 +325,7 @@ async def account_publications(
         publication_type = "posts" if account_row["platform"] == "telegram" else "platform_posts"
         rows = await db.fetch_all(details.ACCOUNT_PUBLICATIONS, {
             "account_id": account_row["account_id"], "publication_legacy_type": publication_type,
-            "after_id": after_id, "fetch_limit": page_size + 1,
-            "days": request.app.state.settings.retention_days, "as_of": committed_at,
+            "after_id": after_id, "fetch_limit": page_size + 1, "as_of": committed_at,
             "growth_day": day,
         })
         has_more = len(rows) > page_size

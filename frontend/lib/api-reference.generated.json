@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "9182c04ec29889d56e977e91d7d8af6415caa90a795e086f7d370472b6b68f6a",
+  "sourceSha256": "1dc305d443ecdd056fca620d36a4d86edbd7b04e7846bc452e80e60c6a592d52",
   "version": "1.0.0",
   "operations": [
     {
@@ -482,6 +482,12 @@
           "in": "path",
           "required": true,
           "type": "uuid"
+        },
+        {
+          "name": "before",
+          "in": "query",
+          "required": false,
+          "type": "date-time"
         }
       ],
       "response": "AccountAnomalyLevels",
