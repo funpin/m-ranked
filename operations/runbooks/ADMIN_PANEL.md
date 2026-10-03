@@ -90,3 +90,34 @@ ls /var/lib/m-ranked/contributors/avatars
 `systemctl disable --now m-ranked-target-ops-sample.timer m-ranked-target-contributors.timer`.
 Без снимков вкладка «Система» показывает «Снимков нет», шапка — авторов из
 сборки. Таблицы удаляются строками отката в заголовках миграций 0052 и 0053.
+
+## Резервная копия из панели
+
+Кнопка «Обновить резервную копию» на вкладке «Система» (роль ADMIN) кладёт
+файл-запрос `/var/lib/m-ranked/backup-request/refresh` (каталог API создаёт
+сам, `StateDirectory`). `m-ranked-target-dump-backup-request.path` запускает
+обычный `m-ranked-target-dump-backup.service`; скрипт удаляет файл и перед
+снимком оставляет только копию, прошедшую проверку восстановлением
+(`rotate-dumps.py --refresh`). После снимка на диске ровно две копии. Ход
+снимка (запрошен, идёт, размер недоснятого файла, результат) панель видит по
+снимку сервера раз в минуту.
+
+## Диагностика: mranked-doctor
+
+`/usr/local/sbin/mranked-doctor` — ссылка на
+`/opt/m-ranked/current/operations/scripts/mranked-doctor.py`. Только читает:
+упавшие службы с выдержкой журнала, таймеры, health API и веба, конвейер,
+диск и резервные копии, 5xx и медленные ответы nginx за час, состояние базы,
+ошибки журналов служб за час. Код выхода 1 и список «problems» — если есть
+что чинить.
+
+```bash
+ssh <сервер 2> mranked-doctor
+ssh <сервер 2> mranked-doctor --json --section units,storage
+```
+
+С машины оператора — `operations/scripts/remote-doctor.sh` (параметры ssh в
+`MRANKED_S2_SSH`).
+
+Кандидаты выкатки (`systemd-run` на порту 3007) запускать с `--collect`:
+иначе после остановки они остаются в состоянии failed и шумят в проверках.

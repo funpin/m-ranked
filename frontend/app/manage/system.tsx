@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { LazySystemCharts } from "./lazy-charts";
 import { LiveNumber } from "./live-number";
 import { RangeSwitch } from "./range-switch";
-import { ago, bytes, Pill, plural, Section } from "./shared";
+import { DatabaseBackup } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ago, bytes, fields, Pill, plural, Section } from "./shared";
 
 const number = new Intl.NumberFormat("ru-RU");
 const TONES = {
@@ -162,8 +164,44 @@ function Storage({ status }: { status: CatalogStatus | null }) {
   );
 }
 
-export function SystemTab({ overview, status, range, now }: {
+function Backups({ backups, now, csrf, canRefresh, outcome }: {
+  backups: SystemOverview["backups"]; now: number; csrf: string; canRefresh: boolean; outcome?: string;
+}) {
+  const state = !backups ? "нет данных"
+    : backups.running ? `снимается${backups.partialBytes ? ` · ${bytes(backups.partialBytes)}` : ""}`
+      : backups.requested ? "запрошена, начнётся в течение минуты"
+        : backups.lastResult && backups.lastResult !== "success" ? `последний запуск не удался (код ${backups.lastExitStatus ?? "—"})` : "готова";
+  const busy = !!backups && (backups.running || backups.requested);
+  return (
+    <Section title="Резервные копии" className="mt-5"
+      description="Полный снимок базы (pg_dump, zstd). На сервере хранятся не больше двух копий: проверенная восстановлением и самая новая. Обновление удаляет остальные, затем снимает новую копию. Снимок идёт с ограничением скорости, чтобы не мешать сбору, и может занять до получаса."
+      action={<form method="post" action="/manage/backup/refresh">{fields(csrf)}
+        <Button type="submit" disabled={!canRefresh || busy} title={canRefresh ? undefined : "Доступно роли ADMIN"}>
+          <DatabaseBackup data-icon="inline-start" aria-hidden="true" />{busy ? "Копия обновляется…" : "Обновить резервную копию"}
+        </Button>
+      </form>}>
+      {outcome === "requested" ? <p role="status" className="text-success mb-3">Запрос принят: копия начнёт сниматься в течение минуты.</p>
+        : outcome === "unavailable" ? <p role="status" className="text-destructive mb-3">Не удалось передать запрос серверу резервного копирования.</p> : null}
+      <p className="mb-3 text-sm">Состояние: <b data-testid="backup-state">{state}</b></p>
+      {backups?.files.length ? (
+        <ul className="divide-y rounded-lg border text-sm">
+          {backups.files.map((file) => (
+            <li key={file.name} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2.5">
+              <span className="font-mono text-xs">{file.name}</span>
+              <span className="text-muted-foreground text-xs">
+                {bytes(file.bytes)} · {ago(file.at, now)}{file.verified ? " · проверена восстановлением" : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-muted-foreground">Копий на сервере нет.</p>}
+    </Section>
+  );
+}
+
+export function SystemTab({ overview, status, range, now, csrf, canRefreshBackup, backupOutcome }: {
   overview: SystemOverview | null; status: CatalogStatus | null; range: "day" | "week"; now: number;
+  csrf: string; canRefreshBackup: boolean; backupOutcome?: string;
 }) {
   if (!overview) return <Section title="Состояние системы"><p className="text-destructive">Не удалось получить снимки сервера.</p></Section>;
   return <>
@@ -175,6 +213,7 @@ export function SystemTab({ overview, status, range, now }: {
       {overview.series.length ? <LazySystemCharts points={overview.series} range={range} /> : <p className="text-muted-foreground">Точек для графиков пока нет.</p>}
     </Section>
     <Pipeline overview={overview} now={now} />
+    <Backups backups={overview.backups} now={now} csrf={csrf} canRefresh={canRefreshBackup} outcome={backupOutcome} />
     <Storage status={status} />
   </>;
 }

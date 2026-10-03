@@ -249,7 +249,8 @@ const server = createServer(async (request, response) => {
       host:{cpuPercent:23.5,cores:2,load:[0.42,0.51,0.48],memoryTotalBytes:4*1024**3,memoryUsedBytes:2.5*1024**3,swapUsedBytes:0,diskTotalBytes:49*1024**3,diskFreeBytes:13.4*1024**3,unitsActive:24,unitsTotal:27,failedUnits:[]},
       pipeline:{ingestAcceptedAt:asOf,analysisLagSeconds:360,analysisBacklog:12,analysisCompletedAt:asOf,normsRunAt:asOf,tailRunAt:asOf,backupAt:asOf},
       restarts:{"m-ranked-target-web.service":1},
-      collection:["telegram","vk","max","rutube"].map((platform,index)=>({platform,ok:5000+index*700,failed:index*12,lastOkAt:asOf})),series});
+      collection:["telegram","vk","max","rutube"].map((platform,index)=>({platform,ok:5000+index*700,failed:index*12,lastOkAt:asOf})),series,
+      backups:{files:[{name:"mranked-20260929T233150Z.dump",bytes:2527692123,at:asOf,verified:false},{name:"mranked-20260927T215949Z.dump",bytes:2411927328,at:asOf,verified:true}],running:false,partialBytes:null,requested:false,lastResult:"success",lastExitStatus:0}});
   }
   if(url.pathname.startsWith("/api/v1/admin/catalog/")) {
     const role=sessionRole;

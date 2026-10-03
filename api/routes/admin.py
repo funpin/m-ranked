@@ -557,6 +557,12 @@ def _required(fields: dict[str, str], name: str) -> str:
 async def _legacy_execute(body: LegacyCommand, request: Request, user: Principal,
                           correlation: uuid.UUID) -> str:
     path, fields = body.path, body.fields
+    if path == "/manage/backup/refresh":
+        from ..backup_request import request_refresh
+        if request_refresh(user.username, str(correlation)):
+            logger.info("резервная копия запрошена из панели: %s", correlation)
+            return "/manage?tab=system&backup_status=requested"
+        return "/manage?tab=system&backup_status=unavailable"
     if path == "/manage/m-rating/update":
         from ..official_rating import refresh
         try:
@@ -678,6 +684,9 @@ async def legacy_command(body: LegacyCommand, request: Request,
                          _: Annotated[None, Depends(require_csrf)]) -> Response:
     if body.path.endswith("/delete") and "ADMIN" not in user.roles:
         raise ApiProblem(403, "Forbidden", "Для удаления требуется роль ADMIN",
+                         "urn:m-ranked:problem:forbidden")
+    if body.path == "/manage/backup/refresh" and "ADMIN" not in user.roles:
+        raise ApiProblem(403, "Forbidden", "Резервную копию обновляет роль ADMIN",
                          "urn:m-ranked:problem:forbidden")
     location = await _legacy_execute(body, request, user, correlation)
     return _no_store({"location": location})

@@ -65,6 +65,20 @@ fi
 find "$BACKUP_DIR" -maxdepth 1 -type f -name 'mranked-*.dump.partial' \
   -mmin "+$(( BACKUP_PARTIAL_MAX_AGE_HOURS * 60 ))" -delete
 
+# Запрос из панели — файл, который кладёт API; юнит .path запускает эту же
+# службу. Файл снимается сразу, чтобы .path не запустил её повторно.
+if [[ -n "${BACKUP_REFRESH_REQUEST:-}" && -f "$BACKUP_REFRESH_REQUEST" ]]; then
+  rm -f -- "$BACKUP_REFRESH_REQUEST"
+  BACKUP_REFRESH=1
+fi
+# «Обновить резервную копию» из панели:
+# перед новым снимком остаётся только копия, прошедшая проверку
+# восстановлением, — после снимка на диске ровно две копии, а места на
+# сам снимок хватает с запасом.
+if [[ "${BACKUP_REFRESH:-0}" == 1 ]]; then
+  python3 "$script_dir/rotate-dumps.py" "$BACKUP_DIR" "$BACKUP_KEEP" --refresh
+fi
+
 python3 "$script_dir/storage_guard.py" check --path "$BACKUP_DIR" \
   --peak-bytes "$BACKUP_MAX_DUMP_BYTES" --reserve-bytes "$BACKUP_RESERVE_BYTES"
 

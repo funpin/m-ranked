@@ -25,6 +25,10 @@ Environment=ADMIN_CSRF_SECRET_FILE=%d/admin-csrf-secret
 Environment=MRANKED_IDENTITY_RECEIPT_DIR=/var/lib/m-ranked/identity-receipts
 Environment=MRANKED_SECURITY_METRICS_FILE=/var/lib/node_exporter/textfile_collector/m-ranked-api-security.prom
 Environment=PYTHONUNBUFFERED=1
+# Каталог запросов «Обновить резервную копию»: пишет API, читает root.
+Environment=MRANKED_BACKUP_REQUEST_DIR=/var/lib/m-ranked/backup-request
+StateDirectory=m-ranked/backup-request
+StateDirectoryMode=0700
 Environment=TZ=Europe/Moscow
 # A crashed worker leaves a PID-named Prometheus textfile. The next API master
 # removes every stale worker file before it starts publishing a fresh set.

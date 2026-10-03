@@ -68,6 +68,33 @@ async def _bounded(reader: asyncio.StreamReader, maximum: int, deadline: float) 
     return bytes(result)
 
 
+# На одну попытку соединения: с Сервера 2 IPv4-адрес t.me не отвечает вовсе,
+# и раньше запрос ждал его весь бюджет (10 с), так и не дойдя до IPv6.
+CONNECT_ATTEMPT_SECONDS = 2.5
+
+
+def _preferred(addresses: list[str]) -> list[str]:
+    """IPv6 раньше IPv4 (RFC 6724), порядок внутри семейства — как у DNS."""
+    return sorted(addresses, key=lambda item: ipaddress.ip_address(item).version != 6)
+
+
+async def _connect(addresses: list[str], hostname: str, context: ssl.SSLContext,
+                   deadline: float) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    last: BaseException | None = None
+    for address in _preferred(addresses):
+        remaining = deadline-time.monotonic()
+        if remaining <= 0:
+            break
+        attempt = min(remaining, CONNECT_ATTEMPT_SECONDS)
+        try:
+            return await asyncio.wait_for(asyncio.open_connection(
+                address, 443, ssl=context, server_hostname=hostname,
+                ssl_handshake_timeout=max(0.001, attempt)), attempt)
+        except (OSError, TimeoutError, ssl.SSLError) as error:
+            last = error
+    raise EmojiUpstream("Telegram emoji connection failed") from last
+
+
 async def _request(url: str, maximum: int, deadline: float) -> tuple[int, str | None, str, bytes]:
     parsed = allowed_url(url)
     if parsed is None:
@@ -87,10 +114,7 @@ async def _request(url: str, maximum: int, deadline: float) -> tuple[int, str | 
     context = ssl.create_default_context()
     writer: asyncio.StreamWriter | None = None
     try:
-        remaining = deadline-time.monotonic()
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(
-            addresses[0], 443, ssl=context, server_hostname=parsed.hostname,
-            ssl_handshake_timeout=max(0.001, remaining)), remaining)
+        reader, writer = await _connect(addresses, parsed.hostname, context, deadline)
         target = parsed.path or "/"
         if parsed.query:
             target += "?" + parsed.query
@@ -192,11 +216,22 @@ async def fetch(emoji_id: str) -> Asset:
     return Asset(body, normalized if normalized in ALLOWED_TYPES else "image/webp")
 
 
+# Сервер 2 не достаёт CDN картинок Telegram (cdn*.telesco.pe — только IPv4,
+# закрыт с этой машины). Без памяти о неудачах каждая реакция на странице
+# ждала полные 10 с и отдавала 500. Неудачная реакция помнится час, а после
+# любой неудачи загрузки новых реакций не пробуем пять минут: страница сразу
+# получает отказ и показывает свой значок.
+FAILED_TTL_SECONDS = 3600.0
+BREAKER_SECONDS = 300.0
+
+
 class EmojiCache:
     def __init__(self) -> None:
         self._items: OrderedDict[str, tuple[float, Asset, int]] = OrderedDict()
         self._weight = 0
         self._lock = asyncio.Lock()
+        self._failed: dict[str, float] = {}
+        self._down_until = 0.0
 
     async def get(self, emoji_id: str) -> Asset:
         async with self._lock:
@@ -209,7 +244,18 @@ class EmojiCache:
                 expires, asset, weight = self._items.pop(emoji_id)
                 self._items[emoji_id] = (expires, asset, weight)
                 return asset
-        asset = await fetch(emoji_id)
+            if self._failed.get(emoji_id, 0.0) > now or self._down_until > now:
+                raise EmojiUpstream("Telegram emoji recently unavailable")
+        try:
+            asset = await fetch(emoji_id)
+        except EmojiUpstream:
+            async with self._lock:
+                now = time.monotonic()
+                if len(self._failed) > 4096:
+                    self._failed = {key: until for key, until in self._failed.items() if until > now}
+                self._failed[emoji_id] = now+FAILED_TTL_SECONDS
+                self._down_until = now+BREAKER_SECONDS
+            raise
         weight = len(emoji_id)*2+len(asset.content)+128
         async with self._lock:
             while self._items and self._weight+weight > 32*1024*1024:

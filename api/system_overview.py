@@ -232,3 +232,19 @@ def checks(now: float, sampled_at: float | None, latest: dict[str, Any] | None,
     result.append(_check("errors", "Ошибки для людей", "ok" if errors < 20 else "warn" if errors < 100 else "fail",
                          f"{errors} ответов 5xx за час"))
     return result
+
+
+def backups(latest: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Резервные копии из последнего снимка: время как ISO, остальное как есть."""
+    value = (latest or {}).get("backups")
+    if not isinstance(value, dict):
+        return None
+    return {
+        "files": [{"name": item["name"], "bytes": item["bytes"], "at": _iso(_number(item.get("at"))),
+                   "verified": bool(item.get("verified"))} for item in value.get("files") or []],
+        "running": bool(value.get("running")),
+        "partialBytes": value.get("partialBytes"),
+        "requested": bool(value.get("requested")),
+        "lastResult": value.get("lastResult"),
+        "lastExitStatus": value.get("lastExitStatus"),
+    }

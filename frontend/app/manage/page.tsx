@@ -38,7 +38,7 @@ const commandErrors: Record<string, string> = {
 const TABS = [
   { id: "channels", label: "Каналы", title: "Управление каналами", description: "Добавляйте, временно отключайте или полностью удаляйте мониторинг каналов.", icon: LayoutList },
   { id: "visitors", label: "Посетители", title: "Посетители сайта", description: "Уникальные посетители без cookie: кто на сайте сейчас и как меняется посещаемость.", icon: Users },
-  { id: "system", label: "Система", title: "Состояние системы", description: "Сбор, анализ, ресурсы сервера, трафик и хранилище по снимкам раз в пять минут.", icon: Activity },
+  { id: "system", label: "Система", title: "Состояние системы", description: "Сбор, анализ, ресурсы сервера, трафик и хранилище по снимкам сервера раз в минуту.", icon: Activity },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 // Момент отрисовки для подписей «N мин назад»: страница динамическая и
@@ -97,7 +97,7 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
   if (tab === "system") {
     const range = first(query.range) === "week" ? "week" : "day";
     const [overview, status] = await Promise.all([reader.system(range).catch(() => null), reader.status().catch(() => null)]);
-    return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} status={status} range={range} now={now} /></>;
+    return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} status={status} range={range} now={now} csrf={csrf} canRefreshBackup={canDelete} backupOutcome={first(query.backup_status)} /></>;
   }
 
   const [catalogResult, statusResult] = await Promise.allSettled([reader.institutions(), reader.status()]);
