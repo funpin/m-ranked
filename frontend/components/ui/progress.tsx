@@ -1,7 +1,24 @@
 "use client"
 
+import type * as React from "react"
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress"
+import * as m from "motion/react-m"
+import { createContext, useContext } from "react"
 import { cn } from "cn"
+
+// Полоса в манере animate-ui (primitives-base-progress): заполнение доезжает
+// до значения пружиной. Счётчик значения из оригинала не нужен и не грузится.
+const FILL_SPRING = { type: "spring", stiffness: 120, damping: 26 } as const
+const ProgressValueContext = createContext(0)
+const AnimatedIndicator = m.create(ProgressPrimitive.Indicator)
+
+function AnimatedProgress(props: ProgressPrimitive.Root.Props) {
+  return (
+    <ProgressValueContext.Provider value={props.value ?? 0}>
+      <ProgressPrimitive.Root {...props} />
+    </ProgressValueContext.Provider>
+  )
+}
 
 function Progress({
   className,
@@ -10,7 +27,7 @@ function Progress({
   ...props
 }: ProgressPrimitive.Root.Props) {
   return (
-    <ProgressPrimitive.Root
+    <AnimatedProgress
       value={value}
       data-slot="progress"
       className={cn("flex flex-wrap gap-3", className)}
@@ -20,7 +37,7 @@ function Progress({
       <ProgressTrack>
         <ProgressIndicator />
       </ProgressTrack>
-    </ProgressPrimitive.Root>
+    </AnimatedProgress>
   )
 }
 
@@ -40,11 +57,14 @@ function ProgressTrack({ className, ...props }: ProgressPrimitive.Track.Props) {
 function ProgressIndicator({
   className,
   ...props
-}: ProgressPrimitive.Indicator.Props) {
+}: React.ComponentProps<typeof AnimatedIndicator>) {
+  const value = useContext(ProgressValueContext)
   return (
-    <ProgressPrimitive.Indicator
+    <AnimatedIndicator
       data-slot="progress-indicator"
-      className={cn("h-full bg-primary transition-all", className)}
+      animate={{ width: `${value}%` }}
+      transition={FILL_SPRING}
+      className={cn("h-full bg-primary", className)}
       {...props}
     />
   )

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Component, type ErrorInfo, type ReactNode, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -76,6 +76,40 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
   loading: () => <Skeleton className="h-[360px] w-full" role="status" aria-label="Загрузка графика" />,
 });
 
+/**
+ * Сбой отрисовки графика остаётся внутри графика. Без этой границы любая
+ * ошибка recharts всплывала к границе маршрута, и вся страница поста
+ * сменялась на «Страница временно недоступна». Здесь на месте графика на
+ * мгновение остаётся заглушка, а при следующем изменении данных (сдвиг
+ * диапазона, переключение метрик) график рисуется заново.
+ */
+class PlotBoundary extends Component<{ resetKey: string; children: ReactNode }, { failedKey: string | null }> {
+  state = { failedKey: null as string | null };
+  private retried = new Set<string>();
+  private timer?: ReturnType<typeof setTimeout>;
+  static getDerivedStateFromError() { return { failedKey: "" }; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    const key = this.props.resetKey;
+    this.setState({ failedKey: key });
+    console.warn("график перерисовывается после сбоя", error.message, info.componentStack?.split("\n")[1]?.trim());
+    // Одна повторная попытка на то же состояние: сбой от стечения обновлений
+    // обычно не повторяется, а настоящая ошибка данных не крутится в цикле.
+    if (!this.retried.has(key)) {
+      this.retried.add(key);
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.setState({ failedKey: null }), 800);
+    }
+  }
+  componentWillUnmount() { clearTimeout(this.timer); }
+  render() {
+    const { failedKey } = this.state;
+    if (failedKey !== null && (failedKey === "" || failedKey === this.props.resetKey)) {
+      return <Skeleton className="h-[360px] w-full" role="status" aria-label="График перерисовывается" />;
+    }
+    return this.props.children;
+  }
+}
+
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
   onSelect: (id: string) => void; onActivate: (id: string) => void; platform:string;publishedAt:string;evidenceIds:ReadonlySet<string>;
@@ -149,7 +183,9 @@ function MetricChart(props: {
       </div>
     </div>
 
-    <PublicationPlot {...props} hidden={hidden} scale={scale} />
+    <PlotBoundary resetKey={`${props.rows.length}:${props.rows[0]?.snapshotId}:${props.rows.at(-1)?.snapshotId}:${[...hidden].join()}:${scale}`}>
+      <PublicationPlot {...props} hidden={hidden} scale={scale} />
+    </PlotBoundary>
   </>;
 }
 
@@ -270,14 +306,19 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
     setHighlight(id);
     charts.current?.scrollIntoView({block:"start",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
   },[]);
-  const wholeRange = start === 0 && end === rows.length - 1;
+  // Ползунок двигается сразу, а графики догоняют отложенным диапазоном: при
+  // быстром перетаскивании React пропускает промежуточные положения, вместо
+  // того чтобы синхронно перерисовывать оба графика recharts на каждый шаг.
+  const chartStart = Math.min(useDeferredValue(start), Math.max(0, rows.length - 1));
+  const chartEnd = Math.min(Math.max(chartStart, useDeferredValue(end)), Math.max(0, rows.length - 1));
+  const wholeRange = chartStart === 0 && chartEnd === rows.length - 1;
   // На выборке весь диапазон — это ровно те точки, что сервер отобрал из полной
   // истории, плюс выбранная и границы признаков, если они есть в выборке.
   const displayed = useMemo(() => {
-    if (!preview || !wholeRange) return sampleHistory(rows,start,end,sampledId,[...evidenceIds]);
+    if (!preview || !wholeRange) return sampleHistory(rows,chartStart,chartEnd,sampledId,[...evidenceIds]);
     const keep = new Set([...(sampledIds ?? []), ...evidenceIds, ...(selectedId ? [selectedId] : [])]);
     return rows.filter((row) => keep.has(row.snapshotId));
-  },[preview,wholeRange,rows,start,end,sampledId,evidenceIds,sampledIds,selectedId]);
+  },[preview,wholeRange,rows,chartStart,chartEnd,sampledId,evidenceIds,sampledIds,selectedId]);
   const total = preview ? totalPoints ?? rows.length : rows.length;
   const rangePoints = preview && wholeRange ? total : end-start+1;
   const tableRows = rows.slice(-Math.max(1,tableLimit));
@@ -288,8 +329,8 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
   const showBreakdown = rows.some(row => (historyReactionEntries(row)?.length ?? 0)>0);
   const visibleGaps = useMemo(() => {
     if (!rows.length) return [];
-    return collectorGapsInRange(collectorCoverage, rows[start]!.observedAt, rows[end]!.observedAt);
-  }, [collectorCoverage, rows, start, end]);
+    return collectorGapsInRange(collectorCoverage, rows[chartStart]!.observedAt, rows[chartEnd]!.observedAt);
+  }, [collectorCoverage, rows, chartStart, chartEnd]);
   const coverageComplete = Boolean(rows.length && collectorCoverage.availableFrom
     && Date.parse(collectorCoverage.availableFrom) <= Date.parse(rows[start]!.observedAt)
     && Date.parse(collectorCoverage.through) >= Date.parse(rows[end]!.observedAt));

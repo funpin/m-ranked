@@ -9,11 +9,16 @@ const output = process.env.BUNDLE_REPORT ?? "reports/bundle-budget.json";
 // 206 KiB, publication 197 KiB. The new landing and analysis bring these to
 // 170, 209 and 236 KiB. Keep route-specific ceilings with about 10% headroom;
 // the mobile gate also counts initially requested dynamic chunks.
-const DEFAULT_BUDGET = 180 * 1024;
+// October 2026: animate-ui components (Motion via LazyMotion and the slim
+// motion/react-m entry) add 17-38 KiB per route; the owner accepted that
+// trade for consistent animations. Ceilings keep about 5% headroom over the
+// measured 182-261 KiB. /manage is an authenticated admin page.
+const DEFAULT_BUDGET = 205 * 1024;
 const ROUTE_BUDGETS = new Map([
-  ["/compare", 192 * 1024],
-  ["/statistics", 225 * 1024],
-  ["/publications/[id]", 260 * 1024],
+  ["/compare", 235 * 1024],
+  ["/statistics", 260 * 1024],
+  ["/publications/[id]", 275 * 1024],
+  ["/manage", 235 * 1024],
 ]);
 
 const results = [];

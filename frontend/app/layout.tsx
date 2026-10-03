@@ -14,6 +14,7 @@ import { RouteBoundary } from "@/components/navigation-boundary";
 import { SiteHeaderFallback } from "@/components/site-header-fallback";
 import { readContributors } from "@/lib/contributors.server";
 import { VisitBeacon } from "@/components/visit-beacon";
+import { MotionProvider } from "@/components/motion-provider";
 import { IconSprite } from "@/components/icon-sprite";
 import { cn } from "@/lib/utils";
 
@@ -150,6 +151,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
+        <MotionProvider>
         {/* Набор контуров объявляется раз на страницу: значки ссылаются на
             него вместо того, чтобы возить свои контуры сотнями копий. */}
         <IconSprite />
@@ -161,6 +163,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         </div> : null}
         <main id="main-content" tabIndex={-1} className="safe-page-inset mx-auto w-full max-w-[1400px] min-w-0 py-6"><RouteBoundary>{children}</RouteBoundary></main>
         <VisitBeacon />
+        </MotionProvider>
       </body>
     </html>
   );

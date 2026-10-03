@@ -20,6 +20,7 @@ import { InstitutionFacts } from "@/components/institution-facts";
 import { SummaryTile } from "@/components/summary-tile";
 import { FileText, History, Heart, MessageCircle, Eye, Trophy } from "lucide-react";
 import type { ReactNode } from "react";
+import { PageTitle } from "@/components/page-title";
 
 
 function Tile({ value, label, icon, note, delta, tone, deltaLabel, footer }: {
@@ -58,7 +59,7 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
   const primary = account.platform === "vk" || account.platform === "rutube" ? "лайков" : "реакций";
   return <><span data-active-platform={account.platform} hidden />
     <header className="mb-4 min-w-0">
-      <h1 className="font-heading text-2xl font-semibold tracking-tight wrap-break-word sm:text-3xl">{name}{account.username ? <> <span className="text-muted-foreground">@{account.username}</span></> : null}</h1>
+      <h1 className="font-heading text-2xl font-semibold tracking-tight wrap-break-word sm:text-3xl"><PageTitle text={name} />{account.username ? <> <span className="text-muted-foreground">@{account.username}</span></> : null}</h1>
       {showInstitutionName ? <p data-testid="institution-full-name" className="mt-1 max-w-4xl text-sm leading-relaxed text-muted-foreground sm:text-base">{institutionName}</p> : null}
     </header>
     <ChannelSwitch accounts={siblings} currentId={account.accountId} />

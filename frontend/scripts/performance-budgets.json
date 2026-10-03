@@ -1,22 +1,22 @@
 {
   "calibration": "../reports/redesign/calibration.json",
-  "scope": "Frontend synthetic calibration; real-API provenance and workload eligibility remain mandatory in mobile-performance.mts. Comparison SVG INP tradeoff accepted in the redesign handoff. Ceilings use p75 plus about 15%, retaining stricter existing ordinary-route limits and CLS <= 0.1.",
+  "scope": "Frontend synthetic calibration; real-API provenance and workload eligibility remain mandatory in mobile-performance.mts. Comparison SVG INP tradeoff accepted in the redesign handoff. Ceilings use p75 plus about 15%, retaining stricter existing ordinary-route limits and CLS <= 0.1. October 2026: initial JS ceilings raised by 40 KiB for animate-ui/Motion, accepted by the owner.",
   "default": {
     "lcpMs": 2500,
     "inpMs": 200,
     "cls": 0.1,
-    "initialJsGzipBytes": 174080
+    "initialJsGzipBytes": 215040
   },
   "comparison": {
     "lcpMs": 8400,
     "inpMs": 2850,
     "cls": 0.1,
-    "initialJsGzipBytes": 330752
+    "initialJsGzipBytes": 371712
   },
   "publication": {
     "lcpMs": 2500,
     "inpMs": 250,
     "cls": 0.1,
-    "initialJsGzipBytes": 353280
+    "initialJsGzipBytes": 394240
   }
 }

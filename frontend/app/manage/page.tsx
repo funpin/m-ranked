@@ -7,10 +7,12 @@ import { CatalogApiError, catalogReader } from "@/lib/catalog-api";
 import { first, type SearchParams } from "@/lib/params";
 import { cn } from "@/lib/utils";
 import { AdminLogin, AdminSignOut } from "./admin-access";
+import { LiveRefresh } from "./live-refresh";
 import { ChannelsTab } from "./channels";
 import { plural } from "./shared";
 import { SystemTab } from "./system";
 import { VisitorsTab } from "./visitors";
+import { PageTitle } from "@/components/page-title";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -73,10 +75,12 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
   const header = (count?: number) => (
     <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">{meta.title}</h1>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl"><PageTitle text={meta.title} /></h1>
         <p className="text-muted-foreground mt-2 text-sm">{meta.description}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
+        {/* Мониторинг — каждые 15 с, каталог — каждые 30 с. */}
+        <LiveRefresh intervalMs={tab === "channels" ? 30_000 : 15_000} />
         {count !== undefined ? <div className="bg-muted flex items-baseline gap-2 rounded-full px-4 py-2 text-xs [&>b]:text-lg">
           <b>{count}</b><span>{plural(count, "канал добавлен", "канала добавлено", "каналов добавлено")}</span>
         </div> : null}

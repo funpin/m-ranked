@@ -2,9 +2,7 @@ import { randomUUID } from "node:crypto";
 import { RefreshCw } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AccountMatrix } from "@/components/catalog-forms";
+import { CatalogDialogs } from "@/components/catalog-forms";
 import type { CatalogStatus, ManagedInstitution } from "@/lib/catalog-api";
 import { legacyDate, PLATFORM_LONG_LABELS } from "@/lib/format";
 import { AccountsTable } from "./accounts-table";
@@ -65,18 +63,7 @@ export function ChannelsTab({ institutions, status, selectedId, csrf, canEdit, c
       {message ? <Alert role="status" className="border-success/30 bg-success/10 text-success my-4 p-4 text-sm">{message}</Alert> : null}
       {commandError ? <Alert variant="destructive" className="border-destructive/30 bg-destructive/10 my-4 block p-4 text-sm">{commandError}{UUID.test(correlation) ? <> Код операции: <code>{correlation}</code>.</> : null}</Alert> : null}
       {!canEdit ? <p className="my-4 rounded-lg border p-4 text-sm">Доступен просмотр. Изменения выполняют редакторы и администраторы.</p> : null}
-      <div className="mb-5 grid gap-5 lg:grid-cols-2">
-        <AccountMatrix institutions={institutions} selectedId={selectedId} csrfToken={csrf} correlationId={randomUUID()} canEdit={canEdit} />
-        <form data-testid="institution-create" method="post" action="/manage/institutions"
-          className="bg-muted/20 grid content-start gap-3 rounded-lg border p-4 [&_label]:grid [&_label]:gap-1.5 [&_label]:text-sm">
-          <h3 className="font-heading text-base font-semibold">Новый вуз</h3>
-          <p className="text-muted-foreground text-xs leading-relaxed">Полное название показывается в подсказках, сокращение — в компактных карточках.</p>
-          <Label className="grid gap-1.5 text-sm leading-normal font-normal">Полное название<Input name="name" required placeholder="Полное официальное название" disabled={!canEdit} /></Label>
-          <Label className="grid gap-1.5 text-sm leading-normal font-normal">Сокращение<Input name="short_name" placeholder="Например, ВВГУ" disabled={!canEdit} /></Label>
-          {fields(csrf)}
-          <Button type="submit" disabled={!canEdit}>Добавить вуз</Button>
-        </form>
-      </div>
+      <CatalogDialogs institutions={institutions} selectedId={selectedId} csrfToken={csrf} correlationIds={[randomUUID(), randomUUID()]} canEdit={canEdit} />
       <AccountsTable institutions={institutions} status={status} csrf={csrf} canEdit={canEdit} canDelete={canDelete} />
     </Section>
   </>;

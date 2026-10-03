@@ -38,17 +38,20 @@ for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR
   const response=await page.goto("/manage");expect(response?.status()).toBe(200);expect(response?.headers()["cache-control"]).toContain("no-store");
   await expect(page.getByRole("heading",{name:"Управление каналами"})).toBeVisible();
   await expect(page.getByTestId('platform-table').locator('tbody tr')).toHaveCount(8);
+  // Формы каталога открываются кнопками в модальных окнах.
+  await expect(page.getByTestId("institution-create")).toHaveCount(0);
+  await page.getByTestId("open-institution-create").click();
+  await expect(page.getByRole("dialog",{name:"Новый вуз"})).toBeVisible();
   await expect(page.locator('[data-testid="institution-create"] input[name="name"]')).toBeEnabled({enabled:role!=="viewer"});
+  await page.getByRole("button",{name:"Отмена"}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button",{name:"Удалить",exact:true}).first()).toBeEnabled({enabled:role==="admin"});
   const html=await page.content();expect(html).not.toContain("fixture-password");
+  await page.getByTestId("open-account-matrix").click();
   await expect(page.locator('#accountMatrix input[name="telegram"]')).toHaveValue("https://example.test/telegram/1");
-  const nativeId=page.getByTestId("native-id-editor").first();
-  await nativeId.locator("summary").click();
-  await expect(nativeId.locator('input[name="native_id"]')).toBeVisible();
-  await expect(nativeId.locator('input[name="native_id"]')).toBeEnabled({enabled:role!=="viewer"});
-  await expect(nativeId.locator("form")).toHaveAttribute("action","/manage/platform-accounts/12/native-id");
-  await expect(nativeId.locator('input[name="expected_row_version"]')).toHaveValue("7");
-  await nativeId.locator("summary").click();
+  // Раскрывающийся chat_id MAX из таблицы убран: идентификатор виден подписью.
+  await expect(page.getByTestId("native-id-editor")).toHaveCount(0);
+  await expect(page.getByTestId("platform-table")).toContainText("chat_id");
   if(role!=="viewer") {
     await page.locator("#matrixInstitution").selectOption("2");
     await expect(page.locator("#accountMatrix")).toHaveAttribute("action","/manage/institutions/2/accounts");
@@ -59,7 +62,9 @@ for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR
     await page.getByRole("button",{name:"Сохранить аккаунты"}).click();
     await expect.poll(()=>posted?.get("csrf_token")).toBe("fixture-csrf-token");expect(posted?.get("expected_row_version")).toBe("4");expect(posted?.get("correlation_id")).toMatch(/^[0-9a-f-]{36}$/);expect(posted?.get("telegram")).toBe("https://example.test/telegram/2");
     await page.goto("/manage");
-  }
+  } else await page.keyboard.press("Escape");
+  // Окно закрывается анимацией: axe проверяет страницу после неё.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
 });
 
@@ -121,12 +126,20 @@ test("admin tabs show visitors and system state and the table scrolls inside its
   await page.getByRole("link",{name:"Посетители"}).click();
   await expect(page.getByRole("heading",{name:"Посетители сайта"})).toBeVisible();
   await expect(page.getByTestId("online-now")).toContainText("3");
+  // Панель обновляет данные сама: при возвращении на вкладку — сразу.
+  const refreshed=page.waitForRequest((request)=>request.url().includes("/manage?tab=visitors")&&request.headers()["rsc"]==="1");
+  await page.evaluate(()=>{window.dispatchEvent(new Event("focus"));});
+  await page.waitForTimeout(2100);
+  await page.evaluate(()=>{window.dispatchEvent(new Event("focus"));});
+  await refreshed;
+  await expect(page.getByTestId("live-refresh")).toContainText("Обновлено");
   await expect(page.locator('[data-slot="chart"]')).toHaveCount(1);
   await page.getByRole("link",{name:"Месяц"}).click();
   await expect(page).toHaveURL(/tab=visitors&range=month/);
 
   await page.getByRole("link",{name:"Система"}).click();
   await expect(page.getByRole("heading",{name:"Состояние системы"})).toBeVisible();
+  await expect(page.getByTestId("live-refresh")).toBeVisible();
   await expect(page.getByTestId("system-checks").locator("li")).toHaveCount(11);
   await expect(page.getByText("1 требует внимания")).toBeVisible();
   await expect(page.locator('[data-slot="chart"]')).toHaveCount(5);

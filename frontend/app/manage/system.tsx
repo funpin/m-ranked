@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -5,6 +6,7 @@ import type { CatalogStatus, SystemOverview } from "@/lib/catalog-api";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { LazySystemCharts } from "./lazy-charts";
+import { LiveNumber } from "./live-number";
 import { RangeSwitch } from "./range-switch";
 import { ago, bytes, Pill, plural, Section } from "./shared";
 
@@ -43,7 +45,7 @@ function Checks({ checks }: { checks: SystemOverview["checks"] }) {
   );
 }
 
-function Gauge({ label, value, detail, share }: { label: string; value: string; detail: string; share: number | null }) {
+function Gauge({ label, value, detail, share }: { label: string; value: React.ReactNode; detail: string; share: number | null }) {
   return (
     <Card className="block min-w-0 p-5">
       <div className="flex items-baseline justify-between gap-2">
@@ -64,13 +66,13 @@ function Host({ host }: { host: NonNullable<SystemOverview["host"]> }) {
   const diskUsed = host.diskTotalBytes != null && host.diskFreeBytes != null ? host.diskTotalBytes - host.diskFreeBytes : null;
   return (
     <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Gauge label="Процессор" value={host.cpuPercent == null ? "—" : `${host.cpuPercent}%`} share={host.cpuPercent}
+      <Gauge label="Процессор" value={host.cpuPercent == null ? "—" : <LiveNumber value={host.cpuPercent} decimals={1} suffix="%" />} share={host.cpuPercent}
         detail={`load average ${host.load.map((value) => value.toFixed(2)).join(" · ")} на ${cores} ${cores === 1 ? "ядро" : "ядра"}`} />
-      <Gauge label="Память" value={memory == null ? "—" : `${memory}%`} share={memory}
+      <Gauge label="Память" value={memory == null ? "—" : <LiveNumber value={memory} suffix="%" />} share={memory}
         detail={`${bytes(host.memoryUsedBytes)} из ${bytes(host.memoryTotalBytes)}${host.swapUsedBytes ? ` · подкачка ${bytes(host.swapUsedBytes)}` : ""}`} />
       <Gauge label="Диск" value={`${bytes(host.diskFreeBytes)} свободно`} share={percent(diskUsed, host.diskTotalBytes)}
         detail={`занято ${bytes(diskUsed)} из ${bytes(host.diskTotalBytes)}`} />
-      <Gauge label="Службы" value={`${host.unitsActive ?? "—"} из ${host.unitsTotal ?? "—"}`}
+      <Gauge label="Службы" value={host.unitsActive == null ? "—" : <><LiveNumber value={host.unitsActive} /> из {host.unitsTotal ?? "—"}</>}
         share={percent(host.unitsActive, host.unitsTotal)}
         detail={host.failedUnits.length ? `упали: ${host.failedUnits.join(", ")}` : load !== null && load > cores * 2 ? "нагрузка выше двух на ядро" : "упавших нет"} />
     </div>
@@ -115,7 +117,7 @@ function Pipeline({ overview, now }: { overview: SystemOverview; now: number }) 
               return (
                 <TableRow key={row.platform}>
                   <TableCell className="font-medium">{PLATFORM_LONG_LABELS[row.platform]}</TableCell>
-                  <TableCell className="text-right tabular-nums">{number.format(row.ok)}</TableCell>
+                  <TableCell className="text-right"><LiveNumber value={row.ok} /></TableCell>
                   <TableCell className={cn("text-right tabular-nums", row.failed && total && row.failed / total > 0.05 ? "text-warning" : "")}>
                     {number.format(row.failed)}{total ? ` · ${Math.round(row.failed * 100 / total)}%` : ""}
                   </TableCell>
@@ -167,7 +169,7 @@ export function SystemTab({ overview, status, range, now }: {
   return <>
     <Checks checks={overview.checks} />
     {overview.host ? <Host host={overview.host} /> : null}
-    <Section title="Динамика" description={overview.sampledAt ? `Снимок раз в пять минут, последний — ${ago(overview.sampledAt, now)}.` : "Снимков ещё нет: таймер ops-sample пишет первый в течение пяти минут."}
+    <Section title="Динамика" description={overview.sampledAt ? `Снимок сервера раз в минуту, последний — ${ago(overview.sampledAt, now)}. Точки графика за сутки — по пять минут.` : "Снимков ещё нет: таймер ops-sample пишет первый в течение минуты."}
       action={<RangeSwitch label="Период" value={range} options={[["day", "Сутки"], ["week", "Неделя"]] as const}
         href={(value) => `/manage?tab=system&range=${value}`} />}>
       {overview.series.length ? <LazySystemCharts points={overview.series} range={range} /> : <p className="text-muted-foreground">Точек для графиков пока нет.</p>}

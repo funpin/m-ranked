@@ -11,8 +11,8 @@ from typing import Any
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
 RANGES = {"day": (86400, 300), "week": (7 * 86400, 3600)}
-# Снимок раз в пять минут; дольше двадцати минут тишины — таймер не работает.
-SAMPLE_STALE_SECONDS = 20 * 60
+# Снимок раз в минуту; дольше пяти минут тишины — таймер не работает.
+SAMPLE_STALE_SECONDS = 5 * 60
 
 
 def _number(value: Any) -> float | None:

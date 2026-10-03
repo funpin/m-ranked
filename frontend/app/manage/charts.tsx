@@ -33,8 +33,8 @@ export function VisitorsChart({ days }: { days: Visitors["days"] }) {
           return day ? weekday.format(new Date(`${day}T00:00:00Z`)) : "";
         }} />} />
         <ChartLegend content={<ChartLegendContent />} />
-        <Bar dataKey="views" fill="var(--color-views)" fillOpacity={0.35} radius={[4, 4, 0, 0]} maxBarSize={36} />
-        <Line dataKey="visitors" type="monotone" stroke="var(--color-visitors)" strokeWidth={2} dot={{ r: 2.5 }} />
+        <Bar isAnimationActive={false} dataKey="views" fill="var(--color-views)" fillOpacity={0.35} radius={[4, 4, 0, 0]} maxBarSize={36} />
+        <Line isAnimationActive={false} dataKey="visitors" type="monotone" stroke="var(--color-visitors)" strokeWidth={2} dot={{ r: 2.5 }} />
       </ComposedChart>
     </ChartContainer>
   );
@@ -98,8 +98,8 @@ export function SystemCharts({ points, range }: { points: SystemPoint[]; range: 
             <YAxis {...AXIS} width={36} domain={[0, 100]} unit="%" />
             {tooltip()}
             <ChartLegend content={<ChartLegendContent />} />
-            <Area dataKey="memory" type="monotone" stroke="var(--color-memory)" fill="var(--color-memory)" fillOpacity={0.12} strokeWidth={1.5} connectNulls />
-            <Area dataKey="cpu" type="monotone" stroke="var(--color-cpu)" fill="var(--color-cpu)" fillOpacity={0.2} strokeWidth={1.5} connectNulls />
+            <Area isAnimationActive={false} dataKey="memory" type="monotone" stroke="var(--color-memory)" fill="var(--color-memory)" fillOpacity={0.12} strokeWidth={1.5} connectNulls />
+            <Area isAnimationActive={false} dataKey="cpu" type="monotone" stroke="var(--color-cpu)" fill="var(--color-cpu)" fillOpacity={0.2} strokeWidth={1.5} connectNulls />
           </AreaChart>
         </ChartContainer>
       </Frame>
@@ -112,8 +112,8 @@ export function SystemCharts({ points, range }: { points: SystemPoint[]; range: 
             <YAxis yAxisId="errors" orientation="right" {...AXIS} width={28} allowDecimals={false} />
             {tooltip()}
             <ChartLegend content={<ChartLegendContent />} />
-            <Area yAxisId="rate" dataKey="requestsPerMinute" type="monotone" stroke="var(--color-requestsPerMinute)" fill="var(--color-requestsPerMinute)" fillOpacity={0.15} strokeWidth={1.5} connectNulls />
-            <Bar yAxisId="errors" dataKey="humanErrors" fill="var(--color-humanErrors)" radius={[2, 2, 0, 0]} />
+            <Area isAnimationActive={false} yAxisId="rate" dataKey="requestsPerMinute" type="monotone" stroke="var(--color-requestsPerMinute)" fill="var(--color-requestsPerMinute)" fillOpacity={0.15} strokeWidth={1.5} connectNulls />
+            <Bar isAnimationActive={false} yAxisId="errors" dataKey="humanErrors" fill="var(--color-humanErrors)" radius={[2, 2, 0, 0]} />
           </ComposedChart>
         </ChartContainer>
       </Frame>
@@ -126,8 +126,8 @@ export function SystemCharts({ points, range }: { points: SystemPoint[]; range: 
             <YAxis yAxisId="share" orientation="right" {...AXIS} width={36} domain={[0, 100]} unit="%" />
             {tooltip()}
             <ChartLegend content={<ChartLegendContent />} />
-            <Line yAxisId="ms" dataKey="p95Ms" type="monotone" stroke="var(--color-p95Ms)" strokeWidth={1.5} dot={false} connectNulls />
-            <Line yAxisId="share" dataKey="hitRatio" type="monotone" stroke="var(--color-hitRatio)" strokeWidth={1.5} dot={false} connectNulls />
+            <Line isAnimationActive={false} yAxisId="ms" dataKey="p95Ms" type="monotone" stroke="var(--color-p95Ms)" strokeWidth={1.5} dot={false} connectNulls />
+            <Line isAnimationActive={false} yAxisId="share" dataKey="hitRatio" type="monotone" stroke="var(--color-hitRatio)" strokeWidth={1.5} dot={false} connectNulls />
           </LineChart>
         </ChartContainer>
       </Frame>
@@ -139,8 +139,8 @@ export function SystemCharts({ points, range }: { points: SystemPoint[]; range: 
             <YAxis {...AXIS} width={40} />
             {tooltip()}
             <ChartLegend content={<ChartLegendContent />} />
-            <Line dataKey="analysisLagMinutes" type="monotone" stroke="var(--color-analysisLagMinutes)" strokeWidth={1.5} dot={false} connectNulls />
-            <Line dataKey="ingestDelayMinutes" type="monotone" stroke="var(--color-ingestDelayMinutes)" strokeWidth={1.5} dot={false} connectNulls />
+            <Line isAnimationActive={false} dataKey="analysisLagMinutes" type="monotone" stroke="var(--color-analysisLagMinutes)" strokeWidth={1.5} dot={false} connectNulls />
+            <Line isAnimationActive={false} dataKey="ingestDelayMinutes" type="monotone" stroke="var(--color-ingestDelayMinutes)" strokeWidth={1.5} dot={false} connectNulls />
           </LineChart>
         </ChartContainer>
       </Frame>
@@ -152,8 +152,8 @@ export function SystemCharts({ points, range }: { points: SystemPoint[]; range: 
             <YAxis {...AXIS} width={44} tickFormatter={(value: number) => number.format(value)} />
             {tooltip()}
             <ChartLegend content={<ChartLegendContent />} />
-            <Bar dataKey="collectedOk" stackId="runs" fill="var(--color-collectedOk)" />
-            <Bar dataKey="collectedFailed" stackId="runs" fill="var(--color-collectedFailed)" radius={[2, 2, 0, 0]} />
+            <Bar isAnimationActive={false} dataKey="collectedOk" stackId="runs" fill="var(--color-collectedOk)" />
+            <Bar isAnimationActive={false} dataKey="collectedFailed" stackId="runs" fill="var(--color-collectedFailed)" radius={[2, 2, 0, 0]} />
           </BarChart>
         </ChartContainer>
       </Frame>

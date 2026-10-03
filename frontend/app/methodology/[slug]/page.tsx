@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, PencilLine } from "lucide-react";
 import Link from "@/components/native-link";
 import { ArticleToc } from "@/components/methodology/article-toc";
 import { ARTICLES, articleBySlug, editUrl, headingsOf, neighbours } from "@/lib/methodology";
+import { PageTitle } from "@/components/page-title";
 
 export const dynamicParams = false;
 
@@ -41,7 +42,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
             <Link href="/methodology" prefetch={false} className="hover:text-foreground transition-colors">Методология</Link>
             <span aria-hidden="true"> / </span>{String(number).padStart(2, "0")}
           </p>
-          <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight text-balance sm:text-5xl">{article.title}</h1>
+          <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight text-balance sm:text-5xl"><PageTitle text={article.title} /></h1>
           <p className="text-muted-foreground text-lg leading-relaxed text-pretty">{article.description}</p>
         </header>
         <Content />

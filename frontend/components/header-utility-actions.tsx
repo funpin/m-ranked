@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Settings } from "lucide-react";
 import Link from "@/components/native-link";
 import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { HEADER_BUTTON } from "@/components/header-button";
