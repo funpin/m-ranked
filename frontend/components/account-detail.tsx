@@ -17,6 +17,7 @@ import { AnomalyLevelCell } from "@/components/anomaly-level-cell";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
 import type { TailProfileLoad } from "@/lib/account-tail";
 import { AccountTailCard } from "@/components/account-tail-card";
+import { PageTitle } from "@/components/page-title";
 
 
 /**
@@ -70,7 +71,7 @@ export function AccountDetail({ account, posts, truncated = false, siblings = []
   const primary = account.platform === "vk" || account.platform === "rutube" ? "лайков" : "реакций";
   return <><span data-active-platform={account.platform} hidden />
     <header className="mb-4 min-w-0">
-      <h1 className="font-heading text-2xl font-semibold tracking-tight wrap-break-word sm:text-3xl">{name}{account.username ? <> <span className="text-muted-foreground">@{account.username}</span></> : null}</h1>
+      <h1 className="font-heading text-2xl font-semibold tracking-tight wrap-break-word sm:text-3xl"><PageTitle text={name} />{account.username ? <> <span className="text-muted-foreground">@{account.username}</span></> : null}</h1>
       {showInstitutionName ? <p data-testid="institution-full-name" className="mt-1 max-w-4xl text-sm leading-relaxed text-muted-foreground sm:text-base">{institutionName}</p> : null}
     </header>
     <ChannelSwitch accounts={siblings} currentId={account.accountId} />

@@ -7,6 +7,7 @@ import { publicOrigin } from "@/lib/deployment";
 import type { TocEntry } from "@/lib/methodology";
 import { REPOSITORY_URL } from "@/lib/repository";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageTitle } from "@/components/page-title";
 
 const DESCRIPTION = "Публичные методы API m-ranked с параметрами и примерами запросов: обзор, сравнение, аккаунты, публикации и история замеров.";
 export const metadata: Metadata = {
@@ -39,7 +40,7 @@ export default function ApiReferencePage() {
       <article data-article className="w-full max-w-[80ch] min-w-0" data-testid="api-reference">
         <header className="mb-10 grid gap-4 border-b pb-8">
           <p className="text-muted-foreground font-mono text-xs">Методология / API · версия {API_DIGEST.version}</p>
-          <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight sm:text-5xl">Открытый API</h1>
+          <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight sm:text-5xl"><PageTitle text="Открытый API" /></h1>
           <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
             Те же данные, что на сайте, в JSON. Ключ не нужен. Здесь — публичные методы чтения; полный контракт — в
             {" "}<a href={CONTRACT_URL} target="_blank" rel="noopener noreferrer" className="text-foreground underline underline-offset-4">OpenAPI 3.1</a>.
