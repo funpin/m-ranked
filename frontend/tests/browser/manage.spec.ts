@@ -126,12 +126,20 @@ test("admin tabs show visitors and system state and the table scrolls inside its
   await page.getByRole("link",{name:"Посетители"}).click();
   await expect(page.getByRole("heading",{name:"Посетители сайта"})).toBeVisible();
   await expect(page.getByTestId("online-now")).toContainText("3");
+  // Панель обновляет данные сама: при возвращении на вкладку — сразу.
+  const refreshed=page.waitForRequest((request)=>request.url().includes("/manage?tab=visitors")&&request.headers()["rsc"]==="1");
+  await page.evaluate(()=>{window.dispatchEvent(new Event("focus"));});
+  await page.waitForTimeout(2100);
+  await page.evaluate(()=>{window.dispatchEvent(new Event("focus"));});
+  await refreshed;
+  await expect(page.getByTestId("live-refresh")).toContainText("Обновлено");
   await expect(page.locator('[data-slot="chart"]')).toHaveCount(1);
   await page.getByRole("link",{name:"Месяц"}).click();
   await expect(page).toHaveURL(/tab=visitors&range=month/);
 
   await page.getByRole("link",{name:"Система"}).click();
   await expect(page.getByRole("heading",{name:"Состояние системы"})).toBeVisible();
+  await expect(page.getByTestId("live-refresh")).toBeVisible();
   await expect(page.getByTestId("system-checks").locator("li")).toHaveCount(11);
   await expect(page.getByText("1 требует внимания")).toBeVisible();
   await expect(page.locator('[data-slot="chart"]')).toHaveCount(5);

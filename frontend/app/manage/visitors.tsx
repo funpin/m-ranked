@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import type { Visitors } from "@/lib/catalog-api";
 import { LazyVisitorsChart } from "./lazy-charts";
+import { LiveNumber } from "./live-number";
 import { OnlineNow } from "./online-now";
 import { RangeSwitch } from "./range-switch";
 import { Section } from "./shared";
@@ -11,7 +12,7 @@ function Stat({ label, value, hint }: { label: string; value: React.ReactNode; h
   return (
     <Card className="block min-w-0 p-5">
       <p className="text-muted-foreground text-xs font-medium">{label}</p>
-      <div className="mt-2">{typeof value === "number" ? <span className="font-heading text-3xl font-semibold tabular-nums">{number.format(value)}</span> : value}</div>
+      <div className="mt-2">{typeof value === "number" ? <LiveNumber value={value} className="font-heading text-3xl font-semibold" /> : value}</div>
       {hint ? <p className="text-muted-foreground mt-1 text-xs">{hint}</p> : null}
     </Card>
   );
@@ -24,7 +25,7 @@ export function VisitorsTab({ visitors, range }: { visitors: Visitors | null; ra
   const peak = closed.reduce((best, day) => day.visitors > best.visitors ? day : best, { day: "", visitors: 0, views: 0 });
   return <>
     <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Stat label="Сейчас на сайте" value={<OnlineNow initial={visitors.online} />}
+      <Stat label="Сейчас на сайте" value={<OnlineNow online={visitors.online} />}
         hint={`сигнал за последние ${Math.round(visitors.onlineWindowSeconds / 60)} мин`} />
       <Stat label="Посетители сегодня" value={visitors.today.visitors} hint={`${number.format(visitors.today.views)} просмотров страниц`} />
       <Stat label={`В среднем за сутки · ${range === "week" ? "неделя" : "месяц"}`} value={average} hint="по закрытым суткам" />

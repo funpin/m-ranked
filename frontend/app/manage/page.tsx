@@ -7,6 +7,7 @@ import { CatalogApiError, catalogReader } from "@/lib/catalog-api";
 import { first, type SearchParams } from "@/lib/params";
 import { cn } from "@/lib/utils";
 import { AdminLogin, AdminSignOut } from "./admin-access";
+import { LiveRefresh } from "./live-refresh";
 import { ChannelsTab } from "./channels";
 import { plural } from "./shared";
 import { SystemTab } from "./system";
@@ -78,6 +79,8 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
         <p className="text-muted-foreground mt-2 text-sm">{meta.description}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
+        {/* Мониторинг — каждые 15 с, каталог — каждые 30 с. */}
+        <LiveRefresh intervalMs={tab === "channels" ? 30_000 : 15_000} />
         {count !== undefined ? <div className="bg-muted flex items-baseline gap-2 rounded-full px-4 py-2 text-xs [&>b]:text-lg">
           <b>{count}</b><span>{plural(count, "канал добавлен", "канала добавлено", "каналов добавлено")}</span>
         </div> : null}
