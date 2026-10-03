@@ -106,15 +106,14 @@ export function TableSkeleton({ rows = 10, chrome = true }: { rows?: number; chr
 /** Статистика меняет представление в том же breakpoint, что и результат:
  *  строки на широком экране и полноценные карточки на телефоне. Старая
  *  заготовка всегда обещала таблицу, а затем резко меняла и ширину, и высоту. */
-export function StatisticsSkeleton({ rows = 5, chrome = true, view = "publications" }: {
+export function StatisticsSkeleton({ rows = 5, chrome = true }: {
   rows?: number;
   chrome?: boolean;
-  view?: "publications" | "entities";
 }) {
   return (
     <>
-      {chrome ? <Chrome title="Статистика публикаций"
-        description="Накопленные результаты публикаций, вышедших в выбранный период."
+      {chrome ? <Chrome title="Находки: посты выше нормы"
+        description="Посты, которые сработали лучше обычного для своего аккаунта."
         controls={3} /> : null}
       <section className="min-w-0 space-y-3" role="status" aria-live="polite">
         <span className="sr-only">Загрузка статистики</span>
@@ -144,7 +143,7 @@ export function StatisticsSkeleton({ rows = 5, chrome = true, view = "publicatio
               </div>
               <div className="mt-4 flex gap-2">
                 <Skeleton className="h-9 min-w-0 flex-1" />
-                {view === "publications" ? <Skeleton className="size-9 shrink-0" /> : null}
+                <Skeleton className="size-9 shrink-0" />
               </div>
             </div>
           ))}
@@ -245,10 +244,7 @@ export function skeletonFor(href: string) {
   if (!href) return null;
   const path = href.split("?")[0] ?? "";
   if (path === "/review") return <CardGridSkeleton />;
-  if (path.startsWith("/statistics")) {
-    const view = new URL(href, "https://m-ranked.invalid").searchParams.get("view") === "entities" ? "entities" : "publications";
-    return <StatisticsSkeleton view={view} />;
-  }
+  if (path.startsWith("/statistics")) return <StatisticsSkeleton />;
   if (path.startsWith("/compare")) {
     return <CompareDashboardSkeleton />;
   }
