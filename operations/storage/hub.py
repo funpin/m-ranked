@@ -101,10 +101,15 @@ SELECT object.id::text AS object_id, object.kind, object.name, object.size_bytes
 
 
 def membership(nodes: list[Mapping[str, Any]]) -> str | None:
-    """Строка COLLECTOR_MEMBERSHIP из реестра: подключённые сборщики и их площадки."""
+    """Строка COLLECTOR_MEMBERSHIP из реестра: подключённые сборщики и их площадки.
+
+    Пока сборщик один, состава нет: он собирает всё, как без размещения, и
+    подключение агента не меняет его поведения. Размещение включается со
+    вторым сборщиком.
+    """
     entries = [f"{node['id']}:{'|'.join(sorted(node['platforms']))}" for node in sorted(nodes, key=lambda n: n["id"])
                if node["role"] == "collector" and node["state"] == "active" and node["platforms"]]
-    return ",".join(entries) or None
+    return ",".join(entries) if len(entries) > 1 else None
 
 
 def _clean_report(report: Mapping[str, Any]) -> dict[str, Any]:

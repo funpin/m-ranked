@@ -110,7 +110,10 @@ def test_membership_lists_only_connected_collectors():
              {"id": "server-1", "role": "collector", "state": "active", "platforms": ["vk", "telegram"]},
              {"id": "server-3", "role": "collector", "state": "pending", "platforms": ["max"]},
              {"id": "server-4", "role": "collector", "state": "draining", "platforms": ["max"]}]
-    assert membership(nodes) == "server-1:telegram|vk"
+    # Один подключённый сборщик собирает всё сам: состава нет.
+    assert membership(nodes) is None
+    nodes[2]["state"] = "active"
+    assert membership(nodes) == "server-1:telegram|vk,server-3:max"
     assert membership(nodes[:1]) is None
 
 
