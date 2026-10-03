@@ -34,22 +34,27 @@ const aggregate = (value: number | null, size = 2): Schema["AggregateMetric"] =>
 const metric: Schema["OverviewMetric"] = { total: 12, median: 6, previousTotal: 10, previousMedian: 5, totalTrend: 2, medianTrend: 1,
   totalMetadata: aggregate(12), medianMetadata: aggregate(6), previousTotalMetadata: aggregate(10), previousMedianMetadata: aggregate(5) };
 function item(id: number, platform: Schema["PlatformValue"], period: Schema["PeriodValue"] = "1d"): Schema["OverviewRow"] {
-  const accountKind = platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4;
-  const accounts:Schema["OverviewAccount"][] = platform === "all" ? [] : [{
+  const networks:Schema["OverviewAccount"]["platform"][] = platform === "all"
+    ? id === 1 ? ["telegram", "vk", "max", "rutube"] : ["telegram", "vk"] : [platform];
+  const accounts:Schema["OverviewAccount"][] = networks.map(network => {
+    const accountKind = network === "telegram" ? 1 : network === "vk" ? 2 : network === "max" ? 3 : 4;
+    return {
     accountId:uuid(accountKind,id),legacyId:id,legacyRoute:platform === "telegram" ? `/channels/${id}` : `/platform-accounts/${id}`,
-    platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Аккаунт ${id}`,
-    url:`https://example.test/${platform}/${id}`,accessMode:"public",enabled:true,subscriberCount:100,
+    platform:network,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Официальный аккаунт университета с длинным названием ${id}`,
+    url:platform === "all" && id === 2 && network === "vk" ? null : `https://example.test/${network}/${id}`,accessMode:"public",enabled:!(platform === "all" && id === 2 && network === "vk"),subscriberCount:100,
     subscriberDisplay:"100",subscriberObservedAt:asOf,latestPollStartedAt:asOf,latestPollCompletedAt:asOf,
     latestPollStatus:"success",latestErrorCode:null,
-  }];
+  }; });
   return { entityId: platform === "telegram" ? uuid(1,id) : uuid(9,id), entityType: platform === "telegram" ? "channels" : "institutions", legacyId: id, legacyRoute: `/institutions/${id}`, institutionId: `institution-${id}`, institutionLegacyId: id,
-    canonicalName: names[id - 1]!, shortName: null, platform, period, accounts, accountCount: 1, enabledAccountCount: 1, connectedPlatformCount: 1,
-    subscriberCount: 100, lastCheckedAt: asOf, lastErrorCode: null, statusCode: "connected", ratingRank: id, ratingScore: 90,
-    ratingPeriod: "2026-Q2", ratingFetchedAt: asOf, totalPublicationCount: 2, activityPublicationCount: 2, newPublicationCount: 0,
+    canonicalName: names[id - 1]!, shortName: null, platform, period, accounts, accountCount: accounts.length, enabledAccountCount: accounts.filter(a=>a.enabled).length, connectedPlatformCount: accounts.filter(a=>a.enabled).length,
+    subscriberCount: 100 * accounts.length, lastCheckedAt: asOf, lastErrorCode: null, statusCode: "connected", ratingRank: id, ratingScore: 90,
+    ratingPeriod: "2026-Q2", ratingFetchedAt: asOf, totalPublicationCount: 2 * accounts.length, activityPublicationCount: 2 * accounts.length, newPublicationCount: platform === "all" ? accounts.length : 0,
     anomalyCounts: id === 1 ? {level2:period === "7d" ? 12 : platform === "vk" ? 3 : 2, level3:period === "7d" ? 8 : platform === "vk" ? 1 : 4} : {level2:0,level3:0},
-    views: !performanceFixture && period === "30d" ? {...metric, total:12_345_678, totalTrend:null, medianTrend:null, totalMetadata:aggregate(12_345_678)} : metric,
-    reactions: !performanceFixture && period === "30d" ? {...metric, total:999_999, totalTrend:null, medianTrend:null, totalMetadata:aggregate(999_999)} : metric,
-    comments: { ...metric, total: 0, totalMetadata: aggregate(0, 1) }, shares: { ...metric, total: null, totalMetadata: aggregate(null, 0) }, asOf };
+    views: !performanceFixture && period === "30d" ? {...metric, total:12_345_678, totalTrend:null, medianTrend:null, totalMetadata:aggregate(12_345_678)}
+      : platform === "all" ? {...metric, total:id === 1 ? 2400 : 12000, totalMetadata:aggregate(id === 1 ? 2400 : 12000)} : metric,
+    reactions: !performanceFixture && period === "30d" ? {...metric, total:999_999, totalTrend:null, medianTrend:null, totalMetadata:aggregate(999_999)}
+      : platform === "all" ? {...metric, total:84, totalMetadata:aggregate(84)} : metric,
+    comments: { ...metric, total: 0, totalTrend:-1, totalMetadata: aggregate(0, 1) }, shares: { ...metric, total: null, totalTrend:null, totalMetadata: aggregate(null, 0) }, asOf };
 }
 function statisticsEntity(id: number, platform: "telegram" | "vk" | "max" | "rutube"): Schema["StatisticsEntity"] {
   return { rank:id, legacyRoute:`/institutions/${id}`, accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id), institutionId:uuid(9,id), institutionLegacyId:id,
@@ -333,6 +338,8 @@ const server = createServer(async (request, response) => {
     if ((url.searchParams.get("sort") ?? "anomalies") === "anomalies") {
       const total = (row: Schema["OverviewRow"]) => (row.anomalyCounts?.level2 ?? 0) + (row.anomalyCounts?.level3 ?? 0);
       items.sort((a,b) => (total(a)-total(b)) * (url.searchParams.get("direction") === "asc" ? 1 : -1));
+    } else if (url.searchParams.get("sort") === "views") {
+      items.sort((a,b)=> (Number(a.views.total)-Number(b.views.total)) * (url.searchParams.get("direction") === "asc" ? 1 : -1));
     }
     return json({ items, nextCursor: null, datasetRevision: revision, asOf, integrationStatus: "unknown", integrationWarning: null } satisfies Schema["OverviewPage"]);
   }

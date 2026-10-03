@@ -18,7 +18,8 @@ from .errors import BadRequest
 PLATFORMS = ("all", "telegram", "vk", "max", "rutube")
 PERIODS = ("3h", "1d", "7d", "30d")
 
-SORTS_ALL = frozenset({"anomalies", "name", "m_rating", "coverage", "accounts"})
+SORTS_ALL = frozenset({"anomalies", "name", "m_rating", "coverage", "accounts",
+                       "views", "reactions", "posts", "subscribers"})
 SORTS_PLATFORM = frozenset({"name", "subscribers", "posts", "views", "reactions",
                             "median_reactions", "m_rating", "anomalies"})
 

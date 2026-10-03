@@ -26,7 +26,9 @@ test("overview sort keys normalize per platform before the API request", () => {
   assert.equal(normalizeSort("accounts", "all"), "anomalies");
   assert.equal(normalizeSort("coverage", "telegram"), "anomalies");
   assert.equal(normalizeSort("subscribers", "vk"), "subscribers");
-  assert.equal(normalizeSort("subscribers", "all"), "anomalies");
+  for (const sort of ["views", "reactions", "posts", "subscribers"] as const) {
+    assert.equal(normalizeSort(sort, "all"), sort);
+  }
   for (const platform of ["all", "telegram", "vk", "max", "rutube"] as const) {
     assert.equal(normalizeSort(undefined, platform), "anomalies");
     assert.equal(normalizeSort("anomalies", platform), "anomalies");

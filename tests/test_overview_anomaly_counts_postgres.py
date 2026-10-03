@@ -1,6 +1,7 @@
 """Execute the overview query on an isolated local PostgreSQL read model."""
 from datetime import datetime, timedelta, timezone
 import os
+from pathlib import Path
 from uuid import UUID
 
 import psycopg
@@ -123,3 +124,59 @@ def test_anomaly_sort_and_cursor_cover_the_whole_cohort(connection,direction,ord
         assert {row["entity_id"] for row in rows} == {entity}
         params["after_id"] = entity
     assert connection.execute(OVERVIEW,params).fetchall() == []
+
+
+@pytest.mark.parametrize("sort", ["views", "reactions", "posts", "subscribers"])
+def test_all_platform_totals_are_supported_sort_keys(sort):
+    assert overview_query("all","1d","",sort,"asc").sort == sort
+
+
+def test_all_platform_read_model_sums_accounts_and_pools_medians_without_filling_missing_metrics(connection):
+    # Exercise the real refresh and read SQL together in a rollback-only local transaction.
+    with connection.transaction(force_rollback=True):
+        connection.execute("CREATE TABLE analytics.dataset_revision(committed_at timestamptz)")
+        connection.execute("INSERT INTO analytics.dataset_revision VALUES (%s)",(AS_OF,))
+        connection.execute("ALTER TABLE analytics.overview_card_metrics ADD computed_as_of timestamptz")
+        connection.execute("""ALTER TABLE analytics.publication_latest
+            ADD publication_id uuid, ADD institution_id uuid, ADD platform text,
+            ADD synthetic boolean DEFAULT false, ADD quality text DEFAULT 'exact'""")
+        for name in ("views", "reactions", "comments", "shares"):
+            connection.execute(f"ALTER TABLE analytics.publication_latest ADD {name}_count bigint, ADD {name}_quality text DEFAULT 'exact'")
+        connection.execute("""CREATE TABLE ingest.publication_metric_snapshot(
+            id bigint,publication_id uuid,published_month date,observed_at timestamptz,
+            synthetic boolean,quality text,views_count bigint,reactions_count bigint,
+            comments_count bigint,shares_count bigint)""")
+        for index,account,platform,institution,views,reactions,comments in [
+            (1,TG,"telegram",INSTITUTION,10,2,0),
+            (2,TG,"telegram",INSTITUTION,100,20,None),
+            (5,VK,"vk",INSTITUTION,1000,200,4),
+            (6,VK_SECOND,"vk",INSTITUTION,10000,2000,None),
+            (10,UUID(int=100),"vk",OTHER,20000,4000,None),
+        ]:
+            connection.execute("""INSERT INTO analytics.publication_latest(
+                platform_account_id,observed_at,publication_id,institution_id,platform,
+                views_count,reactions_count,comments_count,shares_count) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NULL)""",
+                (account,AS_OF,UUID(int=1000+index),institution,platform,views,reactions,comments))
+        for index,(account,subscribers) in enumerate(((TG,100),(VK,200),(VK_SECOND,300),(UUID(int=100),999)),1):
+            connection.execute("INSERT INTO ingest.account_metric_snapshot_active VALUES (%s,%s,%s,NULL,%s,%s,'exact')",
+                               (index,account,subscribers,AS_OF,AS_OF))
+        refresh = (Path(__file__).parents[1]/"db/tools/refresh-overview-card-metrics.sql").read_text()
+        connection.execute(refresh.replace("BEGIN;","").replace("COMMIT;",""))
+        params=dict(as_of=AS_OF,platform="all",period="1d",sort="views",direction="desc",search="",after_id=None,fetch_limit=1)
+        first = connection.execute(OVERVIEW,params).fetchall()
+        assert {row["entity_id"] for row in first} == {OTHER}
+        params["after_id"] = OTHER
+        rows = connection.execute(OVERVIEW,params).fetchall()
+        assert len(rows) == 3  # Three accounts repeat the card, never its aggregate values.
+        for row in rows:
+            assert row["entity_id"] == INSTITUTION
+            card = overview_row(row,[],1)
+            assert card["views"]["total"] == 11110
+            assert card["reactions"]["total"] == 2222
+            assert card["views"]["median"] == 550  # Pooled posts, not 55 + 5500.
+            assert card["comments"]["total"] == 4
+            assert card["comments"]["totalMetadata"]["coverage"] == 0.5
+            assert card["shares"]["total"] is None
+            assert card["shares"]["totalTrend"] is None
+            assert card["subscriberCount"] == 600
+            assert card["accountCount"] == 3 and card["connectedPlatformCount"] == 2

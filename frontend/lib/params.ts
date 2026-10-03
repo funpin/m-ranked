@@ -58,7 +58,7 @@ export function normalizeSort(value: SearchValue, platform: Platform): OverviewS
     // расставляли вузы по величине, которая ничего не говорит об
     // активности. Прежние ссылки на них не ломаются — значение не из
     // списка приводится к сортировке по умолчанию ниже.
-    ? ["anomalies", "name", "m_rating"]
+    ? ["anomalies", "name", "m_rating", "views", "reactions", "posts", "subscribers"]
     : ["anomalies", "name", "median_reactions", "m_rating", "reactions", "views", "posts", "subscribers"];
   return accepted.includes(normalized as OverviewSort)
     ? (normalized as OverviewSort)

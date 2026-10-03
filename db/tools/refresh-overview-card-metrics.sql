@@ -50,25 +50,28 @@ SELECT period.period,
        latest.platform_account_id,
        latest.institution_id,
        latest.platform::text AS platform,
-       CASE WHEN latest.views_quality IN ('invalid','suspected_reset') THEN NULL
+       -- PostgreSQL greatest(NULL, 0) возвращает 0: недоступный счётчик
+       -- нужно отсеять до ветки нового поста, иначе он превращается в
+       -- измеренный ноль и завышает покрытие, особенно в общем разрезе.
+       CASE WHEN latest.views_count IS NULL OR latest.views_quality IN ('invalid','suspected_reset') THEN NULL
             WHEN opening.views_count IS NOT NULL
               THEN greatest(latest.views_count - opening.views_count, 0)
             WHEN publication.published_at >= params.as_of - period.duration
               THEN greatest(latest.views_count, 0)
             ELSE NULL END AS views_count,
-       CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset') THEN NULL
+       CASE WHEN latest.reactions_count IS NULL OR latest.reactions_quality IN ('invalid','suspected_reset') THEN NULL
             WHEN opening.reactions_count IS NOT NULL
               THEN greatest(latest.reactions_count - opening.reactions_count, 0)
             WHEN publication.published_at >= params.as_of - period.duration
               THEN greatest(latest.reactions_count, 0)
             ELSE NULL END AS reactions_count,
-       CASE WHEN latest.comments_quality IN ('invalid','suspected_reset') THEN NULL
+       CASE WHEN latest.comments_count IS NULL OR latest.comments_quality IN ('invalid','suspected_reset') THEN NULL
             WHEN opening.comments_count IS NOT NULL
               THEN greatest(latest.comments_count - opening.comments_count, 0)
             WHEN publication.published_at >= params.as_of - period.duration
               THEN greatest(latest.comments_count, 0)
             ELSE NULL END AS comments_count,
-       CASE WHEN latest.shares_quality IN ('invalid','suspected_reset') THEN NULL
+       CASE WHEN latest.shares_count IS NULL OR latest.shares_quality IN ('invalid','suspected_reset') THEN NULL
             WHEN opening.shares_count IS NOT NULL
               THEN greatest(latest.shares_count - opening.shares_count, 0)
             WHEN publication.published_at >= params.as_of - period.duration

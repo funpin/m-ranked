@@ -192,8 +192,10 @@ paths:
         - name: sort
           in: query
           description: >-
-            Legacy sort key. `coverage` and `accounts` apply only to `all`; `posts` and
-            `subscribers` apply only to a concrete platform. Unsupported combinations normalize
+            Legacy sort key. `coverage` and `accounts` apply only to `all`;
+            `median_reactions` applies only to a concrete platform. `views`, `reactions`,
+            `posts` and `subscribers` also apply to the summed institution totals in `all`.
+            Unsupported combinations normalize
             to `anomalies`. `anomalies` orders by the sum of level 2 and level 3
             publication counts for the selected platform and period.
           schema:
