@@ -14,9 +14,9 @@ from .health import _threshold
 router = APIRouter()
 READ = require_roles("VIEWER", "EDITOR", "ADMIN")
 NO_STORE = {"Cache-Control": "no-store"}
-# Снимок появляется раз в пять минут: чаще минуты пересчитывать незачем, а
-# неделя — две тысячи строк по килобайту.
-CACHE_SECONDS = 60.0
+# Панель опрашивает сводку каждые 15 секунд, а снимок появляется раз в минуту:
+# дольше держать ответ нельзя, чаще пересчитывать незачем.
+CACHE_SECONDS = 15.0
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 # Опорный снимок перед началом периода нужен для разности счётчиков процессора.

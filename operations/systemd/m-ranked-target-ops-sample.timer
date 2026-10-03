@@ -1,10 +1,11 @@
 [Unit]
-Description=Sample M-Ranked server state every five minutes
+Description=Sample M-Ranked server state every minute
 
 [Timer]
 OnBootSec=2min
-OnCalendar=*:0/5
-AccuracySec=30s
+# Раз в минуту: панель показывает состояние почти в реальном времени.
+OnCalendar=minutely
+AccuracySec=5s
 Unit=m-ranked-target-ops-sample.service
 
 [Install]

@@ -190,7 +190,7 @@ def test_ops_sample_reads_only_and_stays_small() -> None:
     for directive in ("MemoryMax=128M", "CPUQuota=25%", "IOSchedulingClass=idle",
                       "RuntimeDirectory=m-ranked-ops-sample"):
         assert directive in unit, directive
-    assert "OnCalendar=*:0/5" in text("m-ranked-target-ops-sample.timer")
+    assert "OnCalendar=minutely" in text("m-ranked-target-ops-sample.timer")
 
 
 def test_contributors_refresh_every_three_days_into_a_directory_the_web_reads() -> None:
