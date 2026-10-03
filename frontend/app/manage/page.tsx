@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Activity, LayoutList, Users } from "lucide-react";
+import { Activity, LayoutList, Server, Users } from "lucide-react";
 import Link from "@/components/native-link";
 import { Card } from "@/components/ui/card";
 import { CatalogApiError, catalogReader } from "@/lib/catalog-api";
@@ -10,6 +10,7 @@ import { AdminLogin, AdminSignOut } from "./admin-access";
 import { LiveRefresh } from "./live-refresh";
 import { ChannelsTab } from "./channels";
 import { plural } from "./shared";
+import { ServersTab } from "./servers";
 import { SystemTab } from "./system";
 import { VisitorsTab } from "./visitors";
 import { PageTitle } from "@/components/page-title";
@@ -39,6 +40,7 @@ const TABS = [
   { id: "channels", label: "Каналы", title: "Управление каналами", description: "Добавляйте, временно отключайте или полностью удаляйте мониторинг каналов.", icon: LayoutList },
   { id: "visitors", label: "Посетители", title: "Посетители сайта", description: "Уникальные посетители без cookie: кто на сайте сейчас и как меняется посещаемость.", icon: Users },
   { id: "system", label: "Система", title: "Состояние системы", description: "Сбор, анализ, ресурсы сервера, трафик и хранилище по снимкам сервера раз в минуту.", icon: Activity },
+  { id: "servers", label: "Серверы", title: "Серверы и хранение", description: "Серверы-сборщики и место на дисках, политики сбора, хранения и анализа, резервные копии и холодный архив.", icon: Server },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 // Момент отрисовки для подписей «N мин назад»: страница динамическая и
@@ -98,6 +100,12 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
     const range = first(query.range) === "week" ? "week" : "day";
     const [overview, status] = await Promise.all([reader.system(range).catch(() => null), reader.status().catch(() => null)]);
     return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} status={status} range={range} now={now} csrf={csrf} canRefreshBackup={canDelete} backupOutcome={first(query.backup_status)} /></>;
+  }
+
+  if (tab === "servers") {
+    const storage = await reader.storage().catch(() => null);
+    return <>{header()}<ManageTabs active={tab} /><ServersTab overview={storage} csrf={csrf} canEdit={canDelete} now={now}
+      status={first(query.storage_status)} error={first(query.storage_error)} /></>;
   }
 
   const [catalogResult, statusResult] = await Promise.allSettled([reader.institutions(), reader.status()]);
