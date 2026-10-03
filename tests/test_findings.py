@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
+from api.errors import BadRequest
 from api.findings import (
     FINDING_MIN_INDEX, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE, VIEW_NORM_FLOOR,
     index, is_finding, norm, type_bucket,
 )
+from api.params import encode_scoped_cursor, findings_query, scoped_cursor
 
 
 def test_norm_is_median_of_known_values_with_sample_size() -> None:
@@ -38,3 +42,53 @@ def test_publication_types_fold_into_five_buckets() -> None:
         "text", "photo", "album", "video"]
     assert type_bucket("poll") == "other"
     assert type_bucket("share") == "other"
+
+
+def _query(**overrides):
+    values = {"mode": None, "institution": None, "platform": None, "period": None,
+              "types": None, "sort": None, "direction": None, "group": None,
+              "q": None, "anomalies": None}
+    values.update(overrides)
+    return findings_query(**values)
+
+
+def test_findings_query_defaults() -> None:
+    query = _query()
+    assert (query.mode, query.institution, query.platform, query.period) == ("all", None, "all", "7d")
+    assert (query.types, query.sort, query.direction, query.group) == ((), "interaction_index", "desc", "none")
+    assert (query.search, query.anomalies) == ("", "exclude")
+
+
+def test_findings_query_normalizes_aliases_and_type_order() -> None:
+    query = _query(platform="tg", types=["video", "photo", "video"], q="  мгу ")
+    assert query.platform == "telegram"
+    assert query.types == ("photo", "video")
+    assert query.search == "мгу"
+
+
+@pytest.mark.parametrize("overrides, message", [
+    ({"period": "3h"}, "период"),
+    ({"platform": "ok"}, "платформа"),
+    ({"sort": "erv"}, "сортировка"),
+    ({"direction": "up"}, "направление"),
+    ({"types": ["gif"]}, "тип"),
+    ({"mode": "institution"}, "вуз"),
+    ({"mode": "institution", "institution": "0"}, "вуз"),
+    ({"mode": "institution", "institution": "12", "group": "institution"}, "группировка"),
+    ({"group": "platform"}, "группировка"),
+    ({"anomalies": "hide"}, "аномали"),
+    ({"q": "a" * 201}, "200"),
+])
+def test_findings_query_rejects_unknown_values(overrides, message) -> None:
+    with pytest.raises(BadRequest) as error:
+        _query(**overrides)
+    assert message in (error.value.detail or "")
+
+
+def test_findings_cursor_is_bound_to_every_dimension() -> None:
+    query = _query(mode="institution", institution="12", types=["photo"])
+    cursor = encode_scoped_cursor("00000000-0000-4000-8000-000000000001", 5, "findings:" + query.dimensions)
+    assert scoped_cursor(cursor, 5, "findings:" + query.dimensions)
+    changed = _query(mode="institution", institution="12", types=["video"])
+    with pytest.raises(BadRequest):
+        scoped_cursor(cursor, 5, "findings:" + changed.dimensions)
