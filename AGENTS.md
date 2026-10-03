@@ -1,7 +1,5 @@
 # Repository agent instructions
 
-@/Users/funpin/.codex/RTK.md
-
 ## Production access is not recorded here
 
 This repository is public. Host addresses, SSH ports, service endpoints and any
