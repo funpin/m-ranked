@@ -1,8 +1,3 @@
-"use client";
-
-import { useId, useMemo, type CSSProperties } from "react";
-import { AnimatePresence, LayoutGroup } from "motion/react";
-import * as m from "motion/react-m";
 import { cn } from "@/lib/utils";
 
 function graphemes(text: string) {
@@ -12,52 +7,35 @@ function graphemes(text: string) {
   return Array.from(text);
 }
 
-const MORPH = { type: "spring", stiffness: 125, damping: 25, mass: 0.4 } as const;
-const HIDDEN = { opacity: 0, scale: 0.8, filter: "blur(10px)" } as const;
-// Фильтр снимается в конце: буквы с blur(0px) рисовались бы мягче.
-const SHOWN = { opacity: 1, scale: 1, filter: "blur(0px)", transitionEnd: { filter: "none" } } as const;
-
 /**
- * Крупный заголовок страницы в духе MorphingText из animate-ui.
+ * Крупный заголовок страницы: буквы проявляются из размытия и вырастают из
+ * 80 % — эффект MorphingText из animate-ui, сделанный на CSS (класс
+ * title-reveal в globals.css). Он виден с первой отрисовкой, без скриптов.
  *
- * Первое появление — проявление букв из размытия на CSS (класс
- * title-reveal в globals.css): оно видно с первой отрисовкой, без ожидания
- * скриптов, и не задерживает LCP. Когда текст меняется на клиенте (вкладки
- * панели, переключение режима), общие буквы перестраиваются на новые места,
- * лишние растворяются, новые проявляются — морфинг через layoutId.
- * Буквы сгруппированы по словам: заголовок переносится между словами, а не
- * посреди слова, как у исходного компонента с отдельными inline-block буквами.
+ * Волна по буквам занимает одно и то же время при любой длине заголовка:
+ * у длинного названия вуза буквы просто идут чаще. При смене текста
+ * заголовок пересоздаётся целиком (key) и проявляется заново — старые
+ * буквы не досматривают исчезновение поверх новых.
+ * Буквы сгруппированы по словам: перенос — между словами.
  */
 export function PageTitle({ text, className }: { text: string; className?: string }) {
-  const id = useId();
-  const words = useMemo(() => {
-    const counts = new Map<string, number>();
-    let index = 0;
-    return text.split(/\s+/).filter(Boolean).map((word) => graphemes(word).map((char) => {
-      const seen = (counts.get(char) ?? 0) + 1;
-      counts.set(char, seen);
-      return { char, key: `${id}-${char}-${seen}`, index: index++ };
-    }));
-  }, [text, id]);
+  const words = text.split(/\s+/).filter(Boolean).map((word) => graphemes(word));
+  const total = words.reduce((sum, word) => sum + word.length, 0);
+  let index = 0;
   return (
-    <span className={cn("title-reveal", className)}>
+    <span key={text} className={cn("title-reveal", className)} style={{ "--n": Math.max(1, total) } as React.CSSProperties}>
       <span className="sr-only">{text}</span>
-      <LayoutGroup id={id}>
-        <AnimatePresence mode="popLayout" initial={false}>
-          {words.flatMap((word, wordIndex) => [
-            <span key={`w-${word[0]?.key}`} className="inline-block whitespace-nowrap" aria-hidden="true">
-              {word.map(({ char, key, index }) => (
-                <m.span key={key} layoutId={key} className="title-reveal-char inline-block"
-                  style={{ "--i": index } as CSSProperties}
-                  initial={HIDDEN} animate={SHOWN} exit={HIDDEN} transition={MORPH}>
-                  {char}
-                </m.span>
-              ))}
-            </span>,
-            wordIndex < words.length - 1 ? <span key={`s-${wordIndex}`} aria-hidden="true"> </span> : null,
-          ])}
-        </AnimatePresence>
-      </LayoutGroup>
+      {words.map((word, wordIndex) => (
+        <span key={wordIndex} aria-hidden="true">
+          <span className="inline-block whitespace-nowrap">
+            {word.map((char) => {
+              const i = index++;
+              return <span key={i} className="title-reveal-char inline-block" style={{ "--i": i } as React.CSSProperties}>{char}</span>;
+            })}
+          </span>
+          {wordIndex < words.length - 1 ? " " : null}
+        </span>
+      ))}
     </span>
   );
 }

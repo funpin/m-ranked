@@ -287,7 +287,9 @@
   }
   .title-reveal .title-reveal-char {
     animation: title-char-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
-    animation-delay: min(calc(var(--i) * 28ms), 520ms);
+    /* Волна укладывается в 450 мс при любой длине: шаг — 28 мс на коротких
+       заголовках и меньше на длинных названиях. */
+    animation-delay: calc(var(--i) * min(28ms, 450ms / var(--n)));
   }
   @media (prefers-reduced-motion: reduce) {
     .title-reveal .title-reveal-char { animation: none; }
