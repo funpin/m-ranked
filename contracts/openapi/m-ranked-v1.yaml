@@ -5644,6 +5644,17 @@ components:
           - integer
           - 'null'
           format: int64
+        coldArchive:
+          description: >-
+            Present when the publication month has moved to the cold archive: measurements come from
+            the archive generations of that month merged with late measurements still in the database.
+          type: object
+          additionalProperties: false
+          required: [month, generations, lateSnapshots]
+          properties:
+            month: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
+            generations: { type: integer, minimum: 1 }
+            lateSnapshots: { type: integer, minimum: 0 }
         archivedText:
           type:
           - string

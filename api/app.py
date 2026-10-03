@@ -20,6 +20,7 @@ from .outbox import OutboxMarker
 from .security import AuthConfig
 from .security_events import SecurityTelemetry
 from .sessions import SessionPolicy, SessionStore
+from .cold_archive import ColdArchiveReader
 from .visits import VisitCounter
 from .routes import admin, analysis, compare, emoji, health, query, site, sitemap, statistics, system, visits
 
@@ -97,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.cache = cache
     app.state.cache_metrics = cache_metrics
     app.state.visits = counter
+    app.state.cold_archive = ColdArchiveReader()
     # Неверная настройка админки закрывает админку, а не весь API: публичное
     # чтение к учётным записям отношения не имеет, и ронять из-за них сайт
     # целиком — менять одну неприятность на другую, большую.

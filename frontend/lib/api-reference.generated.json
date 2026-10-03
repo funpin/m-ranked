@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "1dc305d443ecdd056fca620d36a4d86edbd7b04e7846bc452e80e60c6a592d52",
+  "sourceSha256": "74917024c8d300d01d8cbc72d08cd0bf393fac3af5c5998d2e7861bb2010f33c",
   "version": "1.0.0",
   "operations": [
     {
@@ -1387,6 +1387,10 @@
         {
           "name": "nextLegacyId",
           "type": "integer | null"
+        },
+        {
+          "name": "coldArchive",
+          "type": "object"
         },
         {
           "name": "archivedText",
