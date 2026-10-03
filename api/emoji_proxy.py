@@ -68,6 +68,33 @@ async def _bounded(reader: asyncio.StreamReader, maximum: int, deadline: float) 
     return bytes(result)
 
 
+# На одну попытку соединения: с Сервера 2 IPv4-адрес t.me не отвечает вовсе,
+# и раньше запрос ждал его весь бюджет (10 с), так и не дойдя до IPv6.
+CONNECT_ATTEMPT_SECONDS = 2.5
+
+
+def _preferred(addresses: list[str]) -> list[str]:
+    """IPv6 раньше IPv4 (RFC 6724), порядок внутри семейства — как у DNS."""
+    return sorted(addresses, key=lambda item: ipaddress.ip_address(item).version != 6)
+
+
+async def _connect(addresses: list[str], hostname: str, context: ssl.SSLContext,
+                   deadline: float) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    last: BaseException | None = None
+    for address in _preferred(addresses):
+        remaining = deadline-time.monotonic()
+        if remaining <= 0:
+            break
+        attempt = min(remaining, CONNECT_ATTEMPT_SECONDS)
+        try:
+            return await asyncio.wait_for(asyncio.open_connection(
+                address, 443, ssl=context, server_hostname=hostname,
+                ssl_handshake_timeout=max(0.001, attempt)), attempt)
+        except (OSError, TimeoutError, ssl.SSLError) as error:
+            last = error
+    raise EmojiUpstream("Telegram emoji connection failed") from last
+
+
 async def _request(url: str, maximum: int, deadline: float) -> tuple[int, str | None, str, bytes]:
     parsed = allowed_url(url)
     if parsed is None:
@@ -87,10 +114,7 @@ async def _request(url: str, maximum: int, deadline: float) -> tuple[int, str | 
     context = ssl.create_default_context()
     writer: asyncio.StreamWriter | None = None
     try:
-        remaining = deadline-time.monotonic()
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(
-            addresses[0], 443, ssl=context, server_hostname=parsed.hostname,
-            ssl_handshake_timeout=max(0.001, remaining)), remaining)
+        reader, writer = await _connect(addresses, parsed.hostname, context, deadline)
         target = parsed.path or "/"
         if parsed.query:
             target += "?" + parsed.query
