@@ -38,9 +38,16 @@ for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR
   const response=await page.goto("/manage");expect(response?.status()).toBe(200);expect(response?.headers()["cache-control"]).toContain("no-store");
   await expect(page.getByRole("heading",{name:"Управление каналами"})).toBeVisible();
   await expect(page.getByTestId('platform-table').locator('tbody tr')).toHaveCount(8);
+  // Формы каталога открываются кнопками в модальных окнах.
+  await expect(page.getByTestId("institution-create")).toHaveCount(0);
+  await page.getByTestId("open-institution-create").click();
+  await expect(page.getByRole("dialog",{name:"Новый вуз"})).toBeVisible();
   await expect(page.locator('[data-testid="institution-create"] input[name="name"]')).toBeEnabled({enabled:role!=="viewer"});
+  await page.getByRole("button",{name:"Отмена"}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button",{name:"Удалить",exact:true}).first()).toBeEnabled({enabled:role==="admin"});
   const html=await page.content();expect(html).not.toContain("fixture-password");
+  await page.getByTestId("open-account-matrix").click();
   await expect(page.locator('#accountMatrix input[name="telegram"]')).toHaveValue("https://example.test/telegram/1");
   // Раскрывающийся chat_id MAX из таблицы убран: идентификатор виден подписью.
   await expect(page.getByTestId("native-id-editor")).toHaveCount(0);
@@ -55,7 +62,9 @@ for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR
     await page.getByRole("button",{name:"Сохранить аккаунты"}).click();
     await expect.poll(()=>posted?.get("csrf_token")).toBe("fixture-csrf-token");expect(posted?.get("expected_row_version")).toBe("4");expect(posted?.get("correlation_id")).toMatch(/^[0-9a-f-]{36}$/);expect(posted?.get("telegram")).toBe("https://example.test/telegram/2");
     await page.goto("/manage");
-  }
+  } else await page.keyboard.press("Escape");
+  // Окно закрывается анимацией: axe проверяет страницу после неё.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
 });
 
