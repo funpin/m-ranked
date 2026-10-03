@@ -23,7 +23,10 @@ import shutil
 from typing import Any
 
 DEFAULT_ROOT = Path("/var/lib/m-ranked/store")
-CHUNK_BYTES = 8 * 1024 * 1024
+# Кусок передачи. Приёмник на основном сервере живёт под потолком памяти
+# (MemoryHigh 384 МБ): куски по 8 МБ с копиями ответа и брошенными по таймауту
+# соединениями вывели его за потолок 04.10.2026, и встал перенос замеров.
+CHUNK_BYTES = 1024 * 1024
 KIND_DIRECTORY = {"backup": "backups", "archive_full": "archive", "archive_browse": "archive"}
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$")
 OBJECT_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
