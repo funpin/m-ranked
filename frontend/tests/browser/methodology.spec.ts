@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 test("методология: обзор ведёт к статьям, статья — с оглавлением и соседями", async ({ page }) => {
   await page.goto("/methodology");
   await expect(page.getByRole("heading", { level: 1, name: "Методология" })).toBeVisible();
-  await expect(page.getByTestId("methodology-articles").getByRole("link")).toHaveCount(10);
+  await expect(page.getByTestId("methodology-articles").getByRole("link")).toHaveCount(11);
   await page.getByTestId("methodology-articles").getByRole("link", { name: /Расписание сбора/ }).click();
   await expect(page).toHaveURL(/\/methodology\/schedule$/);
   await expect(page.getByRole("heading", { level: 1, name: "Расписание сбора" })).toBeVisible();
