@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  findingBadge, findingsHrefQuery, formatIndex, normalizeFindingsQuery,
+  DEFAULT_FINDINGS_QUERY, findingBadge, findingsHrefQuery, formatIndex, normalizeFindingsQuery,
   recallInstitution, rememberInstitution,
 } from "../lib/findings";
 import type { Finding } from "../lib/types";
@@ -11,6 +11,13 @@ test("findings defaults to all institutions, 7 days and interaction index", () =
     mode: "all", institution: null, platform: "all", period: "7d", types: [],
     sort: "interaction_index", direction: "desc", group: "none", q: "",
   });
+});
+
+test("institution list reuses the warmed default listing", () => {
+  // Прогрев кэша держит /api/v1/findings?period=7d: список вузов берётся из той же записи.
+  assert.deepEqual(DEFAULT_FINDINGS_QUERY, normalizeFindingsQuery({ period: "7d" }));
+  assert.equal(DEFAULT_FINDINGS_QUERY.mode, "all");
+  assert.equal(DEFAULT_FINDINGS_QUERY.group, "none");
 });
 
 test("findings normalizes unknown values instead of failing", () => {

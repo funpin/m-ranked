@@ -241,3 +241,24 @@ def test_institutions_list_has_legacy_ids(dsn) -> None:
     with _connect(dsn) as connection:
         rows = connection.execute(sql.INSTITUTIONS).fetchall()
     assert any(row["legacy_id"] == world.legacy_id for row in rows)
+
+
+def test_checkpoint_after_as_of_is_ignored(dsn) -> None:
+    world = World(dsn)
+    for number in range(MIN_NORM_SAMPLE):
+        world.post(AS_OF - timedelta(days=10, minutes=number), {6: (400, 10), 24: (900, 20)})
+    # Пост восьмичасовой на момент as_of: точка 24-го часа ещё не наступила.
+    young = world.post(AS_OF - timedelta(hours=8), {6: (800, 30), 24: (5000, 400)})
+    row = next(row for row in posts(run(dsn, world)) if row["publication_id"] == young)
+    assert row["age_hours"] == 6 and row["interactions"] == 30 and row["preliminary"] is True
+
+
+def test_norm_sample_counts_interaction_norm_posts(dsn) -> None:
+    world = World(dsn)
+    world.baseline(reactions=20)
+    # Без просмотров: в норму взаимодействий пост входит, в норму просмотров — нет.
+    for number in range(3):
+        world.post(AS_OF - timedelta(days=12, minutes=number), {24: (None, 20)})
+    target = world.post(AS_OF - timedelta(days=1), {24: (1000, 60)})
+    row = next(row for row in posts(run(dsn, world)) if row["publication_id"] == target)
+    assert row["norm_sample"] == MIN_NORM_SAMPLE + 3 + 1

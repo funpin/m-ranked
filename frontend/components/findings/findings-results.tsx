@@ -5,7 +5,8 @@ import { useState } from "react";
 import Link from "@/components/native-link";
 import { RowLink } from "@/components/row-link";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -163,10 +164,17 @@ function Pair({ label, value }: { label: string; value: string }) {
 
 function NoFindings({ query }: { query: ParsedFindingsQuery }) {
   const wider = query.period !== "30d";
+  // В «Моём вузе» порога нет: пусто, только если у вуза нет постов вовсе.
+  const institution = query.mode === "institution";
+  const title = query.q ? "Ничего не найдено"
+    : institution ? "У вуза нет публикаций за период" : "За период нет постов выше нормы";
+  const description = institution ? "Попробуйте другую площадку, период или тип публикации."
+    : query.platform === "rutube" ? "На RuTube взаимодействий мало, и посты редко выходят за норму."
+      : "Норма — типичный пост своего аккаунта на том же возрасте.";
   return <Empty role="status" className="bg-card border py-10">
     <EmptyHeader>
-      <EmptyTitle><h2 className="font-heading text-lg font-semibold">{query.q ? "Ничего не найдено" : "За период нет постов выше нормы"}</h2></EmptyTitle>
-      <EmptyDescription className="text-sm">{query.platform === "rutube" ? "На RuTube взаимодействий мало, и посты редко выходят за норму." : "Норма — типичный пост своего аккаунта на том же возрасте."}</EmptyDescription>
+      <EmptyTitle><h2 className="font-heading text-lg font-semibold">{title}</h2></EmptyTitle>
+      <EmptyDescription className="text-sm">{description}</EmptyDescription>
     </EmptyHeader>
     {wider ? <EmptyContent><Link className={buttonVariants({ variant: "outline" })} prefetch={false}
       href={queryHref("/statistics", { ...findingsHrefQuery(query), period: "30d" })}>Расширить до 30 дней</Link></EmptyContent> : null}

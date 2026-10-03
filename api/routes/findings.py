@@ -74,7 +74,7 @@ async def findings(
     sort: str | None = Query(None),
     direction: str | None = Query(None),
     group: str | None = Query(None),
-    q: str | None = Query(None, max_length=200),
+    q: str | None = Query(None),
     anomalies: str | None = Query(None),
     limit: int = Query(50),
     cursor: str | None = Query(None),

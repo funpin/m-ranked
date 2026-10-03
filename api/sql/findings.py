@@ -54,21 +54,29 @@ WITH params AS (
        AND (%(platform)s='all' OR account.platform::text=%(platform)s)
        AND (%(institution_legacy_id)s::bigint IS NULL
             OR institution_alias.legacy_id=%(institution_legacy_id)s::bigint)
-), measured AS MATERIALIZED (
-    SELECT publication.id AS publication_id,accounts.account_id,checkpoint.hour_offset,
-           publication.published_at>params.cutoff AS in_period,
-           checkpoint.views_count AS views,checkpoint.reactions_count AS reactions,
-           checkpoint.comments_count AS comments,checkpoint.shares_count AS shares,
-           {_INTERACTIONS} AS interactions,
+), published AS MATERIALIZED (
+    -- Уровень считается на пост, а не на каждую его точку: так соединения с
+    -- анализом идут по ~25 тыс. постам, а не по ~130 тыс. точкам.
+    SELECT publication.id AS publication_id,publication.published_at,accounts.account_id,
+           accounts.platform,publication.published_at>params.cutoff AS in_period,
            coalesce(recheck.effective_level,state.level) AS level
       FROM params
       JOIN ingest.visible_publication publication
         ON publication.published_at>params.norm_cutoff AND publication.published_at<=params.as_of
       JOIN accounts ON accounts.account_id=publication.primary_account_id
-      JOIN capabilities capability ON capability.platform=accounts.platform
-      JOIN analytics.publication_checkpoint checkpoint ON checkpoint.publication_id=publication.id
-       AND checkpoint.hour_offset<=24
       {_LEVEL}
+), measured AS MATERIALIZED (
+    SELECT published.publication_id,published.account_id,checkpoint.hour_offset,published.in_period,
+           checkpoint.views_count AS views,checkpoint.reactions_count AS reactions,
+           checkpoint.comments_count AS comments,checkpoint.shares_count AS shares,
+           {_INTERACTIONS} AS interactions,published.level
+      FROM params
+      JOIN published ON true
+      JOIN capabilities capability ON capability.platform=published.platform
+      JOIN analytics.publication_checkpoint checkpoint ON checkpoint.publication_id=published.publication_id
+       AND checkpoint.hour_offset<=24
+       -- Точка «из будущего» относительно as_of ещё не наступила для этой ревизии.
+       AND published.published_at+checkpoint.hour_offset*interval '1 hour'<=params.as_of
 ), norms AS (
     SELECT account_id,hour_offset,
            count(interactions)::integer AS interaction_sample,
@@ -103,7 +111,7 @@ WITH params AS (
 ), scored AS (
     SELECT candidates.*,point.hour_offset AS age_hours,point.views,point.reactions,point.comments,
            point.shares,point.interactions,norms.interaction_norm,norms.view_norm,
-           least(coalesce(norms.interaction_sample,0),coalesce(norms.view_sample,0)) AS norm_sample,
+           coalesce(norms.interaction_sample,0) AS norm_sample,
            CASE WHEN norms.interaction_sample>=%(min_sample)s AND point.interactions IS NOT NULL
                 THEN point.interactions::numeric
                      /greatest(norms.interaction_norm,%(interaction_floor)s)::numeric END AS interaction_index,

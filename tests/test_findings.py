@@ -77,9 +77,11 @@ def test_findings_query_normalizes_aliases_and_type_order() -> None:
     ({"types": ["gif"]}, "тип"),
     ({"mode": "institution"}, "вуз"),
     ({"mode": "institution", "institution": "0"}, "вуз"),
+    ({"mode": "institution", "institution": "99999999999999999999"}, "вуз"),
+    ({"mode": "institution", "institution": str(1 << 63)}, "вуз"),
     ({"mode": "institution", "institution": "12", "group": "institution"}, "группировка"),
     ({"group": "platform"}, "группировка"),
-    ({"anomalies": "hide"}, "аномали"),
+    ({"anomalies": "hide"}, "anomalies"),
     ({"q": "a" * 201}, "200"),
 ])
 def test_findings_query_rejects_unknown_values(overrides, message) -> None:

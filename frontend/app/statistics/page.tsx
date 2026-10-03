@@ -18,10 +18,10 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { anomalyReportVisible } from "@/lib/anomaly-visibility";
 import { api, ApiError } from "@/lib/api";
-import { FINDINGS_PERIOD_OPTIONS, FINDINGS_SORT_OPTIONS, findingsHrefQuery, normalizeFindingsQuery } from "@/lib/findings";
+import { DEFAULT_FINDINGS_QUERY, FINDINGS_PERIOD_OPTIONS, FINDINGS_SORT_OPTIONS, findingsHrefQuery, normalizeFindingsQuery } from "@/lib/findings";
 import { formatDate } from "@/lib/format";
 import { first, queryHref, type SearchParams } from "@/lib/params";
-import type { FindingInstitution, FindingsPage } from "@/lib/types";
+import type { FindingInstitution, FindingsPage, FindingsRequest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -40,25 +40,26 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
   // «Мой вуз» без выбранного вуза — пустое состояние с выбором, без запроса постов.
   const choosing = first(raw.mode) === "institution" && query.mode === "all";
   const anomaliesVisible = anomalyReportVisible();
-  const anomalies = anomaliesVisible ? "exclude" : "include";
+  const anomalies: FindingsRequest["anomalies"] = anomaliesVisible ? "exclude" : "include";
   const cursor = first(raw.cursor);
   let page: FindingsPage | null = null;
   let institutions: FindingInstitution[] = [];
   let failed = false;
   let staleCursor = false;
   let unknownInstitution = false;
+  // Список вузов приходит с любой выдачей. Без выбранного вуза берём его из
+  // выдачи по умолчанию («Все вузы», 7 дней, 50 постов): её греет прогрев
+  // кэша, поэтому выбор вуза не запускает отдельный тяжёлый запрос.
+  const defaultListing = { ...DEFAULT_FINDINGS_QUERY, anomalies, limit: 50 };
   try {
-    // Без выбранного вуза посты не нужны: запрос только за списком вузов.
-    page = await api.findings({ ...query, group: choosing ? "none" : query.group, anomalies,
-      limit: choosing ? 1 : 50, cursor: choosing ? undefined : cursor });
+    page = await api.findings(choosing ? defaultListing : { ...query, anomalies, limit: 50, cursor });
     institutions = page.institutions;
   } catch (error) {
     // Курсор при выборе вуза не отправляется: 400 тогда — обычная ошибка.
     if (error instanceof ApiError && error.status === 400 && cursor && !choosing) staleCursor = true;
     else if (error instanceof ApiError && error.status === 404 && query.mode === "institution") {
       unknownInstitution = true;
-      institutions = await api.findings({ ...query, mode: "all", institution: null, group: "none", anomalies, limit: 1 })
-        .then((body) => body.institutions, () => []);
+      institutions = await api.findings(defaultListing).then((body) => body.institutions, () => []);
     } else failed = true;
   }
   // Курсор устарел (сменилась ревизия): начинаем список заново. redirect()

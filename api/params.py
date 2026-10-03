@@ -18,6 +18,8 @@ from .findings import FINDING_TYPES, FINDINGS_PERIOD_DAYS
 
 PLATFORMS = ("all", "telegram", "vk", "max", "rutube")
 PERIODS = ("3h", "1d", "7d", "30d")
+# legacy id попадает в SQL как bigint: больше не влезет и даст 500 вместо 400.
+MAX_LEGACY_ID = (1 << 63) - 1
 
 SORTS_ALL = frozenset({"anomalies", "name", "m_rating", "coverage", "accounts",
                        "views", "reactions", "posts", "subscribers"})
@@ -163,10 +165,11 @@ def findings_query(mode: str | None, institution: str | None, platform: str | No
         raise BadRequest("группировка должна быть none или institution")
     resolved_anomalies = anomalies or "exclude"
     if resolved_anomalies not in ("exclude", "include"):
-        raise BadRequest("аномали должны быть exclude или include")
+        raise BadRequest("значение anomalies должно быть exclude или include")
     resolved_institution: int | None = None
     if resolved_mode == "institution":
-        if not institution or not institution.isascii() or not institution.isdigit() or int(institution) <= 0:
+        if (not institution or not institution.isascii() or not institution.isdigit()
+                or not 0 < int(institution) <= MAX_LEGACY_ID):
             raise BadRequest("для режима institution нужен вуз: положительный legacy id")
         resolved_institution = int(institution)
         if resolved_group != "none":

@@ -61,6 +61,9 @@ export function normalizeFindingsQuery(params: SearchParams): ParsedFindingsQuer
   };
 }
 
+/** Выдача, которую страница открывает без параметров и которую греет прогрев кэша. */
+export const DEFAULT_FINDINGS_QUERY: ParsedFindingsQuery = Object.freeze(normalizeFindingsQuery({}));
+
 export function findingsHrefQuery(query: ParsedFindingsQuery): Record<string, QueryValue> {
   return {
     mode: query.mode === "institution" ? "institution" : undefined,
