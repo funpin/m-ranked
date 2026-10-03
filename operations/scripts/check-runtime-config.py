@@ -17,6 +17,9 @@ RUNTIME_DIRS = (
     ROOT / "collector_target",
     ROOT / "transfer_ingest",
     ROOT / "anomaly_analysis",
+    # Службы хранения и холодного архива (ADR-016).
+    ROOT / "operations" / "storage",
+    ROOT / "operations" / "cold_archive",
 )
 HELPERS = {"_int", "_float", "_bool", "_bounded", "_environment_or_file", "_flag"}
 DYNAMIC = {

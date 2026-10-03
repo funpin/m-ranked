@@ -1,0 +1,56 @@
+[Unit]
+Description=M-Ranked cold archive: move one ripe month to archive generations (ADR-016)
+Documentation=file:/opt/m-ranked/current/operations/runbooks/COLD_ARCHIVE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-maintenance
+Group=m-ranked-maintenance
+SupplementaryGroups=m-ranked-storage
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/maintenance.env
+EnvironmentFile=-/etc/m-ranked/cold-archive.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/maintenance-pgpass
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-maintenance -g m-ranked-maintenance %d/pgpass /run/m-ranked-cold-archive/pgpass
+Environment=PGPASSFILE=/run/m-ranked-cold-archive/pgpass
+Environment=MRANKED_STORE_DIR=/var/lib/m-ranked/store
+# pyarrow нужен только выгрузке Parquet и ставится отдельно от venv API:
+# pip install --target /opt/m-ranked/ops-libs pyarrow==25.0.1
+Environment=PYTHONPATH=/opt/m-ranked/ops-libs
+Environment=TZ=UTC
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m operations.cold_archive.pipeline
+# Закрытие месяца ограничено COLD_ARCHIVE_FENCE_MINUTES (120); черновик файла
+# просмотра идёт вполсилы до закрытия. Это — страховка на весь прогон.
+TimeoutStartSec=8h
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=50%
+MemoryMax=768M
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/m-ranked/store
+RuntimeDirectory=m-ranked-cold-archive
+RuntimeDirectoryMode=0700
+UMask=0002
+TasksMax=64
