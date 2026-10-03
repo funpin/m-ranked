@@ -43,3 +43,19 @@ def test_all_addresses_down_is_an_upstream_error(monkeypatch) -> None:
     with pytest.raises(emoji_proxy.EmojiUpstream):
         asyncio.run(emoji_proxy._connect(["149.154.167.99"], "t.me", ssl.create_default_context(),
                                          time.monotonic() + 1))
+
+
+def test_unreachable_emoji_fails_fast_after_the_first_attempt(monkeypatch) -> None:
+    calls = []
+
+    async def down(emoji_id):
+        calls.append(emoji_id)
+        raise emoji_proxy.EmojiUpstream("cdn unreachable")
+
+    monkeypatch.setattr(emoji_proxy, "fetch", down)
+    cache = emoji_proxy.EmojiCache()
+    for emoji_id in ("1", "1", "2"):
+        with pytest.raises(emoji_proxy.EmojiUpstream):
+            asyncio.run(cache.get(emoji_id))
+    # Повтор той же реакции и новая реакция в окне отказа не ходят наружу.
+    assert calls == ["1"]
