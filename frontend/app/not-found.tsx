@@ -1,5 +1,5 @@
 import Link from "@/components/native-link";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui";
 
