@@ -230,6 +230,28 @@ HTTP 200 in 10 ms and there were no lock waiters. S1 still had 98 pending envelo
 advance, but return to the pre-backup freshness baseline is **not** verified;
 other daytime CPU load remains. Investigate that load before another manual run.
 
+## October 3, 2026: backups resumed, refresh from the panel
+
+From September 29 the nightly dump on S2 refused to start: admission needs
+`BACKUP_MAX_DUMP_BYTES + BACKUP_RESERVE_BYTES` free (7 + 11 GB), while S2 had
+14.0–14.3 GB with two completed dumps of 2.41 and 2.53 GB on disk. On the
+owner's request (panel button «Обновить резервную копию», at most two copies)
+the policy is now:
+
+- `BACKUP_MAX_DUMP_BYTES=4500000000` in `/etc/m-ranked/dump-backup.env` — real
+  zstd dumps are ~2.5 GB; the stream still stops at the cap. The 11 GB reserve
+  is unchanged. Previous env is saved in the deployment record `fix-51adcd7`.
+- A refresh (panel request file → `m-ranked-target-dump-backup-request.path` →
+  the same dump unit) first keeps only the restore-verified pinned copy
+  (`rotate-dumps.py --refresh`), then dumps. Two copies remain afterwards; the
+  verified copy is still never deleted before a successor passes restore.
+- Helpers are versioned as `/usr/local/libexec/m-ranked/storage-51adcd7/`; the
+  previous `storage-0978931` and its drop-in (`*.pre-51adcd7`) stay for rollback.
+
+The daytime-load caution above still applies: the dump keeps its 10 MB/s and
+0.5 CPU limits. `mranked-doctor --section pipeline,storage` shows ingest lag and
+backup state during a run.
+
 ## Baseline and conditional budget (decimal GB)
 
 Read-only baseline at 03:02 UTC, before A1; candidates rechecked 03:14–03:15.
