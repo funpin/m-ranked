@@ -15,6 +15,7 @@ from collector_target.evidence import ImmutableEvidenceStore
 from collector_target.repository import PostgresCollectorRepository
 from collector_target.poll_receipts import PollReceiptPolicy
 from collector_target.transfer import PostgresDataAdapter
+from operations.storage.hub import hub_from_environment
 
 from .config import IngestSettings
 from .handler import IngestHandler
@@ -123,6 +124,11 @@ async def _run() -> int:
             ),
             path=settings.path,
             allowed_producers=settings.allowed_producers,
+            # Узловые точки агентов хранилища (ADR-016); выключаются явно.
+            node_hub=(
+                hub_from_environment(settings.database_url)
+                if os.getenv("TRANSFER_INGEST_NODE_HUB", "on").strip().lower() != "off" else None
+            ),
         )
         context = build_ssl_context(
             settings.certificate, settings.private_key, settings.ca_bundle,
