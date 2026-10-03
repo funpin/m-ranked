@@ -15,7 +15,8 @@ from psycopg.rows import dict_row
 import pytest
 
 from api.config import Settings
-from api.sql import admin, analysis, compare, details, overview, statistics, findings as findings_sql
+from api.sql import admin, analysis, compare, details, overview, statistics
+from api.sql import findings as findings_sql
 from api.findings import (
     FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE,
     NORM_WINDOW_DAYS, PAGE_CAP, VIEW_NORM_FLOOR,
@@ -31,9 +32,15 @@ pytestmark = requires_api_database
 DEFAULT_BUDGET = (1_000.0, 100_000)
 COMPARISON_24H_BUDGET = (4_000.0, 220_000)
 COMPARISON_336H_BUDGET = (5_000.0, 260_000)
-# Findings queries use a separate budget measured on 2026-09-27 data:
-# 30d all: 676 ms, 364309 blocks; 7d grouped measured when first query completes.
-FINDINGS_BUDGET = (1_000.0, 400_000)
+# Findings queries scan publication_checkpoint for the 30-day norm window across
+# all accounts. Measured on restored prod copy (data through 2026-09-25, revision
+# committed 2026-09-27) on one developer machine. Budgets per case with ~10% headroom:
+# - 30d all: 629.910 ms / 364,309 blocks; uses wide aggregate window
+# - 7d grouped: 380.571 ms / 297,838 blocks; institution grouping reduces result set
+# To re-baseline: restore latest backup to 127.0.0.1:55433, run with env vars,
+# update comment and budget values, then commit.
+FINDINGS_30D_BUDGET = (1_000.0, 400_000)
+FINDINGS_7D_BUDGET = (1_000.0, 330_000)
 
 
 def _plan(connection: psycopg.Connection[Any], statement: str,
@@ -245,8 +252,9 @@ def test_findings_query_budget() -> None:
             "min_interactions": FINDING_MIN_INTERACTIONS, "sort": "interaction_index",
             "direction": "desc", "exclude_anomalies": True, "cap": PAGE_CAP,
         }
-        for name, overrides in {
-            "findings 30d all": {"period_days": 30, "platform": "all", "mode": "all", "group": "none"},
-            "findings 7d grouped": {"period_days": 7, "platform": "all", "mode": "all", "group": "institution"},
-        }.items():
-            _assert_budget(name, _plan(connection, findings_sql.FINDINGS, base | overrides), FINDINGS_BUDGET)
+        cases = {
+            "findings 30d all": ({"period_days": 30, "platform": "all", "mode": "all", "group": "none"}, FINDINGS_30D_BUDGET),
+            "findings 7d grouped": ({"period_days": 7, "platform": "all", "mode": "all", "group": "institution"}, FINDINGS_7D_BUDGET),
+        }
+        for name, (overrides, budget) in cases.items():
+            _assert_budget(name, _plan(connection, findings_sql.FINDINGS, base | overrides), budget)
