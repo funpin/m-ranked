@@ -98,6 +98,7 @@ class Settings:
     cold_after_days: int
     fence_deadline: timedelta
     pace: float
+    run_budget: timedelta = timedelta(hours=4)
 
 
 def _policy(connection: psycopg.Connection[Any]) -> dict[str, Any]:
@@ -230,7 +231,21 @@ class Pipeline:
                 if not ready:
                     return {"status": "idle", "waiting": [
                         {"month": item["month"].key, "analysisOpen": item["analysis_open"]} for item in months]}
-                return self.archive_month(connection, ready[0]["month"], ready[0]["hot_bytes"])
+                # Созревшие месяцы — подряд, от старых к новым, пока не вышел
+                # бюджет прогона: иначе накопленная история уходила бы в архив
+                # по месяцу за ночь.
+                started, done, failed = self.clock(), [], []
+                for item in ready:
+                    if (done or failed) and self.clock() - started >= self.settings.run_budget:
+                        break
+                    try:
+                        done.append(self.archive_month(connection, item["month"], item["hot_bytes"]))
+                    except Exception as error:  # noqa: BLE001 — месяц уже открыт и помечен; дальше — следующий
+                        failed.append({"month": item["month"].key, "error": f"{type(error).__name__}: {error}"[:300]})
+                if not done:
+                    raise RuntimeError(f"no month archived: {failed}")
+                return {**done[-1], "months": [item["month"] for item in done], "failed": failed,
+                        "remaining": len(ready) - len(done) - len(failed)}
             finally:
                 connection.execute("SELECT pg_advisory_unlock(hashtext('cold-archive-pipeline'))")
 
@@ -397,6 +412,7 @@ def main() -> int:
         cold_after_days=int(os.getenv("COLD_ARCHIVE_AFTER_DAYS", "30")),
         fence_deadline=timedelta(minutes=int(os.getenv("COLD_ARCHIVE_FENCE_MINUTES", "120"))),
         pace=float(os.getenv("COLD_ARCHIVE_PACE", "1.0")),
+        run_budget=timedelta(minutes=int(os.getenv("COLD_ARCHIVE_RUN_MINUTES", "240"))),
     )
     return run_jobs(dsn, Pipeline(dsn, settings))
 
