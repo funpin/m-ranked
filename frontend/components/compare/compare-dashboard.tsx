@@ -204,12 +204,13 @@ function LevelBar({ levels }: { levels: readonly number[] }) {
   );
 }
 
-type SortKey = "name" | "posts" | Metric | "analyzed";
+type SortKey = "name" | "posts" | Metric | "analyzed" | "students";
 const TABLE_COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   { key: "name", label: "Вуз" },
   { key: "posts", label: "Публикаций", numeric: true },
   { key: "postsPerDay", label: "В день", numeric: true },
   { key: "subscribers", label: "Подписчики", numeric: true },
+  { key: "students", label: "Студенты", numeric: true },
   { key: "views24", label: "Просмотры 24 ч", numeric: true },
   { key: "reactions24", label: "Реакции 24 ч", numeric: true },
   { key: "engagement24", label: "Вовлечённость", numeric: true },
@@ -224,6 +225,12 @@ function InstitutionTable({ rows, highlights, onToggle }: {
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean }>({ key: "views24", descending: true });
   const sorted = useMemo(() => {
     if (sort.key === "name") return [...rows].sort((a, b) => (sort.descending ? -1 : 1) * a.name.localeCompare(b.name, "ru"));
+    if (sort.key === "students") return [...rows].sort((a,b) => {
+      if (a.students === null && b.students === null) return a.name.localeCompare(b.name,"ru");
+      if (a.students === null) return 1;
+      if (b.students === null) return -1;
+      return sort.descending ? b.students-a.students : a.students-b.students;
+    });
     if (sort.key === "posts" || sort.key === "analyzed") {
       const key = sort.key;
       return [...rows].sort((a, b) => (sort.descending ? b[key] - a[key] : a[key] - b[key]));
@@ -232,9 +239,9 @@ function InstitutionTable({ rows, highlights, onToggle }: {
   }, [rows, sort]);
   return (
     <div className="min-w-0" data-testid="compare-table">
-      <Table className="min-w-[1517px] table-fixed">
+      <Table className="min-w-[1647px] table-fixed">
         <colgroup>
-          {[44, 285, 118, 90, 125, 145, 140, 145, 150, 140, 135].map((width, index) => <col key={index} style={{ width }} />)}
+          {[44, 285, 118, 90, 125, 130, 145, 140, 145, 150, 140, 135].map((width, index) => <col key={index} style={{ width }} />)}
         </colgroup>
         <TableHeader>
           <TableRow>
@@ -268,7 +275,17 @@ function InstitutionTable({ rows, highlights, onToggle }: {
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{formatInteger(row.posts)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatValue(row.postsPerDay, "postsPerDay")}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatCompact(row.subscribers || null)}</TableCell>
+                <TableCell className="text-right tabular-nums" title={row.subscribers === null ? "Замер подписчиков отсутствует" : `Подписки по доступным замерам: ${formatInteger(row.subscribers)}. Соцсетей с данными: ${row.subscriberNetworks} из ${row.connectedNetworks}. Сумма подписок не является числом уникальных людей.`}>
+                  {formatCompact(row.subscribers)}{row.subscriberNetworks < row.connectedNetworks && row.subscribers !== null ? <span className="text-muted-foreground ml-1 text-[10px]" aria-label="Данные доступны не по всем соцсетям">*</span> : null}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {row.studentFact ? <a href={row.studentFact.sourceUrl} target="_blank" rel="noopener noreferrer"
+                    className="decoration-muted-foreground/40 underline underline-offset-4 hover:decoration-foreground"
+                    title={`${row.studentFact.referenceDate ?? row.studentFact.referenceYear ?? "Дата не указана"} · ${row.studentFact.sourceLabel}. ${row.studentFact.scope}`}>
+                    {row.studentFact.approximate ? "≈ " : ""}{formatInteger(row.students)}
+                    <span className="sr-only"> · источник численности студентов (новая вкладка)</span>
+                  </a> : <span title="Проверенная численность студентов не найдена">—</span>}
+                </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">{formatInteger(row.views24)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatInteger(row.reactions24)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatPercent(row.engagement24)}</TableCell>

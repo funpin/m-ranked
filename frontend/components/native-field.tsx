@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent, type ReactNode } from "react";
 import * as m from "motion/react-m";
 
 const subscribeNever = () => () => {};
@@ -19,13 +19,14 @@ const SLIDE = { type: "spring", stiffness: 420, damping: 36 } as const;
  * выбранному пункту пружиной. Состояние по-прежнему живёт в самих radio —
  * компонент лишь следит за ними (change, reset формы, возврат по истории).
  */
-export function NativeSegments({ name, options, value, legend, labelled = true }: {
+export function NativeSegments({ name, options, value, legend, labelled = true, stretch = false }: {
   name: string;
   legend: string;
   value: string;
-  options: readonly { value: string; label: string; title?: string }[];
+  options: readonly { value: string; label: string; title?: string; icon?: ReactNode }[];
   /** В компактной панели подпись мешает: набор и так читается по значениям. */
   labelled?: boolean;
+  stretch?: boolean;
 }) {
   const id = useId();
   const group = useRef<HTMLDivElement>(null);
@@ -44,11 +45,13 @@ export function NativeSegments({ name, options, value, legend, labelled = true }
     const onReset = () => window.setTimeout(sync);
     window.addEventListener("pageshow", sync);
     form?.addEventListener("reset", onReset);
+    form?.addEventListener("segments-sync", sync);
     const frame = window.requestAnimationFrame(sync);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("pageshow", sync);
       form?.removeEventListener("reset", onReset);
+      form?.removeEventListener("segments-sync", sync);
     };
   }, []);
   return (
@@ -60,16 +63,16 @@ export function NativeSegments({ name, options, value, legend, labelled = true }
           const target = event.target as unknown as HTMLInputElement;
           if (target.name === name && target.checked) setCurrent(target.value);
         }}
-        className="group/segments bg-muted text-muted-foreground flex h-8 w-fit max-w-full items-center overflow-x-auto rounded-lg p-[3px]">
+        className={`group/segments bg-muted text-muted-foreground flex h-8 max-w-full items-center overflow-x-auto rounded-lg p-[3px] ${stretch ? "w-full" : "w-fit"}`}>
         {options.map((option) => (
-          <label key={option.value} className="relative m-0 h-full shrink-0 cursor-pointer" title={option.title}>
-            <input type="radio" name={name} value={option.value} defaultChecked={option.value === value} className="peer absolute opacity-0" />
+          <label key={option.value} className={`relative m-0 h-full cursor-pointer ${stretch ? "min-w-0 flex-1" : "shrink-0"}`} title={option.title ?? option.label}>
+            <input type="radio" name={name} value={option.value} aria-label={option.icon ? option.label : undefined} defaultChecked={option.value === value} className="peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0" />
             {hydrated && current === option.value ? (
               <m.span layoutId={`segment-${id}`} transition={SLIDE} aria-hidden="true"
                 className="bg-background dark:border-input dark:bg-input/30 absolute inset-0 rounded-md border border-transparent shadow-sm" />
             ) : null}
-            <span className="text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground peer-checked:bg-background peer-checked:text-foreground dark:peer-checked:border-input dark:peer-checked:bg-input/30 peer-focus-visible:border-ring peer-focus-visible:ring-ring/50 relative grid h-full min-w-10 place-items-center rounded-md border border-transparent px-2.5 text-sm font-medium whitespace-nowrap transition-colors peer-checked:shadow-sm peer-focus-visible:ring-[3px] group-data-[animated]/segments:peer-checked:border-transparent group-data-[animated]/segments:peer-checked:bg-transparent group-data-[animated]/segments:peer-checked:shadow-none dark:group-data-[animated]/segments:peer-checked:bg-transparent">
-              {option.label}
+            <span className={`text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground peer-checked:bg-background peer-checked:text-foreground dark:peer-checked:border-input dark:peer-checked:bg-input/30 peer-focus-visible:border-ring peer-focus-visible:ring-ring/50 relative grid h-full place-items-center rounded-md border border-transparent px-2.5 text-sm font-medium whitespace-nowrap transition-colors peer-checked:shadow-sm peer-focus-visible:ring-[3px] group-data-[animated]/segments:peer-checked:border-transparent group-data-[animated]/segments:peer-checked:bg-transparent group-data-[animated]/segments:peer-checked:shadow-none dark:group-data-[animated]/segments:peer-checked:bg-transparent ${stretch ? "min-w-0" : "min-w-10"}`}>
+              {option.icon ?? option.label}
             </span>
           </label>
         ))}

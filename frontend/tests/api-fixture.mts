@@ -141,6 +141,9 @@ function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
     name: names[index] ?? `Университет ${index + 1}`, shortName: index < 2 ? ["Альфа", "Бета"][index]! : null,
     platforms: index % 5 === 4 ? ["telegram", "vk"] : [...networks],
     subscribers: { telegram: 1000 + index * 350, vk: 2000 + index * 500, max: 300 + index * 40, rutube: index % 3 ? 150 + index * 10 : 0 },
+    students: index === 0 ? { value: 12345, referenceYear: 2026, approximate: false,
+      sourceUrl: "https://example.test/students", sourceLabel: "Официальный отчёт",
+      scope: "Все формы обучения", verifiedAt: "2026-10-03" } : null,
   })) as Schema["ComparisonDashboard"]["institutions"];
   const stat = (institutionId: string | null, platform: string, seed: number): Schema["ComparisonDashboardStat"] => {
     const posts = 20 + (seed * 7) % 60;

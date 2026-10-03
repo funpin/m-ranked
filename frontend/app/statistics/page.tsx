@@ -3,6 +3,7 @@ import Link from "@/components/native-link";
 import { MethodNote } from "@/components/method-note";
 import { NavigationBoundary } from "@/components/navigation-boundary";
 import { NativeSegments } from "@/components/native-field";
+import { SortDirection } from "@/components/sort-direction";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -70,10 +71,15 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
     <StatisticsFilterForm key={selectionKey} action="/statistics" method="get" aria-label="Фильтры статистики"
       data-testid="filter-toolbar" className={FILTER_TOOLBAR_CLASS}>
       {query.platform !== "all" ? <input type="hidden" name="view" value={query.view} /> : null}
-      <div className={FILTER_PLATFORM_CLASS}><NativeSegments name="platform" legend="Площадка" value={query.platform} labelled={false}
+      <div className={FILTER_PLATFORM_CLASS}><NativeSegments name="platform" legend="Площадка" value={query.platform} labelled={false} stretch
         options={FILTER_PLATFORM_OPTIONS} /></div>
       <div className={FILTER_PERIOD_CLASS}><NativeSegments name="period" legend="Период" value={query.period}
-        options={FILTER_PERIOD_OPTIONS} labelled={false} /></div>
+        options={FILTER_PERIOD_OPTIONS} labelled={false} stretch /></div>
+      <div className={FILTER_DIRECTION_CLASS}><SortDirection name={query.view === "publications" ? "publication_direction" : "entity_direction"}
+        value={query.view === "publications" ? query.publicationDirection : query.entityDirection} legend="Направление сортировки" /></div>
+      <div className={FILTER_SORT_CLASS}>{query.view === "publications"
+        ? <NativeSelect name="publication_sort" defaultValue={query.publicationSort} aria-label="Сортировка публикаций" className={FILTER_SELECT_CLASS}>{PUBLICATION_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect>
+        : <NativeSelect name="entity_sort" defaultValue={query.entitySort} aria-label="Сортировка вузов" className={FILTER_SELECT_CLASS}>{ENTITY_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect>}</div>
       <div className={FILTER_SEARCH_CLASS}>
         <InputGroup className="h-8">
           <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
@@ -85,12 +91,6 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
           </InputGroupAddon>
         </InputGroup>
       </div>
-      <div className={FILTER_SORT_CLASS}>{query.view === "publications"
-        ? <NativeSelect name="publication_sort" defaultValue={query.publicationSort} aria-label="Сортировка публикаций" className={FILTER_SELECT_CLASS}>{PUBLICATION_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect>
-        : <NativeSelect name="entity_sort" defaultValue={query.entitySort} aria-label="Сортировка вузов" className={FILTER_SELECT_CLASS}>{ENTITY_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect>}</div>
-      <div className={FILTER_DIRECTION_CLASS}>{query.view === "publications"
-        ? <NativeSelect name="publication_direction" defaultValue={query.publicationDirection} aria-label="Направление сортировки публикаций" className={FILTER_SELECT_CLASS}><NativeSelectOption value="desc">По убыванию</NativeSelectOption><NativeSelectOption value="asc">По возрастанию</NativeSelectOption></NativeSelect>
-        : <NativeSelect name="entity_direction" defaultValue={query.entityDirection} aria-label="Направление сортировки вузов" className={FILTER_SELECT_CLASS}><NativeSelectOption value="desc">По убыванию</NativeSelectOption><NativeSelectOption value="asc">По возрастанию</NativeSelectOption></NativeSelect>}</div>
       {query.view === "publications" ? <><input type="hidden" name="entity_sort" value={query.entitySort} /><input type="hidden" name="entity_direction" value={query.entityDirection} /></> : <><input type="hidden" name="publication_sort" value={query.publicationSort} /><input type="hidden" name="publication_direction" value={query.publicationDirection} /></>}
     </StatisticsFilterForm>
 

@@ -45,7 +45,7 @@ test("comparison dashboard: platform tabs, highlight, ranking metric, table sort
   const table = page.getByTestId("compare-table");
   await table.getByRole("button", { name: /Публикаций/ }).click();
   await expect(table.getByRole("columnheader", { name: /Публикаций/ })).toHaveAttribute("aria-sort", "descending");
-  await page.getByRole("navigation", { name: "Период" }).getByRole("link", { name: "7 дней" }).click();
+  await page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "7 дней" }).click();
   await expect(page).toHaveURL(/period=7d/);
   await expect(page).toHaveURL(/platform=vk/);
   await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
@@ -80,11 +80,11 @@ test("comparison charts and names stay inside their cards", async ({ page }) => 
 test("form sort direction, platform autosubmit and browser history preserve fields", async ({ page }) => {
   await page.goto("/review?platform=vk&sort=subscribers&direction=desc");
   await page.locator('select[name="sort"]').selectOption("name");
-  await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
+  await expect(page.locator('input[name="direction"][value="asc"]')).toBeChecked();
   await page.getByTestId("platform-segments").locator('label:has(input[value="rutube"])').click();
   await expect(page).toHaveURL(/platform=rutube/);
   await expect(page.locator('select[name="sort"]')).toHaveValue("name");
-  await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
+  await expect(page.locator('input[name="direction"][value="asc"]')).toBeChecked();
   await page.goBack();
   await expect(page.locator('input[name="platform"][value="vk"]')).toBeChecked();
   await page.goForward();
@@ -134,7 +134,7 @@ test("statistics concrete platform restores URL state, tabs, search and sorting"
   await expect(publicationTarget.getByText("Полное название университета 001",{exact:true})).toBeVisible();
   await expect(publicationTarget).not.toContainText("Аккаунт 1");
   if (info.project.name === "mobile") {
-    await expect(page.locator('select[name="publication_direction"]')).toHaveValue("asc");
+    await expect(page.locator('input[name="publication_direction"][value="asc"]')).toBeChecked();
   } else {
     await expect(page.getByRole("columnheader", { name: /Просмотры/ })).toHaveAttribute("aria-sort", "ascending");
   }
@@ -364,7 +364,7 @@ test("account list and institutional zero/one/many routes preserve identity",asy
   await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/");await expect(page.locator('[data-testid="main-nav"] a[href^="/review"]')).toHaveAttribute("href","/review?platform=max");
 });
 
-test("overview and statistics keep desktop filters within two rows and wrap on mobile",async({page},info)=>{
+test("overview and statistics share a dense responsive toolbar",async({page},info)=>{
   for(const path of ["/review?platform=telegram","/statistics?platform=telegram"]){
     await page.goto(path);
     const toolbar=page.getByTestId("filter-toolbar");
@@ -372,7 +372,7 @@ test("overview and statistics keep desktop filters within two rows and wrap on m
     const boxes=await toolbar.locator(":scope > :not(input[type=hidden]):not([role=status])").evaluateAll(elements=>elements.map(element=>{
       const box=element.getBoundingClientRect();return {top:Math.round(box.top),bottom:Math.round(box.bottom)};
     }));
-    if(info.project.name==="desktop") expect(new Set(boxes.map(box=>box.top)).size).toBeLessThanOrEqual(2);
+    if(info.project.name==="desktop") expect(new Set(boxes.map(box=>box.top)).size).toBe(1);
     else {
       expect(new Set(boxes.map(box=>box.top)).size).toBeGreaterThan(1);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBe(0);

@@ -4905,6 +4905,11 @@ components:
               legacyId: { type: [integer, 'null'], format: int64 }
               name: { type: string }
               shortName: { type: [string, 'null'] }
+              students:
+                description: Последняя проверенная численность студентов с датой и ссылкой на опубликованный источник.
+                anyOf:
+                - { $ref: '#/components/schemas/InstitutionStudentCount' }
+                - { type: 'null' }
               platforms:
                 type: array
                 items: { $ref: '#/components/schemas/PlatformValue' }
@@ -4913,10 +4918,10 @@ components:
                 additionalProperties: false
                 required: [telegram, vk, max, rutube]
                 properties:
-                  telegram: { type: integer, format: int64, minimum: 0 }
-                  vk: { type: integer, format: int64, minimum: 0 }
-                  max: { type: integer, format: int64, minimum: 0 }
-                  rutube: { type: integer, format: int64, minimum: 0 }
+                  telegram: { type: [integer, 'null'], format: int64, minimum: 0 }
+                  vk: { type: [integer, 'null'], format: int64, minimum: 0 }
+                  max: { type: [integer, 'null'], format: int64, minimum: 0 }
+                  rutube: { type: [integer, 'null'], format: int64, minimum: 0 }
         stats:
           type: array
           items: { $ref: '#/components/schemas/ComparisonDashboardStat' }

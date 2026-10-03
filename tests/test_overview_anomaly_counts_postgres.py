@@ -11,6 +11,7 @@ import pytest
 from api.dto import overview_row
 from api.params import overview_query
 from api.sql.overview import OVERVIEW
+from api.sql.compare import DASHBOARD_INSTITUTIONS
 
 AS_OF = datetime(2026, 10, 3, 12, tzinfo=timezone.utc)
 INSTITUTION, OTHER, TG, VK, VK_SECOND = map(UUID, [f"00000000-0000-4000-8000-{i:012}" for i in range(1, 6)])
@@ -90,6 +91,35 @@ def connection():
         post(14,VK,2,1)  # Weak signal is neither red nor orange.
         post(15,VK,2,None)  # No analysis yet.
         yield db
+
+
+def test_comparison_subscribers_use_last_valid_snapshot_without_turning_unknown_into_zero(connection):
+    with connection.transaction(force_rollback=True):
+        connection.execute("ALTER TABLE ingest.account_metric_snapshot_active ADD subscriber_quality text NOT NULL DEFAULT 'exact'")
+        def snapshot(index, account, count, *, observed=None, collected=None, quality="exact", subscriber_quality="exact"):
+            connection.execute("INSERT INTO ingest.account_metric_snapshot_active VALUES (%s,%s,%s,NULL,%s,%s,%s,%s)",
+                (index,account,count,observed or AS_OF-timedelta(hours=1),
+                 collected or AS_OF-timedelta(minutes=30),quality,subscriber_quality))
+        snapshot(1,TG,123,observed=AS_OF-timedelta(hours=2))
+        snapshot(2,TG,None)
+        snapshot(3,TG,999,quality="invalid")
+        snapshot(4,TG,999,subscriber_quality="invalid")
+        snapshot(5,TG,999,observed=AS_OF+timedelta(minutes=1))
+        snapshot(6,TG,999,collected=AS_OF+timedelta(minutes=1))
+        snapshot(7,VK,100)
+        snapshot(8,VK_SECOND,200)
+        max_account=UUID(int=101)
+        connection.execute("INSERT INTO catalog.visible_platform_account VALUES (%s,%s,'max','external',NULL,'Account',NULL,'public',true)", (max_account,INSTITUTION))
+        snapshot(9,max_account,0)
+        disabled_account=UUID(int=102)
+        connection.execute("INSERT INTO catalog.visible_platform_account VALUES (%s,%s,'vk','external',NULL,'Account',NULL,'public',false)", (disabled_account,INSTITUTION))
+        snapshot(10,disabled_account,999)
+        rows={row["id"]:row for row in connection.execute(DASHBOARD_INSTITUTIONS,{"as_of":AS_OF}).fetchall()}
+        assert rows[INSTITUTION]["telegram"] == 123
+        assert rows[INSTITUTION]["vk"] == 300
+        assert rows[INSTITUTION]["max"] == 0
+        assert rows[INSTITUTION]["rutube"] is None
+        assert rows[OTHER]["vk"] is None
 
 
 @pytest.mark.parametrize("platform,period,entity,expected", [

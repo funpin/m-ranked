@@ -625,3 +625,32 @@ def test_comparison_dashboard_body_matches_the_contract():
     curve = next(item for item in body["curves"] if item["institutionId"] == str(institution))
     assert curve["views"][4] == 812 and curve["views"][0] is None
     assert body["institutions"][0]["platforms"] == ["telegram", "vk"]
+    assert body["institutions"][0]["subscribers"]["max"] == 0
+    assert body["institutions"][0]["subscribers"]["rutube"] is None
+    assert body["institutions"][0]["students"] is None
+
+
+def test_comparison_builder_bounds_subscribers_by_the_same_snapshot(monkeypatch):
+    import asyncio
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from api.routes import compare
+
+    as_of = datetime(2026, 10, 3, 12, tzinfo=timezone.utc)
+    calls = []
+    class ReadDatabase:
+        async def fetch_one(self, query, values):
+            calls.append((query, values))
+            return {}
+        async def fetch_all(self, query, values):
+            calls.append((query, values))
+            return []
+    async def serve(_request, _namespace, _query, _tags, build):
+        return await build(42, as_of)
+    monkeypatch.setattr(compare, "serve", serve)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=ReadDatabase())))
+    body = asyncio.run(compare.dashboard(request, "30d"))
+    assert body["datasetRevision"] == 42
+    assert len(calls) == 3
+    for query, values in calls:
+        assert values["as_of"] == as_of, query

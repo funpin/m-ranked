@@ -3,7 +3,7 @@
 import { useEffect, useRef, useTransition, type ComponentProps } from "react";
 import { beginNavigation } from "@/lib/navigation-pending";
 import { useRouter, useSearchParams } from "next/navigation";
-import { normalizePeriod, normalizePlatform } from "@/lib/params";
+import { normalizeDirection, normalizePeriod, normalizePlatform, normalizeSort } from "@/lib/params";
 import { useStuck } from "@/components/use-stuck";
 
 /** Hydrates only form interaction; all labels, values and results are SSR. */
@@ -26,6 +26,9 @@ export function LegacyFilterForm({ action = "/review", ...props }: ComponentProp
       form.current?.querySelectorAll<HTMLInputElement>('input[name="platform"]').forEach((radio) => {radio.checked=radio.value===platform;});
       const period=normalizePeriod(new URL(location.href).searchParams.getAll("period"), "1d");
       form.current?.querySelectorAll<HTMLInputElement>('input[name="period"]').forEach((radio) => {radio.checked=radio.value===period;});
+      const address=new URL(location.href);
+      const direction=normalizeDirection(address.searchParams.getAll("direction"),normalizeSort(address.searchParams.getAll("sort"),platform));
+      form.current?.querySelectorAll<HTMLInputElement>('input[name="direction"]').forEach((radio) => {radio.checked=radio.value===direction;});
     }, 0); };
     const show = (event: PageTransitionEvent) => { if (event.persisted) restore(); };
     if ((performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined)?.type === "back_forward") restore();
@@ -53,8 +56,12 @@ export function LegacyFilterForm({ action = "/review", ...props }: ComponentProp
     if (field instanceof HTMLSelectElement && field.name === "sort") {
       const direction = event.currentTarget.elements.namedItem("direction");
       if (direction instanceof HTMLSelectElement) direction.value = field.value === "name" ? "asc" : "desc";
+      event.currentTarget.querySelectorAll<HTMLInputElement>('input[name="direction"]').forEach(radio => {
+        radio.checked = radio.value === (field.value === "name" ? "asc" : "desc");
+      });
+      event.currentTarget.dispatchEvent(new Event("segments-sync"));
     }
-    if (field instanceof HTMLInputElement && (field.name === "platform" || field.name === "period") && field.type === "radio") {
+    if (field instanceof HTMLInputElement && (field.name === "platform" || field.name === "period" || field.name === "direction") && field.type === "radio") {
       event.currentTarget.requestSubmit();
     }
   }}>{props.children}<span className="sr-only" role="status" hidden={!pending}>Обновляю…</span></form>;

@@ -366,16 +366,26 @@ SELECT account.institution_id, account.platform::text AS platform, checkpoint.ho
 
 DASHBOARD_INSTITUTIONS = """
 SELECT institution.id, alias.legacy_id, institution.canonical_name, institution.short_name,
-       coalesce(sum(subscribers.value) FILTER (WHERE account.platform = 'telegram'), 0)::bigint AS telegram,
-       coalesce(sum(subscribers.value) FILTER (WHERE account.platform = 'vk'), 0)::bigint AS vk,
-       coalesce(sum(subscribers.value) FILTER (WHERE account.platform = 'max'), 0)::bigint AS max,
-       coalesce(sum(subscribers.value) FILTER (WHERE account.platform = 'rutube'), 0)::bigint AS rutube,
+       sum(subscribers.subscriber_count) FILTER (WHERE account.platform = 'telegram')::bigint AS telegram,
+       sum(subscribers.subscriber_count) FILTER (WHERE account.platform = 'vk')::bigint AS vk,
+       sum(subscribers.subscriber_count) FILTER (WHERE account.platform = 'max')::bigint AS max,
+       sum(subscribers.subscriber_count) FILTER (WHERE account.platform = 'rutube')::bigint AS rutube,
        array_agg(DISTINCT account.platform::text) FILTER (WHERE account.id IS NOT NULL) AS platforms
   FROM catalog.visible_institution institution
   LEFT JOIN catalog.legacy_entity_alias alias ON alias.target_uuid = institution.id AND alias.entity_type = 'institutions'
   LEFT JOIN catalog.visible_platform_account account ON account.institution_id = institution.id AND account.enabled
-  LEFT JOIN analytics.account_latest subscribers ON subscribers.platform_account_id = account.id
-   AND subscribers.metric_key = 'subscribers'
+  -- Read the same source as overview; an absent derived account_latest row
+  -- must not hide an available collector measurement. A missing count is NULL.
+  LEFT JOIN LATERAL (
+      SELECT snapshot.subscriber_count
+        FROM ingest.account_metric_snapshot_active snapshot
+       WHERE snapshot.platform_account_id = account.id
+         AND snapshot.observed_at <= %(as_of)s AND snapshot.collected_at <= %(as_of)s
+         AND snapshot.quality <> 'invalid' AND snapshot.subscriber_quality <> 'invalid'
+         AND snapshot.subscriber_count IS NOT NULL
+       ORDER BY snapshot.observed_at DESC, snapshot.collected_at DESC, snapshot.id DESC
+       LIMIT 1
+  ) subscribers ON true
  GROUP BY institution.id, alias.legacy_id, institution.canonical_name, institution.short_name
  ORDER BY lower(coalesce(institution.short_name, institution.canonical_name))
 """

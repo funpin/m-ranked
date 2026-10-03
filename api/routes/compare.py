@@ -13,6 +13,7 @@ from .. import dto, params as normalize
 from ..cached import serve
 from ..db import Database
 from ..errors import BadRequest
+from ..institution_profile import institution_profile
 from ..sql import compare as sql
 
 router = APIRouter(tags=["Query"])
@@ -205,7 +206,8 @@ def dashboard_body(period: str, revision: int, committed_at: Any, dashboard: dic
             "institutionId": str(row["id"]), "legacyId": row["legacy_id"],
             "name": row["canonical_name"], "shortName": row["short_name"],
             "platforms": sorted(row["platforms"] or []),
-            "subscribers": {platform: int(row[platform] or 0) for platform in PLATFORMS},
+            "subscribers": {platform: int(row[platform]) if row[platform] is not None else None for platform in PLATFORMS},
+            "students": institution_profile({"institution_id": row["id"]})["students"],
         } for row in institutions],
         "stats": [{
             "institutionId": row["institution_id"], "platform": row["platform"],
@@ -246,7 +248,7 @@ async def dashboard(request: Request, period: str = Query("30d")) -> Response:
         values = {"as_of": committed_at, "days": days}
         dashboard_row = await db.fetch_one(sql.DASHBOARD, values)
         curves = await db.fetch_all(sql.DASHBOARD_CURVES, values)
-        institutions = await db.fetch_all(sql.DASHBOARD_INSTITUTIONS, {})
+        institutions = await db.fetch_all(sql.DASHBOARD_INSTITUTIONS, values)
         return dashboard_body(resolved_period, revision, committed_at,
                               dict(dashboard_row or {}), curves, institutions)
 
