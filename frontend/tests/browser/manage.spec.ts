@@ -42,13 +42,9 @@ for(const role of ["viewer","editor","admin"]) test(`manage ${role} receives SSR
   await expect(page.getByRole("button",{name:"Удалить",exact:true}).first()).toBeEnabled({enabled:role==="admin"});
   const html=await page.content();expect(html).not.toContain("fixture-password");
   await expect(page.locator('#accountMatrix input[name="telegram"]')).toHaveValue("https://example.test/telegram/1");
-  const nativeId=page.getByTestId("native-id-editor").first();
-  await nativeId.locator("summary").click();
-  await expect(nativeId.locator('input[name="native_id"]')).toBeVisible();
-  await expect(nativeId.locator('input[name="native_id"]')).toBeEnabled({enabled:role!=="viewer"});
-  await expect(nativeId.locator("form")).toHaveAttribute("action","/manage/platform-accounts/12/native-id");
-  await expect(nativeId.locator('input[name="expected_row_version"]')).toHaveValue("7");
-  await nativeId.locator("summary").click();
+  // Раскрывающийся chat_id MAX из таблицы убран: идентификатор виден подписью.
+  await expect(page.getByTestId("native-id-editor")).toHaveCount(0);
+  await expect(page.getByTestId("platform-table")).toContainText("chat_id");
   if(role!=="viewer") {
     await page.locator("#matrixInstitution").selectOption("2");
     await expect(page.locator("#accountMatrix")).toHaveAttribute("action","/manage/institutions/2/accounts");

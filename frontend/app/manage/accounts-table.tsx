@@ -83,20 +83,8 @@ function AccountStatus({ account, status }: { account: ManagedAccount; status: C
   return <Badge className={`h-auto text-xs ${tone}`}>{text}</Badge>;
 }
 
-function PlatformLabel({ account, csrf, canEdit }: { account: ManagedAccount; csrf: string; canEdit: boolean }) {
-  const label = <PlatformChip platform={account.platform} label={account.platform.toUpperCase()} />;
-  if (account.platform !== "max") return label;
-  return (
-    <details data-testid="native-id-editor" className="min-w-28 [&_form]:mt-3 [&_form]:grid [&_form]:gap-2 [&_summary]:cursor-pointer">
-      <summary aria-label="Изменить chat_id MAX">{label}</summary>
-      <form method="post" action={`/manage/platform-accounts/${account.legacyId}/native-id`}>
-        <Label className="grid gap-1.5 text-sm leading-normal font-normal">chat_id
-          <Input name="native_id" defaultValue={account.nativeId ?? ""} required disabled={!canEdit} /></Label>
-        {fields(csrf, account.rowVersion)}
-        <Button type="submit" disabled={!canEdit}>Сохранить</Button>
-      </form>
-    </details>
-  );
+function PlatformLabel({ account }: { account: ManagedAccount }) {
+  return <PlatformChip platform={account.platform} label={account.platform.toUpperCase()} />;
 }
 
 function AccountName({ account }: { account: ManagedAccount }) {
@@ -158,7 +146,7 @@ export function AccountsTable({ institutions, status, csrf, canEdit, canDelete }
             ? institution.accounts.map((account, index) => (
               <TableRow key={account.id}>
                 {index === 0 ? <InstitutionCell institution={institution} csrf={csrf} canEdit={canEdit} /> : null}
-                <TableCell><PlatformLabel account={account} csrf={csrf} canEdit={canEdit} /></TableCell>
+                <TableCell><PlatformLabel account={account} /></TableCell>
                 <TableCell className="min-w-48"><AccountName account={account} /></TableCell>
                 <TableCell className="min-w-40">
                   <small className="!mt-0">
