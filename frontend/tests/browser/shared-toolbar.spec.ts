@@ -1,5 +1,39 @@
 import { expect, test } from "@playwright/test";
 
+test("MAX fits its selection and comparison tabs have a visible selected surface", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop", "The test checks every viewport itself");
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const path of ["/review?platform=max", "/statistics?platform=max"]) {
+        await page.goto(path);
+        const max = page.getByTestId("platform-segments").getByRole("radio", { name: "MAX", exact: true });
+        await expect(max).toBeChecked();
+        const fits = await max.evaluate(input => {
+          const label = input.parentElement!, text = label.lastElementChild!;
+          const bounds = label.getBoundingClientRect(), textBounds = text.getBoundingClientRect();
+          return textBounds.left >= bounds.left && textBounds.right <= bounds.right + 1 && text.scrollWidth <= text.clientWidth;
+        });
+        expect(fits, `${path} at ${width}px in ${theme}`).toBe(true);
+      }
+      await page.goto("/compare?platform=max&period=30d");
+      const platforms = page.getByTestId("platform-tabs");
+      await expect(platforms.getByRole("tab", { name: "MAX", exact: true })).toHaveAttribute("aria-selected", "true");
+      const selectedSurface = platforms.locator('[data-slot="motion-highlight"]');
+      await expect(selectedSurface).toBeVisible();
+      const surface = await selectedSurface.evaluate(el => ({ width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height, background: getComputedStyle(el).backgroundColor, border: getComputedStyle(el).borderTopStyle }));
+      expect(surface.width).toBeGreaterThan(30);
+      expect(surface.height).toBeGreaterThan(20);
+      expect(surface.background).not.toBe("rgba(0, 0, 0, 0)");
+      expect(surface.border).toBe("solid");
+      await platforms.getByRole("tab", { name: "TG", exact: true }).click();
+      await expect(platforms.getByRole("tab", { name: "TG", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page).toHaveURL(/platform=telegram/);
+    }
+  }
+});
+
 test("filter rows fill available space and keep the same geometry on both pages", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "The test checks every viewport itself");
   await page.emulateMedia({ colorScheme: "dark" });
