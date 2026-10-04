@@ -135,7 +135,7 @@ function FindingRows({ rows, query, anomaliesVisible, showInstitution, personal 
           <IndexValue row={row} sort={query.sort} prominent />
         </div>
         <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
-          <Pair label="Взаимодействия" value={<Interactions row={row} />} />
+          <Pair label="Взаимодействия" value={<Interactions row={row} stacked />} />
           <Pair label="Просмотры" value={formatMetric(row.views)} />
           <Pair label="ERV" value={formatPercentage(row.erv)} />
         </dl>
@@ -196,20 +196,21 @@ function IndexValue({ row, sort, prominent = false }: { row: Finding; sort: Pars
     <TooltipContent className="max-w-sm whitespace-normal leading-relaxed">{tip}</TooltipContent></Tooltip>;
 }
 
-/** Число взаимодействий и до трёх самых частых реакций (Telegram, MAX). */
-function Interactions({ row }: { row: Finding }) {
+/** Число взаимодействий и до трёх самых частых реакций (Telegram, MAX).
+ *  В узкой ячейке карточки реакции уходят строкой ниже, а не в соседнюю. */
+function Interactions({ row, stacked = false }: { row: Finding; stacked?: boolean }) {
   const parts = [
     row.capabilities.reactions ? `реакции ${formatMetric(row.reactions)}` : null,
     row.capabilities.comments ? `комментарии ${formatMetric(row.comments)}` : null,
     row.capabilities.shares ? `репосты ${formatMetric(row.shares)}` : null,
   ].filter(Boolean).join(" · ");
   const top = row.topReactions;
-  const glyphs = top.length ? <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-sm" aria-hidden="true">
+  const glyphs = top.length ? <span className={cn("inline-flex items-center gap-0.5 align-middle text-sm", stacked ? "mt-0.5" : "ml-1.5")} aria-hidden="true">
     {top.map((entry) => <ReactionGlyph key={entry.reaction} name={entry.reaction} className="size-4" />)}
   </span> : null;
   const topText = top.length ? `Чаще всего: ${top.map((entry) => `${entry.reaction.startsWith("custom:") ? "своя реакция" : entry.reaction} ${formatMetric(entry.count)}`).join(", ")}` : null;
   if (!parts && !topText) return <span className="tabular-nums">{formatMetric(row.interactions)}</span>;
-  return <Tooltip><TooltipTrigger render={<button type="button" className="relative z-10 inline-flex cursor-help items-center whitespace-nowrap tabular-nums" aria-label={`Взаимодействия ${formatMetric(row.interactions)}: ${[parts, topText].filter(Boolean).join(". ")}`} />}>
+  return <Tooltip><TooltipTrigger render={<button type="button" className={cn("relative z-10 inline-flex cursor-help whitespace-nowrap tabular-nums", stacked ? "flex-col items-start" : "items-center")} aria-label={`Взаимодействия ${formatMetric(row.interactions)}: ${[parts, topText].filter(Boolean).join(". ")}`} />}>
       <span className="border-b border-dotted border-current">{formatMetric(row.interactions)}</span>{glyphs}
     </TooltipTrigger>
     <TooltipContent className="max-w-sm whitespace-normal leading-relaxed">
