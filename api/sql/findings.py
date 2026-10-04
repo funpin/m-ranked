@@ -15,7 +15,23 @@ analytics.publication_checkpoint, поэтому снимки запрос не 
 """
 from __future__ import annotations
 
-from .statistics import CAPABILITIES, SEARCH_PREDICATE
+from ..statistics_capabilities import INTERACTION_COMPONENTS, PLATFORM_METRIC_CAPABILITIES
+from .statistics import SEARCH_PREDICATE
+
+
+def _capability(platform: str) -> str:
+    """Флаги «площадка отдаёт показатель» выражениями по самой площадке.
+
+    Раньше флаги приходили соединением с VALUES-таблицей возможностей; на нём
+    планировщик оценивал 328 аккаунтов как 7 строк и читал контрольные точки
+    поштучно по индексу: сотни тысяч блоков вместо десятка тысяч.
+    """
+    def supported(metric: str) -> str:
+        platforms = ",".join(f"'{name}'" for name, metrics in PLATFORM_METRIC_CAPABILITIES.items()
+                             if metric in metrics)
+        return f"({platform}) IN ({platforms})" if platforms else "false"
+    flags = ",".join(f"{supported(metric)} AS {metric}_supported" for metric in INTERACTION_COMPONENTS)
+    return f"CROSS JOIN LATERAL (SELECT {flags}) capability"
 
 _INTERACTIONS = """
 CASE WHEN (NOT capability.reactions_supported OR checkpoint.reactions_count IS NULL)
@@ -30,20 +46,67 @@ END::bigint
 
 # Действующий уровень — как на панели сравнения: ручная перепроверка
 # понижает сохранённый уровень, пока анализ поста не обновился.
-_LEVEL = """
+def _level(window_start: str) -> str:
+    """Соединение с анализом аномалий. Окно по published_at состояния (оно
+    повторяет дату поста) даёт планировщику верную оценку числа строк, и он
+    строит хэш вместо десятков тысяч поисков по индексу. Запас в двое суток
+    прощает уточнённую позже дату поста."""
+    return f"""
 LEFT JOIN analytics.post_anomaly_state state ON state.publication_id=publication.id
- AND state.analyzed_at IS NOT NULL
+ AND state.analyzed_at IS NOT NULL AND state.published_at>{window_start}-interval '2 days'
 LEFT JOIN analytics.post_anomaly_context_recheck recheck ON recheck.publication_id=publication.id
  AND recheck.source_analyzed_at=state.analyzed_at AND recheck.source_level=state.level
  AND state.review_status='unreviewed'
 """
 
+# Нормы аккаунтов за 30 дней не зависят от фильтров страницы и меняются
+# медленно: их считает отдельный запрос сразу для всех аккаунтов, а маршрут
+# держит результат в кэше процесса и передаёт в FINDINGS параметром.
+NORMS = f"""
+WITH params AS (
+    SELECT %(as_of)s::timestamptz AS as_of,
+           %(as_of)s::timestamptz-make_interval(days=>%(norm_days)s) AS norm_cutoff
+), posts AS MATERIALIZED (
+    -- Уровень анализа — на пост, до контрольных точек: иначе соединение с
+    -- анализом шло бы по каждой точке (сотни тысяч поисков на проде).
+    SELECT publication.id AS publication_id,publication.published_at,account.id AS account_id,
+           account.platform::text AS platform
+      FROM params
+      JOIN ingest.visible_publication publication
+        ON publication.published_at>params.norm_cutoff AND publication.published_at<=params.as_of
+      JOIN catalog.visible_platform_account account ON account.id=publication.primary_account_id AND account.enabled
+      {_level('params.norm_cutoff')}
+     WHERE coalesce(recheck.effective_level,state.level,0)<2
+), points AS (
+    SELECT posts.account_id,checkpoint.hour_offset,checkpoint.views_count AS views,
+           CASE WHEN capability.comments_supported THEN checkpoint.comments_count END AS comments,
+           CASE WHEN capability.shares_supported THEN checkpoint.shares_count END AS shares,
+           {_INTERACTIONS} AS interactions
+      FROM params
+      JOIN posts ON true
+      {_capability("posts.platform")}
+      JOIN analytics.publication_checkpoint checkpoint ON checkpoint.publication_id=posts.publication_id
+       AND checkpoint.hour_offset<=24
+       AND posts.published_at+checkpoint.hour_offset*interval '1 hour'<=params.as_of
+)
+SELECT account_id,hour_offset,
+       count(interactions)::integer AS interaction_sample,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY interactions) AS interaction_norm,
+       count(views)::integer AS view_sample,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY views) AS view_norm,
+       count(comments)::integer AS comment_sample,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY comments) AS comment_norm,
+       count(shares)::integer AS share_sample,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY shares) AS share_norm
+  FROM points
+ GROUP BY account_id,hour_offset
+"""
+
 FINDINGS = f"""
 WITH params AS (
     SELECT %(as_of)s::timestamptz AS as_of,
-           %(as_of)s::timestamptz-make_interval(days=>%(period_days)s) AS cutoff,
-           %(as_of)s::timestamptz-make_interval(days=>%(norm_days)s) AS norm_cutoff
-), {CAPABILITIES}, accounts AS MATERIALIZED (
+           %(as_of)s::timestamptz-make_interval(days=>%(period_days)s) AS cutoff
+), accounts AS MATERIALIZED (
     SELECT account.id AS account_id,account.platform::text AS platform,account.institution_id,
            account.current_username,account.current_title,
            institution.canonical_name AS institution_canonical_name,
@@ -62,61 +125,52 @@ WITH params AS (
 ), published AS MATERIALIZED (
     -- Уровень считается на пост, а не на каждую его точку: так соединения с
     -- анализом идут по ~25 тыс. постам, а не по ~130 тыс. точкам.
+    -- Только посты периода: нормы уже посчитаны отдельно (NORMS).
     SELECT publication.id AS publication_id,publication.published_at,accounts.account_id,
-           accounts.platform,publication.published_at>params.cutoff AS in_period,
+           accounts.platform,publication.publication_type::text AS publication_type,
            coalesce(recheck.effective_level,state.level) AS level
       FROM params
       JOIN ingest.visible_publication publication
-        ON publication.published_at>params.norm_cutoff AND publication.published_at<=params.as_of
+        ON publication.published_at>params.cutoff AND publication.published_at<=params.as_of
       JOIN accounts ON accounts.account_id=publication.primary_account_id
-      {_LEVEL}
+      {_level('params.cutoff')}
 ), measured AS MATERIALIZED (
-    SELECT published.publication_id,published.account_id,checkpoint.hour_offset,published.in_period,
+    SELECT published.publication_id,published.account_id,checkpoint.hour_offset,
            checkpoint.views_count AS views,checkpoint.reactions_count AS reactions,
            CASE WHEN capability.comments_supported THEN checkpoint.comments_count END AS comments,
            CASE WHEN capability.shares_supported THEN checkpoint.shares_count END AS shares,
            {_INTERACTIONS} AS interactions,published.level
       FROM params
       JOIN published ON true
-      JOIN capabilities capability ON capability.platform=published.platform
+      {_capability("published.platform")}
       JOIN analytics.publication_checkpoint checkpoint ON checkpoint.publication_id=published.publication_id
        AND checkpoint.hour_offset<=24
        -- Точка «из будущего» относительно as_of ещё не наступила для этой ревизии.
        AND published.published_at+checkpoint.hour_offset*interval '1 hour'<=params.as_of
 ), norms AS (
-    SELECT account_id,hour_offset,
-           count(interactions)::integer AS interaction_sample,
-           percentile_cont(0.5) WITHIN GROUP (ORDER BY interactions) AS interaction_norm,
-           count(views)::integer AS view_sample,
-           percentile_cont(0.5) WITHIN GROUP (ORDER BY views) AS view_norm,
-           count(comments)::integer AS comment_sample,
-           percentile_cont(0.5) WITHIN GROUP (ORDER BY comments) AS comment_norm,
-           count(shares)::integer AS share_sample,
-           percentile_cont(0.5) WITHIN GROUP (ORDER BY shares) AS share_norm
-      FROM measured
-     WHERE coalesce(level,0)<2
-     GROUP BY account_id,hour_offset
+    SELECT * FROM jsonb_to_recordset(%(norms)s::jsonb) AS norms(
+        account_id uuid,hour_offset integer,interaction_sample integer,interaction_norm double precision,
+        view_sample integer,view_norm double precision,comment_sample integer,comment_norm double precision,
+        share_sample integer,share_norm double precision)
 ), latest_point AS (
     -- Самая поздняя непустая точка не старше суток. Пустая строка на 24-м
     -- часу (сбор пропустил этот час) не скрывает значение на 12-м.
     SELECT DISTINCT ON (publication_id) publication_id,hour_offset,views,reactions,comments,shares,interactions
       FROM measured
-     WHERE in_period AND (views IS NOT NULL OR interactions IS NOT NULL)
+     WHERE views IS NOT NULL OR interactions IS NOT NULL
      ORDER BY publication_id,hour_offset DESC
 ), candidates AS (
-    SELECT publication.id AS publication_id,publication.published_at,
-           publication.publication_type::text AS publication_type,accounts.*,
-           coalesce(recheck.effective_level,state.level) AS level
-      FROM params
-      JOIN ingest.visible_publication publication
-        ON publication.published_at>params.cutoff AND publication.published_at<=params.as_of
-      JOIN accounts ON accounts.account_id=publication.primary_account_id
+    -- Всё о посте уже есть в published: ни публикации, ни анализ повторно не
+    -- читаются. Псевдоним publication и поле id нужны SEARCH_PREDICATE.
+    SELECT publication.publication_id,publication.published_at,publication.publication_type,
+           accounts.*,publication.level
+      FROM (SELECT published.*,published.publication_id AS id FROM published) publication
+      JOIN accounts ON accounts.account_id=publication.account_id
       JOIN catalog.visible_platform_account account ON account.id=accounts.account_id
       JOIN catalog.visible_institution institution ON institution.id=accounts.institution_id
-      {_LEVEL}
      WHERE (cardinality(%(types)s::text[])=0
-            OR CASE WHEN publication.publication_type::text IN ('text','photo','album','video')
-                    THEN publication.publication_type::text ELSE 'other' END = ANY(%(types)s::text[]))
+            OR CASE WHEN publication.publication_type IN ('text','photo','album','video')
+                    THEN publication.publication_type ELSE 'other' END = ANY(%(types)s::text[]))
        AND {SEARCH_PREDICATE}
 ), scored AS (
     SELECT candidates.*,point.hour_offset AS age_hours,point.views,point.reactions,point.comments,

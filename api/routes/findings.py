@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
+from psycopg.types.json import Jsonb
 
 from .. import dto, params as normalize
 from ..cached import serve
@@ -15,6 +16,7 @@ from ..findings import (
     FINDING_MIN_SHARES, FINDINGS_PERIOD_DAYS, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE,
     NORM_WINDOW_DAYS, PAGE_CAP, SHARE_NORM_FLOOR, TOP_REACTIONS, VIEW_NORM_FLOOR,
 )
+from ..findings_norms import NormsCache
 from ..sql import findings as sql
 from .statistics import _like_pattern, _page
 
@@ -22,6 +24,9 @@ router = APIRouter(tags=["Query"])
 
 # Уровни аномалий меняют выдачу, поэтому ответ сбрасывается и по анализу.
 FINDINGS_TAGS = frozenset({"publications", "catalog", "analysis"})
+
+# Один на процесс: нормы общие для всех запросов страницы.
+NORMS = NormsCache()
 
 
 def findings_body(query: normalize.FindingsQuery, rows: list[dict[str, Any]],
@@ -89,9 +94,11 @@ async def findings(
         dimensions = f"findings:{query.dimensions}:{page_size}"
         after_id = normalize.scoped_cursor(cursor, revision, dimensions)
         username_search = query.search[1:] if query.search.startswith("@") else query.search
-        rows = await db.fetch_all(sql.FINDINGS, {
+        norms = await NORMS.get(lambda: db.fetch_all_hash_joined(sql.NORMS, {
+            "as_of": committed_at, "norm_days": NORM_WINDOW_DAYS}))
+        rows = await db.fetch_all_hash_joined(sql.FINDINGS, {
             "as_of": committed_at, "period_days": FINDINGS_PERIOD_DAYS[query.period],
-            "norm_days": NORM_WINDOW_DAYS, "platform": query.platform,
+            "norms": Jsonb(norms), "platform": query.platform,
             "institution_legacy_id": query.institution, "types": list(query.types),
             "q": query.search, "search_pattern": _like_pattern(query.search),
             "username_pattern": _like_pattern(username_search),

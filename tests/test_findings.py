@@ -157,3 +157,48 @@ def test_findings_unknown_institution_is_404() -> None:
     with pytest.raises(NotFound):
         findings_body(query, [], [{"legacy_id": 1, "short_name": None, "canonical_name": "Вуз"}], 50,
                       None, 9, datetime(2026, 9, 27, tzinfo=timezone.utc), "d")
+
+
+def test_norms_cache_loads_once_per_ttl_and_serializes_ids() -> None:
+    import asyncio
+    from uuid import UUID
+    from api.findings_norms import NormsCache
+    now = [100.0]
+    calls = []
+
+    async def load():
+        calls.append(now[0])
+        return [{"account_id": UUID(int=1), "hour_offset": 24, "interaction_norm": 2.5}]
+
+    cache = NormsCache(ttl_seconds=600, clock=lambda: now[0])
+
+    async def scenario():
+        first, second = await asyncio.gather(cache.get(load), cache.get(load))
+        assert first == second == [{"account_id": "00000000-0000-0000-0000-000000000001",
+                                    "hour_offset": 24, "interaction_norm": 2.5}]
+        now[0] += 599
+        await cache.get(load)
+        now[0] += 2
+        await cache.get(load)
+
+    asyncio.run(scenario())
+    assert calls == [100.0, 701.0]
+
+
+def test_norms_cache_does_not_keep_a_failed_load() -> None:
+    import asyncio
+    from api.findings_norms import NormsCache
+    cache = NormsCache()
+
+    async def broken():
+        raise RuntimeError("db down")
+
+    async def good():
+        return []
+
+    async def scenario():
+        with pytest.raises(RuntimeError):
+            await cache.get(broken)
+        assert await cache.get(good) == []
+
+    asyncio.run(scenario())

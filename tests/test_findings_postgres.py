@@ -18,11 +18,13 @@ from api.findings import (
     FINDING_MIN_SHARES, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE, NORM_WINDOW_DAYS, PAGE_CAP,
     SHARE_NORM_FLOOR, TOP_REACTIONS, VIEW_NORM_FLOOR, index, norm,
 )
+from api.findings_norms import serializable
 from api.routes.statistics import _like_pattern
 from api.sql import findings as sql
 
 psycopg = pytest.importorskip("psycopg")
 from psycopg.rows import dict_row  # noqa: E402
+from psycopg.types.json import Jsonb  # noqa: E402
 
 AS_OF = datetime(2026, 9, 27, 12, tzinfo=timezone.utc)
 
@@ -129,7 +131,7 @@ class World:
 
 def run(dsn: str, world: World | None = None, **overrides) -> list[dict]:
     params = {
-        "as_of": AS_OF, "period_days": 7, "norm_days": NORM_WINDOW_DAYS,
+        "as_of": AS_OF, "period_days": 7,
         "platform": "all", "institution_legacy_id": world.legacy_id if world else None,
         "types": [], "q": "", "search_pattern": "%", "username_pattern": "%",
         "min_sample": MIN_NORM_SAMPLE, "interaction_floor": INTERACTION_NORM_FLOOR,
@@ -142,7 +144,10 @@ def run(dsn: str, world: World | None = None, **overrides) -> list[dict]:
     }
     params.update(overrides)
     with _connect(dsn) as connection:
-        return connection.execute(sql.FINDINGS, params).fetchall()
+        # Как в маршруте: нормы — отдельным запросом, в FINDINGS — параметром.
+        norms = serializable(connection.execute(sql.NORMS, {
+            "as_of": params["as_of"], "norm_days": NORM_WINDOW_DAYS}).fetchall())
+        return connection.execute(sql.FINDINGS, params | {"norms": Jsonb(norms)}).fetchall()
 
 
 def posts(rows: list[dict]) -> list[dict]:
