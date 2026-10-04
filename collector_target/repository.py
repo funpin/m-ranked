@@ -114,6 +114,10 @@ class PostgresCollectorRepository:
         self.snapshot_heartbeat = timedelta(hours=snapshot_heartbeat_hours)
         # Задаётся политикой сбора из панели (runtime_policy.py); None — без предела.
         self.heartbeat_max_age: timedelta | None = None
+        # Срок слежения за постом (track_post_for_hours). Обход ленты отдаёт и
+        # старые посты (весь список видео RUTUBE, закреплённые записи VK);
+        # замеры по ним за сроком не пишутся. None — без предела.
+        self.track_window: timedelta | None = None
         self.poll_receipt_policy = poll_receipt_policy or PollReceiptPolicy()
         self._last_poll_receipt_prune: datetime | None = None
         self.evidence_store = evidence_store or ImmutableEvidenceStore(
@@ -1669,6 +1673,8 @@ class PostgresCollectorRepository:
             if (unchanged and latest_observed_at is not None
                     and self.heartbeat_max_age is not None
                     and snapshot.age_seconds >= self.heartbeat_max_age.total_seconds()):
+                continue
+            if self.track_window is not None and snapshot.age_seconds > self.track_window.total_seconds():
                 continue
             if unchanged and not heartbeat_due:
                 continue
