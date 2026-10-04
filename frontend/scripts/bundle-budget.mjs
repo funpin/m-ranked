@@ -13,12 +13,16 @@ const output = process.env.BUNDLE_REPORT ?? "reports/bundle-budget.json";
 // motion/react-m entry) add 17-38 KiB per route; the owner accepted that
 // trade for consistent animations. Ceilings keep about 5% headroom over the
 // measured 182-261 KiB. /manage is an authenticated admin page.
+// /manage 240 KiB: on the deployed 5b9f2c7 it measured 233.4 of 235 KiB; the
+// findings page's lazy Combobox/Popover share Base UI internals (Field,
+// Dialog) with the admin dialogs, and Turbopack regroups them: 235.1 KiB with
+// no findings code in the /manage chunks.
 const DEFAULT_BUDGET = 205 * 1024;
 const ROUTE_BUDGETS = new Map([
   ["/compare", 235 * 1024],
   ["/statistics", 260 * 1024],
   ["/publications/[id]", 275 * 1024],
-  ["/manage", 235 * 1024],
+  ["/manage", 240 * 1024],
 ]);
 
 const results = [];

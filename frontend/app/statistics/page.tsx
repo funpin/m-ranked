@@ -6,10 +6,10 @@ import { FindingsFilterForm } from "@/components/findings/filter-form";
 import { FindingsResults } from "@/components/findings/findings-results";
 import { InstitutionPicker } from "@/components/findings/institution-picker";
 import { TypesPopover } from "@/components/findings/types-popover";
+import { FILTER_PLATFORM_OPTIONS, FILTER_SELECT_CLASS } from "@/components/filter-toolbar";
 import {
-  FILTER_PLATFORM_OPTIONS, FILTER_SELECT_CLASS, FINDINGS_DIRECTION_CLASS, FINDINGS_FILTERS_CLASS, FINDINGS_INSTITUTION_CLASS,
-  FINDINGS_MODE_CLASS, FINDINGS_PERIOD_CLASS, FINDINGS_PLATFORM_CLASS, FINDINGS_SEARCH_CLASS, FINDINGS_SORT_CLASS, FINDINGS_TOOLBAR_CLASS,
-} from "@/components/filter-toolbar";
+  FINDINGS_DIRECTION_CLASS, FINDINGS_FILTERS_CLASS, FINDINGS_INSTITUTION_CLASS, FINDINGS_MODE_CLASS, FINDINGS_PERIOD_CLASS, FINDINGS_PLATFORM_CLASS, FINDINGS_SEARCH_CLASS, FINDINGS_SORT_CLASS, FINDINGS_TOOLBAR_CLASS,
+} from "@/components/findings/toolbar";
 import { MethodNote } from "@/components/method-note";
 import { NativeSegments } from "@/components/native-field";
 import { SortDirection } from "@/components/sort-direction";
