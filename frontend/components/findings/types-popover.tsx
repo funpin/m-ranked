@@ -68,7 +68,7 @@ export function TypesPopover({ value, group, groupAvailable }: {
       {grouping === "institution" ? <input type="hidden" name="group" value="institution" /> : null}
     </span>
     {!panel ? (
-      <Button type="button" variant="outline" size="sm" className="h-8" aria-haspopup="dialog" aria-expanded="false"
+      <Button type="button" variant="outline" size="sm" className="h-8 w-full text-sm" aria-haspopup="dialog" aria-expanded="false"
         onPointerEnter={() => void loadPanel().catch(() => undefined)} onClick={open}>
         {triggerContent}
       </Button>

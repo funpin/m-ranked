@@ -8,6 +8,14 @@ import {
   FILTER_SEARCH_CLASS,
   FILTER_SORT_CLASS,
   FILTER_TOOLBAR_CLASS,
+  FINDINGS_DIRECTION_CLASS,
+  FINDINGS_FILTERS_CLASS,
+  FINDINGS_MODE_CLASS,
+  FINDINGS_PERIOD_CLASS,
+  FINDINGS_PLATFORM_CLASS,
+  FINDINGS_SEARCH_CLASS,
+  FINDINGS_SORT_CLASS,
+  FINDINGS_TOOLBAR_CLASS,
 } from "@/components/filter-toolbar";
 
 /**
@@ -32,6 +40,21 @@ function Chrome({ title, description, controls = 3 }: {
         {controls > 0 ? <div className={FILTER_PERIOD_CLASS}><Skeleton className="h-8 w-64" /></div> : null}
         {controls > 1 ? <div className={FILTER_SORT_CLASS}><Skeleton className="h-8 w-full" /></div> : null}
         {controls > 2 ? <div className={FILTER_DIRECTION_CLASS}><Skeleton className="h-8 w-full" /></div> : null}
+      </div>
+    </>
+  );
+}
+
+/** Полоса «Находок»: та же сетка, что у настоящей, чтобы подмена не двигала поля. */
+function FindingsChrome() {
+  return (
+    <>
+      <PageHeader title="Находки: посты выше нормы" description="Посты, которые сработали лучше обычного для своего аккаунта." />
+      <div className={FINDINGS_TOOLBAR_CLASS}>
+        {[FINDINGS_MODE_CLASS, FINDINGS_PLATFORM_CLASS, FINDINGS_PERIOD_CLASS, FINDINGS_DIRECTION_CLASS,
+          FINDINGS_SORT_CLASS, FINDINGS_FILTERS_CLASS, FINDINGS_SEARCH_CLASS].map((className) => (
+          <div key={className} className={className}><Skeleton className="h-8 w-full" /></div>
+        ))}
       </div>
     </>
   );
@@ -112,9 +135,7 @@ export function StatisticsSkeleton({ rows = 5, chrome = true }: {
 }) {
   return (
     <>
-      {chrome ? <Chrome title="Находки: посты выше нормы"
-        description="Посты, которые сработали лучше обычного для своего аккаунта."
-        controls={3} /> : null}
+      {chrome ? <FindingsChrome /> : null}
       <section className="min-w-0 space-y-3" role="status" aria-live="polite">
         <span className="sr-only">Загрузка статистики</span>
         <Skeleton className="h-6 w-44" />

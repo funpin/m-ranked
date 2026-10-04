@@ -14,11 +14,11 @@ export const FINDINGS_PERIOD_OPTIONS = [
 ] as const satisfies readonly { value: FindingsPeriod; label: string; title: string }[];
 
 export const FINDINGS_SORT_OPTIONS = [
-  ["interaction_index", "Индекс взаимодействий"],
-  ["view_index", "Индекс просмотров"],
-  ["interactions24", "Взаимодействия · 24 ч"],
-  ["views24", "Просмотры · 24 ч"],
-  ["erv24", "ERV · 24 ч"],
+  ["interaction_index", "Выше нормы"],
+  ["view_index", "Выше нормы · просмотры"],
+  ["interactions24", "Взаимодействия"],
+  ["views24", "Просмотры"],
+  ["erv24", "ERV"],
   ["published_at", "Новые"],
 ] as const satisfies readonly (readonly [FindingsSort, string])[];
 

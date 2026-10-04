@@ -59,7 +59,7 @@ export function FindingsResults({ page, query, anomaliesVisible }: {
 
   if (!page.items.length) return <><NoFindings query={query} />{hiddenNote}</>;
   const visible = page.items.slice(0, shown);
-  return <TooltipProvider><div className="min-w-0 space-y-3 md:rounded-xl md:border md:bg-card md:p-5">
+  return <TooltipProvider><div className="min-w-0 space-y-3 lg:rounded-xl lg:border lg:bg-card lg:p-5">
     <FindingRows rows={visible} query={query} anomaliesVisible={anomaliesVisible} showInstitution={query.mode === "all"} />
     {shown < page.items.length ? <div className="flex justify-center"><Button type="button" variant="outline" onClick={() => setShown(page.items.length)}>Показать ещё</Button></div>
       : page.nextCursor ? <div className="flex justify-center"><Link className={buttonVariants({ variant: "outline" })} prefetch={false}
@@ -74,7 +74,7 @@ function FindingRows({ rows, query, anomaliesVisible, showInstitution }: {
   rows: Finding[]; query: ParsedFindingsQuery; anomaliesVisible: boolean; showInstitution: boolean;
 }) {
   return <>
-    <div className="hidden overflow-x-auto md:block"><Table data-testid="findings-table" className="tabular">
+    <div className="hidden overflow-x-auto lg:block"><Table data-testid="findings-table" className="tabular">
       <caption className="sr-only">Посты выше нормы своего аккаунта. Сортировка: {SORT_LABELS[query.sort]}</caption>
       <TableHeader><TableRow>
         <TableHead>Пост</TableHead><TableHead>Индекс</TableHead><TableHead>Взаимодействия · 24 ч</TableHead>
@@ -91,7 +91,7 @@ function FindingRows({ rows, query, anomaliesVisible, showInstitution }: {
         </RowLink>
       ))}</TableBody>
     </Table></div>
-    <div data-testid="findings-cards" className="grid min-w-0 gap-3 md:hidden">{rows.map((row) => (
+    <div data-testid="findings-cards" className="grid min-w-0 gap-3 md:grid-cols-2 lg:hidden">{rows.map((row) => (
       <article key={row.publicationId} className="bg-card min-w-0 rounded-xl border p-4">
         <div className="flex items-start justify-between gap-3">
           <Identity row={row} showInstitution={showInstitution} badge={findingBadge(row, anomaliesVisible)} />
@@ -118,13 +118,19 @@ function Identity({ row, showInstitution, badge, linked = false }: {
   row: Finding; showInstitution: boolean; badge: string | null; linked?: boolean;
 }) {
   const number = row.externalId ? publicationLabel(row.externalId, row.platform).replace(/^(?:№\s*)+/, "") : null;
-  const description = `${PLATFORM_LABELS[row.platform]} · ${typeName(row.publicationType)}${number ? ` · №${number}` : ""}`;
+  const kind = `${PLATFORM_LABELS[row.platform]} · ${typeName(row.publicationType)}`;
+  // Номер поста MAX — до 18 цифр: не рвём его посреди строки, а обрезаем
+  // многоточием на узком экране; целиком он виден в подсказке.
+  const description = <>
+    <span className="shrink-0">{kind}{number ? " ·" : ""}</span>
+    {number ? <span className="min-w-0 truncate" title={`№${number}`}>№{number}</span> : null}
+  </>;
   return <div className="min-w-0">
     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
-      {showInstitution ? <span className="font-medium" title={row.institutionCanonicalName}>{row.institutionShortName || row.institutionCanonicalName}</span> : null}
+      {showInstitution ? <span className="max-w-full truncate font-medium" title={row.institutionCanonicalName}>{row.institutionShortName || row.institutionCanonicalName}</span> : null}
       {linked
-        ? <Link className="text-muted-foreground hover:text-foreground break-all underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{description}</Link>
-        : <span className="text-muted-foreground break-all">{description}</span>}
+        ? <Link className="text-muted-foreground hover:text-foreground flex min-w-0 max-w-full gap-x-1 underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{description}</Link>
+        : <span className="text-muted-foreground flex min-w-0 max-w-full gap-x-1">{description}</span>}
     </div>
     <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
       {row.publishedAt ? published.format(new Date(row.publishedAt)) : null}

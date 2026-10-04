@@ -6,9 +6,13 @@ import { FindingsFilterForm } from "@/components/findings/filter-form";
 import { FindingsResults } from "@/components/findings/findings-results";
 import { InstitutionPicker } from "@/components/findings/institution-picker";
 import { TypesPopover } from "@/components/findings/types-popover";
-import { FILTER_PLATFORM_OPTIONS, FILTER_SELECT_CLASS, STICKY_CONTROL_SURFACE_CLASS } from "@/components/filter-toolbar";
+import {
+  FILTER_PLATFORM_OPTIONS, FILTER_SELECT_CLASS, FINDINGS_DIRECTION_CLASS, FINDINGS_FILTERS_CLASS, FINDINGS_INSTITUTION_CLASS,
+  FINDINGS_MODE_CLASS, FINDINGS_PERIOD_CLASS, FINDINGS_PLATFORM_CLASS, FINDINGS_SEARCH_CLASS, FINDINGS_SORT_CLASS, FINDINGS_TOOLBAR_CLASS,
+} from "@/components/filter-toolbar";
 import { MethodNote } from "@/components/method-note";
 import { NativeSegments } from "@/components/native-field";
+import { SortDirection } from "@/components/sort-direction";
 import { NavigationBoundary } from "@/components/navigation-boundary";
 import { StatisticsSkeleton } from "@/components/skeletons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -82,27 +86,33 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
     {!anomaliesVisible ? <Alert className="mb-4"><AlertDescription>Проверка аномалий временно недоступна — посты не отфильтрованы.</AlertDescription></Alert> : null}
 
     <FindingsFilterForm key={selectionKey} id="findings-filters" action="/statistics" method="get" aria-label="Фильтры находок"
-      data-testid="filter-toolbar" className={`mb-6 flex min-w-0 flex-wrap items-center gap-2 p-2.5 ${STICKY_CONTROL_SURFACE_CLASS}`}>
-      <NativeSegments name="mode" legend="Режим" value={institutionMode ? "institution" : "all"} options={MODE_OPTIONS} labelled={false} />
-      {query.mode === "institution" && !unknownInstitution ? <InstitutionPicker institutions={institutions} value={query.institution} /> : null}
-      <NativeSegments name="platform" legend="Площадка" value={query.platform} options={FILTER_PLATFORM_OPTIONS} labelled={false} />
-      <NativeSegments name="period" legend="Период" value={query.period} options={FINDINGS_PERIOD_OPTIONS} labelled={false} />
-      <NativeSelect name="sort" defaultValue={query.sort} aria-label="Сортировка" className={`${FILTER_SELECT_CLASS} w-auto`}>
-        {FINDINGS_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
-      </NativeSelect>
-      <NativeSelect name="direction" defaultValue={query.direction} aria-label="Направление сортировки" className={`${FILTER_SELECT_CLASS} w-auto`}>
-        <NativeSelectOption value="desc">По убыванию</NativeSelectOption><NativeSelectOption value="asc">По возрастанию</NativeSelectOption>
-      </NativeSelect>
-      <TypesPopover value={query.types} group={query.group} groupAvailable={!institutionMode} />
-      <InputGroup className="h-8 min-w-48 flex-1">
-        <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
-        <InputGroupInput name="q" type="search" defaultValue={query.q} maxLength={200} placeholder="Номер, URL или аккаунт" aria-label="Поиск публикаций" className="text-sm md:text-sm" />
-        <InputGroupAddon align="inline-end">
-          {query.q ? <InputGroupButton size="icon-sm" className="size-6" nativeButton={false} aria-label="Очистить поиск"
-            render={<Link role="link" href={queryHref("/statistics", { ...findingsHrefQuery(query), q: undefined })} prefetch={false} />}><X className="size-3.5" aria-hidden="true" /></InputGroupButton> : null}
-          <InputGroupButton type="submit" variant="secondary" size="icon-sm" className="size-6" aria-label="Применить фильтры"><ArrowRight className="size-3.5" aria-hidden="true" /></InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
+      data-testid="filter-toolbar" className={FINDINGS_TOOLBAR_CLASS}>
+      <div className={FINDINGS_MODE_CLASS}><NativeSegments name="mode" legend="Режим" value={institutionMode ? "institution" : "all"}
+        options={MODE_OPTIONS} labelled={false} stretch /></div>
+      {query.mode === "institution" && !unknownInstitution
+        ? <div className={FINDINGS_INSTITUTION_CLASS}><InstitutionPicker institutions={institutions} value={query.institution} /></div> : null}
+      <div className={FINDINGS_PLATFORM_CLASS}><NativeSegments name="platform" legend="Площадка" value={query.platform}
+        options={FILTER_PLATFORM_OPTIONS} labelled={false} stretch /></div>
+      <div className={FINDINGS_PERIOD_CLASS}><NativeSegments name="period" legend="Период" value={query.period}
+        options={FINDINGS_PERIOD_OPTIONS} labelled={false} stretch /></div>
+      <div className={FINDINGS_DIRECTION_CLASS}><SortDirection name="direction" value={query.direction} legend="Направление сортировки" /></div>
+      <div className={FINDINGS_SORT_CLASS}>
+        <NativeSelect name="sort" defaultValue={query.sort} aria-label="Сортировка" className={FILTER_SELECT_CLASS}>
+          {FINDINGS_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
+        </NativeSelect>
+      </div>
+      <div className={FINDINGS_FILTERS_CLASS}><TypesPopover value={query.types} group={query.group} groupAvailable={!institutionMode} /></div>
+      <div className={FINDINGS_SEARCH_CLASS}>
+        <InputGroup className="h-8">
+          <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
+          <InputGroupInput name="q" type="search" defaultValue={query.q} maxLength={200} placeholder="Номер, URL или аккаунт" aria-label="Поиск публикаций" className="text-sm md:text-sm" />
+          <InputGroupAddon align="inline-end">
+            {query.q ? <InputGroupButton size="icon-sm" className="size-6" nativeButton={false} aria-label="Очистить поиск" title="Очистить поиск"
+              render={<Link role="link" href={queryHref("/statistics", { ...findingsHrefQuery(query), q: undefined })} prefetch={false} />}><X className="size-3.5" aria-hidden="true" /></InputGroupButton> : null}
+            <InputGroupButton type="submit" variant="secondary" size="icon-sm" className="size-6" aria-label="Применить фильтры" title="Применить фильтры"><ArrowRight className="size-3.5" aria-hidden="true" /></InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+      </div>
     </FindingsFilterForm>
 
     <NavigationBoundary fallback={<StatisticsSkeleton chrome={false} />}>

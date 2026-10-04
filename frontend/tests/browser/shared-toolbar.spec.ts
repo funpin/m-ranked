@@ -55,33 +55,50 @@ test("MAX fits its selection and comparison tabs have a visible selected surface
   }
 });
 
-test("filter rows fill available space and keep the same geometry on both pages", async ({ page }, info) => {
+test("filter rows fill available space with the same controls on every public page", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "The test checks every viewport itself");
   await page.emulateMedia({ colorScheme: "dark" });
-  for (const width of [320, 390, 640, 768, 1024, 1280, 1440]) {
+  const pages = [
+    { path: "/review?platform=vk", periods: 4, singleRow: true },
+    { path: "/statistics?platform=vk", periods: 3, singleRow: true },
+    // «Мой вуз»: поле вуза — отдельная строка на всю ширину.
+    { path: "/statistics?mode=institution&institution=1", periods: 3, singleRow: false },
+  ];
+  for (const width of [320, 375, 390, 430, 640, 768, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    const layouts: unknown[] = [];
-    for (const path of ["/review?platform=vk", "/statistics?platform=vk"]) {
+    const controls: unknown[] = [];
+    for (const { path, periods, singleRow } of pages) {
       await page.goto(path);
       const toolbar = page.getByTestId("filter-toolbar");
       await expect(toolbar).toBeVisible();
-      await expect(toolbar.locator('input[name="period"]')).toHaveCount(4);
+      await expect(toolbar.locator('input[name="period"]')).toHaveCount(periods);
+      await expect(toolbar.getByRole("radio", { name: "По убыванию", exact: true })).toBeVisible();
+      if (path.includes("institution=")) await expect(toolbar.getByRole("combobox", { name: "Вуз" })).toBeVisible();
       const layout = await toolbar.evaluate(form => {
         const formBox = form.getBoundingClientRect();
         const boxes = [...form.children].filter(e => e.getBoundingClientRect().height > 0)
-          .map(e => { const r=e.getBoundingClientRect(); return { x: Math.round(r.x-formBox.x), y: Math.round(r.y-formBox.y), width: Math.round(r.width) }; });
+          .map(e => { const r=e.getBoundingClientRect(); return { x: Math.round(r.x-formBox.x), y: Math.round(r.y-formBox.y), width: Math.round(r.width), height: Math.round(r.height) }; });
         return { boxes, width: Math.round(formBox.width) };
       });
       for (const y of new Set(layout.boxes.map(box => box.y))) {
         const row = layout.boxes.filter(box => box.y === y);
-        expect(Math.max(...row.map(box => box.x+box.width))).toBeGreaterThanOrEqual(layout.width-13);
+        expect(Math.max(...row.map(box => box.x+box.width)), `${path} at ${width}px`).toBeGreaterThanOrEqual(layout.width-13);
       }
-      if (width >= 1280) expect(new Set(layout.boxes.map(box=>box.y)).size).toBe(1);
-      expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBe(0);
-      layouts.push(layout);
-      if ([390,768,1440].includes(width)) await toolbar.screenshot({ path: `/tmp/mranked-toolbar-${width}-${path.startsWith("/review") ? "review" : "statistics"}.png` });
+      expect(new Set(layout.boxes.map(box => box.height)), `${path} at ${width}px`).toEqual(new Set([32]));
+      const rows = new Set(layout.boxes.map(box=>box.y)).size;
+      if (width >= 1280) expect(rows, `${path} at ${width}px`).toBe(singleRow ? 1 : 2);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth), `${path} at ${width}px`).toBe(0);
+      // Общие поля одинаковы на обеих страницах: та же поверхность, высота и вид.
+      controls.push(await toolbar.evaluate(form => {
+        const style = getComputedStyle(form);
+        const search = form.querySelector('input[name="q"]')!.closest('[data-slot="input-group"]')!.getBoundingClientRect();
+        const direction = form.querySelector('[data-testid="direction-segments"]')!.getBoundingClientRect();
+        return { radius: style.borderRadius, padding: style.padding, gap: style.gap, search: Math.round(search.height), direction: Math.round(direction.height) };
+      }));
+      if ([390,768,1024,1280,1440].includes(width)) await toolbar.screenshot({ path: `/tmp/mranked-toolbar-${width}-${path.startsWith("/review") ? "review" : path.includes("institution=") ? "institution" : "statistics"}.png` });
     }
-    expect(layouts[0]).toEqual(layouts[1]);
+    expect(controls[1]).toEqual(controls[0]);
+    expect(controls[2]).toEqual(controls[0]);
   }
 });
 
@@ -97,7 +114,10 @@ test("icon-only direction submits and survives browser history", async ({ page }
   await expect(toolbar.getByRole("radio", { name: "По возрастанию", exact: true })).toBeChecked();
   await page.goto("/statistics?platform=vk");
   await toolbar.getByRole("radio", { name: "По возрастанию", exact: true }).check();
-  await expect(page).toHaveURL(/publication_direction=asc/);
+  await expect(page).toHaveURL(/[?&]direction=asc/);
+  await expect(toolbar.getByRole("radio", { name: "По возрастанию", exact: true })).toBeChecked();
+  await page.goBack();
+  await expect(toolbar.getByRole("radio", { name: "По убыванию", exact: true })).toBeChecked();
 });
 
 test("comparison shows sourced student facts and preserves a measured zero", async ({ page }) => {

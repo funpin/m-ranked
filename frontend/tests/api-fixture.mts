@@ -62,7 +62,8 @@ function finding(id: number, platform: "telegram" | "vk" | "max" | "rutube", ins
     institutionShortName: `Вуз ${String(institution).padStart(3, "0")}`,
     institutionCanonicalName: `Полное название университета ${String(institution).padStart(3, "0")}`,
     accountId: uuid(1, institution), platform, publicationType: id % 3 === 0 ? "video" : "photo",
-    externalId: String(id), publicUrl: `https://example.test/${id}`, publishedAt: asOf,
+    // MAX нумерует посты 18-значными числами: карточка не должна от них разъезжаться.
+    externalId: platform === "max" ? `11497403${String(id).padStart(10, "0")}` : String(id), publicUrl: `https://example.test/${id}`, publishedAt: asOf,
     ageHours: id === 2 ? 6 : id === 7 ? 12 : 24, preliminary: id === 2, interactionIndex: id === 4 ? null : 5 - id / 20,
     viewIndex: 1.5, interactionNorm: 20, viewNorm: 1000, normSampleSize: 12,
     interactions: id === 3 ? 0 : 100 - id, reactions: 80, comments: platform === "max" ? null : 15,

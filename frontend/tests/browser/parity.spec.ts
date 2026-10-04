@@ -138,7 +138,8 @@ test("findings restores URL state and searches", async ({ page }) => {
   await page.goto("/statistics?platform=vk&period=30d&sort=views24&direction=asc&q=alpha");
   await expect(page.locator('input[name="period"][value="30d"]')).toBeChecked();
   await expect(page.locator('select[name="sort"]')).toHaveValue("views24");
-  await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
+  await expect(page.locator('input[name="direction"][value="asc"]')).toBeChecked();
+  await expect(page.locator('select[name="direction"]')).toHaveCount(0);
   await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
   await page.locator('input[name="q"]').fill("missing");
   await page.locator('input[name="q"]').press("Enter");

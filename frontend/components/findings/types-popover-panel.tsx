@@ -11,7 +11,7 @@ export function TypesPopoverPanel({ label, defaultOpen, onOpenChange, children }
 }) {
   return (
     <Popover defaultOpen={defaultOpen} onOpenChange={(open) => onOpenChange?.(open)}>
-      <PopoverTrigger render={<Button type="button" variant="outline" size="sm" className="h-8" />}>{label}</PopoverTrigger>
+      <PopoverTrigger render={<Button type="button" variant="outline" size="sm" className="h-8 w-full text-sm" />}>{label}</PopoverTrigger>
       <PopoverContent align="end" className="w-64 gap-4 text-sm">{children}</PopoverContent>
     </Popover>
   );

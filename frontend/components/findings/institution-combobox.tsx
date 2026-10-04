@@ -24,7 +24,7 @@ export function InstitutionCombobox({ institutions, value, onChoose }: {
     <Combobox items={institutions} value={selected} itemToStringLabel={label} filter={matches}
       isItemEqualToValue={(item, current) => item.legacyId === current.legacyId}
       onValueChange={(item) => { setSelected(item); if (item) onChoose(item); }}>
-      <ComboboxInput placeholder="Выберите вуз" aria-label="Вуз" className="h-8 w-full sm:w-64" />
+      <ComboboxInput placeholder="Выберите вуз" aria-label="Вуз" className="h-8 w-full text-sm md:text-sm" />
       <ComboboxContent>
         <ComboboxEmpty>Вуз не найден</ComboboxEmpty>
         <ComboboxList>
