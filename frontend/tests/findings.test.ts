@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   DEFAULT_FINDINGS_QUERY, findingBadge, findingsHrefQuery, formatIndex, normalizeFindingsQuery,
   recallInstitution, rememberInstitution,
+  findingIndex, isNewSince, periodRange, previousVisit, sortOptionsFor,
 } from "../lib/findings";
 import type { Finding } from "../lib/types";
 
@@ -80,4 +81,42 @@ test("rememberInstitution survives throwing storage", () => {
   assert.equal(recallInstitution(storage), 7);
   values.set("m-ranked-findings-institution", "-3");
   assert.equal(recallInstitution(storage), null);
+});
+
+test("comment and share sorts appear only where the platform has them", () => {
+  const values = (platform: Parameters<typeof sortOptionsFor>[0]) => sortOptionsFor(platform).map(([value]) => value);
+  assert.ok(values("all").includes("comment_index") && values("all").includes("share_index"));
+  assert.ok(values("vk").includes("share_index"));
+  assert.ok(!values("telegram").includes("share_index") && values("telegram").includes("comment_index"));
+  assert.ok(!values("max").includes("comment_index") && !values("max").includes("share_index"));
+  assert.equal(normalizeFindingsQuery({ platform: "max", sort: "comment_index" }).sort, "interaction_index");
+  assert.equal(normalizeFindingsQuery({ platform: "vk", sort: "share_index" }).sort, "share_index");
+});
+
+test("the index column follows the chosen sort", () => {
+  const row = { interactionIndex: 2, commentIndex: 3, shareIndex: 4, interactionNorm: 20, commentNorm: 2, shareNorm: 3 } as Finding;
+  assert.deepEqual(findingIndex(row, "comment_index"), { value: 3, norm: 2, noun: "комментариев" });
+  assert.deepEqual(findingIndex(row, "share_index"), { value: 4, norm: 3, noun: "репостов" });
+  assert.deepEqual(findingIndex(row, "views24"), { value: 2, norm: 20, noun: "взаимодействий" });
+});
+
+test("periodRange counts back from the data moment in Moscow time", () => {
+  assert.equal(periodRange("2026-09-27T16:30:31Z", "7d"), "20.09 – 27.09");
+  assert.equal(periodRange("2026-09-27T22:30:00Z", "1d"), "27.09 – 28.09");
+  assert.equal(periodRange("2026-10-04T09:00:00Z", "30d"), "04.09 – 04.10");
+});
+
+test("previousVisit pins the last visit for the session and records this one", () => {
+  const store = () => { const values = new Map<string, string>(); return {
+    getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => void values.set(key, value) }; };
+  const local = store(); let session = store();
+  assert.equal(previousVisit(local, session, 1000), null);
+  assert.equal(previousVisit(local, session, 2000), null);
+  session = store();
+  assert.equal(previousVisit(local, session, 5000), 1000);
+  assert.equal(previousVisit(local, session, 6000), 1000);
+  const broken = { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); } };
+  assert.equal(previousVisit(broken, broken, 1), null);
+  assert.equal(isNewSince({ publishedAt: "2026-09-27T10:00:00Z" } as Finding, Date.parse("2026-09-27T09:00:00Z")), true);
+  assert.equal(isNewSince({ publishedAt: "2026-09-27T10:00:00Z" } as Finding, null), false);
 });

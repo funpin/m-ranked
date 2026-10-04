@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
+import { ReactionGlyph } from "@/components/reaction-glyph";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
 import type { CollectorCoverage, HistorySnapshot, Platform } from "@/lib/types";
 import { boundarySnapshotIds, nearestSnapshot, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
@@ -27,19 +28,9 @@ import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNo
 
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
-function Reaction({ name }: { name: string }) {
-  const [failed, setFailed] = useState(false);
-  if (name.startsWith("custom:") && /^\d+$/.test(name.slice(7)) && !failed) {
-    // Same-origin proxy validates image type; failure remains visible and accessible.
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img className="inline-block size-5 object-contain align-middle" src={`/emoji/${name.slice(7)}`} alt="Пользовательская реакция" loading="lazy" onError={() => setFailed(true)} />;
-  }
-  return <>{name.startsWith("custom:") || name.startsWith("unknown:") ? "❔" : name === "paid:star" ? "⭐" : name}</>;
-}
-
 function Breakdown({ value, delta = false }: { value: ReturnType<typeof historyReactionEntries>; delta?: boolean }) {
   const entries = value ?? [];
-  return <span className="flex flex-nowrap items-center gap-x-1.5 gap-y-0.5">{entries.length ? entries.map(({reaction:name,count}) => <span className="bg-muted inline-flex items-center gap-1 rounded-md px-1 py-px whitespace-nowrap" key={name}><Reaction name={name} /> <b>{delta && count >= 0 ? "+" : ""}{count}</b></span>) : delta || value === null ? "—" : null}</span>;
+  return <span className="flex flex-nowrap items-center gap-x-1.5 gap-y-0.5">{entries.length ? entries.map(({reaction:name,count}) => <span className="bg-muted inline-flex items-center gap-1 rounded-md px-1 py-px whitespace-nowrap" key={name}><ReactionGlyph name={name} /> <b>{delta && count >= 0 ? "+" : ""}{count}</b></span>) : delta || value === null ? "—" : null}</span>;
 }
 
 /** Заголовки колонок: монохромные значки вместо эмодзи. Эмодзи рисовались

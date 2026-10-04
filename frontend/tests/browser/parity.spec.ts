@@ -119,8 +119,8 @@ test("findings list shows posts above norm with one badge and hidden-anomaly not
   // Ноль — это значение, а не «нет данных».
   const zero = rows.nth(2);
   const mobile = info.project.name === "mobile";
-  const zeroInteractions = mobile ? zero.locator("dd").nth(0) : zero.locator("td").nth(2);
-  const zeroErv = mobile ? zero.locator("dd").nth(2) : zero.locator("td").nth(4);
+  const zeroInteractions = mobile ? zero.locator("dd").nth(0) : zero.locator("td").nth(3);
+  const zeroErv = mobile ? zero.locator("dd").nth(2) : zero.locator("td").nth(5);
   await expect(zeroInteractions).toHaveText("0");
   await expect(zeroErv).toHaveText("0,00%");
   await expect(zeroInteractions).not.toContainText("—");
@@ -132,6 +132,49 @@ test("findings list shows posts above norm with one badge and hidden-anomaly not
   await expect(page.getByTestId("findings-hidden-note")).toContainText("3");
   await page.getByRole("button", { name: "Показать ещё" }).click();
   await expect(rows).toHaveCount(30);
+});
+
+test("findings shows the period window, growth curves, top reactions and per-platform sorts", async ({ page }, info) => {
+  await page.goto("/statistics?platform=telegram");
+  // Период отсчитывается от момента данных двойника (01.08.2026, 15:00 МСК).
+  await expect(page.getByText("период 25.07 – 01.08")).toBeVisible();
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("findings-cards").locator("article")
+    : page.getByTestId("findings-table").locator("tbody tr");
+  await expect(rows.first().getByTestId("growth-sparkline")).toBeVisible();
+  await expect(rows.first().getByTestId("growth-sparkline")).toHaveAttribute("aria-label", /1 ч: 10 при норме 4/);
+  await expect(rows.first().getByRole("button", { name: /Взаимодействия 99: .*Чаще всего: 🔥 40/ })).toBeVisible();
+  const sort = page.locator('select[name="sort"]');
+  await expect(sort.locator("option")).toContainText(["Обсуждаемые"]);
+  await expect(sort.locator('option[value="share_index"]')).toHaveCount(0);
+  await page.goto("/statistics?platform=max");
+  await expect(page.locator('select[name="sort"] option[value="comment_index"]')).toHaveCount(0);
+  await page.goto("/statistics?platform=vk&sort=share_index");
+  await expect(page.locator('select[name="sort"]')).toHaveValue("share_index");
+  if (info.project.name !== "mobile") await expect(page.getByRole("columnheader", { name: /Индекс · репосты/ })).toBeVisible();
+});
+
+test("findings marks posts new since the last visit and the remembered vuz in the shared feed", async ({ page }, info) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("m-ranked-findings-visit")) return;
+    localStorage.setItem("m-ranked-findings-visit", String(Date.parse("2026-07-31T00:00:00Z")));
+    localStorage.setItem("m-ranked-findings-institution", "2");
+  });
+  await page.goto("/statistics?platform=vk");
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("findings-cards").locator("article")
+    : page.getByTestId("findings-table").locator("tbody tr");
+  await expect(rows.first().getByText("Новое с прошлого визита.")).toBeAttached();
+  const mine = rows.filter({ has: page.getByText("ваш вуз", { exact: true }) });
+  await expect(mine.first()).toHaveAttribute("data-mine", "true");
+  await expect(mine.first()).toContainText("Вуз 002");
+  await expect(rows.filter({ hasText: "Вуз 001" }).first()).not.toHaveAttribute("data-mine", "true");
+  // Перезагрузка в той же сессии не снимает пометку «новое».
+  await page.reload();
+  await expect(rows.first().getByText("Новое с прошлого визита.")).toBeAttached();
+  // В «Моём вузе» свои все строки — отметка не нужна.
+  await page.goto("/statistics?mode=institution&institution=2&platform=vk");
+  await expect(page.getByText("ваш вуз", { exact: true })).toHaveCount(0);
 });
 
 test("findings restores URL state and searches", async ({ page }) => {

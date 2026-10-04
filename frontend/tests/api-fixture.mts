@@ -70,6 +70,13 @@ function finding(id: number, platform: "telegram" | "vk" | "max" | "rutube", ins
     shares: platform === "vk" ? 5 : null, views: 2000, erv: id === 3 ? 0 : 5,
     anomalyLevel: id === 2 || id === 5 ? 1 : id === 6 ? null : 0,
     capabilities: { reactions: true, comments: platform !== "max", shares: platform === "vk" },
+    commentIndex: platform === "max" ? null : 3, shareIndex: platform === "vk" ? 2.5 : null,
+    commentNorm: platform === "max" ? null : 5, shareNorm: platform === "vk" ? 2 : null,
+    // Разбивку реакций отдают Telegram и MAX.
+    topReactions: platform === "telegram" || platform === "max"
+      ? [{ reaction: "🔥", count: 40 }, { reaction: "❤", count: 25 }, { reaction: "👍", count: 15 }] : [],
+    curve: { hours: [1, 3, 6, 12, 24], post: [10, 30, 55, id === 2 ? null : 80, id === 2 ? null : 100 - id],
+      norm: [4, 9, 13, 17, 20] },
   };
 }
 

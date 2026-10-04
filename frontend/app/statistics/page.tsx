@@ -22,7 +22,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { anomalyReportVisible } from "@/lib/anomaly-visibility";
 import { api, ApiError } from "@/lib/api";
-import { DEFAULT_FINDINGS_QUERY, FINDINGS_PERIOD_OPTIONS, FINDINGS_SORT_OPTIONS, findingsHrefQuery, normalizeFindingsQuery } from "@/lib/findings";
+import { DEFAULT_FINDINGS_QUERY, FINDINGS_PERIOD_OPTIONS, findingsHrefQuery, normalizeFindingsQuery, periodRange, sortOptionsFor } from "@/lib/findings";
 import { formatDate } from "@/lib/format";
 import { first, queryHref, type SearchParams } from "@/lib/params";
 import type { FindingInstitution, FindingsPage, FindingsRequest } from "@/lib/types";
@@ -81,7 +81,9 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
       title="Находки: посты выше нормы"
       titleNote={<MethodNote title="Как считается индекс"><p>Индекс — взаимодействия поста на 24-м часу (у свежих — на последнем замере), делённые на типичное значение его аккаунта на том же часу за 30 дней.</p>{anomaliesVisible ? <p>Посты с выраженной аномалией не входят ни в норму, ни в выдачу.</p> : null}<p><Link href="/methodology/findings" prefetch={false} className="underline underline-offset-4">Подробнее о методике</Link></p></MethodNote>}
       description="Посты, которые сработали лучше обычного для своего аккаунта."
-      meta={page ? <span className="text-muted-foreground text-xs" title={`${formatDate(page.asOf)} · datasetRevision ${page.datasetRevision}`}>Обновлено {updated}</span> : null}
+      meta={page ? <span className="text-muted-foreground text-xs" title={`${formatDate(page.asOf)} · datasetRevision ${page.datasetRevision}`}>
+        Обновлено {updated}<span className="block sm:inline"><span className="hidden sm:inline"> · </span>период {periodRange(page.asOf, query.period)}</span>
+      </span> : null}
     />
     {!anomaliesVisible ? <Alert className="mb-4"><AlertDescription>Проверка аномалий временно недоступна — посты не отфильтрованы.</AlertDescription></Alert> : null}
 
@@ -98,7 +100,7 @@ export default async function FindingsPageRoute({ searchParams }: { searchParams
       <div className={FINDINGS_DIRECTION_CLASS}><SortDirection name="direction" value={query.direction} legend="Направление сортировки" /></div>
       <div className={FINDINGS_SORT_CLASS}>
         <NativeSelect name="sort" defaultValue={query.sort} aria-label="Сортировка" className={FILTER_SELECT_CLASS}>
-          {FINDINGS_SORT_OPTIONS.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
+          {sortOptionsFor(query.platform).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
         </NativeSelect>
       </div>
       <div className={FINDINGS_FILTERS_CLASS}><TypesPopover value={query.types} group={query.group} groupAvailable={!institutionMode} /></div>

@@ -3,7 +3,8 @@ import type { Finding, Platform, SortDirection } from "./types";
 
 export type FindingsMode = "all" | "institution";
 export type FindingsPeriod = "1d" | "7d" | "30d";
-export type FindingsSort = "interaction_index" | "view_index" | "interactions24" | "views24" | "erv24" | "published_at";
+export type FindingsSort = "interaction_index" | "view_index" | "comment_index" | "share_index"
+  | "interactions24" | "views24" | "erv24" | "published_at";
 export type FindingsType = "text" | "photo" | "album" | "video" | "other";
 export type FindingsGroup = "none" | "institution";
 
@@ -16,6 +17,8 @@ export const FINDINGS_PERIOD_OPTIONS = [
 export const FINDINGS_SORT_OPTIONS = [
   ["interaction_index", "Выше нормы"],
   ["view_index", "Выше нормы · просмотры"],
+  ["comment_index", "Обсуждаемые"],
+  ["share_index", "Репостят"],
   ["interactions24", "Взаимодействия"],
   ["views24", "Просмотры"],
   ["erv24", "ERV"],
@@ -48,13 +51,14 @@ export function normalizeFindingsQuery(params: SearchParams): ParsedFindingsQuer
   const period = first(params.period) ?? "";
   const sort = first(params.sort) ?? "";
   const requested = new Set(many(params.types));
+  const platform = normalizePlatform(params.platform, "all");
   return {
     mode,
     institution: mode === "institution" ? institution : null,
-    platform: normalizePlatform(params.platform, "all"),
+    platform,
     period: PERIODS.has(period) ? period as FindingsPeriod : "7d",
     types: TYPES.filter((value) => requested.has(value)),
-    sort: SORTS.has(sort) ? sort as FindingsSort : "interaction_index",
+    sort: SORTS.has(sort) && sortAvailable(sort as FindingsSort, platform) ? sort as FindingsSort : "interaction_index",
     direction: first(params.direction) === "asc" ? "asc" : "desc",
     group: mode === "all" && first(params.group) === "institution" ? "institution" : "none",
     q: (first(params.q) ?? "").trim(),
@@ -102,4 +106,55 @@ export function rememberInstitution(storage: Pick<Storage, "setItem"> | null, id
 
 export function recallInstitution(storage: Pick<Storage, "getItem"> | null): number | null {
   try { return parsePositiveLegacyId(storage?.getItem(INSTITUTION_STORAGE_KEY) ?? ""); } catch { return null; }
+}
+
+/** Комментарии отдают все площадки, кроме MAX; репосты — только ВКонтакте. */
+function sortAvailable(sort: FindingsSort, platform: Platform): boolean {
+  if (sort === "comment_index") return platform !== "max";
+  if (sort === "share_index") return platform === "all" || platform === "vk";
+  return true;
+}
+
+export function sortOptionsFor(platform: Platform) {
+  return FINDINGS_SORT_OPTIONS.filter(([value]) => sortAvailable(value, platform));
+}
+
+/** Индекс, который показывает колонка: по выбранной мере «выше нормы». */
+export function findingIndex(row: Finding, sort: FindingsSort): { value: number | null; norm: number | null; noun: string } {
+  if (sort === "comment_index") return { value: row.commentIndex, norm: row.commentNorm, noun: "комментариев" };
+  if (sort === "share_index") return { value: row.shareIndex, norm: row.shareNorm, noun: "репостов" };
+  return { value: row.interactionIndex, norm: row.interactionNorm, noun: "взаимодействий" };
+}
+
+const PERIOD_DAYS: Record<FindingsPeriod, number> = { "1d": 1, "7d": 7, "30d": 30 };
+const dayMonth = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit" });
+
+/** Окно выборки: период отсчитывается от момента данных, а не от «сейчас». */
+export function periodRange(asOf: string, period: FindingsPeriod): string {
+  const end = new Date(asOf);
+  const start = new Date(end.getTime() - PERIOD_DAYS[period] * 86_400_000);
+  return `${dayMonth.format(start)} – ${dayMonth.format(end)}`;
+}
+
+const VISIT_KEY = "m-ranked-findings-visit";
+
+/** Момент прошлого визита. В пределах сессии он закреплён, чтобы
+ *  перезагрузка не снимала пометки «новое»; в localStorage пишется текущий. */
+export function previousVisit(local: Pick<Storage, "getItem" | "setItem"> | null,
+  session: Pick<Storage, "getItem" | "setItem"> | null, now: number): number | null {
+  try {
+    const pinned = session?.getItem(VISIT_KEY);
+    if (pinned !== null && pinned !== undefined) return pinned === "none" ? null : Number(pinned) || null;
+    const stored = Number(local?.getItem(VISIT_KEY) ?? "");
+    const previous = Number.isFinite(stored) && stored > 0 ? stored : null;
+    session?.setItem(VISIT_KEY, previous === null ? "none" : String(previous));
+    local?.setItem(VISIT_KEY, String(now));
+    return previous;
+  } catch {
+    return null;
+  }
+}
+
+export function isNewSince(row: Finding, visit: number | null): boolean {
+  return visit !== null && row.publishedAt !== null && Date.parse(row.publishedAt) > visit;
 }
