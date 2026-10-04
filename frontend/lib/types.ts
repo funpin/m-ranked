@@ -38,38 +38,16 @@ export const ACCOUNT_PUBLICATION_LIMIT = 100;
 export const INSTITUTION_ACCOUNT_LIMIT = 50;
 export const FULL_PUBLICATION_HISTORY_LIMIT = 3_000;
 
-export type StatisticsView = "publications" | "entities";
-export type StatisticsPublicationSort =
-  | "erv"
-  | "views"
-  | "interactions"
-  | "published_at";
-export type StatisticsEntitySort =
-  | "erv"
-  | "median_interactions"
-  | "interactions"
-  | "views"
-  | "publications";
 export type SortDirection = "asc" | "desc";
 
-export interface StatisticsRequest {
-  view: StatisticsView;
-  platform: Platform;
-  period: Period;
-  q?: string;
-  publicationSort: StatisticsPublicationSort;
-  publicationDirection: SortDirection;
-  entitySort: StatisticsEntitySort;
-  entityDirection: SortDirection;
-  limit?: number;
-  cursor?: string;
-}
+export type FindingsRequest = import("./findings").ParsedFindingsQuery & {
+  anomalies: "exclude" | "include"; limit?: number; cursor?: string;
+};
 
-export type StatisticsEntity = components["schemas"]["StatisticsEntity"];
-
-export type StatisticsPublication = components["schemas"]["StatisticsPublication"];
-
-export type StatisticsPage = components["schemas"]["Statistics"];
+export type FindingsPage = components["schemas"]["Findings"];
+export type Finding = components["schemas"]["Finding"];
+export type FindingGroup = components["schemas"]["FindingGroup"];
+export type FindingInstitution = components["schemas"]["FindingInstitution"];
 
 export type PublicationView = components["schemas"]["Publication"];
 

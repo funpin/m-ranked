@@ -56,6 +56,30 @@ function item(id: number, platform: Schema["PlatformValue"], period: Schema["Per
       : platform === "all" ? {...metric, total:84, totalMetadata:aggregate(84)} : metric,
     comments: { ...metric, total: 0, totalTrend:-1, totalMetadata: aggregate(0, 1) }, shares: { ...metric, total: null, totalTrend:null, totalMetadata: aggregate(null, 0) }, asOf };
 }
+function finding(id: number, platform: "telegram" | "vk" | "max" | "rutube", institution = 1): Schema["Finding"] {
+  return {
+    publicationId: uuid(5, id), institutionId: uuid(9, institution), institutionLegacyId: institution,
+    institutionShortName: `Вуз ${String(institution).padStart(3, "0")}`,
+    institutionCanonicalName: `Полное название университета ${String(institution).padStart(3, "0")}`,
+    accountId: uuid(1, institution), platform, publicationType: id % 3 === 0 ? "video" : "photo",
+    // MAX нумерует посты 18-значными числами: карточка не должна от них разъезжаться.
+    externalId: platform === "max" ? `11497403${String(id).padStart(10, "0")}` : String(id), publicUrl: `https://example.test/${id}`, publishedAt: asOf,
+    ageHours: id === 2 ? 6 : id === 7 ? 12 : 24, preliminary: id === 2, interactionIndex: id === 4 ? null : 5 - id / 20,
+    viewIndex: 1.5, interactionNorm: 20, viewNorm: 1000, normSampleSize: 12,
+    interactions: id === 3 ? 0 : 100 - id, reactions: 80, comments: platform === "max" ? null : 15,
+    shares: platform === "vk" ? 5 : null, views: 2000, erv: id === 3 ? 0 : 5,
+    anomalyLevel: id === 2 || id === 5 ? 1 : id === 6 ? null : 0,
+    capabilities: { reactions: true, comments: platform !== "max", shares: platform === "vk" },
+    commentIndex: platform === "max" ? null : 3, shareIndex: platform === "vk" ? 2.5 : null,
+    commentNorm: platform === "max" ? null : 5, shareNorm: platform === "vk" ? 2 : null,
+    // Разбивку реакций отдают Telegram и MAX.
+    topReactions: platform === "telegram" || platform === "max"
+      ? [{ reaction: "🔥", count: 40 }, { reaction: "❤", count: 25 }, { reaction: "👍", count: 15 }] : [],
+    curve: { hours: [1, 3, 6, 12, 24], post: [10, 30, 55, id === 2 ? null : 80, id === 2 ? null : 100 - id],
+      norm: [4, 9, 13, 17, 20] },
+  };
+}
+
 function statisticsEntity(id: number, platform: "telegram" | "vk" | "max" | "rutube"): Schema["StatisticsEntity"] {
   return { rank:id, legacyRoute:`/institutions/${id}`, accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id), institutionId:uuid(9,id), institutionLegacyId:id,
     canonicalName:id===3?"Мариупольский государственный университет имени А.И. Куинджи":`Полное название университета ${String(id).padStart(3,"0")}`,
@@ -369,6 +393,37 @@ const server = createServer(async (request, response) => {
       canonicalName: names[id - 1]!, shortName: null, primaryCohortSize: 2, engagementCohortSize: 2, points: performanceFixture ? points.map(point => ({...point, value: point.value * id / 10})) : points, engagementPoints: performanceFixture ? points.map(point => ({...point, value: point.value * id / 100})) : points }));
     return json({ cohortId: "fixture-cohort", nextSelectionCursor: null, platform: platform as "telegram", horizonHours: Number(url.searchParams.get("horizonHours") ?? 72) as 72, includePartial: url.searchParams.get("includePartial") === "true",
       metric: (url.searchParams.get("metric") ?? "reactions") as "reactions", aggregation: "median", selectionType: type, cohortSampleSize: 4, series, datasetRevision: revision, asOf } satisfies Schema["Comparison"]);
+  }
+  if (url.pathname === "/api/v1/findings") {
+    const mode = url.searchParams.get("mode") ?? "all";
+    const institution = Number(url.searchParams.get("institution") ?? "0") || null;
+    if (mode === "institution" && institution !== 1 && institution !== 2) {
+      return json({ type: "about:blank", title: "Not Found", status: 404, detail: "вуз не найден" }, 404);
+    }
+    const platform = (url.searchParams.get("platform") ?? "all") as Schema["Findings"]["platform"];
+    const empty = url.searchParams.get("q") === "missing";
+    const group = (url.searchParams.get("group") ?? "none") as Schema["Findings"]["group"];
+    const rowPlatform = platform === "all" ? "vk" : platform;
+    const items = empty ? [] : Array.from({ length: 30 }, (_, index) => finding(index + 1, rowPlatform, mode === "institution" ? institution! : (index % 2) + 1));
+    const body: Schema["Findings"] = {
+      mode: mode as Schema["Findings"]["mode"], institution, platform,
+      period: (url.searchParams.get("period") ?? "7d") as Schema["Findings"]["period"],
+      types: url.searchParams.getAll("types") as Schema["Findings"]["types"],
+      sort: (url.searchParams.get("sort") ?? "interaction_index") as Schema["Findings"]["sort"],
+      direction: (url.searchParams.get("direction") ?? "desc") as Schema["Findings"]["direction"],
+      group, q: url.searchParams.get("q") ?? "",
+      anomalies: (url.searchParams.get("anomalies") ?? "exclude") as Schema["Findings"]["anomalies"],
+      items: group === "none" ? items : [],
+      groups: group === "institution" && !empty ? [1, 2].map((number) => ({
+        institutionLegacyId: number, institutionShortName: `Вуз ${String(number).padStart(3, "0")}`,
+        institutionCanonicalName: `Полное название университета ${String(number).padStart(3, "0")}`,
+        findingCount: 15, items: items.filter((item) => item.institutionLegacyId === number).slice(0, 3),
+      })) : [],
+      total: items.length, hiddenAnomalous: empty ? 0 : 3,
+      institutions: [1, 2].map((number) => ({ legacyId: number, shortName: `Вуз ${String(number).padStart(3, "0")}`, canonicalName: `Полное название университета ${String(number).padStart(3, "0")}` })),
+      limit: 50, offset: 0, hasMore: false, nextCursor: null, datasetRevision: revision, asOf,
+    };
+    return json(body);
   }
   if (url.pathname === "/api/v1/statistics") {
     const selectedPlatform=(url.searchParams.get("platform")??"all") as "all"|"telegram"|"vk"|"max"|"rutube";

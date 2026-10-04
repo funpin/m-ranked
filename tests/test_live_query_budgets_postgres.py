@@ -16,6 +16,14 @@ import pytest
 
 from api.config import Settings
 from api.sql import admin, analysis, compare, details, overview, statistics
+from api.findings_norms import serializable
+from api.sql import findings as findings_sql
+from psycopg.types.json import Jsonb
+from api.findings import (
+    COMMENT_NORM_FLOOR, FINDING_MIN_COMMENTS, FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS,
+    FINDING_MIN_SHARES, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE, NORM_WINDOW_DAYS, PAGE_CAP,
+    SHARE_NORM_FLOOR, TOP_REACTIONS, VIEW_NORM_FLOOR,
+)
 from conftest import requires_api_database
 
 
@@ -27,6 +35,18 @@ pytestmark = requires_api_database
 DEFAULT_BUDGET = (1_000.0, 100_000)
 COMPARISON_24H_BUDGET = (4_000.0, 220_000)
 COMPARISON_336H_BUDGET = (5_000.0, 260_000)
+# Findings: norms (NORMS) read checkpoints of every account for 30 days but run
+# once per process per 10 minutes (api/findings_norms.py); each page request
+# runs FINDINGS over the period's posts only. Both run without nested loops
+# (Database.fetch_all_hash_joined), as measured here. Restored prod copy (data
+# through 2026-09-25, revision 2026-09-27), one developer machine, no JIT:
+# NORMS 213 ms / 8.6k blocks; FINDINGS 7d 108 ms / 13k, 30d 362 ms / 13.8k.
+# Timings vary run to run; blocks are the stable signal. Before the split,
+# production measured 1.16 s / 389k blocks for 7d (2026-10-04).
+# To re-baseline: run against a restored copy, update these values, commit.
+FINDINGS_NORMS_BUDGET = (1_000.0, 15_000)
+FINDINGS_7D_BUDGET = (500.0, 20_000)
+FINDINGS_30D_BUDGET = (1_000.0, 25_000)
 
 
 def _plan(connection: psycopg.Connection[Any], statement: str,
@@ -221,3 +241,40 @@ def test_management_screen_query_budgets() -> None:
         )
         for name, statement, parameters in checks:
             _assert_budget(name, _plan(connection, statement, parameters), DEFAULT_BUDGET)
+
+
+def test_findings_query_budget() -> None:
+    settings = Settings()
+    with psycopg.connect(settings.read_dsn, autocommit=True, row_factory=dict_row) as connection:
+        connection.execute("SET statement_timeout='15s'")
+        connection.execute("SET max_parallel_workers_per_gather=0")
+        # Как у роли api_read на сервере (infra/postgres/init): без JIT. Под
+        # суперпользователем локальной копии JIT иначе тратит секунды на
+        # компиляцию запроса, который сам выполняется за доли секунды.
+        connection.execute("SET jit=off")
+        # Как в маршруте: запросы «Находок» идут без вложенных циклов.
+        connection.execute("SET enable_nestloop=off")
+        as_of = connection.execute(
+            "SELECT committed_at FROM analytics.dataset_revision ORDER BY id DESC LIMIT 1").fetchone()["committed_at"]
+        norms_parameters = {"as_of": as_of, "norm_days": NORM_WINDOW_DAYS}
+        _assert_budget("findings norms", _plan(connection, findings_sql.NORMS, norms_parameters),
+                       FINDINGS_NORMS_BUDGET)
+        norms = serializable(connection.execute(findings_sql.NORMS, norms_parameters).fetchall())
+        base = {
+            "as_of": as_of, "norms": Jsonb(norms), "institution_legacy_id": None,
+            "types": [], "q": "", "search_pattern": "%", "username_pattern": "%",
+            "min_sample": MIN_NORM_SAMPLE, "interaction_floor": INTERACTION_NORM_FLOOR,
+            "view_floor": VIEW_NORM_FLOOR, "min_index": FINDING_MIN_INDEX,
+            "min_interactions": FINDING_MIN_INTERACTIONS, "sort": "interaction_index",
+            "direction": "desc", "exclude_anomalies": True, "cap": PAGE_CAP,
+            "comment_floor": COMMENT_NORM_FLOOR, "share_floor": SHARE_NORM_FLOOR,
+            "min_comments": FINDING_MIN_COMMENTS, "min_shares": FINDING_MIN_SHARES,
+            "top_reactions": TOP_REACTIONS,
+        }
+        cases = {
+            "findings 30d all": ({"period_days": 30, "platform": "all", "mode": "all", "group": "none"}, FINDINGS_30D_BUDGET),
+            "findings 7d": ({"period_days": 7, "platform": "all", "mode": "all", "group": "none"}, FINDINGS_7D_BUDGET),
+            "findings 7d grouped": ({"period_days": 7, "platform": "all", "mode": "all", "group": "institution"}, FINDINGS_7D_BUDGET),
+        }
+        for name, (overrides, budget) in cases.items():
+            _assert_budget(name, _plan(connection, findings_sql.FINDINGS, base | overrides), budget)

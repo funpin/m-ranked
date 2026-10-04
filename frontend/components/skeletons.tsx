@@ -9,6 +9,9 @@ import {
   FILTER_SORT_CLASS,
   FILTER_TOOLBAR_CLASS,
 } from "@/components/filter-toolbar";
+import {
+  FINDINGS_DIRECTION_CLASS, FINDINGS_FILTERS_CLASS, FINDINGS_MODE_CLASS, FINDINGS_PERIOD_CLASS, FINDINGS_PLATFORM_CLASS, FINDINGS_SEARCH_CLASS, FINDINGS_SORT_CLASS, FINDINGS_TOOLBAR_CLASS,
+} from "@/components/findings/toolbar";
 
 /**
  * Шапка страницы и полоса фильтров при переходе.
@@ -32,6 +35,21 @@ function Chrome({ title, description, controls = 3 }: {
         {controls > 0 ? <div className={FILTER_PERIOD_CLASS}><Skeleton className="h-8 w-64" /></div> : null}
         {controls > 1 ? <div className={FILTER_SORT_CLASS}><Skeleton className="h-8 w-full" /></div> : null}
         {controls > 2 ? <div className={FILTER_DIRECTION_CLASS}><Skeleton className="h-8 w-full" /></div> : null}
+      </div>
+    </>
+  );
+}
+
+/** Полоса «Находок»: та же сетка, что у настоящей, чтобы подмена не двигала поля. */
+function FindingsChrome() {
+  return (
+    <>
+      <PageHeader title="Находки: посты выше нормы" description="Посты, которые сработали лучше обычного для своего аккаунта." />
+      <div className={FINDINGS_TOOLBAR_CLASS}>
+        {[FINDINGS_MODE_CLASS, FINDINGS_PLATFORM_CLASS, FINDINGS_PERIOD_CLASS, FINDINGS_DIRECTION_CLASS,
+          FINDINGS_SORT_CLASS, FINDINGS_FILTERS_CLASS, FINDINGS_SEARCH_CLASS].map((className) => (
+          <div key={className} className={className}><Skeleton className="h-8 w-full" /></div>
+        ))}
       </div>
     </>
   );
@@ -106,16 +124,13 @@ export function TableSkeleton({ rows = 10, chrome = true }: { rows?: number; chr
 /** Статистика меняет представление в том же breakpoint, что и результат:
  *  строки на широком экране и полноценные карточки на телефоне. Старая
  *  заготовка всегда обещала таблицу, а затем резко меняла и ширину, и высоту. */
-export function StatisticsSkeleton({ rows = 5, chrome = true, view = "publications" }: {
+export function StatisticsSkeleton({ rows = 5, chrome = true }: {
   rows?: number;
   chrome?: boolean;
-  view?: "publications" | "entities";
 }) {
   return (
     <>
-      {chrome ? <Chrome title="Статистика публикаций"
-        description="Накопленные результаты публикаций, вышедших в выбранный период."
-        controls={3} /> : null}
+      {chrome ? <FindingsChrome /> : null}
       <section className="min-w-0 space-y-3" role="status" aria-live="polite">
         <span className="sr-only">Загрузка статистики</span>
         <Skeleton className="h-6 w-44" />
@@ -144,7 +159,7 @@ export function StatisticsSkeleton({ rows = 5, chrome = true, view = "publicatio
               </div>
               <div className="mt-4 flex gap-2">
                 <Skeleton className="h-9 min-w-0 flex-1" />
-                {view === "publications" ? <Skeleton className="size-9 shrink-0" /> : null}
+                <Skeleton className="size-9 shrink-0" />
               </div>
             </div>
           ))}
@@ -245,10 +260,7 @@ export function skeletonFor(href: string) {
   if (!href) return null;
   const path = href.split("?")[0] ?? "";
   if (path === "/review") return <CardGridSkeleton />;
-  if (path.startsWith("/statistics")) {
-    const view = new URL(href, "https://m-ranked.invalid").searchParams.get("view") === "entities" ? "entities" : "publications";
-    return <StatisticsSkeleton view={view} />;
-  }
+  if (path.startsWith("/statistics")) return <StatisticsSkeleton />;
   if (path.startsWith("/compare")) {
     return <CompareDashboardSkeleton />;
   }

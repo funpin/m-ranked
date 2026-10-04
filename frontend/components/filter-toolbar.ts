@@ -14,9 +14,12 @@ export const STICKY_CONTROL_SURFACE_CLASS = [
   "dark:md:data-stuck:shadow-[inset_0_-1px_0_rgb(255_255_255/0.04),0_24px_48px_-24px_rgb(0_0_0/0.95)]",
 ].join(" ");
 
-/** Shared responsive geometry for the overview and statistics filter bars. */
+/** Six-column phone/tablet grid shared by every public filter bar. */
+export const FILTER_GRID_CLASS = "mb-6 grid grid-cols-6 items-center gap-2 p-2.5";
+
+/** Shared responsive geometry for the overview filter bar. */
 export const FILTER_TOOLBAR_CLASS =
-  `mb-6 grid grid-cols-6 items-center gap-2 p-2.5 xl:grid-cols-[240px_210px_80px_minmax(180px,220px)_minmax(180px,1fr)] ${STICKY_CONTROL_SURFACE_CLASS}`;
+  `${FILTER_GRID_CLASS} xl:grid-cols-[240px_210px_80px_minmax(180px,220px)_minmax(180px,1fr)] ${STICKY_CONTROL_SURFACE_CLASS}`;
 
 /** Filter selects keep the toolbar's 32px row instead of the preset's 28px. */
 export const FILTER_SELECT_CLASS = "w-full [&>select]:h-8 [&>select]:pl-2.5 [&>select]:pr-8 [&>select]:text-sm [&>svg]:right-2.5 [&>svg]:size-4";

@@ -7,6 +7,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .institution_profile import institution_profile
+from .findings import CURVE_HOURS
+from .statistics_capabilities import INTERACTION_COMPONENTS, PLATFORM_METRIC_CAPABILITIES
 
 
 def iso(value: Any) -> Any:
@@ -459,6 +461,64 @@ def statistics_publication(row: dict[str, Any]) -> dict[str, Any]:
         "interactionsAvailable": row["interactions"] is not None,
         "ervEligible": row["erv"] is not None,
     }
+
+
+def _decimal(value: Any) -> Any:
+    return Decimal(str(value)) if isinstance(value, float) else value
+
+
+def finding(row: dict[str, Any]) -> dict[str, Any]:
+    supported = PLATFORM_METRIC_CAPABILITIES[row["platform"]]
+    return {
+        "publicationId": str(row["publication_id"]),
+        "institutionId": str(row["institution_id"]),
+        "institutionLegacyId": row["institution_legacy_id"],
+        "institutionShortName": row["institution_short_name"],
+        "institutionCanonicalName": row["institution_canonical_name"],
+        "accountId": str(row["account_id"]),
+        "platform": row["platform"],
+        "publicationType": row["publication_type"],
+        "externalId": row["external_id"],
+        "publicUrl": row["public_url"],
+        "publishedAt": iso(row["published_at"]),
+        "ageHours": row["age_hours"],
+        "preliminary": bool(row["preliminary"]),
+        "interactionIndex": number(row["interaction_index"]),
+        "viewIndex": number(row["view_index"]),
+        "commentIndex": number(row.get("comment_index")),
+        "shareIndex": number(row.get("share_index")),
+        "interactionNorm": number(_decimal(row["interaction_norm"])),
+        "viewNorm": number(_decimal(row["view_norm"])),
+        "commentNorm": number(_decimal(row.get("comment_norm"))),
+        "shareNorm": number(_decimal(row.get("share_norm"))),
+        "normSampleSize": row["norm_sample"] or 0,
+        "interactions": row["interactions"],
+        "reactions": row["reactions"],
+        "comments": row["comments"],
+        "shares": row["shares"],
+        "views": row["views"],
+        "erv": number(row["erv"]),
+        "anomalyLevel": row["level"],
+        "capabilities": {metric: metric in supported for metric in INTERACTION_COMPONENTS},
+        "topReactions": [{"reaction": entry["reaction"], "count": int(entry["count"])}
+                         for entry in (row.get("top_reactions") or [])],
+        "curve": _finding_curve(row.get("post_curve"), row.get("norm_curve")),
+    }
+
+
+def _finding_curve(post: dict[str, Any] | None, norm: dict[str, Any] | None) -> dict[str, Any]:
+    """Взаимодействия поста и норма аккаунта на часах 1–24; нет точки — null."""
+    post, norm = post or {}, norm or {}
+    return {
+        "hours": list(CURVE_HOURS),
+        "post": [post.get(str(hour)) for hour in CURVE_HOURS],
+        "norm": [number(_decimal(norm.get(str(hour)))) for hour in CURVE_HOURS],
+    }
+
+
+def finding_institution(row: dict[str, Any]) -> dict[str, Any]:
+    return {"legacyId": row["legacy_id"], "shortName": row["short_name"],
+            "canonicalName": row["canonical_name"]}
 
 
 def comparison_candidate(row: dict[str, Any]) -> dict[str, Any]:

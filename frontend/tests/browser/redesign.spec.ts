@@ -49,7 +49,7 @@ async function viewportLayout(page: Page) {
 test("PWA pages cannot pan into an empty strip at iPhone widths", async ({ page }) => {
   for (const width of [375, 390, 430]) {
     await page.setViewportSize({ width, height: 844 });
-    for (const path of ["/review?platform=telegram", "/statistics?platform=telegram", "/statistics?platform=telegram&view=entities", "/accounts/00000001-0000-4000-8000-000000000001"]) {
+    for (const path of ["/review?platform=telegram", "/statistics?platform=telegram", "/statistics?group=institution", "/accounts/00000001-0000-4000-8000-000000000001"]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await settled(page);
@@ -64,7 +64,7 @@ for (const theme of ["light", "dark"]) {
   test(`remaining screens fit the viewport and meet axe AA in ${theme} theme`, async ({ page }) => {
     await page.addInitScript((value) => localStorage.setItem("m-ranked-theme", value), theme);
     await page.setExtraHTTPHeaders({ authorization: `Basic ${Buffer.from("admin:fixture-password").toString("base64")}` });
-    for (const path of ["/statistics?platform=telegram", "/accounts/00000001-0000-4000-8000-000000000001", "/compare?platform=max", "/missing-page", "/manage"]) {
+    for (const path of ["/statistics?platform=telegram", "/statistics?mode=institution", "/statistics?group=institution", "/accounts/00000001-0000-4000-8000-000000000001", "/compare?platform=max", "/missing-page", "/manage"]) {
       await test.step(path, async () => {
         await page.goto(path);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

@@ -135,6 +135,9 @@ CASES = [
      "/api/v1/compare?platform=rutube&horizonHours=24&institutionLimit=2"),
     ("/api/v1/publications/{legacyId}/anomaly-analysis", "get", "200",
      "/api/v1/publications/99269506-1466-5e18-a215-a3db2688d786/anomaly-analysis"),
+    ("/api/v1/findings", "get", "200", "/api/v1/findings"),
+    ("/api/v1/findings", "get", "200", "/api/v1/findings?group=institution"),
+    ("/api/v1/findings", "get", "200", "/api/v1/findings?mode=institution&institution=1"),
 ]
 
 
@@ -518,6 +521,20 @@ def test_overview_etag_returns_304(client) -> None:
     etag = response.headers["etag"]
     assert etag
     again = client.get("/api/v1/overview?limit=3", headers={"If-None-Match": etag})
+    assert again.status_code == 304
+    assert again.headers["etag"] == etag
+
+
+@requires_database
+def test_findings_problem_and_etag(client, validator_for) -> None:
+    rejected = client.get("/api/v1/findings?period=3h")
+    assert rejected.headers["cache-control"] == "no-store"
+    assert_contract_response(rejected, validator_for, "/api/v1/findings", "400")
+
+    response = client.get("/api/v1/findings?limit=3")
+    etag = response.headers["etag"]
+    assert etag
+    again = client.get("/api/v1/findings?limit=3", headers={"If-None-Match": etag})
     assert again.status_code == 304
     assert again.headers["etag"] == etag
 

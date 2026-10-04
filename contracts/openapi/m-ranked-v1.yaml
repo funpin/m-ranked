@@ -452,9 +452,10 @@ paths:
     get:
       tags: [Query]
       operationId: getStatistics
+      deprecated: true
       summary: Read bounded cumulative publication statistics
       description: >-
-        Selects publications by publication date, then uses their latest available cumulative
+        Deprecated: use getFindings. Selects publications by publication date, then uses their latest available cumulative
         counters. Publication results apply global search before the newest-200 cap and rank the
         resulting top 50 independently per platform. Entity results aggregate the newest 20
         matching publications per institution on one platform. Unsupported interaction components
@@ -545,6 +546,51 @@ paths:
               $ref: '#/components/headers/PublicCache'
         '400':
           $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/findings:
+    get:
+      tags: [Query]
+      operationId: getFindings
+      summary: Read publications that performed above their account norm
+      description: >-
+        Compares each publication with the median of its own account at the same age (latest
+        non-empty checkpoint of 1, 3, 6, 12 or 24 hours) over the 30 days before the dataset
+        revision. Posts with an effective anomaly level 2-3 are excluded from norms and, unless
+        anomalies=include, from results. In mode=all only posts with an interaction index of at
+        least 1.5 and at least 10 interactions are returned.
+      security: []
+      parameters:
+        - { name: mode, in: query, schema: { type: string, enum: [all, institution], default: all } }
+        - { name: institution, in: query, description: Institution legacy id; required when mode=institution., schema: { type: integer, format: int64, minimum: 1 } }
+        - { name: platform, in: query, schema: { type: string, enum: [all, telegram, vk, max, rutube], default: all } }
+        - { name: period, in: query, schema: { type: string, enum: ['1d', '7d', '30d'], default: '7d' } }
+        - { name: types, in: query, style: form, explode: true, schema: { type: array, maxItems: 5, items: { type: string, enum: [text, photo, album, video, other] } } }
+        - { name: sort, in: query, schema: { type: string, enum: [interaction_index, view_index, comment_index, share_index, interactions24, views24, erv24, published_at], default: interaction_index } }
+        - { name: direction, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { name: group, in: query, schema: { type: string, enum: [none, institution], default: none } }
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: anomalies, in: query, schema: { type: string, enum: [exclude, include], default: exclude } }
+        - { name: limit, in: query, schema: { type: integer, format: int32, minimum: 1, maximum: 50, default: 50 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, maxLength: 512 } }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Revision-pinned findings.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Findings' }
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/compare/candidates:
@@ -4787,6 +4833,105 @@ components:
         asOf:
           type: string
           format: date-time
+    Finding:
+      type: object
+      additionalProperties: false
+      required: [publicationId, institutionId, institutionLegacyId, institutionShortName, institutionCanonicalName, accountId, platform, publicationType, externalId, publicUrl, publishedAt, ageHours, preliminary, interactionIndex, viewIndex, interactionNorm, viewNorm, normSampleSize, interactions, reactions, comments, shares, views, erv, anomalyLevel, capabilities, commentIndex, shareIndex, commentNorm, shareNorm, topReactions, curve]
+      properties:
+        publicationId: { type: string, format: uuid }
+        institutionId: { type: string, format: uuid }
+        institutionLegacyId: { type: ['integer', 'null'], format: int64 }
+        institutionShortName: { type: ['string', 'null'] }
+        institutionCanonicalName: { type: string }
+        accountId: { type: string, format: uuid }
+        platform: { type: string, enum: [telegram, vk, max, rutube] }
+        publicationType: { type: string }
+        externalId: { type: ['string', 'null'] }
+        publicUrl: { type: ['string', 'null'] }
+        publishedAt: { type: ['string', 'null'], format: date-time }
+        ageHours: { type: ['integer', 'null'], enum: [1, 3, 6, 12, 24, null] }
+        preliminary: { type: boolean }
+        interactionIndex: { type: ['number', 'null'] }
+        viewIndex: { type: ['number', 'null'] }
+        interactionNorm: { type: ['number', 'null'] }
+        viewNorm: { type: ['number', 'null'] }
+        normSampleSize: { type: integer, minimum: 0, description: "Number of the account's posts behind the interaction norm at the same post age." }
+        interactions: { type: ['integer', 'null'], minimum: 0 }
+        reactions: { type: ['integer', 'null'], minimum: 0 }
+        comments: { type: ['integer', 'null'], minimum: 0 }
+        shares: { type: ['integer', 'null'], minimum: 0 }
+        views: { type: ['integer', 'null'], minimum: 0 }
+        erv: { type: ['number', 'null'] }
+        anomalyLevel: { type: ['integer', 'null'], minimum: 0, maximum: 3 }
+        capabilities: { $ref: '#/components/schemas/StatisticsCapabilities' }
+        commentIndex: { type: ['number', 'null'], description: Comments at the post age divided by the account comment norm (floor 2); null where the platform has no comments or the norm sample is under 10. }
+        shareIndex: { type: ['number', 'null'], description: Shares at the post age divided by the account share norm (floor 2); VK only. }
+        commentNorm: { type: ['number', 'null'] }
+        shareNorm: { type: ['number', 'null'] }
+        topReactions:
+          type: array
+          maxItems: 3
+          description: Most frequent reactions in the latest snapshot (Telegram and MAX), largest first; custom emoji use the custom:<id> label.
+          items:
+            type: object
+            additionalProperties: false
+            required: [reaction, count]
+            properties:
+              reaction: { type: string, maxLength: 200 }
+              count: { type: integer, minimum: 1 }
+        curve:
+          type: object
+          additionalProperties: false
+          description: Interactions of the post and the account norm at 1, 3, 6, 12 and 24 hours; null where no checkpoint exists.
+          required: [hours, post, norm]
+          properties:
+            hours: { type: array, items: { type: integer, enum: [1, 3, 6, 12, 24] }, minItems: 5, maxItems: 5 }
+            post: { type: array, items: { type: ['integer', 'null'], minimum: 0 }, minItems: 5, maxItems: 5 }
+            norm: { type: array, items: { type: ['number', 'null'], minimum: 0 }, minItems: 5, maxItems: 5 }
+    FindingGroup:
+      type: object
+      additionalProperties: false
+      required: [institutionLegacyId, institutionShortName, institutionCanonicalName, findingCount, items]
+      properties:
+        institutionLegacyId: { type: ['integer', 'null'], format: int64 }
+        institutionShortName: { type: ['string', 'null'] }
+        institutionCanonicalName: { type: string }
+        findingCount: { type: integer, minimum: 1 }
+        items: { type: array, maxItems: 3, items: { $ref: '#/components/schemas/Finding' } }
+    FindingInstitution:
+      type: object
+      additionalProperties: false
+      required: [legacyId, shortName, canonicalName]
+      properties:
+        legacyId: { type: integer, format: int64 }
+        shortName: { type: ['string', 'null'] }
+        canonicalName: { type: string }
+    Findings:
+      type: object
+      additionalProperties: false
+      required: [mode, institution, platform, period, types, sort, direction, group, q, anomalies, items, groups, total, hiddenAnomalous, institutions, limit, offset, hasMore, nextCursor, datasetRevision, asOf]
+      properties:
+        mode: { type: string, enum: [all, institution] }
+        institution: { type: ['integer', 'null'], format: int64 }
+        platform: { type: string, enum: [all, telegram, vk, max, rutube] }
+        period: { type: string, enum: ['1d', '7d', '30d'] }
+        types: { type: array, items: { type: string, enum: [text, photo, album, video, other] } }
+        sort: { type: string, enum: [interaction_index, view_index, comment_index, share_index, interactions24, views24, erv24, published_at] }
+        direction: { type: string, enum: [asc, desc] }
+        group: { type: string, enum: [none, institution] }
+        q: { type: string, maxLength: 200 }
+        anomalies: { type: string, enum: [exclude, include] }
+        items: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/Finding' } }
+        groups: { type: array, items: { $ref: '#/components/schemas/FindingGroup' } }
+        total: { type: integer, minimum: 0 }
+        hiddenAnomalous: { type: integer, minimum: 0 }
+        institutions: { type: array, items: { $ref: '#/components/schemas/FindingInstitution' } }
+        limit: { type: integer, format: int32, minimum: 1, maximum: 50 }
+        offset: { type: integer, minimum: 0 }
+        hasMore: { type: boolean }
+        nextCursor: { type: ['string', 'null'] }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        asOf: { type: string, format: date-time }
     ComparisonCandidate:
       type: object
       additionalProperties: false

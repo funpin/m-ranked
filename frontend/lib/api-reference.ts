@@ -34,8 +34,13 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
   },
   getStatistics: {
     section: "overview", title: "Статистика публикаций и вузов",
-    text: "Накопленные показатели публикаций (view=publications) или вузов (view=entities) за период с сортировками и поиском.",
+    text: "Устарел, используйте /api/v1/findings. Накопленные показатели публикаций (view=publications) или вузов (view=entities) за период с сортировками и поиском.",
     example: "/api/v1/statistics?platform=telegram&period=30d&limit=20",
+  },
+  getFindings: {
+    section: "overview", title: "Находки: посты выше нормы",
+    text: "Данные страницы /statistics: посты, сработавшие лучше обычного для своего аккаунта, с индексом к норме на возрасте до 24 часов. Все вузы или один вуз, группировка по вузам, курсор.",
+    example: "/api/v1/findings?platform=vk&period=7d&limit=20",
   },
   getComparisonDashboard: {
     section: "comparison", title: "Панель сравнения",
