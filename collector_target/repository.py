@@ -804,7 +804,11 @@ class PostgresCollectorRepository:
             metric_evidence_ids = self._batch_evidence_ids(batch)
         revision_id = self._begin_revision(connection, batch)
         if not self.compact_working_set:
-            for published_month in sorted({item.snapshot.published_month for item in batch.publications}):
+            # Партиции — только месяцам постов в сроке слежения: замеры старых
+            # постов не пишутся, и пустые партиции прошлых лет не нужны.
+            limit = self.track_window.total_seconds() if self.track_window is not None else None
+            for published_month in sorted({item.snapshot.published_month for item in batch.publications
+                                           if limit is None or item.snapshot.age_seconds <= limit}):
                 connection.execute(
                     "SELECT ops_and_admin.ensure_publication_metric_partition(%s::date)",
                     (published_month,),
