@@ -18,8 +18,9 @@ from api.config import Settings
 from api.sql import admin, analysis, compare, details, overview, statistics
 from api.sql import findings as findings_sql
 from api.findings import (
-    FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE,
-    NORM_WINDOW_DAYS, PAGE_CAP, VIEW_NORM_FLOOR,
+    COMMENT_NORM_FLOOR, FINDING_MIN_COMMENTS, FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS,
+    FINDING_MIN_SHARES, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE, NORM_WINDOW_DAYS, PAGE_CAP,
+    SHARE_NORM_FLOOR, TOP_REACTIONS, VIEW_NORM_FLOOR,
 )
 from conftest import requires_api_database
 
@@ -242,6 +243,10 @@ def test_findings_query_budget() -> None:
     with psycopg.connect(settings.read_dsn, autocommit=True, row_factory=dict_row) as connection:
         connection.execute("SET statement_timeout='15s'")
         connection.execute("SET max_parallel_workers_per_gather=0")
+        # Как у роли api_read на сервере (infra/postgres/init): без JIT. Под
+        # суперпользователем локальной копии JIT иначе тратит секунды на
+        # компиляцию запроса, который сам выполняется за доли секунды.
+        connection.execute("SET jit=off")
         as_of = connection.execute(
             "SELECT committed_at FROM analytics.dataset_revision ORDER BY id DESC LIMIT 1").fetchone()["committed_at"]
         base = {
@@ -251,6 +256,9 @@ def test_findings_query_budget() -> None:
             "view_floor": VIEW_NORM_FLOOR, "min_index": FINDING_MIN_INDEX,
             "min_interactions": FINDING_MIN_INTERACTIONS, "sort": "interaction_index",
             "direction": "desc", "exclude_anomalies": True, "cap": PAGE_CAP,
+            "comment_floor": COMMENT_NORM_FLOOR, "share_floor": SHARE_NORM_FLOOR,
+            "min_comments": FINDING_MIN_COMMENTS, "min_shares": FINDING_MIN_SHARES,
+            "top_reactions": TOP_REACTIONS,
         }
         cases = {
             "findings 30d all": ({"period_days": 30, "platform": "all", "mode": "all", "group": "none"}, FINDINGS_30D_BUDGET),
