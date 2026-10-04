@@ -116,8 +116,11 @@ class PostgresCollectorRepository:
         self.heartbeat_max_age: timedelta | None = None
         # Срок слежения за постом (track_post_for_hours). Обход ленты отдаёт и
         # старые посты (весь список видео RUTUBE, закреплённые записи VK);
-        # замеры по ним за сроком не пишутся. None — без предела.
-        self.track_window: timedelta | None = None
+        # замеры по ним за сроком не пишутся. Действует и в приёмнике
+        # Сервера 2, который применяет пачки тем же кодом: сборщик кладёт в
+        # пачку весь обход ленты.
+        self.track_window: timedelta | None = timedelta(
+            hours=int(os.getenv("TRACK_POST_FOR_HOURS", "720").strip().strip('"') or "720"))
         self.poll_receipt_policy = poll_receipt_policy or PollReceiptPolicy()
         self._last_poll_receipt_prune: datetime | None = None
         self.evidence_store = evidence_store or ImmutableEvidenceStore(
