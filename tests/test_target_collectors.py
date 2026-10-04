@@ -999,6 +999,11 @@ def test_max_exact_lookup_omission_is_missing_but_auth_is_transient(
 
 def test_max_history_quota_still_refreshes_known_metrics(tmp_path: Path) -> None:
     class LimitedClient(_MaxPointClient):
+        remembered = None
+
+        def remember_posts(self, chat_id, posts, limit):
+            self.remembered = (chat_id, [post.id for post in posts], limit)
+
         async def posts(self, chat_id: int, count: int) -> list[MaxPost]:
             assert count == 20
             raise MaxHistoryRateLimited(1200)
@@ -1013,6 +1018,7 @@ def test_max_history_quota_still_refreshes_known_metrics(tmp_path: Path) -> None
         tracking=_Tracking((_tracked(10, "10"),)),
     ).collect(account(Platform.MAX), context(Platform.MAX)))
     assert client.requested == ["10"]
+    assert client.remembered == (9, ["10"], 20)
     assert result.publications[0].metrics["views"] == 354
     assert result.publications[0].metrics["reactions"] == 48
     assert result.account_observation.source["discovery_deferred"] is True

@@ -249,6 +249,9 @@ class MaxGatewayCollector:
         if discovery_error is not None:
             if not posts and not refreshed:
                 raise discovery_error
+            remember = getattr(self.client, "remember_posts", None)
+            if callable(remember):
+                remember(channel.id, [*posts, *refreshed], self.settings.max_discovery_limit)
             logger.warning(
                 "MAX history deferred account=%s retry_after_seconds=%.0f refreshed=%s",
                 account.id, discovery_error.retry_after_seconds, len(final.publications),

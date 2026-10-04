@@ -476,6 +476,15 @@ class MaxUserClient:
         messages = await self._request(self.client.get_messages, chat_id, ids)
         return await self._with_reactions(chat_id, list(messages or []))
 
+    def remember_posts(self, chat_id: int, posts: list[MaxPost], limit: int) -> None:
+        """Seed identities after a quota refusal on a freshly started worker.
+
+        Point-refresh scheduling may find nothing due on the next cycle. Keep
+        a bounded recent cohort to re-read independently during history backoff.
+        """
+        recent = sorted(posts, key=lambda post: post.published_at, reverse=True)
+        self._history_ids[chat_id] = tuple(dict.fromkeys(post.id for post in recent))[:limit]
+
 
 def max_username(reference: str) -> str:
     value = reference.strip()

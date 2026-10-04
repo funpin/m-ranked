@@ -194,7 +194,12 @@ def test_history_quota_defers_only_history_and_keeps_point_reads_live(tmp_path, 
             await client.posts(-123, 20)
         assert sdk.history_calls == 1
         assert sdk.closed is False
-        assert (await client.posts_by_ids(-123, ["700"]))[0].views == 321
+        refreshed = await client.posts_by_ids(-123, ["700"])
+        assert refreshed[0].views == 321
+        client.remember_posts(-123, refreshed, 20)
+        with pytest.raises(MaxHistoryRateLimited) as seeded:
+            await client.posts(-123, 20)
+        assert seeded.value.message_ids == ("700",)
         assert len(await client.posts(-456, 20)) == 1
         now[0] += 20
         with pytest.raises(MaxHistoryRateLimited) as second:
