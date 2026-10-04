@@ -11,8 +11,9 @@ from ..cached import serve
 from ..db import Database
 from ..errors import NotFound
 from ..findings import (
-    FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS, FINDINGS_PERIOD_DAYS, INTERACTION_NORM_FLOOR,
-    MIN_NORM_SAMPLE, NORM_WINDOW_DAYS, PAGE_CAP, VIEW_NORM_FLOOR,
+    COMMENT_NORM_FLOOR, FINDING_MIN_COMMENTS, FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS,
+    FINDING_MIN_SHARES, FINDINGS_PERIOD_DAYS, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE,
+    NORM_WINDOW_DAYS, PAGE_CAP, SHARE_NORM_FLOOR, TOP_REACTIONS, VIEW_NORM_FLOOR,
 )
 from ..sql import findings as sql
 from .statistics import _like_pattern, _page
@@ -99,7 +100,9 @@ async def findings(
             "min_index": FINDING_MIN_INDEX, "min_interactions": FINDING_MIN_INTERACTIONS,
             "sort": query.sort, "direction": query.direction,
             "exclude_anomalies": query.anomalies == "exclude", "group": query.group,
-            "cap": PAGE_CAP,
+            "cap": PAGE_CAP, "comment_floor": COMMENT_NORM_FLOOR, "share_floor": SHARE_NORM_FLOOR,
+            "min_comments": FINDING_MIN_COMMENTS, "min_shares": FINDING_MIN_SHARES,
+            "top_reactions": TOP_REACTIONS,
         })
         institutions = await db.fetch_all(sql.INSTITUTIONS, {})
         institutions.sort(key=lambda row: (row["short_name"] or row["canonical_name"]).lower())

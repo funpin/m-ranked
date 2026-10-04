@@ -21,6 +21,15 @@ FINDING_TYPES = ("text", "photo", "album", "video", "other")
 MAIN_TYPES = ("text", "photo", "album", "video")
 PAGE_CAP = 200
 GROUP_POSTS = 3
+# Комментарии и репосты редки: медиана аккаунта часто 0–1, поэтому норма
+# ограничена снизу двумя, а в ленту «Обсуждаемые» и «Репостят» пост попадает
+# только с пятью и более комментариями или репостами на возрасте h.
+COMMENT_NORM_FLOOR = 2
+SHARE_NORM_FLOOR = 2
+FINDING_MIN_COMMENTS = 5
+FINDING_MIN_SHARES = 5
+CURVE_HOURS = (1, 3, 6, 12, 24)
+TOP_REACTIONS = 3
 
 
 def type_bucket(publication_type: str) -> str:

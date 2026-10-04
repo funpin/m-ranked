@@ -112,7 +112,8 @@ def statistics_query(view_value: str | None, platform_value: str | None,
 
 
 FINDINGS_SORTS = frozenset({
-    "interaction_index", "view_index", "interactions24", "views24", "erv24", "published_at",
+    "interaction_index", "view_index", "comment_index", "share_index",
+    "interactions24", "views24", "erv24", "published_at",
 })
 
 

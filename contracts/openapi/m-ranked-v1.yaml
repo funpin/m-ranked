@@ -566,7 +566,7 @@ paths:
         - { name: platform, in: query, schema: { type: string, enum: [all, telegram, vk, max, rutube], default: all } }
         - { name: period, in: query, schema: { type: string, enum: ['1d', '7d', '30d'], default: '7d' } }
         - { name: types, in: query, style: form, explode: true, schema: { type: array, maxItems: 5, items: { type: string, enum: [text, photo, album, video, other] } } }
-        - { name: sort, in: query, schema: { type: string, enum: [interaction_index, view_index, interactions24, views24, erv24, published_at], default: interaction_index } }
+        - { name: sort, in: query, schema: { type: string, enum: [interaction_index, view_index, comment_index, share_index, interactions24, views24, erv24, published_at], default: interaction_index } }
         - { name: direction, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
         - { name: group, in: query, schema: { type: string, enum: [none, institution], default: none } }
         - { name: q, in: query, schema: { type: string, maxLength: 200 } }
@@ -4836,7 +4836,7 @@ components:
     Finding:
       type: object
       additionalProperties: false
-      required: [publicationId, institutionId, institutionLegacyId, institutionShortName, institutionCanonicalName, accountId, platform, publicationType, externalId, publicUrl, publishedAt, ageHours, preliminary, interactionIndex, viewIndex, interactionNorm, viewNorm, normSampleSize, interactions, reactions, comments, shares, views, erv, anomalyLevel, capabilities]
+      required: [publicationId, institutionId, institutionLegacyId, institutionShortName, institutionCanonicalName, accountId, platform, publicationType, externalId, publicUrl, publishedAt, ageHours, preliminary, interactionIndex, viewIndex, interactionNorm, viewNorm, normSampleSize, interactions, reactions, comments, shares, views, erv, anomalyLevel, capabilities, commentIndex, shareIndex, commentNorm, shareNorm, topReactions, curve]
       properties:
         publicationId: { type: string, format: uuid }
         institutionId: { type: string, format: uuid }
@@ -4864,6 +4864,30 @@ components:
         erv: { type: ['number', 'null'] }
         anomalyLevel: { type: ['integer', 'null'], minimum: 0, maximum: 3 }
         capabilities: { $ref: '#/components/schemas/StatisticsCapabilities' }
+        commentIndex: { type: ['number', 'null'], description: Comments at the post age divided by the account comment norm (floor 2); null where the platform has no comments or the norm sample is under 10. }
+        shareIndex: { type: ['number', 'null'], description: Shares at the post age divided by the account share norm (floor 2); VK only. }
+        commentNorm: { type: ['number', 'null'] }
+        shareNorm: { type: ['number', 'null'] }
+        topReactions:
+          type: array
+          maxItems: 3
+          description: Most frequent reactions in the latest snapshot (Telegram and MAX), largest first; custom emoji use the custom:<id> label.
+          items:
+            type: object
+            additionalProperties: false
+            required: [reaction, count]
+            properties:
+              reaction: { type: string, maxLength: 200 }
+              count: { type: integer, minimum: 1 }
+        curve:
+          type: object
+          additionalProperties: false
+          description: Interactions of the post and the account norm at 1, 3, 6, 12 and 24 hours; null where no checkpoint exists.
+          required: [hours, post, norm]
+          properties:
+            hours: { type: array, items: { type: integer, enum: [1, 3, 6, 12, 24] }, minItems: 5, maxItems: 5 }
+            post: { type: array, items: { type: ['integer', 'null'], minimum: 0 }, minItems: 5, maxItems: 5 }
+            norm: { type: array, items: { type: ['number', 'null'], minimum: 0 }, minItems: 5, maxItems: 5 }
     FindingGroup:
       type: object
       additionalProperties: false
@@ -4892,7 +4916,7 @@ components:
         platform: { type: string, enum: [all, telegram, vk, max, rutube] }
         period: { type: string, enum: ['1d', '7d', '30d'] }
         types: { type: array, items: { type: string, enum: [text, photo, album, video, other] } }
-        sort: { type: string, enum: [interaction_index, view_index, interactions24, views24, erv24, published_at] }
+        sort: { type: string, enum: [interaction_index, view_index, comment_index, share_index, interactions24, views24, erv24, published_at] }
         direction: { type: string, enum: [asc, desc] }
         group: { type: string, enum: [none, institution] }
         q: { type: string, maxLength: 200 }

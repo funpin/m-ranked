@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "21a4adaa3bc3e5370d1f67692fa749e707ce3ef97310788047c8f11b54b87ace",
+  "sourceSha256": "fb50852664e9a2b48bc091160a2a6cad138519f409222ea6e72384f2921710a6",
   "version": "1.0.0",
   "operations": [
     {
@@ -818,6 +818,8 @@
           "enum": [
             "interaction_index",
             "view_index",
+            "comment_index",
+            "share_index",
             "interactions24",
             "views24",
             "erv24",

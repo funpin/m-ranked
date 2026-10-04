@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .institution_profile import institution_profile
+from .findings import CURVE_HOURS
 from .statistics_capabilities import INTERACTION_COMPONENTS, PLATFORM_METRIC_CAPABILITIES
 
 
@@ -484,8 +485,12 @@ def finding(row: dict[str, Any]) -> dict[str, Any]:
         "preliminary": bool(row["preliminary"]),
         "interactionIndex": number(row["interaction_index"]),
         "viewIndex": number(row["view_index"]),
+        "commentIndex": number(row.get("comment_index")),
+        "shareIndex": number(row.get("share_index")),
         "interactionNorm": number(_decimal(row["interaction_norm"])),
         "viewNorm": number(_decimal(row["view_norm"])),
+        "commentNorm": number(_decimal(row.get("comment_norm"))),
+        "shareNorm": number(_decimal(row.get("share_norm"))),
         "normSampleSize": row["norm_sample"] or 0,
         "interactions": row["interactions"],
         "reactions": row["reactions"],
@@ -495,6 +500,19 @@ def finding(row: dict[str, Any]) -> dict[str, Any]:
         "erv": number(row["erv"]),
         "anomalyLevel": row["level"],
         "capabilities": {metric: metric in supported for metric in INTERACTION_COMPONENTS},
+        "topReactions": [{"reaction": entry["reaction"], "count": int(entry["count"])}
+                         for entry in (row.get("top_reactions") or [])],
+        "curve": _finding_curve(row.get("post_curve"), row.get("norm_curve")),
+    }
+
+
+def _finding_curve(post: dict[str, Any] | None, norm: dict[str, Any] | None) -> dict[str, Any]:
+    """Взаимодействия поста и норма аккаунта на часах 1–24; нет точки — null."""
+    post, norm = post or {}, norm or {}
+    return {
+        "hours": list(CURVE_HOURS),
+        "post": [post.get(str(hour)) for hour in CURVE_HOURS],
+        "norm": [number(_decimal(norm.get(str(hour)))) for hour in CURVE_HOURS],
     }
 
 

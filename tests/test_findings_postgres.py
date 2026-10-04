@@ -14,8 +14,9 @@ from uuid import uuid4
 import pytest
 
 from api.findings import (
-    FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE,
-    NORM_WINDOW_DAYS, PAGE_CAP, VIEW_NORM_FLOOR, index, norm,
+    COMMENT_NORM_FLOOR, FINDING_MIN_COMMENTS, FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS,
+    FINDING_MIN_SHARES, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE, NORM_WINDOW_DAYS, PAGE_CAP,
+    SHARE_NORM_FLOOR, TOP_REACTIONS, VIEW_NORM_FLOOR, index, norm,
 )
 from api.routes.statistics import _like_pattern
 from api.sql import findings as sql
@@ -59,10 +60,10 @@ class World:
                 VALUES (%s,%s,%s,%s,'public_web')""",
                 (self.account, self.institution, platform, f"findings-{self.account}"))
 
-    def post(self, published_at: datetime, points: dict[int, tuple[int | None, int | None]],
+    def post(self, published_at: datetime, points: dict[int, tuple[int | None, ...]],
              *, level: int | None = None, recheck_to: int | None = None,
              publication_type: str = "photo", external_id: str | None = None):
-        """points: час -> (просмотры, реакции); комментарии и репосты пустые."""
+        """points: час -> (просмотры, реакции[, комментарии[, репосты]])."""
         publication = uuid4()
         with _connect(self.dsn) as connection:
             connection.execute("""
@@ -73,11 +74,13 @@ class World:
                 connection.execute("""
                     INSERT INTO ingest.publication_identity(publication_id,platform_account_id,role,external_id,public_url)
                     VALUES (%s,%s,'primary',%s,%s)""", (publication, self.account, external_id, f"https://vk.com/wall{external_id}"))
-            for hour, (views, reactions) in points.items():
+            for hour, values in points.items():
+                views, reactions, comments, shares = (tuple(values) + (None, None))[:4]
                 connection.execute("""
-                    INSERT INTO analytics.publication_checkpoint(publication_id,hour_offset,observed_at,views_count,reactions_count)
-                    VALUES (%s,%s,%s,%s,%s)""",
-                    (publication, hour, published_at + timedelta(hours=hour), views, reactions))
+                    INSERT INTO analytics.publication_checkpoint(
+                      publication_id,hour_offset,observed_at,views_count,reactions_count,comments_count,shares_count)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                    (publication, hour, published_at + timedelta(hours=hour), views, reactions, comments, shares))
             if level is not None:
                 analyzed = published_at + timedelta(hours=30)
                 connection.execute("""
@@ -89,6 +92,34 @@ class World:
                           publication_id,source_analyzed_at,source_level,effective_level,method_version,reason,evidence)
                         VALUES (%s,%s,%s,%s,'test','fixture','{}')""", (publication, analyzed, level, recheck_to))
         return publication
+
+    def reaction_breakdown(self, publication, published_at: datetime, breakdown: dict[str, int]) -> None:
+        """Снимок поста с разбивкой реакций; publication_latest заполняет триггер."""
+        observed = published_at + timedelta(hours=30)
+        month = published_at.astimezone(timezone.utc).date().replace(day=1)
+        with _connect(self.dsn) as connection:
+            if connection.execute("SELECT max(id) AS id FROM analytics.dataset_revision").fetchone()["id"] is None:
+                connection.execute("INSERT INTO analytics.dataset_revision(cause,correlation_id) "
+                                   "VALUES ('ingestion',gen_random_uuid())")
+            run_id = uuid4()
+            connection.execute("""
+                INSERT INTO ingest.collection_run(id,platform,partition_key,collector_version,started_at,status,correlation_id)
+                VALUES (%s,%s,'findings','integration',%s,'succeeded',gen_random_uuid())""",
+                (run_id, self.platform, observed - timedelta(minutes=1)))
+            connection.execute("SELECT ops_and_admin.ensure_publication_metric_partition(%s)", (month,))
+            # Разбивка принимается только вместе со своим снимком: одна транзакция.
+            with connection.transaction():
+                snapshot = connection.execute("""
+                    INSERT INTO ingest.publication_metric_snapshot(
+                      published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,
+                      views_count,reactions_count,quality,source_fingerprint,collected_at,views_quality,reactions_quality)
+                    VALUES (%s,%s,%s,%s,%s,0,1000,%s,'exact',%s,%s,'exact','exact') RETURNING id""",
+                    (month, publication, run_id, observed, 30 * 3600, sum(breakdown.values()),
+                     uuid4().hex, observed)).fetchone()["id"]
+                for key, count in breakdown.items():
+                    connection.execute("""
+                        INSERT INTO ingest.reaction_breakdown(snapshot_published_month,snapshot_id,reaction_key,reaction_count)
+                        VALUES (%s,%s,%s,%s)""", (month, snapshot, key, count))
 
     def baseline(self, count: int = MIN_NORM_SAMPLE, views: int = 1000, reactions: int = 20,
                  days_ago: int = 20) -> None:
@@ -105,7 +136,9 @@ def run(dsn: str, world: World | None = None, **overrides) -> list[dict]:
         "view_floor": VIEW_NORM_FLOOR, "mode": "institution" if world else "all",
         "min_index": FINDING_MIN_INDEX, "min_interactions": FINDING_MIN_INTERACTIONS,
         "sort": "interaction_index", "direction": "desc", "exclude_anomalies": True,
-        "group": "none", "cap": PAGE_CAP,
+        "group": "none", "cap": PAGE_CAP, "comment_floor": COMMENT_NORM_FLOOR,
+        "share_floor": SHARE_NORM_FLOOR, "min_comments": FINDING_MIN_COMMENTS,
+        "min_shares": FINDING_MIN_SHARES, "top_reactions": TOP_REACTIONS,
     }
     params.update(overrides)
     with _connect(dsn) as connection:
@@ -262,3 +295,57 @@ def test_norm_sample_counts_interaction_norm_posts(dsn) -> None:
     target = world.post(AS_OF - timedelta(days=1), {24: (1000, 60)})
     row = next(row for row in posts(run(dsn, world)) if row["publication_id"] == target)
     assert row["norm_sample"] == MIN_NORM_SAMPLE + 3 + 1
+
+
+def test_comment_and_share_indexes_drive_their_own_feed(dsn) -> None:
+    world = World(dsn, platform="vk")
+    for number in range(MIN_NORM_SAMPLE):
+        world.post(AS_OF - timedelta(days=12, minutes=number), {24: (1000, 20, 4, 3)})
+    discussed = world.post(AS_OF - timedelta(days=1), {24: (1000, 20, 12, 3)})
+    shared = world.post(AS_OF - timedelta(days=1, hours=2), {24: (1000, 20, 4, 15)})
+    rows = {row["publication_id"]: row for row in posts(run(dsn, world))}
+    assert rows[discussed]["comment_index"] == Decimal(12) / Decimal(4)
+    assert rows[shared]["share_index"] == Decimal(15) / Decimal(3)
+    feed = lambda sort: {row["publication_id"] for row in posts(run(
+        dsn, None, sort=sort, q=f"В{world.legacy_id}", search_pattern=f"%в{world.legacy_id}%",
+        username_pattern=f"%в{world.legacy_id}%"))}
+    # Лайков у обоих как обычно: в ленту взаимодействий не попадают,
+    # а по своему индексу — попадают.
+    assert feed("interaction_index") == set()
+    assert feed("comment_index") == {discussed}
+    assert feed("share_index") == {shared}
+
+
+def test_comment_index_ignores_platforms_without_comments(dsn) -> None:
+    world = World(dsn, platform="max")
+    for number in range(MIN_NORM_SAMPLE):
+        world.post(AS_OF - timedelta(days=12, minutes=number), {24: (1000, 20, 4, 3)})
+    target = world.post(AS_OF - timedelta(days=1), {24: (1000, 20, 40, 30)})
+    row = next(row for row in posts(run(dsn, world)) if row["publication_id"] == target)
+    assert row["comment_index"] is None and row["share_index"] is None
+    assert row["comments"] is None and row["shares"] is None
+
+
+def test_curve_has_post_and_norm_values_by_hour(dsn) -> None:
+    world = World(dsn)
+    for number in range(MIN_NORM_SAMPLE):
+        world.post(AS_OF - timedelta(days=12, minutes=number), {1: (100, 2), 6: (400, 8), 24: (900, 20)})
+    target = world.post(AS_OF - timedelta(days=1, hours=2), {1: (300, 10), 6: (900, 30), 24: (2000, 60)})
+    row = next(row for row in posts(run(dsn, world)) if row["publication_id"] == target)
+    assert row["post_curve"] == {"1": 10, "6": 30, "24": 60}
+    assert {hour: float(value) for hour, value in row["norm_curve"].items()} == {"1": 2.0, "6": 8.0, "24": 20.0}
+
+
+def test_top_reactions_come_from_latest_snapshot(dsn) -> None:
+    world = World(dsn, platform="telegram")
+    world.baseline()
+    published = AS_OF - timedelta(days=1, hours=3)
+    target = world.post(published, {24: (1000, 60)})
+    other = world.post(AS_OF - timedelta(days=2), {24: (1000, 60)})
+    world.reaction_breakdown(target, published, {"👍": 5, "🔥": 30, "custom:5064709487953183440": 12, "❤": 20})
+    row = next(row for row in posts(run(dsn, world)) if row["publication_id"] == target)
+    assert row["top_reactions"] == [
+        {"reaction": "🔥", "count": 30}, {"reaction": "❤", "count": 20},
+        {"reaction": "custom:5064709487953183440", "count": 12}][:TOP_REACTIONS]
+    plain = next(row for row in posts(run(dsn, world)) if row["publication_id"] == other)
+    assert plain["top_reactions"] is None
