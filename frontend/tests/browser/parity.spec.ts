@@ -169,6 +169,12 @@ test("findings marks posts new since the last visit and the remembered vuz in th
   await expect(mine.first()).toHaveAttribute("data-mine", "true");
   await expect(mine.first()).toContainText("Вуз 002");
   await expect(rows.filter({ hasText: "Вуз 001" }).first()).not.toHaveAttribute("data-mine", "true");
+  // Подсветка «ваш вуз» читаема в обеих темах.
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
+    const axe = await new AxeBuilder({ page }).include('[data-mine="true"]').withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(axe.violations, theme).toEqual([]);
+  }
   // Перезагрузка в той же сессии не снимает пометку «новое».
   await page.reload();
   await expect(rows.first().getByText("Новое с прошлого визита.")).toBeAttached();

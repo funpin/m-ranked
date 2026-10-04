@@ -95,6 +95,11 @@ export function FindingsResults({ page, query, anomaliesVisible }: {
 
 const SORT_LABELS = Object.fromEntries(FINDINGS_SORT_OPTIONS) as Record<ParsedFindingsQuery["sort"], string>;
 
+/** «Ваш вуз» — синим цветом бренда (--chart-2), а не почти чёрным primary:
+ *  в светлой теме полупрозрачный primary сливался с наведением на строку. */
+const MINE_ROW = "bg-[color-mix(in_oklch,var(--chart-2)_8%,transparent)] shadow-[inset_4px_0_0_var(--chart-2)] hover:bg-[color-mix(in_oklch,var(--chart-2)_12%,transparent)]";
+const MINE_CARD = "border-2 border-[var(--chart-2)] bg-[color-mix(in_oklch,var(--chart-2)_7%,var(--card))]";
+
 const INDEX_HEADERS: Partial<Record<ParsedFindingsQuery["sort"], string>> = {
   comment_index: "комментарии", share_index: "репосты",
 };
@@ -116,7 +121,7 @@ function FindingRows({ rows, query, anomaliesVisible, showInstitution, personal 
       </TableRow></TableHeader>
       <TableBody>{rows.map((row) => (
         <RowLink key={row.publicationId} href={publicationHref(row.publicationId)} data-mine={mine(row) || undefined}
-          className={cn("hover:bg-muted/50 focus-within:bg-muted/50 cursor-pointer", mine(row) && "bg-primary/5 shadow-[inset_3px_0_0_var(--primary)]")}>
+          className={cn("hover:bg-muted/50 focus-within:bg-muted/50 cursor-pointer", mine(row) && MINE_ROW)}>
           <TableCell className="min-w-64 whitespace-normal"><Identity row={row} showInstitution={showInstitution} badge={findingBadge(row, anomaliesVisible)} marks={marks(row)} linked /></TableCell>
           <TableCell><IndexValue row={row} sort={query.sort} /></TableCell>
           <TableCell><GrowthSparkline curve={row.curve} /></TableCell>
@@ -129,7 +134,7 @@ function FindingRows({ rows, query, anomaliesVisible, showInstitution, personal 
     </Table></div>
     <div data-testid="findings-cards" className="grid min-w-0 gap-3 md:grid-cols-2 lg:hidden">{rows.map((row) => (
       <article key={row.publicationId} data-mine={mine(row) || undefined}
-        className={cn("bg-card min-w-0 rounded-xl border p-4", mine(row) && "border-primary/60")}>
+        className={cn("bg-card min-w-0 rounded-xl border p-4", mine(row) && MINE_CARD)}>
         <div className="flex items-start justify-between gap-3">
           <Identity row={row} showInstitution={showInstitution} badge={findingBadge(row, anomaliesVisible)} marks={marks(row)} />
           <IndexValue row={row} sort={query.sort} prominent />
@@ -166,7 +171,7 @@ function Identity({ row, showInstitution, badge, marks, linked = false }: {
   return <div className="min-w-0">
     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
       {showInstitution ? <span className="max-w-full truncate font-medium" title={row.institutionCanonicalName}>{row.institutionShortName || row.institutionCanonicalName}</span> : null}
-      {marks.mine ? <span className="text-primary text-xs font-medium">ваш вуз</span> : null}
+      {marks.mine ? <span className="bg-[var(--chart-2)] text-background shrink-0 rounded-full px-2 py-px text-[11px] font-semibold">ваш вуз</span> : null}
       {linked
         ? <Link className="text-muted-foreground hover:text-foreground flex min-w-0 max-w-full gap-x-1 underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{description}</Link>
         : <span className="text-muted-foreground flex min-w-0 max-w-full gap-x-1">{description}</span>}
