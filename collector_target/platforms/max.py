@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime
+import logging
 from typing import Any, Iterable
 
 from collector_runtime.config import Settings
 from collector_runtime.max_api import MaxChannel, MaxPost, max_post_url
-from collector_runtime.max_user_api import MaxUserClient
+from collector_runtime.max_user_api import MaxHistoryRateLimited, MaxUserClient
 
 from ..model import (
     AccountRef,
@@ -36,6 +37,8 @@ from ._shared import (
     sampling_interval as _interval,
     tracking_reader as _tracking_reader,
 )
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -144,6 +147,7 @@ class MaxGatewayCollector:
             settings.max_user_first_name,
             settings.max_user_last_name,
             request_timeout_seconds=settings.max_request_timeout_seconds,
+            history_backoff_seconds=settings.max_history_backoff_seconds,
         )
         self._closed = False
 
@@ -156,9 +160,18 @@ class MaxGatewayCollector:
             reference,
             int(native) if native and native.lstrip("-").isdigit() else None,
         )
-        posts = await self.client.posts(
-            channel.id, min(self.settings.discovery_limit, 100),
-        )
+        discovery_error = None
+        try:
+            posts = await self.client.posts(
+                channel.id,
+                min(self.settings.discovery_limit, self.settings.max_discovery_limit, 100),
+            )
+        except MaxHistoryRateLimited as error:
+            discovery_error = error
+            # Cache identities only. Re-fetch messages and counters so a quota
+            # refusal never turns old values into a fresh observation.
+            posts = (await self.client.posts_by_ids(channel.id, list(error.message_ids))
+                     if error.message_ids else [])
         observed, collected = _times(self.clock)
         initial = max_batch(
             account=account,
@@ -182,6 +195,10 @@ class MaxGatewayCollector:
                 publication.external_id for publication in initial.publications
             },
         )
+        if discovery_error is not None and not posts and not plan.publications:
+            # Do not report an empty successful batch when neither discovery
+            # nor an independent metrics read could confirm provider data.
+            raise discovery_error
         refreshed: list[Any] = []
         probes: list[RawDeletionProbe] = []
         for chunk in by_chunks(plan.publications, 100):
@@ -189,6 +206,8 @@ class MaxGatewayCollector:
             try:
                 values = await self.client.posts_by_ids(channel.id, request_ids)
             except Exception as error:
+                if discovery_error is not None and not posts and not refreshed:
+                    raise
                 probes.extend(
                     transient_probe(
                         publication,
@@ -227,6 +246,19 @@ class MaxGatewayCollector:
                 self.settings.complete_history_max_first_age_minutes * 60
             ),
         )
+        if discovery_error is not None:
+            if not posts and not refreshed:
+                raise discovery_error
+            logger.warning(
+                "MAX history deferred account=%s retry_after_seconds=%.0f refreshed=%s",
+                account.id, discovery_error.retry_after_seconds, len(final.publications),
+            )
+            final = replace(final, account_observation=replace(
+                final.account_observation,
+                source={**final.account_observation.source,
+                        "discovery_deferred": True,
+                        "history_retry_after_seconds": discovery_error.retry_after_seconds},
+            ))
         return replace(
             final,
             deletion_probes=tuple(probes),

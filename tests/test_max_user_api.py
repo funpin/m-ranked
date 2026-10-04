@@ -6,6 +6,7 @@ import pytest
 
 from collector_runtime.max_user_api import (
     MaxUserClient,
+    MaxHistoryRateLimited,
     _comment_count,
     _install_pymax_decode_compatibility,
     _model_dict,
@@ -162,6 +163,77 @@ def test_max_user_client_times_out_and_closes_a_stuck_request(tmp_path):
 
     assert sdk.closed is True
     assert client._connected is False
+
+
+def test_history_quota_defers_only_history_and_keeps_point_reads_live(tmp_path, monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr("collector_runtime.max_user_api.time.monotonic", lambda: now[0])
+
+    class ApiError(Exception):
+        opcode = 49
+        error = "too.many.requests"
+
+    class LimitedSdk(FakeSdkClient):
+        history_calls = 0
+        limited = True
+
+        async def fetch_history(self, **kwargs):
+            self.history_calls += 1
+            if kwargs["chat_id"] == -123 and self.limited:
+                raise ApiError("provider detail")
+            return [self.message]
+
+    sdk = LimitedSdk()
+    client = MaxUserClient("", tmp_path / "session", client=sdk, history_backoff_seconds=20)
+
+    async def exercise():
+        with pytest.raises(MaxHistoryRateLimited) as first:
+            await client.posts(-123, 20)
+        assert first.value.retry_after_seconds == 20
+        with pytest.raises(MaxHistoryRateLimited):
+            await client.posts(-123, 20)
+        assert sdk.history_calls == 1
+        assert sdk.closed is False
+        assert (await client.posts_by_ids(-123, ["700"]))[0].views == 321
+        assert len(await client.posts(-456, 20)) == 1
+        now[0] += 20
+        with pytest.raises(MaxHistoryRateLimited) as second:
+            await client.posts(-123, 20)
+        assert second.value.retry_after_seconds == 40
+        now[0] += 40
+        sdk.limited = False
+        assert len(await client.posts(-123, 20)) == 1
+        sdk.limited = True
+        with pytest.raises(MaxHistoryRateLimited) as reset:
+            await client.posts(-123, 20)
+        assert reset.value.retry_after_seconds == 20
+        assert reset.value.message_ids == ("700",)
+        assert sdk.connect_calls == 1
+
+    asyncio.run(exercise())
+
+
+def test_shared_max_session_serializes_connect_and_requests(tmp_path):
+    class ConcurrentSdk(FakeSdkClient):
+        active = 0
+        peak = 0
+
+        async def get_chat(self, chat_id):
+            self.active += 1
+            self.peak = max(self.peak, self.active)
+            await asyncio.sleep(0)
+            self.active -= 1
+            return await super().get_chat(chat_id)
+
+    sdk = ConcurrentSdk()
+    client = MaxUserClient("", tmp_path / "session", client=sdk)
+
+    async def exercise():
+        await asyncio.gather(*(client.resolve_channel("vuz", -n) for n in range(1, 5)))
+
+    asyncio.run(exercise())
+    assert sdk.peak == 1
+    assert sdk.connect_calls == 1
 
 
 def test_model_dict_falls_back_when_pydantic_serializer_is_unresolved():

@@ -4,6 +4,7 @@ import asyncio
 import math
 import os
 import re
+import time
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -11,6 +12,22 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .max_api import MaxChannel, MaxPost
+
+
+class MaxHistoryRateLimited(RuntimeError):
+    """History discovery is deferred; point reads may still collect metrics."""
+
+    def __init__(self, retry_after_seconds: float, message_ids: tuple[str, ...] = ()) -> None:
+        self.retry_after_seconds = retry_after_seconds
+        self.message_ids = message_ids
+        super().__init__("MAX history discovery is rate limited")
+
+
+def _history_rate_limited(error: BaseException) -> bool:
+    return (
+        getattr(error, "error", None) == "too.many.requests"
+        and getattr(error, "opcode", None) == 49
+    )
 
 
 def _value(value: Any) -> Any:
@@ -255,6 +272,7 @@ class MaxUserClient:
         last_name: str | None = None,
         client: Any | None = None,
         request_timeout_seconds: float = 30.0,
+        history_backoff_seconds: float = 1200.0,
     ) -> None:
         if not phone and client is None:
             raise ValueError("MAX_USER_PHONE is required")
@@ -264,6 +282,15 @@ class MaxUserClient:
         if not math.isfinite(request_timeout_seconds) or request_timeout_seconds <= 0:
             raise ValueError("MAX request timeout must be positive")
         self.request_timeout_seconds = float(request_timeout_seconds)
+        if not math.isfinite(history_backoff_seconds) or history_backoff_seconds <= 0:
+            raise ValueError("MAX history backoff must be positive")
+        self.history_backoff_seconds = float(history_backoff_seconds)
+        self._history_retry_at: dict[int, float] = {}
+        self._history_failures: dict[int, int] = {}
+        self._history_ids: dict[int, tuple[str, ...]] = {}
+        # Accounts share one SDK session. A failed request must not close a
+        # connection another account is currently using.
+        self._request_lock = asyncio.Lock()
         if client is not None:
             self.client = client
             return
@@ -306,13 +333,21 @@ class MaxUserClient:
         self._connected = True
 
     async def _request(self, method: Any, *args: Any, **kwargs: Any) -> Any:
+        async with self._request_lock:
+            return await self._request_locked(method, *args, **kwargs)
+
+    async def _request_locked(self, method: Any, *args: Any, **kwargs: Any) -> Any:
         try:
             await self.connect()
             async with asyncio.timeout(self.request_timeout_seconds):
                 return await method(*args, **kwargs)
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
+            # A provider quota refusal is not a broken connection. Reconnecting
+            # neither resets the quota nor helps independent message reads.
+            if _history_rate_limited(error):
+                raise
             # PyMax.connect() is intentionally one-shot. Mark the wrapper as
             # disconnected so the next polling cycle builds a fresh runtime.
             self._connected = False
@@ -414,11 +449,26 @@ class MaxUserClient:
         return result
 
     async def posts(self, chat_id: int, count: int = 100) -> list[MaxPost]:
-        messages = await self._request(
-            self.client.fetch_history,
-            chat_id=chat_id,
-            backward=max(1, min(count, 100)),
-        )
+        remaining = self._history_retry_at.get(chat_id, 0.0) - time.monotonic()
+        if remaining > 0:
+            raise MaxHistoryRateLimited(remaining, self._history_ids.get(chat_id, ()))
+        try:
+            messages = await self._request(
+                self.client.fetch_history,
+                chat_id=chat_id,
+                backward=max(1, min(count, 100)),
+            )
+        except Exception as error:
+            if not _history_rate_limited(error):
+                raise
+            failures = min(self._history_failures.get(chat_id, 0) + 1, 3)
+            delay = self.history_backoff_seconds * (2 ** (failures - 1))
+            self._history_failures[chat_id] = failures
+            self._history_retry_at[chat_id] = time.monotonic() + delay
+            raise MaxHistoryRateLimited(delay, self._history_ids.get(chat_id, ())) from error
+        self._history_retry_at.pop(chat_id, None)
+        self._history_failures.pop(chat_id, None)
+        self._history_ids[chat_id] = tuple(str(message.id) for message in messages or [])
         return await self._with_reactions(chat_id, list(messages or []))
 
     async def posts_by_ids(self, chat_id: int, message_ids: list[str]) -> list[MaxPost]:
