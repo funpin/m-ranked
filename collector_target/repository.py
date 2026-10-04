@@ -114,6 +114,13 @@ class PostgresCollectorRepository:
         self.snapshot_heartbeat = timedelta(hours=snapshot_heartbeat_hours)
         # Задаётся политикой сбора из панели (runtime_policy.py); None — без предела.
         self.heartbeat_max_age: timedelta | None = None
+        # Срок слежения за постом (track_post_for_hours). Обход ленты отдаёт и
+        # старые посты (весь список видео RUTUBE, закреплённые записи VK);
+        # замеры по ним за сроком не пишутся. Действует и в приёмнике
+        # Сервера 2, который применяет пачки тем же кодом: сборщик кладёт в
+        # пачку весь обход ленты.
+        self.track_window: timedelta | None = timedelta(
+            hours=int(os.getenv("TRACK_POST_FOR_HOURS", "720").strip().strip('"') or "720"))
         self.poll_receipt_policy = poll_receipt_policy or PollReceiptPolicy()
         self._last_poll_receipt_prune: datetime | None = None
         self.evidence_store = evidence_store or ImmutableEvidenceStore(
@@ -797,7 +804,11 @@ class PostgresCollectorRepository:
             metric_evidence_ids = self._batch_evidence_ids(batch)
         revision_id = self._begin_revision(connection, batch)
         if not self.compact_working_set:
-            for published_month in sorted({item.snapshot.published_month for item in batch.publications}):
+            # Партиции — только месяцам постов в сроке слежения: замеры старых
+            # постов не пишутся, и пустые партиции прошлых лет не нужны.
+            limit = self.track_window.total_seconds() if self.track_window is not None else None
+            for published_month in sorted({item.snapshot.published_month for item in batch.publications
+                                           if limit is None or item.snapshot.age_seconds <= limit}):
                 connection.execute(
                     "SELECT ops_and_admin.ensure_publication_metric_partition(%s::date)",
                     (published_month,),
@@ -1669,6 +1680,8 @@ class PostgresCollectorRepository:
             if (unchanged and latest_observed_at is not None
                     and self.heartbeat_max_age is not None
                     and snapshot.age_seconds >= self.heartbeat_max_age.total_seconds()):
+                continue
+            if self.track_window is not None and snapshot.age_seconds > self.track_window.total_seconds():
                 continue
             if unchanged and not heartbeat_due:
                 continue

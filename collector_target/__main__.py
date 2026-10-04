@@ -488,6 +488,7 @@ async def _run(args: argparse.Namespace) -> int:
             deployment_profile=deployment_profile,
             compact_working_set=settings.collector_compact_working_set,
         )
+        repository.track_window = timedelta(hours=settings.track_post_for_hours)
         repository.assert_schema_contract()
         lease_provider = PostgresAdvisoryLeaseProvider(dsn)
         adapter = build_adapter(platform, settings, clock, repository)
@@ -548,6 +549,7 @@ async def _run(args: argparse.Namespace) -> int:
             heartbeat = state.heartbeat_hours if state and state.heartbeat_hours else (
                 base_settings.publication_snapshot_heartbeat_hours)
             repository.snapshot_heartbeat = timedelta(hours=heartbeat)
+            repository.track_window = timedelta(hours=settings.track_post_for_hours)
             max_age = state.heartbeat_max_age_days if state else None
             repository.heartbeat_max_age = timedelta(days=max_age) if max_age else None
             membership = (state.membership if state else None) or base_settings.collector_membership

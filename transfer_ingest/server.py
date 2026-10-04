@@ -30,6 +30,7 @@ MAX_HEADER_BYTES = 32 * 1024
 READ_TIMEOUT_SECONDS = 30.0
 WRITE_TIMEOUT_SECONDS = 30.0
 HANDSHAKE_TIMEOUT_SECONDS = 3.0
+CLOSE_TIMEOUT_SECONDS = 5.0
 REGISTRY_TTL_SECONDS = 30.0
 
 _REASON = {
@@ -137,16 +138,16 @@ async def _read_body(reader: asyncio.StreamReader, headers: dict[str, str]) -> b
         raise _BadRequest(400, "incomplete_body") from error
 
 
-def _binary_response(status: int, data: bytes) -> bytes:
-    head = (
+def _binary_head(status: int, length: int) -> bytes:
+    # Заголовок отдельно от тела: тело куска файла не копируется ещё раз.
+    return (
         f"HTTP/1.1 {status} {_REASON.get(status, 'Error')}\r\n"
         "content-type: application/octet-stream\r\n"
-        f"content-length: {len(data)}\r\n"
+        f"content-length: {length}\r\n"
         "connection: close\r\n"
         "cache-control: no-store\r\n"
         "\r\n"
     ).encode("latin-1")
-    return head + data
 
 
 class _NodeDone(Exception):
@@ -189,16 +190,20 @@ class IngestServer:
         self._clock = clock
         self._registry: tuple[str, ...] = ()
         self._registry_at = float("-inf")
+        # Куски файлов хранилища идут по одному: передача файлов не должна
+        # занять потоки и память, нужные переносу замеров.
+        self._node_files = asyncio.Semaphore(1)
 
-    def _allowed_now(self) -> tuple[str, ...]:
+    async def _allowed_now(self) -> tuple[str, ...]:
         if not self._allowed:
             return ()
         if self.node_hub is not None and self._clock() - self._registry_at >= REGISTRY_TTL_SECONDS:
+            self._registry_at = self._clock()
             try:
-                self._registry = self.node_hub.allowed_producers()
+                # Запрос к базе — не в цикле событий: он не должен держать приём.
+                self._registry = await asyncio.to_thread(self.node_hub.allowed_producers)
             except Exception as error:  # noqa: BLE001 — остаётся прежний список
                 logger.warning("node registry unavailable class=%s", type(error).__name__)
-            self._registry_at = self._clock()
         return self._allowed + self._registry
 
     async def _serve_node(self, request: "_Request", reader: asyncio.StreamReader,
@@ -215,14 +220,16 @@ class IngestServer:
                 offset, length = int(params.get("offset", "")), int(params.get("length", ""))
             except ValueError as error:
                 raise _BadRequest(400, "bad_range") from error
-            outcome = await asyncio.to_thread(hub.read_chunk, identities, parts[3], offset, length)
+            async with self._node_files:
+                outcome = await asyncio.to_thread(hub.read_chunk, identities, parts[3], offset, length)
         elif len(parts) == 4 and parts[:3] == ["node", "v1", "objects"] and request.method == "PUT":
             try:
                 offset = int(params.get("offset", ""))
             except ValueError as error:
                 raise _BadRequest(400, "bad_offset") from error
             body = await asyncio.wait_for(_read_body(reader, request.headers), timeout=READ_TIMEOUT_SECONDS)
-            outcome = await asyncio.to_thread(hub.write_chunk, identities, parts[3], offset, body)
+            async with self._node_files:
+                outcome = await asyncio.to_thread(hub.write_chunk, identities, parts[3], offset, body)
         elif len(parts) == 5 and parts[:3] == ["node", "v1", "objects"] and parts[4] == "commit" \
                 and request.method == "POST":
             await asyncio.wait_for(_read_body(reader, request.headers), timeout=READ_TIMEOUT_SECONDS)
@@ -246,7 +253,7 @@ class IngestServer:
             if not peer_cert:
                 raise _BadRequest(403, "client_certificate_required")
             certificate_ids = producer_ids_from_certificate(peer_cert)
-            allowed = self._allowed_now()
+            allowed = await self._allowed_now()
             peer_ids = (tuple(item for item in certificate_ids if item in allowed)
                         if allowed else certificate_ids)
             request = await asyncio.wait_for(
@@ -283,16 +290,24 @@ class IngestServer:
             logger.error("transfer ingest error class=%s", type(error).__name__)
             status, body = 500, {"error": "ingest_failed"}
         try:
-            writer.write(_binary_response(status, binary) if binary is not None else _response(status, body))
+            if binary is not None:
+                writer.write(_binary_head(status, len(binary)))
+                writer.write(binary)
+            else:
+                writer.write(_response(status, body))
             await asyncio.wait_for(writer.drain(), timeout=WRITE_TIMEOUT_SECONDS)
         except (ConnectionError, asyncio.TimeoutError):
-            pass
+            # Клиент не читает: буфер ответа не держим — соединение рвётся.
+            writer.transport.abort()
         finally:
+            binary = None
             writer.close()
             try:
-                await writer.wait_closed()
-            except (ConnectionError, ssl.SSLError):
-                pass
+                # Без срока закрытие TLS с ушедшим клиентом висело вечно и
+                # копило соединения в CLOSE-WAIT вместе с их буферами.
+                await asyncio.wait_for(writer.wait_closed(), timeout=CLOSE_TIMEOUT_SECONDS)
+            except (ConnectionError, ssl.SSLError, asyncio.TimeoutError):
+                writer.transport.abort()
 
     async def start(
         self, host: str, port: int, context: ssl.SSLContext,

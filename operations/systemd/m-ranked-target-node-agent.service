@@ -41,7 +41,7 @@ ProtectControlGroups=true
 ProtectClock=true
 ProtectHostname=true
 RestrictRealtime=true
-RestrictSUIDSGID=true
+# Без RestrictSUIDSGID: агент создаёт каталоги хранилища с битом setgid.
 LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallArchitectures=native
