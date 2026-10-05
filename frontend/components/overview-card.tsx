@@ -28,7 +28,11 @@ function CardBadges({ item }: { item: OverviewItem }) {
         return <Badge key={level} data-testid={`overview-anomaly-level-${level}`} tabIndex={0}
           aria-label={description} title={description}
           className={cn("pointer-events-auto h-auto cursor-help px-2 py-1 text-[10px] font-extrabold shadow-sm tabular",
-            level === 3 ? "bg-destructive/12 text-destructive" : "bg-warning/15 text-warning")}>
+            // Плашка лежит на кромке карточки: оттенок смешан с фоном карточки,
+            // а не с прозрачностью, иначе сквозь неё видна граница.
+            level === 3
+              ? "bg-[color-mix(in_oklch,var(--destructive)_12%,var(--card))] text-destructive"
+              : "bg-[color-mix(in_oklch,var(--warning)_15%,var(--card))] text-warning")}>
           <LevelIcon level={level} /><span>{legacyNumber(count)}</span>
         </Badge>;
       })}
