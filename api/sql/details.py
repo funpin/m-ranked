@@ -199,16 +199,16 @@ WITH publications AS (
            snapshot.views_count, snapshot.reactions_count, snapshot.comments_count,
            snapshot.views_quality, snapshot.reactions_quality, snapshot.comments_quality
       FROM publications publication
-      JOIN ingest.publication_metric_snapshot_active snapshot
+      -- Окно по всем постам аккаунта сразу: упакованная история (0059)
+      -- разворачивается только отрезком внутри окна.
+      JOIN ingest.publication_points_between(
+             ARRAY(SELECT id FROM publications),
+             (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 3)::timestamp
+              AT TIME ZONE 'Europe/Moscow'),
+             (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+              AT TIME ZONE 'Europe/Moscow')) snapshot
         ON snapshot.publication_id=publication.id
-       AND snapshot.published_month=date_trunc('month', publication.published_at)::date
-     WHERE snapshot.observed_at
-           < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
-              AT TIME ZONE 'Europe/Moscow')
-       AND snapshot.observed_at
-           >= (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 3)::timestamp
-              AT TIME ZONE 'Europe/Moscow')
-       AND snapshot.quality<>'invalid'
+     WHERE snapshot.visible AND snapshot.quality<>'invalid'
      ORDER BY publication.id, snapshot.observed_at DESC, snapshot.id DESC
 ), yesterday_metric AS (
     SELECT value.metric_key,
@@ -366,14 +366,13 @@ WITH page AS (
            CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
                 THEN NULL ELSE snapshot.views_count END AS views_count
       FROM page
-      JOIN ingest.publication_metric_snapshot_active snapshot
+      JOIN ingest.publication_points_between(
+             ARRAY(SELECT id FROM page),
+             (((%(growth_day)s::date - 1)::timestamp) AT TIME ZONE 'Europe/Moscow'),
+             (((%(growth_day)s::date + 1)::timestamp) AT TIME ZONE 'Europe/Moscow')) snapshot
         ON snapshot.publication_id=page.id
-       AND snapshot.published_month=date_trunc('month',page.published_at)::date
      WHERE %(growth_day)s::date IS NOT NULL
-       AND snapshot.observed_at >= (((%(growth_day)s::date - 1)::timestamp)
-                                    AT TIME ZONE 'Europe/Moscow')
-       AND snapshot.observed_at < (((%(growth_day)s::date + 1)::timestamp)
-                                   AT TIME ZONE 'Europe/Moscow')
+       AND snapshot.visible
        AND snapshot.observed_at<=%(as_of)s::timestamptz
        AND snapshot.quality<>'invalid'
      ORDER BY page.id,
@@ -498,7 +497,7 @@ WITH account AS MATERIALIZED (
     SELECT snapshot.*,
            row_number() OVER (PARTITION BY snapshot.publication_id,snapshot.sampling_bucket
                               ORDER BY snapshot.correction_sequence DESC) AS correction_position
-      FROM ingest.publication_metric_snapshot snapshot
+      FROM ingest.publication_metric_point snapshot
      WHERE snapshot.published_month=%(published_month)s::date
        AND snapshot.publication_id=%(publication_id)s::uuid
        AND snapshot.observed_at<=%(as_of)s::timestamptz
@@ -514,12 +513,8 @@ WITH account AS MATERIALIZED (
      ORDER BY snapshot.observed_at DESC,snapshot.published_month DESC,snapshot.id DESC
      LIMIT %(fetch_limit)s+1
 ), decorated AS (
-    SELECT page.*,
-           coalesce((SELECT jsonb_object_agg(reaction.reaction_key,reaction.reaction_count)
-             FROM ingest.reaction_breakdown reaction
-            WHERE reaction.snapshot_published_month=page.published_month
-              AND reaction.snapshot_id=page.id),'{}'::jsonb) AS reaction_breakdown
-      FROM page
+    -- Разбивка реакций приходит с точкой (горячей или упакованной, 0059).
+    SELECT page.* FROM page
 ), windowed AS (
     SELECT decorated.*,
            lag(decorated.views_count) OVER chronology AS previous_views,
@@ -590,7 +585,7 @@ SELECT windowed.id AS snapshot_id,windowed.*,
 # Поправка добавляет снимок с большим номером, удаление уменьшает число.
 HISTORY_FINGERPRINT = """
 SELECT count(*)::integer AS snapshot_count, coalesce(max(snapshot.id),0)::bigint AS max_snapshot_id
-  FROM ingest.publication_metric_snapshot snapshot
+  FROM ingest.publication_metric_point snapshot
  WHERE snapshot.published_month=%(published_month)s::date
    AND snapshot.publication_id=%(publication_id)s::uuid
 """
@@ -604,7 +599,7 @@ SELECT page.payload, page.items_count
    AND page.published_month=%(published_month)s::date
    AND (page.snapshot_count, page.max_snapshot_id) = (
        SELECT count(*)::integer, coalesce(max(snapshot.id),0)::bigint
-         FROM ingest.publication_metric_snapshot snapshot
+         FROM ingest.publication_metric_point snapshot
         WHERE snapshot.published_month=%(published_month)s::date
           AND snapshot.publication_id=%(publication_id)s::uuid)
 """
@@ -762,18 +757,18 @@ WITH bounds AS (
            CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
                 THEN NULL ELSE snapshot.views_count END AS views_count
       FROM tracked
-      JOIN ingest.publication_metric_snapshot_active snapshot
-        ON snapshot.publication_id=tracked.id
-       AND snapshot.published_month=tracked.published_month
      -- Граница окна считается из параметра прямо здесь, а не берётся из
      -- bounds. Значение из CTE планировщик применял уже после соединения —
      -- фильтром, а не условием поиска по индексу, — занижал оценку в сотни
      -- раз и выбирал параллельный проход по всем партициям снимков: на
      -- крупном аккаунте 12 миллионов строк и 5 ГБ чтения на одну карточку.
-     WHERE snapshot.observed_at >= ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
-                                   AT TIME ZONE 'Europe/Moscow')
-       AND snapshot.observed_at<=%(as_of)s::timestamptz
-       AND snapshot.quality<>'invalid'
+      JOIN ingest.publication_points_between(
+             ARRAY(SELECT id FROM tracked),
+             ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
+              AT TIME ZONE 'Europe/Moscow'),
+             %(as_of)s::timestamptz + interval '1 microsecond') snapshot
+        ON snapshot.publication_id=tracked.id
+     WHERE snapshot.visible AND snapshot.quality<>'invalid'
      ORDER BY tracked.id,
               (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date,
               snapshot.observed_at DESC, snapshot.id DESC

@@ -137,7 +137,7 @@ SELECT h.published_month, p.snapshot_id, h.publication_id, run.id, p.observed_at
               AND successor.sampling_bucket = (floor(extract(epoch FROM p.observed_at) / 300))::bigint + p.bucket_residual
               AND successor.correction_sequence > p.correction_sequence) ELSE true END,
        true,
-       h.reaction_dict[p.reaction_ref]
+       COALESCE(h.reaction_dict[p.reaction_ref], '{}'::jsonb)
   FROM unnest(h.snapshot_id[lo:hi], h.observed_at[lo:hi], h.collected_lag[lo:hi], h.created_lag[lo:hi],
               h.age_residual[lo:hi], h.bucket_residual[lo:hi], h.run_seq[lo:hi], h.views_count[lo:hi],
               h.reactions_count[lo:hi], h.comments_count[lo:hi], h.shares_count[lo:hi], h.codes[lo:hi],
@@ -167,9 +167,11 @@ SELECT s.published_month, s.id, s.publication_id, s.collection_run_id, s.observe
                       AND successor.sampling_bucket = s.sampling_bucket
                       AND successor.correction_sequence > s.correction_sequence) AS visible,
        false AS packed,
-       (SELECT jsonb_object_agg(r.reaction_key, r.reaction_count ORDER BY r.reaction_key)
-          FROM ingest.reaction_breakdown r
-         WHERE r.snapshot_published_month = s.published_month AND r.snapshot_id = s.id) AS reaction_breakdown
+       -- Разбивка без строк — пустой объект, как и прежде отдавала история.
+       COALESCE((SELECT jsonb_object_agg(r.reaction_key, r.reaction_count ORDER BY r.reaction_key)
+                   FROM ingest.reaction_breakdown r
+                  WHERE r.snapshot_published_month = s.published_month AND r.snapshot_id = s.id),
+                '{}'::jsonb) AS reaction_breakdown
   FROM ingest.publication_metric_snapshot s
   LEFT JOIN ingest.metric_evidence_dictionary evidence ON evidence.id = s.metric_evidence_id
 UNION ALL
