@@ -20,6 +20,7 @@ from psycopg.rows import dict_row  # noqa: E402
 
 from api import findings as findings_rules  # noqa: E402
 from api.sql import compare, details, findings  # noqa: E402
+from anomaly_analysis.v2 import store as anomaly_store  # noqa: E402
 
 ADMIN = os.environ.get("MRANKED_TEST_PACKED_ADMIN_DSN", "")
 pytestmark = pytest.mark.skipif(not ADMIN, reason="disposable PostgreSQL DSN is required")
@@ -150,6 +151,19 @@ def answers(connection, ids) -> dict[str, list]:
         result[f"point:{item['id']}"] = connection.execute(
             "SELECT * FROM ingest.publication_point_by_id(%s, %s, %s)",
             (item["publication_id"], item["published_month"], item["id"])).fetchall()
+    # Пакетные читатели анализа аномалий.
+    posts = [publication(connection, post) for post in ids["posts"]]
+    months = sorted({post["published_month"] for post in posts})
+    result["series"] = connection.execute(anomaly_store.SERIES, {
+        "ids": [post["id"] for post in posts], "months": months}).fetchall()
+    for back in (timedelta(hours=1), timedelta(days=3), timedelta(days=12)):
+        result[f"progress:{back}"] = connection.execute(anomaly_store.PROGRESS, {
+            "ids": [post["id"] for post in posts], "published": [post["published_at"] for post in posts],
+            "last": [max(post["published_at"], as_of - back) for post in posts]}).fetchall()
+    for since in (as_of - timedelta(hours=20), as_of - timedelta(days=6)):
+        result[f"activity:{since}"] = connection.execute(anomaly_store.ACTIVITY, {
+            "accounts": ids["accounts"], "published_since": as_of - timedelta(days=40), "months": months,
+            "since": since, "until": as_of}).fetchall()
     for horizon in (6, 48):
         result[f"comparison:{horizon}"] = connection.execute(compare.COMPARISON, {
             "aggregation": "median", "as_of": as_of, "horizon_hours": horizon, "hot_days": 70,

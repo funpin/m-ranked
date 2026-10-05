@@ -46,17 +46,16 @@ SELECT DISTINCT ON (target.id, snapshot.observed_at)
        snapshot.comments_count, snapshot.comments_quality::text AS comments_quality,
        snapshot.shares_count, snapshot.shares_quality::text AS shares_quality,
        CASE WHEN target.platform = 'telegram' AND snapshot.reactions_quality IN ('rounded', 'unknown')
-            THEN coalesce((SELECT jsonb_object_agg(reaction.reaction_key, reaction.reaction_count)
-                    FROM ingest.reaction_breakdown reaction
-                   WHERE reaction.snapshot_published_month = snapshot.published_month
-                     AND reaction.snapshot_id = snapshot.id), '{}'::jsonb)
+            THEN snapshot.reaction_breakdown
        END AS reaction_breakdown
   FROM target
-  JOIN ingest.publication_metric_snapshot_active snapshot
+  -- Горячие и упакованные точки пачки одним вызовом (0059).
+  JOIN ingest.publication_points_between(%(ids)s::uuid[], '-infinity', 'infinity') snapshot
     ON snapshot.publication_id = target.id
    AND snapshot.published_month = target.published_month
  -- Месяцы известны заранее: предикат-константа отсекает партиции при планировании.
  WHERE snapshot.published_month = ANY(%(months)s::date[])
+   AND snapshot.visible
    AND NOT snapshot.synthetic
  ORDER BY target.id, snapshot.observed_at, snapshot.correction_sequence DESC
 """
@@ -78,20 +77,20 @@ SELECT due.publication_id, account.platform::text AS platform,
  CROSS JOIN LATERAL (
     SELECT count(DISTINCT snapshot.observed_at)::integer AS new_points,
            min(snapshot.observed_at) AS first_new_at
-      FROM ingest.publication_metric_snapshot_active snapshot
-     WHERE snapshot.publication_id = due.publication_id
+      FROM ingest.publication_points_between(
+             ARRAY[due.publication_id],
+             -- Границу «после» окно включает, поэтому сдвиг на микросекунду.
+             coalesce(due.last_point_observed_at + interval '1 microsecond', '-infinity'), 'infinity') snapshot
+     WHERE snapshot.visible
        AND snapshot.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
-       AND snapshot.observed_at > due.last_point_observed_at
        AND NOT snapshot.synthetic
  ) fresh
+  -- Последняя видимая точка. Синтетическая стоит в момент публикации, раньше
+  -- всех: если последней оказалась она, настоящих точек нет.
   LEFT JOIN LATERAL (
-    SELECT snapshot.observed_at
-      FROM ingest.publication_metric_snapshot_active snapshot
-     WHERE snapshot.publication_id = due.publication_id
-       AND snapshot.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
-       AND NOT snapshot.synthetic
-     ORDER BY snapshot.observed_at DESC
-     LIMIT 1
+    SELECT CASE WHEN NOT snapshot.synthetic THEN snapshot.observed_at END AS observed_at
+      FROM ingest.publication_point_at(ARRAY[due.publication_id], 'infinity') snapshot
+     WHERE snapshot.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
  ) latest ON true
 """
 
@@ -128,10 +127,10 @@ WITH posts AS (
            CASE WHEN snapshot.views_quality = 'exact' AND NOT snapshot.interval_uncertain
                 THEN snapshot.views_count END AS views_count
       FROM posts
-      JOIN ingest.publication_metric_snapshot_active snapshot
+      JOIN ingest.publication_points_between(ARRAY(SELECT id FROM posts), %(since)s, %(until)s) snapshot
         ON snapshot.publication_id = posts.id AND snapshot.published_month = posts.published_month
      WHERE snapshot.published_month = ANY(%(months)s::date[])
-       AND snapshot.observed_at >= %(since)s AND snapshot.observed_at < %(until)s
+       AND snapshot.visible
        AND NOT snapshot.synthetic
     UNION ALL
     -- Keep the real time of the last reading before the window. A stale
@@ -140,18 +139,18 @@ WITH posts AS (
            floor(extract(epoch FROM before.observed_at) / 3600)::bigint,
            before.reactions_count, before.views_count
       FROM posts
-      JOIN LATERAL (
-          SELECT snapshot.observed_at,
+      -- Последняя видимая точка строго до окна; синтетическая — самая ранняя,
+      -- и если последней оказалась она, настоящего чтения до окна нет.
+      JOIN (
+          SELECT snapshot.publication_id, snapshot.published_month, snapshot.observed_at,
                  CASE WHEN snapshot.reactions_quality = 'exact' AND NOT snapshot.interval_uncertain
                       THEN snapshot.reactions_count END AS reactions_count,
                  CASE WHEN snapshot.views_quality = 'exact' AND NOT snapshot.interval_uncertain
                       THEN snapshot.views_count END AS views_count
-            FROM ingest.publication_metric_snapshot_active snapshot
-           WHERE snapshot.publication_id = posts.id AND snapshot.published_month = posts.published_month
-             AND snapshot.observed_at < %(since)s AND NOT snapshot.synthetic
-           ORDER BY snapshot.observed_at DESC, snapshot.correction_sequence DESC
-           LIMIT 1
-      ) before ON true
+            FROM ingest.publication_point_at(ARRAY(SELECT id FROM posts),
+                                             %(since)s::timestamptz - interval '1 microsecond') snapshot
+           WHERE NOT snapshot.synthetic
+      ) before ON before.publication_id = posts.id AND before.published_month = posts.published_month
 )
 SELECT primary_account_id, publication_id, published_at, hour,
        CASE WHEN count(reactions_count) = count(*) THEN max(reactions_count) END AS reactions,
