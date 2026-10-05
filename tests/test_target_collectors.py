@@ -1504,7 +1504,8 @@ class _ScriptedConnection:
             ])
         if "identity.publication_id IS DISTINCT FROM input.publication_id" in normalized:
             return _Cursor(rows=[])
-        if "LEFT JOIN LATERAL" in normalized and "publication_metric_snapshot_active" in normalized:
+        if "LEFT JOIN LATERAL" in normalized and ("publication_metric_snapshot_active" in normalized
+                                                  or "publication_latest_point" in normalized):
             items = json.loads(params[0])
             return _Cursor(rows=[{
                 "publication_id": UUID(item["publication_id"]),

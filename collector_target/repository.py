@@ -142,6 +142,16 @@ class PostgresCollectorRepository:
             "ingest.collector_publication_working_set" if compact_working_set
             else "ingest.publication_metric_snapshot_active"
         )
+        # Последний замер публикации. В полной базе история частично упакована
+        # (0059): функция берёт горячую строку по индексу и декодирует одну
+        # упакованную точку, только если горячей нет.
+        self._latest_publication_point = (
+            "(SELECT * FROM ingest.collector_publication_working_set snapshot"
+            " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter}"
+            " ORDER BY snapshot.observed_at DESC, snapshot.id DESC LIMIT 1)"
+            if compact_working_set else
+            "ingest.publication_latest_point({publication}, {month}, {synthetic})"
+        )
         self._account_snapshot_read = (
             "ingest.collector_account_working_set" if compact_working_set
             else "ingest.account_metric_snapshot_active"
@@ -535,6 +545,12 @@ class PostgresCollectorRepository:
             ).fetchone()
         return row is not None
 
+    def _latest_point_sql(self, publication: str, month: str, synthetic: str = "NULL") -> str:
+        """Подзапрос последнего видимого замера публикации (класса synthetic)."""
+        synthetic_filter = "" if synthetic == "NULL" else f" AND snapshot.synthetic={synthetic}"
+        return self._latest_publication_point.format(
+            publication=publication, month=month, synthetic=synthetic, synthetic_filter=synthetic_filter)
+
     def metric_ever_positive(
         self,
         account: AccountRef,
@@ -699,13 +715,8 @@ class PostgresCollectorRepository:
                      -- строку выдачи.
                      LEFT JOIN LATERAL (
                          SELECT snapshot.observed_at, snapshot.sampling_bucket
-                           FROM {self._publication_snapshot_read} AS snapshot
-                          WHERE snapshot.publication_id=publication.id
-                            AND snapshot.published_month
-                                =date_trunc('month', publication.published_at)::date
-                            AND (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
-                          ORDER BY snapshot.observed_at DESC, snapshot.id DESC
-                          LIMIT 1
+                           FROM {self._latest_point_sql("publication.id", "date_trunc('month', publication.published_at)::date")} AS snapshot
+                          WHERE (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
                      ) AS latest ON true
                     WHERE publication.primary_account_id=%s
                       AND publication.deleted_at IS NULL
@@ -1590,13 +1601,8 @@ class PostgresCollectorRepository:
                  FROM input
                  LEFT JOIN LATERAL (
                      SELECT snapshot.semantic_fingerprint, snapshot.observed_at
-                       FROM {self._publication_snapshot_read} AS snapshot
-                      WHERE snapshot.publication_id=input.publication_id
-                        AND snapshot.published_month=input.published_month
-                        AND snapshot.synthetic=input.synthetic
-                        AND (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
-                      ORDER BY snapshot.observed_at DESC, snapshot.id DESC
-                      LIMIT 1
+                       FROM {self._latest_point_sql("input.publication_id", "input.published_month", "input.synthetic")} AS snapshot
+                      WHERE (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
                  ) AS latest ON true""",
             (_json(snapshot_key_input), self.compact_working_set),
         ).fetchall()

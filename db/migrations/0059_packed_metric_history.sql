@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS ingest.publication_metric_history (
     reaction_dict jsonb[] NOT NULL,
     block_sha256 bytea NOT NULL,
     packed_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+    -- Отпечаток состояния последней видимой точки (обычной и синтетической):
+    -- по нему сборщик понимает, что пост не изменился, и не пишет лишнюю строку.
+    fingerprint_snapshot_id bigint,
+    semantic_fingerprint bytea,
+    synthetic_fingerprint_snapshot_id bigint,
+    synthetic_semantic_fingerprint bytea,
     CONSTRAINT publication_metric_history_shape CHECK (
         point_count = cardinality(snapshot_id) AND point_count > 0
         AND cardinality(observed_at) = point_count AND cardinality(collected_lag) = point_count
@@ -129,7 +135,9 @@ SELECT h.published_month, p.snapshot_id, h.publication_id, run.id, p.observed_at
        NULL::text, p.observed_at + (p.collected_lag + p.created_lag) * interval '1 microsecond',
        p.observed_at + p.collected_lag * interval '1 microsecond', NULL::xid8, p.correction_sequence,
        p.supersedes_snapshot_id, p.correction_reason, ingest.quality_of(p.code, 3), ingest.quality_of(p.code, 6),
-       ingest.quality_of(p.code, 9), ingest.quality_of(p.code, 12), evidence.payload, NULL::bytea,
+       ingest.quality_of(p.code, 9), ingest.quality_of(p.code, 12), evidence.payload,
+       CASE p.snapshot_id WHEN h.fingerprint_snapshot_id THEN h.semantic_fingerprint
+                          WHEN h.synthetic_fingerprint_snapshot_id THEN h.synthetic_semantic_fingerprint END,
        (p.code >> 17) & 1 = 1 AND CASE WHEN h.late_rows THEN NOT EXISTS (
            SELECT 1 FROM ingest.publication_metric_snapshot successor
             WHERE successor.published_month = h.published_month
@@ -211,6 +219,40 @@ SELECT p.*
  CROSS JOIN LATERAL (SELECT array_position(h.snapshot_id, p_id) AS i) found
  CROSS JOIN LATERAL ingest.unpack_history(h, found.i, found.i) p
  WHERE h.publication_id = p_publication_id AND found.i IS NOT NULL
+$$;
+
+-- Последняя видимая точка поста (класса synthetic, если задан) — для приёма
+-- замеров: чтение на каждый пакет переноса. Горячая — по индексу; упакованная
+-- ищется по битам visible/synthetic в массиве кодов и декодируется одна, и
+-- только когда горячей нет или есть поздние строки.
+CREATE OR REPLACE FUNCTION ingest.publication_latest_point(p_publication_id uuid, p_published_month date,
+                                                           p_synthetic boolean DEFAULT NULL)
+RETURNS SETOF ingest.publication_metric_point
+LANGUAGE sql STABLE PARALLEL SAFE
+AS $$
+WITH hot AS (
+    SELECT p.* FROM ingest.publication_metric_point p
+     WHERE NOT p.packed AND p.publication_id = p_publication_id AND p.published_month = p_published_month
+       AND (p_synthetic IS NULL OR p.synthetic = p_synthetic) AND p.visible
+     ORDER BY p.observed_at DESC, p.id DESC LIMIT 1
+), packed AS (
+    SELECT p.*
+      FROM ingest.publication_metric_history h
+     CROSS JOIN LATERAL (SELECT max(u.o)::integer AS i FROM unnest(h.codes) WITH ORDINALITY AS u(c, o)
+                          WHERE (u.c >> 17) & 1 = 1
+                            AND (p_synthetic IS NULL OR ((u.c >> 16) & 1 = 1) = p_synthetic)) pick
+     CROSS JOIN LATERAL ingest.unpack_history(h, pick.i, pick.i) p
+     WHERE h.publication_id = p_publication_id AND h.published_month = p_published_month
+       AND pick.i IS NOT NULL AND NOT h.late_rows AND NOT EXISTS (SELECT 1 FROM hot)
+    UNION ALL
+    SELECT p.*
+      FROM ingest.publication_metric_history h
+     CROSS JOIN LATERAL ingest.unpack_history(h, 1, h.point_count) p
+     WHERE h.publication_id = p_publication_id AND h.published_month = p_published_month AND h.late_rows
+       AND p.visible AND (p_synthetic IS NULL OR p.synthetic = p_synthetic)
+)
+SELECT * FROM (SELECT * FROM hot UNION ALL SELECT * FROM packed) candidate
+ ORDER BY candidate.observed_at DESC, candidate.id DESC LIMIT 1
 $$;
 
 -- Последняя видимая точка каждого поста не позже момента at (значение «на
@@ -325,6 +367,9 @@ BEGIN
                p.code & (~(1 << 17)) AS code, p.correction_sequence, p.supersedes_snapshot_id, p.correction_reason,
                p.semantics_version, p.capability_version, p.evidence_id,
                old_row.reaction_dict[p.reaction_ref] AS breakdown,
+               CASE p.snapshot_id WHEN old_row.fingerprint_snapshot_id THEN old_row.semantic_fingerprint
+                                  WHEN old_row.synthetic_fingerprint_snapshot_id
+                                  THEN old_row.synthetic_semantic_fingerprint END AS fingerprint,
                (floor(extract(epoch FROM p.observed_at) / 300))::bigint + p.bucket_residual AS bucket
           FROM unnest(old_row.snapshot_id, old_row.observed_at, old_row.collected_lag, old_row.created_lag,
                       old_row.age_residual, old_row.bucket_residual, old_row.run_seq, old_row.views_count,
@@ -356,6 +401,7 @@ BEGIN
                (SELECT jsonb_object_agg(r.reaction_key, r.reaction_count ORDER BY r.reaction_key)
                   FROM ingest.reaction_breakdown r
                  WHERE r.snapshot_published_month = s.published_month AND r.snapshot_id = s.id),
+               s.semantic_fingerprint,
                s.sampling_bucket
           FROM ingest.publication_metric_snapshot s
           JOIN ingest.collection_run run ON run.id = s.collection_run_id
@@ -368,6 +414,11 @@ BEGIN
                row_number() OVER (PARTITION BY bucket ORDER BY correction_sequence DESC, id DESC) = 1 AS visible,
                row_number() OVER (ORDER BY observed_at, id) AS position
           FROM points
+    ), latest AS (
+        -- Последняя видимая точка каждого класса (обычные / синтетические).
+        SELECT DISTINCT ON ((code >> 16) & 1) (code >> 16) & 1 AS synthetic_bit, id, fingerprint
+          FROM ranked WHERE visible
+         ORDER BY (code >> 16) & 1, position DESC
     ), dict AS (
         SELECT breakdown, row_number() OVER (ORDER BY min(position)) AS ref
           FROM ranked WHERE breakdown IS NOT NULL GROUP BY breakdown
@@ -389,7 +440,9 @@ BEGIN
            array_agg(r.evidence_id ORDER BY r.position), array_agg(d.ref::integer ORDER BY r.position),
            coalesce((SELECT array_agg(dict.breakdown ORDER BY dict.ref) FROM dict), '{}'::jsonb[]),
            '\x0000000000000000000000000000000000000000000000000000000000000000'::bytea,
-           transaction_timestamp()
+           transaction_timestamp(),
+           (SELECT id FROM latest WHERE synthetic_bit = 0), (SELECT fingerprint FROM latest WHERE synthetic_bit = 0),
+           (SELECT id FROM latest WHERE synthetic_bit = 1), (SELECT fingerprint FROM latest WHERE synthetic_bit = 1)
       INTO result_row
       FROM ranked r LEFT JOIN dict d ON d.breakdown = r.breakdown;
 
@@ -419,7 +472,11 @@ BEGIN
         correction_reason = EXCLUDED.correction_reason, semantics_version = EXCLUDED.semantics_version,
         capability_version = EXCLUDED.capability_version, evidence_id = EXCLUDED.evidence_id,
         reaction_ref = EXCLUDED.reaction_ref, reaction_dict = EXCLUDED.reaction_dict,
-        block_sha256 = EXCLUDED.block_sha256, packed_at = EXCLUDED.packed_at;
+        block_sha256 = EXCLUDED.block_sha256, packed_at = EXCLUDED.packed_at,
+        fingerprint_snapshot_id = EXCLUDED.fingerprint_snapshot_id,
+        semantic_fingerprint = EXCLUDED.semantic_fingerprint,
+        synthetic_fingerprint_snapshot_id = EXCLUDED.synthetic_fingerprint_snapshot_id,
+        synthetic_semantic_fingerprint = EXCLUDED.synthetic_semantic_fingerprint;
 
     -- Удаление перенесённого: только под флагом упаковщика (см. reject_observation_mutation).
     PERFORM set_config('ingest.compaction', 'on', true);
@@ -555,7 +612,8 @@ GRANT SELECT ON ingest.publication_metric_point TO maintenance, api_read, analyt
 GRANT EXECUTE ON FUNCTION ingest.unpack_history(ingest.publication_metric_history, integer, integer),
     ingest.publication_points_between(uuid[], timestamptz, timestamptz),
     ingest.publication_point_at(uuid[], timestamptz),
-    ingest.publication_point_by_id(uuid, date, bigint)
+    ingest.publication_point_by_id(uuid, date, bigint),
+    ingest.publication_latest_point(uuid, date, boolean)
     TO maintenance, api_read, analytics_worker, collector_ingest;
 GRANT SELECT ON ingest.collection_run TO api_read, analytics_worker;
 

@@ -54,7 +54,7 @@ WITH offs AS (
 INSERT INTO ingest.publication_metric_snapshot(published_month, id, publication_id, collection_run_id, observed_at,
   age_seconds, sampling_bucket, views_count, reactions_count, comments_count, shares_count, quality, views_quality,
   reactions_quality, comments_quality, shares_quality, interval_uncertain, source_fingerprint, collected_at,
-  created_at, metric_evidence)
+  created_at, metric_evidence, semantic_fingerprint)
 SELECT date_trunc('month', p.published_at AT TIME ZONE 'UTC')::date, nextval(pg_get_serial_sequence('ingest.publication_metric_snapshot', 'id')),
        p.id, (%(runs)s::uuid[])[1 + (o.k %% 7)], p.published_at + o.age * interval '1 second' + (o.k %% 5) * interval '1 millisecond',
        o.age, floor(extract(epoch FROM p.published_at + o.age * interval '1 second') / 300)::bigint,
@@ -65,20 +65,21 @@ SELECT date_trunc('month', p.published_at AT TIME ZONE 'UTC')::date, nextval(pg_
        'unknown', 'exact', o.k %% 11 = 0, md5(p.id::text || o.k),
        p.published_at + o.age * interval '1 second' + interval '2 seconds',
        p.published_at + o.age * interval '1 second' + interval '20 seconds',
-       jsonb_build_object('views', jsonb_build_object('quality', 'exact', 'k', o.k %% 3))
+       jsonb_build_object('views', jsonb_build_object('quality', 'exact', 'k', o.k %% 3)),
+       sha256(convert_to(p.id::text || o.k, 'UTF8'))
   FROM ingest.publication p JOIN offs o ON p.published_at + o.age * interval '1 second' < %(now)s
  WHERE p.id = ANY (%(posts)s::uuid[]);
 -- Исправления: тот же бакет, следующая версия.
 INSERT INTO ingest.publication_metric_snapshot(published_month, id, publication_id, collection_run_id, observed_at,
   age_seconds, sampling_bucket, views_count, reactions_count, comments_count, shares_count, quality, views_quality,
   reactions_quality, comments_quality, shares_quality, source_fingerprint, collected_at, created_at,
-  correction_sequence, supersedes_snapshot_id, correction_reason, metric_evidence)
+  correction_sequence, supersedes_snapshot_id, correction_reason, metric_evidence, semantic_fingerprint)
 SELECT s.published_month, nextval(pg_get_serial_sequence('ingest.publication_metric_snapshot', 'id')), s.publication_id,
        s.collection_run_id, s.observed_at + interval '40 seconds', s.age_seconds + 40, s.sampling_bucket,
        s.views_count + 5, s.reactions_count + 1, s.comments_count, s.shares_count, s.quality, s.views_quality,
        s.reactions_quality, s.comments_quality, s.shares_quality, md5(s.source_fingerprint),
        s.collected_at + interval '40 seconds', s.created_at + interval '40 seconds', 1, s.id,
-       'provider_payload_changed', s.metric_evidence
+       'provider_payload_changed', s.metric_evidence, sha256(s.semantic_fingerprint)
   FROM ingest.publication_metric_snapshot s
  WHERE s.publication_id = ANY (%(posts)s::uuid[]) AND s.id %% 23 = 0;
 INSERT INTO ingest.reaction_breakdown(snapshot_published_month, snapshot_id, reaction_key, reaction_count)
@@ -231,3 +232,29 @@ def test_findings_sql_runs_with_route_parameters(fixture):
             "comment_floor": rules.COMMENT_NORM_FLOOR, "share_floor": rules.SHARE_NORM_FLOOR,
             "min_comments": rules.FINDING_MIN_COMMENTS, "min_shares": rules.FINDING_MIN_SHARES,
             "top_reactions": 3}).fetchall()
+
+
+def test_latest_point_keeps_its_semantic_fingerprint_after_packing(fixture):
+    # Сборщик сравнивает новый замер с отпечатком последнего: без него каждый
+    # опрос старого поста выглядел бы изменением и писал лишнюю строку.
+    query = "SELECT * FROM ingest.publication_latest_point(%s, %s, %s)"
+    with connect() as connection:
+        posts = [publication(connection, post) for post in fixture["posts"]]
+        before = {(post["id"], flag): connection.execute(query, (post["id"], post["published_month"], flag)).fetchall()
+                  for post in posts for flag in (False, None)}
+        view = {post["id"]: connection.execute(
+            "SELECT * FROM ingest.publication_metric_snapshot_active WHERE publication_id = %s AND NOT synthetic "
+            "ORDER BY observed_at DESC, id DESC LIMIT 1", (post["id"],)).fetchall() for post in posts}
+        for post in fixture["posts"]:
+            connection.execute("SELECT ingest.compact_publication_history(%s, %s)",
+                               (post, fixture["now"] - timedelta(hours=2)))
+        after = {(post["id"], flag): connection.execute(query, (post["id"], post["published_month"], flag)).fetchall()
+                 for post in posts for flag in (False, None)}
+    assert all(rows and rows[0]["semantic_fingerprint"] for rows in before.values())
+    for key, rows in before.items():
+        assert [{k: v for k, v in row.items() if k not in ("source_fingerprint", "ingested_xid", "packed")}
+                for row in after[key]] == \
+               [{k: v for k, v in row.items() if k not in ("source_fingerprint", "ingested_xid", "packed")}
+                for row in rows], key
+    for post in posts:
+        assert [row["id"] for row in view[post["id"]]] == [row["id"] for row in before[(post["id"], False)]]
