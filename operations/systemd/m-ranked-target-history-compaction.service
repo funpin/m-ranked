@@ -1,0 +1,53 @@
+[Unit]
+Description=M-Ranked metric history compaction: measurements older than two days into packed rows (0059)
+Documentation=file:/opt/m-ranked/current/operations/runbooks/HISTORY_COMPACTION.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-maintenance
+Group=m-ranked-maintenance
+SupplementaryGroups=node-exporter
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/maintenance.env
+EnvironmentFile=-/etc/m-ranked/history-compaction.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/maintenance-pgpass
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-maintenance -g m-ranked-maintenance %d/pgpass /run/m-ranked-history-compaction/pgpass
+Environment=PGPASSFILE=/run/m-ranked-history-compaction/pgpass
+Environment=TZ=UTC
+Environment=HISTORY_COMPACTION_METRICS_FILE=/var/lib/node_exporter/textfile_collector/mranked-history-compaction.prom
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m operations.storage.compaction
+# Бюджет прогона — 20 минут (HISTORY_COMPACTION_MINUTES), остальное доделает
+# следующий запуск; полчаса с запасом на освобождение партиций.
+TimeoutStartSec=30min
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=50%
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/node_exporter/textfile_collector
+RuntimeDirectory=m-ranked-history-compaction
+RuntimeDirectoryMode=0700
+UMask=0022
+TasksMax=16

@@ -250,3 +250,68 @@ def test_window_functions_match_the_view_in_both_layers(publication):
     def logical(rows):
         return [{key: value for key, value in item.items() if key not in (*HOT_ONLY, "packed")} for item in rows]
     assert [logical(view) for view, _ in before] == [logical(view) for view, _ in after]
+
+
+def test_month_with_everything_packed_releases_its_partition(publication):
+    publication_id, month, row = publication
+    part = f"publication_metric_snapshot_{month:%Y_%m}"
+    with connect() as connection:
+        # Месяц ещё с горячими строками этого поста — не освобождается.
+        others = connection.execute(f"SELECT count(*) AS n FROM ingest.{part} WHERE publication_id <> %s",
+                                    (publication_id,)).fetchone()["n"]
+        assert connection.execute("SELECT ingest.release_empty_metric_partition(%s, 0) AS ok",
+                                  (month,)).fetchone()["ok"] is False
+        connection.execute("SELECT ingest.compact_publication_history(%s, %s)",
+                           (publication_id, datetime.now(timezone.utc) + timedelta(minutes=1)))
+        released = connection.execute("SELECT ingest.release_empty_metric_partition(%s, 0) AS ok",
+                                      (month,)).fetchone()["ok"]
+        points = connection.execute("SELECT count(*) AS n FROM ingest.publication_metric_point "
+                                    "WHERE publication_id = %s", (publication_id,)).fetchone()["n"]
+    # В общей тестовой базе в том же месяце могут быть чужие горячие строки.
+    assert released is (others == 0)
+    assert points > 100
+
+
+def test_released_partition_keeps_packed_points_readable():
+    month = datetime(2025, 3, 1).date()
+    publication_id, account, run = uuid4(), uuid4(), uuid4()
+    published = datetime(2025, 3, 10, 9, tzinfo=timezone.utc)
+    part = f"publication_metric_snapshot_{month:%Y_%m}"
+    with connect() as connection:
+        connection.execute("SELECT ops_and_admin.ensure_publication_metric_partition(%s)", (month,))
+        if connection.execute(f"SELECT EXISTS (SELECT 1 FROM ingest.{part}) AS busy").fetchone()["busy"]:
+            pytest.skip("month already used in this database")
+        institution = uuid4()
+        connection.execute("INSERT INTO catalog.institution(id, canonical_name) VALUES (%s, 'Released')", (institution,))
+        connection.execute("""INSERT INTO catalog.platform_account(id, institution_id, platform, canonical_external_id,
+                              access_mode) VALUES (%s, %s, 'vk', %s, 'public_web')""", (account, institution, f"r-{account}"))
+        connection.execute("""INSERT INTO ingest.collection_run(id, platform, partition_key, collector_version, started_at,
+                              status, correlation_id) VALUES (%s, 'vk', 'r', 'test', %s, 'succeeded', gen_random_uuid())""",
+                           (run, published))
+        connection.execute("""INSERT INTO ingest.publication(id, primary_account_id, published_at, discovered_at,
+                              publication_type, history_completeness) VALUES (%s, %s, %s, %s, 'post', 'complete')""",
+                           (publication_id, account, published, published))
+        with connection.transaction():
+            connection.execute("SET LOCAL session_replication_role = replica")
+            connection.execute(f"""
+                INSERT INTO ingest.publication_metric_snapshot(published_month, id, publication_id, collection_run_id,
+                  observed_at, age_seconds, sampling_bucket, views_count, quality, views_quality, reactions_quality,
+                  comments_quality, shares_quality, source_fingerprint, collected_at)
+                SELECT %s, nextval(pg_get_serial_sequence('ingest.publication_metric_snapshot', 'id')), %s, %s,
+                       %s::timestamptz + k * interval '10 minutes', k * 600, k, k * 10, 'exact', 'exact', 'exact',
+                       'exact', 'exact', md5(k::text), %s::timestamptz + k * interval '10 minutes'
+                  FROM generate_series(1, 3000) k""", (month, publication_id, run, published, published))
+            connection.execute(f"""INSERT INTO ingest.reaction_breakdown(snapshot_published_month, snapshot_id,
+                                   reaction_key, reaction_count)
+                                   SELECT published_month, id, '👍', views_count FROM ingest.{part} WHERE id % 7 = 0""")
+        before = connection.execute("SELECT id, views_count, reaction_breakdown FROM ingest.publication_metric_point "
+                                    "WHERE publication_id = %s ORDER BY id", (publication_id,)).fetchall()
+        connection.execute("SELECT ingest.compact_publication_history(%s, now())", (publication_id,))
+        size_before = connection.execute(f"SELECT pg_total_relation_size('ingest.{part}') AS b").fetchone()["b"]
+        assert connection.execute("SELECT ingest.release_empty_metric_partition(%s, 0) AS ok",
+                                  (month,)).fetchone()["ok"] is True
+        size_after = connection.execute(f"SELECT pg_total_relation_size('ingest.{part}') AS b").fetchone()["b"]
+        after = connection.execute("SELECT id, views_count, reaction_breakdown FROM ingest.publication_metric_point "
+                                   "WHERE publication_id = %s ORDER BY id", (publication_id,)).fetchall()
+    assert size_after < size_before / 4
+    assert after == before and len(after) == 3000

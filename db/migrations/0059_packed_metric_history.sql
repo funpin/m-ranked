@@ -628,10 +628,49 @@ AS $$
      LIMIT p_limit
 $$;
 
+-- Партиция месяца, все замеры которого упакованы, держит место удалённых
+-- строк до VACUUM FULL. Пустую партицию заменяем новой: TRUNCATE нельзя —
+-- на снимки ссылается внешний ключ разбивки, а CASCADE очистил бы её всю.
+-- Как в drop_publication_metric_partition_v22: разбивку месяца удалить,
+-- партицию снимков отсоединить и удалить, пустые создать заново. Пустота
+-- проверяется уже под эксклюзивной блокировкой; ждём её не дольше 3 с.
+CREATE OR REPLACE FUNCTION ingest.release_empty_metric_partition(p_month date, p_min_bytes bigint DEFAULT 1048576)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO 'pg_catalog', 'ingest', 'ops_and_admin'
+SET lock_timeout TO '3s'
+AS $$
+DECLARE
+    snapshot_part text := 'publication_metric_snapshot_' || to_char(p_month, 'YYYY_MM');
+    reaction_part text := 'reaction_breakdown_' || to_char(p_month, 'YYYY_MM');
+    has_rows boolean;
+BEGIN
+    IF p_month IS NULL OR p_month <> date_trunc('month', p_month)::date
+       OR to_regclass('ingest.' || snapshot_part) IS NULL OR to_regclass('ingest.' || reaction_part) IS NULL THEN
+        RETURN false;
+    END IF;
+    IF pg_total_relation_size(('ingest.' || snapshot_part)::regclass) < p_min_bytes THEN
+        RETURN false;
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended('observation-partition:' || p_month::text, 0));
+    LOCK TABLE ingest.publication_metric_snapshot, ingest.reaction_breakdown IN ACCESS EXCLUSIVE MODE;
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM ingest.%I)', snapshot_part) INTO has_rows;
+    IF has_rows THEN RETURN false; END IF;
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM ingest.%I)', reaction_part) INTO has_rows;
+    IF has_rows THEN RETURN false; END IF;
+    EXECUTE format('DROP TABLE ingest.%I', reaction_part);
+    EXECUTE format('ALTER TABLE ingest.publication_metric_snapshot DETACH PARTITION ingest.%I', snapshot_part);
+    EXECUTE format('DROP TABLE ingest.%I', snapshot_part);
+    PERFORM ops_and_admin.ensure_publication_metric_partition(p_month);
+    RETURN true;
+END $$;
+
 REVOKE ALL ON FUNCTION ingest.compact_publication_history(uuid, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION ingest.compactable_publications(timestamptz, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION ingest.compact_publication_history(uuid, timestamptz) TO maintenance;
 GRANT EXECUTE ON FUNCTION ingest.compactable_publications(timestamptz, integer) TO maintenance;
+REVOKE ALL ON FUNCTION ingest.release_empty_metric_partition(date, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION ingest.release_empty_metric_partition(date, bigint) TO maintenance;
 
 -- Читают то же, что читали таблицу снимков.
 GRANT SELECT ON ingest.publication_metric_history TO maintenance, api_read, analytics_worker, collector_ingest;
