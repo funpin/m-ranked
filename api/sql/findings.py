@@ -255,16 +255,18 @@ SELECT page.*,summary.hidden_anomalous,identity.external_id,identity.public_url,
   LEFT JOIN post_curve ON post_curve.publication_id=page.publication_id
   LEFT JOIN norm_curve ON norm_curve.account_id=page.account_id
   LEFT JOIN analytics.publication_latest latest ON latest.publication_id=page.publication_id
-  -- Топ реакций последнего снимка: разбивка лежит по снимку, снимок — в
-  -- месячной партиции публикации. Наружу идут только метки и счётчики.
+  -- Топ реакций последнего снимка: разбивка приходит с точкой — горячей или
+  -- упакованной (0059). Наружу идут только метки и счётчики.
   LEFT JOIN LATERAL (
       SELECT jsonb_agg(jsonb_build_object('reaction',top.reaction_key,'count',top.reaction_count)
                        ORDER BY top.reaction_count DESC,top.reaction_key) AS top_reactions
         FROM (SELECT breakdown.reaction_key,breakdown.reaction_count
-                FROM ingest.reaction_breakdown breakdown
-               WHERE breakdown.snapshot_published_month=date_trunc('month',page.published_at AT TIME ZONE 'UTC')::date
-                 AND breakdown.snapshot_id=(latest.source_snapshot_refs->>'reactions')::bigint
-                 AND breakdown.reaction_count>0 AND length(breakdown.reaction_key)<=200
+                FROM ingest.publication_point_by_id(
+                       page.publication_id, date_trunc('month',page.published_at AT TIME ZONE 'UTC')::date,
+                       (latest.source_snapshot_refs->>'reactions')::bigint) point
+               CROSS JOIN LATERAL (SELECT item.key AS reaction_key, item.value::bigint AS reaction_count
+                                     FROM jsonb_each(point.reaction_breakdown) item) breakdown
+               WHERE breakdown.reaction_count>0 AND length(breakdown.reaction_key)<=200
                  AND breakdown.reaction_key!~'[[:cntrl:]]' AND breakdown.reaction_key!~'://'
                ORDER BY breakdown.reaction_count DESC,breakdown.reaction_key
                LIMIT %(top_reactions)s) top

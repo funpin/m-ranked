@@ -196,6 +196,23 @@ SELECT p.*
    AND slice.lo IS NOT NULL
 $$;
 
+-- Одна точка по номеру снимка: горячая — по ключу, упакованная — поиском
+-- номера в массиве и декодированием одного элемента.
+CREATE OR REPLACE FUNCTION ingest.publication_point_by_id(p_publication_id uuid, p_published_month date, p_id bigint)
+RETURNS SETOF ingest.publication_metric_point
+LANGUAGE sql STABLE PARALLEL SAFE
+AS $$
+SELECT p.* FROM ingest.publication_metric_point p
+ WHERE NOT p.packed AND p.published_month = p_published_month AND p.id = p_id
+   AND p.publication_id = p_publication_id
+UNION ALL
+SELECT p.*
+  FROM ingest.publication_metric_history h
+ CROSS JOIN LATERAL (SELECT array_position(h.snapshot_id, p_id) AS i) found
+ CROSS JOIN LATERAL ingest.unpack_history(h, found.i, found.i) p
+ WHERE h.publication_id = p_publication_id AND found.i IS NOT NULL
+$$;
+
 -- Последняя видимая точка каждого поста не позже момента at (значение «на
 -- момент» для сводок). Горячая часть — по индексу (publication_id,
 -- observed_at), упакованная — отрезок до at с конца.
@@ -537,7 +554,8 @@ GRANT SELECT ON ingest.publication_metric_history TO maintenance, api_read, anal
 GRANT SELECT ON ingest.publication_metric_point TO maintenance, api_read, analytics_worker, collector_ingest;
 GRANT EXECUTE ON FUNCTION ingest.unpack_history(ingest.publication_metric_history, integer, integer),
     ingest.publication_points_between(uuid[], timestamptz, timestamptz),
-    ingest.publication_point_at(uuid[], timestamptz)
+    ingest.publication_point_at(uuid[], timestamptz),
+    ingest.publication_point_by_id(uuid, date, bigint)
     TO maintenance, api_read, analytics_worker, collector_ingest;
 GRANT SELECT ON ingest.collection_run TO api_read, analytics_worker;
 

@@ -106,8 +106,10 @@ WITH params AS (
       JOIN LATERAL (
           SELECT by_publication.*
             FROM (
+                -- Горячие и упакованные точки (0059); пост один, поэтому
+                -- упакованная история разворачивается только его.
                 SELECT candidate.*
-                  FROM ingest.publication_metric_snapshot candidate
+                  FROM ingest.publication_metric_point candidate
                  WHERE candidate.published_month=publication.published_month
                    AND candidate.publication_id=publication.publication_id
                  OFFSET 0

@@ -18,7 +18,8 @@ import pytest
 psycopg = pytest.importorskip("psycopg")
 from psycopg.rows import dict_row  # noqa: E402
 
-from api.sql import compare, details  # noqa: E402
+from api import findings as findings_rules  # noqa: E402
+from api.sql import compare, details, findings  # noqa: E402
 
 ADMIN = os.environ.get("MRANKED_TEST_PACKED_ADMIN_DSN", "")
 pytestmark = pytest.mark.skipif(not ADMIN, reason="disposable PostgreSQL DSN is required")
@@ -39,6 +40,9 @@ INSERT INTO ingest.publication(id, primary_account_id, published_at, discovered_
 SELECT p.id, (%(accounts)s::uuid[])[1 + (p.n %% %(account_count)s)], %(now)s - p.n * interval '13 hours',
        %(now)s - p.n * interval '13 hours', 'post', 'complete'
   FROM unnest(%(posts)s::uuid[]) WITH ORDINALITY AS p(id, n);
+INSERT INTO catalog.legacy_entity_alias(entity_type, legacy_id, target_uuid, legacy_route)
+SELECT 'channels', %(alias_base)s + a.n, a.id, '/channels/' || (%(alias_base)s + a.n)
+  FROM unnest(%(accounts)s::uuid[]) WITH ORDINALITY AS a(id, n);
 INSERT INTO catalog.legacy_entity_alias(entity_type, legacy_id, target_uuid, legacy_route)
 SELECT 'platform_posts', %(alias_base)s + p.n, p.id, '/platform-posts/' || (%(alias_base)s + p.n)
   FROM unnest(%(posts)s::uuid[]) WITH ORDINALITY AS p(id, n);
@@ -138,6 +142,19 @@ def answers(connection, ids) -> dict[str, list]:
             result[f"publications:{account}:{day}"] = connection.execute(details.ACCOUNT_PUBLICATIONS, {
                 "account_id": account, "after_id": None, "as_of": as_of, "fetch_limit": 200,
                 "growth_day": day, "publication_legacy_type": "platform_posts"}).fetchall()
+    # Разбивка реакций одной точки по номеру снимка (топ реакций в «Находках»).
+    rows = connection.execute("""SELECT s.publication_id, s.published_month, s.id FROM ingest.publication_metric_point s
+                                  WHERE s.publication_id = ANY (%s) AND s.reaction_breakdown <> '{}'
+                                  ORDER BY s.id LIMIT 25""", (ids["posts"],)).fetchall()
+    for item in rows:
+        result[f"point:{item['id']}"] = connection.execute(
+            "SELECT * FROM ingest.publication_point_by_id(%s, %s, %s)",
+            (item["publication_id"], item["published_month"], item["id"])).fetchall()
+    for horizon in (6, 48):
+        result[f"comparison:{horizon}"] = connection.execute(compare.COMPARISON, {
+            "aggregation": "median", "as_of": as_of, "horizon_hours": horizon, "hot_days": 70,
+            "include_partial": True, "metric": "views", "platform": "telegram", "revision": 1,
+            "selection_ids": json.dumps([ids["alias_base"] + n for n in range(1, ACCOUNTS + 1)])}).fetchall()
     return result
 
 
@@ -170,3 +187,33 @@ def test_readers_answer_the_same_before_and_after_packing(fixture):
     assert not empty, f"fixture gives these readers nothing to compare: {empty}"
     for name in before:
         assert normalized(after[name]) == normalized(before[name]), name
+
+
+def test_point_by_id_reads_the_same_breakdown_as_the_reaction_table(fixture):
+    with connect() as connection:
+        pairs = connection.execute("""
+            SELECT s.publication_id, s.published_month, s.id,
+                   (SELECT jsonb_object_agg(r.reaction_key, r.reaction_count) FROM ingest.reaction_breakdown r
+                     WHERE r.snapshot_published_month = s.published_month AND r.snapshot_id = s.id) AS table_breakdown
+              FROM ingest.publication_metric_snapshot s
+             WHERE s.publication_id = ANY (%s) AND s.id %% 3 = 0 ORDER BY s.id LIMIT 40""",
+            (fixture["posts"],)).fetchall()
+        for pair in pairs:
+            point = connection.execute("SELECT reaction_breakdown FROM ingest.publication_point_by_id(%s, %s, %s)",
+                                       (pair["publication_id"], pair["published_month"], pair["id"])).fetchone()
+            assert point["reaction_breakdown"] == (pair["table_breakdown"] or {})
+
+
+def test_findings_sql_runs_with_route_parameters(fixture):
+    rules = findings_rules
+    with connect() as connection:
+        connection.execute(findings.FINDINGS, {
+            "as_of": fixture["now"], "period_days": 7, "norms": psycopg.types.json.Jsonb([]),
+            "platform": "all", "institution_legacy_id": None, "types": [], "q": "", "search_pattern": "%",
+            "username_pattern": "%", "min_sample": rules.MIN_NORM_SAMPLE,
+            "interaction_floor": rules.INTERACTION_NORM_FLOOR, "view_floor": rules.VIEW_NORM_FLOOR,
+            "mode": "all", "min_index": rules.FINDING_MIN_INDEX, "min_interactions": rules.FINDING_MIN_INTERACTIONS,
+            "sort": "index", "direction": "desc", "exclude_anomalies": False, "group": "none", "cap": 50,
+            "comment_floor": rules.COMMENT_NORM_FLOOR, "share_floor": rules.SHARE_NORM_FLOOR,
+            "min_comments": rules.FINDING_MIN_COMMENTS, "min_shares": rules.FINDING_MIN_SHARES,
+            "top_reactions": 3}).fetchall()
