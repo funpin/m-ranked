@@ -132,12 +132,19 @@ class ImmutableEvidenceStore:
                     connection.execute("SET LOCAL lock_timeout='1s'")
                     connection.execute("SET LOCAL statement_timeout='5s'")
                     connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))", ("raw-evidence:" + digest,))
+                    # Доказательство в карантине держится для разбора, срок ему не указ.
                     result = connection.execute(
-                        "SELECT max(purge_after) FROM ingest.raw_payload WHERE external_ref=%s", (uri,)
+                        "SELECT max(payload.purge_after) AS latest, bool_or(EXISTS ("
+                        "SELECT 1 FROM ingest.evidence_quarantine quarantine "
+                        "WHERE quarantine.raw_payload_id=payload.id)) AS quarantined "
+                        "FROM ingest.raw_payload payload WHERE payload.external_ref=%s", (uri,)
                     ).fetchone()
                     if not entry.exists():
                         continue
-                    latest = next(iter(result.values())) if isinstance(result, dict) else result[0]
+                    latest, quarantined = ((result["latest"], result["quarantined"]) if isinstance(result, dict)
+                                           else (result[0], result[1]))
+                    if quarantined:
+                        continue
                     if latest is not None and latest > now:
                         continue
                     if latest is None and datetime.fromtimestamp(entry.lstat().st_mtime, now.tzinfo) > now - orphan_grace:
