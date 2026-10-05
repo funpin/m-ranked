@@ -105,6 +105,52 @@ CREATE OR REPLACE FUNCTION ingest.quality_of(code integer, shift integer) RETURN
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$ SELECT ('{unknown,rounded,estimated,exact,degraded,suspected_reset,invalid}'::ingest.observation_quality[])[((code >> shift) & 7) + 1] $$;
 
+-- Точки упакованной строки с позиции lo по hi. Единственное место, где
+-- массивы превращаются в точки: SQL-функция встраивается в запрос, поэтому
+-- окно по времени разворачивает только свой отрезок.
+CREATE OR REPLACE FUNCTION ingest.unpack_history(h ingest.publication_metric_history, lo integer, hi integer)
+RETURNS TABLE (
+    published_month date, id bigint, publication_id uuid, collection_run_id uuid, observed_at timestamptz,
+    age_seconds integer, sampling_bucket bigint, views_count bigint, reactions_count bigint,
+    comments_count bigint, shares_count bigint, quality ingest.observation_quality,
+    interval_uncertain boolean, synthetic boolean, metric_semantics_version integer,
+    capability_version integer, source_fingerprint text, created_at timestamptz, collected_at timestamptz,
+    ingested_xid xid8, correction_sequence bigint, supersedes_snapshot_id bigint, correction_reason text,
+    views_quality ingest.observation_quality, reactions_quality ingest.observation_quality,
+    comments_quality ingest.observation_quality, shares_quality ingest.observation_quality,
+    metric_evidence jsonb, semantic_fingerprint bytea, visible boolean, packed boolean, reaction_breakdown jsonb)
+LANGUAGE sql STABLE PARALLEL SAFE
+AS $$
+SELECT h.published_month, p.snapshot_id, h.publication_id, run.id, p.observed_at,
+       (floor(extract(epoch FROM p.observed_at - h.published_at)))::integer + p.age_residual,
+       (floor(extract(epoch FROM p.observed_at) / 300))::bigint + p.bucket_residual,
+       p.views_count, p.reactions_count, p.comments_count, p.shares_count, ingest.quality_of(p.code, 0),
+       (p.code >> 15) & 1 = 1, (p.code >> 16) & 1 = 1, p.semantics_version, p.capability_version,
+       NULL::text, p.observed_at + (p.collected_lag + p.created_lag) * interval '1 microsecond',
+       p.observed_at + p.collected_lag * interval '1 microsecond', NULL::xid8, p.correction_sequence,
+       p.supersedes_snapshot_id, p.correction_reason, ingest.quality_of(p.code, 3), ingest.quality_of(p.code, 6),
+       ingest.quality_of(p.code, 9), ingest.quality_of(p.code, 12), evidence.payload, NULL::bytea,
+       (p.code >> 17) & 1 = 1 AND CASE WHEN h.late_rows THEN NOT EXISTS (
+           SELECT 1 FROM ingest.publication_metric_snapshot successor
+            WHERE successor.published_month = h.published_month
+              AND successor.publication_id = h.publication_id
+              AND successor.sampling_bucket = (floor(extract(epoch FROM p.observed_at) / 300))::bigint + p.bucket_residual
+              AND successor.correction_sequence > p.correction_sequence) ELSE true END,
+       true,
+       h.reaction_dict[p.reaction_ref]
+  FROM unnest(h.snapshot_id[lo:hi], h.observed_at[lo:hi], h.collected_lag[lo:hi], h.created_lag[lo:hi],
+              h.age_residual[lo:hi], h.bucket_residual[lo:hi], h.run_seq[lo:hi], h.views_count[lo:hi],
+              h.reactions_count[lo:hi], h.comments_count[lo:hi], h.shares_count[lo:hi], h.codes[lo:hi],
+              h.correction_sequence[lo:hi], h.supersedes_snapshot_id[lo:hi], h.correction_reason[lo:hi],
+              h.semantics_version[lo:hi], h.capability_version[lo:hi], h.evidence_id[lo:hi], h.reaction_ref[lo:hi])
+       AS p(snapshot_id, observed_at, collected_lag, created_lag, age_residual, bucket_residual, run_seq,
+            views_count, reactions_count, comments_count, shares_count, code, correction_sequence,
+            supersedes_snapshot_id, correction_reason, semantics_version, capability_version, evidence_id,
+            reaction_ref)
+  LEFT JOIN ingest.collection_run run ON run.seq = p.run_seq
+  LEFT JOIN ingest.metric_evidence_dictionary evidence ON evidence.id = p.evidence_id
+$$;
+
 -- Все точки: горячие строки и упакованные массивы, колонки
 -- publication_metric_snapshot_resolved + visible, packed, reaction_breakdown.
 CREATE OR REPLACE VIEW ingest.publication_metric_point AS
@@ -127,35 +173,66 @@ SELECT s.published_month, s.id, s.publication_id, s.collection_run_id, s.observe
   FROM ingest.publication_metric_snapshot s
   LEFT JOIN ingest.metric_evidence_dictionary evidence ON evidence.id = s.metric_evidence_id
 UNION ALL
-SELECT h.published_month, p.snapshot_id, h.publication_id, run.id, p.observed_at,
-       (floor(extract(epoch FROM p.observed_at - h.published_at)))::integer + p.age_residual,
-       (floor(extract(epoch FROM p.observed_at) / 300))::bigint + p.bucket_residual,
-       p.views_count, p.reactions_count, p.comments_count, p.shares_count, ingest.quality_of(p.code, 0),
-       (p.code >> 15) & 1 = 1, (p.code >> 16) & 1 = 1, p.semantics_version, p.capability_version,
-       NULL::text, p.observed_at + (p.collected_lag + p.created_lag) * interval '1 microsecond',
-       p.observed_at + p.collected_lag * interval '1 microsecond', NULL::xid8, p.correction_sequence,
-       p.supersedes_snapshot_id, p.correction_reason, ingest.quality_of(p.code, 3), ingest.quality_of(p.code, 6),
-       ingest.quality_of(p.code, 9), ingest.quality_of(p.code, 12), evidence.payload, NULL::bytea,
-       (p.code >> 17) & 1 = 1 AND CASE WHEN h.late_rows THEN NOT EXISTS (
-           SELECT 1 FROM ingest.publication_metric_snapshot successor
-            WHERE successor.published_month = h.published_month
-              AND successor.publication_id = h.publication_id
-              AND successor.sampling_bucket = (floor(extract(epoch FROM p.observed_at) / 300))::bigint + p.bucket_residual
-              AND successor.correction_sequence > p.correction_sequence) ELSE true END,
-       true,
-       h.reaction_dict[p.reaction_ref]
+SELECT p.* FROM ingest.publication_metric_history h CROSS JOIN LATERAL ingest.unpack_history(h, 1, h.point_count) p;
+
+-- Точки постов в окне [from, to): горячие — по индексу, упакованные —
+-- только отрезок массивов внутри окна, посты вне окна не разворачиваются.
+CREATE OR REPLACE FUNCTION ingest.publication_points_between(p_ids uuid[], p_from timestamptz, p_to timestamptz)
+RETURNS SETOF ingest.publication_metric_point
+LANGUAGE sql STABLE PARALLEL SAFE
+AS $$
+SELECT p.* FROM ingest.publication_metric_point p
+ WHERE NOT p.packed AND p.publication_id = ANY (p_ids) AND p.observed_at >= p_from AND p.observed_at < p_to
+UNION ALL
+SELECT p.*
   FROM ingest.publication_metric_history h
- CROSS JOIN LATERAL unnest(h.snapshot_id, h.observed_at, h.collected_lag, h.created_lag, h.age_residual,
-                           h.bucket_residual, h.run_seq, h.views_count, h.reactions_count, h.comments_count,
-                           h.shares_count, h.codes, h.correction_sequence, h.supersedes_snapshot_id,
-                           h.correction_reason, h.semantics_version, h.capability_version, h.evidence_id,
-                           h.reaction_ref)
-       AS p(snapshot_id, observed_at, collected_lag, created_lag, age_residual, bucket_residual, run_seq,
-            views_count, reactions_count, comments_count, shares_count, code, correction_sequence,
-            supersedes_snapshot_id, correction_reason, semantics_version, capability_version, evidence_id,
-            reaction_ref)
-  LEFT JOIN ingest.collection_run run ON run.seq = p.run_seq
-  LEFT JOIN ingest.metric_evidence_dictionary evidence ON evidence.id = p.evidence_id;
+ CROSS JOIN LATERAL (SELECT min(u.o)::integer AS lo, max(u.o)::integer AS hi
+                       FROM unnest(h.observed_at) WITH ORDINALITY AS u(t, o)
+                      WHERE u.t >= p_from AND u.t < p_to) slice
+ CROSS JOIN LATERAL ingest.unpack_history(h, slice.lo, slice.hi) p
+ WHERE h.publication_id = ANY (p_ids) AND h.last_observed_at >= p_from AND h.first_observed_at < p_to
+   AND slice.lo IS NOT NULL
+$$;
+
+-- Последняя видимая точка каждого поста не позже момента at (значение «на
+-- момент» для сводок). Горячая часть — по индексу (publication_id,
+-- observed_at), упакованная — отрезок до at с конца.
+CREATE OR REPLACE FUNCTION ingest.publication_point_at(p_ids uuid[], p_at timestamptz)
+RETURNS SETOF ingest.publication_metric_point
+LANGUAGE sql STABLE PARALLEL SAFE
+AS $$
+SELECT DISTINCT ON (candidate.publication_id) candidate.*
+  FROM (
+    SELECT hot.* FROM unnest(p_ids) AS ids(publication_id)
+     CROSS JOIN LATERAL (
+        SELECT p.* FROM ingest.publication_metric_point p
+         WHERE NOT p.packed AND p.publication_id = ids.publication_id AND p.observed_at <= p_at AND p.visible
+         ORDER BY p.observed_at DESC, p.id DESC LIMIT 1) hot
+    UNION ALL
+    -- Обычный случай: последняя точка с битом visible находится по двум
+    -- массивам, декодируется одна точка.
+    SELECT packed.*
+      FROM ingest.publication_metric_history h
+     CROSS JOIN LATERAL (SELECT max(u.o)::integer AS i
+                           FROM unnest(h.observed_at, h.codes) WITH ORDINALITY AS u(t, c, o)
+                          WHERE u.t <= p_at AND (u.c >> 17) & 1 = 1) pick
+     CROSS JOIN LATERAL ingest.unpack_history(h, pick.i, pick.i) packed
+     WHERE h.publication_id = ANY (p_ids) AND h.first_observed_at <= p_at AND pick.i IS NOT NULL
+       AND NOT h.late_rows
+    UNION ALL
+    -- Есть поздние горячие строки: видимость сверяется с ними, отрезок целиком.
+    SELECT packed.*
+      FROM ingest.publication_metric_history h
+     CROSS JOIN LATERAL (SELECT max(u.o)::integer AS hi FROM unnest(h.observed_at) WITH ORDINALITY AS u(t, o)
+                          WHERE u.t <= p_at) slice
+     CROSS JOIN LATERAL (
+        SELECT p.* FROM ingest.unpack_history(h, 1, slice.hi) p
+         WHERE p.visible ORDER BY p.observed_at DESC, p.id DESC LIMIT 1) packed
+     WHERE h.publication_id = ANY (p_ids) AND h.first_observed_at <= p_at AND slice.hi IS NOT NULL
+       AND h.late_rows
+  ) candidate
+ ORDER BY candidate.publication_id, candidate.observed_at DESC, candidate.id DESC
+$$;
 
 -- Прежние представления — поверх обеих частей, колонки те же.
 CREATE OR REPLACE VIEW ingest.publication_metric_snapshot_resolved AS
@@ -456,6 +533,10 @@ GRANT EXECUTE ON FUNCTION ingest.compactable_publications(timestamptz, integer) 
 -- Читают то же, что читали таблицу снимков.
 GRANT SELECT ON ingest.publication_metric_history TO maintenance, api_read, analytics_worker, collector_ingest;
 GRANT SELECT ON ingest.publication_metric_point TO maintenance, api_read, analytics_worker, collector_ingest;
+GRANT EXECUTE ON FUNCTION ingest.unpack_history(ingest.publication_metric_history, integer, integer),
+    ingest.publication_points_between(uuid[], timestamptz, timestamptz),
+    ingest.publication_point_at(uuid[], timestamptz)
+    TO maintenance, api_read, analytics_worker, collector_ingest;
 GRANT SELECT ON ingest.collection_run TO api_read, analytics_worker;
 
 COMMIT;

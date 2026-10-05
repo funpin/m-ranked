@@ -211,3 +211,42 @@ def test_only_the_compactor_may_delete_observations(publication):
         finally:
             connection.execute(f"DROP OWNED BY {role}")
             connection.execute(f"DROP ROLE {role}")
+
+
+WINDOW_VIEW = """SELECT * FROM ingest.publication_metric_point
+                  WHERE publication_id = %s AND observed_at >= %s AND observed_at < %s ORDER BY id"""
+WINDOW_FUNCTION = """SELECT * FROM ingest.publication_points_between(ARRAY[%s]::uuid[], %s, %s) ORDER BY id"""
+AT_VIEW = """SELECT * FROM ingest.publication_metric_point WHERE publication_id = %s AND observed_at <= %s AND visible
+              ORDER BY observed_at DESC, id DESC LIMIT 1"""
+AT_FUNCTION = "SELECT * FROM ingest.publication_point_at(ARRAY[%s]::uuid[], %s)"
+
+
+def window_answers(connection, publication_id, published):
+    answers = []
+    for start, end in ((0, 6), (5, 30), (40, 80), (0, 100)):
+        bounds = (published + timedelta(hours=start), published + timedelta(hours=end))
+        answers.append((connection.execute(WINDOW_VIEW, (publication_id, *bounds)).fetchall(),
+                        connection.execute(WINDOW_FUNCTION, (publication_id, *bounds)).fetchall()))
+    for hours in (0, 3, 12.4, 30, 70, 200):
+        at = published + timedelta(hours=hours)
+        answers.append((connection.execute(AT_VIEW, (publication_id, at)).fetchall(),
+                        connection.execute(AT_FUNCTION, (publication_id, at)).fetchall()))
+    return answers
+
+
+def test_window_functions_match_the_view_in_both_layers(publication):
+    publication_id, month, row = publication
+    with connect() as connection:
+        published = connection.execute("SELECT published_at FROM ingest.publication WHERE id = %s",
+                                       (publication_id,)).fetchone()["published_at"]
+        before = window_answers(connection, publication_id, published)
+        connection.execute("SELECT ingest.compact_publication_history(%s, %s)",
+                           (publication_id, datetime.now(timezone.utc) - timedelta(hours=30)))
+        after = window_answers(connection, publication_id, published)
+        insert(connection, row(20, views=777, fingerprint=uuid4().hex))  # поздняя версия: late_rows
+        late = window_answers(connection, publication_id, published)
+    for view, function in before + after + late:
+        assert function == view
+    def logical(rows):
+        return [{key: value for key, value in item.items() if key not in (*HOT_ONLY, "packed")} for item in rows]
+    assert [logical(view) for view, _ in before] == [logical(view) for view, _ in after]
