@@ -47,14 +47,16 @@ def main():
     parser.add_argument('--path', default=os.environ.get('MRANKED_STORAGE_PATH', '/var/lib/m-ranked'))
     parser.add_argument('--peak-bytes', type=int, default=0)
     parser.add_argument('--reserve-bytes', type=int, default=0)
+    # Запас в процентах раздела; действует больший из двух запасов.
+    parser.add_argument('--reserve-percent', type=int, default=20)
     parser.add_argument('--backup-dir', type=Path, default=Path('/var/backups/m-ranked'))
     parser.add_argument('--state', type=Path, default=Path('/var/lib/m-ranked/storage-guard/history.json'))
     parser.add_argument('--metrics', type=Path, default=Path('/var/lib/node_exporter/textfile_collector/mranked_storage.prom'))
     args = parser.parse_args()
-    if min(args.peak_bytes, args.reserve_bytes) < 0:
-        parser.error('negative budget')
+    if min(args.peak_bytes, args.reserve_bytes) < 0 or not 0 <= args.reserve_percent <= 50:
+        parser.error('negative budget or reserve percent outside [0; 50]')
     point = sample(args.path)
-    reserve = max(args.reserve_bytes, point['total'] // 5)
+    reserve = max(args.reserve_bytes, point['total'] * args.reserve_percent // 100)
     allowed = point['free'] >= reserve + args.peak_bytes and (point['inodes'] == 0 or point['free_inodes'] > point['inodes'] // 10)
     print(json.dumps(dict(**point, peak_bytes=args.peak_bytes, reserve_bytes=reserve, allowed=allowed)))
     if args.mode == 'check':

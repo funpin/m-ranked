@@ -109,3 +109,21 @@ def test_refresh_keeps_only_the_restore_verified_copy_before_a_new_dump(tmp_path
     assert subprocess.run(cmd,capture_output=True).returncode == 0
     # После нового снимка копий будет ровно две: проверенная и новая.
     assert verified.exists() and not newer.exists()
+
+def test_verified_copy_held_on_another_server_is_not_kept_locally(tmp_path):
+    # Сервер 2 держит одну самую новую копию; проверенную держит Сервер 1 (0064).
+    verified=tmp_path/'mranked-20260921T010000Z.dump'
+    new=tmp_path/'mranked-20260923T010000Z.dump'
+    for f in [verified,new]:f.write_bytes(f.name.encode())
+    verified.with_suffix('.restore-verified.json').write_text(json.dumps(dict(dump=verified.name,restore_exit_code=0,sha256=hashlib.sha256(verified.read_bytes()).hexdigest())))
+    cmd=[sys.executable,str(SCRIPTS/'rotate-dumps.py'),str(tmp_path),'1']
+    # Нет сверенной копии на другом сервере — проверенная остаётся.
+    assert subprocess.run(cmd+['--offsite',''],capture_output=True).returncode == 0
+    assert verified.exists() and new.exists()
+    assert subprocess.run(cmd+['--offsite',verified.name],capture_output=True).returncode == 0
+    assert new.exists() and not verified.exists()
+    # Дальше локальной проверенной нет, но она есть на другом сервере: ротация идёт.
+    newer=tmp_path/'mranked-20260924T010000Z.dump'; newer.write_bytes(newer.name.encode())
+    assert subprocess.run(cmd+['--offsite',verified.name],capture_output=True).returncode == 0
+    assert newer.exists() and not new.exists()
+    assert subprocess.run(cmd,capture_output=True).returncode == 75

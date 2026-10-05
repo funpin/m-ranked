@@ -13,8 +13,11 @@ umask 077
 : "${BACKUP_DIR:=/var/backups/m-ranked}"
 # Approved deployment may select one; previous restore-verified copy is pinned.
 : "${BACKUP_KEEP:=1}"
+# Потолок одного снимка: поток останавливается, если снимок его перерос.
 : "${BACKUP_MAX_DUMP_BYTES:=7000000000}"
-: "${BACKUP_RESERVE_BYTES:=11000000000}"
+# Запас места: больший из абсолютного и процента раздела.
+: "${BACKUP_RESERVE_BYTES:=0}"
+: "${BACKUP_RESERVE_PERCENT:=15}"
 : "${MRANKED_DB_CONTAINER:?MRANKED_DB_CONTAINER is required}"
 # Потолок скорости потока. Дамп читается медленнее — pg_dump ждёт записи, и
 # вместе с ним притормаживает серверный COPY: без потолка контрольный запуск
@@ -79,8 +82,21 @@ if [[ "${BACKUP_REFRESH:-0}" == 1 ]]; then
   python3 "$script_dir/rotate-dumps.py" "$BACKUP_DIR" "$BACKUP_KEEP" --refresh
 fi
 
+# Пик — полтора последнего готового снимка (не меньше 512 МБ и не больше
+# потолка): заранее заданный пик в несколько гигабайт не давал снимать копию,
+# когда база уже ужалась. Перерастёт — поток остановит потолок.
+newest="$(ls -1t "$BACKUP_DIR"/mranked-*.dump 2>/dev/null | head -n 1 || true)"
+peak=0
+if [[ -n "$newest" ]]; then
+  peak=$(( $(stat -c %s "$newest") * 3 / 2 ))
+fi
+(( peak < 536870912 )) && peak=536870912
+(( peak > BACKUP_MAX_DUMP_BYTES )) && peak=$BACKUP_MAX_DUMP_BYTES
+total=$(df -B1 --output=size "$BACKUP_DIR" | tail -n 1 | tr -d ' ')
+reserve=$(( total * BACKUP_RESERVE_PERCENT / 100 ))
+(( reserve < BACKUP_RESERVE_BYTES )) && reserve=$BACKUP_RESERVE_BYTES
 python3 "$script_dir/storage_guard.py" check --path "$BACKUP_DIR" \
-  --peak-bytes "$BACKUP_MAX_DUMP_BYTES" --reserve-bytes "$BACKUP_RESERVE_BYTES"
+  --peak-bytes "$peak" --reserve-bytes "$reserve" --reserve-percent 0
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 target="$BACKUP_DIR/mranked-$stamp.dump"
@@ -119,7 +135,7 @@ docker run --rm -i --log-driver=none --name "$dumper" --network "container:$MRAN
   -e PGPASSWORD -e PGAPPNAME="$dumper" "$image" \
   pg_dump -h 127.0.0.1 -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" -Fc --compress="$BACKUP_COMPRESSION" --no-password \
   | python3 "$script_dir/backup-stream.py" \
-    "$partial" "$BACKUP_MAX_DUMP_BYTES" "$BACKUP_RESERVE_BYTES" "$BACKUP_MAX_BYTES_PER_SECOND" &
+    "$partial" "$BACKUP_MAX_DUMP_BYTES" "$reserve" "$BACKUP_MAX_BYTES_PER_SECOND" &
 wait $!
 
 # Decode every archive member; TOC alone does not detect truncated payload.
@@ -136,7 +152,17 @@ mv "$partial" "$target"
 # Verification receipts contain SHA256 and basename, written only after a real
 # isolated restore. Preserve every attested copy until a newer attested copy
 # exists. No backup deletion based just on age, filename, or TOC.
-python3 "$script_dir/rotate-dumps.py" "$BACKUP_DIR" "$BACKUP_KEEP"
+# Проверенная восстановлением копия держится локально, пока её сверенной
+# копии нет на другом сервере (политика verifiedBackupNodes, 0064). Список
+# таких — из базы; не ответила — список пуст, и копия остаётся.
+offsite="$(docker exec "$MRANKED_DB_CONTAINER" sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -XAt' <<'SQL' 2>/dev/null | paste -sd, - || true
+SELECT o.name FROM ops_and_admin.storage_object o
+ WHERE o.kind = 'backup' AND o.restore_verified_at IS NOT NULL AND o.retired_at IS NULL
+   AND EXISTS (SELECT 1 FROM ops_and_admin.storage_replica r JOIN ops_and_admin.server_node n ON n.id = r.node_id
+                WHERE r.object_id = o.id AND r.state = 'verified' AND n.role <> 'main');
+SQL
+)"
+python3 "$script_dir/rotate-dumps.py" "$BACKUP_DIR" "$BACKUP_KEEP" --offsite "$offsite"
 
 elapsed=$(( $(date -u +%s) - started ))
 if [[ -n "$BACKUP_METRICS_FILE" ]]; then

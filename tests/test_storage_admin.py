@@ -44,11 +44,13 @@ def test_collection_policy_blank_means_environment_value() -> None:
 def test_storage_policy_keeps_retired_archive_fields_as_they_were() -> None:
     # Холодный архив выведен (0063): его поля остаются прежними и формой не меняются.
     nodes = ["server-1", "server-2", "server-3"]
-    fields = {"coldAfterDays": "45", "backupCopies": "2", "backup_server-2": "on", "archive_server-3": "on"}
+    fields = {"coldAfterDays": "45", "backupCopies": "2", "backup_server-2": "on", "archive_server-3": "on",
+              "verified_server-1": "on"}
     current = {"browseCacheBytes": 7, "coldAfterDays": 30, "archiveNodes": ["server-1", "server-2"]}
     value = admin.storage_policy(fields, nodes, current)
     assert value == {"coldAfterDays": 30, "backupCopies": 2, "browseCacheBytes": 7,
-                     "backupNodes": ["server-2"], "archiveNodes": ["server-1", "server-2"]}
+                     "backupNodes": ["server-2"], "archiveNodes": ["server-1", "server-2"],
+                     "verifiedBackupNodes": ["server-1"]}
     no_backup = {key: item for key, item in fields.items() if key != "backup_server-2"}
     assert code(admin.storage_policy, no_backup, nodes, current) == "policy-backup-nodes"
 

@@ -183,6 +183,7 @@ function Updated({ overview, name, now }: { overview: StorageOverview; name: str
 function StoragePolicy({ overview, csrf, canEdit, now }: { overview: StorageOverview; csrf: string; canEdit: boolean; now: number }) {
   const value = policyValue(overview, "storage");
   const backupNodes = (value.backupNodes as string[] | undefined) ?? [];
+  const verifiedNodes = (value.verifiedBackupNodes as string[] | undefined) ?? [];
   const candidates = overview.servers.filter((server) => server.storesObjects && server.state !== "disabled");
   return <Section title="Политика хранения" description="История замеров живёт в базе целиком: замеры старше двух суток упакованы в строку поста. Резервные копии базы — полные снимки — хранятся на выбранных серверах.">
     <form method="post" action="/manage/policies/storage" className="grid gap-4 md:grid-cols-2">
@@ -190,8 +191,12 @@ function StoragePolicy({ overview, csrf, canEdit, now }: { overview: StorageOver
       <Field label="Хранить резервных копий базы" hint="Более старые выводятся, когда у новых есть сверенные копии.">
         <Input name="backupCopies" type="number" min={1} max={14} defaultValue={Number(value.backupCopies ?? 1)} required disabled={!canEdit} />
       </Field>
-      <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Резервные копии хранятся на</legend>
+      <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Самые новые копии хранятся на</legend>
         {candidates.map((server) => <Check key={server.id} name={`backup_${server.id}`} label={server.displayName} checked={backupNodes.includes(server.id)} disabled={!canEdit} />)}
+      </fieldset>
+      <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Последняя проверенная восстановлением копия — на</legend>
+        {candidates.map((server) => <Check key={server.id} name={`verified_${server.id}`} label={server.displayName} checked={verifiedNodes.includes(server.id)} disabled={!canEdit} />)}
+        <p className="text-muted-foreground text-xs">Пусто — там же, где самые новые. Основной сервер держит её у себя, пока сверенная копия не ляжет на выбранный.</p>
       </fieldset>
       <div className="md:col-span-2"><Button type="submit" disabled={!canEdit}><Save data-icon="inline-start" aria-hidden="true" />Сохранить и переразместить</Button>
         <p className="text-muted-foreground mt-2 text-xs">Файлы переезжают сами: агенты копируют их по 8 МБ с докачкой и сверкой SHA-256, а старая копия удаляется только после сверки всех новых.</p>

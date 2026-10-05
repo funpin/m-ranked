@@ -187,6 +187,8 @@ def storage_policy(fields: Mapping[str, str], node_ids: Iterable[str], current: 
         "coldAfterDays": int(current.get("coldAfterDays", 30)),
         "backupCopies": _whole(fields, "backupCopies", 1, 14, "policy-backup-copies"),
         "backupNodes": [node for node in nodes if _checked(fields, f"backup_{node}")],
+        # Последняя проверенная восстановлением копия — отдельно (0064).
+        "verifiedBackupNodes": [node for node in nodes if _checked(fields, f"verified_{node}")],
         "archiveNodes": [node for node in current.get("archiveNodes", nodes) if node in nodes] or nodes,
         "browseCacheBytes": current.get("browseCacheBytes", 2 * GIB),
     }

@@ -82,3 +82,45 @@ def test_policy_validation():
         with pytest.raises(ValueError):
             validate_storage_policy({"coldAfterDays": 30, "backupCopies": 1, "backupNodes": ["server-2"],
                                      "archiveNodes": ["server-2", "server-1"], **bad}, ["server-1", "server-2"])
+
+
+def test_restore_verified_backup_stays_on_its_own_servers_while_others_retire():
+    # Сервер 2 держит только самую новую копию, Сервер 1 — ещё и последнюю
+    # проверенную восстановлением: только она доказанно восстанавливается.
+    policy = {**POLICY, "verifiedBackupNodes": ["server-1"]}
+    verified = StoredObject("verified", "backup", 3 * GB, NOW - timedelta(days=8), restore_verified=True)
+    objects = [backup("new", 0), backup("middle", 4), verified]
+    replicas = {("new", "server-2"): "verified", ("new", "server-1"): "verified",
+                ("middle", "server-2"): "verified", ("middle", "server-1"): "verified",
+                ("verified", "server-2"): "verified", ("verified", "server-1"): "verified"}
+    result = plan([MAIN, S1], objects, replicas, policy)
+    assert result.retire == ["middle"]
+    assert ("verified", "server-2") in result.delete and ("verified", "server-1") not in result.delete
+    assert ("new", "server-2") not in result.delete and ("new", "server-1") not in result.delete
+
+
+def test_restore_verified_copy_reaches_server_1_before_main_lets_it_go():
+    policy = {**POLICY, "verifiedBackupNodes": ["server-1"]}
+    verified = StoredObject("verified", "backup", 3 * GB, NOW - timedelta(days=8), restore_verified=True)
+    result = plan([MAIN, S1], [backup("new", 0), verified],
+                  {("new", "server-2"): "verified", ("verified", "server-2"): "verified"}, policy)
+    assert ("verified", "server-1") in result.want
+    assert ("verified", "server-2") not in result.delete
+
+
+def test_newest_backup_that_is_verified_needs_no_extra_copy():
+    policy = {**POLICY, "verifiedBackupNodes": ["server-1"]}
+    newest = StoredObject("new", "backup", 3 * GB, NOW, restore_verified=True)
+    result = plan([MAIN, S1], [newest, backup("old", 3)],
+                  {("new", "server-2"): "verified", ("new", "server-1"): "verified",
+                   ("old", "server-1"): "verified"}, policy)
+    assert result.retire == ["old"]
+
+
+def test_policy_accepts_verified_backup_servers():
+    value = validate_storage_policy({**POLICY, "coldAfterDays": 30, "verifiedBackupNodes": ["server-1"]},
+                                    ["server-1", "server-2"])
+    assert value["verifiedBackupNodes"] == ["server-1"]
+    with pytest.raises(ValueError):
+        validate_storage_policy({**POLICY, "coldAfterDays": 30, "verifiedBackupNodes": ["server-9"]},
+                                ["server-1", "server-2"])
