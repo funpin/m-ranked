@@ -34,6 +34,26 @@ COLLECTOR_INTERVAL_SECONDS = {"telegram": 300, "vk": 300, "max": 300, "rutube": 
 ARCHIVE_LATE_LIMIT = 100_000
 
 
+_UINT64 = 1 << 64
+
+
+def snapshot_cursor(snapshot_id: int) -> str:
+    """Id снимка (64 бита со знаком) — в UUID курсора истории.
+
+    Отрицательные id (синтетические и перенесённые точки) идут дополнением до
+    двух, а положительные дают прежний текст: выданные курсоры не ломаются.
+    """
+    return str(uuid.UUID(int=snapshot_id % _UINT64))
+
+
+def snapshot_from_cursor(text: str) -> int | None:
+    """Обратное к snapshot_cursor; None — курсор не из этой истории."""
+    value = uuid.UUID(text).int
+    if value == 0 or value >= _UINT64:
+        return None
+    return value - _UINT64 if value >= 1 << 63 else value
+
+
 def _iso(value: Any) -> Any:
     return value.isoformat() if hasattr(value, "isoformat") else value
 
@@ -378,7 +398,7 @@ async def _archived_history(db: Database, request: Request, publication_row: Any
     neighbours = await db.fetch_one(details.NEIGHBOURS, {
         "publication_id": publication_id, "legacy_type": canonical_type,
     })
-    cursor_uuid = str(uuid.UUID(int=int(visible[-1]["snapshotId"]))) if has_more and visible else None
+    cursor_uuid = snapshot_cursor(int(visible[-1]["snapshotId"])) if has_more and visible else None
     return {
         "publication": dto.publication(publication_row, revision),
         "items": visible,
@@ -420,10 +440,9 @@ async def publication_history(
         cursor_id = normalize.scoped_cursor(cursor, revision, dimensions)
         after_snapshot_id = None
         if cursor_id is not None:
-            parsed = uuid.UUID(cursor_id)
-            if parsed.int <= 0 or parsed.int > (1 << 63) - 1:
+            after_snapshot_id = snapshot_from_cursor(cursor_id)
+            if after_snapshot_id is None:
                 raise BadRequest("курсор истории повреждён")
-            after_snapshot_id = parsed.int
         published_month = publication_row["published_at"].date().replace(day=1)
         archive_reader = getattr(request.app.state, "cold_archive", None)
         archived = (await archive_reader.history(db, published_month, str(publication_id))
@@ -460,7 +479,7 @@ async def publication_history(
             "as_of": committed_at,
             "expected_interval_seconds": COLLECTOR_INTERVAL_SECONDS[publication_row["platform"]],
         })
-        cursor_uuid = str(uuid.UUID(int=last_snapshot)) if last_snapshot is not None else None
+        cursor_uuid = snapshot_cursor(last_snapshot) if last_snapshot is not None else None
         neighbours = await db.fetch_one(details.NEIGHBOURS, {
             "publication_id": publication_id, "legacy_type": canonical_type,
         })
