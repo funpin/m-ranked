@@ -147,7 +147,7 @@ class Rehearsal:
         self.query(primary,'SET ROLE maintenance; SELECT ops_and_admin.begin_publication_archive('+literal+')')
         expected=json.loads(self.query(primary,'SET ROLE maintenance; SELECT to_jsonb(d) FROM ops_and_admin.publication_partition_digest('+literal+') d'))
         path=self.report_dir/('cold-'+self.run_id+'.parquet')
-        sql='SET ROLE maintenance; BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT row_to_json(archive_row) FROM ('+EXPORT_SQL.replace('%s',literal)+') archive_row; COMMIT;'
+        sql='SET ROLE maintenance; BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY; SET LOCAL TIME ZONE \'UTC\'; SELECT row_to_json(archive_row) FROM ('+EXPORT_SQL.replace('%(month)s',literal)+') archive_row; COMMIT;'
         began=time.monotonic()
         with tempfile.TemporaryFile() as errors:
             process=subprocess.Popen(['docker','exec','-i',primary,'psql','-U','mranked_bootstrap','-d',self.database,'-X','-q','-A','-t','-v','ON_ERROR_STOP=1'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=errors)

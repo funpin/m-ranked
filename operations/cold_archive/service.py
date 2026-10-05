@@ -18,6 +18,11 @@ from .model import ArchiveResult, ArchiveVerification, MonthRange
 from .parquet import DATASET_TYPE, SCHEMA_VERSION, ParquetArchiveWriter, verify_archive
 
 
+# Разбивка реакций и metric_evidence — по тем же правилам, что каноническая
+# запись (0058): сентябрьские снимки r4 держат разбивку внутри
+# metric_evidence, без строк в ingest.reaction_breakdown. Каноническая запись
+# берётся из представления в этом же запросе: построчный вызов функции стоил
+# десятки часов на крупный месяц.
 EXPORT_SQL = """
 SELECT
     snapshot.published_month,
@@ -42,22 +47,24 @@ SELECT
     snapshot.capability_version,
     snapshot.source_fingerprint,
     snapshot.created_at,
-    COALESCE(reactions.breakdown, '{}'::jsonb) AS reaction_breakdown_json,
+    COALESCE(snapshot.metric_evidence -> 'reaction_breakdown', reactions.breakdown, '{}'::jsonb) AS reaction_breakdown_json,
     snapshot.correction_sequence, snapshot.supersedes_snapshot_id, snapshot.correction_reason,
     snapshot.views_quality::text, snapshot.reactions_quality::text,
     snapshot.comments_quality::text, snapshot.shares_quality::text,
-    snapshot.metric_evidence AS metric_evidence_json,
-    ops_and_admin.publication_archive_record(snapshot.published_month,snapshot.id) AS canonical_record
+    snapshot.metric_evidence - 'reaction_breakdown' AS metric_evidence_json,
+    canonical.canonical_record
 FROM ingest.publication_metric_snapshot_resolved AS snapshot
 JOIN ingest.publication AS publication ON publication.id = snapshot.publication_id
 JOIN catalog.platform_account AS account ON account.id = publication.primary_account_id
+JOIN ops_and_admin.publication_archive_canonical AS canonical
+  ON canonical.published_month = snapshot.published_month AND canonical.id = snapshot.id
 LEFT JOIN LATERAL (
     SELECT jsonb_object_agg(item.reaction_key, item.reaction_count ORDER BY item.reaction_key) AS breakdown
     FROM ingest.reaction_breakdown AS item
     WHERE item.snapshot_published_month = snapshot.published_month
       AND item.snapshot_id = snapshot.id
 ) AS reactions ON true
-WHERE snapshot.published_month = %s
+WHERE snapshot.published_month = %(month)s AND canonical.published_month = %(month)s
 ORDER BY snapshot.published_month, snapshot.id
 """
 
@@ -255,11 +262,14 @@ class ColdArchiveService:
                     control.execute(
                         "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
                     )
+                    # Текст канонической записи зависит от пояса сеанса, а
+                    # дайджест партиции считается в UTC.
+                    control.execute("SET LOCAL TIME ZONE 'UTC'")
                 with connection.cursor(
                     name=f"archive_{month.partition_suffix}", row_factory=dict_row
                 ) as cursor:
                     cursor.itersize = self._batch_size
-                    cursor.execute(EXPORT_SQL, (month.start,))
+                    cursor.execute(EXPORT_SQL, {"month": month.start})
                     with ParquetArchiveWriter(temporary_path) as writer:
                         while True:
                             rows = cursor.fetchmany(self._batch_size)

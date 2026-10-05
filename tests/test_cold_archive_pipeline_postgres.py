@@ -24,6 +24,8 @@ import pytest
 psycopg = pytest.importorskip("psycopg")
 pytest.importorskip("pyarrow")
 from psycopg.rows import dict_row  # noqa: E402
+from psycopg.types.json import Jsonb  # noqa: E402
+import pyarrow.parquet as pq  # noqa: E402
 
 from anomaly_analysis.v2 import archive_job  # noqa: E402
 from anomaly_analysis.v2.schedule import ScheduleConfig  # noqa: E402
@@ -40,6 +42,8 @@ ADMIN = os.environ.get("MRANKED_TEST_ARCHIVE_ADMIN_DSN", "")
 MAINTENANCE = os.environ.get("MRANKED_TEST_ARCHIVE_MAINTENANCE_DSN", "")
 WORKER = os.environ.get("MRANKED_TEST_ARCHIVE_WORKER_DSN", "")
 INSTITUTION, ACCOUNT, RUN = uuid4(), uuid4(), uuid4()
+EMBEDDED_EVIDENCE = {"reaction_breakdown": {"❤️": 4, "🔥": 6}, "views": "exact"}
+TABLE_BREAKDOWN = {"👍": 11, "custom:5472256095697246943": 1}
 
 pytestmark = pytest.mark.skipif(not (ADMIN and MAINTENANCE), reason="disposable archive PostgreSQL DSNs are required")
 
@@ -74,13 +78,24 @@ def posts():
                                   VALUES (%s,%s,%s,%s,'post','complete')""", (publication, ACCOUNT, published, published))
             for point in range(40):
                 observed = published + timedelta(minutes=15 * (point + 1))
-                connection.execute("""
-                    INSERT INTO ingest.publication_metric_snapshot(
-                      published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,
-                      views_count,reactions_count,comments_count,shares_count,quality,source_fingerprint,collected_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,0,NULL,'exact',%s,%s)""",
-                    (month, publication, RUN, observed, 900 * (point + 1), point, 100 * (point + 1), 3 * point,
-                     uuid4().hex, observed))
+                # Сентябрьский сборщик r4 клал разбивку реакций внутрь
+                # metric_evidence, без строк в reaction_breakdown.
+                evidence = EMBEDDED_EVIDENCE if index == 0 and point < 5 else {}
+                breakdown = TABLE_BREAKDOWN if index == 1 and point == 5 else {}
+                # Строки разбивки вставляются в одной транзакции со своим замером.
+                with connection.transaction():
+                    snapshot = connection.execute("""
+                        INSERT INTO ingest.publication_metric_snapshot(
+                          published_month,publication_id,collection_run_id,observed_at,age_seconds,sampling_bucket,
+                          views_count,reactions_count,comments_count,shares_count,quality,source_fingerprint,collected_at,
+                          metric_evidence)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,0,NULL,'exact',%s,%s,%s) RETURNING id""",
+                        (month, publication, RUN, observed, 900 * (point + 1), point, 100 * (point + 1), 3 * point,
+                         uuid4().hex, observed, Jsonb(evidence))).fetchone()["id"]
+                    for key, count in breakdown.items():
+                        connection.execute("""INSERT INTO ingest.reaction_breakdown(
+                                                snapshot_published_month,snapshot_id,reaction_key,reaction_count)
+                                              VALUES (%s,%s,%s,%s)""", (month, snapshot, key, count))
             created.append((publication, published))
     return month, created
 
@@ -123,6 +138,12 @@ def test_month_goes_cold_reads_back_and_late_rows_form_the_next_generation(posts
     result = Pipeline(MAINTENANCE, settings, sleep=copy_to_second_server(root, remote)).run(MONTH)
     assert result["status"] == "cold" and result["publications"] == 3 and result["rows"] == 120
     assert result["copy"] == "server-1"
+    # Разбивка из metric_evidence и из таблицы доезжает до файла, а сама
+    # metric_evidence — без неё, как в канонической записи.
+    full = pq.read_table(store.object_path(root, "archive_full", f"snapshots-{MONTH:%Y-%m}-g1.parquet")).to_pylist()
+    breakdowns = [json.loads(row["reaction_breakdown_json"]) for row in full]
+    assert breakdowns.count(EMBEDDED_EVIDENCE["reaction_breakdown"]) == 5 and breakdowns.count(TABLE_BREAKDOWN) == 1
+    assert {"views": "exact"} in [json.loads(row["metric_evidence_json"]) for row in full]
 
     with connect(ADMIN) as connection:
         assert connection.execute("SELECT count(*) AS n FROM ingest.publication_metric_snapshot "
