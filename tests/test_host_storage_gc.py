@@ -190,3 +190,23 @@ def test_collect_goes_on_past_a_release_it_cannot_remove(monkeypatch, tmp_path, 
     assert not old.exists() and stuck.is_dir()
     out = capsys.readouterr().out
     assert "failed release=a-stuck" in out and "removed release=b-old" in out
+
+
+def test_collect_keeps_the_release_that_holds_current_venv(monkeypatch, tmp_path, capsys):
+    # На Сервере 2 .venv текущего релиза — ссылка в старый релиз. Очистка
+    # 05.10 начала стирать его и остановилась только на чужом frontend.
+    releases, _ = configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("MRANKED_APPROVED_RELEASE_REMOVALS", "")
+    monkeypatch.setenv("MRANKED_RELEASE_AUTO_REMOVE", "1")
+    rollback, holder, old = releases / "rollback-release", releases / "venv-holder", releases / "old-release"
+    for path in (rollback, holder, old):
+        path.mkdir()
+    (holder / ".venv").mkdir()
+    (releases / "current-release" / ".venv").symlink_to(holder / ".venv")
+    for path, hours in ((releases / "current-release", 2), (rollback, 3), (holder, 6), (old, 5)):
+        age(path, hours)
+
+    gc_host_storage.collect(apply=True)
+
+    assert holder.is_dir() and (holder / ".venv").is_dir() and not old.exists()
+    assert "keep release=venv-holder reason=link-target" in capsys.readouterr().out

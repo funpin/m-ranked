@@ -28,6 +28,16 @@ def release_for(path: Path, root: Path) -> Path | None:
     return root / relative.parts[0] if relative.parts else None
 
 
+def link_targets(release: Path, root: Path) -> set[Path]:
+    """Другие релизы, куда ведут ссылки верхнего уровня этого релиза."""
+    try:
+        entries = list(release.iterdir())
+    except OSError:
+        return set()
+    targets = {release_for(entry, root) for entry in entries if entry.is_symlink()}
+    return {target for target in targets if target is not None and target != release}
+
+
 def process_releases(root: Path, proc_root: Path) -> set[Path]:
     active: set[Path] = set()
     for process in proc_root.glob("[0-9]*"):
@@ -174,6 +184,15 @@ def collect(apply: bool) -> int:
     if shutil.which("docker"):
         for release in docker_mount_releases(root):
             protected[release] = "in-use"
+
+    # Релиз, на который ведёт ссылка из оставленного (так .venv текущего
+    # релиза живёт в старом), оставляется вместе с ним — и дальше по цепочке.
+    pending = list(protected)
+    while pending:
+        for release in link_targets(pending.pop(), root):
+            if release not in protected:
+                protected[release] = "link-target"
+                pending.append(release)
 
     cutoff_ns = (time.time_ns() - min_age_hours * 3_600 * 1_000_000_000)
     candidates = 0

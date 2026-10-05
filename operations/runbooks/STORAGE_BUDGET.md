@@ -487,6 +487,10 @@ release. Resolved 05.10: removal also needs `CAP_DAC_OVERRIDE` — the standalon
 `frontend` built in Docker is owned by uid 1001, and without it root could not
 unlink inside it (PermissionError stopped the whole pass). A release that still
 cannot be removed is now reported and skipped; the run fails at the end.
+The same day GC had begun deleting the release that holds the current
+`.venv` (the current release links it by symlink; process `exe` resolves to
+`/usr/bin/python3`, so the in-use check never saw it). Releases reached by
+top-level symlinks from a kept release are now kept too (`link-target`).
 
 The minimal unresolved product concession is a finite S2 detailed-observation
 horizon or finite total collection volume. At .43–1.47 GB/day even a 30d extension
