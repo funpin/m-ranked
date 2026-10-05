@@ -28,22 +28,21 @@ BEGIN
     END IF;
 END $$;
 
-DELETE FROM ops_and_admin.anomaly_analysis_candidate WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.post_anomaly_log WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.post_anomaly_state WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.publication_anomaly_review WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.publication_anomaly_finding WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.publication_analysis_attempt WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.publication_analysis_state WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.comparison_cohort_member WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.anomaly_event WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM analytics.anomaly_analysis_revision WHERE publication_id IN (SELECT id FROM doomed);
-DELETE FROM ingest.deletion_observation WHERE publication_id IN (SELECT id FROM doomed);
+-- Таблицы без ON DELETE CASCADE находятся по внешним ключам на публикацию:
+-- список не устаревает вместе со схемой.
 DO $$
+DECLARE ref record;
 BEGIN
-    IF to_regclass('ingest.collector_publication_working_set') IS NOT NULL THEN
-        DELETE FROM ingest.collector_publication_working_set WHERE publication_id IN (SELECT id FROM doomed);
-    END IF;
+    FOR ref IN
+        SELECT c.conrelid::regclass AS relation, a.attname AS column_name
+          FROM pg_constraint c
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+         WHERE c.contype = 'f' AND c.confrelid = 'ingest.publication'::regclass
+           AND c.confdeltype <> 'c' AND c.conparentid = 0
+           AND c.conrelid <> 'ingest.publication_metric_snapshot'::regclass
+    LOOP
+        EXECUTE format('DELETE FROM %s WHERE %I IN (SELECT id FROM doomed)', ref.relation, ref.column_name);
+    END LOOP;
 END $$;
 -- Короткие адреса постов (/platform-posts/N) ведут на удалённое.
 DELETE FROM catalog.legacy_entity_alias WHERE target_uuid IN (SELECT id FROM doomed);

@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { Archive, HardDrive, Play, Plus, RefreshCw, Save } from "lucide-react";
+import { HardDrive, Plus, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,6 @@ import { ago, bytes, fields, Pill, Section } from "./shared";
 
 type Server = StorageOverview["servers"][number];
 type Replica = StorageOverview["backups"][number]["replicas"][number];
-type Month = StorageOverview["archive"][number];
 type Platform = Server["platforms"][number];
 
 const PLATFORMS: Platform[] = ["telegram", "vk", "max", "rutube"];
@@ -28,17 +27,12 @@ const REPLICA: Record<Replica["state"], [string, string]> = {
   transferring: ["копируется", "text-warning"], deleting: ["удаляется", "text-muted-foreground"],
   deleted: ["удалена", "text-muted-foreground"], failed: ["сбой", "text-destructive"],
 };
-const GENERATION: Record<Month["generations"][number]["state"], string> = {
-  preparing: "готовится", exporting: "выгружается", replicating: "копируется на второй сервер",
-  dropping: "удаляется из базы", cold: "в архиве", failed: "не удалось",
-};
 const STATUS: Record<string, string> = {
   "server-added": "Сервер добавлен. Приём с него откроется в течение 30 секунд, агент получит состав сборщиков в течение минуты.",
   "server-updated": "Настройки сервера сохранены.",
   "policy-collection": "Политика сбора сохранена: сборщики применят её с ближайшего цикла.",
   "policy-storage": "Политика хранения сохранена: размещение копий пересчитается в течение минуты.",
   "policy-analysis": "Политика анализа сохранена: анализ применит её в течение минуты.",
-  "job-queued": "Задание поставлено в очередь и начнётся в течение минуты.",
 };
 const ERROR: Record<string, string> = {
   "server-id": "Имя сервера: латиница в нижнем регистре, цифры и дефис, 2–40 символов, начинается с буквы. Оно должно совпадать с именем в сертификате сервера.",
@@ -46,13 +40,10 @@ const ERROR: Record<string, string> = {
   "server-state": "Такое состояние для этого сервера недоступно.", "server-platforms": "Площадки назначаются только серверу-сборщику.",
   "server-reserve": "Запас места — целое число гигабайт от 0 до 1000.", "server-exists": "Сервер с таким именем уже есть.",
   "server-missing": "Сервер не найден.", "policy-collection": "Проверьте значения политики сбора: целые числа в указанных пределах.",
-  "policy-cold-days": "Срок горячего хранения — от 30 до 3650 дней.", "policy-backup-copies": "Число резервных копий — от 1 до 14.",
+  "policy-backup-copies": "Число резервных копий — от 1 до 14.",
   "policy-backup-nodes": "Выберите хотя бы один сервер для резервных копий.",
-  "policy-archive-nodes": "Полный архив хранится минимум на двух серверах: после удаления месяца из базы это единственные его копии.",
-  "policy-cold-before-analysis": "Финальный анализ должен проходить не позже ухода месяца в архив: срок анализа не больше срока горячего хранения.",
   "policy-analysis": "Срок финального анализа — от 3 до 3650 дней или пусто.", "policy-storage": "Политика хранения не прошла проверку.",
-  "archive-month": "Месяц указывается в виде ГГГГ-ММ.", "archive-platform": "Неизвестная площадка.",
-  "job-busy": "Такое задание уже стоит в очереди или выполняется.", unknown: "Неизвестная команда.",
+  unknown: "Неизвестная команда.",
 };
 
 function percent(part: number | null, total: number | null) {
@@ -104,7 +95,7 @@ function ServerForm({ server, csrf, canEdit }: { server: Server; csrf: string; c
       {server.role === "collector" ? <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Площадки сбора</legend>
         <div className="flex flex-wrap gap-4">{PLATFORMS.map((platform) => <Check key={platform} name={`platform_${platform}`} label={PLATFORM_LONG_LABELS[platform]} checked={server.platforms.includes(platform)} disabled={!canEdit} />)}</div>
       </fieldset> : null}
-      <Check name="stores_objects" label="Хранит резервные копии и архив" checked={server.storesObjects} disabled={!canEdit} />
+      <Check name="stores_objects" label="Хранит резервные копии" checked={server.storesObjects} disabled={!canEdit} />
       <Field label="Запас свободного места, ГБ" hint="Копия не ляжет на сервер, если после неё останется меньше.">
         <Input name="reserve_gb" type="number" min={0} max={1000} defaultValue={Math.round(server.reserveBytes / 1024 ** 3)} required disabled={!canEdit} />
       </Field>
@@ -173,7 +164,7 @@ function AddServer({ csrf, canEdit }: { csrf: string; canEdit: boolean }) {
       <fieldset className="grid gap-2 md:col-span-2"><legend className="mb-1 text-sm">Площадки сбора (для сборщика)</legend>
         <div className="flex flex-wrap gap-4">{PLATFORMS.map((platform) => <Check key={platform} name={`platform_${platform}`} label={PLATFORM_LONG_LABELS[platform]} checked={false} disabled={!canEdit} />)}</div>
       </fieldset>
-      <Check name="stores_objects" label="Хранит резервные копии и архив" checked disabled={!canEdit} />
+      <Check name="stores_objects" label="Хранит резервные копии" checked disabled={!canEdit} />
       <Field label="Запас свободного места, ГБ"><Input name="reserve_gb" type="number" min={0} max={1000} defaultValue={3} required disabled={!canEdit} /></Field>
       <div className="md:col-span-2"><Button type="submit" disabled={!canEdit}><Plus data-icon="inline-start" aria-hidden="true" />Добавить сервер</Button></div>
     </form>
@@ -192,22 +183,15 @@ function Updated({ overview, name, now }: { overview: StorageOverview; name: str
 function StoragePolicy({ overview, csrf, canEdit, now }: { overview: StorageOverview; csrf: string; canEdit: boolean; now: number }) {
   const value = policyValue(overview, "storage");
   const backupNodes = (value.backupNodes as string[] | undefined) ?? [];
-  const archiveNodes = (value.archiveNodes as string[] | undefined) ?? [];
   const candidates = overview.servers.filter((server) => server.storesObjects && server.state !== "disabled");
-  return <Section title="Политика хранения" description="Замеры месяца публикации уходят в холодный архив, когда со дня конца месяца прошёл срок горячего хранения. Архив месяца — два файла: полный Parquet для восстановления (на выбранных серверах) и компактный файл просмотра (всегда на основном сервере), из которого пост открывается за миллисекунды.">
+  return <Section title="Политика хранения" description="История замеров живёт в базе целиком: замеры старше двух суток упакованы в строку поста. Резервные копии базы — полные снимки — хранятся на выбранных серверах.">
     <form method="post" action="/manage/policies/storage" className="grid gap-4 md:grid-cols-2">
       {fields(csrf)}
-      <Field label="Горячее хранение, дней после конца месяца" hint="От 30. Пример: 30 — замеры постов сентября уходят в архив 31 октября.">
-        <Input name="coldAfterDays" type="number" min={30} max={3650} defaultValue={Number(value.coldAfterDays ?? 30)} required disabled={!canEdit} />
-      </Field>
       <Field label="Хранить резервных копий базы" hint="Более старые выводятся, когда у новых есть сверенные копии.">
         <Input name="backupCopies" type="number" min={1} max={14} defaultValue={Number(value.backupCopies ?? 1)} required disabled={!canEdit} />
       </Field>
       <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Резервные копии хранятся на</legend>
         {candidates.map((server) => <Check key={server.id} name={`backup_${server.id}`} label={server.displayName} checked={backupNodes.includes(server.id)} disabled={!canEdit} />)}
-      </fieldset>
-      <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Полный архив хранится на (минимум два)</legend>
-        {candidates.map((server) => <Check key={server.id} name={`archive_${server.id}`} label={server.displayName} checked={archiveNodes.includes(server.id)} disabled={!canEdit} />)}
       </fieldset>
       <div className="md:col-span-2"><Button type="submit" disabled={!canEdit}><Save data-icon="inline-start" aria-hidden="true" />Сохранить и переразместить</Button>
         <p className="text-muted-foreground mt-2 text-xs">Файлы переезжают сами: агенты копируют их по 8 МБ с докачкой и сверкой SHA-256, а старая копия удаляется только после сверки всех новых.</p>
@@ -220,10 +204,10 @@ function StoragePolicy({ overview, csrf, canEdit, now }: { overview: StorageOver
 function AnalysisPolicy({ overview, csrf, canEdit, now }: { overview: StorageOverview; csrf: string; canEdit: boolean; now: number }) {
   const value = policyValue(overview, "analysis");
   const [low, high] = overview.limits.finalAnalysisDays;
-  return <Section title="Политика анализа" description="Пост анализируется, пока не достигнет срока финального анализа: тогда он проходит последний анализ по всему ряду и замораживается. Месяц уходит в архив только после финального анализа всех его постов.">
+  return <Section title="Политика анализа" description="Пост анализируется, пока не достигнет срока финального анализа: тогда он проходит последний анализ по всему ряду и замораживается.">
     <form method="post" action="/manage/policies/analysis" className="grid gap-3 md:grid-cols-2">
       {fields(csrf)}
-      <Field label="Финальный анализ на возрасте поста, дней" hint="Пусто — как в окружении службы анализа (обычно 30). Не больше срока горячего хранения.">
+      <Field label="Финальный анализ на возрасте поста, дней" hint="Пусто — как в окружении службы анализа (обычно 30).">
         <Input name="finalAnalysisDays" type="number" min={low} max={high} defaultValue={value.finalAnalysisDays == null ? "" : Number(value.finalAnalysisDays)} disabled={!canEdit} />
       </Field>
       <div className="self-end"><Button type="submit" disabled={!canEdit}><Save data-icon="inline-start" aria-hidden="true" />Сохранить</Button></div>
@@ -281,69 +265,6 @@ function Backups({ overview, servers, now }: { overview: StorageOverview; server
   </Section>;
 }
 
-function ArchiveMonths({ overview, servers, csrf, canEdit, now }: { overview: StorageOverview; servers: Map<string, string>; csrf: string; canEdit: boolean; now: number }) {
-  const today = new Date(now).toISOString().slice(0, 10);
-  return <Section title="Холодный архив" description="Месяцы — по дате публикации постов. Пока месяц выгружается, запись в него закрыта (не дольше двух часов): поздние замеры с Сервера 1 ждут и не теряются. После удаления из базы месяц снова открыт, а поздние контрольные замеры уйдут в архив следующим поколением."
-    action={<form method="post" action="/manage/archive/run">{fields(csrf)}
-      <Button type="submit" variant="outline" disabled={!canEdit}><Play data-icon="inline-start" aria-hidden="true" />Архивировать созревшие</Button>
-    </form>}>
-    <div className="overflow-x-auto"><Table>
-      <TableHeader><TableRow><TableHead>Месяц</TableHead><TableHead className="text-right">В базе</TableHead><TableHead>Архив</TableHead><TableHead>Действия</TableHead></TableRow></TableHeader>
-      <TableBody>{overview.archive.map((month) => {
-        const cold = month.generations.filter((item) => item.state === "cold");
-        const due = month.coldFrom <= today;
-        return <TableRow key={month.month} data-month={month.month}>
-          <TableCell className="align-top font-medium tabular-nums">{month.month}{month.fence !== "active" ? <span className="text-warning block text-xs">запись закрыта на выгрузку</span> : null}</TableCell>
-          <TableCell className="text-right align-top tabular-nums">{bytes(month.hotBytes)}<span className="text-muted-foreground block text-xs">{due ? "созрел для архива" : `в архив с ${month.coldFrom}`}</span></TableCell>
-          <TableCell className="align-top">{month.generations.length ? <ul className="grid gap-2">{month.generations.map((generation) => (
-            <li key={generation.generation} className="text-xs">
-              <b>Поколение {generation.generation}</b> · <span className={generation.state === "failed" ? "text-destructive" : generation.state === "cold" ? "text-success" : "text-warning"}>{GENERATION[generation.state]}</span>
-              {generation.rowCount != null ? ` · ${number.format(generation.rowCount)} замеров, ${number.format(generation.publications ?? 0)} постов` : ""}
-              {generation.full ? <span className="block">полный {bytes(generation.full.sizeBytes)} (было в базе {bytes(generation.hotBytes)}): <Replicas replicas={generation.full.replicas} servers={servers} /></span> : null}
-              {generation.browse ? <span className="block">просмотр {bytes(generation.browse.sizeBytes)}: <Replicas replicas={generation.browse.replicas} servers={servers} /></span> : null}
-              {generation.error ? <span className="text-destructive block">{generation.error}</span> : null}
-            </li>))}</ul> : <span className="text-muted-foreground text-xs">не архивировался</span>}</TableCell>
-          <TableCell className="align-top">
-            <div className="flex flex-wrap gap-2">
-              {due && month.hotBytes ? <form method="post" action="/manage/archive/run">{fields(csrf)}<input type="hidden" name="month" value={month.month} />
-                <Button type="submit" size="sm" variant="outline" disabled={!canEdit}><Archive data-icon="inline-start" aria-hidden="true" />В архив</Button></form> : null}
-              {cold.length ? <form method="post" action="/manage/archive/analysis">{fields(csrf)}<input type="hidden" name="month" value={month.month} />
-                <Button type="submit" size="sm" variant="outline" disabled={!canEdit} title="Финальный анализ всех постов месяца заново — по данным архива и текущими детекторами">
-                  <RefreshCw data-icon="inline-start" aria-hidden="true" />Анализ заново</Button></form> : null}
-            </div>
-          </TableCell>
-        </TableRow>;
-      })}</TableBody>
-    </Table></div>
-  </Section>;
-}
-
-const JOB_KIND: Record<string, string> = { archive_now: "Архивация", archive_analysis: "Анализ архива" };
-const JOB_STATE: Record<string, [string, string]> = {
-  queued: ["в очереди", "text-muted-foreground"], running: ["выполняется", "text-warning"], done: ["готово", "text-success"],
-  failed: ["ошибка", "text-destructive"], cancelled: ["отменено", "text-muted-foreground"],
-};
-
-function Jobs({ overview, now }: { overview: StorageOverview; now: number }) {
-  if (!overview.jobs.length) return null;
-  return <Section title="Задания">
-    <ul className="divide-y rounded-lg border text-sm">{overview.jobs.map((job) => {
-      const [label, tone] = JOB_STATE[job.state] ?? [job.state, ""];
-      const params = job.params as { month?: string; platform?: string };
-      const result = job.result as { status?: string; month?: string; publications?: number; queued?: number } | null;
-      return <li key={job.id} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2.5">
-        <span>{JOB_KIND[job.kind] ?? job.kind}{params.month ? ` · ${params.month}` : ""}{params.platform ? ` · ${PLATFORM_LONG_LABELS[params.platform as Platform] ?? params.platform}` : ""}</span>
-        <span className="text-muted-foreground text-xs">
-          <span className={tone}>{label}</span> · {job.requestedBy} · {ago(job.requestedAt, now)}
-          {result?.queued != null ? ` · поставлено на анализ ${number.format(result.queued)}` : ""}
-          {result?.status === "idle" ? " · созревших месяцев нет" : result?.status === "cold" ? ` · ${result.month} в архиве` : ""}
-          {job.error ? <span className="text-destructive"> · {job.error}</span> : null}
-        </span>
-      </li>;
-    })}</ul>
-  </Section>;
-}
-
 export function ServersTab({ overview, csrf, canEdit, now, status, error }: {
   overview: StorageOverview | null; csrf: string; canEdit: boolean; now: number; status?: string; error?: string;
 }) {
@@ -360,8 +281,6 @@ export function ServersTab({ overview, csrf, canEdit, now, status, error }: {
       <AnalysisPolicy overview={overview} csrf={csrf} canEdit={canEdit} now={now} />
     </div>
     <CollectionPolicy overview={overview} csrf={csrf} canEdit={canEdit} now={now} />
-    <ArchiveMonths overview={overview} servers={servers} csrf={csrf} canEdit={canEdit} now={now} />
     <Backups overview={overview} servers={servers} now={now} />
-    <Jobs overview={overview} now={now} />
   </>;
 }

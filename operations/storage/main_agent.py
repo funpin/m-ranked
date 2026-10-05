@@ -22,7 +22,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 from typing import Any
 import uuid
@@ -201,20 +200,6 @@ def apply_plan(connection: Any, node: str, root: Path, metrics: dict[str, Any]) 
     return result
 
 
-def start_jobs(connection: Any, start: Any = None) -> list[str]:
-    """Задания из панели запускают свои службы; службы сами берут очередь."""
-    start = start or (lambda unit: subprocess.run(["systemctl", "start", "--no-block", unit], check=False))
-    started = []
-    for kind, unit in (("archive_now", "m-ranked-target-cold-archive.service"),
-                       ("archive_analysis", "m-ranked-target-archive-analysis.service")):
-        row = connection.execute("SELECT 1 FROM ops_and_admin.admin_job WHERE kind = %(kind)s AND state = 'queued' LIMIT 1",
-                                 {"kind": kind}).fetchone()
-        if row is not None:
-            start(unit)
-            started.append(unit)
-    return started
-
-
 def main() -> int:
     import psycopg
     from psycopg.rows import dict_row
@@ -241,9 +226,8 @@ def main() -> int:
                 plan = apply_plan(connection, node, root, metrics)
             else:
                 plan = reconcile.Plan()
-        started = start_jobs(connection)
-    logger.info("main agent backups_added=%s lost=%s want=%s delete=%s retire=%s blocked=%s started=%s",
-                added, lost, len(plan.want), len(plan.delete), len(plan.retire), len(plan.blocked), started)
+    logger.info("main agent backups_added=%s lost=%s want=%s delete=%s retire=%s blocked=%s",
+                added, lost, len(plan.want), len(plan.delete), len(plan.retire), len(plan.blocked))
     return 0
 
 

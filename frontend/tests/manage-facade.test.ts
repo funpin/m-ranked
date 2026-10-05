@@ -210,7 +210,7 @@ test("malformed/oversized session, fetch failure and open redirects fail closed"
     assert.equal((await submitManage(request(undefined, `name=a&csrf_token=${csrf}`), server(() => Response.json({ location })).fetcher)).status, 502);
 });
 
-test("servers, policies and archive commands are ADMIN-only and forward their form fields", async () => {
+test("servers and policies commands are ADMIN-only and forward their form fields", async () => {
   const body = new URLSearchParams({ csrf_token: csrf, coldAfterDays: "45", backupCopies: "2", "backup_server-2": "on",
     "archive_server-1": "on", "archive_server-2": "on", "x-evil header": "1" }).toString();
   const editor = server(undefined, { canEdit: true, canDelete: false });
@@ -224,14 +224,14 @@ test("servers, policies and archive commands are ADMIN-only and forward their fo
   assert.equal(response.headers.get("location"), "/manage?tab=servers&storage_status=policy-storage");
   const forwarded = JSON.parse(String(admin.calls[1].init.body));
   assert.equal(forwarded.path, "/manage/policies/storage");
-  assert.deepEqual(forwarded.fields, { coldAfterDays: "45", backupCopies: "2", "backup_server-2": "on",
-    "archive_server-1": "on", "archive_server-2": "on" });
+  // Поля выведенного холодного архива (0063) больше не пересылаются.
+  assert.deepEqual(forwarded.fields, { coldAfterDays: "45", backupCopies: "2", "backup_server-2": "on" });
 
-  for (const path of ["/manage/servers", "/manage/servers/server-3", "/manage/archive/run", "/manage/archive/analysis"]) {
+  for (const path of ["/manage/servers", "/manage/servers/server-3"]) {
     const accepted = server();
     assert.equal((await submitManage(request(path, `csrf_token=${csrf}`), accepted.fetcher)).status, 303, path);
   }
-  for (const path of ["/manage/servers/Server_3", "/manage/policies/other", "/manage/archive/drop"]) {
+  for (const path of ["/manage/servers/Server_3", "/manage/policies/other", "/manage/archive/run", "/manage/archive/analysis"]) {
     assert.equal((await submitManage(request(path, `csrf_token=${csrf}`), server().fetcher)).status, 404, path);
   }
 });

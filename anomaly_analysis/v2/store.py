@@ -13,7 +13,6 @@ import json
 from typing import Any, Mapping, Sequence
 from uuid import UUID
 
-from . import archive_series
 from .detectors import SiblingActivity
 from .domain import Metric, PostSeries, PostVerdict
 from .levels import quality_payload, sign_payload
@@ -300,8 +299,6 @@ class PostgresAnomalyStore:
         # Дочитывается только хвост — догонка по десяткам тысяч постов иначе
         # перечитывала бы один и тот же журнал на каждой пачке.
         self._collected: dict[UUID, tuple[list[datetime], datetime]] = {}
-        # Месяцы в холодном архиве: ряд собирается из файлов просмотра (ADR-016).
-        self._archive = archive_series.ArchiveSeriesSource()
 
     def _connect(self):
         import psycopg
@@ -322,17 +319,6 @@ class PostgresAnomalyStore:
                 grouped: dict[UUID, list[Mapping[str, Any]]] = {}
                 for row in rows:
                     grouped.setdefault(row["id"], []).append(row)
-                cold = self._archive.cold_files(connection, months)
-                if cold:
-                    month_of = {item.publication_id: item.published_at.astimezone(timezone.utc).date().replace(day=1)
-                                for item in batch}
-                    archived, unreadable = self._archive.rows(
-                        connection, [item.publication_id for item in batch], cold, month_of)
-                    for publication_id, items in archived.items():
-                        grouped[publication_id] = archive_series.merge_rows(items, grouped.get(publication_id, ()))
-                    # Без архива ряда нет: пост получит series_unavailable и повтор.
-                    for publication_id in unreadable:
-                        grouped.pop(publication_id, None)
                 collected = self._read_collected(connection, {items[0]["primary_account_id"]
                                                               for items in grouped.values()})
                 result.update({key: series_from_rows(items, collected.get(items[0]["primary_account_id"], ()))

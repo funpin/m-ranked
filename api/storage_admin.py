@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 import json
 import re
 from typing import Any, Iterable, Mapping
@@ -24,7 +24,6 @@ from operations.storage.reconcile import validate_storage_policy
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
 NODE_ID = re.compile(r"^[a-z][a-z0-9-]{1,39}$")
-MONTH = re.compile(r"^(20[0-9]{2})-(0[1-9]|1[0-2])$")
 GIB = 1024 ** 3
 # Агент отчитывается раз в минуту; три пропуска подряд — сервер не на связи.
 ONLINE_SECONDS = 180
@@ -59,30 +58,6 @@ SELECT object.id::text, object.kind, object.name, object.size_bytes, object.crea
  ORDER BY object.created_at DESC
  LIMIT 400
 """
-GENERATIONS_SQL = """
-SELECT published_month, generation, state, row_count, publications, hot_bytes, error, started_at, finished_at,
-       full_object_id::text, browse_object_id::text
-  FROM ops_and_admin.cold_archive_generation
- ORDER BY published_month DESC, generation DESC
-"""
-HOT_MONTHS_SQL = """
-SELECT to_date(substring(child.relname from '(\\d{4}_\\d{2})$'), 'YYYY_MM') AS month,
-       pg_total_relation_size(child.oid)::bigint AS hot_bytes
-  FROM pg_inherits link
-  JOIN pg_class parent ON parent.oid = link.inhparent
-  JOIN pg_class child ON child.oid = link.inhrelid
-  JOIN pg_namespace namespace ON namespace.oid = parent.relnamespace
- WHERE namespace.nspname = 'ingest' AND parent.relname = 'publication_metric_snapshot'
-   AND child.relname ~ '_\\d{4}_\\d{2}$'
- ORDER BY 1 DESC
-"""
-FENCES_SQL = "SELECT published_month, state FROM ops_and_admin.publication_partition_fence"
-JOBS_SQL = """
-SELECT id::text, kind, params, state, requested_by, requested_at, started_at, finished_at, progress, result, error
-  FROM ops_and_admin.admin_job ORDER BY requested_at DESC LIMIT 20
-"""
-
-
 class StorageCommandError(ValueError):
     """Ошибка проверки формы; code уходит в адрес возврата."""
 
@@ -125,57 +100,11 @@ def server_view(row: Mapping[str, Any], totals: Iterable[Mapping[str, Any]], now
     }
 
 
-def _month_key(value: date) -> str:
-    return value.isoformat()[:7]
-
-
-def _month_end(value: date) -> date:
-    return (value.replace(day=28) + timedelta(days=4)).replace(day=1)
-
-
-def archive_months(hot: Iterable[Mapping[str, Any]], generations: Iterable[Mapping[str, Any]],
-                   fences: Mapping[date, str], objects: Mapping[str, Mapping[str, Any]],
-                   cold_after_days: int) -> list[dict[str, Any]]:
-    """Месяцы партиций и их поколения в архиве, от новых к старым."""
-    months: dict[date, dict[str, Any]] = {}
-    for row in hot:
-        months[row["month"]] = {"hotBytes": row["hot_bytes"], "generations": []}
-    for row in generations:
-        month = months.setdefault(row["published_month"], {"hotBytes": None, "generations": []})
-
-        def file(object_id: str | None) -> dict[str, Any] | None:
-            item = objects.get(object_id or "")
-            return None if item is None else {"name": item["name"], "sizeBytes": item["sizeBytes"],
-                                              "replicas": item["replicas"]}
-
-        month["generations"].append({
-            "generation": row["generation"], "state": row["state"], "rowCount": row["row_count"],
-            "publications": row["publications"], "hotBytes": row["hot_bytes"], "error": row["error"],
-            "startedAt": _iso(row["started_at"]), "finishedAt": _iso(row["finished_at"]),
-            "full": file(row["full_object_id"]), "browse": file(row["browse_object_id"]),
-        })
-    result = []
-    for month, item in sorted(months.items(), reverse=True):
-        result.append({
-            "month": _month_key(month), "hotBytes": item["hotBytes"], "fence": fences.get(month, "active"),
-            "coldFrom": (_month_end(month) + timedelta(days=cold_after_days)).isoformat(),
-            "generations": item["generations"],
-        })
-    return result
-
-
 def _object_view(row: Mapping[str, Any]) -> dict[str, Any]:
     replicas = row["replicas"] if isinstance(row["replicas"], list) else json.loads(row["replicas"] or "[]")
     return {"id": row["id"], "kind": row["kind"], "name": row["name"], "sizeBytes": row["size_bytes"],
             "createdAt": _iso(row["created_at"]), "retired": row["retired_at"] is not None,
             "replicas": replicas}
-
-
-def _job_view(row: Mapping[str, Any]) -> dict[str, Any]:
-    return {"id": row["id"], "kind": row["kind"], "params": row["params"] or {}, "state": row["state"],
-            "requestedBy": row["requested_by"], "requestedAt": _iso(row["requested_at"]),
-            "startedAt": _iso(row["started_at"]), "finishedAt": _iso(row["finished_at"]),
-            "progress": row["progress"] or {}, "result": row["result"], "error": row["error"]}
 
 
 async def overview(connection: Any, now: datetime) -> dict[str, Any]:
@@ -188,17 +117,12 @@ async def overview(connection: Any, now: datetime) -> dict[str, Any]:
     policy = {row["name"]: {"value": row["value"], "version": row["version"],
                             "updatedAt": _iso(row["updated_at"]), "updatedBy": row["updated_by"]}
               for row in policies}
-    cold_after = int((policy.get("storage", {}).get("value") or {}).get("coldAfterDays") or 30)
-    fences = {row["published_month"]: row["state"] for row in await rows(FENCES_SQL)}
     return {
         "servers": [server_view(row, totals, now) for row in servers],
         "policies": policy,
         "limits": {"collection": {key: list(value) for key, value in COLLECTION_LIMITS.items()},
                    "finalAnalysisDays": list(FINAL_ANALYSIS_LIMITS)},
         "backups": [item for item in objects if item["kind"] == "backup"][:30],
-        "archive": archive_months(await rows(HOT_MONTHS_SQL), await rows(GENERATIONS_SQL), fences, by_id,
-                                  cold_after),
-        "jobs": [_job_view(row) for row in await rows(JOBS_SQL)],
     }
 
 
@@ -255,50 +179,35 @@ def collection_policy(fields: Mapping[str, str]) -> dict[str, Any]:
         raise StorageCommandError("policy-collection") from error
 
 
-def storage_policy(fields: Mapping[str, str], node_ids: Iterable[str], current: Mapping[str, Any],
-                   final_analysis_days: int | None) -> dict[str, Any]:
+def storage_policy(fields: Mapping[str, str], node_ids: Iterable[str], current: Mapping[str, Any]) -> dict[str, Any]:
     nodes = list(node_ids)
+    # Холодный архив выведен (0063): его поля политики остаются прежними —
+    # схему читают агенты обоих серверов, — но из формы больше не меняются.
     value = {
-        "coldAfterDays": _whole(fields, "coldAfterDays", 30, 3650, "policy-cold-days"),
+        "coldAfterDays": int(current.get("coldAfterDays", 30)),
         "backupCopies": _whole(fields, "backupCopies", 1, 14, "policy-backup-copies"),
         "backupNodes": [node for node in nodes if _checked(fields, f"backup_{node}")],
-        "archiveNodes": [node for node in nodes if _checked(fields, f"archive_{node}")],
+        "archiveNodes": [node for node in current.get("archiveNodes", nodes) if node in nodes] or nodes,
         "browseCacheBytes": current.get("browseCacheBytes", 2 * GIB),
     }
-    if final_analysis_days is not None and value["coldAfterDays"] < final_analysis_days:
-        # Месяц уходит в архив только после финального анализа всех его постов.
-        raise StorageCommandError("policy-cold-before-analysis")
     if len(value["backupNodes"]) < 1:
         raise StorageCommandError("policy-backup-nodes")
-    if len(value["archiveNodes"]) < 2:
-        raise StorageCommandError("policy-archive-nodes")
     try:
         return validate_storage_policy(value, nodes)
     except ValueError as error:
         raise StorageCommandError("policy-storage") from error
 
 
-def analysis_policy(fields: Mapping[str, str], cold_after_days: int) -> dict[str, Any]:
-    days = _whole(fields, "finalAnalysisDays", *FINAL_ANALYSIS_LIMITS, "policy-analysis", optional=True)
-    if days is not None and days > cold_after_days:
-        raise StorageCommandError("policy-cold-before-analysis")
-    return {"finalAnalysisDays": days}
-
-
-def job_month(fields: Mapping[str, str], *, required: bool) -> str | None:
-    raw = fields.get("month", "").strip()
-    if not raw and not required:
-        return None
-    if not MONTH.fullmatch(raw):
-        raise StorageCommandError("archive-month")
-    return raw
+def analysis_policy(fields: Mapping[str, str]) -> dict[str, Any]:
+    return {"finalAnalysisDays": _whole(fields, "finalAnalysisDays", *FINAL_ANALYSIS_LIMITS, "policy-analysis",
+                                        optional=True)}
 
 
 # --- команды ----------------------------------------------------------------
 
 SERVER_PATH = re.compile(r"/manage/servers/([a-z][a-z0-9-]{1,39})")
 POLICY_PATH = re.compile(r"/manage/policies/(collection|storage|analysis)")
-STORAGE_PATHS = re.compile(r"/manage/(?:servers(?:/[^/]+)?|policies/[a-z]+|archive/(?:run|analysis))")
+STORAGE_PATHS = re.compile(r"/manage/(?:servers(?:/[^/]+)?|policies/[a-z]+)")
 
 
 def is_storage_path(path: str) -> bool:
@@ -375,44 +284,18 @@ async def _execute(connection: Any, path: str, fields: Mapping[str, str], actor:
     if match:
         name = match.group(1)
         storage = await _policy(connection, "storage")
-        analysis = await _policy(connection, "analysis")
         if name == "collection":
             await _policy(connection, "collection")
             value = collection_policy(fields)
         elif name == "storage":
             nodes = [row["id"] for row in await (await connection.execute(
                 "SELECT id FROM ops_and_admin.server_node ORDER BY id")).fetchall()]
-            value = storage_policy(fields, nodes, storage, analysis.get("finalAnalysisDays"))
-            # Порог функции удаления партиции живёт в retention_policy: обе
-            # меняются вместе, иначе архив и удаление разойдутся.
-            await connection.execute("""
-                UPDATE ops_and_admin.retention_policy SET hot_days = %(days)s, updated_at = transaction_timestamp()
-                 WHERE data_class = 'publication_metric_snapshot'""", {"days": value["coldAfterDays"]})
+            value = storage_policy(fields, nodes, storage)
         else:
-            value = analysis_policy(fields, int(storage.get("coldAfterDays") or 30))
+            value = analysis_policy(fields)
         await _save_policy(connection, name, value, actor)
         return _back(f"policy-{name}")
 
-    if path in {"/manage/archive/run", "/manage/archive/analysis"}:
-        kind = "archive_now" if path.endswith("/run") else "archive_analysis"
-        month = job_month(fields, required=kind == "archive_analysis")
-        params: dict[str, Any] = {"month": month} if month else {}
-        if kind == "archive_analysis":
-            platform = fields.get("platform", "")
-            if platform:
-                if platform not in PLATFORMS:
-                    raise StorageCommandError("archive-platform")
-                params["platform"] = platform
-        busy = await (await connection.execute("""
-            SELECT 1 FROM ops_and_admin.admin_job
-             WHERE kind = %(kind)s AND state IN ('queued', 'running') AND params = %(params)s::jsonb""",
-            {"kind": kind, "params": json.dumps(params)})).fetchone()
-        if busy is not None:
-            raise StorageCommandError("job-busy")
-        await connection.execute("""
-            INSERT INTO ops_and_admin.admin_job (kind, params, requested_by) VALUES (%(kind)s, %(params)s::jsonb, %(actor)s)""",
-            {"kind": kind, "params": json.dumps(params), "actor": actor})
-        return _back("job-queued")
     raise StorageCommandError("unknown")
 
 
