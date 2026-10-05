@@ -811,6 +811,7 @@ class PostgresCollectorRepository:
         deletion_probe_count = 0
         changed = False
         identity_receipt = None
+        batch, metric_evidence_ids = self._without_stale_discoveries(connection, batch, metric_evidence_ids)
         if metric_evidence_ids is None:
             metric_evidence_ids = self._batch_evidence_ids(batch)
         revision_id = self._begin_revision(connection, batch)
@@ -1302,6 +1303,36 @@ class PostgresCollectorRepository:
                 )
                 changed = True
         return changed
+
+    def _without_stale_discoveries(
+        self, connection: Any, batch: CanonicalAccountBatch, evidence_ids: Sequence[int] | None,
+    ) -> tuple[CanonicalAccountBatch, Sequence[int] | None]:
+        """Пост, который при первом обнаружении старше окна слежения, не берётся.
+
+        Его нельзя замерить с первых минут — в этом смысл наблюдения, — а лента
+        подбрасывает такие посты постоянно: закреплённые записи, старые посты
+        в выдаче. Известный базе пост остаётся: правило — только про первое
+        обнаружение.
+        """
+        if self.track_window is None:
+            return batch, evidence_ids
+        stale = {item.external_id for item in batch.publications
+                 if item.discovered_at - item.published_at > self.track_window}
+        if not stale:
+            return batch, evidence_ids
+        known = {str(_row_value(row, "external_id", 0)) for row in connection.execute(
+            """SELECT external_id FROM ingest.publication_identity
+                WHERE platform_account_id=%s AND external_id=ANY(%s::text[])""",
+            (batch.account.id, sorted(stale)),
+        ).fetchall()}
+        keep = [index for index, item in enumerate(batch.publications)
+                if item.external_id not in stale or item.external_id in known]
+        if len(keep) == len(batch.publications):
+            return batch, evidence_ids
+        return (
+            replace(batch, publications=tuple(batch.publications[index] for index in keep)),
+            None if evidence_ids is None else tuple(evidence_ids[index] for index in keep),
+        )
 
     def _persist_publications(
         self,
