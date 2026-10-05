@@ -167,7 +167,10 @@ SELECT s.published_month, s.id, s.publication_id, s.collection_run_id, s.observe
        s.interval_uncertain, s.synthetic, s.metric_semantics_version, s.capability_version,
        s.source_fingerprint, s.created_at, s.collected_at, s.ingested_xid, s.correction_sequence,
        s.supersedes_snapshot_id, s.correction_reason, s.views_quality, s.reactions_quality,
-       s.comments_quality, s.shares_quality, COALESCE(s.metric_evidence, evidence.payload) AS metric_evidence,
+       s.comments_quality, s.shares_quality,
+       -- Каноническая форма (как в архиве, 0058): разбивка, встроенная в
+       -- evidence сборщиком r4, — отдельно, evidence — без неё.
+       COALESCE(s.metric_evidence, evidence.payload) - 'reaction_breakdown' AS metric_evidence,
        s.semantic_fingerprint,
        NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
                     WHERE successor.published_month = s.published_month
@@ -176,7 +179,8 @@ SELECT s.published_month, s.id, s.publication_id, s.collection_run_id, s.observe
                       AND successor.correction_sequence > s.correction_sequence) AS visible,
        false AS packed,
        -- Разбивка без строк — пустой объект, как и прежде отдавала история.
-       COALESCE((SELECT jsonb_object_agg(r.reaction_key, r.reaction_count ORDER BY r.reaction_key)
+       COALESCE(COALESCE(s.metric_evidence, evidence.payload) -> 'reaction_breakdown',
+                (SELECT jsonb_object_agg(r.reaction_key, r.reaction_count ORDER BY r.reaction_key)
                    FROM ingest.reaction_breakdown r
                   WHERE r.snapshot_published_month = s.published_month AND r.snapshot_id = s.id),
                 '{}'::jsonb) AS reaction_breakdown
@@ -340,6 +344,23 @@ SELECT published_month, id, publication_id, collection_run_id, observed_at, age_
   FROM ingest.publication_metric_point
  WHERE visible;
 
+-- Каноническая запись архива (0058) — поверх точек: разбивка уже в
+-- канонической форме (встроенная r4 или из таблицы), evidence — без неё.
+CREATE OR REPLACE VIEW ops_and_admin.publication_archive_canonical AS
+SELECT p.published_month,
+       p.id,
+       p.observed_at,
+       ((to_jsonb(p) - ARRAY['visible', 'packed', 'reaction_breakdown', 'metric_evidence'])
+        || jsonb_build_object(
+           'metric_evidence', p.metric_evidence,
+           'primary_account_id', publication.primary_account_id,
+           'platform', account.platform,
+           'published_at', publication.published_at,
+           'reaction_breakdown', p.reaction_breakdown))::text AS canonical_record
+  FROM ingest.publication_metric_point p
+  JOIN ingest.publication publication ON publication.id = p.publication_id
+  JOIN catalog.platform_account account ON account.id = publication.primary_account_id;
+
 -- Упаковка. Сливает упакованное и горячие строки ниже границы, пересчитывает
 -- видимость, пишет строку и удаляет перенесённые строки. Бакет переносится,
 -- только когда все его версии ниже границы: иначе исправление на границе
@@ -380,12 +401,14 @@ BEGIN
         RETURN 0;
     END IF;
 
-    -- evidence из горячих строк — в словарь (запись в словарь неизменяемая).
+    -- evidence горячих строк в канонической форме (без встроенной разбивки) —
+    -- в словарь; запись словаря неизменяемая, повтор — та же запись.
     INSERT INTO ingest.metric_evidence_dictionary (payload, payload_sha256)
-    SELECT DISTINCT s.metric_evidence, sha256(convert_to(s.metric_evidence::text, 'UTF8'))
+    SELECT DISTINCT effective.payload, sha256(convert_to(effective.payload::text, 'UTF8'))
       FROM ingest.publication_metric_snapshot s
-     WHERE s.publication_id = p_publication_id AND s.id = ANY (moved)
-       AND s.metric_evidence IS NOT NULL AND s.metric_evidence_id IS NULL
+      LEFT JOIN ingest.metric_evidence_dictionary known ON known.id = s.metric_evidence_id
+     CROSS JOIN LATERAL (SELECT COALESCE(s.metric_evidence, known.payload) - 'reaction_breakdown' AS payload) effective
+     WHERE s.publication_id = p_publication_id AND s.id = ANY (moved) AND effective.payload IS NOT NULL
     ON CONFLICT (payload_sha256) DO NOTHING;
 
     WITH points AS (
@@ -424,17 +447,19 @@ BEGIN
                  | CASE WHEN s.synthetic THEN 1 << 16 ELSE 0 END,
                s.correction_sequence, s.supersedes_snapshot_id, s.correction_reason,
                s.metric_semantics_version, s.capability_version,
-               COALESCE(s.metric_evidence_id, interned.id),
-               (SELECT jsonb_object_agg(r.reaction_key, r.reaction_count ORDER BY r.reaction_key)
-                  FROM ingest.reaction_breakdown r
-                 WHERE r.snapshot_published_month = s.published_month AND r.snapshot_id = s.id),
+               interned.id,
+               COALESCE(raw.evidence -> 'reaction_breakdown',
+                        (SELECT jsonb_object_agg(r.reaction_key, r.reaction_count ORDER BY r.reaction_key)
+                           FROM ingest.reaction_breakdown r
+                          WHERE r.snapshot_published_month = s.published_month AND r.snapshot_id = s.id)),
                s.semantic_fingerprint,
                s.sampling_bucket
           FROM ingest.publication_metric_snapshot s
           JOIN ingest.collection_run run ON run.id = s.collection_run_id
+          LEFT JOIN ingest.metric_evidence_dictionary known ON known.id = s.metric_evidence_id
+         CROSS JOIN LATERAL (SELECT COALESCE(s.metric_evidence, known.payload) AS evidence) raw
           LEFT JOIN ingest.metric_evidence_dictionary interned
-                 ON s.metric_evidence IS NOT NULL AND s.metric_evidence_id IS NULL
-                AND interned.payload_sha256 = sha256(convert_to(s.metric_evidence::text, 'UTF8'))
+                 ON interned.payload_sha256 = sha256(convert_to((raw.evidence - 'reaction_breakdown')::text, 'UTF8'))
          WHERE s.publication_id = p_publication_id AND s.id = ANY (moved)
     ), ranked AS (
         SELECT points.*,
