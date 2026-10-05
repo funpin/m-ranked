@@ -158,3 +158,35 @@ def test_without_auto_remove_only_approved_names_go(monkeypatch, tmp_path):
         age(releases / name, hours)
     gc_host_storage.collect(apply=True)
     assert not (releases / "old-release").exists() and (releases / "other-old").is_dir()
+
+
+def test_collect_goes_on_past_a_release_it_cannot_remove(monkeypatch, tmp_path, capsys):
+    # 05.10 на Сервере 2: каталог frontend собран в Docker от uid 1001, и
+    # очистка падала на первом таком релизе, не дойдя до остальных.
+    releases, _ = configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("MRANKED_APPROVED_RELEASE_REMOVALS", "")
+    monkeypatch.setenv("MRANKED_RELEASE_AUTO_REMOVE", "1")
+    rollback, stuck, old = releases / "rollback-release", releases / "a-stuck", releases / "b-old"
+    for path, hours in ((rollback, 3), (stuck, 5), (old, 4)):
+        path.mkdir()
+        age(path, hours)
+    age(releases / "current-release", 2)
+    real_rmtree = gc_host_storage.shutil.rmtree
+
+    def rmtree(path, *args, **kwargs):
+        if Path(path) == stuck:
+            raise PermissionError(13, "Permission denied", str(stuck / "frontend"))
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(gc_host_storage.shutil, "rmtree", rmtree)
+
+    try:
+        gc_host_storage.collect(apply=True)
+    except SystemExit as error:
+        assert error.code == 1
+    else:
+        raise AssertionError("a release left behind must fail the run")
+
+    assert not old.exists() and stuck.is_dir()
+    out = capsys.readouterr().out
+    assert "failed release=a-stuck" in out and "removed release=b-old" in out

@@ -31,8 +31,10 @@ LockPersonality=true
 # Защита занятых релизов читает /proc/<pid>/cwd и exe процессов других
 # пользователей (API, web, анализ). Без этих двух прав root такие ссылки не
 # прочитает, и очистка честно отказывается работать каждую ночь — проверено
-# на Сервере 2 24.09. Удалению они не нужны: каталоги релизов принадлежат root.
-CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+# на Сервере 2 24.09. CAP_DAC_OVERRIDE нужен удалению: каталог frontend
+# собирается в Docker и принадлежит uid 1001, без него root не стирает в нём
+# файлы (PermissionError на Сервере 2 05.10).
+CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
 AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX
 SystemCallArchitectures=native
