@@ -116,28 +116,16 @@ SELECT period.period,
   LEFT JOIN LATERAL (
       SELECT snapshot.views_count, snapshot.reactions_count,
              snapshot.comments_count, snapshot.shares_count, snapshot.observed_at
-        FROM ingest.publication_metric_snapshot snapshot
-       WHERE snapshot.published_month = date_trunc('month', publication.published_at)::date
-         AND snapshot.publication_id = latest.publication_id
-         AND snapshot.observed_at <= params.as_of - period.duration
-         AND NOT snapshot.synthetic
-         AND snapshot.quality <> 'invalid'
-       ORDER BY snapshot.observed_at DESC, snapshot.id DESC
-       LIMIT 1
+        -- Горячие и упакованные точки (0059), все версии, как по сырой таблице.
+        FROM ingest.publication_last_valid_at(ARRAY[latest.publication_id], params.as_of - period.duration) snapshot
   ) opening ON true
   -- Дальняя граница прошлого окна. Поиск тот же и по тому же индексу, только
   -- отступ вдвое больше.
   LEFT JOIN LATERAL (
       SELECT snapshot.views_count, snapshot.reactions_count,
              snapshot.comments_count, snapshot.shares_count
-        FROM ingest.publication_metric_snapshot snapshot
-       WHERE snapshot.published_month = date_trunc('month', publication.published_at)::date
-         AND snapshot.publication_id = latest.publication_id
-         AND snapshot.observed_at <= params.as_of - period.duration - period.duration
-         AND NOT snapshot.synthetic
-         AND snapshot.quality <> 'invalid'
-       ORDER BY snapshot.observed_at DESC, snapshot.id DESC
-       LIMIT 1
+        -- Горячие и упакованные точки (0059), все версии, как по сырой таблице.
+        FROM ingest.publication_last_valid_at(ARRAY[latest.publication_id], params.as_of - period.duration - period.duration) snapshot
   ) earlier ON true
  WHERE latest.observed_at > params.as_of - period.duration
    AND latest.observed_at <= params.as_of

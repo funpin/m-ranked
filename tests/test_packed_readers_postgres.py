@@ -86,6 +86,26 @@ INSERT INTO ingest.reaction_breakdown(snapshot_published_month, snapshot_id, rea
 SELECT s.published_month, s.id, key, s.reactions_count / k
   FROM ingest.publication_metric_snapshot s CROSS JOIN (VALUES ('👍', 1), ('❤️', 2), ('🔥', 3)) AS r(key, k)
  WHERE s.publication_id = ANY (%(posts)s::uuid[]) AND s.id %% 3 = 0 AND s.reactions_count IS NOT NULL;
+-- Последний замер поста, как его ведёт триггер publication_latest_track.
+INSERT INTO analytics.publication_latest(publication_id, institution_id, platform_account_id, platform, observed_at,
+  views_count, views_observed_at, views_quality, reactions_count, reactions_observed_at, reactions_quality,
+  comments_count, comments_observed_at, comments_quality, shares_count, shares_observed_at, shares_quality,
+  quality, interval_uncertain, synthetic, history_completeness, source_snapshot_refs, dataset_revision_id)
+SELECT DISTINCT ON (s.publication_id) s.publication_id, %(institution)s, p.primary_account_id, 'telegram', s.observed_at,
+       s.views_count, CASE WHEN s.views_count IS NOT NULL THEN s.observed_at END,
+       CASE WHEN s.views_count IS NOT NULL THEN s.views_quality END,
+       s.reactions_count, CASE WHEN s.reactions_count IS NOT NULL THEN s.observed_at END,
+       CASE WHEN s.reactions_count IS NOT NULL THEN s.reactions_quality END,
+       s.comments_count, CASE WHEN s.comments_count IS NOT NULL THEN s.observed_at END,
+       CASE WHEN s.comments_count IS NOT NULL THEN s.comments_quality END,
+       s.shares_count, CASE WHEN s.shares_count IS NOT NULL THEN s.observed_at END,
+       CASE WHEN s.shares_count IS NOT NULL THEN s.shares_quality END,
+       s.quality, s.interval_uncertain, s.synthetic, 'complete',
+       jsonb_build_object('views', s.id, 'reactions', s.id, 'latest', s.id),
+       (SELECT max(id) FROM analytics.dataset_revision)
+  FROM ingest.publication_metric_snapshot s JOIN ingest.publication p ON p.id = s.publication_id
+ WHERE s.publication_id = ANY (%(posts)s::uuid[])
+ ORDER BY s.publication_id, s.observed_at DESC, s.id DESC;
 SET session_replication_role = origin;
 """
 
@@ -96,7 +116,7 @@ def connect():
     return psycopg.connect(ADMIN, autocommit=True, row_factory=dict_row)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def fixture():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     ids = {"institution": uuid4(), "accounts": [uuid4() for _ in range(ACCOUNTS)],
@@ -173,7 +193,7 @@ def answers(connection, ids) -> dict[str, list]:
     return result
 
 
-HOT_ONLY = ("source_fingerprint", "semantic_fingerprint", "ingested_xid", "packed")
+HOT_ONLY = ("source_fingerprint", "semantic_fingerprint", "ingested_xid", "packed", "computed_as_of", "refreshed_at", "computed_at")
 
 
 def normalized(rows: list) -> list:
@@ -258,3 +278,33 @@ def test_latest_point_keeps_its_semantic_fingerprint_after_packing(fixture):
                 for row in rows], key
     for post in posts:
         assert [row["id"] for row in view[post["id"]]] == [row["id"] for row in before[(post["id"], False)]]
+
+
+TOOLS = __import__("pathlib").Path(__file__).resolve().parents[1] / "db" / "tools"
+
+
+def tool_rows(connection, ids) -> dict[str, list]:
+    connection.execute("DELETE FROM analytics.publication_checkpoint WHERE publication_id = ANY (%s)", (ids["posts"],))
+    connection.execute((TOOLS / "refresh-publication-checkpoints.sql").read_text())
+    connection.execute((TOOLS / "refresh-overview-card-metrics.sql").read_text())
+    return {
+        "checkpoints": connection.execute(
+            "SELECT * FROM analytics.publication_checkpoint WHERE publication_id = ANY (%s) "
+            "ORDER BY publication_id, hour_offset", (ids["posts"],)).fetchall(),
+        "overview": connection.execute(
+            # Время расчёта у двух прогонов разное, сравниваются значения.
+            "SELECT * FROM analytics.overview_card_metrics WHERE entity_id = %s ORDER BY 1, 2, 3",
+            (ids["institution"],)).fetchall(),
+    }
+
+
+def test_batch_tools_write_the_same_rows_before_and_after_packing(fixture):
+    with connect() as connection:
+        before = tool_rows(connection, fixture)
+        for post in fixture["posts"]:
+            connection.execute("SELECT ingest.compact_publication_history(%s, %s)",
+                               (post, fixture["now"] - timedelta(hours=2)))
+        after = tool_rows(connection, fixture)
+    assert before["checkpoints"] and before["overview"]
+    for name in before:
+        assert normalized(after[name]) == normalized(before[name]), name

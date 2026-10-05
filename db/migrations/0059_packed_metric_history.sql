@@ -255,6 +255,33 @@ SELECT * FROM (SELECT * FROM hot UNION ALL SELECT * FROM packed) candidate
  ORDER BY candidate.observed_at DESC, candidate.id DESC LIMIT 1
 $$;
 
+-- Последний валидный несинтетический замер каждого поста не позже at — по
+-- всем версиям, без отбора видимых: так прежде читали сырую таблицу сводки
+-- «Обзора». Упакованный — по битам в массиве кодов, декодируется один.
+CREATE OR REPLACE FUNCTION ingest.publication_last_valid_at(p_ids uuid[], p_at timestamptz)
+RETURNS SETOF ingest.publication_metric_point
+LANGUAGE sql STABLE PARALLEL SAFE
+AS $$
+SELECT DISTINCT ON (candidate.publication_id) candidate.*
+  FROM (
+    SELECT hot.* FROM unnest(p_ids) AS ids(publication_id)
+     CROSS JOIN LATERAL (
+        SELECT p.* FROM ingest.publication_metric_point p
+         WHERE NOT p.packed AND p.publication_id = ids.publication_id AND p.observed_at <= p_at
+           AND NOT p.synthetic AND p.quality <> 'invalid'
+         ORDER BY p.observed_at DESC, p.id DESC LIMIT 1) hot
+    UNION ALL
+    SELECT packed.*
+      FROM ingest.publication_metric_history h
+     CROSS JOIN LATERAL (SELECT max(u.o)::integer AS i
+                           FROM unnest(h.observed_at, h.codes) WITH ORDINALITY AS u(t, c, o)
+                          WHERE u.t <= p_at AND (u.c >> 16) & 1 = 0 AND u.c & 7 <> 6) pick
+     CROSS JOIN LATERAL ingest.unpack_history(h, pick.i, pick.i) packed
+     WHERE h.publication_id = ANY (p_ids) AND h.first_observed_at <= p_at AND pick.i IS NOT NULL
+  ) candidate
+ ORDER BY candidate.publication_id, candidate.observed_at DESC, candidate.id DESC
+$$;
+
 -- Последняя видимая точка каждого поста не позже момента at (значение «на
 -- момент» для сводок). Горячая часть — по индексу (publication_id,
 -- observed_at), упакованная — отрезок до at с конца.
@@ -613,7 +640,8 @@ GRANT EXECUTE ON FUNCTION ingest.unpack_history(ingest.publication_metric_histor
     ingest.publication_points_between(uuid[], timestamptz, timestamptz),
     ingest.publication_point_at(uuid[], timestamptz),
     ingest.publication_point_by_id(uuid, date, bigint),
-    ingest.publication_latest_point(uuid, date, boolean)
+    ingest.publication_latest_point(uuid, date, boolean),
+    ingest.publication_last_valid_at(uuid[], timestamptz)
     TO maintenance, api_read, analytics_worker, collector_ingest;
 GRANT SELECT ON ingest.collection_run TO api_read, analytics_worker;
 
