@@ -80,6 +80,19 @@ async def _release_payloads(
         if released:
             logger.info("inbox payloads released count=%s", released)
 
+        # Квитанции старше окна — со свёрткой счётчиков (0060).
+        try:
+            pruned = await asyncio.to_thread(
+                adapter.prune_receipts,
+                before=datetime.now(timezone.utc) - timedelta(days=settings.receipt_retention_days),
+                limit=settings.receipt_prune_limit,
+            )
+        except Exception as error:  # noqa: BLE001 — уборка не роняет приём
+            logger.warning("inbox receipt prune failed class=%s", type(error).__name__)
+            pruned = 0
+        if pruned:
+            logger.info("inbox receipts pruned count=%s", pruned)
+
         # Файловый склад сырых доказательств своей уборки не имел: функция
         # удаления написана, но её никто не вызывал, и каталог рос до трёхсот
         # тысяч файлов. Убираем объекты с истёкшим сроком и сирот, у которых
