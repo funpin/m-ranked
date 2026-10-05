@@ -49,7 +49,8 @@ def assert_same(actual, expected, keys):
 
 def unused_month(connection) -> date:
     used = {row["month"] for row in connection.execute(
-        "SELECT DISTINCT date_trunc('month', published_at AT TIME ZONE 'UTC')::date AS month FROM ingest.publication")}
+        "SELECT DISTINCT date_trunc('month', published_at AT TIME ZONE 'UTC')::date AS month FROM ingest.publication "
+        "UNION SELECT published_month FROM ops_and_admin.cold_archive_generation")}
     return next(candidate for candidate in (date(year, number, 1) for year in (2025, 2024, 2023)
                                             for number in range(12, 0, -1)) if candidate not in used)
 
