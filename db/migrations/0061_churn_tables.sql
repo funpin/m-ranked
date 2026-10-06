@@ -13,12 +13,19 @@
 -- Индексы с постоянной сменой ключей перестраивает еженедельная служба
 -- m-ranked-target-reindex (REINDEX CONCURRENTLY, без долгих блокировок).
 --
+-- Индекс удаляется без транзакции и CONCURRENTLY: обычный DROP INDEX ждёт
+-- исключительную блокировку таблицы, а чтения API держат её по 10+ секунд —
+-- 06.10 на проде он восемь раз подряд упёрся в lock_timeout, и всё это время
+-- за ним стоял приём замеров. Параметры таблиц меняются под SHARE UPDATE
+-- EXCLUSIVE и чтению с записью не мешают. Ожидание CONCURRENTLY тоже никого
+-- не держит, поэтому без lock_timeout: иначе оно срывалось бы на долгом чтении.
+--
 -- Откат: CREATE INDEX CONCURRENTLY publication_latest_institution_platform_idx
 -- (0010) и ALTER TABLE … RESET (fillfactor, autovacuum_*).
+DROP INDEX CONCURRENTLY IF EXISTS analytics.publication_latest_institution_platform_idx;
+
 BEGIN;
 SET LOCAL lock_timeout = '5s';
-
-DROP INDEX IF EXISTS analytics.publication_latest_institution_platform_idx;
 
 ALTER TABLE analytics.publication_latest
     SET (fillfactor = 80, autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.05);
