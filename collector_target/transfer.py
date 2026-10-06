@@ -767,6 +767,20 @@ class PostgresDataAdapter:
             ).fetchone()
         return int(_row(row, "count", 0))
 
+    def prune_receipts(self, *, before: datetime, limit: int = 5000) -> int:
+        """Удалить применённые квитанции старше окна, свернув их счётчики.
+
+        Подтверждённый конверт Сервер 1 больше не шлёт и через сутки удаляет
+        из своей очереди; квитанция нужна, только пока может прийти повтор.
+        Карантинные и неприменённые остаются (миграция 0060).
+        """
+        with self.repository._connection() as connection, connection.transaction():
+            row = connection.execute(
+                "SELECT ops_and_admin.prune_transfer_inbox(%s,%s) AS removed",
+                (utc(before, "inbox.receipts.before"), limit),
+            ).fetchone()
+        return int(_row(row, "removed", 0))
+
 
 class PostgresTransferProducer:
     """Oldest-first sender; an ACK is persisted before its watermark advances."""
@@ -934,20 +948,6 @@ class PostgresTransferProducer:
             "quarantines_total": _row(inbox, "quarantines", 3),
             "unaccounted_records": _row(inbox, "unaccounted", 4),
         })
-
-    def prune_receipts(self, *, before: datetime, limit: int = 5000) -> int:
-        """Удалить применённые квитанции старше окна, свернув их счётчики.
-
-        Подтверждённый конверт Сервер 1 больше не шлёт и через сутки удаляет
-        из своей очереди; квитанция нужна, только пока может прийти повтор.
-        Карантинные и неприменённые остаются (миграция 0060).
-        """
-        with self.repository._connection() as connection, connection.transaction():
-            row = connection.execute(
-                "SELECT ops_and_admin.prune_transfer_inbox(%s,%s) AS removed",
-                (utc(before, "inbox.receipts.before"), limit),
-            ).fetchone()
-        return int(_row(row, "removed", 0))
 
     def purge_acknowledged(self, *, before: datetime, limit: int = 1000) -> int:
         with self.repository._connection() as connection, connection.transaction():
