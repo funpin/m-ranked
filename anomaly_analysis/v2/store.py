@@ -21,8 +21,12 @@ from .tail_ledger import VERSION as TAIL_LEDGER_VERSION
 
 # Серия читается пачкой: 50 постов одним запросом (план, раздел 11).
 SERIES_BATCH = 50
-CONNECTION_OPTIONS = ("-c timezone=UTC -c statement_timeout=20000 -c lock_timeout=5000"
-                      " -c idle_in_transaction_session_timeout=30000")
+# Таймаут запроса — минута: почасовая активность аккаунтов пачки (ACTIVITY,
+# ~4 тысячи постов за 31 день, окно 72 часа) и до упаковки шла 12–16 с при
+# прежних 20 с, а 06.10 под нагрузкой догоняющего приёма перестала в них
+# укладываться — воркер вставал целиком.
+CONNECTION_OPTIONS = ("-c timezone=UTC -c statement_timeout=60000 -c lock_timeout=5000"
+                      " -c idle_in_transaction_session_timeout=60000")
 
 # Значение с такой отметкой качества — не замер счётчика, а сбой: в ряд оно
 # идёт как «не получено», а не как точка.
@@ -45,17 +49,53 @@ SELECT DISTINCT ON (target.id, snapshot.observed_at)
        snapshot.comments_count, snapshot.comments_quality::text AS comments_quality,
        snapshot.shares_count, snapshot.shares_quality::text AS shares_quality,
        CASE WHEN target.platform = 'telegram' AND snapshot.reactions_quality IN ('rounded', 'unknown')
-            THEN snapshot.reaction_breakdown
+            THEN coalesce(snapshot.reaction_breakdown,
+                          coalesce(snapshot.metric_evidence,
+                                   (SELECT evidence.payload FROM ingest.metric_evidence_dictionary evidence
+                                     WHERE evidence.id = snapshot.metric_evidence_id)) -> 'reaction_breakdown',
+                          CASE WHEN NOT snapshot.packed THEN
+                              (SELECT jsonb_object_agg(reaction.reaction_key, reaction.reaction_count
+                                                       ORDER BY reaction.reaction_key)
+                                 FROM ingest.reaction_breakdown reaction
+                                WHERE reaction.snapshot_published_month = snapshot.published_month
+                                  AND reaction.snapshot_id = snapshot.id) END,
+                          '{}'::jsonb)
        END AS reaction_breakdown
   FROM target
-  -- Горячие и упакованные точки пачки одним вызовом (0059).
-  JOIN ingest.publication_points_between(%(ids)s::uuid[], '-infinity', 'infinity') snapshot
+  -- Горячие строки — прямо из таблицы, видимость — проверкой преемника по
+  -- индексу на строку: через представление точек по массиву постов
+  -- планировщик сводил её к хеш-антисоединению со всей таблицей (06.10 —
+  -- минута и предел временных файлов на 50 постах). Упакованные — одним
+  -- вызовом (0059), горячая ветка функции отсекается условием packed.
+  JOIN (
+    SELECT s.publication_id, s.published_month, s.id, false AS packed, s.observed_at, s.interval_uncertain,
+           s.views_count, s.views_quality, s.reactions_count, s.reactions_quality, s.comments_count,
+           s.comments_quality, s.shares_count, s.shares_quality, s.correction_sequence,
+           -- Evidence читается (TOAST) только там, где нужна разбивка, — в CASE выше.
+           s.metric_evidence, s.metric_evidence_id, NULL::jsonb AS reaction_breakdown
+      FROM ingest.publication_metric_snapshot s
+     WHERE s.publication_id = ANY(%(ids)s::uuid[]) AND s.published_month = ANY(%(months)s::date[])
+       AND NOT s.synthetic
+       -- Месяцы преемника — тоже константой: иначе каждая проверка в оценке
+       -- планировщика идёт по всем партициям, и он выбирает хеш со всей таблицей.
+       AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
+                        WHERE successor.published_month = ANY(%(months)s::date[])
+                          AND successor.published_month = s.published_month
+                          AND successor.publication_id = s.publication_id
+                          AND successor.sampling_bucket = s.sampling_bucket
+                          AND successor.correction_sequence > s.correction_sequence)
+    UNION ALL
+    SELECT p.publication_id, p.published_month, p.id, true, p.observed_at, p.interval_uncertain,
+           p.views_count, p.views_quality, p.reactions_count, p.reactions_quality, p.comments_count,
+           p.comments_quality, p.shares_count, p.shares_quality, p.correction_sequence,
+           NULL::jsonb, NULL::bigint, p.reaction_breakdown
+      FROM ingest.publication_points_between(%(ids)s::uuid[], '-infinity', 'infinity') p
+     WHERE p.packed AND p.visible AND NOT p.synthetic
+  ) snapshot
     ON snapshot.publication_id = target.id
    AND snapshot.published_month = target.published_month
  -- Месяцы известны заранее: предикат-константа отсекает партиции при планировании.
  WHERE snapshot.published_month = ANY(%(months)s::date[])
-   AND snapshot.visible
-   AND NOT snapshot.synthetic
  ORDER BY target.id, snapshot.observed_at, snapshot.correction_sequence DESC
 """
 
@@ -110,14 +150,23 @@ class SeriesTarget:
     published_at: datetime
 
 
+# Посты аккаунтов окна — отдельным запросом: массив их номеров уходит в
+# оконные функции параметром. Переданный подзапросом (ARRAY(SELECT …)), он
+# не даёт функциям встроиться, и они считали полные строки всех точек —
+# с evidence и разбивкой — ради двух счётчиков (06.10 — таймаут воркера).
+ACTIVITY_POSTS = """
+SELECT publication.id
+  FROM ingest.visible_publication publication
+ WHERE publication.primary_account_id = ANY(%(accounts)s::uuid[])
+   AND publication.published_at >= %(published_since)s
+   AND publication.deleted_at IS NULL
+"""
 ACTIVITY = """
 WITH posts AS (
     SELECT publication.id, publication.primary_account_id, publication.published_at,
            date_trunc('month', publication.published_at AT TIME ZONE 'UTC')::date AS published_month
       FROM ingest.visible_publication publication
-     WHERE publication.primary_account_id = ANY(%(accounts)s::uuid[])
-       AND publication.published_at >= %(published_since)s
-       AND publication.deleted_at IS NULL
+     WHERE publication.id = ANY(%(ids)s::uuid[])
 ), observed AS (
     SELECT posts.primary_account_id, posts.id AS publication_id, posts.published_at,
            floor(extract(epoch FROM snapshot.observed_at) / 3600)::bigint AS hour,
@@ -126,7 +175,7 @@ WITH posts AS (
            CASE WHEN snapshot.views_quality = 'exact' AND NOT snapshot.interval_uncertain
                 THEN snapshot.views_count END AS views_count
       FROM posts
-      JOIN ingest.publication_points_between(ARRAY(SELECT id FROM posts), %(since)s, %(until)s) snapshot
+      JOIN ingest.publication_points_between(%(ids)s::uuid[], %(since)s, %(until)s) snapshot
         ON snapshot.publication_id = posts.id AND snapshot.published_month = posts.published_month
      WHERE snapshot.published_month = ANY(%(months)s::date[])
        AND snapshot.visible
@@ -146,7 +195,7 @@ WITH posts AS (
                       THEN snapshot.reactions_count END AS reactions_count,
                  CASE WHEN snapshot.views_quality = 'exact' AND NOT snapshot.interval_uncertain
                       THEN snapshot.views_count END AS views_count
-            FROM ingest.publication_point_at(ARRAY(SELECT id FROM posts),
+            FROM ingest.publication_point_at(%(ids)s::uuid[],
                                              %(since)s::timestamptz - interval '1 microsecond') snapshot
            WHERE NOT snapshot.synthetic
       ) before ON before.publication_id = posts.id AND before.published_month = posts.published_month
@@ -577,8 +626,10 @@ class PostgresAnomalyStore:
         last = int(until.timestamp() // 3600) + 1
         months = _months(published_since, until)
         with self._factory() as connection:
+            ids = [row["id"] for row in connection.execute(ACTIVITY_POSTS, {
+                "accounts": list(accounts), "published_since": published_since}).fetchall()]
             rows = connection.execute(ACTIVITY, {
-                "accounts": list(accounts), "published_since": published_since, "months": months,
+                "ids": ids, "months": months,
                 # Час до окна нужен, чтобы посчитать прирост первого часа.
                 "since": datetime.fromtimestamp((first - 1) * 3600, tz=timezone.utc), "until": until,
             }).fetchall()
