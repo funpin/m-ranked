@@ -78,7 +78,9 @@ def restore_month(connection: Any, root: Path, month: date) -> MonthResult:
     files = connection.execute(COLD_FILES, (month,)).fetchall()
     for item in files:
         path = store.object_path(root, "archive_full", item["name"])
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        # Потоком: августовский файл — 830 МБ, а памяти на сервере 4 ГБ.
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
         if digest != item["sha256"]:
             raise RestoreMismatch(f"{path.name}: SHA-256 differs from the storage record")
         result.files += 1
