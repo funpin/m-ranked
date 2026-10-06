@@ -10,11 +10,18 @@
 -- каскада — удаляются явно. Если у этих постов окажутся замеры, скрипт
 -- останавливается: замеры молча не удаляются.
 --
+-- Журнал проверок доступности — только для добавления (триггер
+-- availability_event_immutable). Его строки этих постов удаляет владелец
+-- таблицы: триггер выключается и включается в той же транзакции, запись в
+-- журнал на эти секунды ждёт блокировки. 06.10 на проде таких строк было
+-- 14 450, и без этого каскад останавливал чистку.
+--
 --   docker exec -i mranked-target-postgres-1 psql -U postgres -d mranked -v ON_ERROR_STOP=1 \
 --     < operations/sql/purge-publications-before-2026-07.sql
 BEGIN;
 SET LOCAL lock_timeout = '10s';
 SET LOCAL statement_timeout = '15min';
+SET LOCAL ROLE migration_owner;
 
 CREATE TEMP TABLE doomed ON COMMIT DROP AS
 SELECT id FROM ingest.publication WHERE published_at < DATE '2026-07-01';
@@ -44,6 +51,9 @@ BEGIN
         EXECUTE format('DELETE FROM %s WHERE %I IN (SELECT id FROM doomed)', ref.relation, ref.column_name);
     END LOOP;
 END $$;
+ALTER TABLE ingest.publication_availability_event DISABLE TRIGGER availability_event_immutable;
+DELETE FROM ingest.publication_availability_event WHERE publication_id IN (SELECT id FROM doomed);
+ALTER TABLE ingest.publication_availability_event ENABLE TRIGGER availability_event_immutable;
 -- Короткие адреса постов (/platform-posts/N) ведут на удалённое.
 DELETE FROM catalog.legacy_entity_alias WHERE target_uuid IN (SELECT id FROM doomed);
 DELETE FROM ingest.publication WHERE id IN (SELECT id FROM doomed);
