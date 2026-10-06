@@ -142,6 +142,51 @@ class PostgresCollectorRepository:
             "ingest.collector_publication_working_set" if compact_working_set
             else "ingest.publication_metric_snapshot_active"
         )
+        # Последний замер публикации. В полной базе история частично упакована
+        # (0059). Горячая точка — прямым запросом к таблице снимков внутри
+        # общего запроса: вызов функции на каждый пост пакета (свой план,
+        # инициализация всех партиций) стоил 2 мс на пост против 0,2 — 06.10
+        # приём на нём отстал на 20 минут. Функция декодирует упакованную
+        # точку только у поста, где горячих строк этого класса нет или есть
+        # поздние (тогда упакованная может быть новее горячей).
+        self._latest_publication_point = (
+            "(SELECT * FROM ingest.collector_publication_working_set snapshot"
+            " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter}"
+            " ORDER BY snapshot.observed_at DESC, snapshot.id DESC LIMIT 1)"
+            if compact_working_set else
+            "(SELECT candidate.observed_at, candidate.sampling_bucket, candidate.semantic_fingerprint FROM ("
+            "(SELECT snapshot.observed_at, snapshot.sampling_bucket, snapshot.semantic_fingerprint, snapshot.id"
+            " FROM ingest.publication_metric_snapshot snapshot"
+            " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter}"
+            " AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor"
+            " WHERE successor.published_month=snapshot.published_month"
+            " AND successor.publication_id=snapshot.publication_id"
+            " AND successor.sampling_bucket=snapshot.sampling_bucket"
+            " AND successor.correction_sequence>snapshot.correction_sequence)"
+            " ORDER BY snapshot.observed_at DESC, snapshot.id DESC LIMIT 1)"
+            " UNION ALL"
+            # Обычный случай: последняя видимая точка класса — по битам кодов,
+            # декодируется одна, без вызова функции на пост.
+            " SELECT packed.observed_at, packed.sampling_bucket, packed.semantic_fingerprint, packed.id"
+            " FROM ingest.publication_metric_history history"
+            " CROSS JOIN LATERAL (SELECT max(u.o)::integer AS i FROM unnest(history.codes) WITH ORDINALITY AS u(c, o)"
+            " WHERE (u.c >> 17) & 1 = 1 AND ({synthetic}::boolean IS NULL"
+            " OR ((u.c >> 16) & 1 = 1) = {synthetic}::boolean)) found"
+            " CROSS JOIN LATERAL ingest.unpack_history(history, found.i, found.i) packed"
+            " WHERE history.publication_id={publication} AND history.published_month={month}"
+            " AND found.i IS NOT NULL AND NOT history.late_rows"
+            " AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot snapshot"
+            " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter})"
+            " UNION ALL"
+            # Поздние строки в упакованных бакетах: видимость сверяет функция.
+            " SELECT packed.observed_at, packed.sampling_bucket, packed.semantic_fingerprint, packed.id"
+            " FROM ingest.publication_metric_history history"
+            " CROSS JOIN LATERAL ingest.publication_latest_point(history.publication_id, history.published_month,"
+            " {synthetic}) packed"
+            " WHERE history.publication_id={publication} AND history.published_month={month}"
+            " AND history.late_rows"
+            ") candidate ORDER BY candidate.observed_at DESC, candidate.id DESC LIMIT 1)"
+        )
         self._account_snapshot_read = (
             "ingest.collector_account_working_set" if compact_working_set
             else "ingest.account_metric_snapshot_active"
@@ -535,6 +580,12 @@ class PostgresCollectorRepository:
             ).fetchone()
         return row is not None
 
+    def _latest_point_sql(self, publication: str, month: str, synthetic: str = "NULL") -> str:
+        """Подзапрос последнего видимого замера публикации (класса synthetic)."""
+        synthetic_filter = "" if synthetic == "NULL" else f" AND snapshot.synthetic={synthetic}"
+        return self._latest_publication_point.format(
+            publication=publication, month=month, synthetic=synthetic, synthetic_filter=synthetic_filter)
+
     def metric_ever_positive(
         self,
         account: AccountRef,
@@ -699,13 +750,8 @@ class PostgresCollectorRepository:
                      -- строку выдачи.
                      LEFT JOIN LATERAL (
                          SELECT snapshot.observed_at, snapshot.sampling_bucket
-                           FROM {self._publication_snapshot_read} AS snapshot
-                          WHERE snapshot.publication_id=publication.id
-                            AND snapshot.published_month
-                                =date_trunc('month', publication.published_at)::date
-                            AND (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
-                          ORDER BY snapshot.observed_at DESC, snapshot.id DESC
-                          LIMIT 1
+                           FROM {self._latest_point_sql("publication.id", "date_trunc('month', publication.published_at)::date")} AS snapshot
+                          WHERE (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
                      ) AS latest ON true
                     WHERE publication.primary_account_id=%s
                       AND publication.deleted_at IS NULL
@@ -800,6 +846,7 @@ class PostgresCollectorRepository:
         deletion_probe_count = 0
         changed = False
         identity_receipt = None
+        batch, metric_evidence_ids = self._without_stale_discoveries(connection, batch, metric_evidence_ids)
         if metric_evidence_ids is None:
             metric_evidence_ids = self._batch_evidence_ids(batch)
         revision_id = self._begin_revision(connection, batch)
@@ -1292,6 +1339,36 @@ class PostgresCollectorRepository:
                 changed = True
         return changed
 
+    def _without_stale_discoveries(
+        self, connection: Any, batch: CanonicalAccountBatch, evidence_ids: Sequence[int] | None,
+    ) -> tuple[CanonicalAccountBatch, Sequence[int] | None]:
+        """Пост, который при первом обнаружении старше окна слежения, не берётся.
+
+        Его нельзя замерить с первых минут — в этом смысл наблюдения, — а лента
+        подбрасывает такие посты постоянно: закреплённые записи, старые посты
+        в выдаче. Известный базе пост остаётся: правило — только про первое
+        обнаружение.
+        """
+        if self.track_window is None:
+            return batch, evidence_ids
+        stale = {item.external_id for item in batch.publications
+                 if item.discovered_at - item.published_at > self.track_window}
+        if not stale:
+            return batch, evidence_ids
+        known = {str(_row_value(row, "external_id", 0)) for row in connection.execute(
+            """SELECT external_id FROM ingest.publication_identity
+                WHERE platform_account_id=%s AND external_id=ANY(%s::text[])""",
+            (batch.account.id, sorted(stale)),
+        ).fetchall()}
+        keep = [index for index, item in enumerate(batch.publications)
+                if item.external_id not in stale or item.external_id in known]
+        if len(keep) == len(batch.publications):
+            return batch, evidence_ids
+        return (
+            replace(batch, publications=tuple(batch.publications[index] for index in keep)),
+            None if evidence_ids is None else tuple(evidence_ids[index] for index in keep),
+        )
+
     def _persist_publications(
         self,
         connection: Any,
@@ -1590,13 +1667,8 @@ class PostgresCollectorRepository:
                  FROM input
                  LEFT JOIN LATERAL (
                      SELECT snapshot.semantic_fingerprint, snapshot.observed_at
-                       FROM {self._publication_snapshot_read} AS snapshot
-                      WHERE snapshot.publication_id=input.publication_id
-                        AND snapshot.published_month=input.published_month
-                        AND snapshot.synthetic=input.synthetic
-                        AND (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
-                      ORDER BY snapshot.observed_at DESC, snapshot.id DESC
-                      LIMIT 1
+                       FROM {self._latest_point_sql("input.publication_id", "input.published_month", "input.synthetic")} AS snapshot
+                      WHERE (NOT %s OR snapshot.observed_at >= transaction_timestamp()-interval '31 days')
                  ) AS latest ON true""",
             (_json(snapshot_key_input), self.compact_working_set),
         ).fetchall()

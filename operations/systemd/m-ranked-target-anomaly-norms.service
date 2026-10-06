@@ -20,8 +20,12 @@ ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-anomaly -g m-ranked-anomaly %
 Environment=PGPASSFILE=/run/m-ranked-anomaly-norms/pgpass
 Environment=TZ=Europe/Moscow
 ExecStart=/opt/m-ranked/current/.venv/bin/python -m anomaly_analysis.norms_job
-# Задание короткое, но читает ряды шестидесяти суток: полчаса с запасом.
-TimeoutStartSec=30min
+# Задание читает ряды шестидесяти суток при CPUQuota=50%: процессора ему
+# нужно ~10 мин, остальное — ожидание базы. Пока окно наполнялось, прогон
+# рос на ~минуту в сутки (26 мин 28.09, 29 мин 04.10) и 05.10 упёрся в
+# прежние полчаса. Отклонённая по таймауту норма не страшна — работник
+# остаётся на последней принятой, — но и смысла обрывать прогон нет.
+TimeoutStartSec=75min
 TimeoutStopSec=30s
 KillSignal=SIGINT
 NoNewPrivileges=true

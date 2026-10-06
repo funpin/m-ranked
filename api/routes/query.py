@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse, Response
 from .. import params as normalize
 from ..cached import published_revision, serve
 from ..db import Database
-from .. import cold_archive, dto
+from .. import dto
 from ..dto import overview_account, overview_row
 from ..errors import BadRequest, NotFound
 from ..params import encode_cursor
@@ -31,7 +31,26 @@ OVERVIEW_TAGS = frozenset({"publications", "overview", "analysis"})
 DETAIL_TAGS = frozenset({"publications", "catalog"})
 COLLECTOR_INTERVAL_SECONDS = {"telegram": 300, "vk": 300, "max": 300, "rutube": 3600}
 # Поздних замеров архивного месяца — единицы на пост; предел только страховка.
-ARCHIVE_LATE_LIMIT = 100_000
+
+
+_UINT64 = 1 << 64
+
+
+def snapshot_cursor(snapshot_id: int) -> str:
+    """Id снимка (64 бита со знаком) — в UUID курсора истории.
+
+    Отрицательные id (синтетические и перенесённые точки) идут дополнением до
+    двух, а положительные дают прежний текст: выданные курсоры не ломаются.
+    """
+    return str(uuid.UUID(int=snapshot_id % _UINT64))
+
+
+def snapshot_from_cursor(text: str) -> int | None:
+    """Обратное к snapshot_cursor; None — курсор не из этой истории."""
+    value = uuid.UUID(text).int
+    if value == 0 or value >= _UINT64:
+        return None
+    return value - _UINT64 if value >= 1 << 63 else value
 
 
 def _iso(value: Any) -> Any:
@@ -345,54 +364,6 @@ async def account_publications(
     }, DETAIL_TAGS, build, _pinned_revision(revision, cursor))
 
 
-async def _archived_history(db: Database, request: Request, publication_row: Any, revision: int, committed_at: Any,
-                            archived: Any, page_size: int, after_snapshot_id: int | None, dimensions: str,
-                            canonical_type: str) -> dict[str, Any]:
-    """Месяц поста в холодном архиве: файлы поколений + поздние замеры из базы."""
-    publication_id = publication_row["publication_id"]
-    published_month = publication_row["published_at"].date().replace(day=1)
-    late = await db.fetch_all(details.HISTORY, {
-        "publication_id": publication_id, "published_month": published_month, "as_of": committed_at,
-        "after_snapshot_id": None, "fetch_limit": ARCHIVE_LATE_LIMIT,
-    })
-    # Архив хранит выдачу в JSON; поздние строки приводятся к тому же виду.
-    fresh = json.loads(json.dumps([dto.history_snapshot(row) for row in late], default=str))
-    items = cold_archive.merge([archived.items, fresh])
-    start = 0
-    if after_snapshot_id is not None:
-        positions = [index for index, item in enumerate(items) if item["snapshotId"] == str(after_snapshot_id)]
-        if not positions:
-            raise BadRequest("курсор истории устарел")
-        start = positions[0] + 1
-    visible = items[start:start + page_size]
-    has_more = len(items) > start + page_size
-    coverage_row = await db.fetch_one(details.COLLECTOR_COVERAGE, {
-        "publication_id": publication_id, "from_at": publication_row["published_at"], "as_of": committed_at,
-        "expected_interval_seconds": COLLECTOR_INTERVAL_SECONDS[publication_row["platform"]],
-    })
-    coverage = dto.collector_coverage(coverage_row)
-    # Журнал опросов живёт меньше архива: если в нём уже пусто, берём
-    # покрытие, сохранённое при архивации.
-    if archived.coverage and not coverage.get("successfulPolls"):
-        coverage = archived.coverage
-    neighbours = await db.fetch_one(details.NEIGHBOURS, {
-        "publication_id": publication_id, "legacy_type": canonical_type,
-    })
-    cursor_uuid = str(uuid.UUID(int=int(visible[-1]["snapshotId"]))) if has_more and visible else None
-    return {
-        "publication": dto.publication(publication_row, revision),
-        "items": visible,
-        "collectorCoverage": coverage,
-        "previousLegacyId": neighbours["previous"] if neighbours else None,
-        "nextLegacyId": neighbours["next"] if neighbours else None,
-        "archivedText": None,
-        "coldArchive": {"month": published_month.isoformat()[:7], "generations": archived.generations,
-                        "lateSnapshots": len(fresh)},
-        "nextCursor": normalize.encode_scoped_cursor(cursor_uuid, revision, dimensions),
-        "datasetRevision": revision, "asOf": _iso(committed_at),
-    }
-
-
 @router.get("/publications/{legacyId}/history")
 async def publication_history(
     legacyId: str,
@@ -420,17 +391,10 @@ async def publication_history(
         cursor_id = normalize.scoped_cursor(cursor, revision, dimensions)
         after_snapshot_id = None
         if cursor_id is not None:
-            parsed = uuid.UUID(cursor_id)
-            if parsed.int <= 0 or parsed.int > (1 << 63) - 1:
+            after_snapshot_id = snapshot_from_cursor(cursor_id)
+            if after_snapshot_id is None:
                 raise BadRequest("курсор истории повреждён")
-            after_snapshot_id = parsed.int
         published_month = publication_row["published_at"].date().replace(day=1)
-        archive_reader = getattr(request.app.state, "cold_archive", None)
-        archived = (await archive_reader.history(db, published_month, str(publication_id))
-                    if archive_reader is not None else None)
-        if archived is not None:
-            return await _archived_history(db, request, publication_row, revision, committed_at, archived,
-                                           page_size, after_snapshot_id, dimensions, canonical_type)
         # Первая страница поста с законченным сбором — из готовой выдачи
         # (миграция 0043), если снимки с тех пор не менялись: живой расчёт
         # стоит около секунды базы, а роботы открывают каждый пост по разу.
@@ -460,7 +424,7 @@ async def publication_history(
             "as_of": committed_at,
             "expected_interval_seconds": COLLECTOR_INTERVAL_SECONDS[publication_row["platform"]],
         })
-        cursor_uuid = str(uuid.UUID(int=last_snapshot)) if last_snapshot is not None else None
+        cursor_uuid = snapshot_cursor(last_snapshot) if last_snapshot is not None else None
         neighbours = await db.fetch_one(details.NEIGHBOURS, {
             "publication_id": publication_id, "legacy_type": canonical_type,
         })

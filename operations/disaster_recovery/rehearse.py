@@ -19,8 +19,6 @@ import tempfile
 import time
 from uuid import uuid4
 
-from operations.cold_archive.parquet import ParquetArchiveWriter, verify_archive
-from operations.cold_archive.service import EXPORT_SQL
 
 IMAGE = 'postgres:18.6'
 LABEL = 'org.mranked.disposable-dr'
@@ -136,47 +134,6 @@ class Rehearsal:
         self.run(['run','--rm','--user','postgres','-v',volume+':/data',IMAGE,'pg_checksums','--check','-D','/data'],
                  description='Offline PostgreSQL page-checksum verification')
 
-    def archive_fixture(self, primary: str) -> tuple[Path, dict]:
-        """Stream the production archive schema through the maintenance role.
-
-        The artifact is outside the primary's Docker volume. This is a local
-        archive-read rehearsal, never a provider attestation or DROP authority.
-        """
-        month=date.fromisoformat(self.query(primary,'SELECT min(published_month) FROM ingest.publication_metric_snapshot'))
-        literal="DATE '"+month.isoformat()+"'"
-        self.query(primary,'SET ROLE maintenance; SELECT ops_and_admin.begin_publication_archive('+literal+')')
-        expected=json.loads(self.query(primary,'SET ROLE maintenance; SELECT to_jsonb(d) FROM ops_and_admin.publication_partition_digest('+literal+') d'))
-        path=self.report_dir/('cold-'+self.run_id+'.parquet')
-        sql='SET ROLE maintenance; BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT row_to_json(archive_row) FROM ('+EXPORT_SQL.replace('%s',literal)+') archive_row; COMMIT;'
-        began=time.monotonic()
-        with tempfile.TemporaryFile() as errors:
-            process=subprocess.Popen(['docker','exec','-i',primary,'psql','-U','mranked_bootstrap','-d',self.database,'-X','-q','-A','-t','-v','ON_ERROR_STOP=1'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=errors)
-            try:
-                process.stdin.write(sql.encode()); process.stdin.close()
-                with ParquetArchiveWriter(path) as writer:
-                    batch=[]
-                    for line in process.stdout:
-                        if not line.strip(): continue
-                        row=json.loads(line)
-                        row['published_month']=date.fromisoformat(row['published_month'])
-                        for key in ('published_at','observed_at','collected_at','created_at'):
-                            row[key]=datetime.fromisoformat(row[key])
-                        batch.append(row)
-                        if len(batch)==500: writer.append(batch); batch=[]
-                    writer.append(batch)
-                if process.wait(timeout=90): raise RuntimeError('bounded archive export failed')
-            finally:
-                if process.poll() is None: process.kill(); process.wait()
-        path.chmod(0o600)
-        verified=verify_archive(path,expected_row_count=expected['row_count'])
-        if verified.canonical_sha256!=expected['canonical_sha256']: raise RuntimeError('archive canonical digest differs')
-        self.query(primary,'SET ROLE maintenance; SELECT ops_and_admin.abort_publication_archive('+literal+')')
-        record={'path':path.name,'schemaVersion':3,'sha256':verified.sha256,
-                'canonicalSha256':verified.canonical_sha256,'rowCount':verified.row_count,
-                'exportSeconds':round(time.monotonic()-began,4),'providerAttestation':False}
-        self.report['commands'].append({'action':'Bounded maintenance-role Parquet export and full canonical verification','exitCode':0,'durationSeconds':record['exportSeconds']})
-        return path,record
-
     def execute(self):
         started=time.monotonic()
         self.report_dir.mkdir(parents=True,exist_ok=True)
@@ -235,8 +192,6 @@ class Rehearsal:
                 cloned=self.state(primary)
                 if cloned['canonicalSha256']!=before['canonicalSha256']: raise RuntimeError('logical bootstrap differs from frozen fixture')
                 self.report['checks']['independentSourceClone']=True
-                archive_path,archive_record=self.archive_fixture(primary)
-                self.report['coldArchive']=archive_record
                 self.query(primary,"CREATE TABLE public.dr_marker(id text PRIMARY KEY,committed_at timestamptz NOT NULL DEFAULT clock_timestamp()); INSERT INTO public.dr_marker(id) VALUES('baseline');")
                 roles=json.loads(self.query(primary,"SELECT jsonb_build_object('backupReplication',rolreplication,'backupSuperuser',rolsuper,'backupCreateDb',rolcreatedb,'backupCreateRole',rolcreaterole) FROM pg_roles WHERE rolname='backup'"))
                 if roles!={'backupReplication':True,'backupSuperuser':False,'backupCreateDb':False,'backupCreateRole':False}: raise RuntimeError('backup role privilege drift')
@@ -264,11 +219,6 @@ class Rehearsal:
                 self.report['walFiles']=self.run(['exec',primary,'sh','-ec','cd /archive; sha256sum *']).splitlines()
                 outage=time.monotonic()
                 self.run(['stop','--time','30',primary],description='Simulate loss of only the UUID-owned primary')
-                archive_began=time.monotonic()
-                fallback=verify_archive(archive_path,expected_row_count=archive_record['rowCount'],expected_sha256=archive_record['sha256'])
-                if fallback.canonical_sha256!=archive_record['canonicalSha256']: raise RuntimeError('archive fallback digest mismatch')
-                self.report['measurements']['coldArchiveFallbackSeconds']=round(time.monotonic()-archive_began,4)
-                self.report['checks']['coldArchiveFallbackWithPrimaryStopped']=True
                 self.query(standby,'SELECT pg_promote(true,30)')
                 if self.query(standby,"SELECT NOT pg_is_in_recovery() AND (SELECT count(*)=3 FROM public.dr_marker)")!='t': raise RuntimeError('standby promotion lost a committed marker')
                 self.report['measurements']['standbyControlledRpoSeconds']=0

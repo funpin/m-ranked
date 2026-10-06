@@ -33,6 +33,11 @@ class IngestSettings:
     payload_retention_hours: int = 24
     payload_release_interval_seconds: int = 300
     payload_release_limit: int = 2000
+    # Квитанция применённого конверта нужна, пока может прийти повтор:
+    # Сервер 1 подтверждённое удаляет через сутки и больше не шлёт.
+    # Неделя — с большим запасом (0060).
+    receipt_retention_days: int = 7
+    receipt_prune_limit: int = 5000
     # Уборка файлового склада идёт своим, много более редким шагом:
     # каждый объект требует блокировки и запроса к базе, а удалять
     # обычно нечего — у доказательств недельный срок. В одном шаге с
@@ -83,6 +88,12 @@ class IngestSettings:
             ),
             payload_release_limit=_int(
                 "TRANSFER_INGEST_PAYLOAD_RELEASE_LIMIT", 2000,
+            ),
+            receipt_retention_days=_int(
+                "TRANSFER_INGEST_RECEIPT_RETENTION_DAYS", 7,
+            ),
+            receipt_prune_limit=_int(
+                "TRANSFER_INGEST_RECEIPT_PRUNE_LIMIT", 5000,
             ),
             evidence_purge_interval_seconds=_int(
                 "TRANSFER_INGEST_EVIDENCE_PURGE_INTERVAL_SECONDS", 3600,

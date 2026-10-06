@@ -1576,7 +1576,8 @@ class _ScriptedConnection:
             ])
         if "identity.publication_id IS DISTINCT FROM input.publication_id" in normalized:
             return _Cursor(rows=[])
-        if "LEFT JOIN LATERAL" in normalized and "publication_metric_snapshot_active" in normalized:
+        if "LEFT JOIN LATERAL" in normalized and ("publication_metric_snapshot_active" in normalized
+                                                  or "publication_latest_point" in normalized):
             items = json.loads(params[0])
             return _Cursor(rows=[{
                 "publication_id": UUID(item["publication_id"]),
@@ -2206,3 +2207,47 @@ def test_pool_smaller_than_two_is_rejected() -> None:
     # батча: на единственном соединении это встало бы намертво.
     with pytest.raises(ValueError):
         PostgresCollectorRepository("postgresql:///unused", pool_size=1)
+
+
+class _KnownIdentityConnection(_ScriptedConnection):
+    """Двойник базы, которому известны заданные внешние id публикаций."""
+
+    def __init__(self, known: set[str]) -> None:
+        super().__init__()
+        self.known = known
+
+    def execute(self, sql: str, params: Any = None) -> _Cursor:
+        normalized = " ".join(sql.split())
+        if normalized.startswith("SELECT external_id FROM ingest.publication_identity WHERE platform_account_id"):
+            self.calls.append((normalized, params))
+            return _Cursor(rows=[{"external_id": item} for item in params[1] if item in self.known])
+        return super().execute(sql, params)
+
+
+@pytest.mark.parametrize("known", [set(), {"old-post"}])
+def test_post_older_than_the_window_at_first_discovery_is_not_taken(monkeypatch, tmp_path, known) -> None:
+    # Закреплённая запись и старые посты в ленте: замерить их с первых минут
+    # нельзя, и раньше они попадали в базу и на сайт без единого замера.
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    canonical = CanonicalNormalizer().normalize(raw_batch(target, run_context), run_context)
+    fresh = canonical.publications[0]
+    old = replace(fresh, id=UUID("30000000-0000-4000-8000-000000000099"), external_id="old-post",
+                  source_external_id="old-post", public_url="https://example.test/old-post",
+                  identities=tuple(replace(identity, external_id="old-post", source_external_id="old-post",
+                                           public_url="https://example.test/old-post")
+                                   for identity in fresh.identities),
+                  published_at=NOW - timedelta(days=40))
+    batch = replace(canonical, publications=(fresh, old))
+    connection = _KnownIdentityConnection(known)
+    repository = PostgresCollectorRepository(connection_factory=lambda: connection, snapshot_heartbeat_hours=24)
+
+    repository.persist_account_batch(batch)
+
+    inserted = [params for statement, params in connection.calls
+                if statement.startswith("WITH input AS") and "INSERT INTO ingest.publication AS current" in statement]
+    taken = {item["source_id"] for item in json.loads(inserted[0][0])}
+    assert str(fresh.id) in taken
+    assert (str(old.id) in taken) is bool(known)

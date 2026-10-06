@@ -113,30 +113,88 @@ SELECT period.period,
  CROSS JOIN periods period
   -- Открывающее значение: последний снимок до начала окна. Месяц публикации
   -- передаётся явно, иначе поиск пойдёт по всем партициям снимков.
+  -- Все версии, как по сырой таблице. Горячая точка — по таблице снимков в
+  -- партиции месяца поста, упакованная (0059) — из массивов поста; берётся
+  -- более поздняя. Общая функция publication_last_valid_at ищет то же в 5–10
+  -- раз дольше, а внутри LATERAL ещё и не встраивается: 06.10 сводка на ней
+  -- не укладывалась в десять минут против прежних 30 секунд.
   LEFT JOIN LATERAL (
-      SELECT snapshot.views_count, snapshot.reactions_count,
-             snapshot.comments_count, snapshot.shares_count, snapshot.observed_at
-        FROM ingest.publication_metric_snapshot snapshot
-       WHERE snapshot.published_month = date_trunc('month', publication.published_at)::date
-         AND snapshot.publication_id = latest.publication_id
-         AND snapshot.observed_at <= params.as_of - period.duration
-         AND NOT snapshot.synthetic
-         AND snapshot.quality <> 'invalid'
-       ORDER BY snapshot.observed_at DESC, snapshot.id DESC
+      SELECT candidate.views_count, candidate.reactions_count,
+             candidate.comments_count, candidate.shares_count,
+             candidate.observed_at
+        FROM (
+          (SELECT snapshot.views_count, snapshot.reactions_count, snapshot.comments_count,
+                  snapshot.shares_count, snapshot.observed_at, snapshot.id
+             FROM ingest.publication_metric_snapshot snapshot
+            WHERE snapshot.published_month = date_trunc('month', publication.published_at)::date
+              AND snapshot.publication_id = latest.publication_id
+              AND snapshot.observed_at <= params.as_of - period.duration
+              AND NOT snapshot.synthetic
+              AND snapshot.quality <> 'invalid'
+            ORDER BY snapshot.observed_at DESC, snapshot.id DESC
+            LIMIT 1)
+          UNION ALL
+          -- Упакованная: последняя несинтетическая валидная точка по битам кодов
+          -- (как в publication_last_valid_at), декодируется одна.
+          SELECT packed.views_count, packed.reactions_count, packed.comments_count,
+                 packed.shares_count, packed.observed_at, packed.id
+            FROM ingest.publication_metric_history history
+           CROSS JOIN LATERAL (SELECT max(u.o)::integer AS i
+                                 FROM unnest(history.observed_at, history.codes) WITH ORDINALITY AS u(t, c, o)
+                                WHERE u.t <= params.as_of - period.duration AND (u.c >> 16) & 1 = 0 AND u.c & 7 <> 6) pick
+           CROSS JOIN LATERAL ingest.unpack_history(history, pick.i, pick.i) packed
+           WHERE history.publication_id = latest.publication_id
+             AND history.first_observed_at <= params.as_of - period.duration AND pick.i IS NOT NULL
+             -- Упакованные точки старше всех горячих, кроме поздних строк:
+             -- нашлась горячая — массивы не распаковываются.
+             AND (history.late_rows OR NOT EXISTS (
+                   SELECT 1 FROM ingest.publication_metric_snapshot hot
+                    WHERE hot.published_month = date_trunc('month', publication.published_at)::date
+                      AND hot.publication_id = latest.publication_id
+                      AND hot.observed_at <= params.as_of - period.duration
+                      AND NOT hot.synthetic AND hot.quality <> 'invalid'))
+        ) candidate
+       ORDER BY candidate.observed_at DESC, candidate.id DESC
        LIMIT 1
   ) opening ON true
   -- Дальняя граница прошлого окна. Поиск тот же и по тому же индексу, только
   -- отступ вдвое больше.
   LEFT JOIN LATERAL (
-      SELECT snapshot.views_count, snapshot.reactions_count,
-             snapshot.comments_count, snapshot.shares_count
-        FROM ingest.publication_metric_snapshot snapshot
-       WHERE snapshot.published_month = date_trunc('month', publication.published_at)::date
-         AND snapshot.publication_id = latest.publication_id
-         AND snapshot.observed_at <= params.as_of - period.duration - period.duration
-         AND NOT snapshot.synthetic
-         AND snapshot.quality <> 'invalid'
-       ORDER BY snapshot.observed_at DESC, snapshot.id DESC
+      SELECT candidate.views_count, candidate.reactions_count,
+             candidate.comments_count, candidate.shares_count
+        FROM (
+          (SELECT snapshot.views_count, snapshot.reactions_count, snapshot.comments_count,
+                  snapshot.shares_count, snapshot.observed_at, snapshot.id
+             FROM ingest.publication_metric_snapshot snapshot
+            WHERE snapshot.published_month = date_trunc('month', publication.published_at)::date
+              AND snapshot.publication_id = latest.publication_id
+              AND snapshot.observed_at <= params.as_of - period.duration - period.duration
+              AND NOT snapshot.synthetic
+              AND snapshot.quality <> 'invalid'
+            ORDER BY snapshot.observed_at DESC, snapshot.id DESC
+            LIMIT 1)
+          UNION ALL
+          -- Упакованная: последняя несинтетическая валидная точка по битам кодов
+          -- (как в publication_last_valid_at), декодируется одна.
+          SELECT packed.views_count, packed.reactions_count, packed.comments_count,
+                 packed.shares_count, packed.observed_at, packed.id
+            FROM ingest.publication_metric_history history
+           CROSS JOIN LATERAL (SELECT max(u.o)::integer AS i
+                                 FROM unnest(history.observed_at, history.codes) WITH ORDINALITY AS u(t, c, o)
+                                WHERE u.t <= params.as_of - period.duration - period.duration AND (u.c >> 16) & 1 = 0 AND u.c & 7 <> 6) pick
+           CROSS JOIN LATERAL ingest.unpack_history(history, pick.i, pick.i) packed
+           WHERE history.publication_id = latest.publication_id
+             AND history.first_observed_at <= params.as_of - period.duration - period.duration AND pick.i IS NOT NULL
+             -- Упакованные точки старше всех горячих, кроме поздних строк:
+             -- нашлась горячая — массивы не распаковываются.
+             AND (history.late_rows OR NOT EXISTS (
+                   SELECT 1 FROM ingest.publication_metric_snapshot hot
+                    WHERE hot.published_month = date_trunc('month', publication.published_at)::date
+                      AND hot.publication_id = latest.publication_id
+                      AND hot.observed_at <= params.as_of - period.duration - period.duration
+                      AND NOT hot.synthetic AND hot.quality <> 'invalid'))
+        ) candidate
+       ORDER BY candidate.observed_at DESC, candidate.id DESC
        LIMIT 1
   ) earlier ON true
  WHERE latest.observed_at > params.as_of - period.duration

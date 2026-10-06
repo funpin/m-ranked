@@ -481,9 +481,16 @@ Before release GC, set explicit protected/approved basenames in its env and
 recheck units and container mounts. GC is not a deployment tool.
 Resolved 24.09: under the unit sandbox with an empty capability set the GC
 could not read cross-UID `/proc/<pid>/cwd|exe` and refused (fail closed) on
-every run. The unit now keeps exactly `CAP_SYS_PTRACE CAP_DAC_READ_SEARCH`;
+every run. The unit keeps `CAP_SYS_PTRACE CAP_DAC_READ_SEARCH` for that check;
 a sandboxed dry-run with these two found every in-use, rollback and young
-release. Removal needs neither: release directories are root-owned.
+release. Resolved 05.10: removal also needs `CAP_DAC_OVERRIDE` — the standalone
+`frontend` built in Docker is owned by uid 1001, and without it root could not
+unlink inside it (PermissionError stopped the whole pass). A release that still
+cannot be removed is now reported and skipped; the run fails at the end.
+The same day GC had begun deleting the release that holds the current
+`.venv` (the current release links it by symlink; process `exe` resolves to
+`/usr/bin/python3`, so the in-use check never saw it). Releases reached by
+top-level symlinks from a kept release are now kept too (`link-target`).
 
 The minimal unresolved product concession is a finite S2 detailed-observation
 horizon or finite total collection volume. At .43–1.47 GB/day even a 30d extension

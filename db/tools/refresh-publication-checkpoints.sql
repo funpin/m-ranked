@@ -49,12 +49,13 @@ SELECT pending.id, pending.hour_offset, snapshot.observed_at,
              candidate.reactions_count, candidate.reactions_quality,
              candidate.comments_count, candidate.comments_quality,
              candidate.shares_count, candidate.shares_quality
-        FROM ingest.publication_metric_snapshot candidate
+        -- Горячие и упакованные точки (0059): часы 72 и 168 уже в упаковке.
+        -- Как и прежде по сырой таблице — все версии, без отбора видимых.
+        FROM ingest.publication_points_between(
+               ARRAY[pending.id],
+               pending.due_at - greatest(interval '30 minutes', pending.hour_offset * interval '15 minutes'),
+               pending.due_at + interval '1 microsecond') candidate
        WHERE candidate.published_month = pending.published_month
-         AND candidate.publication_id = pending.id
-         AND candidate.observed_at <= pending.due_at
-         AND candidate.observed_at >= pending.due_at
-             - greatest(interval '30 minutes', pending.hour_offset * interval '15 minutes')
          AND candidate.quality <> 'invalid'
          AND NOT candidate.synthetic
        ORDER BY candidate.observed_at DESC, candidate.id DESC

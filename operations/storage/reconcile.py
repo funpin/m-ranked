@@ -5,8 +5,10 @@
 * Резервные копии лежат на серверах из backupNodes, полные файлы архива — на
   archiveNodes, просмотровые файлы архива — ещё и на основном сервере всегда:
   без них архивный пост не открыть быстро.
-* Хранятся последние backupCopies резервных копий; более старые выводятся из
-  оборота, только когда у каждой из новых есть подтверждённая копия.
+* Хранятся последние backupCopies резервных копий и, кроме них, последняя
+  проверенная восстановлением — на серверах verifiedBackupNodes (если пусто —
+  на backupNodes). Остальные выводятся из оборота, только когда у каждой из
+  новых есть подтверждённая копия.
 * Лишняя копия удаляется, лишь когда все нужные копии объекта подтверждены по
   SHA-256. Пока это не так, она остаётся — объект не может потерять последнюю
   проверенную копию ни при какой смене политики.
@@ -42,6 +44,7 @@ class StoredObject:
     size_bytes: int
     created_at: datetime
     retired: bool = False
+    restore_verified: bool = False
 
 
 @dataclass(slots=True)
@@ -53,7 +56,11 @@ class Plan:
 
 
 def targets(kind: str, policy: Mapping[str, object], nodes: Mapping[str, Node]) -> list[str]:
-    wanted = list(policy.get("backupNodes" if kind == "backup" else "archiveNodes") or [])  # type: ignore[arg-type]
+    if kind == "verified_backup":
+        key = "verifiedBackupNodes" if policy.get("verifiedBackupNodes") else "backupNodes"
+    else:
+        key = "backupNodes" if kind == "backup" else "archiveNodes"
+    wanted = list(policy.get(key) or [])  # type: ignore[arg-type]
     if kind == "archive_browse":
         wanted += [node.id for node in nodes.values() if node.role == "main"]
     result: list[str] = []
@@ -80,8 +87,13 @@ def plan(nodes: Sequence[Node], objects: Sequence[StoredObject],
                      key=lambda item: item.created_at, reverse=True)
     keep = max(1, int(policy.get("backupCopies") or 1))  # type: ignore[arg-type]
     newest = backups[:keep]
+    # Последняя проверенная восстановлением копия держится отдельно, даже если
+    # новее неё уже несколько снимков: только она доказанно восстанавливается.
+    verified = next((item for item in backups if item.restore_verified), None)
+    extra = verified if verified is not None and verified not in newest else None
+    kept = {item.id for item in newest} | ({extra.id} if extra else set())
     if all(any(replicas.get((item.id, node)) == "verified" for node in by_id) for item in newest):
-        result.retire.extend(item.id for item in backups[keep:])
+        result.retire.extend(item.id for item in backups if item.id not in kept)
     retiring = set(result.retire)
 
     for item in objects:
@@ -95,7 +107,8 @@ def plan(nodes: Sequence[Node], objects: Sequence[StoredObject],
                 if by_id.get(node) and by_id[node].state != "disabled":
                     result.delete.append((item.id, node))
             continue
-        wanted = targets(item.kind, policy, by_id)
+        wanted = (targets("verified_backup", policy, by_id) if extra is not None and item.id == extra.id
+                  else targets(item.kind, policy, by_id))
         for node in wanted:
             if node in live:
                 continue
@@ -122,7 +135,8 @@ def plan(nodes: Sequence[Node], objects: Sequence[StoredObject],
 
 def validate_storage_policy(value: Mapping[str, object], node_ids: Iterable[str]) -> dict[str, object]:
     known = set(node_ids)
-    unknown = set(value) - {"coldAfterDays", "backupCopies", "backupNodes", "archiveNodes", "browseCacheBytes"}
+    unknown = set(value) - {"coldAfterDays", "backupCopies", "backupNodes", "archiveNodes", "browseCacheBytes",
+                            "verifiedBackupNodes"}
     if unknown:
         raise ValueError(f"unknown storage policy keys: {sorted(unknown)}")
     cold = value.get("coldAfterDays")
@@ -133,8 +147,8 @@ def validate_storage_policy(value: Mapping[str, object], node_ids: Iterable[str]
         raise ValueError("backupCopies must be an integer in [1; 14]")
     result: dict[str, object] = {"coldAfterDays": cold, "backupCopies": copies,
                                  "browseCacheBytes": value.get("browseCacheBytes", 2 * 1024 ** 3)}
-    for key, minimum in (("backupNodes", 1), ("archiveNodes", 2)):
-        nodes = value.get(key)
+    for key, minimum in (("backupNodes", 1), ("archiveNodes", 2), ("verifiedBackupNodes", 0)):
+        nodes = value.get(key, [] if key == "verifiedBackupNodes" else None)
         if not isinstance(nodes, list) or not all(isinstance(item, str) for item in nodes):
             raise ValueError(f"{key} must be a list of server ids")
         cleaned = list(dict.fromkeys(nodes))

@@ -22,7 +22,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 from typing import Any
 import uuid
@@ -40,7 +39,8 @@ SELECT id, role, state, stores_objects, reserve_bytes, last_seen_at,
        (report->'metrics'->>'diskFreeBytes')::bigint AS free_bytes
   FROM ops_and_admin.server_node
 """
-OBJECTS_SQL = "SELECT id::text, kind, name, size_bytes, sha256, created_at, retired_at FROM ops_and_admin.storage_object"
+OBJECTS_SQL = ("SELECT id::text, kind, name, size_bytes, sha256, created_at, retired_at, restore_verified_at "
+               "FROM ops_and_admin.storage_object")
 REPLICAS_SQL = "SELECT object_id::text, node_id, state FROM ops_and_admin.storage_replica"
 
 
@@ -118,10 +118,36 @@ def register_backups(connection: Any, node: str, root: Path, backup_dir: Path, c
                 ON CONFLICT (object_id, node_id) DO NOTHING""",
                 {"object": row["id"], "node": node, "size": stat.st_size})
             added += 1
+    mark_restore_verified(connection, backup_dir)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({key: value for key, value in cache.items()
                                       if key.split(":", 1)[0] in {p.name for p in backup_dir.iterdir()}}))
     return added
+
+
+def mark_restore_verified(connection: Any, backup_dir: Path) -> int:
+    """Квитанция проверки восстановлением (*.restore-verified.json) → отметка копии.
+
+    Отмечается только копия с тем же SHA-256, что в квитанции, и только по
+    успешному восстановлению: по отметке сверщик держит её на серверах
+    verifiedBackupNodes, когда локальная копия уже удалена ротацией.
+    """
+    marked = 0
+    for receipt in sorted(backup_dir.glob("mranked-*.restore-verified.json")):
+        if receipt.is_symlink() or not receipt.is_file():
+            continue
+        try:
+            info = json.loads(receipt.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if info.get("restore_exit_code") != 0 or not DUMP.fullmatch(str(info.get("dump", ""))):
+            continue
+        row = connection.execute("""
+            UPDATE ops_and_admin.storage_object SET restore_verified_at = transaction_timestamp()
+             WHERE kind = 'backup' AND name = %(name)s AND sha256 = %(sha)s AND restore_verified_at IS NULL
+            RETURNING id""", {"name": info["dump"], "sha": str(info.get("sha256", ""))}).fetchone()
+        marked += int(row is not None)
+    return marked
 
 
 def check_local_copies(connection: Any, node: str, root: Path) -> int:
@@ -158,7 +184,7 @@ def apply_plan(connection: Any, node: str, root: Path, metrics: dict[str, Any]) 
         nodes.append(reconcile.Node(row["id"], row["role"], row["state"], row["stores_objects"], free,
                                     row["reserve_bytes"]))
     objects = [reconcile.StoredObject(row["id"], row["kind"], row["size_bytes"], row["created_at"],
-                                      row["retired_at"] is not None)
+                                      row["retired_at"] is not None, row["restore_verified_at"] is not None)
                for row in connection.execute(OBJECTS_SQL).fetchall()]
     replicas = {(row["object_id"], row["node_id"]): row["state"]
                 for row in connection.execute(REPLICAS_SQL).fetchall()}
@@ -201,20 +227,6 @@ def apply_plan(connection: Any, node: str, root: Path, metrics: dict[str, Any]) 
     return result
 
 
-def start_jobs(connection: Any, start: Any = None) -> list[str]:
-    """Задания из панели запускают свои службы; службы сами берут очередь."""
-    start = start or (lambda unit: subprocess.run(["systemctl", "start", "--no-block", unit], check=False))
-    started = []
-    for kind, unit in (("archive_now", "m-ranked-target-cold-archive.service"),
-                       ("archive_analysis", "m-ranked-target-archive-analysis.service")):
-        row = connection.execute("SELECT 1 FROM ops_and_admin.admin_job WHERE kind = %(kind)s AND state = 'queued' LIMIT 1",
-                                 {"kind": kind}).fetchone()
-        if row is not None:
-            start(unit)
-            started.append(unit)
-    return started
-
-
 def main() -> int:
     import psycopg
     from psycopg.rows import dict_row
@@ -241,9 +253,8 @@ def main() -> int:
                 plan = apply_plan(connection, node, root, metrics)
             else:
                 plan = reconcile.Plan()
-        started = start_jobs(connection)
-    logger.info("main agent backups_added=%s lost=%s want=%s delete=%s retire=%s blocked=%s started=%s",
-                added, lost, len(plan.want), len(plan.delete), len(plan.retire), len(plan.blocked), started)
+    logger.info("main agent backups_added=%s lost=%s want=%s delete=%s retire=%s blocked=%s",
+                added, lost, len(plan.want), len(plan.delete), len(plan.retire), len(plan.blocked))
     return 0
 
 

@@ -1,0 +1,20 @@
+[Unit]
+Description=M-Ranked weekly REINDEX CONCURRENTLY of high-churn indexes (0061)
+Documentation=file:/opt/m-ranked/current/operations/sql/reindex-churn.sql
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Environment=MRANKED_POSTGRES_CONTAINER=mranked-target-postgres-1
+ExecStart=/bin/bash /opt/m-ranked/current/operations/scripts/reindex-churn.sh
+TimeoutStartSec=2h
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
