@@ -143,14 +143,36 @@ class PostgresCollectorRepository:
             else "ingest.publication_metric_snapshot_active"
         )
         # Последний замер публикации. В полной базе история частично упакована
-        # (0059): функция берёт горячую строку по индексу и декодирует одну
-        # упакованную точку, только если горячей нет.
+        # (0059). Горячая точка — прямым запросом к таблице снимков внутри
+        # общего запроса: вызов функции на каждый пост пакета (свой план,
+        # инициализация всех партиций) стоил 2 мс на пост против 0,2 — 06.10
+        # приём на нём отстал на 20 минут. Функция декодирует упакованную
+        # точку только у поста, где горячих строк этого класса нет или есть
+        # поздние (тогда упакованная может быть новее горячей).
         self._latest_publication_point = (
             "(SELECT * FROM ingest.collector_publication_working_set snapshot"
             " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter}"
             " ORDER BY snapshot.observed_at DESC, snapshot.id DESC LIMIT 1)"
             if compact_working_set else
-            "ingest.publication_latest_point({publication}, {month}, {synthetic})"
+            "(SELECT candidate.observed_at, candidate.sampling_bucket, candidate.semantic_fingerprint FROM ("
+            "(SELECT snapshot.observed_at, snapshot.sampling_bucket, snapshot.semantic_fingerprint, snapshot.id"
+            " FROM ingest.publication_metric_snapshot snapshot"
+            " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter}"
+            " AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor"
+            " WHERE successor.published_month=snapshot.published_month"
+            " AND successor.publication_id=snapshot.publication_id"
+            " AND successor.sampling_bucket=snapshot.sampling_bucket"
+            " AND successor.correction_sequence>snapshot.correction_sequence)"
+            " ORDER BY snapshot.observed_at DESC, snapshot.id DESC LIMIT 1)"
+            " UNION ALL"
+            " SELECT packed.observed_at, packed.sampling_bucket, packed.semantic_fingerprint, packed.id"
+            " FROM ingest.publication_metric_history history"
+            " CROSS JOIN LATERAL ingest.publication_latest_point(history.publication_id, history.published_month,"
+            " {synthetic}) packed"
+            " WHERE history.publication_id={publication} AND history.published_month={month}"
+            " AND (history.late_rows OR NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot snapshot"
+            " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter}))"
+            ") candidate ORDER BY candidate.observed_at DESC, candidate.id DESC LIMIT 1)"
         )
         self._account_snapshot_read = (
             "ingest.collector_account_working_set" if compact_working_set
