@@ -165,13 +165,26 @@ class PostgresCollectorRepository:
             " AND successor.correction_sequence>snapshot.correction_sequence)"
             " ORDER BY snapshot.observed_at DESC, snapshot.id DESC LIMIT 1)"
             " UNION ALL"
+            # Обычный случай: последняя видимая точка класса — по битам кодов,
+            # декодируется одна, без вызова функции на пост.
+            " SELECT packed.observed_at, packed.sampling_bucket, packed.semantic_fingerprint, packed.id"
+            " FROM ingest.publication_metric_history history"
+            " CROSS JOIN LATERAL (SELECT max(u.o)::integer AS i FROM unnest(history.codes) WITH ORDINALITY AS u(c, o)"
+            " WHERE (u.c >> 17) & 1 = 1 AND ({synthetic}::boolean IS NULL"
+            " OR ((u.c >> 16) & 1 = 1) = {synthetic}::boolean)) found"
+            " CROSS JOIN LATERAL ingest.unpack_history(history, found.i, found.i) packed"
+            " WHERE history.publication_id={publication} AND history.published_month={month}"
+            " AND found.i IS NOT NULL AND NOT history.late_rows"
+            " AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot snapshot"
+            " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter})"
+            " UNION ALL"
+            # Поздние строки в упакованных бакетах: видимость сверяет функция.
             " SELECT packed.observed_at, packed.sampling_bucket, packed.semantic_fingerprint, packed.id"
             " FROM ingest.publication_metric_history history"
             " CROSS JOIN LATERAL ingest.publication_latest_point(history.publication_id, history.published_month,"
             " {synthetic}) packed"
             " WHERE history.publication_id={publication} AND history.published_month={month}"
-            " AND (history.late_rows OR NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot snapshot"
-            " WHERE snapshot.publication_id={publication} AND snapshot.published_month={month}{synthetic_filter}))"
+            " AND history.late_rows"
             ") candidate ORDER BY candidate.observed_at DESC, candidate.id DESC LIMIT 1)"
         )
         self._account_snapshot_read = (

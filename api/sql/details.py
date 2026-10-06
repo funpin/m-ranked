@@ -195,25 +195,46 @@ WITH publications AS (
     -- Значение каждой публикации на границе вчерашних суток по Москве.
     -- Отсюда берутся плашки «за сутки» у плиток: медиана вчера против
     -- медианы сейчас. Одним проходом по диапазону, как в недельном ряду.
-    SELECT DISTINCT ON (publication.id) publication.id,
+    --
+    -- Горячие точки — по таблице снимков в партиции месяца поста, как до
+    -- упаковки; упакованные (0059) — отрезком массивов поста внутри окна.
+    -- Каждая ветка сама обходит посты: соединение постов с объединением
+    -- веток общий план подготовленного запроса выполнял, пересчитывая всё
+    -- объединение на каждый пост (06.10 — 32 с на крупном аккаунте).
+    SELECT DISTINCT ON (snapshot.publication_id) snapshot.publication_id AS id,
            snapshot.views_count, snapshot.reactions_count, snapshot.comments_count,
            snapshot.views_quality, snapshot.reactions_quality, snapshot.comments_quality
-      FROM publications publication
-      -- Окно по всем постам аккаунта сразу: упакованная история (0059)
-      -- разворачивается только отрезком внутри окна.
-      -- Номера постов — LATERAL-ссылкой, а не подзапросом в аргументе: так
-      -- функция встраивается, и читаются только нужные колонки (06.10 с
-      -- ARRAY(SELECT …) статистика большого аккаунта шла 2–4 с вместо 0,1).
-      CROSS JOIN (SELECT array_agg(id) AS list FROM publications) publications_ids
-      JOIN LATERAL ingest.publication_points_between(
-             publications_ids.list,
-             (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 3)::timestamp
-              AT TIME ZONE 'Europe/Moscow'),
-             (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
-              AT TIME ZONE 'Europe/Moscow')) snapshot
-        ON snapshot.publication_id=publication.id
-     WHERE snapshot.visible AND snapshot.quality<>'invalid'
-     ORDER BY publication.id, snapshot.observed_at DESC, snapshot.id DESC
+      FROM (
+        SELECT s.publication_id, s.observed_at, s.id, s.quality,
+               s.views_count, s.reactions_count, s.comments_count,
+               s.views_quality, s.reactions_quality, s.comments_quality
+          FROM publications post
+          JOIN ingest.publication_metric_snapshot s
+            ON s.publication_id=post.id
+           AND s.published_month=date_trunc('month', post.published_at)::date
+         WHERE s.observed_at >= (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 3)::timestamp
+                    AT TIME ZONE 'Europe/Moscow')
+           AND s.observed_at < (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+                    AT TIME ZONE 'Europe/Moscow')
+           AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
+                        WHERE successor.published_month = s.published_month
+                          AND successor.publication_id = s.publication_id
+                          AND successor.sampling_bucket = s.sampling_bucket
+                          AND successor.correction_sequence > s.correction_sequence)
+        UNION ALL
+        SELECT p.publication_id, p.observed_at, p.id, p.quality,
+               p.views_count, p.reactions_count, p.comments_count,
+               p.views_quality, p.reactions_quality, p.comments_quality
+          FROM publications post
+         CROSS JOIN LATERAL ingest.packed_points_between(post.id,
+                 (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 3)::timestamp
+                    AT TIME ZONE 'Europe/Moscow'),
+                 (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
+                    AT TIME ZONE 'Europe/Moscow')) p
+         WHERE p.visible
+      ) snapshot
+     WHERE snapshot.quality<>'invalid'
+     ORDER BY snapshot.publication_id, snapshot.observed_at DESC, snapshot.id DESC
 ), yesterday_metric AS (
     SELECT value.metric_key,
            round(percentile_cont(0.5) WITHIN GROUP(ORDER BY value.metric_value)
@@ -756,32 +777,50 @@ WITH bounds AS (
     -- Граница суток — последний замер публикации в эти сутки. Берётся одним
     -- проходом по диапазону вместо восьми точечных поисков на публикацию:
     -- на полутора сотнях постов это 800 мс против полусотни.
-    SELECT DISTINCT ON (tracked.id, (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date)
-           tracked.id,
-           tracked.published_day,
+    --
+    -- Граница окна считается из параметра прямо здесь, а не берётся из
+    -- bounds. Значение из CTE планировщик применял уже после соединения —
+    -- фильтром, а не условием поиска по индексу, — занижал оценку в сотни
+    -- раз и выбирал параллельный проход по всем партициям снимков: на
+    -- крупном аккаунте 12 миллионов строк и 5 ГБ чтения на одну карточку.
+    --
+    -- Горячие точки — по таблице снимков в партиции месяца поста, как до
+    -- упаковки; упакованные (0059) — отрезком массивов поста внутри окна.
+    -- Каждая ветка сама обходит посты (см. yesterday_edge в ACCOUNT_STATS).
+    SELECT DISTINCT ON (snapshot.publication_id, (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date)
+           snapshot.publication_id AS id,
+           snapshot.published_day,
            (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
            CASE WHEN snapshot.reactions_quality IN ('invalid','suspected_reset')
                 THEN NULL ELSE snapshot.reactions_count END AS reactions_count,
            CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
                 THEN NULL ELSE snapshot.views_count END AS views_count
-      FROM tracked
-     -- Граница окна считается из параметра прямо здесь, а не берётся из
-     -- bounds. Значение из CTE планировщик применял уже после соединения —
-     -- фильтром, а не условием поиска по индексу, — занижал оценку в сотни
-     -- раз и выбирал параллельный проход по всем партициям снимков: на
-     -- крупном аккаунте 12 миллионов строк и 5 ГБ чтения на одну карточку.
-      -- Номера постов — LATERAL-ссылкой, а не подзапросом в аргументе: так
-      -- функция встраивается, и читаются только нужные колонки (06.10 с
-      -- ARRAY(SELECT …) статистика большого аккаунта шла 2–4 с вместо 0,1).
-      CROSS JOIN (SELECT array_agg(id) AS list FROM tracked) tracked_ids
-      JOIN LATERAL ingest.publication_points_between(
-             tracked_ids.list,
-             ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
-              AT TIME ZONE 'Europe/Moscow'),
-             %(as_of)s::timestamptz + interval '1 microsecond') snapshot
-        ON snapshot.publication_id=tracked.id
-     WHERE snapshot.visible AND snapshot.quality<>'invalid'
-     ORDER BY tracked.id,
+      FROM (
+        SELECT s.publication_id, tracked.published_day, s.observed_at, s.id, s.quality,
+               s.reactions_count, s.reactions_quality, s.views_count, s.views_quality
+          FROM tracked
+          JOIN ingest.publication_metric_snapshot s
+            ON s.publication_id=tracked.id AND s.published_month=tracked.published_month
+         WHERE s.observed_at >= ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
+                    AT TIME ZONE 'Europe/Moscow')
+           AND s.observed_at < %(as_of)s::timestamptz + interval '1 microsecond'
+           AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
+                        WHERE successor.published_month = s.published_month
+                          AND successor.publication_id = s.publication_id
+                          AND successor.sampling_bucket = s.sampling_bucket
+                          AND successor.correction_sequence > s.correction_sequence)
+        UNION ALL
+        SELECT p.publication_id, tracked.published_day, p.observed_at, p.id, p.quality,
+               p.reactions_count, p.reactions_quality, p.views_count, p.views_quality
+          FROM tracked
+         CROSS JOIN LATERAL ingest.packed_points_between(tracked.id,
+                 ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
+                    AT TIME ZONE 'Europe/Moscow'),
+                 %(as_of)s::timestamptz + interval '1 microsecond') p
+         WHERE p.visible
+      ) snapshot
+     WHERE snapshot.quality<>'invalid'
+     ORDER BY snapshot.publication_id,
               (snapshot.observed_at AT TIME ZONE 'Europe/Moscow')::date,
               snapshot.observed_at DESC, snapshot.id DESC
 ), growth_window AS (

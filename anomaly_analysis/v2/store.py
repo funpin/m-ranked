@@ -66,7 +66,7 @@ SELECT DISTINCT ON (target.id, snapshot.observed_at)
   -- индексу на строку: через представление точек по массиву постов
   -- планировщик сводил её к хеш-антисоединению со всей таблицей (06.10 —
   -- минута и предел временных файлов на 50 постах). Упакованные — одним
-  -- вызовом (0059), горячая ветка функции отсекается условием packed.
+  -- вызовом packed_points_between (0068).
   JOIN (
     SELECT s.publication_id, s.published_month, s.id, false AS packed, s.observed_at, s.interval_uncertain,
            s.views_count, s.views_quality, s.reactions_count, s.reactions_quality, s.comments_count,
@@ -89,8 +89,8 @@ SELECT DISTINCT ON (target.id, snapshot.observed_at)
            p.views_count, p.views_quality, p.reactions_count, p.reactions_quality, p.comments_count,
            p.comments_quality, p.shares_count, p.shares_quality, p.correction_sequence,
            NULL::jsonb, NULL::bigint, p.reaction_breakdown
-      FROM ingest.publication_points_between(%(ids)s::uuid[], '-infinity', 'infinity') p
-     WHERE p.packed AND p.visible AND NOT p.synthetic
+      FROM ingest.packed_points_between(%(ids)s::uuid[], '-infinity', 'infinity') p
+     WHERE p.visible AND NOT p.synthetic
   ) snapshot
     ON snapshot.publication_id = target.id
    AND snapshot.published_month = target.published_month
@@ -113,23 +113,61 @@ SELECT due.publication_id, account.platform::text AS platform,
        AS due(publication_id, published_at, last_point_observed_at)
   JOIN ingest.visible_publication publication ON publication.id = due.publication_id
   JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
+ -- Горячие точки — по таблице снимков в партиции месяца поста, как до
+ -- упаковки; упакованные (0059) — из массивов. Общие функции окна здесь
+ -- на две пятых медленнее (проверка на проде 06.10).
  CROSS JOIN LATERAL (
-    SELECT count(DISTINCT snapshot.observed_at)::integer AS new_points,
-           min(snapshot.observed_at) AS first_new_at
-      FROM ingest.publication_points_between(
-             ARRAY[due.publication_id],
-             -- Границу «после» окно включает, поэтому сдвиг на микросекунду.
-             coalesce(due.last_point_observed_at + interval '1 microsecond', '-infinity'), 'infinity') snapshot
-     WHERE snapshot.visible
-       AND snapshot.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
-       AND NOT snapshot.synthetic
+    SELECT count(DISTINCT point.observed_at)::integer AS new_points,
+           min(point.observed_at) AS first_new_at
+      FROM (
+        SELECT s.observed_at
+          FROM ingest.publication_metric_snapshot s
+         WHERE s.publication_id = due.publication_id
+           AND s.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
+           -- Границу «после» окно не включает.
+           AND s.observed_at > coalesce(due.last_point_observed_at, '-infinity')
+           AND NOT s.synthetic
+           AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
+                        WHERE successor.published_month = s.published_month
+                          AND successor.publication_id = s.publication_id
+                          AND successor.sampling_bucket = s.sampling_bucket
+                          AND successor.correction_sequence > s.correction_sequence)
+        UNION ALL
+        SELECT packed.observed_at
+          FROM ingest.packed_points_between(due.publication_id,
+                 coalesce(due.last_point_observed_at + interval '1 microsecond', '-infinity'), 'infinity') packed
+         WHERE packed.visible AND NOT packed.synthetic
+           AND packed.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
+      ) point
  ) fresh
   -- Последняя видимая точка. Синтетическая стоит в момент публикации, раньше
   -- всех: если последней оказалась она, настоящих точек нет.
   LEFT JOIN LATERAL (
-    SELECT CASE WHEN NOT snapshot.synthetic THEN snapshot.observed_at END AS observed_at
-      FROM ingest.publication_point_at(ARRAY[due.publication_id], 'infinity') snapshot
-     WHERE snapshot.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
+    SELECT CASE WHEN NOT candidate.synthetic THEN candidate.observed_at END AS observed_at
+      FROM (
+        (SELECT s.observed_at, s.id, s.synthetic
+           FROM ingest.publication_metric_snapshot s
+          WHERE s.publication_id = due.publication_id
+            AND s.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
+            AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
+                        WHERE successor.published_month = s.published_month
+                          AND successor.publication_id = s.publication_id
+                          AND successor.sampling_bucket = s.sampling_bucket
+                          AND successor.correction_sequence > s.correction_sequence)
+          ORDER BY s.observed_at DESC, s.id DESC LIMIT 1)
+        UNION ALL
+        -- Упакованные старше всех горячих, кроме поздних строк: нашлась
+        -- горячая — массивы не распаковываются.
+        SELECT packed.observed_at, packed.id, packed.synthetic
+          FROM ingest.publication_metric_history history
+         CROSS JOIN LATERAL ingest.packed_point_at(history.publication_id, 'infinity') packed
+         WHERE history.publication_id = due.publication_id
+           AND history.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date
+           AND (history.late_rows OR NOT EXISTS (
+                 SELECT 1 FROM ingest.publication_metric_snapshot s
+                  WHERE s.publication_id = due.publication_id AND s.published_month = date_trunc('month', due.published_at AT TIME ZONE 'UTC')::date))
+      ) candidate
+     ORDER BY candidate.observed_at DESC, candidate.id DESC LIMIT 1
  ) latest ON true
 """
 

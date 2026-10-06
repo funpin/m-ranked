@@ -145,6 +145,14 @@ SELECT period.period,
            CROSS JOIN LATERAL ingest.unpack_history(history, pick.i, pick.i) packed
            WHERE history.publication_id = latest.publication_id
              AND history.first_observed_at <= params.as_of - period.duration AND pick.i IS NOT NULL
+             -- Упакованные точки старше всех горячих, кроме поздних строк:
+             -- нашлась горячая — массивы не распаковываются.
+             AND (history.late_rows OR NOT EXISTS (
+                   SELECT 1 FROM ingest.publication_metric_snapshot hot
+                    WHERE hot.published_month = date_trunc('month', publication.published_at)::date
+                      AND hot.publication_id = latest.publication_id
+                      AND hot.observed_at <= params.as_of - period.duration
+                      AND NOT hot.synthetic AND hot.quality <> 'invalid'))
         ) candidate
        ORDER BY candidate.observed_at DESC, candidate.id DESC
        LIMIT 1
@@ -177,6 +185,14 @@ SELECT period.period,
            CROSS JOIN LATERAL ingest.unpack_history(history, pick.i, pick.i) packed
            WHERE history.publication_id = latest.publication_id
              AND history.first_observed_at <= params.as_of - period.duration - period.duration AND pick.i IS NOT NULL
+             -- Упакованные точки старше всех горячих, кроме поздних строк:
+             -- нашлась горячая — массивы не распаковываются.
+             AND (history.late_rows OR NOT EXISTS (
+                   SELECT 1 FROM ingest.publication_metric_snapshot hot
+                    WHERE hot.published_month = date_trunc('month', publication.published_at)::date
+                      AND hot.publication_id = latest.publication_id
+                      AND hot.observed_at <= params.as_of - period.duration - period.duration
+                      AND NOT hot.synthetic AND hot.quality <> 'invalid'))
         ) candidate
        ORDER BY candidate.observed_at DESC, candidate.id DESC
        LIMIT 1
