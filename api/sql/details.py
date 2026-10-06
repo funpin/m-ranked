@@ -201,8 +201,12 @@ WITH publications AS (
       FROM publications publication
       -- Окно по всем постам аккаунта сразу: упакованная история (0059)
       -- разворачивается только отрезком внутри окна.
-      JOIN ingest.publication_points_between(
-             ARRAY(SELECT id FROM publications),
+      -- Номера постов — LATERAL-ссылкой, а не подзапросом в аргументе: так
+      -- функция встраивается, и читаются только нужные колонки (06.10 с
+      -- ARRAY(SELECT …) статистика большого аккаунта шла 2–4 с вместо 0,1).
+      CROSS JOIN (SELECT array_agg(id) AS list FROM publications) publications_ids
+      JOIN LATERAL ingest.publication_points_between(
+             publications_ids.list,
              (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 3)::timestamp
               AT TIME ZONE 'Europe/Moscow'),
              (((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date)::timestamp
@@ -366,8 +370,12 @@ WITH page AS (
            CASE WHEN snapshot.views_quality IN ('invalid','suspected_reset')
                 THEN NULL ELSE snapshot.views_count END AS views_count
       FROM page
-      JOIN ingest.publication_points_between(
-             ARRAY(SELECT id FROM page),
+      -- Номера постов — LATERAL-ссылкой, а не подзапросом в аргументе: так
+      -- функция встраивается, и читаются только нужные колонки (06.10 с
+      -- ARRAY(SELECT …) статистика большого аккаунта шла 2–4 с вместо 0,1).
+      CROSS JOIN (SELECT array_agg(id) AS list FROM page) page_ids
+      JOIN LATERAL ingest.publication_points_between(
+             page_ids.list,
              (((%(growth_day)s::date - 1)::timestamp) AT TIME ZONE 'Europe/Moscow'),
              (((%(growth_day)s::date + 1)::timestamp) AT TIME ZONE 'Europe/Moscow')) snapshot
         ON snapshot.publication_id=page.id
@@ -762,8 +770,12 @@ WITH bounds AS (
      -- фильтром, а не условием поиска по индексу, — занижал оценку в сотни
      -- раз и выбирал параллельный проход по всем партициям снимков: на
      -- крупном аккаунте 12 миллионов строк и 5 ГБ чтения на одну карточку.
-      JOIN ingest.publication_points_between(
-             ARRAY(SELECT id FROM tracked),
+      -- Номера постов — LATERAL-ссылкой, а не подзапросом в аргументе: так
+      -- функция встраивается, и читаются только нужные колонки (06.10 с
+      -- ARRAY(SELECT …) статистика большого аккаунта шла 2–4 с вместо 0,1).
+      CROSS JOIN (SELECT array_agg(id) AS list FROM tracked) tracked_ids
+      JOIN LATERAL ingest.publication_points_between(
+             tracked_ids.list,
              ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
               AT TIME ZONE 'Europe/Moscow'),
              %(as_of)s::timestamptz + interval '1 microsecond') snapshot
