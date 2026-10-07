@@ -34,8 +34,13 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
   },
   getStatistics: {
     section: "overview", title: "Статистика публикаций и вузов",
-    text: "Накопленные показатели публикаций (view=publications) или вузов (view=entities) за период с сортировками и поиском.",
+    text: "Устарел, используйте /api/v1/findings. Накопленные показатели публикаций (view=publications) или вузов (view=entities) за период с сортировками и поиском.",
     example: "/api/v1/statistics?platform=telegram&period=30d&limit=20",
+  },
+  getFindings: {
+    section: "overview", title: "Находки: посты выше нормы",
+    text: "Данные страницы /statistics: посты, сработавшие лучше обычного для своего аккаунта, с индексом к норме на возрасте до 24 часов. Все вузы или один вуз, группировка по вузам, курсор.",
+    example: "/api/v1/findings?platform=vk&period=7d&limit=20",
   },
   getComparisonDashboard: {
     section: "comparison", title: "Панель сравнения",
@@ -81,6 +86,16 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
     section: "accounts", title: "Отклик на старые публикации",
     text: "Доля реакций на просмотры постов в возрасте 4–14 суток относительно первых суток — в сравнении с другими аккаунтами площадки за 28 суток. Уровень null — метод воздержался, причина в abstainReason.",
     example: "/api/v1/accounts/{uuid}/tail-profile",
+  },
+  getAccountAnomalyFindings: {
+    section: "accounts", title: "Аккаунтные находки",
+    text: "Закономерности, видимые только на многих постах аккаунта за 30 дней, в сравнении с другими аккаунтами площадки: повторяющийся стартовый пакет реакций, слишком ровный отклик, необычный поздний отклик. Считаются отдельно от уровней публикаций.",
+    example: "/api/v1/accounts/{uuid}/anomaly-findings",
+  },
+  getAccountDailySeries: {
+    section: "accounts", title: "Динамика аккаунта по дням",
+    text: "Публикации, медианы и суточные суммы реакций и просмотров за последние 7 или 30 полных дней и сегодняшние сутки (последняя точка, ещё не закончена).",
+    example: "/api/v1/accounts/{uuid}/daily-series?days=30",
   },
   getPublication: {
     section: "publications", title: "Публикация",

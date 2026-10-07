@@ -8,7 +8,7 @@ export interface PublicResponseCache {
   load(key: string[], tags: string[], produce: () => Promise<PublicRepresentation>): Promise<PublicRepresentation>;
 }
 
-const PUBLIC_DOMAINS = /^\/api\/v1\/(overview|statistics|compare(?:\/candidates)?|institutions\/\d+(?:\/accounts)?|accounts\/\d+(?:\/publications)?|publications\/\d+(?:\/history)?)$/;
+const PUBLIC_DOMAINS = /^\/api\/v1\/(overview|statistics|findings|compare(?:\/candidates)?|institutions\/\d+(?:\/accounts)?|accounts\/\d+(?:\/publications)?|publications\/\d+(?:\/history)?)$/;
 
 /**
  * Как долго один и тот же снимок обслуживает читателей.
@@ -31,7 +31,10 @@ export function publicCacheKey(url: URL, revision: number, representationVersion
   // Stable sort retains the intentional order of repeated selection IDs.
   canonical.searchParams.sort();
   const platform = canonical.searchParams.get("platform") ?? "identity";
-  return { key: ["m-ranked-public-v1", url.origin, domain, canonical.pathname, canonical.search, String(revision),representationVersion],
+  // Analysis can change independently of the dataset revision. Bound overview
+  // reuse to one freshness window even when the underlying cache has a longer TTL.
+  const analysisWindow = domain === "overview" ? [String(Math.floor(Date.now() / FRESHNESS_MS))] : [];
+  return { key: ["m-ranked-public-v1", url.origin, domain, canonical.pathname, canonical.search, String(revision),representationVersion, ...analysisWindow],
     tags: [`m-ranked:${domain}`, `m-ranked:${domain}:${platform}`, `m-ranked:revision:${revision}`] };
 }
 

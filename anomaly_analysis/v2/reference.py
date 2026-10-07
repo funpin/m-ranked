@@ -296,9 +296,10 @@ def cases() -> tuple[Case, ...]:
         Case("p03_multiscale_rise_vk", "synthetic",
              "ВК: растянутый на сутки плавный подъём просмотров на четвёртые сутки — на "
              "получасовых барах тонет в шуме, выпуклый на шестичасовых (паттерн 3 как "
-             "поздний скачок на крупном масштабе).",
-             Post("vk", _at(5, 13), (_vk(60000),), 6 * DAY, {V: (Hump(3 * DAY, 4 * DAY, 2500),)}),
-             Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (2,)),
+             "поздний скачок на крупном масштабе). +8 000 к ~60 000 — меньше четверти "
+             "набранного: слабый сигнал (разбор 07.10.2026).",
+             Post("vk", _at(5, 13), (_vk(60000),), 6 * DAY, {V: (Hump(3 * DAY, 4 * DAY, 8000),)}),
+             Level.WEAK_SIGNAL, Level.WEAK_SIGNAL, (2,)),
         Case("p04_gap_growth_telegram", "synthetic",
              "Telegram: за четырнадцатичасовой пробел в замерах затухший пост прибавил "
              "7 000 просмотров, реакции не изменились.",
@@ -380,6 +381,25 @@ def cases() -> tuple[Case, ...]:
              "с ~6 000 до ~20 000, реакции остаются органическими.",
              Post("vk", _at(16, 14), (_vk(7500),), 4 * DAY, {V: (Ramp(30 * HOUR, 31 * HOUR, 14000),)}),
              Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (2,)),
+        Case("p14_reaction_pack_then_stop_max", "synthetic",
+             "MAX: с 3,5 до 8,5 ч реакции идут ровно (~54/ч, больше половины новых "
+             "просмотров), затем прекращаются, хотя просмотры продолжают прибывать "
+             "(разбор 07.10.2026, пост Губкинского университета).",
+             Post("max", _at(13, 10), (Wave(0, 2600, 1.5 * HOUR, 0.7),), 3 * DAY,
+                  {R: (Ramp(3.5 * HOUR, 8.5 * HOUR, 270),)}),
+             Level.ARTIFICIAL_ACTIVITY_SIGNS, Level.ARTIFICIAL_ACTIVITY_SIGNS, (14,)),
+        Case("p15_reaction_write_off_vk", "synthetic",
+             "ВК: за первые три часа +80 лайков при паре сотен просмотров, на четвёртом "
+             "часу площадка списывает 80 лайков одним замером, значение не возвращается.",
+             Post("vk", _at(14, 12), (_vk(3000),), 2 * DAY,
+                  {R: (Ramp(1 * HOUR, 3 * HOUR, 80), Ramp(4 * HOUR, 4 * HOUR + 5 * MINUTE, -80))}),
+             Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (15,)),
+        Case("p16_joint_cliff_vk", "synthetic",
+             "ВК: с часа до шести с половиной просмотры (~90/ч) и лайки (~45/ч) идут "
+             "ровно вместе, затем обе метрики обрываются одновременно днём.",
+             Post("vk", _at(15, 12), (_vk(500),), 2 * DAY,
+                  {V: (Ramp(1 * HOUR, 6.5 * HOUR, 500),), R: (Ramp(1 * HOUR, 6.5 * HOUR, 250),)}),
+             Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (16,)),
         Case("honest_organic_telegram", "synthetic",
              "Telegram: органическое степенное затухание, 30 суток, шаг сбора по возрасту.",
              Post("telegram", _at(17, 9), (_tg(5200),), 30 * DAY), **HONEST),

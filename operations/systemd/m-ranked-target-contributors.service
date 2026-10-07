@@ -1,0 +1,44 @@
+[Unit]
+Description=M-Ranked repository contributors for the site header
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Читает результат веб-служба, поэтому и пишет её пользователь — в свой
+# отдельный каталог, без доступа к кэшу страниц и данным.
+User=m-ranked-web
+Group=m-ranked-web
+WorkingDirectory=/opt/m-ranked/current
+Environment=MRANKED_CONTRIBUTORS_DIR=/var/lib/m-ranked/contributors
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m api.tools.refresh_contributors
+TimeoutStartSec=2min
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+StateDirectory=m-ranked/contributors
+StateDirectoryMode=0755
+UMask=0022
+MemoryMax=96M
+CPUQuota=25%
+Nice=15
+TasksMax=8

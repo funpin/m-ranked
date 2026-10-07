@@ -66,12 +66,14 @@ def test_signs_on_unanalyzable_intervals_are_dropped_except_the_gap_pattern():
     assert kept.level is Level.PRONOUNCED_ANOMALY
 
 
-def test_reposts_keep_reaction_shape_but_skip_source_view_shapes():
+def test_reposts_compare_with_themselves_but_skip_norms_and_late_engagement():
     prepared = _prepared("honest_repost_of_foreign_telegram")
     _, versions = run_detectors(prepared, DetectorContext("telegram"))
     assert set(versions) == {"preparation", "aggregation", "linear_feed", "burst_plateau", "bounded_reaction_burst",
-                             "reactions_before_views", "reactions_exceed_views"}
-    assert "repost_source_counter" in assess(prepared.series).quality.codes
+                             "reactions_before_views", "reactions_exceed_views", "engagement_regime",
+                             "reaction_write_off", "joint_cliff"}
+    # Просмотры репоста — собственные: оговорки о чужом счётчике нет.
+    assert "repost_source_counter" not in assess(prepared.series).quality.codes
 
 
 def test_compact_output_is_bounded_sorted_and_worded():
@@ -121,6 +123,25 @@ def test_glossary_of_adr_006_holds_for_every_text_and_formula():
 
 
 def test_all_symbols_from_the_plan_are_distinct():
-    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 12
+    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 15
     assert np.all([pattern in TITLES for pattern in SYMBOLS])
     assert levels.STRONG > YOUNG_NORM_CAP >= levels.MEDIUM
+
+
+def test_one_reaction_pack_seen_by_two_detectors_counts_once():
+    # ГУАП ВК №149108: рывок доказан на двух соседних пятиминутках, пакет —
+    # по доле реакций на просмотр. Это одно событие, а не два семейства.
+    def reactions(pattern, family, strength, minutes):
+        return Sign(pattern, family, Metric.REACTIONS, strength,
+                    Interval(START + timedelta(minutes=minutes[0]), START + timedelta(minutes=minutes[1])),
+                    timedelta(minutes=5), "Δ = 1")
+    signs = [reactions(9, Family.SHAPE, .8, (1, 6)), reactions(9, Family.SHAPE, .75, (6, 11)),
+             reactions(14, Family.CROSS_METRIC, .75, (1, 21))]
+    result = verdict(_prepared(), DetectorContext("telegram"), signs, {})
+    (only,) = result.signs
+    assert result.level is Level.PRONOUNCED_ANOMALY
+    assert (only.interval.start, only.interval.end) == (START + timedelta(minutes=1), START + timedelta(minutes=21))
+    assert only.render["sameEpisode"] == ["Пакет реакций с остановкой"]
+    # Отдельное событие через час остаётся отдельным признаком.
+    later = verdict(_prepared(), DetectorContext("telegram"), [*signs, reactions(9, Family.SHAPE, .8, (90, 95))], {})
+    assert len(later.signs) == 2

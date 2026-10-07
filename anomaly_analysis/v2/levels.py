@@ -28,11 +28,14 @@ from .detectors.bounded_reaction_burst import (
     CONFIRMED_PLATEAU_MODE, MEASUREMENT_MODE as BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE,
 )
 from .detectors.burst_plateau import RAPID_VIEW_MODE, VIEW_MEASUREMENT_MODE
+from .detectors import engagement_regime
+from .detectors.engagement_regime import CONFIRMED_MODE as CONFIRMED_EPISODE_MODE
 from .detectors.late_engagement import MEASUREMENT_MODE as LATE_ENGAGEMENT_MODE
+from .detectors.linear_feed import STEADY_STOP_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
-from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare
+from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare, views_belong_to_source
 
 # Пороги силы. Сильный признак — тот, что один даёт выраженную аномалию: у
 # детекторов это пуассоновский z в районе десяти и выше или физически
@@ -45,13 +48,31 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
-AGGREGATION_VERSION = "2.3.0"
+AGGREGATION_VERSION = "2.5.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
 GAP_PATTERN = 4
+# Признаки одного события, разделённые не больше чем этим, — одно событие:
+# детектор рывка доказывает соседние пятиминутки по отдельности.
+SAME_EVENT_GAP = timedelta(minutes=10)
+# RuTube: форма прихода просмотров — не признак. Видео внутри площадки почти
+# не находят, смотрят по ссылке из соцсети или с сайта: волна за час-два и
+# тишина. По журналу циклов (квитанции подтвердили 49 из 52 мест роста) так
+# выглядят 13 % постов RuTube из 30 аккаунтов — это норма площадки, а не
+# пакет. Рывок с плато и поздний скачок просмотров, а с ними рывок
+# реакций в ту же волну, ослабляются ниже порога вывода: при пороге 0,3 две
+# волны одного поста давали слабый сигнал у 3 % постов RuTube. Реакции,
+# оторванные от просмотров (6, 7, 14), и линейная подача (1: волна по ссылке
+# не бывает ровной по часам) проверяются как прежде.
+RUTUBE_WAVE_CAP = 0.15
+RUTUBE_VIEW_SHAPES = frozenset({2, 9})
+# Волна по ссылке растягивается на десятки минут; скачок, доказанный на
+# более коротком окне (при частых замерах), — уже не она.
+RUTUBE_WAVE_SCALE = timedelta(minutes=30)
 
-SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻"}
+SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻",
+           14: "⊓", 15: "↧", 16: "⌐"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -65,6 +86,9 @@ TITLES = {
     11: "Отклик выше исторического диапазона",
     12: "Продолжение отклика выше ожидаемого",
     13: "Поздняя вовлечённость выше ранней",
+    14: "Пакет реакций, оторванный от просмотров",
+    15: "Площадка списала реакции",
+    16: "Одновременный обрыв просмотров и реакций",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
@@ -94,6 +118,9 @@ ALTERNATIVES = {
     "wide_reach_low_engagement": "пост разошёлся шире обычной аудитории, которая реагирует реже",
     "interested_audience_found_post": "пост нашла заинтересованная аудитория: подборка, профильный чат или новый увлечённый читатель архива",
     "multiple_reactions_per_viewer": "один читатель мог поставить несколько реакций; правило сравнения использует порог 1:1",
+    "external_link_wave": "видео посмотрели по ссылке из соцсети или с сайта: на RuTube такие волны обычны",
+    "platform_write_off": "площадка удалила реакции аккаунтов, которые сочла недостоверными",
+    "post_edited_reactions_reset": "пост пересоздали или изменили так, что площадка сбросила часть реакций",
 }
 QUALITY_TEXTS = {
     "reported_reaction_shape": "форма сохранённых реакций отмечена слабым сигналом без подтверждения точности или сопоставимой аудитории",
@@ -142,15 +169,45 @@ def run_detectors(prepared: PreparedSeries, context: DetectorContext) -> tuple[l
     signs: list[Sign] = []
     for detector in detectors:
         signs.extend(detector.detect(prepared, context))
+    signs = _widen_to_episodes(prepared, context, signs)
     signs = [replace(sign, render={"measurementMode": "exact_quality_v1", **sign.render}) for sign in signs]
     return signs, {"preparation": PREPARATION_VERSION, "aggregation": AGGREGATION_VERSION,
                    **{detector.ID: detector.VERSION for detector in detectors}}
+
+
+def _widen_to_episodes(prepared: PreparedSeries, context: DetectorContext, signs: list[Sign]) -> list[Sign]:
+    """Рывок реакций на коротком окне подсвечивает весь эпизод, в котором лежит.
+
+    Детектор рывка доказывает изменение на самом коротком убедительном окне;
+    отрезок с той же высокой долей реакций вокруг него — тот же пакет, и
+    читатель должен видеть его целиком. Формула и числа признака не меняются.
+    """
+    reactions_bursts = [sign for sign in signs if sign.pattern == 9 and sign.metric is Metric.REACTIONS]
+    if not reactions_bursts:
+        return signs
+    spans = engagement_regime.episode_spans(prepared, context)
+    published = prepared.series.published_at
+    widened = []
+    for sign in signs:
+        if sign in reactions_bursts:
+            start = (sign.interval.start - published).total_seconds()
+            end = (sign.interval.end - published).total_seconds()
+            for low, high in spans:
+                if low <= start + 60 and end - 60 <= high and (high - low) > (end - start):
+                    sign = replace(sign, interval=Interval(published + timedelta(seconds=low),
+                                                           published + timedelta(seconds=high)),
+                                   render={**sign.render, "startAge": round(low), "endAge": round(high),
+                                           "burstStartAge": round(start), "burstEndAge": round(end)})
+                    break
+        widened.append(sign)
+    return widened
 
 
 def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[Sign],
             versions: dict[str, str], norm_version: int | None = None) -> PostVerdict:
     unanalyzable = _unanalyzable(prepared)
     kept = []
+    signs = _rutube_waves(prepared, signs)
     for sign in signs:
         bounded_counts = (sign.pattern == 9 and (
             sign.metric is Metric.REACTIONS and sign.render.get("measurementMode") in {BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE}
@@ -169,21 +226,19 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
                                and sign.render.get("comparisonMode") == ENDPOINT_MODE)
         # Late engagement compares exact endpoints of a days-long window.
         late_endpoints = sign.pattern == 13 and sign.render.get("measurementMode") == LATE_ENGAGEMENT_MODE
+        # Эпизод отклика сравнивает долю реакций по концам отрезков: пробел
+        # внутри лишь укрупняет отрезок. Губкинский в MAX: +265 реакций за 6 ч
+        # с пробелом сбора 2,6 ч внутри снимались целиком.
+        episode = sign.pattern == 14
         if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_counts
-                and not endpoint_comparison and not late_endpoints
+                and not endpoint_comparison and not late_endpoints and not episode
                 and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:
             sign = replace(sign, strength=min(sign.strength, YOUNG_NORM_CAP))
         if sign.strength >= WEAK:
             kept.append(sign)
-    # Two implementations/scales observing the same event are one signal.
-    unique = []
-    for sign in sorted(kept, key=lambda item: (not _confirmed_plateau(item), -item.strength, item.pattern)):
-        if not any(sign.pattern == item.pattern and sign.metric is item.metric
-                   and sign.family is item.family and sign.interval.start < item.interval.end
-                   and item.interval.start < sign.interval.end for item in unique):
-            unique.append(sign)
+    unique = _same_events(kept)
     level = level_for(unique)
     # Keep the independent evidence that produced the level visible even when
     # one family has more than six stronger events.
@@ -208,7 +263,74 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
                        quality, versions, norm_version)
 
 
+def _rutube_waves(prepared: PreparedSeries, signs: Sequence[Sign]) -> list[Sign]:
+    if prepared.series.platform != "rutube":
+        return list(signs)
+    def wave(sign: Sign) -> bool:
+        return (sign.pattern in RUTUBE_VIEW_SHAPES and sign.metric is Metric.VIEWS
+                and sign.scale >= RUTUBE_WAVE_SCALE)
+    waves = [sign.interval for sign in signs if wave(sign)]
+    capped = []
+    for sign in signs:
+        view_shape = wave(sign)
+        same_wave = (sign.pattern == 9 and sign.metric is Metric.REACTIONS
+                     and any(sign.interval.start <= wave.end + SAME_EVENT_GAP
+                             and wave.start <= sign.interval.end + SAME_EVENT_GAP for wave in waves))
+        if (view_shape or same_wave) and sign.strength > RUTUBE_WAVE_CAP:
+            sign = replace(sign, strength=RUTUBE_WAVE_CAP,
+                           alternatives=tuple(dict.fromkeys(("external_link_wave", *sign.alternatives))))
+        capped.append(sign)
+    return capped
+
+
+def _event(sign: Sign) -> tuple[Any, ...]:
+    """Что именно утверждает признак — у разных детекторов одного события ключ общий.
+
+    Рывок реакций (9) и пакет реакций (14) — два способа увидеть одну и ту же
+    пачку реакций на фоне просмотров: рывок доказывает её на коротком окне,
+    эпизод — по доле реакций на просмотр. Как два независимых семейства они
+    давали уровень 3 одним событием.
+    """
+    if sign.pattern == 14 or sign.pattern == 9 and sign.metric is Metric.REACTIONS:
+        return ("reaction_episode",)
+    return (sign.pattern, sign.metric, sign.family)
+
+
+def _same_events(signs: Sequence[Sign]) -> list[Sign]:
+    """Признаки одного события — один признак: сильнейший, на весь участок события.
+
+    Остальные названия уходят в `render.sameEpisode`: читатель видит, что
+    событие подтвердили несколько проверок, но в уровень оно входит один раз.
+    """
+    unique: list[Sign] = []
+    others: dict[int, list[str]] = {}
+    patterns: dict[int, set[int]] = {}
+    for sign in sorted(signs, key=lambda item: (not _confirmed_plateau(item), -item.strength, item.pattern)):
+        for index, item in enumerate(unique):
+            if (_event(sign) == _event(item) and sign.interval.start <= item.interval.end + SAME_EVENT_GAP
+                    and item.interval.start <= sign.interval.end + SAME_EVENT_GAP):
+                unique[index] = replace(item, interval=Interval(min(item.interval.start, sign.interval.start),
+                                                                max(item.interval.end, sign.interval.end)))
+                if sign.pattern != item.pattern:
+                    patterns.setdefault(index, set()).add(sign.pattern)
+                title = sign_title(sign)
+                if title != sign_title(item):
+                    others.setdefault(index, [])
+                    if title not in others[index]:
+                        others[index].append(title)
+                break
+        else:
+            unique.append(sign)
+    return [replace(item, render={**item.render, "sameEpisode": others[index],
+                                  "sameEpisodePatterns": sorted(patterns.get(index, ()))})
+            if index in others else item for index, item in enumerate(unique)]
+
+
 def _confirmed_plateau(sign: Sign) -> bool:
+    if sign.pattern == 1:
+        return sign.strength >= .9 and sign.render.get("plateauEvidence") == STEADY_STOP_MODE
+    if sign.pattern == 14:
+        return sign.strength >= .9 and sign.render.get("plateauEvidence") == CONFIRMED_EPISODE_MODE
     return (sign.pattern == 9 and sign.family is Family.SHAPE and sign.strength >= .9
             and (sign.metric, sign.render.get("measurementMode"), sign.render.get("plateauEvidence")) in {
                 (Metric.REACTIONS, BOUNDED_REACTION_MODE, CONFIRMED_PLATEAU_MODE),
@@ -240,10 +362,10 @@ def compact(verdict: PostVerdict) -> dict[str, Any]:
     }
 
 
-def sign_payload(sign: Sign) -> dict[str, Any]:
+def sign_title(sign: Sign) -> str:
     title = TITLES[sign.pattern]
     if sign.render.get("measurementMode") == REPORTED_SHAPE_MODE:
-        title = "Рывок с плато: требуется проверка"
+        title = "Рывок реакций с плато по сохранённым значениям"
     elif sign.render.get("measurementMode") == BOUNDED_REACTION_MODE:
         title = ("Рывок, переходящий в плато" if sign.render.get("plateauEvidence") == CONFIRMED_PLATEAU_MODE
                  else "Резкий прирост реакций с последующим замедлением")
@@ -255,6 +377,18 @@ def sign_payload(sign: Sign) -> dict[str, Any]:
         title = "Резкий скачок просмотров с последующим плато"
     elif sign.pattern == 6 and sign.render.get("comparisonMode") == ENDPOINT_MODE:
         title = "Прирост реакций при малом приросте просмотров"
+    elif sign.pattern == 14:
+        if sign.render.get("viewsSurge"):
+            title = "Приток просмотров без отклика"
+        elif sign.render.get("mode") == "start":
+            title = "Реакции включились без новой аудитории"
+        else:
+            title = "Пакет реакций с остановкой"
+    return title
+
+
+def sign_payload(sign: Sign) -> dict[str, Any]:
+    title = sign_title(sign)
     return {
         "pattern": sign.pattern, "symbol": SYMBOLS[sign.pattern], "title": title,
         "family": sign.family.value, "metric": sign.metric.value, "strength": round(sign.strength, 3),
@@ -343,7 +477,7 @@ def _quality(prepared: PreparedSeries, context: DetectorContext,
     codes = list(prepared.quality_codes)
     if prepared.truncated_start:
         codes.append("truncated_start")
-    if prepared.series.is_repost:
+    if views_belong_to_source(prepared.series):
         codes.append("repost_source_counter")
     if context.norm is None:
         codes.append("no_norm")

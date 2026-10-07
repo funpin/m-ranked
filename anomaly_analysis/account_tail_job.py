@@ -1,10 +1,11 @@
-"""Ночной профиль позднего отклика аккаунтов: python -m anomaly_analysis.account_tail_job.
+"""Ночной профиль позднего отклика и аккаунтные находки: python -m anomaly_analysis.account_tail_job.
 
-Читает только сводки позднего отклика постов (analytics.post_anomaly_state.
-tail_ledger, ~200 байт на пост), которые работник анализа уже построил из
-прочитанных им рядов; замеры не читаются. Пишет строку на аккаунт в
-analytics.account_tail_profile и удаляет строки старше срока хранения.
-Метод и пороги — anomaly_analysis/v2/account_tail.py.
+Читает только сводки постов (analytics.post_anomaly_state.tail_ledger,
+~200 байт на пост), которые работник анализа уже построил из прочитанных им
+рядов; замеры не читаются. Пишет строку на аккаунт в
+analytics.account_tail_profile и удаляет строки старше срока хранения, затем
+переписывает analytics.account_anomaly_finding. Метод и пороги —
+anomaly_analysis/v2/account_tail.py и v2/account_findings.py.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from pathlib import Path
 import time
 
 from .metrics import write_textfile
+from .v2.account_findings import METHOD_VERSION as FINDINGS_VERSION, WINDOW_DAYS, LedgerPost, findings, with_texts
 from .v2.account_tail import POSTS_FROM_DAYS, POSTS_UNTIL_DAYS, PostLedger, profiles, window_end
 from .v2.store import PostgresAnomalyStore
 from .v2.tail_ledger import MOSCOW, ledger_from_payload
@@ -40,6 +42,24 @@ def run(store: PostgresAnomalyStore, computed_for: date, retention_days: int = R
     return result, len(posts)
 
 
+def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=()):
+    end = window_end(computed_for)
+    start = end - timedelta(days=WINDOW_DAYS)
+    posts = []
+    for row in store.read_finding_ledgers(start, end):
+        ledger = ledger_from_payload(row["tail_ledger"])
+        if ledger is not None:
+            posts.append(LedgerPost(row["publication_id"], row["account_id"], row["platform"],
+                                    row["published_at"], bool(row["is_repost"]), ledger))
+    tail_status = {item.account_id: (item.platform, item.status, {**item.metrics})
+                   for item in tail_profiles if item.status is not None}
+    persistent = [account for account, (_, status, _) in tail_status.items() if status == 2]
+    late = store.read_late_members(persistent, start, end)
+    result = [with_texts(item) for item in findings(posts, computed_for, late, tail_status)]
+    store.write_account_findings(result, FINDINGS_VERSION)
+    return result
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     dsn = os.environ.get("ANOMALY_DATABASE_URL", "").strip()
@@ -49,7 +69,9 @@ def main() -> None:
     started = time.monotonic()
     # Окно заканчивается московской полночью: последние полные сутки — вчера.
     computed_for = datetime.now(timezone.utc).astimezone(MOSCOW).date()
-    result, posts = run(PostgresAnomalyStore(dsn), computed_for)
+    store = PostgresAnomalyStore(dsn)
+    result, posts = run(store, computed_for)
+    found = run_findings(store, computed_for, result)
     statuses = Counter((item.platform, "abstain" if item.status is None else str(item.status)) for item in result)
     log.info("account tail profiles for %s: %d accounts, %d post ledgers, %s", computed_for, len(result), posts,
              dict(sorted(statuses.items())))
@@ -58,6 +80,10 @@ def main() -> None:
                ("tail_post_ledgers", "gauge", {}, posts)]
     samples += [("tail_profiles", "gauge", {"platform": platform, "status": status}, count)
                 for (platform, status), count in sorted(statuses.items())]
+    kinds = Counter((item.platform, item.kind) for item in found)
+    log.info("account findings for %s: %s", computed_for, dict(sorted(kinds.items())))
+    samples += [("account_findings", "gauge", {"platform": platform, "kind": kind}, count)
+                for (platform, kind), count in sorted(kinds.items())]
     write_textfile(Path(metrics_value) if metrics_value else None, samples)
 
 

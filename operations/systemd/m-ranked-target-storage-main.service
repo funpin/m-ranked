@@ -1,0 +1,51 @@
+[Unit]
+Description=M-Ranked main server storage agent: backups, placement, panel jobs (ADR-016)
+Documentation=file:/opt/m-ranked/current/operations/runbooks/COLD_ARCHIVE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# root: агент читает дампы базы (0600 root), делает на них жёсткие ссылки в
+# хранилище и запускает службы заданий панели через systemctl.
+User=root
+Group=root
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/maintenance.env
+EnvironmentFile=-/etc/m-ranked/storage-main.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/maintenance-pgpass
+ExecStartPre=/usr/bin/install -m 0600 %d/pgpass /run/m-ranked-storage-main/pgpass
+Environment=PGPASSFILE=/run/m-ranked-storage-main/pgpass
+Environment=MRANKED_STORE_DIR=/var/lib/m-ranked/store
+Environment=NODE_AGENT_STATE_DIR=/var/lib/m-ranked/node-agent
+Environment=TZ=UTC
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m operations.storage.main_agent
+TimeoutStartSec=10min
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+# Без RestrictSUIDSGID: агент создаёт каталоги хранилища с битом setgid.
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+RuntimeDirectory=m-ranked-storage-main
+RuntimeDirectoryMode=0700
+StateDirectory=m-ranked/node-agent
+UMask=0027
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

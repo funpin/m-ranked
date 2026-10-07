@@ -9,6 +9,9 @@ import {
   FILTER_SORT_CLASS,
   FILTER_TOOLBAR_CLASS,
 } from "@/components/filter-toolbar";
+import {
+  FINDINGS_DIRECTION_CLASS, FINDINGS_FILTERS_CLASS, FINDINGS_MODE_CLASS, FINDINGS_PERIOD_CLASS, FINDINGS_PLATFORM_CLASS, FINDINGS_SEARCH_CLASS, FINDINGS_SORT_CLASS, FINDINGS_TOOLBAR_CLASS,
+} from "@/components/findings/toolbar";
 
 /**
  * Шапка страницы и полоса фильтров при переходе.
@@ -37,30 +40,48 @@ function Chrome({ title, description, controls = 3 }: {
   );
 }
 
+/** Полоса «Находок»: та же сетка, что у настоящей, чтобы подмена не двигала поля. */
+function FindingsChrome() {
+  return (
+    <>
+      <PageHeader title="Находки: посты выше нормы" description="Посты, которые сработали лучше обычного для своего аккаунта." />
+      <div className={FINDINGS_TOOLBAR_CLASS}>
+        {[FINDINGS_MODE_CLASS, FINDINGS_PLATFORM_CLASS, FINDINGS_PERIOD_CLASS, FINDINGS_DIRECTION_CLASS,
+          FINDINGS_SORT_CLASS, FINDINGS_FILTERS_CLASS, FINDINGS_SEARCH_CLASS].map((className) => (
+          <div key={className} className={className}><Skeleton className="h-8 w-full" /></div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 /** Одна карточка вуза: та же высота и та же внутренняя разбивка, что у
  *  настоящей, поэтому подмена не двигает сетку. */
 function CardShape() {
   return (
-    <div className="bg-card flex min-h-[470px] flex-col gap-4 rounded-xl border p-5 pt-6 shadow-sm">
+    <div className="bg-card flex flex-col gap-3 rounded-xl border p-5 pt-6 shadow-sm">
       <Skeleton className="h-5 w-3/4" />
       <Skeleton className="h-4 w-1/2" />
       <div className="flex gap-1.5">
         <Skeleton className="h-6 w-12" /><Skeleton className="h-6 w-12" /><Skeleton className="h-6 w-12" />
       </div>
       <Skeleton className="h-1.5 w-full" />
-      {/* Четыре числа в две колонки, под каждым подпись и место под плашку
-          изменения — ровно как в настоящей карточке. */}
-      <div className="my-4 grid flex-1 grid-cols-2 content-center gap-x-5 gap-y-3">
-        {Array.from({ length: 4 }, (_, cell) => (
-          <div key={cell} className="grid gap-1.5">
-            <Skeleton className="h-7 w-16" />
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-[22px] w-14" />
+      <div className="my-1 grid flex-1 gap-4">
+        {Array.from({ length: 2 }, (_, row) => (
+          <div key={row} className="grid gap-2">
+            <Skeleton className="h-3 w-28" />
+            <div className="grid grid-cols-2 gap-x-5">
+              {Array.from({ length: 2 }, (_, cell) => <div key={cell} className="grid gap-1.5">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-7 w-16" />
+                <Skeleton className="h-5 w-14" />
+              </div>)}
+            </div>
           </div>
         ))}
       </div>
-      <div className="mt-auto grid gap-2 border-t pt-3.5">
-        <Skeleton className="h-4 w-24" /><Skeleton className="h-3 w-2/3" />
+      <div className="mt-auto flex justify-between gap-2 border-t pt-3">
+        <Skeleton className="h-5 w-14" /><Skeleton className="h-5 w-28" />
       </div>
     </div>
   );
@@ -103,16 +124,13 @@ export function TableSkeleton({ rows = 10, chrome = true }: { rows?: number; chr
 /** Статистика меняет представление в том же breakpoint, что и результат:
  *  строки на широком экране и полноценные карточки на телефоне. Старая
  *  заготовка всегда обещала таблицу, а затем резко меняла и ширину, и высоту. */
-export function StatisticsSkeleton({ rows = 5, chrome = true, view = "publications" }: {
+export function StatisticsSkeleton({ rows = 5, chrome = true }: {
   rows?: number;
   chrome?: boolean;
-  view?: "publications" | "entities";
 }) {
   return (
     <>
-      {chrome ? <Chrome title="Статистика публикаций"
-        description="Накопленные результаты публикаций, вышедших в выбранный период."
-        controls={3} /> : null}
+      {chrome ? <FindingsChrome /> : null}
       <section className="min-w-0 space-y-3" role="status" aria-live="polite">
         <span className="sr-only">Загрузка статистики</span>
         <Skeleton className="h-6 w-44" />
@@ -141,7 +159,7 @@ export function StatisticsSkeleton({ rows = 5, chrome = true, view = "publicatio
               </div>
               <div className="mt-4 flex gap-2">
                 <Skeleton className="h-9 min-w-0 flex-1" />
-                {view === "publications" ? <Skeleton className="size-9 shrink-0" /> : null}
+                <Skeleton className="size-9 shrink-0" />
               </div>
             </div>
           ))}
@@ -205,19 +223,22 @@ export function AccountSkeleton({ chrome = true }: { chrome?: boolean }) {
           {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-10 w-44" />)}
         </div>
       </> : null}
-      <div className="bg-card grid gap-4 rounded-xl border p-5 shadow-sm">
-        <Skeleton className="h-4 w-full max-w-3xl" />
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {Array.from({ length: 6 }, (_, index) => (
-              <div key={index} className="grid content-start gap-1 rounded-lg border p-4">
-                <Skeleton className="h-6 w-20" />
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="mt-1 h-[22px] w-14" />
+      <div className="bg-card grid gap-3 rounded-xl border p-4 sm:p-5">
+        <Skeleton className="h-4 w-80 max-w-full" />
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-2">
+            {Array.from({ length: 8 }, (_, index) => (
+              <div key={index} className={`grid content-start gap-1 rounded-lg border p-2.5 ${index < 4 ? "min-h-20 sm:min-h-[72px]" : "min-h-[92px]"}`}>
+                <Skeleton className="h-4 w-24 max-w-full" />
+                <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-7 w-16" />
+                  {index < 6 ? <Skeleton className="h-5 w-10" /> : null}
+                </div>
+                {index >= 4 ? <Skeleton className="h-3 w-20 max-w-full" /> : null}
               </div>
             ))}
           </div>
-          <Skeleton className="h-[380px] w-full rounded-lg" />
+          <Skeleton className="h-[422px] w-full rounded-lg sm:h-[438px]" />
         </div>
       </div>
       <div className="bg-card grid gap-3 rounded-xl border p-5 shadow-sm">
@@ -239,10 +260,7 @@ export function skeletonFor(href: string) {
   if (!href) return null;
   const path = href.split("?")[0] ?? "";
   if (path === "/review") return <CardGridSkeleton />;
-  if (path.startsWith("/statistics")) {
-    const view = new URL(href, "https://m-ranked.invalid").searchParams.get("view") === "entities" ? "entities" : "publications";
-    return <StatisticsSkeleton view={view} />;
-  }
+  if (path.startsWith("/statistics")) return <StatisticsSkeleton />;
   if (path.startsWith("/compare")) {
     return <CompareDashboardSkeleton />;
   }

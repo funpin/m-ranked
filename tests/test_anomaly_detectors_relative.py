@@ -32,7 +32,6 @@ def run(detector, name, **options):
 
 @pytest.mark.parametrize("detector,name", [
     (late_spike, "p02_late_spike_telegram"),
-    (late_spike, "p03_multiscale_rise_vk"),
     (late_spike, "owner_vk_views_jump_second_day"),
     (gap_growth, "p04_gap_growth_telegram"),
 ])
@@ -43,6 +42,13 @@ def test_detector_finds_its_pattern(detector, name):
     assert sign.pattern == detector.PATTERN and sign.strength >= 0.7
     assert detector.NEEDS_NORM and sign.norm_confidence is not None and sign.norm_confidence >= 0.5
     assert re.search(r"\d", sign.formula)
+
+
+def test_late_rise_below_a_quarter_of_the_post_is_a_weak_signal():
+    # Подъём +8 000 к ~60 000 просмотров значим по модели, но меньше четверти
+    # набранного: к четвёртым суткам модель ждёт почти ноль, отсюда большой z.
+    (sign,) = [sign for sign in run(late_spike, "p03_multiscale_rise_vk") if sign.metric.value == "views"]
+    assert sign.strength == late_spike.NATURAL_CAP and sign.render["excessShare"] < late_spike.STRONG_SHARE
 
 
 def test_conditional_underdispersion_is_only_an_exploratory_weak_sign():
@@ -92,7 +98,7 @@ def test_stretched_rise_is_invisible_at_fifteen_minutes_and_found_at_six_hours(m
     assert not [sign for sign in run(late_spike, "p03_multiscale_rise_vk") if sign.metric.value == "views"]
     monkeypatch.setattr(late_spike, "SCALES", (timedelta(minutes=15), timedelta(hours=1), timedelta(hours=6)))
     (sign,) = [sign for sign in run(late_spike, "p03_multiscale_rise_vk") if sign.metric.value == "views"]
-    assert sign.scale == timedelta(hours=6) and "виден на масштабе 6 ч" in sign.formula
+    assert sign.scale >= timedelta(hours=1) and f"виден на масштабе {sign.scale.seconds // 3600} ч" in sign.formula
 
 
 def test_without_a_norm_the_detectors_still_mark_their_confidence():

@@ -20,7 +20,8 @@ from .outbox import OutboxMarker
 from .security import AuthConfig
 from .security_events import SecurityTelemetry
 from .sessions import SessionPolicy, SessionStore
-from .routes import admin, analysis, compare, emoji, health, query, site, sitemap, statistics
+from .visits import VisitCounter
+from .routes import admin, analysis, compare, emoji, findings, health, query, site, sitemap, statistics, system, visits
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     listener = InvalidationListener(settings.read_dsn, cache) if settings.read_dsn else None
     outbox = OutboxMarker(settings.outbox_dsn) if settings.outbox_dsn else None
+    # Посещения пишутся административным соединением; без него маячок молчит.
+    counter = VisitCounter(database) if settings.admin_dsn else None
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -64,6 +67,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if outbox is not None:
             await outbox.start()
         await cache_metrics.start()
+        if counter is not None:
+            await counter.start()
         try:
             yield
         finally:
@@ -72,6 +77,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if outbox is not None:
                 await outbox.stop()
             await cache_metrics.stop()
+            if counter is not None:
+                await counter.stop()
             await cache_call(cache.close())
             await database.close()
 
@@ -89,6 +96,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db = database
     app.state.cache = cache
     app.state.cache_metrics = cache_metrics
+    app.state.visits = counter
     # Неверная настройка админки закрывает админку, а не весь API: публичное
     # чтение к учётным записям отношения не имеет, и ронять из-за них сайт
     # целиком — менять одну неприятность на другую, большую.
@@ -112,7 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(ApiProblem, handle)
     app.add_exception_handler(RequestValidationError, handle_validation)
 
-    for module in (health, query, statistics, compare, emoji, analysis, site, sitemap, admin):
+    for module in (health, query, statistics, findings, compare, emoji, analysis, site, sitemap, admin, visits, system):
         app.include_router(module.router)
     app.add_middleware(BodyLimit, maximum=settings.max_body_bytes)
     return app

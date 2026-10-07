@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem,
   PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { NativeSegments } from "@/components/native-field";
+import { SortDirection } from "@/components/sort-direction";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { LegacyFilterForm } from "@/components/legacy-filter-form";
@@ -56,12 +57,13 @@ export const metadata: Metadata = {
 export default async function OverviewPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const period = normalizePeriod(params.period, "1d");
-  const platform = normalizePlatform(params.platform, "telegram");
+  const platform = normalizePlatform(params.platform, "all");
   const sort = normalizeSort(params.sort, platform);
   const direction = normalizeDirection(params.direction, sort);
   const q = (first(params.q) ?? "").trim();
   const cursor = first(params.cursor);
   const pagination = overviewPagination(cursor, params.from);
+  const summaryPromise = platform === "all" ? api.siteSummary().catch(() => null) : Promise.resolve(null);
 
   let page;
   try {
@@ -78,6 +80,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
   }
 
   const items = page.items;
+  const summary = await summaryPromise;
   return (
     <>
       <PageHeader
@@ -85,14 +88,14 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         titleNote={
           <MethodNote title="Как считаются показатели">
             {platform === "all"
-              ? <><b>Почему нет общей суммы:</b> лайк, реакция, просмотр видео и просмотр поста имеют разный смысл. Общий режим показывает покрытие и официальный общий М‑Рейтинг; единый межплатформенный индекс будет добавлен только после утверждения формулы.</>
+              ? <>Показатели суммируются по всем официальным аккаунтам вуза. Реакции включают лайки; просмотры, комментарии и репосты складываются отдельно. Прирост каждого поста считается от замера на границе периода до последнего замера внутри него; для новых постов отсчёт идёт от нуля. Недоступные метрики не заменяются нулями — размер выборки и покрытие доступны по значку у каждого показателя. Публикации одного материала в разных соцсетях учитываются отдельно. Подписчики — сумма подписок, а не число уникальных людей. На странице сравнения показаны последние накопленные показатели постов, вышедших за период.</>
               : platform === "telegram"
                 ? <>В карточке показана активность всех отслеживаемых постов, для которых внутри выбранного периода есть сравнимые замеры, а не только новых публикаций. Реакции и просмотры — разница между первым и последним замером внутри окна; прирост до первого замера в период не включается. Для новых постов с полной историей отсчёт идёт от нуля в момент публикации. Медианы — типичный прирост одного поста за это окно и округляются до целого. Плашка у медианы сравнивает типичный прирост с предыдущим таким же периодом и скрывается, если сравнивать не с чем или изменения нет.</>
                 : <>Для каждой публикации берётся разница между первым и последним сравнимым снимком внутри окна. Метрики, которых нет в официальном источнике {PLATFORM_LONG_LABELS[platform]}, не заменяются нулями и не подменяются Telegram-данными.</>}
           </MethodNote>
         }
         description={platform === "all"
-          ? "Официальные аккаунты и общий М‑Рейтинг без сложения несопоставимых метрик."
+          ? "Суммарная активность официальных соцсетей каждого вуза за выбранный период."
           : "Прирост показателей всех постов в базе за выбранный период, а не только новых."}
       />
 
@@ -103,25 +106,22 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   legend="Площадка"
                   value={platform}
                   options={FILTER_PLATFORM_OPTIONS}
-                  labelled={false}
+                  labelled={false} stretch
                 /></div>
               <div className={FILTER_PERIOD_CLASS}><NativeSegments name="period" legend="Период" value={period}
-                options={FILTER_PERIOD_OPTIONS} labelled={false} /></div>
-              <div className={FILTER_SEARCH_CLASS}>
-                <InputGroup className="h-8">
-                  <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
-                  <InputGroupInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" className="text-sm md:text-sm" />
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupButton type="submit" variant="secondary" size="icon-sm" aria-label="Применить фильтры" title="Применить фильтры" className="size-6"><ArrowRight className="size-3.5" aria-hidden="true" /></InputGroupButton>
-                  </InputGroupAddon>
-                </InputGroup>
-              </div>
-              <div className={FILTER_SORT_CLASS}>
-                <NativeSelect name="sort" defaultValue={sort} aria-label="Сортировка" title="Порядок карточек в списке" className={FILTER_SELECT_CLASS}>
+                options={FILTER_PERIOD_OPTIONS} labelled={false} stretch /></div>
+              <div className={FILTER_DIRECTION_CLASS}><SortDirection name="direction" value={direction} /></div>
+      <div className={FILTER_SORT_CLASS}>
+                <NativeSelect name="sort" defaultValue={sort} aria-label="Сортировка" title={sort === "anomalies" ? "Сумма красных и оранжевых счётчиков за выбранный период" : "Порядок карточек в списке"} className={FILTER_SELECT_CLASS}>
+                  <NativeSelectOption value="anomalies">Количество аномалий</NativeSelectOption>
                   <NativeSelectOption value="name">Название вуза · алфавит</NativeSelectOption>
                   {platform === "all" ? (
                     <>
                       <NativeSelectOption value="m_rating">Общий М‑Рейтинг · место</NativeSelectOption>
+                      <NativeSelectOption value="views">Прирост просмотров</NativeSelectOption>
+                      <NativeSelectOption value="reactions">Прирост реакций</NativeSelectOption>
+                      <NativeSelectOption value="posts">Новые публикации</NativeSelectOption>
+                      <NativeSelectOption value="subscribers">Подписчики</NativeSelectOption>
                     </>
                   ) : (
                     <>
@@ -135,18 +135,21 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   )}
                 </NativeSelect>
               </div>
-              <div className={FILTER_DIRECTION_CLASS}>
-                <NativeSelect name="direction" defaultValue={direction} aria-label="Порядок" title="Порядок" className={FILTER_SELECT_CLASS}>
-                  <NativeSelectOption value="desc">По убыванию</NativeSelectOption>
-                  <NativeSelectOption value="asc">По возрастанию</NativeSelectOption>
-                </NativeSelect>
+              <div className={FILTER_SEARCH_CLASS}>
+                <InputGroup className="h-8">
+                  <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
+                  <InputGroupInput name="q" type="search" defaultValue={q} aria-label="Поиск вуза" placeholder="Поиск вуза" className="text-sm md:text-sm" />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton type="submit" variant="secondary" size="icon-sm" aria-label="Применить фильтры" title="Применить фильтры" className="size-6"><ArrowRight className="size-3.5" aria-hidden="true" /></InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
               </div>
-      </LegacyFilterForm>
+              </LegacyFilterForm>
 
       {/* Заготовка стоит только вокруг списка: заголовок и фильтры остаются
           видимыми и рабочими, пока едет новая выборка. */}
       <NavigationBoundary fallback={<CardGridSkeleton chrome={false} />}>
-        {platform === "all" ? <CoverageSummary items={items} /> : null}
+        {platform === "all" ? <CoverageSummary items={items} trackedInstitutions={summary?.trackedInstitutions ?? null} referenceInstitutions={summary?.ratingInstitutions ?? 233} /> : null}
 
         <section className="reveal grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
           items.map((item) => <OverviewCard item={item} integrationWarning={page.integrationWarning} key={item.entityId} />)

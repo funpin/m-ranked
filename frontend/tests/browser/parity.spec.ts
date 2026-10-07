@@ -18,37 +18,41 @@ for (const platform of ["telegram", "vk", "max", "rutube"]) {
     const legacy = platform === "telegram" ? "channels=2" : "institutions=2";
     const response = await page.goto(`/compare?platform=${platform}&period=24&submitted=true&${legacy}`);
     expect(response?.status()).toBe(200);
-    await expect(page.getByTestId("compare-dashboard")).toBeVisible();
+    // Потоковая отрисовка на мгновение держит копию панели в скрытом
+    // контейнере React (div[hidden]) — панель ищется в основном содержимом.
+    await expect(page.getByRole("main").getByTestId("compare-dashboard")).toBeVisible();
     await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
-    await expect(page.getByTestId("platform-tabs").getByRole("tab", { selected: true })).toHaveAttribute("data-value", platform);
-    if (platform !== "telegram") await expect(page.getByTestId("highlight-chip")).toContainText("Бета");
+    await expect(page.getByRole("main").getByTestId("platform-tabs").getByRole("tab", { selected: true })).toHaveAttribute("data-value", platform);
+    if (platform !== "telegram") await expect(page.getByRole("main").getByTestId("highlight-chip")).toContainText("Бета");
   });
 }
 
 test("comparison dashboard: platform tabs, highlight, ranking metric, table sort and period", async ({ page }) => {
   await page.goto("/compare");
-  const dashboard = page.getByTestId("compare-dashboard");
+  // Потоковая отрисовка на мгновение держит копию в скрытом контейнере React.
+  const main = page.getByRole("main");
+  const dashboard = main.getByTestId("compare-dashboard");
   await expect(dashboard).toBeVisible();
-  await expect(page.getByTestId("compare-kpi")).toHaveCount(6);
+  await expect(main.getByTestId("compare-kpi")).toHaveCount(6);
   // Все вузы без ограничения: 12 вузов фикстуры в рейтинге и в таблице.
-  await expect(page.getByTestId("compare-table").locator("tbody tr")).toHaveCount(12);
+  await expect(main.getByTestId("compare-table").locator("tbody tr")).toHaveCount(12);
   // На телефоне у вкладки короткая подпись «ВК», поэтому ищем по значению.
-  await page.getByTestId("platform-tabs").locator('[role="tab"][data-value="vk"]').click();
+  await main.getByTestId("platform-tabs").locator('[role="tab"][data-value="vk"]').click();
   await expect(page).toHaveURL(/platform=vk/);
-  await page.getByTestId("highlight-search").fill("Альфа");
+  await main.getByTestId("highlight-search").fill("Альфа");
   await page.getByRole("option").first().click();
-  await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
+  await expect(main.getByTestId("highlight-chip")).toContainText("Альфа");
   await expect(page).toHaveURL(/highlight=00000009-0000-4000-8000-000000000001/);
-  await expect(page.getByTestId("compare-table").locator('tr[data-highlighted="true"]')).toHaveCount(1);
+  await expect(main.getByTestId("compare-table").locator('tr[data-highlighted="true"]')).toHaveCount(1);
   await page.getByRole("combobox", { name: "Мера рейтинга" }).selectOption("engagement24");
-  await expect(page.getByTestId("ranking-card")).toContainText("Вовлечённость за 24 часа");
-  const table = page.getByTestId("compare-table");
+  await expect(main.getByTestId("ranking-card")).toContainText("Вовлечённость за 24 часа");
+  const table = main.getByTestId("compare-table");
   await table.getByRole("button", { name: /Публикаций/ }).click();
   await expect(table.getByRole("columnheader", { name: /Публикаций/ })).toHaveAttribute("aria-sort", "descending");
-  await page.getByRole("navigation", { name: "Период" }).getByRole("link", { name: "7 дней" }).click();
+  await page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "7 д", exact: true }).click();
   await expect(page).toHaveURL(/period=7d/);
   await expect(page).toHaveURL(/platform=vk/);
-  await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
+  await expect(main.getByTestId("highlight-chip")).toContainText("Альфа");
   await expect(page.locator('[data-testid="ranking-chart"] .recharts-bar-rectangle').first()).toBeVisible();
 });
 
@@ -80,11 +84,11 @@ test("comparison charts and names stay inside their cards", async ({ page }) => 
 test("form sort direction, platform autosubmit and browser history preserve fields", async ({ page }) => {
   await page.goto("/review?platform=vk&sort=subscribers&direction=desc");
   await page.locator('select[name="sort"]').selectOption("name");
-  await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
+  await expect(page.locator('input[name="direction"][value="asc"]')).toBeChecked();
   await page.getByTestId("platform-segments").locator('label:has(input[value="rutube"])').click();
   await expect(page).toHaveURL(/platform=rutube/);
   await expect(page.locator('select[name="sort"]')).toHaveValue("name");
-  await expect(page.locator('select[name="direction"]')).toHaveValue("asc");
+  await expect(page.locator('input[name="direction"][value="asc"]')).toBeChecked();
   await page.goBack();
   await expect(page.locator('input[name="platform"][value="vk"]')).toBeChecked();
   await page.goForward();
@@ -97,91 +101,157 @@ test("legacy validation returns 422 and repeated scalar chooses last", async ({ 
   await page.goto("/review?platform=telegram&platform=vk");
   await expect(page.locator('input[name="platform"][value="vk"]')).toBeChecked();
   await page.goto("/review?platform=invalid");
-  await expect(page.locator('input[name="platform"][value="telegram"]')).toBeChecked();
+  await expect(page.locator('input[name="platform"][value="all"]')).toBeChecked();
 });
 
-test("statistics all-platform mode has four independent publication slices", async ({ page }) => {
-  await page.goto("/statistics?platform=all");
-  await expect(page.getByRole("heading", { level: 1, name: "Статистика публикаций" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Вузы" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Telegram", "ВКонтакте", "MAX", "Rutube"]);
-  const tables = page.getByTestId("statistics-publications-table");
-  await expect(tables).toHaveCount(4);
-  await expect(tables.nth(0).locator("tbody tr")).toHaveCount(10);
-  await expect(tables.nth(1).locator("tbody tr")).toHaveCount(10);
-  await page.getByRole("button", { name: /Показать ещё/ }).first().click();
-  await expect(tables.nth(0).locator("tbody tr")).toHaveCount(50);
-  await expect(tables.nth(1).locator("tbody tr")).toHaveCount(10);
+test("findings list shows posts above norm with one badge and hidden-anomaly note", async ({ page }, info) => {
+  await page.goto("/statistics?platform=vk");
+  await expect(page.getByRole("heading", { level: 1, name: "Находки: посты выше нормы" })).toBeVisible();
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("findings-cards").locator("article")
+    : page.getByTestId("findings-table").locator("tbody tr");
+  await expect(rows).toHaveCount(20);
+  await expect(rows.first()).toContainText("Вуз 001");
+  await expect(rows.first()).toContainText("×5,0");
+  // Один значок на строку: возраст важнее уровня анализа.
+  await expect(rows.nth(1)).toContainText("предварительно, 6 ч");
+  await expect(rows.nth(1)).not.toContainText("слабый сигнал");
+  await expect(rows.nth(4)).toContainText("слабый сигнал");
+  await expect(rows.nth(5)).toContainText("не проверен");
+  await expect(rows.nth(6)).toContainText("по 12-му часу");
+  await expect(rows.nth(6)).not.toContainText("предварительно");
+  // Ноль — это значение, а не «нет данных».
+  const zero = rows.nth(2);
+  const mobile = info.project.name === "mobile";
+  const zeroInteractions = mobile ? zero.locator("dd").nth(0) : zero.locator("td").nth(3);
+  const zeroErv = mobile ? zero.locator("dd").nth(2) : zero.locator("td").nth(5);
+  await expect(zeroInteractions).toHaveText("0");
+  await expect(zeroErv).toHaveText("0,00%");
+  await expect(zeroInteractions).not.toContainText("—");
+  await expect(zeroErv).not.toContainText("—");
+  // Неизвестный индекс — прочерк без «×».
+  const unknownIndex = rows.nth(3).getByRole("button", { name: /^Индекс/ });
+  await expect(unknownIndex).toHaveText("—");
+  await expect(unknownIndex).not.toContainText("×");
+  await expect(page.getByTestId("findings-hidden-note")).toContainText("3");
+  await page.getByRole("button", { name: "Показать ещё" }).click();
+  await expect(rows).toHaveCount(30);
 });
 
-test("statistics concrete platform restores URL state, tabs, search and sorting", async ({ page }, info) => {
-  await page.goto("/statistics?platform=vk&q=alpha&publication_sort=views&publication_direction=asc");
-  await page.getByRole("button",{name:"Как считается: Как считается статистика"}).click();
-  const statisticsNote=page.getByText(/Период — по дате публикации/);
-  await expect(statisticsNote).toContainText("ERV = взаимодействия ÷ просмотры × 100%");
-  await expect(statisticsNote).not.toContainText("последние накопленные счётчики");
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("tab", { name: "Публикации" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("tab", { name: "Вузы" })).toBeVisible();
-  await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
-  await expect(page.getByTestId("statistics-results-panel")).toHaveCount(1);
-  await expect(page.getByTestId("statistics-results-panel")).toHaveClass(/md:bg-card/);
-  const publicationTarget=info.project.name==="mobile"
-    ? page.getByTestId("statistics-publication-cards").locator("article").first()
-    : page.getByTestId("statistics-publications-table").locator("tbody tr").first();
-  await expect(publicationTarget.getByText("Вуз 001",{exact:true})).toBeVisible();
-  await expect(publicationTarget.getByText("№1",{exact:true})).toBeVisible();
-  await expect(publicationTarget.getByText("Полное название университета 001",{exact:true})).toBeVisible();
-  await expect(publicationTarget).not.toContainText("Аккаунт 1");
-  if (info.project.name === "mobile") {
-    await expect(page.locator('select[name="publication_direction"]')).toHaveValue("asc");
-  } else {
-    await expect(page.getByRole("columnheader", { name: /Просмотры/ })).toHaveAttribute("aria-sort", "ascending");
+test("findings shows the period window, growth curves, top reactions and per-platform sorts", async ({ page }, info) => {
+  await page.goto("/statistics?platform=telegram");
+  // Период отсчитывается от момента данных двойника (01.08.2026, 15:00 МСК).
+  await expect(page.getByText("период 25.07 – 01.08")).toBeVisible();
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("findings-cards").locator("article")
+    : page.getByTestId("findings-table").locator("tbody tr");
+  await expect(rows.first().getByTestId("growth-sparkline")).toBeVisible();
+  await expect(rows.first().getByTestId("growth-sparkline")).toHaveAttribute("aria-label", /1 ч: 10 при норме 4/);
+  await expect(rows.first().getByRole("button", { name: /Взаимодействия 99: .*Чаще всего: 🔥 40/ })).toBeVisible();
+  const sort = page.locator('select[name="sort"]');
+  await expect(sort.locator("option")).toContainText(["Обсуждаемые"]);
+  await expect(sort.locator('option[value="share_index"]')).toHaveCount(0);
+  await page.goto("/statistics?platform=max");
+  await expect(page.locator('select[name="sort"] option[value="comment_index"]')).toHaveCount(0);
+  await page.goto("/statistics?platform=vk&sort=share_index");
+  await expect(page.locator('select[name="sort"]')).toHaveValue("share_index");
+  if (info.project.name !== "mobile") await expect(page.getByRole("columnheader", { name: /Индекс · репосты/ })).toBeVisible();
+});
+
+test("findings marks posts new since the last visit and the remembered vuz in the shared feed", async ({ page }, info) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("m-ranked-findings-visit")) return;
+    localStorage.setItem("m-ranked-findings-visit", String(Date.parse("2026-07-31T00:00:00Z")));
+    localStorage.setItem("m-ranked-findings-institution", "2");
+  });
+  await page.goto("/statistics?platform=vk");
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("findings-cards").locator("article")
+    : page.getByTestId("findings-table").locator("tbody tr");
+  await expect(rows.first().getByText("Новое с прошлого визита.")).toBeAttached();
+  const mine = rows.filter({ has: page.getByText("ваш вуз", { exact: true }) });
+  await expect(mine.first()).toHaveAttribute("data-mine", "true");
+  await expect(mine.first()).toContainText("Вуз 002");
+  await expect(rows.filter({ hasText: "Вуз 001" }).first()).not.toHaveAttribute("data-mine", "true");
+  // Подсветка «ваш вуз» читаема в обеих темах.
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => document.documentElement.setAttribute("data-theme", value), theme);
+    const axe = await new AxeBuilder({ page }).include('[data-mine="true"]').withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(axe.violations, theme).toEqual([]);
   }
+  // Перезагрузка в той же сессии не снимает пометку «новое».
+  await page.reload();
+  await expect(rows.first().getByText("Новое с прошлого визита.")).toBeAttached();
+  // В «Моём вузе» свои все строки — отметка не нужна.
+  await page.goto("/statistics?mode=institution&institution=2&platform=vk");
+  await expect(page.getByText("ваш вуз", { exact: true })).toHaveCount(0);
+});
+
+test("findings restores URL state and searches", async ({ page }) => {
+  await page.goto("/statistics?platform=vk&period=30d&sort=views24&direction=asc&q=alpha");
+  await expect(page.locator('input[name="period"][value="30d"]')).toBeChecked();
+  await expect(page.locator('select[name="sort"]')).toHaveValue("views24");
+  await expect(page.locator('input[name="direction"][value="asc"]')).toBeChecked();
+  await expect(page.locator('select[name="direction"]')).toHaveCount(0);
+  await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
   await page.locator('input[name="q"]').fill("missing");
   await page.locator('input[name="q"]').press("Enter");
   await expect(page).toHaveURL(/q=missing/);
   await expect(page.getByText("Ничего не найдено")).toBeVisible();
   await page.goBack();
   await expect(page.locator('input[name="q"]')).toHaveValue("alpha");
-  await page.getByRole("tab", { name: "Вузы" }).click();
-  await expect(page).toHaveURL(/view=entities/);
-  await expect(page.getByTestId("statistics-entities-table").locator("tbody tr")).toHaveCount(20);
-  const entityTarget=info.project.name==="mobile"
-    ? page.getByTestId("statistics-entity-cards").locator("article").first()
-    : page.getByTestId("statistics-entities-table").locator("tbody tr").first();
-  await expect(entityTarget.getByText("Вуз 001",{exact:true})).toBeVisible();
-  await expect(entityTarget.getByText("Полное название университета 001",{exact:true})).toBeVisible();
-  await expect(entityTarget).not.toContainText(/выборка|для ERV/i);
-  await entityTarget.getByRole("button",{name:/ERV .*Подробнее о расчёте/}).first().hover();
-  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("ERV по сумме");
-  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("20 из 20");
-  await page.keyboard.press("Escape");
-  if(info.project.name==="desktop"){
-    await page.getByRole("button",{name:"Как считается ERV вузов"}).hover();
-    await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("сумма взаимодействий");
-    await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("20 последних публикаций");
-    await page.keyboard.press("Escape");
-  }
-  const medianHelp = info.project.name === "mobile"
-    ? entityTarget.getByRole("button",{name:"Что означает медиана взаимодействий"})
-    : page.getByRole("button",{name:"Что означает медиана взаимодействий"});
-  await medianHelp.first().hover();
-  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("у половины публикаций");
-  await expect(page.locator('[data-slot="tooltip-content"][data-open]')).toContainText("20 последних публикаций");
-  await page.keyboard.press("Escape");
-  await entityTarget.getByRole("link").first().click();
-  await expect(page).toHaveURL(/\/accounts\/00000002-0000-4000-8000-000000000001$/);
 });
 
-test("statistics mobile uses cards and keeps zero distinct from unknown", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/statistics?platform=telegram");
-  await expect(page.getByTestId("statistics-publication-cards").locator("article")).toHaveCount(20);
-  await expect(page.getByTestId("statistics-publications-table")).toBeHidden();
-  const cards = page.getByTestId("statistics-publication-cards");
-  await expect(cards.getByText("—").first()).toBeVisible();
-  await expect(cards.getByText("1,00%").first()).toBeVisible();
+test("findings groups by institution and links into institution mode", async ({ page }) => {
+  await page.goto("/statistics?group=institution");
+  const groups = page.getByTestId("findings-groups").locator("section");
+  await expect(groups).toHaveCount(2);
+  await expect(groups.first().getByRole("heading", { level: 2 })).toHaveText("Вуз 001");
+  await groups.first().getByRole("link", { name: "Все посты вуза →" }).click();
+  await expect(page).toHaveURL(/mode=institution/);
+  await expect(page).toHaveURL(/institution=1/);
+  await expect(page.getByRole("combobox", { name: "Вуз" })).toHaveValue("Вуз 001");
+});
+
+test("institution mode without a choice asks for one and unknown id is not an error", async ({ page }) => {
+  await page.goto("/statistics?mode=institution");
+  await expect(page.getByText("Выберите вуз, чтобы увидеть его посты")).toBeVisible();
+  await page.getByRole("combobox", { name: "Вуз" }).fill("002");
+  await page.getByRole("option", { name: /Вуз 002/ }).click();
+  await expect(page).toHaveURL(/institution=2/);
+  await page.goto("/statistics?mode=institution&institution=999");
+  await expect(page.getByText("Вуз не найден — выберите другой")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Вуз" })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Не удалось загрузить данные" })).toHaveCount(0);
+  await expect(page.getByText("Не удалось загрузить данные")).toHaveCount(0);
+  await expect(page.getByTestId("findings-table")).toHaveCount(0);
+  await expect(page.getByTestId("findings-cards")).toHaveCount(0);
+});
+
+test("institution choice works when localStorage throws", async ({ page }) => {
+  await page.addInitScript(() => {
+    const fail = () => { throw new DOMException("denied", "SecurityError"); };
+    Object.defineProperty(window, "localStorage", { configurable: true, get: fail });
+  });
+  await page.goto("/statistics?mode=institution");
+  await expect(page.getByText("Выберите вуз, чтобы увидеть его посты")).toBeVisible();
+  await page.getByRole("combobox", { name: "Вуз" }).fill("002");
+  await page.getByRole("option", { name: /Вуз 002/ }).click();
+  await expect(page).toHaveURL(/institution=2/);
+  await expect(page.getByTestId(/findings-(table|cards)/).first()).toBeAttached();
+  await expect(page.getByRole("alert").filter({ hasText: "Не удалось загрузить данные" })).toHaveCount(0);
+});
+
+test("findings filters popover applies publication types once on close", async ({ page }) => {
+  await page.goto("/statistics");
+  const trigger = page.getByRole("button", { name: /Фильтры/ });
+  await trigger.click();
+  await page.getByRole("checkbox", { name: "Видео" }).check();
+  await expect(page).not.toHaveURL(/types=/);
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/types=video/);
+  await expect(page.getByRole("button", { name: /Фильтры · 1/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Фильтры/ })).toBeFocused();
 });
 
 test("mobile menu closes on Escape, navigation and desktop breakpoint", async ({ page }) => {
@@ -364,7 +434,7 @@ test("account list and institutional zero/one/many routes preserve identity",asy
   await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/");await expect(page.locator('[data-testid="main-nav"] a[href^="/review"]')).toHaveAttribute("href","/review?platform=max");
 });
 
-test("overview and statistics keep desktop filters within two rows and wrap on mobile",async({page},info)=>{
+test("overview and statistics share a dense responsive toolbar",async({page},info)=>{
   for(const path of ["/review?platform=telegram","/statistics?platform=telegram"]){
     await page.goto(path);
     const toolbar=page.getByTestId("filter-toolbar");
@@ -372,7 +442,7 @@ test("overview and statistics keep desktop filters within two rows and wrap on m
     const boxes=await toolbar.locator(":scope > :not(input[type=hidden]):not([role=status])").evaluateAll(elements=>elements.map(element=>{
       const box=element.getBoundingClientRect();return {top:Math.round(box.top),bottom:Math.round(box.bottom)};
     }));
-    if(info.project.name==="desktop") expect(new Set(boxes.map(box=>box.top)).size).toBeLessThanOrEqual(2);
+    if(info.project.name==="desktop") expect(new Set(boxes.map(box=>box.top)).size).toBe(1);
     else {
       expect(new Set(boxes.map(box=>box.top)).size).toBeGreaterThan(1);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBe(0);

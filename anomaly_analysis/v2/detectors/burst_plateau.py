@@ -18,7 +18,7 @@ from math import log2
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries
+from ..series import HOUR, PreparedSeries, views_belong_to_source
 from .base import DetectorContext, age_text, make_sign, number
 from .bounded_reaction_burst import _candidate_pairs, _views
 
@@ -193,13 +193,17 @@ def _judge(prepared, metric, grid, rates, usable, begin, end, floor):
 
 
 def _rapid_views(prepared: PreparedSeries) -> tuple[Sign, ...]:
-    """Large short late view bursts with observed abrupt plateau.
+    """Large short view bursts with observed abrupt plateau.
 
-    The initial audience ramp has no comparable pre-burst background and is
-    deliberately ineligible. No norm or guessed points are used.
+    The initial audience ramp (first half hour) has no comparable background
+    and is ineligible. From the first hour a burst is compared with the
+    average rate since then: a views pack lands within one or two readings
+    and the rate returns to the background at once, while a forward by a
+    large channel brings a wave that keeps tens of percent of its peak for
+    the next hour. No norm or guessed points are used.
     """
     series = prepared.series
-    if series.is_repost or Metric.VIEWS not in series.values:
+    if views_belong_to_source(series) or Metric.VIEWS not in series.values:
         return ()
     count = bisect_right(series.observed_at, prepared.analyzed_at)
     rows = series.values[Metric.VIEWS][:count]
@@ -209,15 +213,19 @@ def _rapid_views(prepared: PreparedSeries) -> tuple[Sign, ...]:
     # A conservative bounded rise cannot exceed the displayed rise. Inspect
     # the widest eligible window first; ordinary gradual curves then avoid
     # constructing bounds and enumerating all four burst scales.
+    # RuTube читается раз в час: пакет укладывается в один интервал сбора, а
+    # не в полчаса, как у площадок с пятиминутным шагом.
+    scales, longest = ((0, 1/6, .25, .5, 1), 1.1) if series.platform == "rutube" else ((0, 1/6, .25, .5), .5)
     nominal = np.array([np.nan if value is None else value for value in rows])
-    earliest = np.maximum(0, np.searchsorted(ages, ages - .5))
+    earliest = np.maximum(0, np.searchsorted(ages, ages - longest))
     # Corrections may put the minimum inside the window rather than at its
     # beginning. Keep the full path for those histories.
     if (np.all(np.diff(nominal) >= 0)
-            and not np.any((ages >= 6) & (nominal - nominal[earliest] >= 500))):
+            and not np.any((ages >= RAPID_EARLY_MIN_AGE) & (nominal - nominal[earliest] >= 500))):
         return ()
     bounds = _views(prepared, count)
-    candidates = tuple(_candidate_pairs(ages, bounds, (0, 1/6, .25, .5), max_duration=.5, min_age=6, min_delta=500))
+    candidates = tuple(_candidate_pairs(ages, bounds, scales, max_duration=longest,
+                                        min_age=RAPID_EARLY_MIN_AGE, min_delta=500))
     if not candidates:
         return ()
     bad = np.array([bound is None for bound in bounds], dtype=int)
@@ -227,6 +235,11 @@ def _rapid_views(prepared: PreparedSeries) -> tuple[Sign, ...]:
     prefix = np.r_[0, np.cumsum(bad)]
     signs = []
     for begin, end in candidates:
+        if ages[begin] < 6:
+            sign = _early_rapid_view(prepared, ages, bounds, rows, count, begin, end)
+            if sign is not None:
+                signs.append(sign)
+            continue
         before = int(np.searchsorted(ages, ages[begin] - 6, side="right")) - 1
         after = int(np.searchsorted(ages, ages[end] + 3))
         if (before < 0 or after >= count or ages[begin] - ages[before] > 7
@@ -264,6 +277,57 @@ def _rapid_views(prepared: PreparedSeries) -> tuple[Sign, ...]:
              "confirmationEndAge": float(ages[after] * HOUR), "timingUnknown": True},
             ("counter_update_delay", "forward_by_large_channel", "counter_frozen")))
     return tuple(signs)
+
+
+RAPID_EARLY_MIN_AGE = 1.0
+RAPID_EARLY_RAMP = 0.5
+RAPID_EARLY_MIN_BACKGROUND = 0.75
+
+
+def _early_rapid_view(prepared, ages, bounds, rows, count, begin, end):
+    """Пакет просмотров в первые шесть часов: фон — средняя скорость с конца
+    стартового разгона, проверка «после» — ближайший час."""
+    start = max(RAPID_EARLY_RAMP, ages[begin] - 6)
+    before = int(np.searchsorted(ages, start, side="left"))
+    after = int(np.searchsorted(ages, ages[end] + 1))
+    first_after = int(np.searchsorted(ages, ages[end] + .25))
+    if (before >= begin or ages[begin] - ages[before] < RAPID_EARLY_MIN_BACKGROUND or after >= count
+            or ages[after] - ages[end] > 1.5 or after - end < 3 or np.max(np.diff(ages[before:after+1])) > .75):
+        return None
+    # Пропуск значения или заметное уменьшение счётчика внутри окон — вывода нет;
+    # дрожание на единицы (просмотры MAX: 312 → 309) помехой не считается.
+    window = rows[before:after + 1]
+    if any(bound is None for bound in bounds[before:after + 1]) or any(value is None for value in window):
+        return None
+    if any(left - right > max(10, .01 * left) for left, right in zip(window, window[1:])):
+        return None
+    low, high = bounds[begin], bounds[end]
+    burst = high[0] - low[1]
+    duration = float(ages[end] - ages[begin])
+    if burst < max(500, .5 * low[1]):
+        return None
+    rate = burst / duration
+    background = max(0, low[1] - bounds[before][0]) / float(ages[begin] - ages[before])
+    tail = max(0, bounds[after][1] - high[0]) / float(ages[after] - ages[end])
+    immediate = max(0, bounds[first_after][1] - high[0]) / float(ages[first_after] - ages[end])
+    if rate < 30 * max(background, 1) or max(tail, immediate) > .02 * rate:
+        return None
+    formula = (f"просмотры: прирост ≥ +{number(burst)} за {age_text(duration * HOUR)} "
+               f"(не менее {burst / max(low[1], 1):.0%} прежнего значения) на {age_text(ages[begin] * HOUR)} после публикации; "
+               f"скорость ≥ {number(rate)}/ч, до скачка в среднем ≤ {number(background)}/ч, "
+               f"в следующие 15 мин ≤ {number(immediate)}/ч, за час ≤ {number(tail)}/ч. "
+               "Границы учитывают точность счётчиков; время изменений между замерами неизвестно")
+    return make_sign(
+        PATTERN, FAMILY, prepared, Metric.VIEWS,
+        min(.99, .9 + .03 * log2(burst / 500) + .02 * log2(.5 / max(duration, 1/12))),
+        float(ages[begin] * HOUR), float(ages[end] * HOUR), timedelta(hours=duration), formula,
+        {"kind": "bounded_burst", "measurementMode": VIEW_MEASUREMENT_MODE, "mode": "early_view_pack",
+         "plateauEvidence": RAPID_VIEW_MODE, "burstLower": burst,
+         "burstRateLower": round(rate, 2), "backgroundRateUpper": round(background, 2),
+         "afterRateUpper": round(tail, 2), "firstAfterRateUpper": round(immediate, 2),
+         "beforeRange": list(low), "afterRange": list(high),
+         "confirmationEndAge": float(ages[after] * HOUR), "timingUnknown": True},
+        ("counter_update_delay", "forward_by_large_channel", "counter_frozen"))
 
 
 def _touches_gap(edges: np.ndarray, data) -> np.ndarray:

@@ -278,6 +278,23 @@
      Задержка маленькая — двадцать две миллисекунды на строку, — поэтому вся
      волна укладывается в полсекунды даже на длинном списке. Дальше двадцатой
      строки задержки нет: до неё ещё надо долистать. */
+  /* Проявление букв крупного заголовка (components/page-title.tsx): как у
+     MorphingText из animate-ui, но на CSS — видно с первой отрисовкой. Анимация
+     перекрывает inline-стили motion, задержка на длинных заголовках ограничена. */
+  @keyframes title-char-in {
+    from { opacity: 0; transform: scale(0.8); filter: blur(10px); }
+    to { opacity: 1; transform: none; filter: none; }
+  }
+  .title-reveal .title-reveal-char {
+    animation: title-char-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    /* Волна укладывается в 450 мс при любой длине: шаг — 28 мс на коротких
+       заголовках и меньше на длинных названиях. */
+    animation-delay: calc(var(--i) * min(28ms, 450ms / var(--n)));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .title-reveal .title-reveal-char { animation: none; }
+  }
+
   @keyframes reveal {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: none; }

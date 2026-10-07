@@ -209,3 +209,29 @@ test("malformed/oversized session, fetch failure and open redirects fail closed"
   for (const location of ["https://evil.test/manage", "//evil.test/manage", "/manage?token=secret%0aLocation:evil", "/manage/other"])
     assert.equal((await submitManage(request(undefined, `name=a&csrf_token=${csrf}`), server(() => Response.json({ location })).fetcher)).status, 502);
 });
+
+test("servers and policies commands are ADMIN-only and forward their form fields", async () => {
+  const body = new URLSearchParams({ csrf_token: csrf, coldAfterDays: "45", backupCopies: "2", "backup_server-2": "on",
+    "archive_server-1": "on", "archive_server-2": "on", "x-evil header": "1" }).toString();
+  const editor = server(undefined, { canEdit: true, canDelete: false });
+  const denied = await submitManage(request("/manage/policies/storage", body), editor.fetcher);
+  assert.equal(denied.status, 403);
+  assert.equal(editor.calls.length, 1);
+
+  const admin = server(() => Response.json({ location: "/manage?tab=servers&storage_status=policy-storage" }));
+  const response = await submitManage(request("/manage/policies/storage", body), admin.fetcher);
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), "/manage?tab=servers&storage_status=policy-storage");
+  const forwarded = JSON.parse(String(admin.calls[1].init.body));
+  assert.equal(forwarded.path, "/manage/policies/storage");
+  // Поля выведенного холодного архива (0063) больше не пересылаются.
+  assert.deepEqual(forwarded.fields, { coldAfterDays: "45", backupCopies: "2", "backup_server-2": "on" });
+
+  for (const path of ["/manage/servers", "/manage/servers/server-3"]) {
+    const accepted = server();
+    assert.equal((await submitManage(request(path, `csrf_token=${csrf}`), accepted.fetcher)).status, 303, path);
+  }
+  for (const path of ["/manage/servers/Server_3", "/manage/policies/other", "/manage/archive/run", "/manage/archive/analysis"]) {
+    assert.equal((await submitManage(request(path, `csrf_token=${csrf}`), server().fetcher)).status, 404, path);
+  }
+});

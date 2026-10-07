@@ -207,12 +207,17 @@ UNITS_COMMON_PRESENTATION = [
     "m-ranked-target-web-cache-gc.timer",
     "m-ranked-target-maintenance.service",
     "m-ranked-target-maintenance.timer",
+    "m-ranked-target-ops-sample.service",
+    "m-ranked-target-ops-sample.timer",
+    "m-ranked-target-contributors.service",
+    "m-ranked-target-contributors.timer",
     "m-ranked-target-official-rating.service",
     "m-ranked-target-official-rating.timer",
     "m-ranked-target-overview-metrics.service",
     "m-ranked-target-overview-metrics.timer",
     "m-ranked-target-dump-backup.service",
     "m-ranked-target-dump-backup.timer",
+    "m-ranked-target-dump-backup-request.path",
 ]
 
 # Анализ аномальной динамики: работник, ночной пересчёт норм и профиль позднего

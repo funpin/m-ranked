@@ -44,6 +44,34 @@ test("rows follow the chosen platform and skip institutions without an account t
   assert.equal(institutionRows(data, "all")[0]!.subscribers, 300);
 });
 
+test("subscribers distinguish missing, partial and measured zero counts", () => {
+  const partial: Dashboard = { ...data, institutions: [
+    { ...data.institutions[0]!, subscribers: { telegram: null, vk: 0, max: null, rutube: null } },
+    { ...data.institutions[1]!, subscribers: { telegram: 900, vk: null, max: null, rutube: null } },
+  ] };
+  const rows = institutionRows(partial, "all");
+  assert.equal(rows[0]!.subscribers, 0);
+  assert.equal(rows[0]!.subscriberNetworks, 1);
+  assert.equal(rows[0]!.connectedNetworks, 2);
+  assert.equal(rows[1]!.subscribers, null); // Disconnected TG must not enter VK's sum.
+  assert.equal(institutionRows(partial, "telegram")[0]!.subscribers, null);
+  for (const descending of [true, false]) {
+    assert.deepEqual(sortRows(rows, "subscribers", descending).map(row => row.id), [A, B]);
+  }
+});
+
+test("student facts retain their source and remain optional for older responses", () => {
+  const students = { value: 12345, referenceYear: 2026, approximate: false,
+    sourceUrl: "https://example.test/students", sourceLabel: "Официальный отчёт",
+    scope: "Все формы обучения", verifiedAt: "2026-10-03" };
+  const rows = institutionRows({ ...data, institutions: [
+    { ...data.institutions[0]!, students }, data.institutions[1]!,
+  ] }, "all");
+  assert.equal(rows[0]!.students, 12345);
+  assert.deepEqual(rows[0]!.studentFact, students);
+  assert.equal(rows[1]!.students, null);
+});
+
 test("anomaly share counts levels 2–3 among analysed posts and is empty without analysis", () => {
   const [alpha, beta] = institutionRows(data, "vk");
   assert.equal(alpha!.anomalyShare, 10);

@@ -2,37 +2,41 @@
 
 import * as React from "react"
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog"
+import {
+  AlertDialog as AnimatedAlertDialog,
+  AlertDialogBackdrop as AnimatedBackdrop,
+  AlertDialogPopup as AnimatedPopup,
+  AlertDialogPortal as AnimatedPortal,
+  AlertDialogTrigger as AnimatedTrigger,
+} from "@/components/animate-ui/primitives/base/alert-dialog"
+import { FADE_IN, FADE_SHOWN, PANEL_IN, PANEL_SHOWN, PANEL_SPRING } from "@/lib/motion-presets"
 import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
 
-function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
+// Корень, портал, фон и окно — анимированные примитивы animate-ui: окно
+// появляется с лёгким переворотом и размытием, фон проявляется. Остальные
+// части — прежние, на Base UI.
+function AlertDialog(props: React.ComponentProps<typeof AnimatedAlertDialog>) {
+  return <AnimatedAlertDialog data-slot="alert-dialog" {...props} />
 }
 
-function AlertDialogTrigger({ ...props }: AlertDialogPrimitive.Trigger.Props) {
-  return (
-    <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
-  )
+function AlertDialogTrigger(props: React.ComponentProps<typeof AnimatedTrigger>) {
+  return <AnimatedTrigger data-slot="alert-dialog-trigger" {...props} />
 }
 
-function AlertDialogPortal({ ...props }: AlertDialogPrimitive.Portal.Props) {
-  return (
-    <AlertDialogPrimitive.Portal data-slot="alert-dialog-portal" {...props} />
-  )
+function AlertDialogPortal(props: React.ComponentProps<typeof AnimatedPortal>) {
+  return <AnimatedPortal data-slot="alert-dialog-portal" {...props} />
 }
 
-function AlertDialogOverlay({
-  className,
-  ...props
-}: AlertDialogPrimitive.Backdrop.Props) {
+function AlertDialogOverlay({ className, ...props }: React.ComponentProps<typeof AnimatedBackdrop>) {
   return (
-    <AlertDialogPrimitive.Backdrop
+    <AnimatedBackdrop
       data-slot="alert-dialog-overlay"
-      className={cn(
-        "fixed inset-0 isolate z-50 bg-black/80 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
-        className
-      )}
+      initial={FADE_IN}
+      animate={FADE_SHOWN}
+      exit={FADE_IN}
+      className={cn("fixed inset-0 isolate z-[400] bg-black/70 supports-backdrop-filter:backdrop-blur-xs", className)}
       {...props}
     />
   )
@@ -42,17 +46,21 @@ function AlertDialogContent({
   className,
   size = "default",
   ...props
-}: AlertDialogPrimitive.Popup.Props & {
+}: React.ComponentProps<typeof AnimatedPopup> & {
   size?: "default" | "sm"
 }) {
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
-      <AlertDialogPrimitive.Popup
+      <AnimatedPopup
         data-slot="alert-dialog-content"
         data-size={size}
+        initial={PANEL_IN}
+        animate={PANEL_SHOWN}
+        exit={PANEL_IN}
+        transition={PANEL_SPRING}
         className={cn(
-          "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-3 rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-64 data-[size=default]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "group/alert-dialog-content fixed inset-0 z-[400] m-auto grid h-fit w-[calc(100%-2rem)] gap-3 rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-64 data-[size=default]:sm:max-w-sm",
           className
         )}
         {...props}

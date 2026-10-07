@@ -9,7 +9,8 @@ import {
 import Link from "@/components/native-link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button-variants";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -149,8 +150,8 @@ function HighlightPicker({ rows, highlights, onToggle, onClear }: {
   const names = new Map(rows.map((row) => [row.id, row.name]));
   const full = highlights.size >= MAX_HIGHLIGHTS;
   return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-      <div className="relative w-full sm:w-64">
+    <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 md:col-span-1">
+      <div className="relative w-full">
         <InputGroup className="h-8">
         <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
         <InputGroupInput value={query} disabled={full} placeholder={full ? `Выделено ${MAX_HIGHLIGHTS} из ${MAX_HIGHLIGHTS}` : "Выделить вуз на графиках…"}
@@ -178,9 +179,9 @@ function HighlightPicker({ rows, highlights, onToggle, onClear }: {
         ) : null}
       </div>
       {[...highlights].map(([id, color]) => (
-        <Badge key={id} variant="outline" className="gap-1.5 rounded-full py-1 pr-1 pl-2" data-testid="highlight-chip">
+        <Badge key={id} variant="outline" className="max-w-full gap-1.5 rounded-full py-1 pr-1 pl-2" data-testid="highlight-chip">
           <span className="size-2.5 rounded-full" style={{ background: color }} aria-hidden="true" />
-          {names.get(id) ?? "вуз"}
+          <span className="min-w-0 truncate" title={names.get(id)}>{names.get(id) ?? "вуз"}</span>
           <Button variant="ghost" size="icon-xs" className="rounded-full" onClick={() => onToggle(id)} aria-label={`Снять выделение: ${names.get(id) ?? "вуз"}`}>
             <X aria-hidden="true" /></Button>
         </Badge>
@@ -203,12 +204,13 @@ function LevelBar({ levels }: { levels: readonly number[] }) {
   );
 }
 
-type SortKey = "name" | "posts" | Metric | "analyzed";
+type SortKey = "name" | "posts" | Metric | "analyzed" | "students";
 const TABLE_COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   { key: "name", label: "Вуз" },
   { key: "posts", label: "Публикаций", numeric: true },
   { key: "postsPerDay", label: "В день", numeric: true },
   { key: "subscribers", label: "Подписчики", numeric: true },
+  { key: "students", label: "Студенты", numeric: true },
   { key: "views24", label: "Просмотры 24 ч", numeric: true },
   { key: "reactions24", label: "Реакции 24 ч", numeric: true },
   { key: "engagement24", label: "Вовлечённость", numeric: true },
@@ -223,6 +225,12 @@ function InstitutionTable({ rows, highlights, onToggle }: {
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean }>({ key: "views24", descending: true });
   const sorted = useMemo(() => {
     if (sort.key === "name") return [...rows].sort((a, b) => (sort.descending ? -1 : 1) * a.name.localeCompare(b.name, "ru"));
+    if (sort.key === "students") return [...rows].sort((a,b) => {
+      if (a.students === null && b.students === null) return a.name.localeCompare(b.name,"ru");
+      if (a.students === null) return 1;
+      if (b.students === null) return -1;
+      return sort.descending ? b.students-a.students : a.students-b.students;
+    });
     if (sort.key === "posts" || sort.key === "analyzed") {
       const key = sort.key;
       return [...rows].sort((a, b) => (sort.descending ? b[key] - a[key] : a[key] - b[key]));
@@ -231,9 +239,9 @@ function InstitutionTable({ rows, highlights, onToggle }: {
   }, [rows, sort]);
   return (
     <div className="min-w-0" data-testid="compare-table">
-      <Table className="min-w-[1517px] table-fixed">
+      <Table className="min-w-[1647px] table-fixed">
         <colgroup>
-          {[44, 285, 118, 90, 125, 145, 140, 145, 150, 140, 135].map((width, index) => <col key={index} style={{ width }} />)}
+          {[44, 285, 118, 90, 125, 130, 145, 140, 145, 150, 140, 135].map((width, index) => <col key={index} style={{ width }} />)}
         </colgroup>
         <TableHeader>
           <TableRow>
@@ -267,7 +275,17 @@ function InstitutionTable({ rows, highlights, onToggle }: {
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{formatInteger(row.posts)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatValue(row.postsPerDay, "postsPerDay")}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatCompact(row.subscribers || null)}</TableCell>
+                <TableCell className="text-right tabular-nums" title={row.subscribers === null ? "Замер подписчиков отсутствует" : `Подписки по доступным замерам: ${formatInteger(row.subscribers)}. Соцсетей с данными: ${row.subscriberNetworks} из ${row.connectedNetworks}. Сумма подписок не является числом уникальных людей.`}>
+                  {formatCompact(row.subscribers)}{row.subscriberNetworks < row.connectedNetworks && row.subscribers !== null ? <span className="text-muted-foreground ml-1 text-[10px]" aria-label="Данные доступны не по всем соцсетям">*</span> : null}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {row.studentFact ? <a href={row.studentFact.sourceUrl} target="_blank" rel="noopener noreferrer"
+                    className="decoration-muted-foreground/40 underline underline-offset-4 hover:decoration-foreground"
+                    title={`${row.studentFact.referenceDate ?? row.studentFact.referenceYear ?? "Дата не указана"} · ${row.studentFact.sourceLabel}. ${row.studentFact.scope}`}>
+                    {row.studentFact.approximate ? "≈ " : ""}{formatInteger(row.students)}
+                    <span className="sr-only"> · источник численности студентов (новая вкладка)</span>
+                  </a> : <span title="Проверенная численность студентов не найдена">—</span>}
+                </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">{formatInteger(row.views24)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatInteger(row.reactions24)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatPercent(row.engagement24)}</TableCell>
@@ -380,23 +398,23 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     // min-w-0: секции — элементы сетки, и без него широкая таблица вузов
     // растягивала колонку, а с ней всю страницу за край окна.
     <div className="grid min-w-0 grid-cols-1 gap-8" data-testid="compare-dashboard">
-      <div ref={toolbar} className={cn("px-3 py-3", STICKY_CONTROL_SURFACE_CLASS)}>
-        <div className="flex flex-wrap items-center gap-3 md:flex-nowrap md:overflow-x-auto">
-          <Tabs value={platform} onValueChange={(value) => changePlatform(value as DashboardPlatform)} className="w-full sm:w-auto">
-            <TabsList aria-label="Соцсеть" data-testid="platform-tabs" activateOnFocus className="grid w-full grid-cols-5 sm:inline-flex sm:w-auto">
+      <div ref={toolbar} className={cn("p-2.5", STICKY_CONTROL_SURFACE_CLASS)}>
+        <div data-testid="compare-filter-row" className="grid grid-cols-2 items-start gap-2 sm:grid-cols-[minmax(240px,1fr)_minmax(140px,1fr)] md:grid-cols-[240px_140px_minmax(0,1fr)]">
+          <Tabs value={platform} onValueChange={(value) => changePlatform(value as DashboardPlatform)} className="col-span-2 min-w-0 w-full sm:col-span-1">
+            <TabsList aria-label="Соцсеть" data-testid="platform-tabs" activateOnFocus className="grid w-full grid-cols-5">
               {DASHBOARD_PLATFORMS.map((value) => (
-                <TabsTrigger key={value} value={value} data-value={value} className="px-2.5 text-sm">
+                <TabsTrigger key={value} value={value} data-value={value} className="px-1.5 text-sm">
                   <span title={PLATFORM_NAMES[value]}>{SHORT_PLATFORM_NAMES[value]}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
           </Tabs>
-          <Tabs value={period}>
-            <TabsList aria-label="Период">
+          <Tabs value={period} className="col-span-2 min-w-0 w-full sm:col-span-1">
+            <TabsList aria-label="Период" className="grid w-full grid-cols-2">
               {(["7d", "30d"] as const).map((value) => (
-                <TabsTrigger key={value} value={value} nativeButton={false} className="px-2.5 text-sm"
+                <TabsTrigger key={value} value={value} nativeButton={false} className="px-1.5 text-sm" title={value === "7d" ? "7 дней" : "30 дней"}
                   render={<Link href={periodHref(value)} prefetch={false} />}>
-                  {value === "7d" ? "7 дней" : "30 дней"}
+                  {value === "7d" ? "7 д" : "30 д"}
                 </TabsTrigger>
               ))}
             </TabsList>

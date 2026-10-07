@@ -1,11 +1,6 @@
-"""Verified Parquet cold-archive support."""
+"""Холодный архив выведен из оборота (миграция 0063).
 
-from .model import ArchiveResult, ArchiveVerification, MonthRange
-from .service import ColdArchiveService
-
-__all__ = [
-    "ArchiveResult",
-    "ArchiveVerification",
-    "ColdArchiveService",
-    "MonthRange",
-]
+История замеров живёт в базе целиком: недавние замеры строками, старые — в
+упакованной строке поста (0059). Остался только возврат месяцев, уже ушедших
+в Parquet, — restore.py.
+"""

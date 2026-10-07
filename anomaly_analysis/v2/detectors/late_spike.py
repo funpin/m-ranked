@@ -9,11 +9,17 @@
 Поздняя волна бывает честной: пересылка крупным каналом приносит новую волну
 со своим степенным затуханием и живые реакции примерно в норме поста
 (исследование, раздел 6). Такая волна — не выше слабого сигнала, а при
-одновременном росте подписчиков или репостов ещё ниже. Прямая, ступенька
-или волна без реакций остаются сильным признаком.
+одновременном росте подписчиков или репостов ещё ниже. Так же — скачок
+любой формы, если реакции пришли с ним в прежней пропорции, и скачок меньше
+четверти набранного: к 5–10 суткам модель ждёт почти ноль, и +150 просмотров
+на посте с 1 700 давали z = 8 и «выраженную аномалию» (разбор 07.10.2026:
+четверть сильных скачков — меньше 13 % значения на начало). Прямая,
+ступенька или волна без реакций и размером от четверти остаются сильным
+признаком.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 
 import numpy as np
@@ -23,7 +29,7 @@ from ..series import DAY, HOUR, PreparedSeries
 from .base import DetectorContext, age_text, expected_step, make_sign, number, scale_text, strongest
 
 ID = "late_spike"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 PATTERN = 2
 FAMILY = Family.SHAPE
 NEEDS_NORM = True
@@ -35,9 +41,14 @@ LATE_AGE = DAY
 CANDIDATE_Z = 3.0
 MIN_Z = 4.0
 MIN_EXCESS = {Metric.VIEWS: 50, Metric.REACTIONS: 20}
-# Скачок меньше 3 % значения на начало не меняет картину поста, даже если он
-# статистически значим.
-MIN_SHARE = 0.03
+# Скачок меньше 10 % значения на начало не меняет картину поста, даже если он
+# статистически значим: на 12.09–05.10 таких было 848 признаков, почти все —
+# обычные поздние волны ВК (разбор 07.10.2026).
+MIN_SHARE = 0.10
+# Сильным скачок бывает только от четверти значения на начало: из 368 сильных
+# поздних скачков 12.09–05.10 так — у 95 постов, две трети из них — у одного
+# аккаунта; остальные — слабый сигнал.
+STRONG_SHARE = 0.25
 # Согласованность: доля реакций в приросте волны отличается от доли поста
 # не больше чем втрое — живая новая аудитория реагирует примерно как старая.
 CONSISTENCY = 3.0
@@ -74,7 +85,9 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
             grid = data.grids.get(scale)
             if grid is not None and grid.rates.size:
                 signs.extend(_scan(prepared, context, metric, fit, grid))
-    return tuple(strongest(signs))
+    return tuple(replace(sign, strength=min(sign.strength, sign.render["cap"]),
+                         render={key: value for key, value in sign.render.items() if key != "cap"})
+                 for sign in strongest(signs))
 
 
 def _scan(prepared, context, metric, fit, grid):
@@ -100,17 +113,22 @@ def _scan(prepared, context, metric, fit, grid):
         shape = _shape(prepared, context, metric, start_age, end_age)
         consistent = _consistent(prepared, context, metric, start_age, end_age)
         alternatives: tuple[str, ...] = ("news_event", "pinned_post", "forward_by_large_channel")
+        # Потолок применяется после выбора масштаба (detect): масштаб выбирается
+        # по самой статистике, а не по ограниченной силе.
+        cap = 1.0
+        if consistent or actual - model < STRONG_SHARE * start_value:
+            cap = NATURAL_CAP
         if consistent and shape == "wave":
-            strength = min(strength, NATURAL_CAP)
             alternatives = ("forward_by_large_channel", "recommendation_wave", "news_event")
             if _confirmed(prepared, context, start_age, end_age):
-                strength = min(strength, CONFIRMED_CAP)
+                cap = CONFIRMED_CAP
         formula = (f"{NAMES[metric]}: факт {number(actual)} против ожидаемых {number(model)} "
                    f"(×{(actual + 0.5) / (model + 0.5):.1f}, z = {run_z:.1f}), "
                    f"t ∈ [{age_text(start_age)}; {age_text(end_age)}], виден на масштабе {scale_text(grid.scale)}")
         signs.append(make_sign(
             PATTERN, FAMILY, prepared, metric, strength, start_age, end_age, grid.scale, formula,
             {"kind": "expected", "actual": round(actual), "expected": round(model, 1),
+             "excessShare": round((actual - model) / max(start_value, 1.0), 3), "cap": cap,
              "shape": shape, "consistent": consistent,
              "decay": [round(fit.decay.a, 4), round(fit.decay.b, 4), round(fit.decay.c, 4)]},
             alternatives, context.confidence_for(metric, start_age)))

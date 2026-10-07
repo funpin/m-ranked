@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import json
 import hashlib
+import logging
 import os
 import re
 import shutil
-import time
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from psycopg import errors as pg_errors
 
 from ..errors import ApiProblem, BadRequest, NotFound
-from .. import dto
+from .. import dto, storage_admin
 from ..identity_receipts import persist_admin_envelope
 from ..security import (SESSION_COOKIE, Principal, csrf_token, current_session,
                         require_csrf, require_roles, same_origin, source_address,
@@ -27,6 +27,7 @@ from ..sessions import SessionRecord
 from ..sql import admin as sql
 
 router = APIRouter(tags=["Admin"])
+logger = logging.getLogger(__name__)
 READ = require_roles("VIEWER", "EDITOR", "ADMIN")
 WRITE = require_roles("EDITOR", "ADMIN")
 ADMIN = require_roles("ADMIN")
@@ -76,7 +77,8 @@ class LegacyCommand(BaseModel):
     @field_validator("fields")
     @classmethod
     def fields_are_bounded(cls, value: dict[str, str]) -> dict[str, str]:
-        if len(value) > 20 or any(len(key) > 100 or len(item) > 131072
+        # Форма политики хранения несёт по флажку на сервер для копий и архива.
+        if len(value) > 40 or any(len(key) > 100 or len(item) > 131072
                                   for key, item in value.items()):
             raise ValueError("invalid legacy fields")
         return value
@@ -364,50 +366,34 @@ async def catalog_accounts(id: uuid.UUID, request: Request,
                       if len(items) == limit else None})
 
 
-_PROJECT_SIZE: tuple[float, int | None] = (0.0, None)
-_PROJECT_SIZE_TTL = 300.0
+def _project_size(row: Any, database_bytes: int | None) -> tuple[int | None, dict[str, Any] | None]:
+    """Весь проект: каталоги из последнего замера снимка сервера плюс база.
 
-
-def _project_bytes() -> int | None:
-    """Размер дерева релиза. Пересчитывается не чаще раза в пять минут.
-
-    Поле возвращалось пустым, и панель писала «размер не предоставлен
-    сервером» — при том, что рядом размер базы показывался. Дерево релиза
-    неизменяемо, поэтому считать его на каждый запрос незачем, а обход сорока
-    тысяч файлов на одном ядре стоит заметно дороже самого ответа.
+    Раньше API сам обходил дерево релиза и сдавался на первом нечитаемом
+    каталоге (.next/cache принадлежит веб-службе) — панель писала «размер не
+    предоставлен сервером». Теперь меряет таймер ops-sample с правом чтения, а
+    запрос только читает готовое число.
     """
-    global _PROJECT_SIZE
-    cached_at, cached = _PROJECT_SIZE
-    now = time.monotonic()
-    if cached is not None and now - cached_at < _PROJECT_SIZE_TTL:
-        return cached
-    total = 0
-    try:
-        # После атомарного переключения current старый релиз могут удалить до
-        # перезапуска процесса. В таком процессе getcwd() возвращает ENOENT;
-        # необязательный размер проекта не должен из-за этого ронять весь
-        # endpoint состояния админки.
-        stack = [Path.cwd()]
-        while stack:
-            with os.scandir(stack.pop()) as entries:
-                for entry in entries:
-                    # По символическим ссылкам не идём: иначе счёт уйдёт за
-                    # пределы дерева, а то и закольцуется.
-                    if entry.is_symlink():
-                        continue
-                    if entry.is_dir(follow_symlinks=False):
-                        stack.append(Path(entry.path))
-                    elif entry.is_file(follow_symlinks=False):
-                        total += entry.stat(follow_symlinks=False).st_size
-    except OSError:
-        return cached
-    _PROJECT_SIZE = (now, total)
-    return total
+    if row is None or not isinstance(row["sizes"], dict):
+        return None, None
+    sizes = row["sizes"]
+    parts = {"releasesBytes": sizes.get("releases"), "stateBytes": sizes.get("state"),
+             "pageCacheBytes": sizes.get("pageCache"),
+             "measuredAt": row["observed_at"].isoformat()}
+    known = [value for value in (*(parts[key] for key in ("releasesBytes", "stateBytes", "pageCacheBytes")),
+                                 database_bytes) if isinstance(value, int)]
+    return (sum(known) if known else None), parts
 
 
 @router.get("/api/v1/admin/catalog/status")
 async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)]) -> Response:
     row = await request.app.state.db.admin_fetch_one(sql.CATALOG_STATUS)
+    try:
+        sizes = await request.app.state.db.admin_fetch_one(sql.PROJECT_SIZES)
+    except Exception:  # noqa: BLE001 — до миграции 0052 таблицы снимков нет
+        logger.warning("размеры проекта недоступны", exc_info=True)
+        sizes = None
+    project, parts = _project_size(sizes, row["database_bytes"])
     try:
         usage = shutil.disk_usage(Path.cwd())
         total, free = usage.total, usage.free
@@ -433,7 +419,7 @@ async def catalog_status(request: Request, _: Annotated[Principal, Depends(READ)
                           "detail": details[platform]}
                          for platform in ("telegram", "vk", "max", "rutube")],
         "storage": {"diskTotalBytes": total, "diskFreeBytes": free,
-                    "projectBytes": _project_bytes(),
+                    "projectBytes": project, "projectParts": parts,
                     "databaseBytes": row["database_bytes"]},
     })
 
@@ -572,10 +558,21 @@ def _required(fields: dict[str, str], name: str) -> str:
 async def _legacy_execute(body: LegacyCommand, request: Request, user: Principal,
                           correlation: uuid.UUID) -> str:
     path, fields = body.path, body.fields
+    if storage_admin.is_storage_path(path):
+        async with request.app.state.db.admin() as connection:
+            location = await storage_admin.execute(connection, path, fields, user.username)
+        logger.info("команда хранения из панели: %s → %s (%s)", path, location, correlation)
+        return location
+    if path == "/manage/backup/refresh":
+        from ..backup_request import request_refresh
+        if request_refresh(user.username, str(correlation)):
+            logger.info("резервная копия запрошена из панели: %s", correlation)
+            return "/manage?tab=system&backup_status=requested"
+        return "/manage?tab=system&backup_status=unavailable"
     if path == "/manage/m-rating/update":
         from ..official_rating import refresh
         try:
-            await refresh(request, user.username, correlation)
+            await refresh(request, user.username, correlation, update_coverage=True)
             return "/manage?m_rating_status=updated"
         except ApiProblem:
             raise
@@ -694,6 +691,12 @@ async def legacy_command(body: LegacyCommand, request: Request,
     if body.path.endswith("/delete") and "ADMIN" not in user.roles:
         raise ApiProblem(403, "Forbidden", "Для удаления требуется роль ADMIN",
                          "urn:m-ranked:problem:forbidden")
+    if storage_admin.is_storage_path(body.path) and "ADMIN" not in user.roles:
+        raise ApiProblem(403, "Forbidden", "Серверы и политики меняет роль ADMIN",
+                         "urn:m-ranked:problem:forbidden")
+    if body.path == "/manage/backup/refresh" and "ADMIN" not in user.roles:
+        raise ApiProblem(403, "Forbidden", "Резервную копию обновляет роль ADMIN",
+                         "urn:m-ranked:problem:forbidden")
     location = await _legacy_execute(body, request, user, correlation)
     return _no_store({"location": location})
 
@@ -716,6 +719,14 @@ def _platform_account(row: dict[str, Any]) -> dict[str, Any]:
     return {"accountId": str(row["id"]), "platform": row["platform"],
             "enabled": row["enabled"], "rowVersion": row["row_version"],
             "updatedAt": dto.iso(row["updated_at"])}
+
+
+@router.get("/api/v1/admin/storage")
+async def storage(request: Request, _: Annotated[Principal, Depends(READ)]) -> Response:
+    """Серверы, политики, резервные копии и холодный архив для вкладки «Серверы»."""
+    async with request.app.state.db.admin() as connection:
+        body = await storage_admin.overview(connection, storage_admin.utc_now())
+    return _no_store(body)
 
 
 @router.get("/api/v1/admin/jobs")

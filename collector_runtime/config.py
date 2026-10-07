@@ -87,6 +87,8 @@ class Settings:
     max_user_last_name: str | None = None
     max_session_path: Path = Path("data/max.session.db")
     max_request_timeout_seconds: float = 30.0
+    max_discovery_limit: int = 20
+    max_history_backoff_seconds: float = 1200.0
     rutube_public_api_enabled: bool = True
     rutube_api_base: str = "https://rutube.ru/api"
     # Сколько страниц публичного предпросмотра читать за обход. Единица —
@@ -312,6 +314,8 @@ class Settings:
             max_request_timeout_seconds=_float(
                 "MAX_REQUEST_TIMEOUT_SECONDS", 30.0,
             ),
+            max_discovery_limit=_int("MAX_DISCOVERY_LIMIT", 20),
+            max_history_backoff_seconds=_float("MAX_HISTORY_BACKOFF_SECONDS", 1200.0),
             rutube_public_api_enabled=_bool("RUTUBE_PUBLIC_API_ENABLED", True),
             rutube_api_base=(
                 os.getenv("RUTUBE_API_BASE", "https://rutube.ru/api").strip()

@@ -14,13 +14,17 @@ import uuid
 from dataclasses import dataclass
 
 from .errors import BadRequest
+from .findings import FINDING_TYPES, FINDINGS_PERIOD_DAYS
 
 PLATFORMS = ("all", "telegram", "vk", "max", "rutube")
 PERIODS = ("3h", "1d", "7d", "30d")
+# legacy id попадает в SQL как bigint: больше не влезет и даст 500 вместо 400.
+MAX_LEGACY_ID = (1 << 63) - 1
 
-SORTS_ALL = frozenset({"name", "m_rating", "coverage", "accounts"})
+SORTS_ALL = frozenset({"anomalies", "name", "m_rating", "coverage", "accounts",
+                       "views", "reactions", "posts", "subscribers"})
 SORTS_PLATFORM = frozenset({"name", "subscribers", "posts", "views", "reactions",
-                            "median_reactions", "m_rating"})
+                            "median_reactions", "m_rating", "anomalies"})
 
 STATISTICS_VIEWS = frozenset({"publications", "entities"})
 STATISTICS_PUBLICATION_SORTS = frozenset({
@@ -107,6 +111,80 @@ def statistics_query(view_value: str | None, platform_value: str | None,
     )
 
 
+FINDINGS_SORTS = frozenset({
+    "interaction_index", "view_index", "comment_index", "share_index",
+    "interactions24", "views24", "erv24", "published_at",
+})
+
+
+@dataclass(frozen=True, slots=True)
+class FindingsQuery:
+    mode: str
+    institution: int | None
+    platform: str
+    period: str
+    types: tuple[str, ...]
+    sort: str
+    direction: str
+    group: str
+    search: str
+    anomalies: str
+
+    @property
+    def dimensions(self) -> str:
+        return ":".join((self.mode, str(self.institution or ""), self.platform, self.period,
+                         ",".join(self.types), self.sort, self.direction, self.group,
+                         self.search, self.anomalies))
+
+
+def findings_query(mode: str | None, institution: str | None, platform: str | None,
+                   period: str | None, types: list[str] | None, sort: str | None,
+                   direction: str | None, group: str | None, q: str | None,
+                   anomalies: str | None) -> FindingsQuery:
+    resolved_mode = mode or "all"
+    if resolved_mode not in ("all", "institution"):
+        raise BadRequest("режим должен быть all или institution")
+    resolved_platform = (platform or "all").strip().lower()
+    if resolved_platform == "tg":
+        resolved_platform = "telegram"
+    if resolved_platform not in PLATFORMS:
+        raise BadRequest(f"платформа должна быть одной из {', '.join(PLATFORMS)}")
+    resolved_period = period or "7d"
+    if resolved_period not in FINDINGS_PERIOD_DAYS:
+        raise BadRequest(f"период должен быть одним из {', '.join(FINDINGS_PERIOD_DAYS)}")
+    requested_types = set(types or ())
+    if requested_types - set(FINDING_TYPES):
+        raise BadRequest(f"тип публикации должен быть одним из {', '.join(FINDING_TYPES)}")
+    resolved_sort = sort or "interaction_index"
+    if resolved_sort not in FINDINGS_SORTS:
+        raise BadRequest(f"сортировка должна быть одной из {', '.join(sorted(FINDINGS_SORTS))}")
+    resolved_direction = direction or "desc"
+    if resolved_direction not in ("asc", "desc"):
+        raise BadRequest("направление должно быть asc или desc")
+    resolved_group = group or "none"
+    if resolved_group not in ("none", "institution"):
+        raise BadRequest("группировка должна быть none или institution")
+    resolved_anomalies = anomalies or "exclude"
+    if resolved_anomalies not in ("exclude", "include"):
+        raise BadRequest("значение anomalies должно быть exclude или include")
+    resolved_institution: int | None = None
+    if resolved_mode == "institution":
+        if (not institution or not institution.isascii() or not institution.isdigit()
+                or not 0 < int(institution) <= MAX_LEGACY_ID):
+            raise BadRequest("для режима institution нужен вуз: положительный legacy id")
+        resolved_institution = int(institution)
+        if resolved_group != "none":
+            raise BadRequest("группировка по вузам доступна только в режиме all")
+    text = (q or "").strip()
+    if len(text) > 200:
+        raise BadRequest("поисковый фрагмент длиннее 200 символов")
+    return FindingsQuery(
+        resolved_mode, resolved_institution, resolved_platform, resolved_period,
+        tuple(value for value in FINDING_TYPES if value in requested_types),
+        resolved_sort, resolved_direction, resolved_group, text, resolved_anomalies,
+    )
+
+
 def overview_query(platform_value: str | None, period_value: str | None,
                    search: str | None, sort: str | None, direction: str | None) -> OverviewQuery:
     resolved_platform = platform(platform_value)
@@ -117,7 +195,7 @@ def overview_query(platform_value: str | None, period_value: str | None,
         raise BadRequest("поисковый фрагмент длиннее 200 символов")
 
     supported = SORTS_ALL if resolved_platform == "all" else SORTS_PLATFORM
-    fallback = "m_rating" if resolved_platform == "all" else "median_reactions"
+    fallback = "anomalies"
     resolved_sort = sort if sort in supported else fallback
     resolved_direction = (direction if direction in ("asc", "desc")
                           else ("asc" if resolved_sort == "name" else "desc"))

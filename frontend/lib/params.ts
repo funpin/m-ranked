@@ -9,6 +9,7 @@ export type SearchValue = string | string[] | undefined;
 export type SearchParams = Record<string, SearchValue>;
 
 export type OverviewSort =
+  | "anomalies"
   | "name"
   | "median_reactions"
   | "reactions"
@@ -57,17 +58,17 @@ export function normalizeSort(value: SearchValue, platform: Platform): OverviewS
     // расставляли вузы по величине, которая ничего не говорит об
     // активности. Прежние ссылки на них не ломаются — значение не из
     // списка приводится к сортировке по умолчанию ниже.
-    ? ["name", "m_rating"]
-    : ["name", "median_reactions", "m_rating", "reactions", "views", "posts", "subscribers"];
+    ? ["anomalies", "name", "m_rating", "views", "reactions", "posts", "subscribers"]
+    : ["anomalies", "name", "median_reactions", "m_rating", "reactions", "views", "posts", "subscribers"];
   return accepted.includes(normalized as OverviewSort)
     ? (normalized as OverviewSort)
-    : platform === "all" ? "m_rating" : "median_reactions";
+    : "anomalies";
 }
 
 export function normalizeDirection(value: SearchValue, sort: OverviewSort): "asc" | "desc" {
   const normalized = first(value);
   if (normalized === "asc" || normalized === "desc") return normalized;
-  return sort === "name" ? "asc" : "desc";
+  return sort === "name" || sort === "m_rating" ? "asc" : "desc";
 }
 
 export function normalizeHistoryLimit(value: SearchValue): number {
@@ -98,7 +99,7 @@ export function metricNumber(value: number | string | null | undefined): number 
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-type QueryValue = string | number | readonly (string | number)[] | undefined;
+export type QueryValue = string | number | readonly (string | number)[] | undefined;
 
 export function queryHref(pathname: string, values: Record<string, QueryValue>): string {
   const query = new URLSearchParams();

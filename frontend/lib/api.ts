@@ -1,6 +1,6 @@
 import createClient from "openapi-fetch";
 import type { paths } from "../../contracts/openapi/m-ranked-v1-client";
-import type { ApiProblem, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection, StatisticsRequest } from "./types";
+import type { ApiProblem, LegacyAccountType, LegacyPublicationType, Period, Platform, SortDirection, FindingsRequest } from "./types";
 import type { OverviewSort } from "./params";
 import { revisionCachedResponse, type PublicResponseCache } from "./revision-cache";
 import { publicResponseCacheFromEnv } from "./bounded-response-cache";
@@ -128,6 +128,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
         params: { path: { accountId } },
       }).then(unwrap);
     },
+    accountAnomalyFindings(accountId: string) {
+      return analysisClient.GET("/api/v1/accounts/{accountId}/anomaly-findings", {
+        params: { path: { accountId } },
+      }).then(unwrap);
+    },
     siteSummary() {
       return client.GET("/api/v1/site/summary", {}).then(unwrap);
     },
@@ -140,14 +145,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
     comparisonDashboard(period: "7d" | "30d") {
       return client.GET("/api/v1/compare/dashboard", { params: { query: { period } } }).then(unwrap);
     },
-    statistics(input: StatisticsRequest) {
+    findings(input: FindingsRequest) {
       const q = (input.q ?? "").trim();
-      if ([...(input.q ?? "")].length > 200) throw new RangeError("q must contain at most 200 characters");
-      return client.GET("/api/v1/statistics", { params: { query: {
-        view: input.view, platform: input.platform, period: input.period, q: q || undefined,
-        publication_sort: input.publicationSort,
-        publication_direction: input.publicationDirection,
-        entity_sort: input.entitySort, entity_direction: input.entityDirection,
+      if ([...q].length > 200) throw new RangeError("q must contain at most 200 characters");
+      return client.GET("/api/v1/findings", { params: { query: {
+        mode: input.mode, platform: input.platform, period: input.period,
+        ...(input.institution !== null ? { institution: input.institution } : {}),
+        ...(input.types.length ? { types: input.types } : {}),
+        sort: input.sort, direction: input.direction, group: input.group,
+        q: q || undefined, anomalies: input.anomalies,
         limit: Math.min(50, Math.max(1, input.limit ?? 50)),
         ...(input.cursor ? { cursor: input.cursor } : {}),
       } } }).then(unwrap);

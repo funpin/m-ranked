@@ -90,7 +90,7 @@ export function ScatterMap({ rows, x, y, highlights }: {
   rows: readonly InstitutionRow[]; x: Metric; y: Metric; highlights: Highlights;
 }) {
   const points = useMemo(() => rows
-    .map((row) => ({ id: row.id, name: row.fullName, short: row.name, x: metricValue(row, x), y: metricValue(row, y), z: Math.max(row.subscribers, 1) }))
+    .map((row) => ({ id: row.id, name: row.fullName, short: row.name, x: metricValue(row, x), y: metricValue(row, y), z: Math.max(row.subscribers ?? 0, 1) }))
     .filter((point): point is typeof point & { x: number; y: number } => point.x !== null && point.y !== null && point.x > 0 && point.y > 0),
   [rows, x, y]);
   const config = { y: { label: METRICS[y].short, color: BASE_BAR } } satisfies ChartConfig;

@@ -21,12 +21,18 @@ test("legacy platform and period aliases normalize to the public API vocabulary"
 test("overview sort keys normalize per platform before the API request", () => {
   // Сортировки по числу площадок и аккаунтов убраны из набора: прежние
   // ссылки на них должны не ломаться, а приводиться к сортировке по
-  // умолчанию — месту в общем М-Рейтинге.
-  assert.equal(normalizeSort("coverage", "all"), "m_rating");
-  assert.equal(normalizeSort("accounts", "all"), "m_rating");
-  assert.equal(normalizeSort("coverage", "telegram"), "median_reactions");
+  // умолчанию — количеству аномалий.
+  assert.equal(normalizeSort("coverage", "all"), "anomalies");
+  assert.equal(normalizeSort("accounts", "all"), "anomalies");
+  assert.equal(normalizeSort("coverage", "telegram"), "anomalies");
   assert.equal(normalizeSort("subscribers", "vk"), "subscribers");
-  assert.equal(normalizeSort("subscribers", "all"), "m_rating");
+  for (const sort of ["views", "reactions", "posts", "subscribers"] as const) {
+    assert.equal(normalizeSort(sort, "all"), sort);
+  }
+  for (const platform of ["all", "telegram", "vk", "max", "rutube"] as const) {
+    assert.equal(normalizeSort(undefined, platform), "anomalies");
+    assert.equal(normalizeSort("anomalies", platform), "anomalies");
+  }
 });
 
 test("queryHref preserves repeated values and omits empty fields", () => {

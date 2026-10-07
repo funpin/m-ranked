@@ -26,11 +26,11 @@ from typing import Mapping
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries
+from ..series import HOUR, PreparedSeries, views_belong_to_source
 from .base import DetectorContext, age_text, make_sign, number, strongest
 
 ID = "bounded_reaction_burst"
-VERSION = "1.3.2"
+VERSION = "1.4.0"
 PATTERN = 9
 FAMILY = Family.SHAPE
 NEEDS_NORM = False
@@ -52,6 +52,14 @@ MIN_PACK_RATE = 100
 MAX_PACK_HOURS = .5
 MIN_PACK_SHARE = .75
 MIN_RATIO_DROP = 5
+# Насыщенный пакет: за минуты отреагировали три четверти новых зрителей, и не
+# меньше трети — по просмотрам, догнавшим пакет с задержкой счётчика (ВК и MAX
+# отстают до получаса, Telegram — до 15 минут). Живая аудитория так не
+# реагирует, и плато после него доказывать на аудитории не меньше пакета не
+# нужно: ГУАП ВК №149008 — 105 реакций на 113 просмотров за 13 минут, затем
+# +6 на +77; ncfulife 16720 — +32 на 37 за 5 минут.
+SATURATED_SHARE = .75
+SATURATED_CAUGHT_SHARE = .35
 
 
 def reaction_bounds(total: int | None, quality: str,
@@ -143,9 +151,9 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         immediate = max(0, bounds[first_after][1] - high[0]) / (ages[first_after] - ages[end])
         if rate < 10 * max(background, 1) or max(tail, immediate) > .05 * rate:
             continue
-        if view_bounds is None and not series.is_repost:
+        if view_bounds is None and not views_belong_to_source(series):
             view_bounds = _views(prepared, count)
-        if view_bounds and not series.is_repost:
+        if view_bounds and not views_belong_to_source(series):
             v0, v1 = view_bounds[begin], view_bounds[end]
             if v0 is not None and v1 is not None:
                 # A new audience with a compatible reaction fraction is a
@@ -172,10 +180,14 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
              "timingUnknown": True},
             ("reaction_counter_batch_update", "news_event", "pinned_post")))
     withdrawal_prefix = np.r_[0, np.cumsum(withdrawals)]
-    signs.extend(_decoupled(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
+    signs.extend(_decoupled(prepared, ages, bounds, validity_prefix, withdrawal_prefix,
+                            delay=context.counter_delay / HOUR))
     if not signs and series.platform == "telegram" and any(row[2] == "rounded" for row in rows):
         signs.extend(_reported_plateau(prepared, ages, bounds, validity_prefix, withdrawal_prefix))
-    if not signs and (series.is_repost or series.platform == "telegram" and any(
+    # Without own comparable views or attested precision only the saved shape
+    # can be shown; with own exact views engagement_regime judges the pack.
+    if not signs and (views_belong_to_source(series) or Metric.VIEWS not in series.values
+                      or series.platform == "telegram" and any(
             row[2] in {"rounded", "unknown"} or row[4] and any(k.startswith("paid:") for k in row[4])
             for row in rows)):
         signs.extend(_reported_own_shape(prepared, ages, rows))
@@ -242,14 +254,16 @@ def _reported_own_shape(prepared, ages, rows):
         if (burst / (burst + tail) < MIN_PACK_SHARE or tail / (ages[after] - ages[end]) > .05 * burst / duration
                 or ages[first_after] - ages[end] > 1.5 or immediate / (ages[first_after] - ages[end]) > .1 * burst / duration):
             continue
-        reason = ("Просмотры репоста относятся к источнику и не подтверждают этот сигнал."
-                  if prepared.series.is_repost else "Точность исторических счётчиков не подтверждена.")
+        if views_belong_to_source(prepared.series) or Metric.VIEWS not in prepared.series.values:
+            reason = "Сопоставимых просмотров нет, поэтому отклик с аудиторией не сравнивается."
+        else:
+            reason = "Точность сохранённых счётчиков не подтверждена, поэтому величина рывка не доказывается расчётом."
         excluded_paid = any(paid[begin:after+1])
         if excluded_paid:
             reason += " Платные звёзды исключены."
         formula = (f"По сохранённым значениям: {number(rows[begin][1])} → {number(rows[end][1])} реакций "
                    f"за {age_text(duration * HOUR)}, затем +{number(tail)} за {age_text((ages[after] - ages[end]) * HOUR)}. "
-                   f"{reason} Показан слабый сигнал формы; величина и причина рывка требуют проверки")
+                   f"{reason} Форма сама по себе даёт слабый сигнал")
         signs.append(make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, .5,
             float(ages[begin] * HOUR), float(ages[end] * HOUR), timedelta(hours=duration), formula,
             {"kind": "bounded_burst", "measurementMode": REPORTED_SHAPE_MODE,
@@ -289,7 +303,7 @@ def _views(prepared, count):
                 series.interval_uncertain[:count])]
 
 
-def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, views_override=None):
+def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, views_override=None, delay=0.0):
     """Reaction packs at any age, without a synthetic zero or an early model.
 
     Require observed subsequent viewers, a tenfold fall in reactions/view,
@@ -297,7 +311,7 @@ def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, view
     Source views of reposts are not a comparable audience and abstain here.
     """
     series = prepared.series
-    if series.is_repost or Metric.VIEWS not in series.values:
+    if views_belong_to_source(series) or Metric.VIEWS not in series.values:
         return []
     count = len(ages)
     candidates = tuple(_candidate_pairs(ages, bounds, (0, 1/6, .25, .5, 1, 2), max_duration=2, min_delta=MIN_EARLY_DELTA))
@@ -352,11 +366,17 @@ def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, view
                      + withdrawals[first_after+1] - withdrawals[end+1]) / float(ages[first_after] - ages[end])
         concentrated = burst / (burst + after_reactions) >= MIN_PACK_SHARE
         disproportionate = burst >= 3 * burst_views
+        caught = int(np.searchsorted(ages, ages[end] + delay, side="right")) - 1
+        caught_views = (views[caught][1] - (0 if begin is None else views[begin][0])
+                        if views[caught] is not None and caught > end else burst_views)
+        # Просмотры, догнавшие пакет за время задержки счётчика, включают и
+        # обычный поток новых зрителей: по ним требуется лишь треть.
+        saturated = (burst >= SATURATED_SHARE * max(burst_views, 1)
+                     and burst >= SATURATED_CAUGHT_SHARE * max(caught_views, 1))
         required_pack = max(MIN_PACK, MIN_PACK_RATE * duration)
         confirmed = (burst >= required_pack and duration <= MAX_PACK_HOURS
                      and (begin is None or burst >= MIN_SHARE * bounds[begin][1])
-                     and (concentrated or disproportionate)
-                     and after_views >= burst_views
+                     and (saturated or (concentrated or disproportionate) and after_views >= burst_views)
                      and MIN_RATIO_DROP * after_reactions / after_views <= burst / burst_views
                      and after - end >= 3 and np.max(np.diff(ages[end:after+1])) <= 1.5
                      and ages[first_after] - ages[end] <= 1.5 and immediate <= .1 * rate)
@@ -388,10 +408,16 @@ def _decoupled(prepared, ages, bounds, reaction_bad_prefix, withdrawals, *, view
         if confirmed:
             render["plateauEvidence"] = CONFIRMED_PLATEAU_MODE
             render["packShareLower"] = round(burst / (burst + after_reactions), 4)
-            render["severityReason"] = "concentration" if concentrated else "disproportionate_reactions"
+            classic = (concentrated or disproportionate) and after_views >= burst_views
+            render["severityReason"] = ("saturated_audience" if not classic
+                                        else "concentration" if concentrated else "disproportionate_reactions")
         signs.append(make_sign(
             PATTERN, FAMILY, prepared, Metric.REACTIONS,
-            min(.99, .9 + .03 * log2(burst / required_pack) + .02 * log2(MAX_PACK_HOURS / duration)) if confirmed else .75,
+            min(.99, .9 + .03 * log2(burst / required_pack) + .02 * log2(MAX_PACK_HOURS / duration)) if confirmed
+            # Меньше двадцати реакций без подтверждённого плато — не уверенный
+            # признак (уровень 2), а слабый: повтор на постах аккаунта видит
+            # аккаунтная находка (id0901006061 в MAX: по +10 за 5 минут).
+            else .75 if burst >= MIN_PACK else .55,
             float(ages[first] * HOUR), float(ages[after if begin is None else end] * HOUR),
             timedelta(hours=duration), formula, render,
             ("reaction_counter_batch_update", "pinned_post")))
@@ -406,7 +432,7 @@ def _reported_plateau(prepared, ages, bounds, validity_prefix, withdrawals):
     lower/upper growth claims and highest-severity evidence are discarded.
     """
     series = prepared.series
-    if series.is_repost or Metric.VIEWS not in series.values:
+    if views_belong_to_source(series) or Metric.VIEWS not in series.values:
         return []
     count = len(ages)
     views = _views(prepared, count)

@@ -1,0 +1,13 @@
+[Unit]
+Description=Refresh M-Ranked contributors every three days
+
+[Timer]
+# Каждые третьи сутки месяца (1, 4, 7 … 31), утром по Москве, когда трафик мал.
+OnCalendar=*-*-01/3 05:20:00 Europe/Moscow
+RandomizedDelaySec=20min
+Persistent=true
+AccuracySec=1min
+Unit=m-ranked-target-contributors.service
+
+[Install]
+WantedBy=timers.target

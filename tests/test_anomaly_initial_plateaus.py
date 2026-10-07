@@ -53,7 +53,8 @@ def test_pack_already_present_at_first_read_is_not_invented_as_a_zero_to_count_j
     assert level_for(initial) is Level.ARTIFICIAL_ACTIVITY_SIGNS
 
 
-@pytest.mark.parametrize('amount,expected', [(12,2),(25,3),(40,3),(111,3)])
+# Двенадцать реакций без подтверждённого плато — слабый сигнал (разбор 07.10.2026).
+@pytest.mark.parametrize('amount,expected', [(12,1),(25,3),(40,3),(111,3)])
 @pytest.mark.parametrize('platform', ['telegram','vk','max','rutube'])
 def test_small_early_packs_are_not_normalized_away(amount,expected,platform):
     s = series([(1,30,0),(6,60,amount)] + [(m,60+(m-6)*2,amount) for m in range(11,247,5)],platform=platform)
@@ -99,7 +100,8 @@ def test_telegram_order_is_visible_but_respects_counter_evidence(kind):
     if kind == 'repost': s=replace(s,is_repost=True)
     if kind == 'uncertain': s=replace(s,interval_uncertain=(True,))
     result=assess(s)
-    if kind in {'overlap','exact'}:
+    # Просмотры репоста — его собственные: правило 1:1 действует и для него.
+    if kind in {'overlap','exact','repost'}:
         assert result.level is Level.WEAK_SIGNAL
         assert result.signs[0].pattern == 7
         assert result.signs[0].render['boundsOverlap'] == (kind=='overlap')

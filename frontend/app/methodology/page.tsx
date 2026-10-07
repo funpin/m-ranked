@@ -4,6 +4,7 @@ import Link from "@/components/native-link";
 import { GithubMark } from "@/components/github-mark";
 import { ARTICLES } from "@/lib/methodology";
 import { REPOSITORY_URL } from "@/lib/repository";
+import { PageTitle } from "@/components/page-title";
 
 const DESCRIPTION = "Как m-ranked собирает публичные счётчики соцсетей вузов, проверяет их, сравнивает вузы и анализирует динамику публикаций.";
 export const metadata: Metadata = {
@@ -24,7 +25,7 @@ export default function MethodologyIndex() {
     <div className="grid gap-14 pb-10">
       <header className="grid max-w-3xl gap-5">
         <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">Документация</p>
-        <h1 className="font-heading text-5xl leading-[1] font-bold tracking-tight sm:text-6xl">Методология</h1>
+        <h1 className="font-heading text-5xl leading-[1] font-bold tracking-tight sm:text-6xl"><PageTitle text="Методология" /></h1>
         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
           Как устроен m-ranked: что и как часто мы замеряем, какие значения считаем достоверными, как сравниваем вузы и
           что именно сообщает анализ динамики. Каждая статья ссылается на код, который можно прочитать.

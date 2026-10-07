@@ -3,11 +3,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEve
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis, usePlotArea, useXAxisScale } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, legacyDate } from "@/lib/format";
-import { elapsedSincePublication } from "@/lib/history-data";
+import { elapsedSincePublication, withUnchangedReads, type PlotRow } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
 import { PatternIcon } from "@/components/anomaly-icons";
-import { clusterPixelMarks, gapPresentation, mergePixelIntervals } from "@/lib/plot-density";
+import { clusterPixelMarks, mergePixelIntervals } from "@/lib/plot-density";
 import type { CollectorGap, HistorySnapshot } from "@/lib/types";
 import type { SignalMarker } from "@/lib/anomaly";
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
@@ -25,16 +25,16 @@ const GAP_MERGE_DISTANCE_PX = 3;
  * plots and made the whole page expensive to paint while scrolling. Gaps whose
  * visible separation is three pixels or less are merged at the current scale:
  * zooming in separates them again. The textual count and duration remain exact.
- * One path keeps the overlay at one DOM node per chart. */
+ * Gaps are always a thin rail along the top edge: full-height bands hid the
+ * curve under them. One path keeps the overlay at one DOM node per chart. */
 function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
   const scale = useXAxisScale();
   const plot = usePlotArea();
   const overlay = useMemo(() => {
-    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0, mode: "bands" as const };
+    if (!scale || !plot || !gaps.length) return { path: "", blocks: 0 };
     const minX = plot.x;
     const maxX = plot.x + plot.width;
     const minY = plot.y;
-    const maxY = plot.y + plot.height;
     const projected = gaps.flatMap((gap) => {
       const from = scale(Date.parse(gap.from));
       const to = scale(Date.parse(gap.to));
@@ -45,15 +45,13 @@ function CollectorGapOverlay({ gaps }: { gaps: readonly CollectorGap[] }) {
       return [{ left, right }];
     }).sort((a,b) => a.left-b.left || a.right-b.right);
     const blocks = mergePixelIntervals(projected, GAP_MERGE_DISTANCE_PX);
-    const mode = gapPresentation(blocks, plot.width);
     const path = blocks.map(({left,right}) =>
-      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${(mode === "rail" ? minY + 4 : maxY).toFixed(2)}H${left.toFixed(2)}Z`,
+      `M${left.toFixed(2)},${minY.toFixed(2)}H${right.toFixed(2)}V${(minY + 4).toFixed(2)}H${left.toFixed(2)}Z`,
     ).join("");
-    return {path,blocks:blocks.length,mode};
+    return {path,blocks:blocks.length};
   }, [gaps, plot, scale]);
-  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length} data-gap-mode={overlay.mode}
-    d={overlay.path} fill="var(--destructive)" fillOpacity={overlay.mode === "rail" ? 0.8 : 0.11}
-    stroke="var(--destructive)" strokeOpacity={overlay.mode === "rail" ? 0 : 0.35} strokeWidth={1} pointerEvents="none" /> : null;
+  return overlay.path ? <path className="collector-gap" data-gap-blocks={overlay.blocks} data-gap-count={gaps.length}
+    d={overlay.path} fill="var(--destructive)" fillOpacity={0.8} pointerEvents="none" /> : null;
 }
 
 const SIGNAL_COLORS: Record<SignalMarker["tone"], string> = {
@@ -115,6 +113,18 @@ function SampleDot(props: { cx?: number; cy?: number; fill?: string; evidence?: 
   return <circle cx={cx} cy={cy} r={3} fill={fill} stroke="var(--background)" strokeWidth={1} />;
 }
 
+// Всё, что уходит в recharts, держится одной ссылкой между отрисовками.
+// recharts 3 переносит настройки осей, подсказки и точек в свой store
+// эффектами: новый объект на каждую отрисовку — новая запись в store и новая
+// отрисовка. Пока ползунок масштаба двигается, это превращалось в каскад и
+// заканчивалось ошибкой React #185 («Maximum update depth exceeded»).
+const ACTIVE_DOT = { r: 5 } as const;
+const TOOLTIP_CURSOR = { strokeDasharray: "4 4" } as const;
+const LABEL_STYLE = { textAnchor: "middle" } as const;
+const BAR_PADDING = { left: 18, right: 18 } as const;
+const LINE_PADDING = { left: 4, right: 4 } as const;
+const renderTimeTick = (props: Parameters<typeof TimeTick>[0]) => <TimeTick {...props} />;
+
 /** Keep the axis to one compact line; sample age stays in the chart tooltip. */
 function TimeTick({ x, y, payload, index, visibleTicksCount }: {
   x?: number | string; y?: number | string; payload?: { value?: number };
@@ -140,8 +150,9 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   const chartId = useId();
 
   const at = useCallback((row: HistorySnapshot) => Date.parse(row.observedAt), []);
+  const plotted = useMemo((): PlotRow[] => delta ? rows : withUnchangedReads(rows), [rows, delta]);
   const data = useMemo(() => {
-    const points = rows.map((row) => {
+    const points = plotted.map((row) => {
       const point: Record<string, number | null | string | boolean> = {
         t: at(row), snapshotId: row.snapshotId, evidence: evidenceIds.has(row.snapshotId),
       };
@@ -171,10 +182,11 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       grouped.push(merged);
     }
     return grouped;
-  }, [rows, metrics, delta, evidenceIds, at]);
+  }, [plotted, metrics, delta, evidenceIds, at]);
 
   const firstAt = rows.length ? at(rows[0]!) : 0;
   const lastAt = rows.length ? at(rows[rows.length - 1]!) : 1;
+  const domain = useMemo(() => [firstAt, lastAt === firstAt ? firstAt + 1 : lastAt], [firstAt, lastAt]);
 
   const config = useMemo(() => {
     const value: ChartConfig = {};
@@ -220,51 +232,65 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
     : undefined;
 
   /** Resolves a pointer position on the plot to the sample nearest that instant. */
-  const nearestRow = useCallback((instant: unknown) => {
-    if (typeof instant !== "number" || !rows.length) return null;
-    return rows.reduce((best, row) =>
-      Math.abs(at(row) - instant) < Math.abs(at(best) - instant) ? row : best, rows[0]!);
-  }, [rows, at]);
+  const nearestRow = useCallback((instant: unknown): PlotRow | null => {
+    if (typeof instant !== "number" || !plotted.length) return null;
+    return plotted.reduce((best, row) =>
+      Math.abs(at(row) - instant) < Math.abs(at(best) - instant) ? row : best, plotted[0]!);
+  }, [plotted, at]);
 
   // В режиме «Авто» шкала строится только по показанным метрикам: первая идёт
   // слева, вторая справа. Раньше сторона выбиралась по месту метрики в полном
   // списке, и при двух показанных метриках левая шкала доставалась скрытой —
   // на экране оставалась только правая.
-  const visible = metrics.filter((metric) => !hidden.has(metric.key)).slice(0, 2);
+  const visible = useMemo(() => metrics.filter((metric) => !hidden.has(metric.key)).slice(0, 2), [metrics, hidden]);
   // Сетка и линия выбранной точки привязываются к одной шкале — левой, а при
   // общем масштабе к единственной.
   const primaryAxis = scale === "shared" ? "y" : visible[0]?.key ?? "y";
   // Скрытая метрика всё равно должна ссылаться на существующую шкалу.
   const axisFor = (metric: Metric) =>
     scale === "shared" || !visible.includes(metric) ? primaryAxis : metric.key;
-  const axes = scale === "shared" || !visible.length
+  const axes = useMemo(() => scale === "shared" || !visible.length
     ? [<YAxis key="y" yAxisId="y" tickLine={false} axisLine={false} width={72} allowDecimals={false}
         tickFormatter={axisNumber} tickMargin={6} hide={!visible.length}
-        label={{ value: axisTitle, angle: -90, position: "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />]
+        label={{ value: axisTitle, angle: -90, position: "insideLeft", style: LABEL_STYLE, fill: "var(--muted-foreground)" }} />]
     : visible.map((metric, index) => (
         <YAxis key={metric.key} yAxisId={metric.key} orientation={index ? "right" : "left"}
           tickLine={false} axisLine={false} width={72} allowDecimals={false}
           tickFormatter={axisNumber} tickMargin={6}
-          label={{ value: metricLabel(metric, platform), angle: -90, position: index ? "insideRight" : "insideLeft", style: { textAnchor: "middle" }, fill: "var(--muted-foreground)" }} />
-      ));
+          label={{ value: metricLabel(metric, platform), angle: -90, position: index ? "insideRight" : "insideLeft", style: LABEL_STYLE, fill: "var(--muted-foreground)" }} />
+      )), [scale, visible, axisTitle, platform]);
 
-  const shared = {
-    data,
-    margin: { left: 4, right: 4, top: markers.length ? 30 : 8, bottom: 8 },
-    onClick: (state: { activeLabel?: unknown }, event: ReactMouseEvent<SVGGraphicsElement>) => {
-      let row = nearestRow(state?.activeLabel);
-      // Recharts has no active label when the click lands between sparse
-      // points. Resolve that click by its position in the visible time axis.
-      if (!row && rows.length) {
-        const bounds = event.currentTarget.getBoundingClientRect();
-        const left = bounds.left + 76;
-        const width = Math.max(1, bounds.width - 80 - (scale === "auto" && visible.length > 1 ? 72 : 0));
-        const fraction = Math.max(0, Math.min(1, (event.clientX - left) / width));
-        row = nearestRow(firstAt + fraction * (lastAt - firstAt));
-      }
-      if (row) onActivate(row.snapshotId);
-    },
-  };
+  const margin = useMemo(() => ({ left: 4, right: 4, top: markers.length ? 30 : 8, bottom: 8 }), [markers.length]);
+  const onClick = useCallback((state: { activeLabel?: unknown }, event: ReactMouseEvent<SVGGraphicsElement>) => {
+    let row = nearestRow(state?.activeLabel);
+    // Recharts has no active label when the click lands between sparse
+    // points. Resolve that click by its position in the visible time axis.
+    if (!row && rows.length) {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const left = bounds.left + 76;
+      const width = Math.max(1, bounds.width - 80 - (scale === "auto" && visible.length > 1 ? 72 : 0));
+      const fraction = Math.max(0, Math.min(1, (event.clientX - left) / width));
+      row = nearestRow(firstAt + fraction * (lastAt - firstAt));
+    }
+    // Чтение без изменений не сохранено: открывается точка роста за ним.
+    if (row) onActivate(row.unchangedFor ?? row.snapshotId);
+  }, [nearestRow, rows.length, scale, visible.length, firstAt, lastAt, onActivate]);
+  const tooltipContent = useCallback((props: { active?: boolean; label?: unknown; payload?: unknown }) => (
+    <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} publishedAt={publishedAt} delta={delta} nearestRow={nearestRow} />
+  ), [metrics, hidden, platform, publishedAt, delta, nearestRow]);
+  // Точка остаётся только там, где она что-то означает — на границе
+  // опубликованного сигнала; кружок на каждом замере превращал линию в пунктир.
+  const dots = useMemo(() => new Map(metrics.map((metric) => [metric.key, (props: unknown) => {
+    // Recharts types the per-point dot props loosely; the shape this chart
+    // supplies is narrowed at the boundary.
+    // Чтение без изменений отдельной отметки не получает: значение у него то
+    // же, что у прошлой точки, и кружок читался бы как «здесь данных нет».
+    const dot = props as { cx?: number; cy?: number; payload?: { evidence?: boolean }; key?: string };
+    if (!dot.payload?.evidence) return <g key={dot.key} />;
+    return <SampleDot key={dot.key} cx={dot.cx} cy={dot.cy} fill={metric.color} evidence />;
+  }])), [metrics]);
+
+  const shared = { data, margin, onClick };
 
   const children = (
     <>
@@ -277,17 +303,12 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       <SignalOverlay markers={markers} highlight={highlight} />
       {/* Крайние столбцы упирались в шкалы и налезали на их подписи, поэтому
           у оси времени есть поля. */}
-      <XAxis dataKey="t" type="number" domain={[firstAt, lastAt === firstAt ? firstAt + 1 : lastAt]}
-        padding={delta ? { left: 18, right: 18 } : { left: 4, right: 4 }}
+      <XAxis dataKey="t" type="number" domain={domain}
+        padding={delta ? BAR_PADDING : LINE_PADDING}
         scale="time" tickLine={false} axisLine={false} height={30} tickCount={3} minTickGap={80} interval="preserveStartEnd"
-        tick={(props) => <TimeTick {...props} />} />
+        tick={renderTimeTick} />
       {axes}
-      <ChartTooltip
-        cursor={{ strokeDasharray: "4 4" }}
-        content={(props) => (
-          <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} publishedAt={publishedAt} delta={delta} nearestRow={nearestRow} />
-        )}
-      />
+      <ChartTooltip cursor={TOOLTIP_CURSOR} content={tooltipContent} />
       {selectedAt ? (
         <ReferenceLine x={Date.parse(selectedAt)} yAxisId={primaryAxis} stroke="var(--foreground)" strokeOpacity={0.45} strokeDasharray="3 3" />
       ) : null}
@@ -337,17 +358,8 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
               <Line key={metric.key} dataKey={metric.key} yAxisId={axisFor(metric)} hide={hidden.has(metric.key)}
                 type="monotone" stroke={metric.color} strokeWidth={2.5}
                 connectNulls={false} isAnimationActive animationDuration={420}
-                activeDot={{ r: 5 }}
-                dot={(props) => {
-                  // Recharts types the per-point dot props loosely; the shape
-                  // this chart supplies is narrowed at the boundary. Точка
-                  // остаётся только там, где она что-то означает — на границе
-                  // опубликованного сигнала; кружок на каждом замере превращал
-                  // линию в пунктир и ничего не добавлял к чтению.
-                  const dot = props as unknown as { cx?: number; cy?: number; payload?: { evidence?: boolean }; key?: string };
-                  if (!dot.payload?.evidence) return <g key={dot.key} />;
-                  return <SampleDot key={dot.key} cx={dot.cx} cy={dot.cy} fill={metric.color} evidence />;
-                }}
+                activeDot={ACTIVE_DOT}
+                dot={dots.get(metric.key)}
               />
             ))}
           </LineChart>
@@ -398,7 +410,7 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, pu
   platform: string;
   publishedAt: string;
   delta: boolean;
-  nearestRow: (instant: unknown) => HistorySnapshot | null;
+  nearestRow: (instant: unknown) => PlotRow | null;
 }) {
   if (!active) return null;
   // Столбец может быть группой замеров. Тогда подписи берутся из самой
@@ -431,6 +443,7 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, pu
     <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
       <TooltipTime observedAt={row.observedAt} publishedAt={publishedAt} />
       {row.synthetic ? <div className="text-muted-foreground">Момент публикации · синтетическая точка</div> : null}
+      {row.unchangedFor ? <div className="text-muted-foreground max-w-[16rem] whitespace-normal">Цикл сбора без изменений: рост пришёл после него</div> : null}
       {metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => (
         <div key={metric.key} className="flex items-center gap-2">
           <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[2px]" style={{ background: metric.color }} />

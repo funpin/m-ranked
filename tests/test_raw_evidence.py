@@ -48,20 +48,23 @@ def test_precommit_crash_leaves_reusable_object_not_dangling_reference(tmp_path:
 
 
 class Connection:
-    def __init__(self, expiry):
+    def __init__(self, expiry, quarantined=()):
         self.expiry = expiry
+        self.quarantined = set(quarantined)
         self.last = None
+        self.last_quarantined = False
         self.lookups = []
     def transaction(self):
         from contextlib import nullcontext
         return nullcontext()
     def execute(self, sql, params=None):
-        if 'max(purge_after)' in sql:
+        if 'max(payload.purge_after)' in sql:
             self.last = self.expiry.get(params[0])
+            self.last_quarantined = params[0] in self.quarantined
             self.lookups.append(params[0])
         return self
     def fetchone(self):
-        return (self.last,)
+        return (self.last, self.last_quarantined)
 
 
 def test_gc_advances_past_unexpired_across_process_restarts(tmp_path):
@@ -93,3 +96,17 @@ def test_gc_orphan_grace_and_crash_replay(tmp_path):
     # Recreate stale pre-crash worklist: retry missing object is harmless.
     (store.root/'.gc-worklist').write_text(digest+'.json\n')
     assert store.purge_expired(conn, now=now, max_objects=1) == 0
+
+
+def test_gc_keeps_quarantined_evidence_after_expiry(tmp_path):
+    # Карантин держит доказательство для разбора: истёкший срок его не убирает.
+    now = datetime.now(timezone.utc)
+    store = ImmutableEvidenceStore(tmp_path/'raw')
+    uri, digest = store.put({'views': 5})
+    conn = Connection({uri: now - timedelta(days=30)}, quarantined={uri})
+    assert store.purge_expired(conn, now=now, max_objects=10) == 0
+    assert (store.root/(digest+'.json')).exists()
+    conn.quarantined.clear()
+    store_again = ImmutableEvidenceStore(tmp_path/'raw')
+    (store.root/'.gc-worklist').unlink(missing_ok=True)
+    assert store_again.purge_expired(conn, now=now, max_objects=10) == 1

@@ -44,7 +44,9 @@ export const periodDays = (period: DashboardPeriod) => (period === "7d" ? 7 : 30
 /** Строка вуза в выбранном разрезе площадок. */
 export type InstitutionRow = {
   id: string; name: string; fullName: string;
-  posts: number; postsPerDay: number; subscribers: number;
+  posts: number; postsPerDay: number; subscribers: number | null;
+  subscriberNetworks: number; connectedNetworks: number;
+  students: number | null; studentFact: components["schemas"]["InstitutionStudentCount"] | null;
   views24: number | null; reactions24: number | null; comments24: number | null; engagement24: number | null;
   viewsTotal: number; reactionsTotal: number; sample24: number;
   analyzed: number; levels: [number, number, number, number];
@@ -83,13 +85,18 @@ export function institutionRows(data: Dashboard, platform: DashboardPlatform): I
     const byNetwork = Object.fromEntries(NETWORKS.map((network) => [network, byKey.get(`${institution.institutionId}|${network}`)?.posts ?? 0])) as Record<Network, number>;
     const levels = (stat?.levels ?? [0, 0, 0, 0]) as [number, number, number, number];
     const analyzed = stat?.analyzed ?? 0;
+    const availableSubscribers = networks.filter(network => institution.platforms.includes(network))
+      .map(network => institution.subscribers[network]).filter((value): value is number => value !== null && value !== undefined);
     rows.push({
       id: institution.institutionId,
       name: institution.shortName || institution.name,
       fullName: institution.name,
       posts: stat?.posts ?? 0,
       postsPerDay: (stat?.posts ?? 0) / days,
-      subscribers: networks.reduce((sum, network) => sum + (institution.subscribers[network] ?? 0), 0),
+      subscribers: availableSubscribers.length ? availableSubscribers.reduce((sum, value) => sum + value, 0) : null,
+      subscriberNetworks: availableSubscribers.length,
+      connectedNetworks: networks.filter(network => institution.platforms.includes(network)).length,
+      students: institution.students?.value ?? null, studentFact: institution.students ?? null,
       views24: stat?.views24 ?? null, reactions24: stat?.reactions24 ?? null, comments24: stat?.comments24 ?? null,
       engagement24: stat?.engagement24 ?? null,
       viewsTotal: stat?.viewsTotal ?? 0, reactionsTotal: stat?.reactionsTotal ?? 0, sample24: stat?.sample24 ?? 0,

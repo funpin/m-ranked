@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Component, type ErrorInfo, type ReactNode, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { MethodNote } from "@/components/method-note";
+import { ReactionGlyph } from "@/components/reaction-glyph";
 import { collectorGapsInRange, collectorIntervalCoverage } from "@/lib/collector-coverage";
 import type { CollectorCoverage, HistorySnapshot, Platform } from "@/lib/types";
 import { boundarySnapshotIds, nearestSnapshot, signalMarkers, type AnalysisLoad, type SignalMarker } from "@/lib/anomaly";
@@ -27,19 +28,9 @@ import { availableHistoryMetrics, tabulatedHistoryMetrics, metricLabel, metricNo
 
 function shortDate(value:string) {return legacyDate(value).replace(/\.\d{4},/, ",");}
 
-function Reaction({ name }: { name: string }) {
-  const [failed, setFailed] = useState(false);
-  if (name.startsWith("custom:") && /^\d+$/.test(name.slice(7)) && !failed) {
-    // Same-origin proxy validates image type; failure remains visible and accessible.
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img className="inline-block size-5 object-contain align-middle" src={`/emoji/${name.slice(7)}`} alt="Пользовательская реакция" loading="lazy" onError={() => setFailed(true)} />;
-  }
-  return <>{name.startsWith("custom:") || name.startsWith("unknown:") ? "❔" : name === "paid:star" ? "⭐" : name}</>;
-}
-
 function Breakdown({ value, delta = false }: { value: ReturnType<typeof historyReactionEntries>; delta?: boolean }) {
   const entries = value ?? [];
-  return <span className="flex flex-nowrap items-center gap-x-1.5 gap-y-0.5">{entries.length ? entries.map(({reaction:name,count}) => <span className="bg-muted inline-flex items-center gap-1 rounded-md px-1 py-px whitespace-nowrap" key={name}><Reaction name={name} /> <b>{delta && count >= 0 ? "+" : ""}{count}</b></span>) : delta || value === null ? "—" : null}</span>;
+  return <span className="flex flex-nowrap items-center gap-x-1.5 gap-y-0.5">{entries.length ? entries.map(({reaction:name,count}) => <span className="bg-muted inline-flex items-center gap-1 rounded-md px-1 py-px whitespace-nowrap" key={name}><ReactionGlyph name={name} /> <b>{delta && count >= 0 ? "+" : ""}{count}</b></span>) : delta || value === null ? "—" : null}</span>;
 }
 
 /** Заголовки колонок: монохромные значки вместо эмодзи. Эмодзи рисовались
@@ -75,6 +66,40 @@ const PublicationPlot = dynamic(() => import("./publication-plot"), {
   ssr: false,
   loading: () => <Skeleton className="h-[360px] w-full" role="status" aria-label="Загрузка графика" />,
 });
+
+/**
+ * Сбой отрисовки графика остаётся внутри графика. Без этой границы любая
+ * ошибка recharts всплывала к границе маршрута, и вся страница поста
+ * сменялась на «Страница временно недоступна». Здесь на месте графика на
+ * мгновение остаётся заглушка, а при следующем изменении данных (сдвиг
+ * диапазона, переключение метрик) график рисуется заново.
+ */
+class PlotBoundary extends Component<{ resetKey: string; children: ReactNode }, { failedKey: string | null }> {
+  state = { failedKey: null as string | null };
+  private retried = new Set<string>();
+  private timer?: ReturnType<typeof setTimeout>;
+  static getDerivedStateFromError() { return { failedKey: "" }; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    const key = this.props.resetKey;
+    this.setState({ failedKey: key });
+    console.warn("график перерисовывается после сбоя", error.message, info.componentStack?.split("\n")[1]?.trim());
+    // Одна повторная попытка на то же состояние: сбой от стечения обновлений
+    // обычно не повторяется, а настоящая ошибка данных не крутится в цикле.
+    if (!this.retried.has(key)) {
+      this.retried.add(key);
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.setState({ failedKey: null }), 800);
+    }
+  }
+  componentWillUnmount() { clearTimeout(this.timer); }
+  render() {
+    const { failedKey } = this.state;
+    if (failedKey !== null && (failedKey === "" || failedKey === this.props.resetKey)) {
+      return <Skeleton className="h-[360px] w-full" role="status" aria-label="График перерисовывается" />;
+    }
+    return this.props.children;
+  }
+}
 
 function MetricChart(props: {
   rows: HistorySnapshot[]; metrics: Metric[]; delta: boolean; selectedId?: string;
@@ -127,11 +152,13 @@ function MetricChart(props: {
       </div>
       <div className="flex shrink-0 items-center gap-2" aria-label={delta ? "Режим масштаба прироста" : "Режим масштаба"}>
         <span className="text-muted-foreground text-xs font-medium">Масштаб</span>
+        {/* Тот же сегментный вид, что у переключателей графика аккаунта: без
+            собственной рамки у каждой кнопки. */}
         <ToggleGroup
           disabled={!hydrated}
           size="sm"
-          variant="outline"
-          spacing={0}
+          spacing={1}
+          className="rounded-lg bg-muted/70 p-0.5"
           value={[scale]}
           onValueChange={(next) => {
             // Base UI reports an empty selection when the pressed item is
@@ -143,13 +170,17 @@ function MetricChart(props: {
             setScale(value);
           }}
         >
-          <ToggleGroupItem value="shared">1:1</ToggleGroupItem>
-          <ToggleGroupItem value="auto">Авто</ToggleGroupItem>
+          {([["shared", "1:1", "Одна шкала для всех показателей"], ["auto", "Авто", "Своя шкала у каждого показателя"]] as const).map(([value, label, hint]) => (
+            <ToggleGroupItem key={value} value={value} title={hint}
+              className="px-2.5 tabular aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm">{label}</ToggleGroupItem>
+          ))}
         </ToggleGroup>
       </div>
     </div>
 
-    <PublicationPlot {...props} hidden={hidden} scale={scale} />
+    <PlotBoundary resetKey={`${props.rows.length}:${props.rows[0]?.snapshotId}:${props.rows.at(-1)?.snapshotId}:${[...hidden].join()}:${scale}`}>
+      <PublicationPlot {...props} hidden={hidden} scale={scale} />
+    </PlotBoundary>
   </>;
 }
 
@@ -270,14 +301,19 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
     setHighlight(id);
     charts.current?.scrollIntoView({block:"start",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
   },[]);
-  const wholeRange = start === 0 && end === rows.length - 1;
+  // Ползунок двигается сразу, а графики догоняют отложенным диапазоном: при
+  // быстром перетаскивании React пропускает промежуточные положения, вместо
+  // того чтобы синхронно перерисовывать оба графика recharts на каждый шаг.
+  const chartStart = Math.min(useDeferredValue(start), Math.max(0, rows.length - 1));
+  const chartEnd = Math.min(Math.max(chartStart, useDeferredValue(end)), Math.max(0, rows.length - 1));
+  const wholeRange = chartStart === 0 && chartEnd === rows.length - 1;
   // На выборке весь диапазон — это ровно те точки, что сервер отобрал из полной
   // истории, плюс выбранная и границы признаков, если они есть в выборке.
   const displayed = useMemo(() => {
-    if (!preview || !wholeRange) return sampleHistory(rows,start,end,sampledId,[...evidenceIds]);
+    if (!preview || !wholeRange) return sampleHistory(rows,chartStart,chartEnd,sampledId,[...evidenceIds]);
     const keep = new Set([...(sampledIds ?? []), ...evidenceIds, ...(selectedId ? [selectedId] : [])]);
     return rows.filter((row) => keep.has(row.snapshotId));
-  },[preview,wholeRange,rows,start,end,sampledId,evidenceIds,sampledIds,selectedId]);
+  },[preview,wholeRange,rows,chartStart,chartEnd,sampledId,evidenceIds,sampledIds,selectedId]);
   const total = preview ? totalPoints ?? rows.length : rows.length;
   const rangePoints = preview && wholeRange ? total : end-start+1;
   const tableRows = rows.slice(-Math.max(1,tableLimit));
@@ -288,8 +324,8 @@ export function PublicationMeasurements({ publicationId, rows: initialRows, samp
   const showBreakdown = rows.some(row => (historyReactionEntries(row)?.length ?? 0)>0);
   const visibleGaps = useMemo(() => {
     if (!rows.length) return [];
-    return collectorGapsInRange(collectorCoverage, rows[start]!.observedAt, rows[end]!.observedAt);
-  }, [collectorCoverage, rows, start, end]);
+    return collectorGapsInRange(collectorCoverage, rows[chartStart]!.observedAt, rows[chartEnd]!.observedAt);
+  }, [collectorCoverage, rows, chartStart, chartEnd]);
   const coverageComplete = Boolean(rows.length && collectorCoverage.availableFrom
     && Date.parse(collectorCoverage.availableFrom) <= Date.parse(rows[start]!.observedAt)
     && Date.parse(collectorCoverage.through) >= Date.parse(rows[end]!.observedAt));
@@ -448,9 +484,10 @@ function CollectorIntervalCell({ row, coverage }: { row: HistorySnapshot; covera
   const summary = state.kind === "gap"
     ? `Подтверждённый пропуск: ${duration(state.missingSeconds)}. В остальное время сбор шёл.`
     : "Сбор шёл; промежуточные опросы без изменений не сохранялись.";
+  const unchanged = interval.unchangedAt ? ` Последнее чтение без изменений — ${legacyDate(interval.unchangedAt)}: рост пришёл после него.` : "";
   return <td className="min-w-44 !whitespace-normal"><InlineHint
     testId="collector-status-trigger"
-    content={`${summary} За интервал: успешных циклов — ${interval.successfulPolls}, с ошибкой — ${interval.failedPolls}.`}
+    content={`${summary} За интервал: успешных циклов — ${interval.successfulPolls}, с ошибкой — ${interval.failedPolls}.${unchanged}`}
   >{state.kind === "gap"
       ? <Badge variant="destructive" data-testid="collector-gap-badge">Пропуск {duration(state.missingSeconds)}</Badge>
       : <Badge variant="secondary" data-testid="collector-covered-badge">Сбор шёл</Badge>}

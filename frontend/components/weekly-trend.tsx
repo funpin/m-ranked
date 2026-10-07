@@ -2,7 +2,7 @@
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -21,8 +21,19 @@ export type TrendMode = "median" | "total";
 // публикации: в первой загрузке страницы площадки ей делать нечего.
 const AccountTrendPlot = dynamic(() => import("@/components/account-trend-plot"), {
   ssr: false,
-  loading: () => <Skeleton className="h-[280px] w-full" role="status" aria-label="Загрузка графика" />,
+  loading: () => <Skeleton className="h-[280px] w-full sm:h-[320px]" role="status" aria-label="Загрузка графика" />,
 });
+
+/** Период графика: семь или тридцать полных дней и сегодняшние сутки. */
+type Span = 7 | 30;
+const SPANS: { id: Span; label: string; hint: string }[] = [
+  { id: 7, label: "7 д", hint: "Семь полных дней и сегодня" },
+  { id: 30, label: "30 д", hint: "Тридцать полных дней и сегодня" },
+];
+
+const periodDate = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", timeZone: "UTC" });
+const period = (points: readonly Point[]) => points.length
+  ? `${periodDate.format(new Date(`${points[0]!.day}T00:00:00Z`))} — сегодня` : "";
 
 const MODES: { id: TrendMode; label: string; hint: string }[] = [
   { id: "median", label: "Медианы", hint: "Каким вышел типичный пост этого дня" },
@@ -38,59 +49,115 @@ const MODES: { id: TrendMode; label: string; hint: string }[] = [
  * шкалах. Сколько публикаций вышло в день, видно в обоих режимах: это опора,
  * без которой ни то ни другое не читается.
  */
-export function WeeklyTrend({ points, primary, selectedDay, selectedTrend }: { points: readonly Point[]; primary: string; selectedDay?: string; selectedTrend?: TrendMode }) {
+export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accountId }: { points: readonly Point[]; primary: string; selectedDay?: string; selectedTrend?: TrendMode; accountId?: string }) {
   const [mode, setMode] = useState<TrendMode>(selectedTrend ?? "median");
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
+  // Период живёт в адресе: переключатель «Медианы / Всего за день» перестраивает
+  // блок, и состояние компонента терялось бы; ссылку можно и переслать.
+  const [span, setSpanState] = useState<Span>(search.get("span") === "30" ? 30 : 7);
+  const setSpan = (next: Span) => {
+    setSpanState(next);
+    // Повторный выбор месяца после сбоя — новая попытка загрузки.
+    if (next === 30) setMonthFailed(false);
+    const params = new URLSearchParams(search.toString());
+    if (next === 30) params.set("span", "30"); else params.delete("span");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+  // Месяц приходит отдельным запросом только по нажатию: карточка аккаунта
+  // несёт неделю, а месячный ряд нужен не каждому читателю.
+  const [month, setMonth] = useState<readonly Point[] | null>(null);
+  const [monthFailed, setMonthFailed] = useState(false);
+  useEffect(() => {
+    if (span !== 30 || month || monthFailed || !accountId) return;
+    const controller = new AbortController();
+    fetch(`/api/v1/accounts/${accountId}/daily-series?days=30`, { headers: { accept: "application/json" }, signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error(String(response.status))))
+      .then((body: { points: Point[] }) => setMonth(body.points))
+      .catch(() => { if (!controller.signal.aborted) setMonthFailed(true); });
+    return () => controller.abort();
+  }, [span, month, monthFailed, accountId]);
+  // Переключатель и заголовок не расходятся: при сбое загрузки месяца выбор
+  // показывает неделю, строка под заголовком называет сбой, повторное нажатие
+  // «30 д» пробует снова.
+  const shownSpan: Span = monthFailed ? 7 : span;
+  const monthly = shownSpan === 30;
+  const shown = monthly && month ? month : points;
   const chooseMode = (next: TrendMode) => {
     setMode(next);
     router.replace(selectedDayHref(pathname, search.toString(), selectedDay, next), { scroll: false });
   };
-  const published = points.reduce((total, point) => total + point.publishedCount, 0);
+  // Сегодняшние сутки ещё идут: публикации за полные дни и за сегодня — раздельно.
+  const today = shown.at(-1);
+  const published = shown.slice(0, -1).reduce((total, point) => total + point.publishedCount, 0);
+  const days = Math.max(0, shown.length - 1);
   const totals = mode === "total";
   return (
-    <section className="grid min-w-0 content-start gap-3 rounded-lg border p-4" aria-label="Динамика за неделю">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <b className="text-sm font-semibold">Неделя</b>
-        <span className="text-muted-foreground text-xs">
-          {published ? <>вышло <b className="text-foreground tabular">{published}</b> публикаций за 7 дней</> : "за 7 дней публикаций не было"}
-        </span>
-      </div>
-      <ToggleGroup aria-label="Что показывают линии" variant="outline" spacing={0} value={[mode]}
+    <section className="grid min-w-0 content-start gap-2 rounded-lg border border-border/70 bg-background/30 p-3" aria-label="Динамика за неделю">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold leading-5">{monthly ? "Месяц" : "Неделя"}
+            <span className="text-muted-foreground ml-1.5 text-xs font-normal">{period(shown)}</span></h2>
+          <span className="block text-xs leading-4 text-muted-foreground">
+          {published ? <>вышло <b className="text-foreground tabular">{published}</b> публикаций за {days} дней</> : `за ${days} дней публикаций не было`}
+          {today ? <>, сегодня — <b className="text-foreground tabular">{today.publishedCount}</b></> : null}
+          {monthFailed && !monthly ? " · месяц не загрузился, показана неделя" : null}
+          </span>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        {accountId ? <ToggleGroup aria-label="Период графика" spacing={1} value={[String(shownSpan)]}
+          className="shrink-0 rounded-lg bg-muted/70 p-0.5"
+          onValueChange={(next) => {
+            const selected = SPANS.find((option) => String(option.id) === next[0]);
+            if (selected) setSpan(selected.id);
+          }}>
+          {SPANS.map((option) => <ToggleGroupItem key={option.id} value={String(option.id)} title={option.hint}
+            className="px-2.5 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm">{option.label}</ToggleGroupItem>)}
+        </ToggleGroup> : null}
+        <ToggleGroup aria-label="Что показывают линии" spacing={1} value={[mode]}
+          className="shrink-0 rounded-lg bg-muted/70 p-0.5"
         onValueChange={(next) => {
           // Base UI reports an empty selection when the pressed item is toggled off.
           const selected = MODES.find((option) => option.id === next[0]);
           if (selected) chooseMode(selected.id);
         }}>
-        {MODES.map((option) => <ToggleGroupItem key={option.id} value={option.id} title={option.hint}>{option.label}</ToggleGroupItem>)}
-      </ToggleGroup>
-      {points.length > 1
+          {MODES.map((option) => <ToggleGroupItem key={option.id} value={option.id} title={option.hint}
+            className="px-2.5 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm">{option.label}</ToggleGroupItem>)}
+        </ToggleGroup>
+        </div>
+      </div>
+      {shown.length > 1
         ? <>
-            <AccountTrendPlot points={points} primary={primary} mode={mode} selectedDay={selectedDay} />
-            {/* Легенда под графиком и всегда в три колонки на широком экране,
-                в три строки на узком. Раньше она переносилась по ширине, а
-                подписи в двух режимах разной длины — «медиана лайков» против
-                «всего лайков», — поэтому при переключении менялось число строк
-                и блок прыгал по высоте. Сетка с постоянным числом колонок этого
-                не допускает: от режима высота больше не зависит. */}
-            <ul className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-3" aria-hidden="true">
+            {monthly && !month ? <Skeleton className="h-[280px] w-full sm:h-[320px]" role="status" aria-label="Загрузка месячного ряда" />
+              : <AccountTrendPlot points={shown} primary={primary} mode={mode} selectedDay={selectedDay} />}
+            {/* Режим указан в переключателе; легенда связывает цвет с
+                показателем и шкалой и сохраняет высоту при смене режима. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-1">
+            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground" aria-label="Легенда графика">
               {[
-                { color: "var(--muted-foreground)", faded: true, name: "публикаций в день", side: "фоном" },
-                { color: "var(--chart-1)", name: totals ? `всего ${primary}` : `медиана ${primary}`, side: "слева" },
-                { color: "var(--chart-2)", name: totals ? "всего просмотров" : "медиана просмотров", side: "справа" },
+                { color: "var(--muted-foreground)", faded: true, name: "Публикации", side: "", description: "Публикаций в день — столбцы" },
+                { color: "var(--chart-1)", name: primary === "лайков" ? "Лайки" : "Реакции", side: "слева", description: `${totals ? "Всего" : "Медиана"} ${primary} — левая шкала` },
+                { color: "var(--chart-2)", name: "Просмотры", side: "справа", description: `${totals ? "Всего" : "Медиана"} просмотров — правая шкала` },
               ].map((item) => (
-                <li key={item.side} className="flex min-w-0 items-center gap-1.5">
-                  <span className={cn("size-2.5 shrink-0 rounded-[2px]", item.faded && "opacity-40")}
+                <li key={item.name} className="flex items-center gap-1.5 whitespace-nowrap" aria-label={item.description} title={item.description}>
+                  <span aria-hidden="true" className={cn("shrink-0 rounded-[2px]", item.faded ? "size-2 opacity-40" : "h-0.5 w-3")}
                     style={{ background: item.color }} />
-                  <span className="truncate">{item.name}</span>
-                  <span className="text-muted-foreground shrink-0">· {item.side}</span>
+                  <span>{item.name}{item.side && <> <span className="text-muted-foreground">· {item.side}</span></>}</span>
                 </li>
               ))}
             </ul>
-            <p className="text-muted-foreground min-h-[3.25rem] text-xs">{totals
-              ? "Нажмите на день — покажем прирост каждой публикации за эти сутки в таблице ниже."
-              : "Нажмите на день — покажем публикации, вышедшие в этот день."}</p>
+            {/* Обе подсказки лежат в одной ячейке, неактивная скрыта: ширина
+                строки не зависит от режима, и легенда с подсказкой не
+                переносятся на вторую строку только в одном из них. */}
+            <p className="grid min-h-8 text-xs leading-4 text-muted-foreground sm:min-h-4">
+              {([["median", "Нажмите на день — покажем его публикации"], ["total", "Нажмите на день — покажем суточный прирост"]] as const).map(([id, text]) => (
+                <span key={id} className={cn("col-start-1 row-start-1", (id === "total") !== totals && "invisible")}
+                  aria-hidden={(id === "total") !== totals}>{text}</span>
+              ))}
+            </p>
+            </div>
           </>
         : <p className="text-muted-foreground py-10 text-center text-sm">Недельного ряда ещё нет.</p>}
     </section>

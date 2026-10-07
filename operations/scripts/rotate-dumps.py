@@ -8,6 +8,15 @@ import sys
 
 root = Path(sys.argv[1])
 keep = int(sys.argv[2])
+# --refresh: перед снимком по запросу из панели остаётся только проверенная
+# восстановлением копия; новый снимок станет второй.
+# --offsite a,b: проверенные копии, сверенная копия которых уже лежит на
+# другом сервере (0064), — локально их можно не держать.
+extra = sys.argv[3:]
+refresh = '--refresh' in extra
+offsite = set()
+if '--offsite' in extra:
+    offsite = {name for name in extra[extra.index('--offsite') + 1].split(',') if name}
 if not 1 <= keep <= 90:
     raise SystemExit("BACKUP_KEEP must be between 1 and 90")
 files = sorted((p for p in root.iterdir() if re.fullmatch(r'mranked-[0-9]{8}T[0-9]{6}Z\.dump',p.name)
@@ -28,10 +37,11 @@ for dump in files:
             raise SystemExit('restore receipt checksum mismatch')
         verified.append(dump)
         break
-if not verified:
-    print('rotation refused: no restore-verified copy; operator action required')
+if not verified and not offsite:
+    print('rotation refused: no restore-verified copy here or on another server; operator action required')
     raise SystemExit(75)
-protected = set(files[:keep] + verified)
+local_verified = [dump for dump in verified if dump.name not in offsite]
+protected = set(local_verified if refresh else files[:keep] + local_verified)
 for dump in files:
     if dump not in protected:
         dump.unlink()

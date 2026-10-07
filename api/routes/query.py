@@ -26,10 +26,31 @@ router = APIRouter(prefix="/api/v1", tags=["Query"])
 
 NO_STORE = {"Cache-Control": "no-store"}
 
-# Обзор и списки затрагиваются записью публикаций и справочника.
-OVERVIEW_TAGS = frozenset({"publications", "overview"})
+# Счётчики замечаний также меняются после анализа и контекстной перепроверки.
+OVERVIEW_TAGS = frozenset({"publications", "overview", "analysis"})
 DETAIL_TAGS = frozenset({"publications", "catalog"})
 COLLECTOR_INTERVAL_SECONDS = {"telegram": 300, "vk": 300, "max": 300, "rutube": 3600}
+# Поздних замеров архивного месяца — единицы на пост; предел только страховка.
+
+
+_UINT64 = 1 << 64
+
+
+def snapshot_cursor(snapshot_id: int) -> str:
+    """Id снимка (64 бита со знаком) — в UUID курсора истории.
+
+    Отрицательные id (синтетические и перенесённые точки) идут дополнением до
+    двух, а положительные дают прежний текст: выданные курсоры не ломаются.
+    """
+    return str(uuid.UUID(int=snapshot_id % _UINT64))
+
+
+def snapshot_from_cursor(text: str) -> int | None:
+    """Обратное к snapshot_cursor; None — курсор не из этой истории."""
+    value = uuid.UUID(text).int
+    if value == 0 or value >= _UINT64:
+        return None
+    return value - _UINT64 if value >= 1 << 63 else value
 
 
 def _iso(value: Any) -> Any:
@@ -75,7 +96,7 @@ async def overview(
     platform: str = Query("all"),
     period: str = Query("1d"),
     q: str = Query(""),
-    sort: str = Query("median_reactions"),
+    sort: str = Query("anomalies"),
     direction: str | None = Query(None),
     limit: int = Query(50),
     cursor: str | None = Query(None),
@@ -202,7 +223,7 @@ async def account(
             "as_of": committed_at,
         })
         daily = await db.fetch_all(details.ACCOUNT_DAILY, {
-            "account_id": row["account_id"], "as_of": committed_at,
+            "account_id": row["account_id"], "as_of": committed_at, "span": WEEK_SPAN,
         }) if stats_row else []
         stats = dto.account_stats(stats_row, revision, committed_at,
                                   dto.account_daily(list(daily))) if stats_row else None
@@ -211,6 +232,37 @@ async def account(
     return await serve(request, "account", {
         "id": legacyId.lower(), "legacyType": resolved_type,
     }, DETAIL_TAGS, build, _pinned_revision(revision), aliases=_account_aliases)
+
+
+# Неделя — семь полных дней и сегодняшние сутки; месяц — тридцать и сегодня.
+WEEK_SPAN = 7
+DAILY_SPANS = (7, 30)
+
+
+@router.get("/accounts/{accountId}/daily-series")
+async def account_daily_series(
+    accountId: str,
+    request: Request,
+    days: int = Query(30),
+) -> Response:
+    """Дни аккаунта для переключателя «7 д / 30 д»; неделя приходит и в карточке аккаунта."""
+    if days not in DAILY_SPANS:
+        raise BadRequest("days должен быть 7 или 30")
+    try:
+        account_id = uuid.UUID(accountId)
+    except ValueError as error:
+        raise BadRequest("accountId должен быть UUID") from error
+
+    async def build(revision: int, committed_at: Any) -> dict[str, Any]:
+        db: Database = request.app.state.db
+        rows = await db.fetch_all(details.ACCOUNT_DAILY, {
+            "account_id": account_id, "as_of": committed_at, "span": days,
+        })
+        return {"accountId": str(account_id), "days": days, "datasetRevision": revision,
+                "points": dto.account_daily(list(rows))}
+
+    return await serve(request, "account-daily-series", {"id": str(account_id), "days": str(days)},
+                       DETAIL_TAGS, build)
 
 
 def _account_aliases(body: dict[str, Any]) -> list[dict[str, Any]]:
@@ -318,15 +370,15 @@ async def account_publications(
         if account_row is None:
             raise NotFound(f"аккаунт {legacyId} не найден")
         today = committed_at.astimezone(ZoneInfo("Europe/Moscow")).date()
-        if day is not None and not today - timedelta(days=6) <= day <= today:
-            raise BadRequest("day должен входить в последние 7 московских суток")
+        # День выбирают на графике аккаунта: неделя или месяц и сегодняшние сутки.
+        if day is not None and not today - timedelta(days=max(DAILY_SPANS)) <= day <= today:
+            raise BadRequest("day должен входить в последние 30 московских суток или сегодняшние")
         dimensions = f"account-publications:{account_row['account_id']}:{day.isoformat() if day else '-'}"
         after_id = normalize.scoped_cursor(cursor, revision, dimensions)
         publication_type = "posts" if account_row["platform"] == "telegram" else "platform_posts"
         rows = await db.fetch_all(details.ACCOUNT_PUBLICATIONS, {
             "account_id": account_row["account_id"], "publication_legacy_type": publication_type,
-            "after_id": after_id, "fetch_limit": page_size + 1,
-            "days": request.app.state.settings.retention_days, "as_of": committed_at,
+            "after_id": after_id, "fetch_limit": page_size + 1, "as_of": committed_at,
             "growth_day": day,
         })
         has_more = len(rows) > page_size
@@ -371,10 +423,9 @@ async def publication_history(
         cursor_id = normalize.scoped_cursor(cursor, revision, dimensions)
         after_snapshot_id = None
         if cursor_id is not None:
-            parsed = uuid.UUID(cursor_id)
-            if parsed.int <= 0 or parsed.int > (1 << 63) - 1:
+            after_snapshot_id = snapshot_from_cursor(cursor_id)
+            if after_snapshot_id is None:
                 raise BadRequest("курсор истории повреждён")
-            after_snapshot_id = parsed.int
         published_month = publication_row["published_at"].date().replace(day=1)
         # Первая страница поста с законченным сбором — из готовой выдачи
         # (миграция 0043), если снимки с тех пор не менялись: живой расчёт
@@ -405,7 +456,7 @@ async def publication_history(
             "as_of": committed_at,
             "expected_interval_seconds": COLLECTOR_INTERVAL_SECONDS[publication_row["platform"]],
         })
-        cursor_uuid = str(uuid.UUID(int=last_snapshot)) if last_snapshot is not None else None
+        cursor_uuid = snapshot_cursor(last_snapshot) if last_snapshot is not None else None
         neighbours = await db.fetch_one(details.NEIGHBOURS, {
             "publication_id": publication_id, "legacy_type": canonical_type,
         })

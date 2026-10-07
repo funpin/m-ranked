@@ -192,13 +192,16 @@ paths:
         - name: sort
           in: query
           description: >-
-            Legacy sort key. `coverage` and `accounts` apply only to `all`; `posts` and
-            `subscribers` apply only to a concrete platform. Unsupported combinations normalize
-            to `m_rating` for `all` and `median_reactions` otherwise.
+            Legacy sort key. `coverage` and `accounts` apply only to `all`;
+            `median_reactions` applies only to a concrete platform. `views`, `reactions`,
+            `posts` and `subscribers` also apply to the summed institution totals in `all`.
+            Unsupported combinations normalize
+            to `anomalies`. `anomalies` orders by the sum of level 2 and level 3
+            publication counts for the selected platform and period.
           schema:
             type: string
-            enum: [name, median_reactions, m_rating, reactions, views, posts, subscribers, coverage, accounts]
-            default: median_reactions
+            enum: [anomalies, name, median_reactions, m_rating, reactions, views, posts, subscribers, coverage, accounts]
+            default: anomalies
         - name: direction
           in: query
           description: Defaults to ascending for `name`, descending otherwise.
@@ -379,12 +382,17 @@ paths:
       description: >-
         Level only, newest publications first, at most 1000. Publications not analyzed yet are
         absent. Signals and data quality are served per publication by anomaly-analysis.
+        With before, only publications published at or before that instant are returned.
       security: []
       parameters:
         - name: accountId
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: before
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
         - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
@@ -440,13 +448,97 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/accounts/{accountId}/daily-series:
+    get:
+      tags: [Query]
+      operationId: getAccountDailySeries
+      summary: Read the account's daily series for the last 7 or 30 full days and today
+      description: >-
+        The same points as dailySeries of the account card for a selectable span: `days` full Moscow days
+        plus today (still in progress), oldest first.
+      security: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, enum: [7, 30], default: 30 }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Daily points of the span.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [accountId, days, datasetRevision, points]
+                properties:
+                  accountId: { type: string, format: uuid }
+                  days: { type: integer, enum: [7, 30] }
+                  datasetRevision: { type: integer, format: int64, minimum: 0 }
+                  points:
+                    type: array
+                    maxItems: 31
+                    items: { $ref: '#/components/schemas/AccountDailyPoint' }
+        '304':
+          description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/accounts/{accountId}/anomaly-findings:
+    get:
+      tags: [Query]
+      operationId: getAccountAnomalyFindings
+      summary: Read account-level anomaly findings
+      description: >-
+        Patterns visible only across many posts of one account over the last 30 days, relative to the other
+        accounts of its platform: a repeated early reaction pack, reactions that ignore post reach, posts
+        that gain their reactions days later, a
+        persistently unusual late response. Findings are recomputed nightly, counted separately from post
+        levels and never change them. Status 1 is unusual, 2 persistently unusual (both halves of the window).
+      security: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Current findings of the account; an empty list when there are none.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAnomalyFindings'
+        '304':
+          description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/statistics:
     get:
       tags: [Query]
       operationId: getStatistics
+      deprecated: true
       summary: Read bounded cumulative publication statistics
       description: >-
-        Selects publications by publication date, then uses their latest available cumulative
+        Deprecated: use getFindings. Selects publications by publication date, then uses their latest available cumulative
         counters. Publication results apply global search before the newest-200 cap and rank the
         resulting top 50 independently per platform. Entity results aggregate the newest 20
         matching publications per institution on one platform. Unsupported interaction components
@@ -537,6 +629,51 @@ paths:
               $ref: '#/components/headers/PublicCache'
         '400':
           $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/findings:
+    get:
+      tags: [Query]
+      operationId: getFindings
+      summary: Read publications that performed above their account norm
+      description: >-
+        Compares each publication with the median of its own account at the same age (latest
+        non-empty checkpoint of 1, 3, 6, 12 or 24 hours) over the 30 days before the dataset
+        revision. Posts with an effective anomaly level 2-3 are excluded from norms and, unless
+        anomalies=include, from results. In mode=all only posts with an interaction index of at
+        least 1.5 and at least 10 interactions are returned.
+      security: []
+      parameters:
+        - { name: mode, in: query, schema: { type: string, enum: [all, institution], default: all } }
+        - { name: institution, in: query, description: Institution legacy id; required when mode=institution., schema: { type: integer, format: int64, minimum: 1 } }
+        - { name: platform, in: query, schema: { type: string, enum: [all, telegram, vk, max, rutube], default: all } }
+        - { name: period, in: query, schema: { type: string, enum: ['1d', '7d', '30d'], default: '7d' } }
+        - { name: types, in: query, style: form, explode: true, schema: { type: array, maxItems: 5, items: { type: string, enum: [text, photo, album, video, other] } } }
+        - { name: sort, in: query, schema: { type: string, enum: [interaction_index, view_index, comment_index, share_index, interactions24, views24, erv24, published_at], default: interaction_index } }
+        - { name: direction, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { name: group, in: query, schema: { type: string, enum: [none, institution], default: none } }
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: anomalies, in: query, schema: { type: string, enum: [exclude, include], default: exclude } }
+        - { name: limit, in: query, schema: { type: integer, format: int32, minimum: 1, maximum: 50, default: 50 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, maxLength: 512 } }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Revision-pinned findings.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Findings' }
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/compare/candidates:
@@ -923,6 +1060,137 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/visit:
+    post:
+      tags: [Operations]
+      operationId: recordVisit
+      summary: Count a page view without cookies
+      description: >-
+        Page beacon sent on load and once a minute while the tab is visible. The visitor is a
+        BLAKE2b hash of a daily salt, the client address and the user agent; the address is never
+        stored and the salt is deleted after the day is summed up. Robots are ignored. The response
+        is always 204 and does not depend on whether the signal was counted.
+      security: []
+      requestBody:
+        required: false
+        content:
+          text/plain:
+            schema:
+              type: string
+              maxLength: 256
+              description: 'JSON object {"view": true} for a page view; anything else marks an open tab.'
+      responses:
+        '204':
+          description: Accepted.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+  /api/v1/admin/visitors:
+    get:
+      tags:
+      - Admin
+      operationId: getVisitors
+      summary: getVisitors
+      description: Requires VIEWER, EDITOR or ADMIN. Unique visitors per Moscow day and visitors seen in the last five minutes.
+      security:
+      - adminSession: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - week
+          - month
+          default: week
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminVisitors'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/system:
+    get:
+      tags:
+      - Admin
+      operationId: getSystemOverview
+      summary: getSystemOverview
+      description: >-
+        Requires VIEWER, EDITOR or ADMIN. Server state from the one-minute samples of the ops-sample
+        timer: health checks, host resources, pipeline timestamps, collection outcomes and chart series
+        (five-minute points for a day, hourly points for a week). Cached for 15 seconds per API process.
+      security:
+      - adminSession: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - day
+          - week
+          default: day
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSystem'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/storage:
+    get:
+      tags:
+      - Admin
+      operationId: getStorageOverview
+      summary: getStorageOverview
+      description: >-
+        Requires VIEWER, EDITOR or ADMIN. Server registry with disk and memory from each node agent's last
+        report, runtime policies (collection, storage, analysis), recent database backups and cold archive
+        months with their copies per server, and the latest panel jobs (ADR-016). Changes are submitted as
+        panel forms to /manage/servers, /manage/policies/{name} and /manage/archive/{run|analysis} (ADMIN).
+      security:
+      - adminSession: []
+      responses:
+        '200':
+          description: Consistent private result; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStorage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/AdminUnavailable'
   /api/v1/admin/catalog/institutions:
@@ -1869,7 +2137,7 @@ paths:
         in: query
         required: false
         description: >-
-          Moscow calendar day from the account's seven-day series. When present,
+          Moscow calendar day from the account's daily series: one of the last 30 full days or today. When present,
           every returned publication includes its growth between that day and the
           preceding calendar day; a publication first seen that day uses zero as
           its baseline.
@@ -2238,6 +2506,8 @@ components:
       additionalProperties: false
       required: [available, institutions, accounts, accountsByPlatform, publications, snapshots, computedAt]
       properties:
+        trackedInstitutions: { type: integer, minimum: 0, description: 'All catalog institutions with at least one enabled official account, independent of filters and pagination.' }
+        ratingInstitutions: { type: integer, minimum: 1, description: 'Social M-Rating institution count, initially 233; refreshed only by the administrative M-Rating update action.' }
         available: { type: boolean }
         institutions: { type: ['integer', 'null'], minimum: 0 }
         accounts: { type: ['integer', 'null'], minimum: 0 }
@@ -2658,6 +2928,675 @@ components:
           type: boolean
         canDelete:
           type: boolean
+    AdminVisitorDay:
+      type: object
+      additionalProperties: false
+      required:
+      - day
+      - visitors
+      - views
+      properties:
+        day:
+          type: string
+          format: date
+        visitors:
+          type: integer
+          minimum: 0
+        views:
+          type: integer
+          minimum: 0
+    AdminVisitors:
+      type: object
+      additionalProperties: false
+      required:
+      - range
+      - online
+      - onlineWindowSeconds
+      - today
+      - days
+      properties:
+        range:
+          type: string
+          enum:
+          - week
+          - month
+        online:
+          type: integer
+          minimum: 0
+          description: Distinct visitors with a signal inside the window; signals reach the database within 30 seconds.
+        onlineWindowSeconds:
+          type: integer
+          minimum: 1
+        today:
+          $ref: '#/components/schemas/AdminVisitorDay'
+        days:
+          type: array
+          description: Oldest first, zero-filled, the last item is today.
+          items:
+            $ref: '#/components/schemas/AdminVisitorDay'
+    AdminSystemCheck:
+      type: object
+      additionalProperties: false
+      required:
+      - key
+      - label
+      - state
+      - detail
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        state:
+          type: string
+          enum:
+          - ok
+          - warn
+          - fail
+          - unknown
+        detail:
+          type: string
+    AdminSystemPoint:
+      type: object
+      additionalProperties: false
+      required:
+      - at
+      - cpu
+      - memory
+      - load
+      - requestsPerMinute
+      - humanErrors
+      - botRejected
+      - hitRatio
+      - p95Ms
+      - analysisLagMinutes
+      - ingestDelayMinutes
+      - collectedOk
+      - collectedFailed
+      properties:
+        at:
+          type: string
+          format: date-time
+        cpu:
+          type:
+          - number
+          - 'null'
+        memory:
+          type:
+          - number
+          - 'null'
+        load:
+          type:
+          - number
+          - 'null'
+        requestsPerMinute:
+          type:
+          - number
+          - 'null'
+        humanErrors:
+          type: integer
+          minimum: 0
+        botRejected:
+          type: integer
+          minimum: 0
+        hitRatio:
+          type:
+          - number
+          - 'null'
+        p95Ms:
+          type:
+          - number
+          - 'null'
+        analysisLagMinutes:
+          type:
+          - number
+          - 'null'
+        ingestDelayMinutes:
+          type:
+          - number
+          - 'null'
+        collectedOk:
+          type: integer
+          minimum: 0
+        collectedFailed:
+          type: integer
+          minimum: 0
+    AdminStorageReplica:
+      type: object
+      additionalProperties: false
+      required:
+      - node
+      - state
+      - bytesDone
+      - error
+      - verifiedAt
+      properties:
+        node:
+          type: string
+        state:
+          type: string
+          enum:
+          - wanted
+          - transferring
+          - verified
+          - deleting
+          - deleted
+          - failed
+        bytesDone:
+          type: integer
+          format: int64
+        error:
+          type:
+          - string
+          - 'null'
+        verifiedAt:
+          type:
+          - string
+          - 'null'
+    AdminStorageFile:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      - sizeBytes
+      - replicas
+      properties:
+        name:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        replicas:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageReplica'
+    AdminStorageBackup:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - kind
+      - name
+      - sizeBytes
+      - createdAt
+      - retired
+      - replicas
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - backup
+          - archive_full
+          - archive_browse
+        name:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        retired:
+          type: boolean
+        replicas:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageReplica'
+    AdminStorageServer:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - displayName
+      - role
+      - platforms
+      - state
+      - storesObjects
+      - reserveBytes
+      - lastSeenAt
+      - online
+      - agentVersion
+      - disk
+      - memory
+      - load1
+      - cpus
+      - units
+      - copies
+      - updatedAt
+      - updatedBy
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+          enum:
+          - main
+          - collector
+          - storage
+        platforms:
+          type: array
+          items:
+            type: string
+            enum:
+            - telegram
+            - vk
+            - max
+            - rutube
+        state:
+          type: string
+          enum:
+          - pending
+          - active
+          - draining
+          - disabled
+        storesObjects:
+          type: boolean
+        reserveBytes:
+          type: integer
+          format: int64
+        lastSeenAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        online:
+          type: boolean
+        agentVersion:
+          type:
+          - string
+          - 'null'
+        disk:
+          type: object
+          additionalProperties: false
+          required:
+          - totalBytes
+          - freeBytes
+          - storeBytes
+          - rootTotalBytes
+          - rootFreeBytes
+          properties:
+            totalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            freeBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            storeBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            rootTotalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            rootFreeBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+        memory:
+          type: object
+          additionalProperties: false
+          required:
+          - totalBytes
+          - availableBytes
+          properties:
+            totalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            availableBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+        load1:
+          type:
+          - number
+          - 'null'
+        cpus:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        units:
+          type: object
+          additionalProperties:
+            type: string
+        copies:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: false
+            required:
+            - objects
+            - bytes
+            properties:
+              objects:
+                type: integer
+              bytes:
+                type: integer
+                format: int64
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type:
+          - string
+          - 'null'
+    AdminStoragePolicy:
+      type: object
+      additionalProperties: false
+      required:
+      - value
+      - version
+      - updatedAt
+      - updatedBy
+      properties:
+        value:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type:
+          - string
+          - 'null'
+    AdminStorage:
+      type: object
+      additionalProperties: false
+      required:
+      - servers
+      - policies
+      - limits
+      - backups
+      properties:
+        servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageServer'
+        policies:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AdminStoragePolicy'
+        limits:
+          type: object
+          additionalProperties: false
+          required:
+          - collection
+          - finalAnalysisDays
+          properties:
+            collection:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: integer
+            finalAnalysisDays:
+              type: array
+              items:
+                type: integer
+        backups:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStorageBackup'
+    AdminSystem:
+      type: object
+      additionalProperties: false
+      required:
+      - range
+      - sampledAt
+      - checks
+      - host
+      - pipeline
+      - restarts
+      - collection
+      - series
+      - backups
+      properties:
+        range:
+          type: string
+          enum:
+          - day
+          - week
+        sampledAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminSystemCheck'
+        host:
+          type:
+          - object
+          - 'null'
+          additionalProperties: false
+          required:
+          - cpuPercent
+          - cores
+          - load
+          - memoryTotalBytes
+          - memoryUsedBytes
+          - swapUsedBytes
+          - diskTotalBytes
+          - diskFreeBytes
+          - unitsActive
+          - unitsTotal
+          - failedUnits
+          properties:
+            cpuPercent:
+              type:
+              - number
+              - 'null'
+            cores:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            load:
+              type: array
+              items:
+                type: number
+            memoryTotalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            memoryUsedBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            swapUsedBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            diskTotalBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            diskFreeBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            unitsActive:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            unitsTotal:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            failedUnits:
+              type: array
+              items:
+                type: string
+        pipeline:
+          type:
+          - object
+          - 'null'
+          additionalProperties: false
+          required:
+          - ingestAcceptedAt
+          - analysisLagSeconds
+          - analysisBacklog
+          - analysisCompletedAt
+          - normsRunAt
+          - tailRunAt
+          - backupAt
+          properties:
+            ingestAcceptedAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            analysisLagSeconds:
+              type:
+              - number
+              - 'null'
+            analysisBacklog:
+              type:
+              - number
+              - 'null'
+            analysisCompletedAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            normsRunAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            tailRunAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+            backupAt:
+              type:
+              - string
+              - 'null'
+              format: date-time
+        restarts:
+          type: object
+          description: Automatic restarts of long-running services during the period.
+          additionalProperties:
+            type: integer
+            minimum: 1
+        collection:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - platform
+            - ok
+            - failed
+            - lastOkAt
+            properties:
+              platform:
+                type: string
+                enum:
+                - telegram
+                - vk
+                - max
+                - rutube
+              ok:
+                type: integer
+                minimum: 0
+              failed:
+                type: integer
+                minimum: 0
+              lastOkAt:
+                type:
+                - string
+                - 'null'
+                format: date-time
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminSystemPoint'
+        backups:
+          type:
+          - object
+          - 'null'
+          additionalProperties: false
+          description: Database dumps on the server; the newest first.
+          required:
+          - files
+          - running
+          - partialBytes
+          - requested
+          - lastResult
+          - lastExitStatus
+          properties:
+            files:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - name
+                - bytes
+                - at
+                - verified
+                properties:
+                  name:
+                    type: string
+                  bytes:
+                    type: integer
+                    format: int64
+                    minimum: 0
+                  at:
+                    type:
+                    - string
+                    - 'null'
+                    format: date-time
+                  verified:
+                    type: boolean
+                    description: A full restore of this dump was checked.
+            running:
+              type: boolean
+            partialBytes:
+              type:
+              - integer
+              - 'null'
+              format: int64
+            requested:
+              type: boolean
+              description: A refresh requested from the panel waits to start.
+            lastResult:
+              type:
+              - string
+              - 'null'
+            lastExitStatus:
+              type:
+              - integer
+              - 'null'
     AdminCatalogStatus:
       type: object
       additionalProperties: false
@@ -2753,6 +3692,40 @@ components:
               - 'null'
               format: int64
               minimum: 0
+              description: Релизы, данные служб, страничный кэш nginx и база вместе.
+            projectParts:
+              type:
+              - object
+              - 'null'
+              additionalProperties: false
+              description: Размеры каталогов из последнего замера снимка сервера (раз в 6 часов).
+              required:
+              - releasesBytes
+              - stateBytes
+              - pageCacheBytes
+              - measuredAt
+              properties:
+                releasesBytes:
+                  type:
+                  - integer
+                  - 'null'
+                  format: int64
+                  minimum: 0
+                stateBytes:
+                  type:
+                  - integer
+                  - 'null'
+                  format: int64
+                  minimum: 0
+                pageCacheBytes:
+                  type:
+                  - integer
+                  - 'null'
+                  format: int64
+                  minimum: 0
+                measuredAt:
+                  type: string
+                  format: date-time
             databaseBytes:
               type:
               - integer
@@ -3178,6 +4151,30 @@ components:
           type: [integer, 'null']
           format: int64
           minimum: 0
+        anomalyCounts:
+          type: object
+          additionalProperties: false
+          description: >-
+            Counts of publications published within the selected platform and period,
+            grouped by their current effective anomaly level (including context rechecks).
+            Each publication is counted once. Missing on older API versions; absence
+            does not mean that analysis found no anomalies.
+          required: [level2, level3]
+          properties:
+            accountFindings:
+              type: integer
+              minimum: 0
+              description: >-
+                Account-level findings of the entity's accounts (getAccountAnomalyFindings), counted
+                separately from publication levels.
+            level2:
+              type: integer
+              minimum: 0
+              description: Publications with a pronounced anomaly (level 2).
+            level3:
+              type: integer
+              minimum: 0
+              description: Publications with signs of artificial activity (level 3).
         views:
           $ref: '#/components/schemas/OverviewMetric'
         reactions:
@@ -3235,6 +4232,47 @@ components:
           - null
           description: Safe deployment warning for an explicitly missing integration. Null when configured or unknown;
             does not contain credential values and does not override missing/disabled account state.
+    InstitutionStudentCount:
+      type: object
+      additionalProperties: false
+      required: [value, referenceYear, approximate, sourceUrl, sourceLabel, scope, verifiedAt]
+      properties:
+        value:
+          type: integer
+          minimum: 0
+        referenceYear:
+          type: [integer, 'null']
+          description: Year of the reported data, not the publication or retrieval year. Null when the source does not specify it.
+        referenceDate:
+          type: [string, 'null']
+          format: date
+          description: Exact census date when explicitly given in the source. Retrieval date is not a substitute.
+        approximate:
+          type: boolean
+        sourceUrl:
+          type: string
+          format: uri
+        sourceLabel:
+          type: string
+        scope:
+          type: string
+          description: Programmes, forms of study and institution/branch coverage counted by the source.
+        verifiedAt:
+          type: string
+          format: date
+    InstitutionProfile:
+      type: object
+      additionalProperties: false
+      required: [trackingStartedAt, students]
+      properties:
+        trackingStartedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Earliest recorded institution or associated account catalogue created_at, including deleted accounts and pre-migration enrollment. Independent of selected platform, retention and publication dates; does not assert uninterrupted collection.
+        students:
+          oneOf:
+            - $ref: '#/components/schemas/InstitutionStudentCount'
+            - type: 'null'
     Institution:
       type: object
       additionalProperties: false
@@ -3259,6 +4297,8 @@ components:
           type: string
         shortName:
           type: [string, 'null']
+        institutionProfile:
+          $ref: '#/components/schemas/InstitutionProfile'
         platform:
           $ref: '#/components/schemas/PlatformValue'
         period:
@@ -3718,6 +4758,105 @@ components:
         asOf:
           type: string
           format: date-time
+    Finding:
+      type: object
+      additionalProperties: false
+      required: [publicationId, institutionId, institutionLegacyId, institutionShortName, institutionCanonicalName, accountId, platform, publicationType, externalId, publicUrl, publishedAt, ageHours, preliminary, interactionIndex, viewIndex, interactionNorm, viewNorm, normSampleSize, interactions, reactions, comments, shares, views, erv, anomalyLevel, capabilities, commentIndex, shareIndex, commentNorm, shareNorm, topReactions, curve]
+      properties:
+        publicationId: { type: string, format: uuid }
+        institutionId: { type: string, format: uuid }
+        institutionLegacyId: { type: ['integer', 'null'], format: int64 }
+        institutionShortName: { type: ['string', 'null'] }
+        institutionCanonicalName: { type: string }
+        accountId: { type: string, format: uuid }
+        platform: { type: string, enum: [telegram, vk, max, rutube] }
+        publicationType: { type: string }
+        externalId: { type: ['string', 'null'] }
+        publicUrl: { type: ['string', 'null'] }
+        publishedAt: { type: ['string', 'null'], format: date-time }
+        ageHours: { type: ['integer', 'null'], enum: [1, 3, 6, 12, 24, null] }
+        preliminary: { type: boolean }
+        interactionIndex: { type: ['number', 'null'] }
+        viewIndex: { type: ['number', 'null'] }
+        interactionNorm: { type: ['number', 'null'] }
+        viewNorm: { type: ['number', 'null'] }
+        normSampleSize: { type: integer, minimum: 0, description: "Number of the account's posts behind the interaction norm at the same post age." }
+        interactions: { type: ['integer', 'null'], minimum: 0 }
+        reactions: { type: ['integer', 'null'], minimum: 0 }
+        comments: { type: ['integer', 'null'], minimum: 0 }
+        shares: { type: ['integer', 'null'], minimum: 0 }
+        views: { type: ['integer', 'null'], minimum: 0 }
+        erv: { type: ['number', 'null'] }
+        anomalyLevel: { type: ['integer', 'null'], minimum: 0, maximum: 3 }
+        capabilities: { $ref: '#/components/schemas/StatisticsCapabilities' }
+        commentIndex: { type: ['number', 'null'], description: Comments at the post age divided by the account comment norm (floor 2); null where the platform has no comments or the norm sample is under 10. }
+        shareIndex: { type: ['number', 'null'], description: Shares at the post age divided by the account share norm (floor 2); VK only. }
+        commentNorm: { type: ['number', 'null'] }
+        shareNorm: { type: ['number', 'null'] }
+        topReactions:
+          type: array
+          maxItems: 3
+          description: Most frequent reactions in the latest snapshot (Telegram and MAX), largest first; custom emoji use the custom:<id> label.
+          items:
+            type: object
+            additionalProperties: false
+            required: [reaction, count]
+            properties:
+              reaction: { type: string, maxLength: 200 }
+              count: { type: integer, minimum: 1 }
+        curve:
+          type: object
+          additionalProperties: false
+          description: Interactions of the post and the account norm at 1, 3, 6, 12 and 24 hours; null where no checkpoint exists.
+          required: [hours, post, norm]
+          properties:
+            hours: { type: array, items: { type: integer, enum: [1, 3, 6, 12, 24] }, minItems: 5, maxItems: 5 }
+            post: { type: array, items: { type: ['integer', 'null'], minimum: 0 }, minItems: 5, maxItems: 5 }
+            norm: { type: array, items: { type: ['number', 'null'], minimum: 0 }, minItems: 5, maxItems: 5 }
+    FindingGroup:
+      type: object
+      additionalProperties: false
+      required: [institutionLegacyId, institutionShortName, institutionCanonicalName, findingCount, items]
+      properties:
+        institutionLegacyId: { type: ['integer', 'null'], format: int64 }
+        institutionShortName: { type: ['string', 'null'] }
+        institutionCanonicalName: { type: string }
+        findingCount: { type: integer, minimum: 1 }
+        items: { type: array, maxItems: 3, items: { $ref: '#/components/schemas/Finding' } }
+    FindingInstitution:
+      type: object
+      additionalProperties: false
+      required: [legacyId, shortName, canonicalName]
+      properties:
+        legacyId: { type: integer, format: int64 }
+        shortName: { type: ['string', 'null'] }
+        canonicalName: { type: string }
+    Findings:
+      type: object
+      additionalProperties: false
+      required: [mode, institution, platform, period, types, sort, direction, group, q, anomalies, items, groups, total, hiddenAnomalous, institutions, limit, offset, hasMore, nextCursor, datasetRevision, asOf]
+      properties:
+        mode: { type: string, enum: [all, institution] }
+        institution: { type: ['integer', 'null'], format: int64 }
+        platform: { type: string, enum: [all, telegram, vk, max, rutube] }
+        period: { type: string, enum: ['1d', '7d', '30d'] }
+        types: { type: array, items: { type: string, enum: [text, photo, album, video, other] } }
+        sort: { type: string, enum: [interaction_index, view_index, comment_index, share_index, interactions24, views24, erv24, published_at] }
+        direction: { type: string, enum: [asc, desc] }
+        group: { type: string, enum: [none, institution] }
+        q: { type: string, maxLength: 200 }
+        anomalies: { type: string, enum: [exclude, include] }
+        items: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/Finding' } }
+        groups: { type: array, items: { $ref: '#/components/schemas/FindingGroup' } }
+        total: { type: integer, minimum: 0 }
+        hiddenAnomalous: { type: integer, minimum: 0 }
+        institutions: { type: array, items: { $ref: '#/components/schemas/FindingInstitution' } }
+        limit: { type: integer, format: int32, minimum: 1, maximum: 50 }
+        offset: { type: integer, minimum: 0 }
+        hasMore: { type: boolean }
+        nextCursor: { type: ['string', 'null'] }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        asOf: { type: string, format: date-time }
     ComparisonCandidate:
       type: object
       additionalProperties: false
@@ -3966,6 +5105,8 @@ components:
           type:
           - string
           - 'null'
+        institutionProfile:
+          $ref: '#/components/schemas/InstitutionProfile'
         platform:
           type: string
           enum:
@@ -4273,7 +5414,7 @@ components:
       required: [pattern, symbol, title, family, metric, strength, startAt, endAt, scaleSeconds,
         formula, render, alternatives, normConfidence]
       properties:
-        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] }
+        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] }
         symbol: { type: string, maxLength: 4 }
         title: { type: string, maxLength: 120 }
         family: { type: string, enum: [velocity, shape, cross_metric, synchrony] }
@@ -4288,7 +5429,7 @@ components:
           type: object
           required: [kind, startAge, endAge]
           properties:
-            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement] }
+            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement, regime, write_off, cliff] }
             startAge: { type: integer }
             endAge: { type: integer }
           additionalProperties:
@@ -4332,7 +5473,7 @@ components:
       required: [publicationId, datasetRevision, status, level, levelLabel, levelSymbol,
         originalLevel, recheckReason, recheckMethodVersion, recheckEvidence, signals,
         quality, analyzedAt, lagSeconds, normVersion, detectorVersions, reviewStatus,
-        methodologyVersion, disclaimer]
+        accountFindings, methodologyVersion, disclaimer]
       properties:
         publicationId: { type: string, format: uuid }
         datasetRevision: { type: integer, format: int64, minimum: 0 }
@@ -4363,6 +5504,11 @@ components:
           maxProperties: 16
           additionalProperties: { type: string }
         reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
+        accountFindings:
+          type: array
+          maxItems: 4
+          description: 'Аккаунтные находки, в которые входит пост; уровень поста они не меняют.'
+          items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         methodologyVersion: { type: string, const: anomaly-dynamics-v2 }
         disclaimer: { type: string }
     ComparisonDashboard:
@@ -4387,6 +5533,11 @@ components:
               legacyId: { type: [integer, 'null'], format: int64 }
               name: { type: string }
               shortName: { type: [string, 'null'] }
+              students:
+                description: Последняя проверенная численность студентов с датой и ссылкой на опубликованный источник.
+                anyOf:
+                - { $ref: '#/components/schemas/InstitutionStudentCount' }
+                - { type: 'null' }
               platforms:
                 type: array
                 items: { $ref: '#/components/schemas/PlatformValue' }
@@ -4395,10 +5546,10 @@ components:
                 additionalProperties: false
                 required: [telegram, vk, max, rutube]
                 properties:
-                  telegram: { type: integer, format: int64, minimum: 0 }
-                  vk: { type: integer, format: int64, minimum: 0 }
-                  max: { type: integer, format: int64, minimum: 0 }
-                  rutube: { type: integer, format: int64, minimum: 0 }
+                  telegram: { type: [integer, 'null'], format: int64, minimum: 0 }
+                  vk: { type: [integer, 'null'], format: int64, minimum: 0 }
+                  max: { type: [integer, 'null'], format: int64, minimum: 0 }
+                  rutube: { type: [integer, 'null'], format: int64, minimum: 0 }
         stats:
           type: array
           items: { $ref: '#/components/schemas/ComparisonDashboardStat' }
@@ -4582,6 +5733,53 @@ components:
                 threshold: { type: number, minimum: 0 }
                 rank: { type: number, minimum: 0, maximum: 1 }
         abstainText: { type: string }
+    AccountAnomalyFinding:
+      type: object
+      additionalProperties: false
+      required: [accountId, accountUsername, kind, platform, status, statusLabel, title, headline, summary,
+                 alternatives, figure, membersCount, windowStart, windowEnd, computedAt, methodologyVersion, metrics]
+      properties:
+        accountId: { type: string, format: uuid }
+        accountUsername: { type: [string, 'null'] }
+        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement] }
+        platform: { type: string, enum: [telegram, vk, max, rutube] }
+        status: { type: integer, minimum: 1, maximum: 2 }
+        statusLabel: { type: [string, 'null'] }
+        title: { type: [string, 'null'] }
+        headline: { type: [string, 'null'], description: 'Одна короткая строка для свёрнутого вида.' }
+        summary: { type: [string, 'null'] }
+        alternatives: { type: [string, 'null'] }
+        figure:
+          description: 'Мера аккаунта против типичного аккаунта площадки — для инфографики.'
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [value, typical, unit, label, direction]
+              properties:
+                value: { type: number }
+                typical: { type: number }
+                unit: { type: string, enum: [times, decimal, percent] }
+                label: { type: string }
+                direction: { type: string, enum: [higher, lower] }
+        membersCount: { type: [integer, 'null'], minimum: 0 }
+        windowStart: { type: string, format: date }
+        windowEnd: { type: string, format: date }
+        computedAt: { type: string, format: date-time }
+        methodologyVersion: { type: string }
+        metrics: { type: object }
+    AccountAnomalyFindings:
+      type: object
+      additionalProperties: false
+      required: [accountId, datasetRevision, items, disclaimer]
+      properties:
+        accountId: { type: string, format: uuid }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        items:
+          type: array
+          maxItems: 4
+          items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
+        disclaimer: { type: string }
     AccountTailProfile:
       type: object
       additionalProperties: false
@@ -4959,6 +6157,14 @@ components:
         failedPolls:
           type: integer
           minimum: 0
+        unchangedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start of the last successful account cycle before this point that read the post with the
+            previous values. Unchanged reads are not stored, so without it growth of the last cycle would be drawn
+            across the whole interval. Null when the run journal cannot place such a read or the values did not change.
     CollectorGap:
       type: object
       additionalProperties: false
@@ -5056,6 +6262,18 @@ components:
           - integer
           - 'null'
           format: int64
+        coldArchive:
+          deprecated: true
+          description: >-
+            Never present since the cold archive was retired (migration 0063): every measurement lives in
+            the database, recent ones as rows and older ones in packed history.
+          type: object
+          additionalProperties: false
+          required: [month, generations, lateSnapshots]
+          properties:
+            month: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
+            generations: { type: integer, minimum: 1 }
+            lateSnapshots: { type: integer, minimum: 0 }
         archivedText:
           type:
           - string
@@ -5167,9 +6385,11 @@ components:
         dailySeries:
           type: array
           description: >-
-            Последние семь дней по московскому времени — сколько публикаций вышло
-            в этот день и какими они оказались по медиане. Ряд всегда полон:
-            день без публикаций присутствует с нулём и пустыми медианами.
+            Последние семь полных дней и сегодняшние сутки по московскому времени
+            (восемь точек, последняя — сегодня и ещё не закончена) — сколько
+            публикаций вышло в этот день и какими они оказались по медиане. Ряд
+            всегда полон: день без публикаций присутствует с нулём и пустыми
+            медианами. Тридцать дней — getAccountDailySeries.
           items:
             $ref: '#/components/schemas/AccountDailyPoint'
         previous:

@@ -1,0 +1,11 @@
+[Unit]
+Description=M-Ranked metric history compaction every half hour
+
+[Timer]
+OnCalendar=*:07/30
+RandomizedDelaySec=3min
+Persistent=true
+Unit=m-ranked-target-history-compaction.service
+
+[Install]
+WantedBy=timers.target

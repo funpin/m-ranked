@@ -28,6 +28,16 @@ def release_for(path: Path, root: Path) -> Path | None:
     return root / relative.parts[0] if relative.parts else None
 
 
+def link_targets(release: Path, root: Path) -> set[Path]:
+    """Другие релизы, куда ведут ссылки верхнего уровня этого релиза."""
+    try:
+        entries = list(release.iterdir())
+    except OSError:
+        return set()
+    targets = {release_for(entry, root) for entry in entries if entry.is_symlink()}
+    return {target for target in targets if target is not None and target != release}
+
+
 def process_releases(root: Path, proc_root: Path) -> set[Path]:
     active: set[Path] = set()
     for process in proc_root.glob("[0-9]*"):
@@ -175,9 +185,19 @@ def collect(apply: bool) -> int:
         for release in docker_mount_releases(root):
             protected[release] = "in-use"
 
+    # Релиз, на который ведёт ссылка из оставленного (так .venv текущего
+    # релиза живёт в старом), оставляется вместе с ним — и дальше по цепочке.
+    pending = list(protected)
+    while pending:
+        for release in link_targets(pending.pop(), root):
+            if release not in protected:
+                protected[release] = "link-target"
+                pending.append(release)
+
     cutoff_ns = (time.time_ns() - min_age_hours * 3_600 * 1_000_000_000)
     candidates = 0
     removed = 0
+    failed = 0
     approved = {name for name in os.environ.get("MRANKED_APPROVED_RELEASE_REMOVALS", "").split(",") if name}
     for release in releases:
         if reason := protected.get(release):
@@ -189,7 +209,14 @@ def collect(apply: bool) -> int:
             if apply and auto_remove != "1" and release.name not in approved:
                 print(f"keep release={release.name} reason=needs-explicit-review")
             elif apply:
-                shutil.rmtree(release)
+                # Один неудаляемый релиз не держит остальные: проход идёт до
+                # конца и в итоге всё равно завершается ошибкой.
+                try:
+                    shutil.rmtree(release)
+                except OSError as error:
+                    failed += 1
+                    print(f"failed release={release.name} error={error}")
+                    continue
                 removed += 1
                 print(f"removed release={release.name}")
             else:
@@ -202,12 +229,15 @@ def collect(apply: bool) -> int:
         "mranked_host_gc_releases": len([item for item in root.iterdir() if item.is_dir()]),
         "mranked_host_gc_release_candidates": candidates,
         "mranked_host_gc_releases_removed": removed,
+        "mranked_host_gc_release_failures": failed,
     }
     reclaimable = docker_reclaimable_bytes()
     if reclaimable is not None:
         metrics["mranked_host_docker_reclaimable_bytes"] = reclaimable
     write_metrics(os.environ.get("MRANKED_HOST_GC_METRICS_FILE", ""), metrics)
-    print(f"host-storage-gc apply={str(apply).lower()} release_candidates={candidates} removed={removed}")
+    print(f"host-storage-gc apply={str(apply).lower()} release_candidates={candidates} removed={removed} failed={failed}")
+    if failed:
+        raise SystemExit(1)
     return candidates
 
 

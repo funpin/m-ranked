@@ -1,0 +1,56 @@
+[Unit]
+Description=M-Ranked server state sample for the admin panel
+Documentation=file:/opt/m-ranked/current/operations/runbooks/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=m-ranked-maintenance
+Group=m-ranked-maintenance
+SupplementaryGroups=node-exporter
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=/etc/m-ranked/maintenance.env
+LoadCredential=pgpass:/etc/m-ranked/credentials/maintenance-pgpass
+# Копия pgpass в приватный файл: libpq игнорирует credential с групповым
+# доступом, который отдаёт systemd 257 (см. m-ranked-target-maintenance).
+ExecStartPre=+/usr/bin/install -m 0600 -o m-ranked-maintenance -g m-ranked-maintenance %d/pgpass /run/m-ranked-ops-sample/pgpass
+Environment=PGPASSFILE=/run/m-ranked-ops-sample/pgpass
+Environment=OPS_SAMPLE_STATE_DIR=/var/lib/m-ranked/ops-sample
+ExecStart=/opt/m-ranked/current/.venv/bin/python -m api.tools.ops_sample
+TimeoutStartSec=4min
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+# /proc/stat и /proc/meminfo нужны снимку: ProcSubset=pid их скрыл бы.
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Только чтение чужих каталогов: размеры релизов, данных и страничного кэша
+# nginx, журнал доступа. Записывать снимок может лишь в свой каталог.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+StateDirectory=m-ranked/ops-sample
+StateDirectoryMode=0700
+RuntimeDirectory=m-ranked-ops-sample
+RuntimeDirectoryMode=0700
+UMask=0077
+# Снимок — доли секунды; раз в 6 часов du по каталогам проекта (~15 с).
+CPUQuota=25%
+Nice=15
+IOSchedulingClass=idle
+MemoryMax=128M
+LimitNOFILE=4096
+TasksMax=16

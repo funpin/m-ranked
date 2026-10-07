@@ -33,7 +33,7 @@ from zoneinfo import ZoneInfo
 
 from .domain import Metric, PostSeries
 
-VERSION = 1
+VERSION = 3
 MOSCOW = ZoneInfo("Europe/Moscow")
 HOUR = 3600
 DAY = 24 * HOUR
@@ -52,6 +52,14 @@ MIN_LATE_SPAN = DAY
 ROUNDED_PLATFORMS = frozenset({"telegram"})
 # Соседние замеры дальше друг от друга — рост мог прийти в любые из суток пробела.
 DAY_BRACKET = 30 * HOUR
+# Отметки для аккаунтных находок (v2/account_findings.py): первый замер и
+# ближайшие к 2, 6, 24 и 72 часам точные совместные замеры в допуске. Отметка
+# 6 ч — для стартовых пакетов длиной в несколько часов (ГУАП в MAX: 50–60
+# реакций за 3,5–5 ч и почти ничего потом).
+FIRST_UNTIL = 30 * 60
+MARKS = {"h2": (2 * HOUR, 1.5 * HOUR, 2.5 * HOUR), "h6": (6 * HOUR, 5 * HOUR, 7 * HOUR),
+         "h24": (DAY, 20 * HOUR, 28 * HOUR),
+         "h72": (3 * DAY, 64 * HOUR, 80 * HOUR)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +81,8 @@ class TailLedger:
     growth: Mapping[str, int] = field(default_factory=dict)
     # Хотя бы одна точка окна взята из округлённого счётчика.
     rounded: bool = False
+    # Только точные замеры: первый (не позже получаса) и ближайшие к 2/24/72 ч.
+    marks: Mapping[str, Point] = field(default_factory=dict)
 
     @property
     def late(self) -> tuple[int, int] | None:
@@ -91,6 +101,7 @@ class TailLedger:
             "covered": list(self.covered),
             "growth": dict(self.growth),
             "rounded": self.rounded,
+            "marks": {key: point.payload() for key, point in self.marks.items()},
         }
 
 
@@ -104,14 +115,16 @@ def ledger_from_payload(payload: Mapping[str, Any] | None) -> TailLedger | None:
     return TailLedger(point(payload.get("early")), point(payload.get("start")), point(payload.get("end")),
                       tuple(payload.get("covered") or ()),
                       {str(day): int(value) for day, value in (payload.get("growth") or {}).items()},
-                      bool(payload.get("rounded", False)))
+                      bool(payload.get("rounded", False)),
+                      {str(key): point(value) for key, value in (payload.get("marks") or {}).items()})
 
 
 def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> TailLedger:
-    """Сводка позднего отклика по ряду поста на момент анализа."""
-    if series.is_repost:
-        # Просмотры репоста принадлежат источнику: доля реакций на них не определена.
-        return TailLedger(None, None, None)
+    """Сводка позднего отклика по ряду поста на момент анализа.
+
+    Репост получает только отметки: его просмотры собственные, но поздний
+    отклик чужого содержания с профилем аккаунта не сравнивается (ADR-015).
+    """
     limit = analyzed_at.timestamp() if analyzed_at is not None else float("inf")
     published = series.published_at.timestamp()
     allowed = {"exact", "rounded"} if series.platform in ROUNDED_PLATFORMS else {"exact"}
@@ -133,11 +146,25 @@ def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> Tai
                 joint.append(Point(age, view, reaction))
                 if not (view_exact and reaction_exact):
                     inexact.add(age)
+    marks = _marks([point for point in joint if point.age not in inexact])
+    if series.is_repost:
+        return TailLedger(None, None, None, marks=marks)
     early = _early(joint)
     start, end = _late_window(joint)
     covered, growth = _days(exact_r, published)
     rounded = any(point is not None and point.age in inexact for point in (early, start, end))
-    return TailLedger(early, start, end, covered, growth, rounded)
+    return TailLedger(early, start, end, covered, growth, rounded, marks)
+
+
+def _marks(points: list[Point]) -> dict[str, Point]:
+    marks: dict[str, Point] = {}
+    if points and points[0].age <= FIRST_UNTIL:
+        marks["first"] = points[0]
+    for key, (target, low, high) in MARKS.items():
+        inside = [item for item in points if low <= item.age <= high]
+        if inside:
+            marks[key] = min(inside, key=lambda item: (abs(item.age - target), item.age))
+    return marks
 
 
 def _usable(series: PostSeries, metric: Metric, allowed: set[str]) -> list[tuple[int | None, bool]] | None:

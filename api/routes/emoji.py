@@ -21,6 +21,10 @@ async def custom_emoji(emojiId: str) -> Response:
         raise ApiProblem(404, "Resource not found", "Реакция не найдена",
                          "urn:m-ranked:problem:not-found") from error
     except EmojiUpstream as error:
-        raise ApiProblem(500, "Internal Server Error", "Не удалось получить реакцию") from error
+        # Источник недоступен — для страницы это та же «нет картинки»: она
+        # покажет свой значок. 404 с коротким кэшем вместо 500 через 10 с.
+        raise ApiProblem(404, "Resource not found", "Реакция временно недоступна",
+                         "urn:m-ranked:problem:not-found",
+                         headers={"Cache-Control": "public, max-age=600"}) from error
     return Response(asset.content, media_type=asset.media_type,
                     headers={"Cache-Control": "public, max-age=21600"})

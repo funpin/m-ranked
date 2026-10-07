@@ -13,10 +13,9 @@ from ..sql import site as sql
 
 router = APIRouter(tags=["Query"])
 
-# Строку пересчитывает обслуживание раз в сутки; приход новых данных её не
-# меняет, поэтому тег не совпадает ни с одним событием сброса кэша, и ответ
-# живёт до срока кэша, а не до следующего пакета замеров.
-SITE_TAGS = frozenset({"site-summary"})
+# Сводные метрики обновляет обслуживание; покрытие читается из каталога.
+# Изменения каталога сбрасывают ответ; поступление замеров не пересчитывает каталог.
+SITE_TAGS = frozenset({"site-summary", "catalog", "rating"})
 
 
 @router.get("/api/v1/site/summary")
@@ -24,11 +23,15 @@ async def site_summary(request: Request) -> Response:
     async def build(revision: int, committed_at: Any) -> dict[str, Any]:
         db: Database = request.app.state.db
         row = await db.fetch_one(sql.SUMMARY, {})
+        coverage = await db.fetch_one(sql.COVERAGE, {})
+        counts = {"trackedInstitutions": coverage["tracked_institutions"],
+                  "ratingInstitutions": coverage["rating_institutions"]}
         if row is None:
             # Обслуживание ещё не посчитало сводку: главная покажет раздел без цифр.
-            return {"available": False, "institutions": None, "accounts": None, "accountsByPlatform": {},
+            return {**counts, "available": False, "institutions": None, "accounts": None, "accountsByPlatform": {},
                     "publications": None, "snapshots": None, "computedAt": None}
         return {
+            **counts,
             "available": True,
             "institutions": row["institutions"], "accounts": row["accounts"],
             "accountsByPlatform": dict(row["accounts_by_platform"] or {}),

@@ -16,7 +16,7 @@ from ..series import DAY, HOUR, PreparedSeries
 from .base import DetectorContext, SiblingActivity, make_sign, number
 
 ID = "synchronous_rise"
-VERSION = "2.1.0"
+VERSION = "2.2.1"
 PATTERN = 8
 FAMILY = Family.SYNCHRONY
 NEEDS_NORM = False
@@ -40,6 +40,14 @@ MIN_RISE = 20
 # Соседний пост считается синхронным, если подъём у него в пределах часа.
 TOLERANCE_HOURS = 1
 MIN_SYNCHRONOUS_SIBLINGS = 2
+# Широкий одновременный вброс: когда реакции в одном часу подросли сразу у
+# многих постов аккаунта, порог каждого поста ниже. Совпадение у пяти и более
+# постов старше 12 ч само по себе маловероятно, и доказательство несёт число
+# постов, а не размер прироста одного. Так пропускались вбросы на маленьких
+# аккаунтах: КГУ в MAX 24.09 — около двадцати постов разом, у постов от 21.09
+# по +14…+19 при пороге 20.
+WIDE_MIN_RISE = 10
+WIDE_MIN_SIBLINGS = 4
 # Прирост подписчиков больше процента за окно — первым объяснением идёт
 # внешний толчок, и признак не выставляется.
 MAX_SUBSCRIBER_GROWTH = 0.01
@@ -65,41 +73,90 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
             continue
         subject = own_rows[0]
         taken: list[int] = []
-        for hour in np.flatnonzero(_rises(subject, MIN_RISE) & (subject_ages >= MIN_AGE)):
-            if any(abs(hour - other) <= TOLERANCE_HOURS for other in taken):
+        strong = _rises(subject, MIN_RISE)
+        for hour in np.flatnonzero(_rises(subject, WIDE_MIN_RISE) & (subject_ages >= MIN_AGE)):
+            # Подъём пары часов отмечается на втором часе, поэтому то же событие
+            # может всплыть на час позже допуска.
+            if any(abs(hour - other) <= TOLERANCE_HOURS + 1 for other in taken):
                 continue
-            synchronous, eligible = 0, 0
+            synchronous, wide, eligible = 0, 0, 0
+            window = slice(max(0, hour - TOLERANCE_HOURS), hour + TOLERANCE_HOURS + 1)
             for index in range(sibling_rows.shape[0]):
-                window = slice(max(0, hour - TOLERANCE_HOURS), hour + TOLERANCE_HOURS + 1)
                 if siblings.ages[index, hour] < MIN_AGE or np.isnan(sibling_rows[index, window]).all():
                     continue
                 eligible += 1
                 synchronous += bool(_rises(sibling_rows[index], MIN_RISE)[window].any())
-            if synchronous < MIN_SYNCHRONOUS_SIBLINGS:
-                continue
+                wide += bool(_rises(sibling_rows[index], WIDE_MIN_RISE)[window].any())
+            if not (strong[hour] and synchronous >= MIN_SYNCHRONOUS_SIBLINGS):
+                if wide < WIDE_MIN_SIBLINGS:
+                    continue
+                synchronous = wide
             start_age = float(own.hours[hour] * HOUR - published)
             growth = context.subscriber_growth(start_age - HOUR, start_age + 2 * HOUR)
             if growth is not None and growth > MAX_SUBSCRIBER_GROWTH:
                 continue
             taken.append(int(hour))
+            step_start, step_end = _step(prepared, metric, start_age)
             clock = datetime.fromtimestamp(own.hours[hour] * HOUR, tz=timezone.utc)
             strength = min(1.0, 0.4 + 0.15 * synchronous)
+            # Подъём мог быть найден в паре «предыдущий час + этот» (рывок на
+            # границе часа): прирост называется за ту же пару, а не «+0».
+            single = float(np.nan_to_num(subject[hour]))
+            rise = single if _rises_in(subject, WIDE_MIN_RISE)[hour] or hour == 0 \
+                else single + float(np.nan_to_num(subject[hour - 1]))
             formula = (f"реакции подросли одновременно у {synchronous + 1} постов аккаунта "
-                       f"(+{number(subject[hour])} у этого) в час {clock:%d.%m %H:00} UTC; "
+                       f"(+{number(rise)} у этого) в час {clock:%d.%m %H:00} UTC; "
                        f"у {eligible - synchronous} других постов старше 12 ч — нет")
-            signs.append(make_sign(PATTERN, FAMILY, prepared, metric, strength, start_age,
-                                   start_age + HOUR, SCALE, formula,
+            signs.append(make_sign(PATTERN, FAMILY, prepared, metric, strength, step_start,
+                                   step_end, SCALE, formula,
                                    {"kind": "synchrony", "posts": synchronous + 1, "quiet": eligible - synchronous,
                                     "hour": clock.isoformat()}, ("account_mentioned_externally",)))
     return tuple(signs)
 
 
+def _step(prepared: PreparedSeries, metric: Metric, start_age: float) -> tuple[float, float]:
+    """Промежуток между замерами с наибольшим приростом в часе подъёма и часе до него.
+
+    Признак привязан к самому скачку, а не к часу: при редких замерах час почти
+    целиком лежит в пропуске, и признак отбрасывался как неразборный, хотя скачок
+    (КГУ в MAX 24.09: 06:56 → 07:01, +28) пойман соседними замерами. Если же
+    прирост накоплен за пропуск, промежуток и есть пропуск, и признак
+    отбрасывается по-прежнему.
+    """
+    series = prepared.series
+    published = series.published_at
+    best, result = 0.0, (start_age, start_age + HOUR)
+    previous: tuple[float, float] | None = None
+    for moment, value in zip(series.observed_at, series.values.get(metric, ()), strict=False):
+        if value is None:
+            continue
+        age = (moment - published).total_seconds()
+        if previous is not None and age > start_age - HOUR and previous[0] < start_age + HOUR \
+                and value - previous[1] > best:
+            best, result = value - previous[1], (previous[0], age)
+        previous = (age, float(value))
+    return result
+
+
 def _rises(hourly: np.ndarray, minimum: float) -> np.ndarray:
-    """Часы, где прирост резко выше медианы предыдущих суток того же поста."""
+    """Часы, где прирост резко выше медианы предыдущих суток того же поста.
+
+    Почасовой ряд строится по замерам, и рывок за пять минут на границе часа
+    делится между двумя часами (КГУ в MAX 24.09: +14 стали 11,6 и 4,2). Поэтому
+    подъём ищется и в часе, и в паре «предыдущий + этот» с базой тоже по парам.
+    """
+    single = _rises_in(hourly, minimum)
+    pairs = np.full(hourly.size, np.nan)
+    pairs[1:] = hourly[1:] + hourly[:-1]
+    return single | _rises_in(pairs, minimum, scale=2)
+
+
+def _rises_in(hourly: np.ndarray, minimum: float, scale: int = 1) -> np.ndarray:
     result = np.zeros(hourly.size, dtype=bool)
     for hour in np.flatnonzero(np.nan_to_num(hourly, nan=0.0) >= minimum):
         history = hourly[max(0, hour - BASELINE_HOURS):hour]
         history = history[~np.isnan(history)]
-        baseline = max(float(np.median(history)), EMPTY_BASELINE) if history.size else EMPTY_BASELINE
+        baseline = (max(float(np.median(history)), EMPTY_BASELINE * scale) if history.size
+                    else EMPTY_BASELINE * scale)
         result[hour] = (hourly[hour] - baseline) / np.sqrt(baseline) >= MIN_Z
     return result

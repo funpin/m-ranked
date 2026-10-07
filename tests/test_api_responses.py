@@ -135,6 +135,9 @@ CASES = [
      "/api/v1/compare?platform=rutube&horizonHours=24&institutionLimit=2"),
     ("/api/v1/publications/{legacyId}/anomaly-analysis", "get", "200",
      "/api/v1/publications/99269506-1466-5e18-a215-a3db2688d786/anomaly-analysis"),
+    ("/api/v1/findings", "get", "200", "/api/v1/findings"),
+    ("/api/v1/findings", "get", "200", "/api/v1/findings?group=institution"),
+    ("/api/v1/findings", "get", "200", "/api/v1/findings?mode=institution&institution=1"),
 ]
 
 
@@ -523,6 +526,20 @@ def test_overview_etag_returns_304(client) -> None:
 
 
 @requires_database
+def test_findings_problem_and_etag(client, validator_for) -> None:
+    rejected = client.get("/api/v1/findings?period=3h")
+    assert rejected.headers["cache-control"] == "no-store"
+    assert_contract_response(rejected, validator_for, "/api/v1/findings", "400")
+
+    response = client.get("/api/v1/findings?limit=3")
+    etag = response.headers["etag"]
+    assert etag
+    again = client.get("/api/v1/findings?limit=3", headers={"If-None-Match": etag})
+    assert again.status_code == 304
+    assert again.headers["etag"] == etag
+
+
+@requires_database
 def test_overview_rejects_broken_cursor(client) -> None:
     assert client.get("/api/v1/overview?cursor=%%%%%%").status_code == 400
 
@@ -530,8 +547,8 @@ def test_overview_rejects_broken_cursor(client) -> None:
 @requires_database
 def test_overview_normalizes_unsupported_sort(client) -> None:
     """Неподдерживаемая сортировка не ошибка: прежний HTML откатывался к умолчанию."""
-    fallback = client.get("/api/v1/overview?platform=all&sort=posts&limit=3")
-    default = client.get("/api/v1/overview?platform=all&sort=m_rating&limit=3")
+    fallback = client.get("/api/v1/overview?platform=all&sort=unsupported&limit=3")
+    default = client.get("/api/v1/overview?platform=all&sort=anomalies&limit=3")
     assert fallback.status_code == 200
     assert fallback.headers["etag"] == default.headers["etag"]
 
@@ -625,3 +642,32 @@ def test_comparison_dashboard_body_matches_the_contract():
     curve = next(item for item in body["curves"] if item["institutionId"] == str(institution))
     assert curve["views"][4] == 812 and curve["views"][0] is None
     assert body["institutions"][0]["platforms"] == ["telegram", "vk"]
+    assert body["institutions"][0]["subscribers"]["max"] == 0
+    assert body["institutions"][0]["subscribers"]["rutube"] is None
+    assert body["institutions"][0]["students"] is None
+
+
+def test_comparison_builder_bounds_subscribers_by_the_same_snapshot(monkeypatch):
+    import asyncio
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from api.routes import compare
+
+    as_of = datetime(2026, 10, 3, 12, tzinfo=timezone.utc)
+    calls = []
+    class ReadDatabase:
+        async def fetch_one(self, query, values):
+            calls.append((query, values))
+            return {}
+        async def fetch_all(self, query, values):
+            calls.append((query, values))
+            return []
+    async def serve(_request, _namespace, _query, _tags, build):
+        return await build(42, as_of)
+    monkeypatch.setattr(compare, "serve", serve)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=ReadDatabase())))
+    body = asyncio.run(compare.dashboard(request, "30d"))
+    assert body["datasetRevision"] == 42
+    assert len(calls) == 3
+    for query, values in calls:
+        assert values["as_of"] == as_of, query

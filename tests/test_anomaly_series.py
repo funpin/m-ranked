@@ -10,7 +10,7 @@ import pytest
 
 from anomaly_analysis.v2.domain import Metric, PostSeries
 from anomaly_analysis.v2.series import (
-    SCALES, CollectionCadence, PointFlag, age_band, prepare,
+    SCALES, CollectionCadence, PointFlag, age_band, prepare, views_belong_to_source,
 )
 
 PUBLISHED = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
@@ -107,11 +107,13 @@ def test_null_metrics_are_unsupported_or_missing_not_zero():
     assert len(series.gaps) == 1 and not prepared.metrics[Metric.VIEWS].gaps
 
 
-def test_repost_views_are_the_source_counter():
+def test_repost_views_are_the_reposts_own_counter():
+    # Замеры 1 100 репостов MAX и Telegram: первый замер и итог как у своих постов.
     ages = np.arange(0, 5 * H, 5 * M)
-    prepared = prepare(post(ages, {"views": list(ages), "reactions": list(ages // 100)},
-                            is_repost=True), later(5), CADENCE)
-    assert prepared.metrics[Metric.VIEWS].source_counter
+    subject = post(ages, {"views": list(ages), "reactions": list(ages // 100)}, is_repost=True)
+    prepared = prepare(subject, later(5), CADENCE)
+    assert not views_belong_to_source(subject)
+    assert not prepared.metrics[Metric.VIEWS].source_counter
     assert not prepared.metrics[Metric.REACTIONS].source_counter
 
 

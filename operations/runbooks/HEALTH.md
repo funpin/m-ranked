@@ -34,6 +34,14 @@ Troubleshooting phased workers:
 - `GlobalPhaseLeaseLost`: investigate PostgreSQL connectivity; the cycle is
   cancelled to avoid unprotected overlap;
 - `partial`: inspect safe per-account error codes and quarantine evidence;
+- MAX `MaxHistoryRateLimited`: discovery hit the history quota. The worker
+  backs off history reads per channel for 20 minutes (then 40/80 minutes on
+  repeated refusal), while independently refreshing known message IDs.
+  `MAX_DISCOVERY_LIMIT=20` bounds each history page; it does not reduce the
+  point-refresh budget. `MAX history deferred` logs and account source
+  `discovery_deferred` distinguish this from complete discovery. Cached IDs
+  are re-read, never cached counters. If neither history nor point reads
+  produce observations, the account remains failed rather than fresh;
 - old `running` run: restart the same platform/version/partition to resume its
   deterministic `scheduled_at`.
 

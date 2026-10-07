@@ -128,13 +128,16 @@ test("account table shows the analysis level without waiting for it",async({page
 
 test("account page explains late engagement against the platform without waiting for it",async({page})=>{
   await page.goto("/channels/1");
-  const card=page.getByTestId("account-tail-card");
-  await expect(card.getByRole("heading",{name:"Отклик на старые публикации"})).toBeVisible();
-  await expect(card.getByTestId("account-tail-status")).toContainText("устойчиво необычный");
-  await expect(card).toContainText("3,10×");
-  await expect(card).toContainText("выше, чем у 98 % аккаунтов");
-  await expect(card).toContainText("Счётчики площадки округлены");
-  await expect(card.getByRole("img",{name:/Сутки с поздними реакциями: 20 из 21/})).toBeVisible();
+  const card=page.getByTestId("account-analysis-card");
+  // Свёрнутая строка называет статус, подробности — по раскрытию.
+  await expect(card.getByTestId("account-analysis-toggle")).toContainText("Отклик на старые посты: устойчиво необычный");
+  await card.getByTestId("account-analysis-toggle").click();
+  const row=card.getByTestId("account-finding");
+  await expect(row).toContainText("Выше, чем у 98 % аккаунтов площадки");
+  await expect(row).toContainText("3,1×");
+  await row.getByRole("button",{name:"подробнее"}).click();
+  await expect(row).toContainText("Счётчики площадки округлены");
+  await expect(row.getByRole("img",{name:/Сутки с поздними реакциями: 20 из 21/})).toBeVisible();
   await expect(card).not.toContainText(/накрут|мошен/);
 });
 
@@ -176,9 +179,9 @@ test("a long interval between saved changes is spaced by time without claiming c
   await expect(longIntervalRow).not.toContainText("Успешных циклов:");
   expect((await longIntervalRow.boundingBox())!.height).toBeLessThan(45);
   await longInterval.hover();
-  await expect(page.getByRole("tooltip").filter({hasText:"Это не простой: опросы без изменений не сохраняются"})).toBeVisible();
+  await expect(page.locator('[data-slot="tooltip-content"]').filter({hasText:"Это не простой: опросы без изменений не сохраняются"})).toBeVisible();
   await longIntervalRow.getByTestId("collector-status-trigger").hover();
-  await expect(page.getByRole("tooltip").filter({hasText:"успешных циклов — 732, с ошибкой — 0"})).toBeVisible();
+  await expect(page.locator('[data-slot="tooltip-content"]').filter({hasText:"успешных циклов — 732, с ошибкой — 0"})).toBeVisible();
   await expect(page.locator('[role="img"][data-chart-ready="true"]')).toHaveCount(2,{timeout:15_000});
   // Neighbouring samples across the break are placed far apart, not side by
   // side: the plotted geometry leaves a wide horizontal stretch between two
@@ -364,4 +367,30 @@ test("an open explanation tooltip leaves its trigger reachable below the sticky 
   await help.hover({timeout:3000});
   await page.keyboard.press("Escape");
   await expect(tooltip).toHaveCount(0);
+});
+
+test("dragging the time range back and forth never breaks the page",async({page}) => {
+  test.setTimeout(90_000);
+  const errors:string[]=[];
+  page.on("pageerror",(error)=>errors.push(error.message));
+  await page.route("**/api/v1/**",(route)=>route.continue({url:route.request().url().replace(/^http:\/\/[^/]+/,"http://127.0.0.1:18091")}));
+  await page.goto("/posts/99");
+  const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
+  await expect(chart).toHaveAttribute("data-chart-ready","true",{timeout:30_000});
+  // Как у пользователя: на графике прироста показана одна метрика, масштаб «Авто».
+  await page.getByRole("button",{name:"Прирост просмотров",exact:true}).click();
+  await page.getByRole("button",{name:"Авто",exact:true}).last().click();
+  const thumbs=page.locator('[data-slot="slider-thumb"]');
+  await thumbs.nth(1).scrollIntoViewIfNeeded();
+  for(let round=0;round<10;round++){
+    const box=(await thumbs.nth(round%2).boundingBox())!;
+    const target=box.x+(round%2 ? -60 : 50);
+    await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+    await page.mouse.down();
+    for(let step=1;step<=12;step++) await page.mouse.move(box.x+(target-box.x)*step/12,box.y+box.height/2);
+    await page.mouse.up();
+  }
+  await expect(page.getByTestId("chart-range-head")).not.toContainText("1205 сохранённых точек");
+  await expect(page.getByText("Страница временно недоступна")).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

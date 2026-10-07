@@ -1,0 +1,11 @@
+[Unit]
+Description=M-Ranked weekly reindex of high-churn indexes
+
+[Timer]
+OnCalendar=Sun *-*-* 04:40:00 Europe/Moscow
+RandomizedDelaySec=10min
+Persistent=true
+Unit=m-ranked-target-reindex.service
+
+[Install]
+WantedBy=timers.target

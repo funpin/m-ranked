@@ -95,6 +95,9 @@ def test_roles_receive_exactly_the_listed_privileges(databases):
         ("analytics_worker", "post_anomaly_log"): {"INSERT"},
         ("api_read", "post_anomaly_state"): {"SELECT"},
         ("api_write_admin", "post_anomaly_state"): {"SELECT"},
+        # 0057: конвейер холодного архива (maintenance) отправлял месяц в архив,
+        # только когда анализ всех его постов окончен.
+        ("maintenance", "post_anomaly_state"): {"SELECT"},
     }
     with _admin(databases["admin"]) as connection:
         roles = [row["rolname"] for row in connection.execute(
@@ -173,7 +176,10 @@ def test_reaction_evidence_survives_database_worker_export_and_api(databases, qu
     store = PostgresAnomalyStore(databases['worker'])
     series = store.read_series([SeriesTarget(publication,published)])[publication]
     assert series.reaction_breakdowns[0] == case['points'][0]['breakdown']
-    assert all(q == quality for q in series.qualities[Metric.REACTIONS])
+    # Telegram округляет показ только с тысячи: «округлённое» меньшее значение
+    # анализ читает как точное (store.effective_quality).
+    assert all(q == ("exact" if quality == "rounded" and point["r"] < 1000 else quality)
+               for q, point in zip(series.qualities[Metric.REACTIONS], case["points"]))
     now = series.observed_at[-1]
     Worker(store,ScheduleConfig(),CollectionCadence(),clock=lambda:now)._analyze(
         [DueRow(publication,published,now,None,None,None,0,())],now,1.)

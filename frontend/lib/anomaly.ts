@@ -26,6 +26,9 @@ export const SIGNAL_LEGEND = [
   { pattern: 11, title: "отклик выше исторического диапазона" },
   { pattern: 12, title: "продолжение отклика выше ожидаемого" },
   { pattern: 13, title: "поздняя вовлечённость выше ранней" },
+  { pattern: 14, title: "пакет реакций, оторванный от просмотров" },
+  { pattern: 15, title: "площадка списала реакции" },
+  { pattern: 16, title: "одновременный обрыв просмотров и реакций" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;
@@ -168,6 +171,35 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
     return { type: "bars", percent: true, bars: [
       { label: "первые сутки", value: numberAt(render, "earlyRate") ?? 0, highlight: false },
       { label: "после 4 суток", value: numberAt(render, "lateRate") ?? 0, highlight: true },
+    ] };
+  }
+  if (render.kind === "regime") {
+    // Доли реакций на новый просмотр: в эпизоде и в соседнем окне (до или после).
+    const share = (reactions: string, views: string) => {
+      const r = numberAt(render, reactions) ?? 0, v = numberAt(render, views) ?? 0;
+      return v > 0 ? r / v : 0;
+    };
+    const window = render.mode === "start" ? "до эпизода" : "после эпизода";
+    return { type: "bars", percent: true, bars: [
+      { label: "в эпизоде", value: share("episodeReactions", "episodeViews"), highlight: true },
+      { label: window, value: share("windowReactions", "windowViews"), highlight: false },
+    ] };
+  }
+  if (render.kind === "write_off") {
+    return { type: "bars", percent: false, bars: [
+      { label: "до списания", value: numberAt(render, "before") ?? 0, highlight: false },
+      { label: "после", value: numberAt(render, "after") ?? 0, highlight: true },
+    ] };
+  }
+  if (render.kind === "cliff") {
+    // Скорость после обрыва как доля скорости до него — у обеих метрик.
+    const kept = (before: string, after: string) => {
+      const b = numberAt(render, before) ?? 0;
+      return b > 0 ? (numberAt(render, after) ?? 0) / b : 0;
+    };
+    return { type: "bars", percent: true, bars: [
+      { label: "просмотры: скорость после", value: kept("viewsBefore", "viewsAfter"), highlight: true },
+      { label: "реакции: скорость после", value: kept("reactionsBefore", "reactionsAfter"), highlight: true },
     ] };
   }
   if (render.kind === "erv") {

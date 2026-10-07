@@ -767,6 +767,20 @@ class PostgresDataAdapter:
             ).fetchone()
         return int(_row(row, "count", 0))
 
+    def prune_receipts(self, *, before: datetime, limit: int = 5000) -> int:
+        """Удалить применённые квитанции старше окна, свернув их счётчики.
+
+        Подтверждённый конверт Сервер 1 больше не шлёт и через сутки удаляет
+        из своей очереди; квитанция нужна, только пока может прийти повтор.
+        Карантинные и неприменённые остаются (миграция 0060).
+        """
+        with self.repository._connection() as connection, connection.transaction():
+            row = connection.execute(
+                "SELECT ops_and_admin.prune_transfer_inbox(%s,%s) AS removed",
+                (utc(before, "inbox.receipts.before"), limit),
+            ).fetchone()
+        return int(_row(row, "removed", 0))
+
 
 class PostgresTransferProducer:
     """Oldest-first sender; an ACK is persisted before its watermark advances."""
@@ -898,15 +912,22 @@ class PostgresTransferProducer:
                    FROM ops_and_admin.transfer_outbox WHERE producer_id=%s""",
                 (RETRY_WINDOW_SECONDS, RETRY_MAX_ATTEMPTS_PER_WINDOW, producer),
             ).fetchone()
+            # Удалённые квитанции живут свёрткой (0060): итог — она плюс окно.
             inbox = connection.execute(
-                """SELECT coalesce(max(applied_cursor),0) AS applied,
-                          coalesce(sum(duplicate_count),0) AS duplicates,
-                          coalesce(sum(rejected_count),0) AS rejects,
-                          count(*) FILTER (WHERE state='quarantined') AS quarantines,
-                          coalesce(sum(record_count-accepted_count-duplicate_count-
-                            deferred_count-rejected_count) FILTER (WHERE state='applied'),0)
+                """SELECT greatest(coalesce(max(inbox.applied_cursor),0),
+                                   coalesce(max(rollup.applied_through_cursor),0)) AS applied,
+                          coalesce(sum(inbox.duplicate_count),0)
+                            + coalesce(max(rollup.duplicates),0) AS duplicates,
+                          coalesce(sum(inbox.rejected_count),0)
+                            + coalesce(max(rollup.rejected),0) AS rejects,
+                          count(*) FILTER (WHERE inbox.state='quarantined') AS quarantines,
+                          coalesce(sum(inbox.record_count-inbox.accepted_count-inbox.duplicate_count-
+                            inbox.deferred_count-inbox.rejected_count) FILTER (WHERE inbox.state='applied'),0)
                             AS unaccounted
-                     FROM ops_and_admin.transfer_inbox WHERE producer_id=%s""",
+                     FROM (SELECT %s::text AS producer_id) wanted
+                     LEFT JOIN ops_and_admin.transfer_inbox inbox ON inbox.producer_id=wanted.producer_id
+                     LEFT JOIN ops_and_admin.transfer_inbox_rollup rollup
+                            ON rollup.producer_id=wanted.producer_id""",
                 (producer,),
             ).fetchone()
         self.metrics.transfer(producer, {

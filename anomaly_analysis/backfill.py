@@ -27,6 +27,7 @@ from uuid import UUID
 from .v2.schedule import ScheduleConfig, plan
 from .v2.series import CollectionCadence
 from .v2.store import SERIES_BATCH, PostgresAnomalyStore, SeriesTarget, StateWrite
+from .v2.worker import _carried
 
 log = logging.getLogger("anomaly_analysis.backfill")
 PLATFORMS = ("telegram", "vk", "max", "rutube")
@@ -98,9 +99,13 @@ def main() -> None:
                     log.error("backfill series unavailable publication=%s", row.publication_id)
                     continue
                 try:
+                    # Синхронность по упакованной истории соседей находится не всегда:
+                    # прореженные старые замеры не дают почасовых приростов. Прежние
+                    # признаки 8 переносятся, как это делает работник; повтор того же
+                    # события сливается при сборке уровня.
                     verdict = assess(subject, norms=norms.get(subject.platform), subscribers=subscribers,
                                      analyzed_at=moment, cadence=cadence, norm_version=version,
-                                     activity=activity, reference=reference)
+                                     activity=activity, reference=reference, carried=_carried(row, moment))
                 except Exception:  # закончить аккаунт, но не продвигать курсор при ошибках
                     account_failed += 1
                     log.exception("backfill post failed publication=%s", row.publication_id)

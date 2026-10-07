@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "40d3224c5cecfaec300a068e4c8216641b9162f79a8168a6d77e1067ff76d0db",
+  "sourceSha256": "eb3dc0adc1e714235ac3748702e81c87bf47793ed00af866a4462bddb68773d8",
   "version": "1.0.0",
   "operations": [
     {
@@ -68,6 +68,7 @@
           "required": false,
           "type": "string",
           "enum": [
+            "anomalies",
             "name",
             "median_reactions",
             "m_rating",
@@ -78,7 +79,7 @@
             "coverage",
             "accounts"
           ],
-          "default": "median_reactions"
+          "default": "anomalies"
         },
         {
           "name": "direction",
@@ -191,6 +192,10 @@
         {
           "name": "shortName",
           "type": "string | null"
+        },
+        {
+          "name": "institutionProfile",
+          "type": "object"
         },
         {
           "name": "platform",
@@ -458,6 +463,10 @@
           "type": "string"
         },
         {
+          "name": "accountFindings",
+          "type": "object[]"
+        },
+        {
           "name": "methodologyVersion",
           "type": "string"
         },
@@ -477,6 +486,12 @@
           "in": "path",
           "required": true,
           "type": "uuid"
+        },
+        {
+          "name": "before",
+          "in": "query",
+          "required": false,
+          "type": "date-time"
         }
       ],
       "response": "AccountAnomalyLevels",
@@ -556,6 +571,81 @@
         {
           "name": "methodologyVersion",
           "type": "string"
+        },
+        {
+          "name": "disclaimer",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "operationId": "getAccountDailySeries",
+      "path": "/api/v1/accounts/{accountId}/daily-series",
+      "summary": "Read the account's daily series for the last 7 or 30 full days and today",
+      "parameters": [
+        {
+          "name": "accountId",
+          "in": "path",
+          "required": true,
+          "type": "uuid"
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "enum": [
+            7,
+            30
+          ],
+          "default": 30
+        }
+      ],
+      "response": null,
+      "fields": [
+        {
+          "name": "accountId",
+          "type": "uuid"
+        },
+        {
+          "name": "days",
+          "type": "integer"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "points",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getAccountAnomalyFindings",
+      "path": "/api/v1/accounts/{accountId}/anomaly-findings",
+      "summary": "Read account-level anomaly findings",
+      "parameters": [
+        {
+          "name": "accountId",
+          "in": "path",
+          "required": true,
+          "type": "uuid"
+        }
+      ],
+      "response": "AccountAnomalyFindings",
+      "fields": [
+        {
+          "name": "accountId",
+          "type": "uuid"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "items",
+          "type": "object[]"
         },
         {
           "name": "disclaimer",
@@ -745,6 +835,221 @@
       ]
     },
     {
+      "operationId": "getFindings",
+      "path": "/api/v1/findings",
+      "summary": "Read publications that performed above their account norm",
+      "parameters": [
+        {
+          "name": "mode",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "institution"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "institution",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "period",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "1d",
+            "7d",
+            "30d"
+          ],
+          "default": "7d"
+        },
+        {
+          "name": "types",
+          "in": "query",
+          "required": false,
+          "type": "string[]"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "interaction_index",
+            "view_index",
+            "comment_index",
+            "share_index",
+            "interactions24",
+            "views24",
+            "erv24",
+            "published_at"
+          ],
+          "default": "interaction_index"
+        },
+        {
+          "name": "direction",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "desc"
+        },
+        {
+          "name": "group",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "none",
+            "institution"
+          ],
+          "default": "none"
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "anomalies",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "exclude",
+            "include"
+          ],
+          "default": "exclude"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 50
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "Findings",
+      "fields": [
+        {
+          "name": "mode",
+          "type": "string"
+        },
+        {
+          "name": "institution",
+          "type": "integer | null"
+        },
+        {
+          "name": "platform",
+          "type": "string"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "types",
+          "type": "string[]"
+        },
+        {
+          "name": "sort",
+          "type": "string"
+        },
+        {
+          "name": "direction",
+          "type": "string"
+        },
+        {
+          "name": "group",
+          "type": "string"
+        },
+        {
+          "name": "q",
+          "type": "string"
+        },
+        {
+          "name": "anomalies",
+          "type": "string"
+        },
+        {
+          "name": "items",
+          "type": "object[]"
+        },
+        {
+          "name": "groups",
+          "type": "object[]"
+        },
+        {
+          "name": "total",
+          "type": "integer"
+        },
+        {
+          "name": "hiddenAnomalous",
+          "type": "integer"
+        },
+        {
+          "name": "institutions",
+          "type": "object[]"
+        },
+        {
+          "name": "limit",
+          "type": "integer"
+        },
+        {
+          "name": "offset",
+          "type": "integer"
+        },
+        {
+          "name": "hasMore",
+          "type": "boolean"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
       "operationId": "getComparisonCandidates",
       "path": "/api/v1/compare/candidates",
       "summary": "Revision-pinned comparison selector candidates",
@@ -866,6 +1171,14 @@
       "parameters": [],
       "response": "SiteSummary",
       "fields": [
+        {
+          "name": "trackedInstitutions",
+          "type": "integer"
+        },
+        {
+          "name": "ratingInstitutions",
+          "type": "integer"
+        },
         {
           "name": "available",
           "type": "boolean"
@@ -1106,6 +1419,10 @@
         {
           "name": "institutionShortName",
           "type": "string | null"
+        },
+        {
+          "name": "institutionProfile",
+          "type": "object"
         },
         {
           "name": "platform",
@@ -1364,6 +1681,10 @@
         {
           "name": "nextLegacyId",
           "type": "integer | null"
+        },
+        {
+          "name": "coldArchive",
+          "type": "object"
         },
         {
           "name": "archivedText",

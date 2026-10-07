@@ -69,6 +69,19 @@ class Database:
             cursor = await connection.execute(sql, params)
             return await cursor.fetchall()
 
+    async def fetch_all_hash_joined(self, sql: str,
+                                    params: Sequence[Any] | dict[str, Any] | None = None
+                                    ) -> list[dict[str, Any]]:
+        """Аналитический запрос без вложенных циклов: оценка строк после
+        CTE и окон по датам занижена, и планировщик иначе выбирает десятки
+        тысяч поисков по индексу там, где один проход с хэшем в разы дешевле.
+        SET LOCAL действует только внутри этой транзакции."""
+        async with self.read() as connection:
+            async with connection.transaction():
+                await connection.execute("SET LOCAL enable_nestloop = off")
+                cursor = await connection.execute(sql, params)
+                return await cursor.fetchall()
+
     async def fetch_one(self, sql: str, params: Sequence[Any] | dict[str, Any] | None = None
                         ) -> dict[str, Any] | None:
         async with self.read() as connection:

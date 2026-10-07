@@ -9,8 +9,9 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
+import logging
 import time
 from typing import Callable, Mapping, Sequence
 from uuid import UUID
@@ -29,6 +30,17 @@ from .tail_ledger import build_ledger
 
 PLATFORMS = ("telegram", "vk", "max", "rutube")
 SYNCHRONY_PATTERN = 8
+POLICY_REFRESH_SECONDS = 60.0
+FINAL_ANALYSIS_DAYS = (3, 3650)
+logger = logging.getLogger("anomaly.worker")
+
+
+def final_analysis_days(policy: Mapping[str, object] | None) -> int | None:
+    """Срок финального анализа из политики; негодное значение — как пустое."""
+    value = (policy or {}).get("finalAnalysisDays")
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if FINAL_ANALYSIS_DAYS[0] <= value <= FINAL_ANALYSIS_DAYS[1] else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +126,10 @@ class Worker:
                  publish: Callable[[WorkerMetrics], None] = lambda metrics: None) -> None:
         self.store = store
         self.schedule = schedule
+        # Срок финального анализа задаёт панель (политика analysis, ADR-016);
+        # пусто — значение окружения, с которым работник запущен.
+        self._base_schedule = schedule
+        self._policy_checked = float("-inf")
         self.cadence = cadence
         self.config = config
         self.clock = clock
@@ -130,6 +146,7 @@ class Worker:
     def run_once(self) -> int:
         started = time.monotonic()
         now = self.clock()
+        self._refresh_policy(started)
         self.metrics.seeded += self.store.seed_new(now, self.schedule.seed_seconds, self.config.seed_limit)
         self._refresh_norms(now)
         lag, backlog = self.store.queue_state(now)
@@ -143,6 +160,17 @@ class Worker:
         self.metrics.last_completion = time.time()
         self.publish(self.metrics)
         return len(due)
+
+    def _refresh_policy(self, clock: float) -> None:
+        if clock - self._policy_checked < POLICY_REFRESH_SECONDS:
+            return
+        self._policy_checked = clock
+        days = final_analysis_days(self.store.read_runtime_policy("analysis"))
+        schedule = (replace(self._base_schedule, track_post_for_hours=days * 24) if days is not None
+                    else self._base_schedule)
+        if schedule != self.schedule:
+            logger.info("analysis policy applied final_analysis_hours=%s", schedule.track_post_for_hours)
+            self.schedule = schedule
 
     def _refresh_norms(self, now: datetime) -> None:
         version = self.store.latest_accepted_norm_version()

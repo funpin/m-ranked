@@ -1,0 +1,54 @@
+[Unit]
+Description=M-Ranked node agent: report to the main server, storage copies, collection runtime (ADR-016)
+Documentation=file:/opt/m-ranked/current/operations/runbooks/COLD_ARCHIVE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Только стандартная библиотека Python. Тот же mTLS, что у отправителя
+# переноса: имя в сертификате — имя сервера в реестре панели.
+User=root
+Group=root
+WorkingDirectory=/opt/m-ranked/current
+EnvironmentFile=-/etc/m-ranked/collector-profile.env
+EnvironmentFile=-/etc/m-ranked/node-agent.env
+LoadCredential=transfer-client-certificate:/etc/m-ranked/credentials/transfer-client.crt
+LoadCredential=transfer-client-private-key:/etc/m-ranked/credentials/transfer-client.key
+LoadCredential=transfer-ca:/etc/m-ranked/credentials/transfer-ca.crt
+Environment=NODE_AGENT_CERTIFICATE=%d/transfer-client-certificate
+Environment=NODE_AGENT_PRIVATE_KEY=%d/transfer-client-private-key
+Environment=NODE_AGENT_CA_BUNDLE=%d/transfer-ca
+Environment=MRANKED_STORE_DIR=/var/lib/m-ranked/store
+Environment=NODE_AGENT_STATE_DIR=/var/lib/m-ranked/node-agent
+Environment=TZ=UTC
+ExecStart=/usr/bin/python3 -m operations.storage.agent
+# Бюджет одного запуска — NODE_AGENT_BUDGET_SECONDS (50 с); это страховка.
+TimeoutStartSec=5min
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=20%
+MemoryMax=128M
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+# Без RestrictSUIDSGID: агент создаёт каталоги хранилища с битом setgid.
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+StateDirectory=m-ranked/node-agent m-ranked/store
+StateDirectoryMode=0755
+UMask=0022
+TasksMax=16
+
+[Install]
+WantedBy=multi-user.target

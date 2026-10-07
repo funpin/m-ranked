@@ -1,91 +1,136 @@
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Alert } from "@/components/ui/alert";
-import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import { PlatformChip } from "@/components/platform-chip";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import type { Metadata } from "next";
-import Link from "@/components/native-link";
 import { headers } from "next/headers";
-import { randomUUID } from "node:crypto";
-import { AccountMatrix, DeleteCatalogForm } from "@/components/catalog-forms";
-import { AdminLogin, AdminSignOut } from "./admin-access";
-import { CatalogApiError, catalogReader, type CatalogStatus, type ManagedAccount, type ManagedInstitution, type OfficialRating } from "@/lib/catalog-api";
+import { Activity, LayoutList, Server, Users } from "lucide-react";
+import Link from "@/components/native-link";
+import { Card } from "@/components/ui/card";
+import { CatalogApiError, catalogReader } from "@/lib/catalog-api";
 import { first, type SearchParams } from "@/lib/params";
-import { legacyDate, PLATFORM_LONG_LABELS } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { AdminLogin, AdminSignOut } from "./admin-access";
+import { LiveRefresh } from "./live-refresh";
+import { ChannelsTab } from "./channels";
+import { plural } from "./shared";
+import { ServersTab } from "./servers";
+import { SystemTab } from "./system";
+import { VisitorsTab } from "./visitors";
+import { PageTitle } from "@/components/page-title";
 
-export const dynamic="force-dynamic";
-export const revalidate=0;
-export const metadata:Metadata={title:"Управление",description:"Закрытое управление вузами, официальными аккаунтами и сбором данных.",referrer:"same-origin",robots:{index:false,follow:false,nocache:true}};
-const statuses:Record<string,string>={"institution-added":"Вуз добавлен.","institution-updated":"Названия вуза обновлены.","account-added":"Аккаунты сохранены.","accounts-updated":"Аккаунты сохранены.","account-disabled":"Сбор для аккаунта остановлен. История сохранена.","account-enabled":"Сбор для аккаунта включён.","native-id-updated":"Идентификатор площадки сохранён.","account-deleted":"Аккаунт и собранные по нему данные удалены."};
-const commandErrors:Record<string,string>={conflict:"Данные уже изменились. Проверьте актуальные значения и повторите действие.",forbidden:"Недостаточно прав для этого действия.",invalid:"Проверьте заполненные поля и повторите действие.","not-found":"Вуз или аккаунт больше не существует.",unavailable:"Сервис управления временно недоступен. Проверьте данные перед повторной отправкой.",failed:"Не удалось сохранить изменение."};
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-function plural(value:number,one:string,few:string,many:string){const n=Math.abs(value)%100;return n>10&&n<20?many:n%10===1?one:n%10>=2&&n%10<=4?few:many;}
-function fields(csrf:string,version=0){return <><input type="hidden" name="csrf_token" value={csrf}/><input type="hidden" name="expected_row_version" value={version}/><input type="hidden" name="correlation_id" value={randomUUID()}/></>;}
-function bytes(value:number|null|undefined){if(value==null)return "—";let unit=0,n=value;while(n>=1024&&unit<4){n/=1024;unit++;}return `${unit?n.toFixed(1):Math.trunc(n)} ${["Б","КБ","МБ","ГБ","ТБ"][unit]}`;}
-function percentage(part:number|null,total:number|null,digits=2){return part!==null&&total!==null&&total>0?Number((part*100/total).toFixed(digits)):null;}
-function ratingScore(value:number|null){if(value===null)return "—";const rounded=Math.round(value*100)/100;return Number.isInteger(rounded)?rounded.toFixed(1):String(rounded);}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const metadata: Metadata = {
+  title: "Управление",
+  description: "Закрытое управление вузами, официальными аккаунтами и сбором данных.",
+  referrer: "same-origin",
+  robots: { index: false, follow: false, nocache: true },
+};
 
-function Storage({status}:{status:CatalogStatus|null}) {
-  const storage=status?.storage,total=storage?.diskTotalBytes??null,free=storage?.diskFreeBytes??null,project=storage?.projectBytes??null,database=storage?.databaseBytes??null;
-  const used=total!==null&&free!==null?Math.max(0,total-free):null;
-  const rows=[{name:"Диск сервера",value:`${bytes(used)} из ${bytes(total)}`,percent:percentage(used,total,1),label:"Занято на диске сервера",note:"раздела занято",kind:""},{name:"Весь проект m-ranked",value:bytes(project),percent:percentage(project,used),label:"Доля проекта в занятом месте",note:"от занятого места на диске",kind:"project"},{name:"База результатов парсинга",value:bytes(database),percent:percentage(database,used),label:"Доля базы в занятом месте",note:"от занятого места на диске",kind:"database"}];
-  return <Card className="block p-5 text-sm mb-5"><div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-semibold">Использование хранилища</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Доли считаются от занятого места на разделе: каталог релиза и база лежат рядом, а не одно внутри другого.</p></div><span className="inline-flex shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-medium">Свободно {bytes(free)}</span></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>article]:min-w-0 [&>article]:rounded-lg [&>article]:border [&>article]:p-4 [&_small]:text-muted-foreground">{rows.map((row)=><article key={row.kind}><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-xs"><span>{row.name}</span><b>{row.value}</b></div><Progress className="my-2 [&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-track]]:rounded-full" aria-label={row.label} value={row.percent===null?null:Math.min(100,row.percent)}/><small>{row.percent===null?"Размер не предоставлен сервером":`${row.percent}% ${row.note}`}</small></article>)}</div></Card>;
-}
-function Rating({rating,label}:{rating:OfficialRating|undefined;label:string}) {return <>{rating===undefined?`${label}: статус не получен`:rating.rank?<><b>{label} №{rating.rank}</b> · {ratingScore(rating.score)}</>:`${label} —`}</>;}
-function InstitutionCell({institution,csrf,canEdit,withRating=true}:{institution:ManagedInstitution;csrf:string;canEdit:boolean;withRating?:boolean}) {
-  // Своя подложка: ячейка вуза охватывает несколько строк, поэтому подсветка
-  // строки красила её только при наведении на первую из них, а на остальных —
-  // нет. Непрозрачный фон делает поведение одинаковым: подсвечиваются только
-  // колонки аккаунта, на какую строку ни наведи.
-  return <TableCell rowSpan={Math.max(1,institution.accounts.length)} className="bg-card min-w-64 space-y-2 [&_form]:mt-3 [&_form]:grid [&_form]:gap-3 [&_label]:grid [&_label]:gap-1.5 [&_summary]:cursor-pointer [&_summary]:text-xs [&_summary]:underline"><b title={institution.name}>{institution.shortName||institution.name}</b><small>{institution.name}</small>{withRating?<small><Rating rating={institution.officialRatings?.all} label="Общий М‑Рейтинг"/></small>:null}<details><summary>Редактировать название</summary><form method="post" action={`/manage/institutions/${institution.legacyId}`}><Label className="grid gap-1.5 text-sm leading-normal font-normal">Полное название<Input name="name" defaultValue={institution.name} required disabled={!canEdit}/></Label><Label className="grid gap-1.5 text-sm leading-normal font-normal">Сокращение<Input name="short_name" defaultValue={institution.shortName||institution.name} required disabled={!canEdit}/></Label>{fields(csrf,institution.rowVersion)}<Button type="submit" disabled={!canEdit}>Сохранить</Button></form></details></TableCell>;
-}
-function AccountStatus({account,status}:{account:ManagedAccount;status:CatalogStatus|null}) {
-  const integration=status?.integrations.find((row)=>row.platform===account.platform)?.status;
-  const text=!account.enabled?"отключён":integration==="unknown"||integration===undefined?"статус не получен":account.platform==="telegram"?"работает":account.platform==="vk"?integration==="configured"?"работает":"нужен токен":account.platform==="max"?integration!=="configured"?"нужна сессия":!account.nativeId?"ожидает подписки":"работает":integration==="configured"?"работает":"сбор выключен";
-  return <Badge className={`h-auto text-xs ${text==="работает"?"bg-success/10 text-success":"bg-warning/10 text-warning"}`}>{text}</Badge>;
-}
-function PlatformLabel({account,csrf,canEdit}:{account:ManagedAccount;csrf:string;canEdit:boolean}) {
-  const label=<PlatformChip platform={account.platform} label={account.platform.toUpperCase()} />;
-  if(account.platform!=="max")return label;
-  return <details data-testid="native-id-editor" className="min-w-28 [&_summary]:cursor-pointer [&_form]:mt-3 [&_form]:grid [&_form]:gap-2"><summary aria-label="Изменить chat_id MAX">{label}</summary><form method="post" action={`/manage/platform-accounts/${account.legacyId}/native-id`}><Label className="grid gap-1.5 text-sm leading-normal font-normal">chat_id<Input name="native_id" defaultValue={account.nativeId??""} required disabled={!canEdit}/></Label>{fields(csrf,account.rowVersion)}<Button type="submit" disabled={!canEdit}>Сохранить</Button></form></details>;
+const statuses: Record<string, string> = {
+  "institution-added": "Вуз добавлен.", "institution-updated": "Названия вуза обновлены.", "account-added": "Аккаунты сохранены.",
+  "accounts-updated": "Аккаунты сохранены.", "account-disabled": "Сбор для аккаунта остановлен. История сохранена.",
+  "account-enabled": "Сбор для аккаунта включён.", "native-id-updated": "Идентификатор площадки сохранён.",
+  "account-deleted": "Аккаунт и собранные по нему данные удалены.",
+};
+const commandErrors: Record<string, string> = {
+  conflict: "Данные уже изменились. Проверьте актуальные значения и повторите действие.", forbidden: "Недостаточно прав для этого действия.",
+  invalid: "Проверьте заполненные поля и повторите действие.", "not-found": "Вуз или аккаунт больше не существует.",
+  unavailable: "Сервис управления временно недоступен. Проверьте данные перед повторной отправкой.", failed: "Не удалось сохранить изменение.",
+};
+
+const TABS = [
+  { id: "channels", label: "Каналы", title: "Управление каналами", description: "Добавляйте, временно отключайте или полностью удаляйте мониторинг каналов.", icon: LayoutList },
+  { id: "visitors", label: "Посетители", title: "Посетители сайта", description: "Уникальные посетители без cookie: кто на сайте сейчас и как меняется посещаемость.", icon: Users },
+  { id: "system", label: "Система", title: "Состояние системы", description: "Сбор, анализ, ресурсы сервера, трафик и хранилище по снимкам сервера раз в минуту.", icon: Activity },
+  { id: "servers", label: "Серверы", title: "Серверы и хранение", description: "Серверы-сборщики и место на дисках, политики сбора, хранения и анализа, резервные копии и холодный архив.", icon: Server },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
+// Момент отрисовки для подписей «N мин назад»: страница динамическая и
+// рисуется на каждый запрос, так что «сейчас» здесь и есть время ответа.
+const renderedAt = () => Date.now();
+
+function ManageTabs({ active }: { active: Tab }) {
+  return (
+    <nav aria-label="Разделы управления" className="bg-muted mb-6 inline-flex max-w-full overflow-x-auto rounded-lg p-[3px]">
+      {TABS.map(({ id, label, icon: Icon }) => (
+        <Link key={id} href={id === "channels" ? "/manage" : `/manage?tab=${id}`} prefetch={false} aria-current={id === active ? "page" : undefined}
+          className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap no-underline transition-colors",
+            id === active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+          <Icon className="size-4" aria-hidden="true" />{label}
+        </Link>
+      ))}
+    </nav>
+  );
 }
 
-export default async function ManagePage({searchParams}:{searchParams:Promise<SearchParams>}) {
-  const incoming=new Headers(await headers()),query=await searchParams;
-  const csrf=incoming.get("x-mranked-csrf")??"",canEdit=["1","true"].includes(incoming.get("x-mranked-can-edit")??"")&&!!csrf,canDelete=["1","true"].includes(incoming.get("x-mranked-can-delete")??"")&&!!csrf;
+export default async function ManagePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const incoming = new Headers(await headers()), query = await searchParams;
+  const csrf = incoming.get("x-mranked-csrf") ?? "";
+  const canEdit = ["1", "true"].includes(incoming.get("x-mranked-can-edit") ?? "") && !!csrf;
+  const canDelete = ["1", "true"].includes(incoming.get("x-mranked-can-delete") ?? "") && !!csrf;
   // Без сессии страница показывает форму входа, а не окно Basic-аутентификации.
-  if(incoming.get("x-mranked-signed-in")!=="true") return <AdminLogin failed={first(query.sign_in)==="failed"}/>;
-  const reader=catalogReader(incoming);
-  const [catalogResult,statusResult]=await Promise.allSettled([reader.institutions(),reader.status()]);
-  if(catalogResult.status==="rejected") return <><h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">Управление каналами</h1><Card className="block p-5 text-sm" role="alert"><p>{catalogResult.reason instanceof CatalogApiError?catalogResult.reason.message:"Не удалось загрузить каталог."}</p><Link href="/manage" prefetch={false}>Повторить загрузку</Link></Card></>;
-  // SQLite NOCASE folds ASCII only; preserve the legacy catalog ordering.
-  const fold=(name:string)=>name.replace(/[A-Z]/g,(letter)=>letter.toLowerCase());
-  const institutions=catalogResult.value.sort((a,b)=>fold(a.name)<fold(b.name)?-1:fold(a.name)>fold(b.name)?1:a.legacyId-b.legacyId);
-  // Bounded API pages use IDs; presentation follows SQLite's platform/title/username order.
-  const textOrder=(a:string|null,b:string|null)=>a===b?0:a===null?-1:b===null?1:a<b?-1:1;
-  for(const institution of institutions)institution.accounts.sort((a,b)=>textOrder(a.platform,b.platform)||textOrder(a.title,b.title)||textOrder(a.username,b.username)||a.legacyId-b.legacyId);
-  const status=statusResult.status==="fulfilled"?statusResult.value:null;
-  const channelCount=status?.channelCount??institutions.flatMap((row)=>row.accounts).filter((row)=>row.channelId!==null).length,platformCount=status?.platformCount??institutions.reduce((sum,row)=>sum+row.accounts.length,0);
-  const selected=Number(first(query.institution_id));
-  const selectedId=institutions.some((row)=>row.legacyId===selected)?selected:institutions[0]?.legacyId??null;
-  const message=statuses[first(query.platform_status)??""];
-  const commandError=commandErrors[first(query.command_error)??""];
-  const correlation=first(query.correlation_id)??"";
-  return <>
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4"><div><h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">Управление каналами</h1><p className="mt-2 mb-5 text-sm text-muted-foreground">Добавляйте, временно отключайте или полностью удаляйте мониторинг каналов.</p></div><div className="flex flex-wrap items-center gap-3"><div className="flex items-baseline gap-2 rounded-full bg-muted px-4 py-2 text-xs [&>b]:text-lg"><b>{channelCount}</b><span>{plural(channelCount,"канал добавлен","канала добавлено","каналов добавлено")}</span></div><AdminSignOut csrf={csrf}/></div></div>
-    <Card className="block p-5 text-sm mb-5 flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-heading text-lg font-semibold">Официальный М‑Рейтинг · соцсети</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Для каждого вуза загружаются общий рейтинг соцсетей и отдельные места в Telegram, VK, MAX и Rutube. Последний период: <b>{status?status.mRating.period||"ещё не загружен":"статус не получен"}</b>{status?.mRating.updatedAt?` · обновлено ${legacyDate(status.mRating.updatedAt,true)}`:""}.</p>{first(query.m_rating_status)==="updated"?<p className="text-success">Пять срезов М‑Рейтинга обновлены.</p>:first(query.m_rating_status)==="error"?<p className="text-destructive">Не удалось обновить М‑Рейтинг: {status?.mRating.error||"неизвестная ошибка"}</p>:status?.mRating.error?<p className="text-destructive">Последняя попытка: {status.mRating.error}</p>:null}</div><form method="post" action="/manage/m-rating/update">{fields(csrf)}<Button type="submit" disabled={!canEdit}>Загрузить свежий М‑Рейтинг</Button></form></Card>
-    <Card className="block p-5 text-sm mb-5"><div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-semibold">Подключения API</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Значения секретов хранятся только в окружении сервера и никогда не выводятся в браузер.</p></div></div>{status?<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>article]:min-w-0 [&>article]:rounded-lg [&>article]:border [&>article]:p-4 [&_small]:text-muted-foreground">{status.integrations.map((integration)=><article key={integration.platform}><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-xs"><b>{PLATFORM_LONG_LABELS[integration.platform]}</b><span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${integration.status==="configured"?"bg-success/10 text-success":"bg-warning/10 text-warning"}`}>{integration.status==="configured"?"подключено":integration.status==="missing"?"нужна настройка":"статус не получен"}</span></div><small>{integration.detail}</small></article>)}</div>:<p className="text-destructive" role="status">Не удалось получить состояние подключений и хранилища.</p>}</Card>
-    <Storage status={status}/>
-    <Card className="block p-5 text-sm min-w-0"><div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-heading text-lg font-semibold">Вузы и аккаунты в соцсетях</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">VK сохраняет просмотры, лайки, комментарии и репосты. MAX читает публичные каналы через отдельную пользовательскую сессию и сохраняет просмотры и реакции. Rutube получает просмотры, лайки и комментарии из официальных публичных API без токена.</p></div><span className="inline-flex shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-medium">{platformCount} {plural(platformCount,"аккаунт","аккаунта","аккаунтов")} · {institutions.length} {plural(institutions.length,"вуз","вуза","вузов")}</span></div>
-      {message?<Alert role="status" className="my-4 border-success/30 bg-success/10 p-4 text-sm text-success">{message}</Alert>:null}
-      {commandError?<Alert variant="destructive" className="my-4 block border-destructive/30 bg-destructive/10 p-4 text-sm">{commandError}{UUID.test(correlation)?<> Код операции: <code>{correlation}</code>.</>:null}</Alert>:null}
-      {!canEdit?<p className="my-4 rounded-lg border p-4 text-sm">Доступен просмотр. Изменения выполняют редакторы и администраторы.</p>:null}
-      <div className="my-5 grid gap-5 lg:grid-cols-2"><AccountMatrix institutions={institutions} selectedId={selectedId} csrfToken={csrf} correlationId={randomUUID()} canEdit={canEdit}/><form data-testid="institution-create" className="grid content-start gap-3 rounded-lg border bg-muted/20 p-4 [&_label]:grid [&_label]:gap-1.5 [&_label]:text-sm" method="post" action="/manage/institutions"><h3 className="font-heading text-base font-semibold">Новый вуз</h3><p className="text-xs leading-relaxed text-muted-foreground">Полное название показывается в подсказках, сокращение — в компактных карточках.</p><Label className="grid gap-1.5 text-sm leading-normal font-normal">Полное название<Input name="name" required placeholder="Полное официальное название" disabled={!canEdit}/></Label><Label className="grid gap-1.5 text-sm leading-normal font-normal">Сокращение<Input name="short_name" placeholder="Например, ВВГУ" disabled={!canEdit}/></Label>{fields(csrf)}<Button type="submit" disabled={!canEdit}>Добавить вуз</Button></form></div>
-      <div className="min-w-0 overflow-x-auto [&_td]:align-top [&_td]:whitespace-normal [&_td]:min-w-32 [&_small]:block [&_small]:mt-1 [&_small]:text-muted-foreground [&_a]:underline [&_a]:underline-offset-4"><Table data-testid="platform-table"><TableHeader><TableRow><TableHead>Вуз</TableHead><TableHead>Платформа</TableHead><TableHead>Аккаунт</TableHead><TableHead>Данные</TableHead><TableHead>Статус</TableHead><TableHead>Действия</TableHead></TableRow></TableHeader><TableBody>{institutions.flatMap((institution)=>institution.accounts.length?institution.accounts.map((account,index)=><TableRow key={account.id}>{index===0?<InstitutionCell institution={institution} csrf={csrf} canEdit={canEdit}/>:null}<TableCell><PlatformLabel account={account} csrf={csrf} canEdit={canEdit}/></TableCell><TableCell>{account.url&&/^https?:\/\//.test(account.url)?<a href={account.url} target="_blank" rel="noopener noreferrer">{account.title||(account.username?`@${account.username}`:account.externalKey)} ↗</a>:account.title||(account.username?`@${account.username}`:account.externalKey)}{account.platform==="max"&&account.nativeId?<small>chat_id {account.nativeId}</small>:null}</TableCell><TableCell><small>{account.channelId!==null?<>{account.subscribers||"—"} подписчиков<br/></>:<>{({public:"публичный доступ",user_session:"пользовательская сессия",owner:"нужен доступ владельца"} as Record<string,string>)[account.legacyAccessMode??account.accessMode]||account.legacyAccessMode||account.accessMode}<br/></>}<Rating rating={institution.officialRatings?.[account.platform]} label={`М‑Рейтинг ${account.platform.toUpperCase()}`}/></small></TableCell><TableCell><AccountStatus account={account} status={status}/>{account.lastErrorCode?<small className="text-destructive block mt-1 text-destructive">{account.lastErrorCode==="legacy_collection_error"?"Ошибка предыдущего сбора":"Ошибка сбора данных"}</small>:null}</TableCell><TableCell><div className="flex flex-wrap gap-2"><form method="post" action={`/manage/platform-accounts/${account.legacyId}/${account.enabled?"disable":"enable"}`}>{fields(csrf,account.rowVersion)}<Button type="submit" disabled={!canEdit}>{account.enabled?"Отключить":"Включить"}</Button></form><DeleteCatalogForm method="post" action={`/manage/platform-accounts/${account.legacyId}/delete`}>{fields(csrf,account.rowVersion)}<Button variant="destructive" type="submit" disabled={!canDelete}>Удалить</Button></DeleteCatalogForm></div></TableCell></TableRow>):[<TableRow key={institution.id}><InstitutionCell institution={institution} csrf={csrf} canEdit={canEdit} withRating={false}/><TableCell colSpan={5} className="text-muted-foreground">Аккаунты ещё не привязаны</TableCell></TableRow>])}</TableBody></Table></div>
+  if (incoming.get("x-mranked-signed-in") !== "true") return <AdminLogin failed={first(query.sign_in) === "failed"} />;
+  const requested = first(query.tab);
+  const tab: Tab = TABS.some((item) => item.id === requested) ? requested as Tab : "channels";
+  const meta = TABS.find((item) => item.id === tab)!;
+  const reader = catalogReader(incoming);
+  const now = renderedAt();
+  // Каждая вкладка читает только своё: панель не ходит в API за чужими данными.
+  const header = (count?: number) => (
+    <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl"><PageTitle text={meta.title} /></h1>
+        <p className="text-muted-foreground mt-2 text-sm">{meta.description}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Мониторинг — каждые 15 с, каталог — каждые 30 с. */}
+        <LiveRefresh intervalMs={tab === "channels" ? 30_000 : 15_000} />
+        {count !== undefined ? <div className="bg-muted flex items-baseline gap-2 rounded-full px-4 py-2 text-xs [&>b]:text-lg">
+          <b>{count}</b><span>{plural(count, "канал добавлен", "канала добавлено", "каналов добавлено")}</span>
+        </div> : null}
+        <AdminSignOut csrf={csrf} />
+      </div>
+    </div>
+  );
+
+  if (tab === "visitors") {
+    const range = first(query.range) === "month" ? "month" : "week";
+    const visitors = await reader.visitors(range).catch(() => null);
+    return <>{header()}<ManageTabs active={tab} /><VisitorsTab visitors={visitors} range={range} /></>;
+  }
+  if (tab === "system") {
+    const range = first(query.range) === "week" ? "week" : "day";
+    const [overview, status] = await Promise.all([reader.system(range).catch(() => null), reader.status().catch(() => null)]);
+    return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} status={status} range={range} now={now} csrf={csrf} canRefreshBackup={canDelete} backupOutcome={first(query.backup_status)} /></>;
+  }
+
+  if (tab === "servers") {
+    const storage = await reader.storage().catch(() => null);
+    return <>{header()}<ManageTabs active={tab} /><ServersTab overview={storage} csrf={csrf} canEdit={canDelete} now={now}
+      status={first(query.storage_status)} error={first(query.storage_error)} /></>;
+  }
+
+  const [catalogResult, statusResult] = await Promise.allSettled([reader.institutions(), reader.status()]);
+  if (catalogResult.status === "rejected") return <>
+    {header()}<ManageTabs active={tab} />
+    <Card className="block p-5 text-sm" role="alert">
+      <p>{catalogResult.reason instanceof CatalogApiError ? catalogResult.reason.message : "Не удалось загрузить каталог."}</p>
+      <Link href="/manage" prefetch={false}>Повторить загрузку</Link>
     </Card>
+  </>;
+  // SQLite NOCASE folds ASCII only; preserve the legacy catalog ordering.
+  const fold = (name: string) => name.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+  const institutions = catalogResult.value.sort((a, b) => fold(a.name) < fold(b.name) ? -1 : fold(a.name) > fold(b.name) ? 1 : a.legacyId - b.legacyId);
+  // Bounded API pages use IDs; presentation follows SQLite's platform/title/username order.
+  const textOrder = (a: string | null, b: string | null) => a === b ? 0 : a === null ? -1 : b === null ? 1 : a < b ? -1 : 1;
+  for (const institution of institutions) institution.accounts.sort((a, b) => textOrder(a.platform, b.platform) || textOrder(a.title, b.title) || textOrder(a.username, b.username) || a.legacyId - b.legacyId);
+  const status = statusResult.status === "fulfilled" ? statusResult.value : null;
+  const channelCount = status?.channelCount ?? institutions.flatMap((row) => row.accounts).filter((row) => row.channelId !== null).length;
+  const selected = Number(first(query.institution_id));
+  const selectedId = institutions.some((row) => row.legacyId === selected) ? selected : institutions[0]?.legacyId ?? null;
+  return <>
+    {header(channelCount)}
+    <ManageTabs active={tab} />
+    <ChannelsTab institutions={institutions} status={status} selectedId={selectedId} csrf={csrf} canEdit={canEdit} canDelete={canDelete}
+      message={statuses[first(query.platform_status) ?? ""]} commandError={commandErrors[first(query.command_error) ?? ""]}
+      correlation={first(query.correlation_id) ?? ""} ratingOutcome={first(query.m_rating_status)} />
   </>;
 }

@@ -1,0 +1,11 @@
+[Unit]
+Description=M-Ranked main server storage agent every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+Unit=m-ranked-target-storage-main.service
+
+[Install]
+WantedBy=timers.target

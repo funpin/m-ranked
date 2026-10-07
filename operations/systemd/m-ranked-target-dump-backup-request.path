@@ -1,0 +1,13 @@
+[Unit]
+Description=Start an M-Ranked database dump requested from the admin panel
+Documentation=file:/opt/m-ranked/current/operations/runbooks/ADMIN_PANEL.md
+
+[Path]
+# API кладёт сюда файл по кнопке «Обновить резервную копию» (только ADMIN).
+# Скрипт дампа удаляет файл при старте и в этом запуске оставляет перед
+# снимком лишь копию, проверенную восстановлением.
+PathExists=/var/lib/m-ranked/backup-request/refresh
+Unit=m-ranked-target-dump-backup.service
+
+[Install]
+WantedBy=paths.target

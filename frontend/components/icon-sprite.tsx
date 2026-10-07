@@ -12,7 +12,7 @@
  * цвет наследуется от текста, как и прежде.
  */
 export const ICON_NAMES = ["info", "file-text", "trending-up", "trending-down",
-                           "plus", "minus"] as const;
+                           "plus", "minus", "heart", "eye", "message-circle", "repeat-2"] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
 export function IconSprite() {
@@ -20,6 +20,22 @@ export function IconSprite() {
     <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="icon"
       style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
       <defs>
+        <g id="i-heart">
+          <path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" />
+        </g>
+        <g id="i-eye">
+          <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g id="i-message-circle">
+          <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
+        </g>
+        <g id="i-repeat-2">
+          <path d="m2 9 3-3 3 3" />
+          <path d="M13 18H7a2 2 0 0 1-2-2V6" />
+          <path d="m22 15-3 3-3-3" />
+          <path d="M11 6h6a2 2 0 0 1 2 2v10" />
+        </g>
         <g id="i-info">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4" />

@@ -32,7 +32,7 @@ function analysis(overrides: Partial<PublicationAnomalyAnalysis> = {}): Publicat
     levelLabel: "выраженная аномалия", levelSymbol: "◑", signals: [signal()], quality: null,
     originalLevel: 2, recheckReason: null, recheckMethodVersion: null, recheckEvidence: null,
     analyzedAt: at(70), lagSeconds: 0, normVersion: 1, detectorVersions: {}, reviewStatus: "unreviewed",
-    methodologyVersion: "anomaly-dynamics-v2", disclaimer: "", ...overrides,
+    accountFindings: [], methodologyVersion: "anomaly-dynamics-v2", disclaimer: "", ...overrides,
   };
 }
 
@@ -59,7 +59,7 @@ test("interval boundaries become the nearest saved points and markers keep their
   const [marker] = signalMarkers(analysis());
   assert.equal(marker!.pattern, 1);
   assert.equal(marker!.to - marker!.from, 24 * 3600_000);
-  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 12);
+  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 15);
 });
 
 test("linear signal draws its fitted line only inside the interval", () => {

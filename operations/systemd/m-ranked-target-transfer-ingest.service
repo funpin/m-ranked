@@ -9,7 +9,8 @@ AssertPathExists=/etc/m-ranked/transfer-ingest.env
 Type=simple
 User=m-ranked-transfer-ingest
 Group=m-ranked-transfer-ingest
-SupplementaryGroups=node-exporter
+# m-ranked-storage — узловые точки /node/v1/* читают и пишут файлы хранилища (ADR-016).
+SupplementaryGroups=node-exporter m-ranked-storage
 WorkingDirectory=/opt/m-ranked/current
 EnvironmentFile=/etc/m-ranked/transfer-ingest.env
 LoadCredential=pgpass:/etc/m-ranked/credentials/transfer-ingest-pgpass
@@ -69,6 +70,7 @@ IPAddressAllow=localhost
 SystemCallArchitectures=native
 ReadWritePaths=-/var/lib/node_exporter/textfile_collector
 ReadWritePaths=/var/lib/m-ranked/transfer-ingest
+ReadWritePaths=-/var/lib/m-ranked/store
 RuntimeDirectory=m-ranked-transfer-ingest
 RuntimeDirectoryMode=0700
 UMask=0077

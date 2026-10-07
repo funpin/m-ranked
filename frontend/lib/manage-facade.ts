@@ -3,7 +3,10 @@ import { timingSafeEqual } from "node:crypto";
 
 const SESSION_COOKIE = "__Host-mranked-admin";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTION = /^\/manage\/(?:channels|institutions|platform-accounts|m-rating\/update|institutions\/[^/]+(?:\/accounts)?|channels\/[^/]+\/(?:enable|disable|delete)|platform-accounts\/[^/]+\/(?:enable|disable|delete|native-id))$/;
+const ACTION = /^\/manage\/(?:channels|institutions|platform-accounts|m-rating\/update|backup\/refresh|servers(?:\/[a-z][a-z0-9-]{1,39})?|policies\/(?:collection|storage|analysis)|institutions\/[^/]+(?:\/accounts)?|channels\/[^/]+\/(?:enable|disable|delete)|platform-accounts\/[^/]+\/(?:enable|disable|delete|native-id))$/;
+const STORAGE = /^\/manage\/(?:servers|policies)(?:\/|$)/;
+// Поля форм вкладки «Серверы»: значения проверяет API, здесь — только имена.
+const STORAGE_FIELD = /^(?:id|display_name|role|state|stores_objects|reserve_gb|month|platform|platform_(?:telegram|vk|max|rutube)|(?:backup|verified)_[a-z][a-z0-9-]{1,39}|[a-zA-Z0-9]{1,40})$/;
 // Native same-origin form navigations must retain their Origin. no-referrer
 // makes Chromium send Origin:null; same-origin still withholds cross-site URLs.
 const NO_STORE = { "Cache-Control": "no-store", "Referrer-Policy": "same-origin" };
@@ -180,7 +183,10 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
   const session = await boundedJson(authentication);
   if (session?.headerName !== "X-XSRF-TOKEN" || typeof session.token !== "string" || !/^[A-Za-z0-9_-]{1,4096}$/.test(session.token))
     return failure(502, "Некорректный ответ сервиса управления");
-  if (session.canEdit !== true || (path.endsWith("/delete") && session.canDelete !== true))
+  // Удаление и обновление резервной копии — только роль ADMIN (canDelete).
+  // Серверы, политики и архив меняет тоже только ADMIN.
+  const adminOnly = path.endsWith("/delete") || path === "/manage/backup/refresh" || STORAGE.test(path);
+  if (session.canEdit !== true || (adminOnly && session.canDelete !== true))
     return failure(403, "Доступ к управлению недоступен");
   const origin = request.headers.get("origin");
   if (origin && origin !== requestOrigin(request)) return failure(403, "Недопустимый источник запроса");
@@ -241,7 +247,8 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
   if (!UUID.test(correlation)) return failure(400, "Некорректный идентификатор команды");
   headers.set("X-Correlation-Id", correlation);
   const allowed = new Set([...required, "short_name", "title", "url", "telegram", "vk", "max_account", "rutube", "expected_row_version", "expected_account_versions"]);
-  for (const key of Object.keys(fields)) if (!allowed.has(key) || key === "csrf_token") delete fields[key];
+  const storageField = (key: string) => STORAGE.test(path) && STORAGE_FIELD.test(key);
+  for (const key of Object.keys(fields)) if ((!allowed.has(key) && !storageField(key)) || key === "csrf_token") delete fields[key];
   let upstream: Response;
   try {
     upstream = await fetcher(apiUrl("/api/v1/admin/catalog/legacy-command"), {

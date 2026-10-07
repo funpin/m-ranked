@@ -4,6 +4,7 @@ import type { Platform } from "@/lib/types";
 import { MANAGE_LINK, NAV_LINKS } from "@/lib/nav-links";
 import { HeaderUtilityActions } from "@/components/header-utility-actions";
 import { BrandLogo } from "@/components/brand-logo";
+import type { Contributor } from "@/lib/contributor";
 
 /**
  * Серверная половина шапки.
@@ -13,7 +14,7 @@ import { BrandLogo } from "@/components/brand-logo";
  * выключены, — меню должно быть на месте и работать: те же адреса, тот же
  * размер, чтобы подмена не дёргала раскладку.
  */
-export function SiteHeaderFallback({ platform }: { platform: Platform }) {
+export function SiteHeaderFallback({ platform, contributors }: { platform: Platform; contributors: Contributor[] }) {
   return (
     <nav
       aria-label="Основная навигация"
@@ -39,7 +40,7 @@ export function SiteHeaderFallback({ platform }: { platform: Platform }) {
             </Link>
           ))}
         </div>
-        <HeaderUtilityActions manageHref={queryHref(MANAGE_LINK.href, { platform })} />
+        <HeaderUtilityActions manageHref={queryHref(MANAGE_LINK.href, { platform })} contributors={contributors} />
       </div>
     </nav>
   );

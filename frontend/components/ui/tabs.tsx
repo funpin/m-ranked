@@ -1,16 +1,46 @@
 "use client"
 
+import type * as React from "react"
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
+import { Highlight, HighlightItem, type HighlightItemProps, type HighlightProps } from "@/components/animate-ui/primitives/effects/highlight"
+import { useControlledState } from "@/hooks/use-controlled-state"
+import { getStrictContext } from "@/lib/get-strict-context"
 import { cn } from "cn"
+
+// Корень и подложка — из animate-ui (primitives-base-tabs), без панелей с
+// автовысотой: сайту они не нужны, а модуль тянул бы их в каждую страницу.
+const [TabsValueProvider, useTabsValue] = getStrictContext<{ value: unknown }>("TabsValueContext")
+
+function AnimatedTabs(props: React.ComponentProps<typeof TabsPrimitive.Root>) {
+  const [value, setValue] = useControlledState({ value: props.value, defaultValue: props.defaultValue, onChange: props.onValueChange })
+  return (
+    <TabsValueProvider value={{ value }}>
+      <TabsPrimitive.Root {...props} onValueChange={setValue} />
+    </TabsValueProvider>
+  )
+}
+
+function TabsHighlight(props: Omit<HighlightProps, "controlledItems" | "value">) {
+  const { value } = useTabsValue()
+  return <Highlight data-slot="tabs-highlight" controlledItems value={value == null ? null : String(value)} click={false} {...props} />
+}
+
+function TabsHighlightItem(props: HighlightItemProps & { value: string }) {
+  return <HighlightItem data-slot="tabs-highlight-item" {...props} />
+}
+
+// Вкладки animate-ui: подложка активной вкладки переезжает пружиной. Состояние,
+// клавиатура и роли — от Base UI; разметка и классы прежние.
+const HIGHLIGHT_SPRING = { type: "spring", stiffness: 420, damping: 36 } as const
 
 function Tabs({
   className,
   orientation = "horizontal",
   ...props
-}: TabsPrimitive.Root.Props) {
+}: React.ComponentProps<typeof AnimatedTabs>) {
   return (
-    <TabsPrimitive.Root
+    <AnimatedTabs
       data-slot="tabs"
       data-orientation={orientation}
       className={cn(
@@ -40,6 +70,7 @@ const tabsListVariants = cva(
 function TabsList({
   className,
   variant = "default",
+  children,
   ...props
 }: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
   return (
@@ -48,23 +79,33 @@ function TabsList({
       data-variant={variant}
       className={cn(tabsListVariants({ variant }), className)}
       {...props}
-    />
+    >
+      {variant === "line" ? children : (
+        <TabsHighlight transition={HIGHLIGHT_SPRING}
+          className="absolute inset-0 rounded-md border border-transparent bg-background shadow-sm dark:border-input dark:bg-input/30">
+          {children}
+        </TabsHighlight>
+      )}
+    </TabsPrimitive.List>
   )
 }
 
 function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   return (
+    <TabsHighlightItem value={String(props.value)} className="h-[calc(100%-1px)] flex-1">
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start group-data-vertical/tabs:py-[calc(--spacing(1.25))] hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        "relative inline-flex h-[calc(100%-1px)] w-full flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:justify-start group-data-vertical/tabs:py-[calc(--spacing(1.25))] hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
-        "data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground",
+        // Фон активной вкладки рисует переезжающая подложка.
+        "relative z-[1] data-active:text-foreground dark:data-active:text-foreground",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
         className
       )}
       {...props}
     />
+    </TabsHighlightItem>
   )
 }
 

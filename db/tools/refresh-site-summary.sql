@@ -23,7 +23,9 @@ SELECT 1,
           FROM pg_inherits inheritance
           JOIN pg_class partition ON partition.oid = inheritance.inhrelid
           LEFT JOIN pg_stat_all_tables stats ON stats.relid = partition.oid
-         WHERE inheritance.inhparent = 'ingest.publication_metric_snapshot'::regclass),
+         WHERE inheritance.inhparent = 'ingest.publication_metric_snapshot'::regclass)
+       -- Упакованные замеры (0059) — точное число из строки поста.
+       + (SELECT coalesce(sum(history.point_count), 0)::bigint FROM ingest.publication_metric_history history),
        transaction_timestamp()
  WHERE NOT EXISTS (
        SELECT 1 FROM analytics.site_summary fresh

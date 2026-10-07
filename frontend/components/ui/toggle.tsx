@@ -1,6 +1,7 @@
 "use client"
 
-import { Toggle as TogglePrimitive } from "@base-ui/react/toggle"
+import type * as React from "react"
+import { Toggle as TogglePrimitive } from "@/components/animate-ui/primitives/base/toggle"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
@@ -26,12 +27,14 @@ const toggleVariants = cva(
   }
 )
 
+// Кнопка-переключатель animate-ui: лёгкое пружинистое нажатие, всё остальное —
+// Base UI (aria-pressed, клавиатура).
 function Toggle({
   className,
   variant = "default",
   size = "default",
   ...props
-}: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
+}: React.ComponentProps<typeof TogglePrimitive> & VariantProps<typeof toggleVariants>) {
   return (
     <TogglePrimitive
       data-slot="toggle"

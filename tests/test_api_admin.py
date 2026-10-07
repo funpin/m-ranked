@@ -26,16 +26,18 @@ def test_admin_identity_receipt_preserves_database_json(monkeypatch, tmp_path: P
     assert persist_admin_envelope(original) == digest
 
 
-def test_project_size_does_not_break_status_after_release_directory_is_removed(
-        monkeypatch) -> None:
-    class MissingWorkingDirectory:
-        @staticmethod
-        def cwd() -> Path:
-            raise FileNotFoundError("release was removed")
+def test_project_size_adds_measured_directories_to_the_database() -> None:
+    from datetime import datetime, timezone
 
-    monkeypatch.setattr(admin, "Path", MissingWorkingDirectory)
-    monkeypatch.setattr(admin, "_PROJECT_SIZE", (0.0, None))
-    assert admin._project_bytes() is None
+    measured = datetime(2026, 10, 2, 18, 0, tzinfo=timezone.utc)
+    row = {"observed_at": measured, "sizes": {"releases": 1000, "state": None, "pageCache": 3000}}
+    total, parts = admin._project_size(row, 500)
+    # Нечитаемый каталог (None) не обнуляет сумму остальных.
+    assert total == 4500
+    assert parts == {"releasesBytes": 1000, "stateBytes": None, "pageCacheBytes": 3000,
+                     "measuredAt": "2026-10-02T18:00:00+00:00"}
+    # До первого часового замера размер честно неизвестен.
+    assert admin._project_size(None, 500) == (None, None)
 
 
 SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"

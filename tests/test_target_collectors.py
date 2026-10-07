@@ -16,6 +16,7 @@ import httpx
 
 from collector_runtime.config import Settings
 from collector_runtime.max_api import MaxChannel, MaxPost
+from collector_runtime.max_user_api import MaxHistoryRateLimited
 from collector_runtime.public_web import PublicChannel
 from collector_runtime.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
 from collector_runtime.vk import VkCommunity, VkPost
@@ -996,6 +997,77 @@ def test_max_exact_lookup_omission_is_missing_but_auth_is_transient(
     assert auth.deletion_probes[0].reason_code == "max_auth_error"
 
 
+def test_max_history_quota_still_refreshes_known_metrics(tmp_path: Path) -> None:
+    class LimitedClient(_MaxPointClient):
+        remembered = None
+
+        def remember_posts(self, chat_id, posts, limit):
+            self.remembered = (chat_id, [post.id for post in posts], limit)
+
+        async def posts(self, chat_id: int, count: int) -> list[MaxPost]:
+            assert count == 20
+            raise MaxHistoryRateLimited(1200)
+
+    client = LimitedClient([MaxPost(
+        id="10", published_at=NOW - timedelta(hours=2), url=None,
+        views=354, reactions=48, comments=None, reposts=None,
+        reaction_breakdown={}, raw={},
+    )])
+    result = asyncio.run(MaxGatewayCollector(
+        target_settings(tmp_path), _FixedClock(), client,
+        tracking=_Tracking((_tracked(10, "10"),)),
+    ).collect(account(Platform.MAX), context(Platform.MAX)))
+    assert client.requested == ["10"]
+    assert client.remembered == (9, ["10"], 20)
+    assert result.publications[0].metrics["views"] == 354
+    assert result.publications[0].metrics["reactions"] == 48
+    assert result.account_observation.source["discovery_deferred"] is True
+    assert not result.deletion_probes
+    assert CanonicalNormalizer().normalize(result, context(Platform.MAX)).publications
+
+
+@pytest.mark.parametrize("point_result", [[], ConnectionError("unavailable")])
+def test_max_failed_discovery_cannot_become_empty_success(tmp_path: Path, point_result) -> None:
+    class LimitedClient(_MaxPointClient):
+        async def posts(self, chat_id: int, count: int) -> list[MaxPost]:
+            raise MaxHistoryRateLimited(1200)
+
+    with pytest.raises((MaxHistoryRateLimited, ConnectionError)):
+        asyncio.run(MaxGatewayCollector(
+            target_settings(tmp_path), _FixedClock(), LimitedClient(point_result),
+            tracking=_Tracking((_tracked(10, "10"),)),
+        ).collect(account(Platform.MAX), context(Platform.MAX)))
+
+
+def test_max_history_quota_without_tracking_is_a_failure(tmp_path: Path) -> None:
+    class LimitedClient(_MaxPointClient):
+        async def posts(self, chat_id: int, count: int) -> list[MaxPost]:
+            raise MaxHistoryRateLimited(1200)
+
+    with pytest.raises(MaxHistoryRateLimited):
+        asyncio.run(MaxGatewayCollector(
+            target_settings(tmp_path), _FixedClock(), LimitedClient([]),
+        ).collect(account(Platform.MAX), context(Platform.MAX)))
+
+
+def test_max_cached_ids_are_requeried_during_history_cooldown(tmp_path: Path) -> None:
+    class LimitedClient(_MaxPointClient):
+        async def posts(self, chat_id: int, count: int) -> list[MaxPost]:
+            raise MaxHistoryRateLimited(900, ("10",))
+
+    client = LimitedClient([MaxPost(
+        id="10", published_at=NOW - timedelta(hours=2), url=None,
+        views=400, reactions=50, comments=None, reposts=None, raw={},
+    )])
+    result = asyncio.run(MaxGatewayCollector(
+        target_settings(tmp_path), _FixedClock(), client,
+    ).collect(account(Platform.MAX), context(Platform.MAX)))
+    assert client.requested == ["10"]
+    assert result.publications[0].metrics["views"] == 400
+    assert result.publications[0].observed_at == NOW
+    assert result.account_observation.source["discovery_deferred"] is True
+
+
 def test_telegram_mtproto_exact_omission_is_missing_but_auth_is_transient(
     tmp_path: Path,
 ) -> None:
@@ -1504,7 +1576,8 @@ class _ScriptedConnection:
             ])
         if "identity.publication_id IS DISTINCT FROM input.publication_id" in normalized:
             return _Cursor(rows=[])
-        if "LEFT JOIN LATERAL" in normalized and "publication_metric_snapshot_active" in normalized:
+        if "LEFT JOIN LATERAL" in normalized and ("publication_metric_snapshot_active" in normalized
+                                                  or "publication_latest_point" in normalized):
             items = json.loads(params[0])
             return _Cursor(rows=[{
                 "publication_id": UUID(item["publication_id"]),
@@ -2134,3 +2207,47 @@ def test_pool_smaller_than_two_is_rejected() -> None:
     # батча: на единственном соединении это встало бы намертво.
     with pytest.raises(ValueError):
         PostgresCollectorRepository("postgresql:///unused", pool_size=1)
+
+
+class _KnownIdentityConnection(_ScriptedConnection):
+    """Двойник базы, которому известны заданные внешние id публикаций."""
+
+    def __init__(self, known: set[str]) -> None:
+        super().__init__()
+        self.known = known
+
+    def execute(self, sql: str, params: Any = None) -> _Cursor:
+        normalized = " ".join(sql.split())
+        if normalized.startswith("SELECT external_id FROM ingest.publication_identity WHERE platform_account_id"):
+            self.calls.append((normalized, params))
+            return _Cursor(rows=[{"external_id": item} for item in params[1] if item in self.known])
+        return super().execute(sql, params)
+
+
+@pytest.mark.parametrize("known", [set(), {"old-post"}])
+def test_post_older_than_the_window_at_first_discovery_is_not_taken(monkeypatch, tmp_path, known) -> None:
+    # Закреплённая запись и старые посты в ленте: замерить их с первых минут
+    # нельзя, и раньше они попадали в базу и на сайт без единого замера.
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path / "identity-receipts"))
+    monkeypatch.setenv("COLLECTOR_RAW_EVIDENCE_DIR", str(tmp_path / "raw-evidence"))
+    target = account(Platform.TELEGRAM)
+    run_context = context()
+    canonical = CanonicalNormalizer().normalize(raw_batch(target, run_context), run_context)
+    fresh = canonical.publications[0]
+    old = replace(fresh, id=UUID("30000000-0000-4000-8000-000000000099"), external_id="old-post",
+                  source_external_id="old-post", public_url="https://example.test/old-post",
+                  identities=tuple(replace(identity, external_id="old-post", source_external_id="old-post",
+                                           public_url="https://example.test/old-post")
+                                   for identity in fresh.identities),
+                  published_at=NOW - timedelta(days=40))
+    batch = replace(canonical, publications=(fresh, old))
+    connection = _KnownIdentityConnection(known)
+    repository = PostgresCollectorRepository(connection_factory=lambda: connection, snapshot_heartbeat_hours=24)
+
+    repository.persist_account_batch(batch)
+
+    inserted = [params for statement, params in connection.calls
+                if statement.startswith("WITH input AS") and "INSERT INTO ingest.publication AS current" in statement]
+    taken = {item["source_id"] for item in json.loads(inserted[0][0])}
+    assert str(fresh.id) in taken
+    assert (str(old.id) in taken) is bool(known)

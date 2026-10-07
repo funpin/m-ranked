@@ -3,6 +3,12 @@ import createMDX from "@next/mdx";
 import path from "node:path";
 
 const deploymentId = process.env.MRANKED_DEPLOYMENT_ID?.trim() || undefined;
+// Локальный стенд без nginx: браузер запрашивает /api/v1 у того же адреса, что
+// и страницу (месяц графика аккаунта, полная история, контекст анализа). В
+// проде /api раздаёт nginx, и флаг не ставится; при сборке с
+// MRANKED_API_REWRITE=1 Next сам переадресует /api на API_BASE_URL.
+const apiRewrite = process.env.MRANKED_API_REWRITE === "1"
+  ? process.env.API_BASE_URL?.trim().replace(/\/+$/, "") || undefined : undefined;
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -20,6 +26,9 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: { "/methodology/*": ["./content/methodology/**/*"] },
   turbopack: {
     root: path.resolve(process.cwd(), ".."),
+  },
+  async rewrites() {
+    return apiRewrite ? [{ source: "/api/:path*", destination: `${apiRewrite}/api/:path*` }] : [];
   },
 };
 

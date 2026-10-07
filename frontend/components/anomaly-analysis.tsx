@@ -1,9 +1,10 @@
 "use client";
 import dynamic from "next/dynamic";
 import { use, useState } from "react";
-import { ChevronRight, CircleHelp, LocateFixed } from "lucide-react";
+import { ArrowUpRight, ChevronRight, CircleHelp, LocateFixed, UsersRound } from "lucide-react";
 import Link from "@/components/native-link";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -13,9 +14,9 @@ import { MethodNote } from "@/components/method-note";
 import { NeighborContextTimeline } from "@/components/neighbor-context-timeline";
 import { LevelIcon, PatternIcon } from "@/components/anomaly-icons";
 import { legacyDate } from "@/lib/format";
-import { publicationHref } from "@/lib/entity-routes";
+import { accountHref, publicationHref } from "@/lib/entity-routes";
 import { FAMILY_NAMES, METRIC_NAMES, intervalText, markerId, miniChart, referenceExplanation, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
-import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
+import type { AccountAnomalyFinding, AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
 import type { NeighborContextLoad } from "@/lib/neighbor-context-loader";
 import type { ContextWindow } from "@/lib/neighbor-context";
 import { cn } from "@/lib/utils";
@@ -27,12 +28,20 @@ const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
 
 function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
   const line = summaryLine(analysis);
+  const findings = analysis.accountFindings ?? [];
   return (
     <span className="inline-flex flex-wrap items-center gap-2" data-testid="saved-anomaly-status">
       <LevelIcon level={line.level} className={cn("size-4 shrink-0", line.calm ? "text-muted-foreground" : line.tone === "red" ? "text-destructive" : "text-chart-3")} />
-      {line.calm ? <b className="font-semibold">{line.label.replace(/^./, (letter) => letter.toUpperCase())}</b>
+      {line.calm ? <b className="font-semibold">{line.label.replace(/^./, (letter) => letter.toUpperCase())}{findings.length && line.level === 0 ? " у поста" : ""}</b>
         : <><span className="text-muted-foreground text-xs font-normal">Итоговая оценка</span>
           <StatusPill tone={line.tone === "red" ? "red" : "amber"}>{line.label}</StatusPill></>}
+      {/* Пост без собственных признаков, но из аккаунтной находки: сама
+          закономерность видна только на многих постах, и «нет признаков» без
+          неё читалось бы как «всё обычно». */}
+      {line.calm && findings.length ? <span className="inline-flex items-center gap-1.5" data-testid="account-finding-summary">
+        <UsersRound className="text-chart-3 size-3.5 shrink-0" aria-hidden="true" />
+        <StatusPill tone="amber">{findings[0]!.title}{findings.length > 1 ? ` +${findings.length - 1}` : ""}</StatusPill>
+      </span> : null}
     </span>
   );
 }
@@ -45,10 +54,23 @@ function SignalHeading({ signal, expanded }: { signal: AnomalySignal; expanded: 
     <span className="inline-flex items-center gap-1.5 font-semibold"><PatternIcon pattern={signal.pattern} className="text-chart-3 size-4 shrink-0" />{signal.title}</span>
     <span className="text-muted-foreground text-xs tabular-nums">{windowDate.format(new Date(signal.startAt))}</span>
     <span className="text-muted-foreground text-xs">{METRIC_NAMES[signal.metric]}</span>
+    <SameEpisode signal={signal} />
     <CollapsibleTrigger render={<Button variant="ghost" size="sm" className="text-muted-foreground ml-auto" />} data-testid="signal-detail-toggle">
       График <ChevronRight data-icon="inline-end" className={cn("transition-transform", expanded && "rotate-90")} aria-hidden="true" />
     </CollapsibleTrigger>
   </div>;
+}
+
+/** Другие проверки, увидевшие то же событие: в уровень оно входит один раз. */
+function SameEpisode({ signal }: { signal: AnomalySignal }) {
+  const titles = Array.isArray(signal.render.sameEpisode)
+    ? signal.render.sameEpisode.filter((item): item is string => typeof item === "string") : [];
+  if (!titles.length) return null;
+  return <Tooltip><TooltipTrigger render={<Badge variant="outline" className="text-muted-foreground font-normal" data-testid="same-episode" />}>
+    +{titles.length} {titles.length === 1 ? "проверка" : "проверки"}
+  </TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
+    То же событие нашли: {titles.join("; ")}. В оценку оно входит один раз.
+  </TooltipContent></Tooltip>;
 }
 
 function ContextRow({ window, signal, index, onShow }: {
@@ -118,6 +140,8 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
         </div>
         {referenceExplanation(signal) ? <p className="text-muted-foreground text-xs" data-testid="reference-explanation">{referenceExplanation(signal)}</p> : null}
         {signal.render.kind === "bounded_burst" ? <p className="text-muted-foreground text-xs" data-testid="bounded-burst-explanation">{signal.formula}</p> : null}
+        {signal.render.kind === "regime" || signal.render.kind === "write_off" || signal.render.kind === "cliff"
+          ? <p className="text-muted-foreground text-xs" data-testid="signal-formula">{signal.formula}</p> : null}
         {signal.render.measurementMode === "telegram_counter_order_v1" ? <p className="text-muted-foreground text-xs">{signal.formula}</p> : null}
         <MiniChart chart={miniChart(signal, rows, publishedAt)} label={title} />
         {onShow ? <Button variant="outline" size="sm" className="w-fit" onClick={() => onShow(markerId(signal, index))}>
@@ -142,6 +166,28 @@ function AnalysisNote({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
 
 /** Строка карточки, пока ответ анализа ещё в пути. Страница поста его не ждёт:
  *  история и графики приходят первыми, а карточка дорисовывается следом. */
+/** Аккаунтные находки, в которые входит пост. Уровень поста они не меняют —
+ *  это закономерность аккаунта, и подробности живут на его странице. */
+function AccountFindingRefs({ findings }: { findings: readonly AccountAnomalyFinding[] }) {
+  return <section className="border-border mt-3 border-t pt-3" aria-labelledby="account-findings-title" data-testid="post-account-findings">
+    <h3 id="account-findings-title" className="text-muted-foreground text-xs font-normal">
+      Пост входит в аккаунтную находку · {findings.length}
+    </h3>
+    <ul className="mt-1 grid gap-2">
+      {findings.map((finding) => <li key={finding.kind} className="grid gap-1" data-testid="post-account-finding" data-kind={finding.kind}>
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="inline-flex items-center gap-1.5 font-semibold"><UsersRound className="text-chart-3 size-4 shrink-0" aria-hidden="true" />{finding.title}</span>
+          {finding.statusLabel ? <span className="text-muted-foreground text-xs">{finding.statusLabel}</span> : null}
+          <Link href={`${accountHref(finding.accountId)}#account-findings`} className="text-primary ml-auto inline-flex items-center gap-0.5 text-xs hover:underline">
+            Страница аккаунта<ArrowUpRight className="size-3.5" aria-hidden="true" />
+          </Link>
+        </span>
+        {finding.summary ? <p className="text-muted-foreground pl-[22px] text-xs leading-relaxed">{finding.summary}.</p> : null}
+      </li>)}
+    </ul>
+  </section>;
+}
+
 export function AnomalyAnalysisSkeleton() {
   return (
     <section className="bg-muted/40 border-border mb-4 rounded-xl border px-4 py-3 text-sm" aria-busy="true" aria-label="Анализ динамики загружается" data-testid="anomaly-card-skeleton">
@@ -201,6 +247,8 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
                   {summary.analyzedAt ? <span>Анализ {legacyDate(summary.analyzedAt)}</span> : null}
                   {analysis.originalLevel !== null && analysis.level !== null && analysis.originalLevel > analysis.level
                     ? <span data-testid="context-cap-status">Сильный признак ослаблен контекстом</span> : null}
+                  {analysis.accountFindings?.length && !summary.calm ? <span className="inline-flex items-center gap-1" data-testid="account-finding-status">
+                    <UsersRound className="text-chart-3 size-3.5" aria-hidden="true" />аккаунтная находка</span> : null}
                 </span> : null}
               </span>
             </CollapsibleTrigger>
@@ -231,6 +279,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
           </> : (
             <p className="text-muted-foreground">{analysis.status === "pending" ? "Пост ещё не проанализирован: анализ идёт по расписанию после первых замеров." : analysis.quality?.codes.includes("no_precise_metrics") ? "Недостаточно точных данных для проверки. Отсутствие сигнала не подтверждает обычность статистики." : "Признаков аномальной динамики не найдено."}</p>
           )}
+          {analysis.accountFindings?.length ? <AccountFindingRefs findings={analysis.accountFindings} /> : null}
         </CollapsibleContent>
       </Collapsible>
     </section></TooltipProvider>
