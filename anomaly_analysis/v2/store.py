@@ -217,7 +217,8 @@ WITH posts AS (
            date_trunc('month', publication.published_at AT TIME ZONE 'UTC')::date AS published_month,
            account.platform::text = 'telegram' AS telegram
       FROM ingest.visible_publication publication
-      JOIN catalog.platform_account account ON account.id = publication.primary_account_id
+      -- Роль работника читает аккаунты только через представление (как SERIES).
+      JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
      WHERE publication.id = ANY(%(ids)s::uuid[])
 ), observed AS (
     SELECT posts.primary_account_id, posts.id AS publication_id, posts.published_at,
