@@ -53,7 +53,8 @@ def test_pack_already_present_at_first_read_is_not_invented_as_a_zero_to_count_j
     assert level_for(initial) is Level.ARTIFICIAL_ACTIVITY_SIGNS
 
 
-@pytest.mark.parametrize('amount,expected', [(12,2),(25,3),(40,3),(111,3)])
+# Двенадцать реакций без подтверждённого плато — слабый сигнал (разбор 07.10.2026).
+@pytest.mark.parametrize('amount,expected', [(12,1),(25,3),(40,3),(111,3)])
 @pytest.mark.parametrize('platform', ['telegram','vk','max','rutube'])
 def test_small_early_packs_are_not_normalized_away(amount,expected,platform):
     s = series([(1,30,0),(6,60,amount)] + [(m,60+(m-6)*2,amount) for m in range(11,247,5)],platform=platform)

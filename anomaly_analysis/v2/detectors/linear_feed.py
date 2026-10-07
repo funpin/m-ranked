@@ -3,8 +3,8 @@
 Кандидаты — участки, где скользящее окно из нескольких ячеек почти не меняет
 скорость; границы уточняются PELT на корне из приростов (для пуассоновского
 счётчика это выравнивает разброс). Признак — только если участок начался
-ступенькой вверх от затухшего фона: ровный органический хвост (RuTube, крупный
-канал) такой ступеньки не имеет.
+ступенькой вверх от затухшего фона или днём оборвался: ровный органический
+хвост (RuTube, крупный канал) ни того ни другого не имеет.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 PATTERN = 1
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -44,6 +44,18 @@ BACKGROUND_WINDOW = 6 * HOUR
 # сбора они видны, и без этого правила каждое утро давало бы «подачу».
 NIGHT_HOURS_MSK = range(0, 7)
 BACKGROUND_LOOKBACK = 18 * HOUR
+# Или участок кончается обрывом: средняя скорость двух ячеек сразу за ним
+# (не дальше четырёх часов: соседние ячейки бывают на пробеле) ниже в пять раз.
+STEP_DOWN = 5.0
+# Обрыв засчитывается только днём: вечером и ночью приток падает и у живого
+# поста (суточный ритм).
+DAY_HOURS_MSK = range(8, 20)
+# ВК через сутки убирает пост из ленты, и просмотры у любого поста падают
+# с десятков в час до единиц (spb1724, ivgpu, theacademy и ещё шесть
+# аккаунтов — ровно на 24-м часе): такой обрыв — граница ленты, не подачи.
+FEED_LIMIT = {"vk": (22 * HOUR, 26 * HOUR)}
+AFTER_CELLS = 2
+AFTER_WINDOW = 4 * HOUR
 MSK_OFFSET = 3 * HOUR
 # Незначимый по объёму участок не признак: минимум 20 % значения на начало.
 MIN_SHARE = 0.2
@@ -129,6 +141,22 @@ def _daytime_background(prepared, grid, rates, valid, begin) -> np.ndarray:
     return np.asarray(picked)
 
 
+def _after(prepared, grid, rates, valid, end) -> np.ndarray:
+    """Скорости первых пригодных дневных ячеек сразу за участком (не дальше AFTER_WINDOW)."""
+    width = grid.scale.total_seconds()
+    published = prepared.series.published_at.timestamp()
+    stop = min(rates.size, end + max(AFTER_CELLS, int(AFTER_WINDOW / width)))
+    cells = []
+    for cell in range(end, stop):
+        clock = int((published + grid.edges[cell] + MSK_OFFSET) // HOUR) % 24
+        if not valid[cell]:
+            continue
+        if clock not in DAY_HOURS_MSK:
+            return np.zeros(0)
+        cells.append(float(rates[cell]))
+    return np.asarray(cells[:AFTER_CELLS])
+
+
 def _judge(prepared, metric, data, grid, rates, valid, begin, end):
     width = grid.scale.total_seconds()
     start_age, end_age = float(grid.edges[begin]), float(grid.edges[end])
@@ -141,9 +169,19 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end):
     third = max(1, segment.size // 3)
     drift = float(segment[-third:].mean() / max(segment[:third].mean(), 1e-9))
     background = _daytime_background(prepared, grid, rates, valid, begin)
-    if cv > MAX_CV or not 1 / MAX_DRIFT <= drift <= MAX_DRIFT or not background.size:
+    if cv > MAX_CV or not 1 / MAX_DRIFT <= drift <= MAX_DRIFT:
         return None
-    if max(float(np.median(background)), 1.0) * STEP_UP > mean:
+    stepped_up = background.size and max(float(np.median(background)), 1.0) * STEP_UP <= mean
+    # Обрыв подачи: сразу за ровным участком скорость падает в пять раз и
+    # больше. Органика затухает плавно; ровные 62 просмотра в час всю ночь и
+    # затем +9 за два часа (Губкинский в MAX, 23–25.09) — нет. Начало такой
+    # подачи ступенькой не выделяется: первые часы поста и так быстрые.
+    after = _after(prepared, grid, rates, valid, end)
+    feed_limit = FEED_LIMIT.get(prepared.series.platform)
+    at_feed_limit = feed_limit is not None and feed_limit[0] <= end_age <= feed_limit[1]
+    stepped_down = (after.size >= AFTER_CELLS and not at_feed_limit
+                    and mean >= STEP_DOWN * max(float(after.mean()), 1.0))
+    if not stepped_up and not stepped_down:
         return None
     start_value = float(grid.cumulative[begin])
     delta = float(grid.cumulative[end] - start_value)
@@ -157,9 +195,13 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end):
     r_squared = 1 - residual / total if total > 0 else 1.0
     strength = 0.4 + 0.3 * (1 - cv / MAX_CV) + 0.3 * min(1.0, duration / (12 * HOUR))
     formula = (f"Δ{NAMES[metric]} ≈ {number(slope)}·t (t в часах), R² = {r_squared:.3f}, "
-               f"t ∈ [{age_text(start_age)}; {age_text(end_age)}], масштаб {scale_text(grid.scale)}")
+               f"t ∈ [{age_text(start_age)}; {age_text(end_age)}], масштаб {scale_text(grid.scale)}"
+               + (f"; затем обрыв до {number(float(after.mean()))}/ч" if stepped_down else ""))
     return make_sign(PATTERN, FAMILY, prepared, metric, strength, start_age, end_age, grid.scale,
                      formula, {"kind": "linear", "slope": round(float(slope), 3),
                                "intercept": round(float(intercept), 1), "r2": round(r_squared, 4),
-                               "cv": round(cv, 3), "background": round(float(np.median(background)), 3)},
+                               "cv": round(cv, 3),
+                               "background": round(float(np.median(background)), 3) if background.size else None,
+                               "afterRate": round(float(after.mean()), 3) if after.size else None,
+                               "stepDown": bool(stepped_down)},
                      ("recommendation_feed", "smoothed_large_audience"))

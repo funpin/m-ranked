@@ -34,7 +34,7 @@ from ..series import HOUR, PointFlag, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "engagement_regime"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 PATTERN = 14
 FAMILY = Family.CROSS_METRIC
 NEEDS_NORM = False
@@ -55,6 +55,14 @@ EPISODE_SHARE = 1 / 3
 WINDOWS = ((6 * HOUR, 4.0), (12 * HOUR, 4.0), (24 * HOUR, 8.0))
 MIN_WINDOW_SPAN = 2 * HOUR
 MIN_WINDOW_VIEWS = 20
+# Для старта хватает часа до эпизода: swsu_kursk ВК №72288 — полтора часа по
+# 8 % реакций на просмотр, затем 217 реакций на 321 просмотр за 25 минут.
+MIN_START_SPAN = HOUR
+# Доля реакций в эпизоде от 40 % новых зрителей — не живой отклик (обычно
+# единицы процентов): при значимом скачке доли такой эпизод выраженный.
+SATURATED_SHARE = 0.4
+# Такому эпизоду хватает пятикратного скачка доли вместо восьмикратного.
+SATURATED_RATIO = 5.0
 MIN_RATIO = 8.0
 START_ALLOWANCE = 3.0
 MIN_EVENTS = 5
@@ -84,6 +92,9 @@ BREAK_LEVELS = ((20.0, 0.75), (10.0, 0.55), (5.0, 0.45))
 BREAK_CONFIDENCE = 0.99
 BREAK_MIN_SPAN = 6 * HOUR - 60
 BREAK_MIN_VIEWS = 50
+# Пакет — часы, а не первые сутки: 26 реакций за 20 ч и затем почти ничего —
+# обычное затухание (Губкинский в MAX, разбор 07.10.2026).
+BREAK_MAX_EPISODE = 6 * HOUR
 # Окно, где просмотры прибывали втрое быстрее, чем в эпизоде, — приток
 # просмотров без отклика: формулировка называет именно его.
 VIEWS_SURGE = 3.0
@@ -331,7 +342,7 @@ def _test(kind, ages, reactions, views, start_age, end_age, total_r, total_v,
         if window is None:
             continue
         w0, w1, wr, wv = window
-        if w1 - w0 < MIN_WINDOW_SPAN or wv < MIN_WINDOW_VIEWS:
+        if w1 - w0 < (MIN_WINDOW_SPAN if kind == "stop" else MIN_START_SPAN) or wv < MIN_WINDOW_VIEWS:
             continue
         wr = max(wr, 0.0)
         floor = max(wr, 0.5 * dispersion) / wv
@@ -346,11 +357,13 @@ def _test(kind, ages, reactions, views, start_age, end_age, total_r, total_v,
         surprise = -math.log10(max(float(p_value), 1e-300))
         ratio = share / floor
         bound = 0.0
-        if kind == "stop" and w1 - w0 >= BREAK_MIN_SPAN and wv >= BREAK_MIN_VIEWS:
+        if (kind == "stop" and w1 - w0 >= BREAK_MIN_SPAN and wv >= BREAK_MIN_VIEWS
+                and end_age - start_age <= BREAK_MAX_EPISODE):
             # Верхняя граница доли окна при 99 % — в «событиях» с учётом зернистости.
             upper = chi2.ppf(BREAK_CONFIDENCE, 2 * (wr / dispersion + 1)) / 2 * dispersion / wv
             bound = share / upper
-        tested = ratio >= MIN_RATIO and surprise >= MIN_SURPRISE
+        needed = SATURATED_RATIO if share >= SATURATED_SHARE else MIN_RATIO
+        tested = ratio >= needed and surprise >= MIN_SURPRISE
         if not tested and bound < BREAK_LEVELS[-1][0]:
             continue
         candidate = Episode(kind, start_age, end_age, total_r, total_v, w0, w1, wr, wv, ratio,
@@ -375,7 +388,8 @@ def grade(item: Episode) -> tuple[float, bool]:
     if item.surprise >= CONFIRMED[0] and item.ratio >= CONFIRMED[1]:
         return min(0.99, 0.9 + 0.02 * math.log2(item.ratio / CONFIRMED[1] + 1)), True
     by_break = next((strength for limit, strength in BREAK_LEVELS if item.bound >= limit), 0.0)
-    if item.surprise >= STRONG[0] and item.ratio >= STRONG[1]:
+    if item.surprise >= STRONG[0] and (item.ratio >= STRONG[1]
+                                       or item.ratio >= SATURATED_RATIO and item.share >= SATURATED_SHARE):
         return max(0.75, by_break), False
     if item.surprise >= MEDIUM[0] and item.ratio >= MEDIUM[1]:
         return max(0.55, by_break), False

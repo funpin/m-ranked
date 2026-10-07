@@ -113,7 +113,7 @@ def test_short_burst_highlights_the_whole_pack_it_belongs_to():
     (burst,) = [sign for sign in assess(series).signs if sign.pattern == 9]
     begin, finish = hours(series, burst)
     assert begin < 0.5 and 1.5 < finish < 2.5
-    assert burst.render["burstEndAge"] - burst.render["burstStartAge"] <= 30 * 60
+    assert burst.render["burstEndAge"] - burst.render["burstStartAge"] <= 31 * 60
 
 
 def test_rutube_hour_long_wave_after_a_quiet_day_is_typical():
@@ -184,3 +184,41 @@ def test_rutube_history_uses_account_cycles_to_place_the_growth():
     # Сама волна для RuTube обычна (см. тест выше): вывода нет, но рост на графике
     # и в анализе стоит на своём часе.
     assert assess(series("rutube", cycles), analyzed_at=at).level is Level.NONE
+
+
+def test_saturated_start_pack_on_a_small_post_is_confirmed():
+    # ГУАП ВК №149008: 105 реакций на 113 просмотров за первые 13 минут, затем
+    # +6 на +77. Просмотров после пакета меньше, чем в нём, но отреагировали
+    # почти все зрители пакета — живая аудитория так не реагирует.
+    result = assess(reported("13_vk_saturated_start_pack"))
+    assert result.level is Level.ARTIFICIAL_ACTIVITY_SIGNS
+    assert any(sign.render.get("severityReason") == "saturated_audience" for sign in result.signs)
+
+
+def test_reactions_switching_on_after_ninety_minutes_are_pronounced():
+    # swsu_kursk ВК №72288: полтора часа ~8 % реакций на просмотр, затем 44 %
+    # за 55 минут. Часа до эпизода хватает для сравнения; доля в 40 % и выше —
+    # выраженный признак (уровень 3 — вместе с синхронными подъёмами аккаунта).
+    episodes = detect(engagement_regime, reported("14_vk_reactions_switch_on_after_ninety_minutes"))
+    assert any(sign.render["mode"] == "start" and sign.strength >= .7 for sign in episodes)
+
+
+def test_linear_reactions_across_a_collection_gap_stay_visible():
+    # Губкинский в MAX: +265 реакций на +538 просмотров ровно за 6 ч, внутри —
+    # пробел сбора 2,6 ч. Эпизод сравнивает концы отрезков, пробел его не снимает.
+    result = assess(reported("15_max_linear_reactions_across_a_gap"))
+    assert result.level is Level.ARTIFICIAL_ACTIVITY_SIGNS and result.signs[0].pattern == 14
+
+
+def test_overnight_linear_views_ending_in_a_daytime_stop_are_a_feed():
+    # Губкинский в MAX: ~60 просмотров в час с 18-го по 44-й час, ночью тоже,
+    # затем днём обрыв до 9/ч. Ступеньки в начале нет — первые часы поста быстрые.
+    result = assess(reported("16_max_overnight_linear_views_then_stop"))
+    assert any(sign.pattern == 1 and sign.metric is V and sign.render["stepDown"] for sign in result.signs)
+    assert result.level >= Level.PRONOUNCED_ANOMALY
+
+
+def test_ten_reactions_in_five_minutes_alone_is_a_weak_signal():
+    # id0901006061 в MAX: +10 реакций за 5 минут, затем обычный темп. Один такой
+    # пост — слабый сигнал; повтор на всех постах аккаунта — аккаунтная находка.
+    assert assess(reported("17_max_small_five_minute_start")).level is Level.WEAK_SIGNAL

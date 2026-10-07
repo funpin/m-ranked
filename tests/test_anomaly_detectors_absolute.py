@@ -56,7 +56,7 @@ def test_linear_feed_formula_names_rate_fit_and_interval():
                if item.metric.value == "views"]
     # Просмотры растут с ~300 до ~26 000 за сутки после 1 д 21 ч.
     assert re.fullmatch(r"Δпросмотры ≈ 1 0\d\d·t \(t в часах\), R² = (0\.99\d|1\.000), t ∈ \[1д2[01]ч; 2д2[01]ч\], "
-                        r"масштаб 1 ч", sign.formula), sign.formula
+                        r"масштаб 1 ч(; затем обрыв до \d+/ч)?", sign.formula), sign.formula
     assert sign.render["slope"] == pytest.approx(1070, rel=0.03)
 
 

@@ -225,8 +225,12 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
                                and sign.render.get("comparisonMode") == ENDPOINT_MODE)
         # Late engagement compares exact endpoints of a days-long window.
         late_endpoints = sign.pattern == 13 and sign.render.get("measurementMode") == LATE_ENGAGEMENT_MODE
+        # Эпизод отклика сравнивает долю реакций по концам отрезков: пробел
+        # внутри лишь укрупняет отрезок. Губкинский в MAX: +265 реакций за 6 ч
+        # с пробелом сбора 2,6 ч внутри снимались целиком.
+        episode = sign.pattern == 14
         if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_counts
-                and not endpoint_comparison and not late_endpoints
+                and not endpoint_comparison and not late_endpoints and not episode
                 and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:
