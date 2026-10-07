@@ -41,7 +41,10 @@ export default function AnomalyMiniChart({ chart, label }: { chart: MiniChart; l
       </div>
     );
   }
-  const config: ChartConfig = Object.fromEntries(chart.series.map((series, index) => [series.key, { label: series.label, color: COLORS[index % COLORS.length] }]));
+  const config: ChartConfig = {
+    ...Object.fromEntries(chart.series.map((series, index) => [series.key, { label: series.label, color: COLORS[index % COLORS.length] }])),
+    ...(chart.band ? { band: { label: "коридор модели", color: "var(--muted-foreground)" } } : {}),
+  };
   const twoAxes = chart.series.some((series) => series.axis === "right");
   const leftDomain = visibleDomain(chart, "left");
   const rightDomain = twoAxes ? visibleDomain(chart, "right") : null;
@@ -53,12 +56,12 @@ export default function AnomalyMiniChart({ chart, label }: { chart: MiniChart; l
           <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} hide />
           <YAxis yAxisId="left" domain={leftDomain} tickCount={4} allowDataOverflow width={48} tickLine={false} axisLine={false} tickFormatter={axisNumber} fontSize={10} />
           {rightDomain ? <YAxis yAxisId="right" orientation="right" domain={rightDomain} tickCount={4} allowDataOverflow width={48} tickLine={false} axisLine={false} tickFormatter={axisNumber} fontSize={10} /> : null}
-          <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, payload) => {
+          <ChartTooltip content={<ChartTooltipContent valueFormatter={tooltipValue} labelFormatter={(_, payload) => {
             const at = (payload?.[0] as { payload?: { t?: number } } | undefined)?.payload?.t;
             return typeof at === "number" ? legacyDate(new Date(at).toISOString()) : "";
           }} />} />
           {chart.band ? <Area yAxisId="left" dataKey={(point: Record<string, number | null>) => point[chart.band!.low] === null ? null : [point[chart.band!.low], point[chart.band!.high]]}
-            stroke="none" fill="var(--muted-foreground)" fillOpacity={0.14} isAnimationActive={false} connectNulls={false} name="полоса модели" /> : null}
+            stroke="none" fill="var(--muted-foreground)" fillOpacity={0.14} isAnimationActive={false} connectNulls={false} name="band" /> : null}
           {chart.series.map((series, index) => (
             <Line key={series.key} yAxisId={series.axis ?? "left"} dataKey={series.key} dot={false} connectNulls={false}
               stroke={COLORS[index % COLORS.length]} strokeWidth={series.dashed ? 1.5 : 2}
@@ -68,6 +71,13 @@ export default function AnomalyMiniChart({ chart, label }: { chart: MiniChart; l
       </ChartContainer>
     </div>
   );
+}
+
+/** Счётчики — целые; модель и её коридор — тоже: дробная часть ожидания
+ *  не значима, а сырые 1780.2374…,1798.9498… читались как сбой. */
+function tooltipValue(value: unknown) {
+  const whole = (item: unknown) => typeof item === "number" ? Math.round(item).toLocaleString("ru-RU") : String(item);
+  return Array.isArray(value) ? `${whole(value[0])} – ${whole(value[1])}` : whole(value);
 }
 
 function format(value: number, percent: boolean) {
