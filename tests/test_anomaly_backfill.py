@@ -23,7 +23,7 @@ class Store:
 
     def backfill_targets(self, account, since):
         self.visited.append(account)
-        return [SimpleNamespace(publication_id=self.subject.publication_id,
+        return [SimpleNamespace(publication_id=self.subject.publication_id, signals=(),
                                 published_at=self.subject.published_at)]
 
     def read_activity(self, *args):

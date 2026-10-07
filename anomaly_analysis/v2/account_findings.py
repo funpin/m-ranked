@@ -142,10 +142,28 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
                                          metrics, tuple(regular["members"])))
     for account, (platform, status, metrics) in (tail_status or {}).items():
         if status == 2:
-            members = tuple((late_members or {}).get(account, ()))
+            # Участники — посты с признаком позднего отклика и посты, у которых
+            # по сводке доля поздних реакций хотя бы вдвое выше ранней (в том
+            # числе округлённые счётчики Telegram, где признак поста не ставится).
+            from_ledgers = [post.publication_id for post in by_account.get(account, ())
+                            if _late_member(post.ledger)]
+            members = tuple(dict.fromkeys([*(late_members or {}).get(account, ()), *from_ledgers]))
             result.append(AccountFinding(account, platform, "late_engagement", 2, start, computed_for,
                                          dict(metrics), members))
     return result
+
+
+LATE_MEMBER_RATIO = 2.0
+LATE_MEMBER_REACTIONS = 3
+
+
+def _late_member(ledger: TailLedger) -> bool:
+    late, early = ledger.late, ledger.early
+    if late is None or early is None or late[1] < LATE_MEMBER_REACTIONS:
+        return False
+    late_rate = (late[1] + 0.5) / (late[0] + 1)
+    early_rate = (early.reactions + 0.5) / (early.views + 1)
+    return late_rate >= LATE_MEMBER_RATIO * early_rate
 
 
 def _pack_stats(items: Sequence[LedgerPost], min_posts: int = PACK_MIN_POSTS) -> dict[str, Any] | None:

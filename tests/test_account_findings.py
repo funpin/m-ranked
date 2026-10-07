@@ -86,9 +86,14 @@ def test_reposts_count_for_packs_but_not_for_regularity():
 def test_persistently_unusual_tail_profile_becomes_a_finding_with_late_posts():
     members = {UUID(int=1): [UUID(int=11), UUID(int=12)]}
     tail = {UUID(int=1): ("max", 2, {"ratio": 0.65}), UUID(int=2): ("max", 1, {"ratio": 0.4})}
-    result = findings([], TODAY, members, tail)
+    # Пост с округлёнными счётчиками без признака: по сводке поздняя доля втрое выше ранней.
+    late = post(1, 0, (250, 20), (600, 30))
+    late = LedgerPost(late.publication_id, late.account_id, late.platform, late.published_at, False,
+                      TailLedger(Point(24 * HOUR, 600, 30), Point(4 * 24 * HOUR, 700, 31), Point(10 * 24 * HOUR, 900, 61)))
+    result = findings([late], TODAY, members, tail)
     (finding,) = result
-    assert finding.kind == "late_engagement" and finding.members == (UUID(int=11), UUID(int=12))
+    assert finding.kind == "late_engagement"
+    assert finding.members == (UUID(int=11), UUID(int=12), late.publication_id)
 
 
 def test_posts_outside_the_thirty_day_window_are_ignored():
