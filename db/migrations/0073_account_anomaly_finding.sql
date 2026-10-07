@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS analytics.account_anomaly_finding (
     computed_at timestamp with time zone DEFAULT transaction_timestamp() NOT NULL,
     CONSTRAINT account_anomaly_finding_pkey PRIMARY KEY (account_id, kind),
     CONSTRAINT account_anomaly_finding_kind_check
-        CHECK (kind = ANY (ARRAY['early_pack'::text, 'regular_reactions'::text, 'late_engagement'::text])),
+        CHECK (kind = ANY (ARRAY['early_pack'::text, 'regular_reactions'::text, 'late_growth'::text, 'late_engagement'::text])),
     CONSTRAINT account_anomaly_finding_platform_check
         CHECK (platform = ANY (ARRAY['telegram'::text, 'vk'::text, 'max'::text, 'rutube'::text])),
     -- 1 — необычно для площадки, 2 — устойчиво (в обеих половинах окна).

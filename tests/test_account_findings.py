@@ -101,3 +101,25 @@ def test_posts_outside_the_thirty_day_window_are_ignored():
     shifted = [LedgerPost(item.publication_id, item.account_id, item.platform,
                           item.published_at - timedelta(days=60), item.is_repost, item.ledger) for item in old]
     assert findings(shifted, TODAY) == []
+
+
+def test_posts_that_gain_reactions_days_later_are_a_finding():
+    from anomaly_analysis.v2.account_findings import headline, figure, with_texts
+    rng = random.Random(9)
+    cohort = [item for account in range(2, 12) for item in organic(account, 40, rng)]
+    boosted = []
+    for index in range(30):
+        base = post(1, index, (300, 8), (600, 10), (900, 12))
+        # К суткам 10 реакций, к 10-м суткам — 360: докачка через дни.
+        ledger = TailLedger(Point(24 * HOUR, 600, 10), Point(4 * 24 * HOUR, 900, 12), Point(10 * 24 * HOUR, 7000, 360),
+                            marks=base.ledger.marks)
+        boosted.append(LedgerPost(base.publication_id, base.account_id, "vk", base.published_at, False, ledger))
+    organic_vk = [LedgerPost(item.publication_id, item.account_id, "vk", item.published_at, False,
+                             TailLedger(item.ledger.marks["h24"], item.ledger.marks["h72"], item.ledger.marks["h72"],
+                                        marks=item.ledger.marks)) for item in cohort]
+    result = findings(boosted + organic_vk, TODAY)
+    (finding,) = [item for item in result if item.kind == "late_growth"]
+    assert finding.account_id == UUID(int=1) and finding.status == 2 and len(finding.members) == 30
+    texts = with_texts(finding).metrics
+    assert texts["headline"].startswith("У 100 % постов") and texts["figure"]["unit"] == "percent"
+    assert texts["figure"]["typical"] == 0.0

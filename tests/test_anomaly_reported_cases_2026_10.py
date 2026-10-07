@@ -114,3 +114,21 @@ def test_short_burst_highlights_the_whole_pack_it_belongs_to():
     begin, finish = hours(series, burst)
     assert begin < 0.5 and 1.5 < finish < 2.5
     assert burst.render["burstEndAge"] - burst.render["burstStartAge"] <= 30 * 60
+
+
+def test_rutube_hour_long_views_pack_after_a_quiet_day_is_found():
+    # RuTube читается раз в час. Скобка (последнее чтение без изменений) теперь
+    # сохраняется, и пакет +1 700 просмотров укладывается в один интервал сбора.
+    from datetime import datetime, timezone
+    from uuid import UUID
+    from anomaly_analysis.v2.domain import PostSeries
+    published = datetime(2026, 9, 28, 14, 1, tzinfo=timezone.utc)
+    ages = [0.25 + hour + 0.0001 * hour for hour in range(0, 30)]
+    views = [20 + hour for hour in range(18)] + [1749 + hour for hour in range(12)]
+    likes = [1] * 18 + [97] * 12
+    series = PostSeries(UUID(int=99), UUID(int=98), "rutube", published, False,
+                        tuple(published + timedelta(hours=age) for age in ages),
+                        {V: tuple(views), R: tuple(likes)})
+    verdict = assess(series)
+    assert verdict.level is Level.ARTIFICIAL_ACTIVITY_SIGNS
+    assert any(sign.pattern == 9 and sign.metric is V for sign in verdict.signs)

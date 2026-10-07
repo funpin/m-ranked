@@ -502,7 +502,8 @@ paths:
       summary: Read account-level anomaly findings
       description: >-
         Patterns visible only across many posts of one account over the last 30 days, relative to the other
-        accounts of its platform: a repeated early reaction pack, reactions that ignore post reach, a
+        accounts of its platform: a repeated early reaction pack, reactions that ignore post reach, posts
+        that gain their reactions days later, a
         persistently unusual late response. Findings are recomputed nightly, counted separately from post
         levels and never change them. Status 1 is unusual, 2 persistently unusual (both halves of the window).
       security: []
@@ -5505,7 +5506,7 @@ components:
         reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
         accountFindings:
           type: array
-          maxItems: 3
+          maxItems: 4
           description: 'Аккаунтные находки, в которые входит пост; уровень поста они не меняют.'
           items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         methodologyVersion: { type: string, const: anomaly-dynamics-v2 }
@@ -5735,18 +5736,32 @@ components:
     AccountAnomalyFinding:
       type: object
       additionalProperties: false
-      required: [accountId, accountUsername, kind, platform, status, statusLabel, title, summary, alternatives,
-                 membersCount, windowStart, windowEnd, computedAt, methodologyVersion, metrics]
+      required: [accountId, accountUsername, kind, platform, status, statusLabel, title, headline, summary,
+                 alternatives, figure, membersCount, windowStart, windowEnd, computedAt, methodologyVersion, metrics]
       properties:
         accountId: { type: string, format: uuid }
         accountUsername: { type: [string, 'null'] }
-        kind: { type: string, enum: [early_pack, regular_reactions, late_engagement] }
+        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement] }
         platform: { type: string, enum: [telegram, vk, max, rutube] }
         status: { type: integer, minimum: 1, maximum: 2 }
         statusLabel: { type: [string, 'null'] }
         title: { type: [string, 'null'] }
+        headline: { type: [string, 'null'], description: 'Одна короткая строка для свёрнутого вида.' }
         summary: { type: [string, 'null'] }
         alternatives: { type: [string, 'null'] }
+        figure:
+          description: 'Мера аккаунта против типичного аккаунта площадки — для инфографики.'
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required: [value, typical, unit, label, direction]
+              properties:
+                value: { type: number }
+                typical: { type: number }
+                unit: { type: string, enum: [times, decimal, percent] }
+                label: { type: string }
+                direction: { type: string, enum: [higher, lower] }
         membersCount: { type: [integer, 'null'], minimum: 0 }
         windowStart: { type: string, format: date }
         windowEnd: { type: string, format: date }
@@ -5762,7 +5777,7 @@ components:
         datasetRevision: { type: integer, format: int64, minimum: 0 }
         items:
           type: array
-          maxItems: 3
+          maxItems: 4
           items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         disclaimer: { type: string }
     AccountTailProfile:

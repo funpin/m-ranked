@@ -359,7 +359,9 @@ def _sign(prepared: PreparedSeries, item: Episode) -> Sign:
     formula = (f"{episode_text}; {'затем' if item.kind == 'stop' else 'до этого'} {window_text} — "
                f"доля {times(item.ratio)} {'ниже' if item.kind == 'stop' else 'ниже, чем в эпизоде'}; "
                f"вероятность при плавном изменении доли ≤ 10{superscript(-round(item.surprise))}")
-    surge = views_surge(item)
+    # «Приток просмотров» — только когда быстрые просмотры пришли после эпизода и
+    # разбавили долю; перед поздним стартом реакций это значило бы обратное.
+    surge = item.kind == "stop" and views_surge(item)
     if surge:
         formula += "; в соседнем окне просмотры прибывали заметно быстрее, чем в эпизоде"
     render = {"kind": "regime", "mode": item.kind, "measurementMode": MEASUREMENT_MODE, "viewsSurge": surge,

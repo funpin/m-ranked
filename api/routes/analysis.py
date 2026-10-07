@@ -252,12 +252,14 @@ FINDINGS_DISCLAIMER = ("Аккаунтная находка — закономе
 def finding_body(row: dict[str, Any]) -> dict[str, Any]:
     """Находка со словами, которые записало ночное задание; числа — без служебных полей."""
     metrics = dict(row["metrics"] or {})
-    texts = {key: metrics.pop(key, None) for key in ("title", "summary", "statusLabel", "alternatives", "members")}
+    texts = {key: metrics.pop(key, None)
+             for key in ("title", "headline", "summary", "statusLabel", "alternatives", "members", "figure")}
     return {
         "accountId": str(row["account_id"]), "accountUsername": row.get("account_username"),
         "kind": row["kind"], "platform": row["platform"], "status": int(row["status"]),
-        "statusLabel": texts["statusLabel"], "title": texts["title"], "summary": texts["summary"],
-        "alternatives": texts["alternatives"], "membersCount": texts["members"],
+        "statusLabel": texts["statusLabel"], "title": texts["title"], "headline": texts["headline"],
+        "summary": texts["summary"], "alternatives": texts["alternatives"], "figure": texts["figure"],
+        "membersCount": texts["members"],
         "windowStart": row["window_start"].isoformat(), "windowEnd": row["window_end"].isoformat(),
         "computedAt": dto.iso(row["computed_at"]), "methodologyVersion": row["method_version"],
         "metrics": metrics,
