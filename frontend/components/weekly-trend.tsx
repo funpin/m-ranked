@@ -59,6 +59,8 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accou
   const [span, setSpanState] = useState<Span>(search.get("span") === "30" ? 30 : 7);
   const setSpan = (next: Span) => {
     setSpanState(next);
+    // Повторный выбор месяца после сбоя — новая попытка загрузки.
+    if (next === 30) setMonthFailed(false);
     const params = new URLSearchParams(search.toString());
     if (next === 30) params.set("span", "30"); else params.delete("span");
     const query = params.toString();
@@ -69,16 +71,19 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accou
   const [month, setMonth] = useState<readonly Point[] | null>(null);
   const [monthFailed, setMonthFailed] = useState(false);
   useEffect(() => {
-    if (span !== 30 || month || !accountId) return;
+    if (span !== 30 || month || monthFailed || !accountId) return;
     const controller = new AbortController();
     fetch(`/api/v1/accounts/${accountId}/daily-series?days=30`, { headers: { accept: "application/json" }, signal: controller.signal })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error(String(response.status))))
       .then((body: { points: Point[] }) => setMonth(body.points))
-      // Ссылка с span=30 остаётся рабочей: при сбое показываем неделю и строку о сбое.
       .catch(() => { if (!controller.signal.aborted) setMonthFailed(true); });
     return () => controller.abort();
-  }, [span, month, accountId]);
-  const monthly = span === 30 && !monthFailed;
+  }, [span, month, monthFailed, accountId]);
+  // Переключатель и заголовок не расходятся: при сбое загрузки месяца выбор
+  // показывает неделю, строка под заголовком называет сбой, повторное нажатие
+  // «30 д» пробует снова.
+  const shownSpan: Span = monthFailed ? 7 : span;
+  const monthly = shownSpan === 30;
   const shown = monthly && month ? month : points;
   const chooseMode = (next: TrendMode) => {
     setMode(next);
@@ -98,11 +103,11 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accou
           <span className="block text-xs leading-4 text-muted-foreground">
           {published ? <>вышло <b className="text-foreground tabular">{published}</b> публикаций за {days} дней</> : `за ${days} дней публикаций не было`}
           {today ? <>, сегодня — <b className="text-foreground tabular">{today.publishedCount}</b></> : null}
-          {monthFailed ? " · месячный ряд временно недоступен" : null}
+          {monthFailed && !monthly ? " · месяц не загрузился, показана неделя" : null}
           </span>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-        {accountId ? <ToggleGroup aria-label="Период графика" spacing={1} value={[String(span)]}
+        {accountId ? <ToggleGroup aria-label="Период графика" spacing={1} value={[String(shownSpan)]}
           className="shrink-0 rounded-lg bg-muted/70 p-0.5"
           onValueChange={(next) => {
             const selected = SPANS.find((option) => String(option.id) === next[0]);
