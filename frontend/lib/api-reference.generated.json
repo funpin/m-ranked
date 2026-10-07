@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "fb50852664e9a2b48bc091160a2a6cad138519f409222ea6e72384f2921710a6",
+  "sourceSha256": "0222726b84e68fe30db2ce5c06cdc4ed872f1243c6924fd518f39a3e72097465",
   "version": "1.0.0",
   "operations": [
     {
@@ -463,6 +463,10 @@
           "type": "string"
         },
         {
+          "name": "accountFindings",
+          "type": "object[]"
+        },
+        {
           "name": "methodologyVersion",
           "type": "string"
         },
@@ -567,6 +571,38 @@
         {
           "name": "methodologyVersion",
           "type": "string"
+        },
+        {
+          "name": "disclaimer",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "operationId": "getAccountAnomalyFindings",
+      "path": "/api/v1/accounts/{accountId}/anomaly-findings",
+      "summary": "Read account-level anomaly findings",
+      "parameters": [
+        {
+          "name": "accountId",
+          "in": "path",
+          "required": true,
+          "type": "uuid"
+        }
+      ],
+      "response": "AccountAnomalyFindings",
+      "fields": [
+        {
+          "name": "accountId",
+          "type": "uuid"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "items",
+          "type": "object[]"
         },
         {
           "name": "disclaimer",

@@ -71,3 +71,25 @@ APPEND_REVIEW = """
 SELECT analytics.append_anomaly_review(
   %(finding)s,%(decision)s,%(comment)s,%(actor)s,%(correlation)s,%(idempotency)s,%(digest)s) AS result
 """
+
+
+# Аккаунтные находки, в которые входит пост: GIN-индекс по members (0073).
+POST_FINDINGS = """
+SELECT finding.account_id, finding.kind, finding.platform, finding.status, finding.window_start,
+       finding.window_end, finding.metrics, finding.method_version, finding.computed_at,
+       account.current_username AS account_username
+  FROM analytics.account_anomaly_finding finding
+  JOIN catalog.platform_account account ON account.id=finding.account_id
+ WHERE finding.members @> ARRAY[%(publication)s::uuid]
+ ORDER BY finding.status DESC, finding.kind
+"""
+
+# Находки аккаунта по первичному ключу (аккаунт, вид).
+ACCOUNT_FINDINGS = """
+SELECT finding.account_id, finding.kind, finding.platform, finding.status, finding.window_start,
+       finding.window_end, finding.metrics, finding.method_version, finding.computed_at,
+       NULL::text AS account_username
+  FROM analytics.account_anomaly_finding finding
+ WHERE finding.account_id=%(account)s::uuid
+ ORDER BY finding.status DESC, finding.kind
+"""

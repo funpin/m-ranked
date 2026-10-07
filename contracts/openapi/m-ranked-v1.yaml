@@ -448,6 +448,41 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/accounts/{accountId}/anomaly-findings:
+    get:
+      tags: [Query]
+      operationId: getAccountAnomalyFindings
+      summary: Read account-level anomaly findings
+      description: >-
+        Patterns visible only across many posts of one account over the last 30 days, relative to the other
+        accounts of its platform: a repeated early reaction pack, reactions that ignore post reach, a
+        persistently unusual late response. Findings are recomputed nightly, counted separately from post
+        levels and never change them. Status 1 is unusual, 2 persistently unusual (both halves of the window).
+      security: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Current findings of the account; an empty list when there are none.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAnomalyFindings'
+        '304':
+          description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/statistics:
     get:
       tags: [Query]
@@ -4078,6 +4113,12 @@ components:
             does not mean that analysis found no anomalies.
           required: [level2, level3]
           properties:
+            accountFindings:
+              type: integer
+              minimum: 0
+              description: >-
+                Account-level findings of the entity's accounts (getAccountAnomalyFindings), counted
+                separately from publication levels.
             level2:
               type: integer
               minimum: 0
@@ -5384,7 +5425,7 @@ components:
       required: [publicationId, datasetRevision, status, level, levelLabel, levelSymbol,
         originalLevel, recheckReason, recheckMethodVersion, recheckEvidence, signals,
         quality, analyzedAt, lagSeconds, normVersion, detectorVersions, reviewStatus,
-        methodologyVersion, disclaimer]
+        accountFindings, methodologyVersion, disclaimer]
       properties:
         publicationId: { type: string, format: uuid }
         datasetRevision: { type: integer, format: int64, minimum: 0 }
@@ -5415,6 +5456,11 @@ components:
           maxProperties: 16
           additionalProperties: { type: string }
         reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
+        accountFindings:
+          type: array
+          maxItems: 3
+          description: 'Аккаунтные находки, в которые входит пост; уровень поста они не меняют.'
+          items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         methodologyVersion: { type: string, const: anomaly-dynamics-v2 }
         disclaimer: { type: string }
     ComparisonDashboard:
@@ -5639,6 +5685,39 @@ components:
                 threshold: { type: number, minimum: 0 }
                 rank: { type: number, minimum: 0, maximum: 1 }
         abstainText: { type: string }
+    AccountAnomalyFinding:
+      type: object
+      additionalProperties: false
+      required: [accountId, accountUsername, kind, platform, status, statusLabel, title, summary, alternatives,
+                 membersCount, windowStart, windowEnd, computedAt, methodologyVersion, metrics]
+      properties:
+        accountId: { type: string, format: uuid }
+        accountUsername: { type: [string, 'null'] }
+        kind: { type: string, enum: [early_pack, regular_reactions, late_engagement] }
+        platform: { type: string, enum: [telegram, vk, max, rutube] }
+        status: { type: integer, minimum: 1, maximum: 2 }
+        statusLabel: { type: [string, 'null'] }
+        title: { type: [string, 'null'] }
+        summary: { type: [string, 'null'] }
+        alternatives: { type: [string, 'null'] }
+        membersCount: { type: [integer, 'null'], minimum: 0 }
+        windowStart: { type: string, format: date }
+        windowEnd: { type: string, format: date }
+        computedAt: { type: string, format: date-time }
+        methodologyVersion: { type: string }
+        metrics: { type: object }
+    AccountAnomalyFindings:
+      type: object
+      additionalProperties: false
+      required: [accountId, datasetRevision, items, disclaimer]
+      properties:
+        accountId: { type: string, format: uuid }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        items:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
+        disclaimer: { type: string }
     AccountTailProfile:
       type: object
       additionalProperties: false

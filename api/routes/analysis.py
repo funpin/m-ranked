@@ -120,7 +120,8 @@ async def publication_analysis(legacyId: str, request: Request, legacyType: str 
             raise NotFound(f"публикация {legacyId} не найдена")
         publication_id = resolved["id"]
         row = await request.app.state.db.fetch_one(sql.STATE, {"publication": publication_id})
-        return analysis_body(str(publication_id), dataset_revision, row)
+        findings = await request.app.state.db.fetch_all(sql.POST_FINDINGS, {"publication": publication_id})
+        return analysis_body(str(publication_id), dataset_revision, row, findings)
 
     # Ответ не зависит от загрузки замеров: теги «publications» здесь нет, иначе
     # каждое уведомление о новой порции данных помечало бы анализ несвежим.
@@ -211,8 +212,13 @@ def levels_body(account_id: str, dataset_revision: int, rows: list[dict[str, Any
     }
 
 
-def analysis_body(publication_id: str, dataset_revision: int, row: dict[str, Any] | None) -> dict[str, Any]:
-    """Тело ответа. Пост без анализа — не ошибка, а «ещё не проанализирован»."""
+def analysis_body(publication_id: str, dataset_revision: int, row: dict[str, Any] | None,
+                  findings: list[dict[str, Any]] = ()) -> dict[str, Any]:
+    """Тело ответа. Пост без анализа — не ошибка, а «ещё не проанализирован».
+
+    `accountFindings` — аккаунтные находки, в которые входит пост. Уровень
+    поста они не меняют: находка относится к аккаунту и считается отдельно.
+    """
     analyzed = row is not None and row["analyzed_at"] is not None
     level = int(row["level"]) if analyzed else None
     insufficient = analyzed and level == 0 and "no_precise_metrics" in (row.get("quality") or {}).get("codes", [])
@@ -233,8 +239,41 @@ def analysis_body(publication_id: str, dataset_revision: int, row: dict[str, Any
         "normVersion": row["norm_version_id"] if analyzed else None,
         "detectorVersions": dict(row["detector_versions"] or {}) if analyzed else {},
         "reviewStatus": row["review_status"] if row is not None else "unreviewed",
+        "accountFindings": [finding_body(item) for item in findings],
         "methodologyVersion": METHODOLOGY_VERSION, "disclaimer": DISCLAIMER,
     }
+
+
+FINDINGS_DISCLAIMER = ("Аккаунтная находка — закономерность на многих постах относительно других аккаунтов "
+                       "площадки. Она бывает и у живой аудитории с необычными привычками; сама по себе не "
+                       "доказывает искусственное происхождение активности или действия университета.")
+
+
+def finding_body(row: dict[str, Any]) -> dict[str, Any]:
+    """Находка со словами, которые записало ночное задание; числа — без служебных полей."""
+    metrics = dict(row["metrics"] or {})
+    texts = {key: metrics.pop(key, None) for key in ("title", "summary", "statusLabel", "alternatives", "members")}
+    return {
+        "accountId": str(row["account_id"]), "accountUsername": row.get("account_username"),
+        "kind": row["kind"], "platform": row["platform"], "status": int(row["status"]),
+        "statusLabel": texts["statusLabel"], "title": texts["title"], "summary": texts["summary"],
+        "alternatives": texts["alternatives"], "membersCount": texts["members"],
+        "windowStart": row["window_start"].isoformat(), "windowEnd": row["window_end"].isoformat(),
+        "computedAt": dto.iso(row["computed_at"]), "methodologyVersion": row["method_version"],
+        "metrics": metrics,
+    }
+
+
+@router.get("/api/v1/accounts/{accountId}/anomaly-findings", tags=["Query"])
+async def account_findings(accountId: str, request: Request) -> Response:
+    account = _uuid(accountId, "accountId")
+
+    async def build(dataset_revision: int, committed_at: Any) -> dict[str, Any]:
+        rows = await request.app.state.db.fetch_all(sql.ACCOUNT_FINDINGS, {"account": account})
+        return {"accountId": str(account), "datasetRevision": dataset_revision,
+                "items": [finding_body(row) for row in rows], "disclaimer": FINDINGS_DISCLAIMER}
+
+    return await serve(request, "account-anomaly-findings", {"id": str(account)}, ANALYSIS_TAGS, build)
 
 
 @router.post("/api/v1/admin/publications/{publicationId}/anomaly-signals", tags=["Admin"])

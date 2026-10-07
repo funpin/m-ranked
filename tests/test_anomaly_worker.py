@@ -232,7 +232,7 @@ def test_a_post_without_a_current_tail_ledger_is_analyzed_once_even_without_new_
     _worker(store, now).run_once()
     [write] = store.written
     assert write.reason == "tail_ledger"
-    assert write.tail_ledger["v"] == 1 and write.tail_ledger["start"] and write.tail_ledger["growth"]
+    assert write.tail_ledger["v"] == 2 and write.tail_ledger["marks"]["h24"] and write.tail_ledger["start"] and write.tail_ledger["growth"]
     assert 13 in {sign.pattern for sign in write.verdict.signs}
 
 

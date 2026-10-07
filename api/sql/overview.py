@@ -131,6 +131,12 @@ WITH params AS (
        AND recheck.source_level=state.level
        AND state.review_status='unreviewed'
      GROUP BY 1,2
+), account_findings AS (
+    -- Аккаунтные находки (0073) — отдельно от уровней постов.
+    SELECT selected.scope_platform, selected.entity_id, count(*)::integer AS finding_count
+      FROM selected_accounts selected
+      JOIN analytics.account_anomaly_finding finding ON finding.account_id=selected.id
+     GROUP BY 1,2
 ), account_summary AS (
     SELECT scope_platform, entity_id, count(*)::integer AS account_count,
            count(*) FILTER(WHERE enabled)::integer AS enabled_account_count,
@@ -165,6 +171,7 @@ WITH params AS (
            coalesce(fresh.new_count,0) AS new_publication_count,
            coalesce(anomalies.level2_count,0) AS anomaly_level2_count,
            coalesce(anomalies.level3_count,0) AS anomaly_level3_count,
+           coalesce(findings.finding_count,0) AS account_finding_count,
            metrics.total_views, metrics.median_views,
            metrics.total_reactions, metrics.median_reactions,
            metrics.total_comments, metrics.median_comments,
@@ -206,6 +213,8 @@ WITH params AS (
         AND fresh.entity_id=dimension.entity_id
       LEFT JOIN publication_anomalies anomalies ON anomalies.scope_platform=dimension.scope_platform
         AND anomalies.entity_id=dimension.entity_id
+      LEFT JOIN account_findings findings ON findings.scope_platform=dimension.scope_platform
+        AND findings.entity_id=dimension.entity_id
       LEFT JOIN publication_active active ON active.scope_platform=dimension.scope_platform
         AND active.entity_id=dimension.entity_id
       LEFT JOIN LATERAL (

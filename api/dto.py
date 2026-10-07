@@ -136,6 +136,7 @@ def overview_row(card: dict[str, Any], accounts: list[dict[str, Any]], revision:
         "anomalyCounts": {
             "level2": card.get("anomaly_level2_count") or 0,
             "level3": card.get("anomaly_level3_count") or 0,
+            "accountFindings": card.get("account_finding_count") or 0,
         },
         "views": metric(card["total_views"], card["median_views"], as_of, revision,
                         card["views_samples"], denominator,

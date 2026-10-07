@@ -655,6 +655,55 @@ class PostgresAnomalyStore:
                   _json(item.metrics), item.metrics["methodVersion"]) for item in profiles])
             cursor.execute("DELETE FROM analytics.account_tail_profile WHERE computed_for < %s", (keep_since,))
 
+    def read_finding_ledgers(self, published_after: datetime, published_until: datetime) -> list[dict[str, Any]]:
+        """Сводки постов окна аккаунтных находок, включая репосты (их просмотры собственные)."""
+        with self._factory() as connection:
+            return connection.execute(
+                """SELECT state.publication_id, publication.primary_account_id AS account_id,
+                          account.platform::text AS platform, state.published_at, publication.is_repost,
+                          state.tail_ledger
+                     FROM analytics.post_anomaly_state state
+                     JOIN ingest.visible_publication publication ON publication.id = state.publication_id
+                     JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
+                    WHERE state.published_at >= %s AND state.published_at < %s
+                      AND state.tail_ledger_version = %s AND publication.deleted_at IS NULL""",
+                (published_after, published_until, TAIL_LEDGER_VERSION)).fetchall()
+
+    def read_late_members(self, accounts: Sequence[UUID], published_after: datetime,
+                          published_until: datetime) -> dict[UUID, list[UUID]]:
+        """Посты окна с признаком позднего отклика (13) или позднего запуска реакций (14)."""
+        if not accounts:
+            return {}
+        with self._factory() as connection:
+            rows = connection.execute(
+                """SELECT publication.primary_account_id AS account_id, state.publication_id
+                     FROM analytics.post_anomaly_state state
+                     JOIN ingest.visible_publication publication ON publication.id = state.publication_id
+                    WHERE publication.primary_account_id = ANY(%s::uuid[])
+                      AND state.published_at >= %s AND state.published_at < %s
+                      AND EXISTS (SELECT 1 FROM jsonb_array_elements(state.signals) signal
+                                   WHERE (signal->>'pattern')::int = 13
+                                      OR (signal->>'pattern')::int = 14
+                                         AND signal->'render'->>'mode' = 'start'
+                                         AND (signal->'render'->>'startAge')::numeric >= 259200)""",
+                (list(accounts), published_after, published_until)).fetchall()
+        members: dict[UUID, list[UUID]] = {}
+        for row in rows:
+            members.setdefault(row["account_id"], []).append(row["publication_id"])
+        return members
+
+    def write_account_findings(self, findings: Sequence[Any], method_version: str) -> None:
+        """Находки целиком одной транзакцией: неподтвердившиеся удаляются."""
+        with self._factory() as connection, connection.transaction(), connection.cursor() as cursor:
+            cursor.execute("DELETE FROM analytics.account_anomaly_finding")
+            cursor.executemany(
+                """INSERT INTO analytics.account_anomaly_finding(
+                       account_id, kind, platform, status, window_start, window_end, metrics, members,
+                       method_version)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::uuid[],%s)""",
+                [(item.account_id, item.kind, item.platform, item.status, item.window_start, item.window_end,
+                  _json(item.metrics), list(item.members), method_version) for item in findings])
+
     def read_activity(self, accounts: Sequence[UUID], since: datetime, until: datetime,
                       published_since: datetime) -> dict[UUID, SiblingActivity]:
         """Почасовые максимумы счётчиков постов аккаунтов — агрегаты для синхронности."""
