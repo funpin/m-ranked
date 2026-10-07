@@ -11,7 +11,7 @@ from bisect import bisect_right
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import PreparedSeries
+from ..series import PreparedSeries, views_belong_to_source
 from .base import DetectorContext, make_sign, number
 from .bounded_reaction_burst import reaction_bounds, _views
 
@@ -29,7 +29,7 @@ MIN_CONSECUTIVE = 2
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
-    if prepared.series.is_repost:
+    if views_belong_to_source(prepared.series):
         return ()
     if prepared.series.platform == "telegram":
         return _telegram_order(prepared, context)

@@ -66,12 +66,14 @@ def test_signs_on_unanalyzable_intervals_are_dropped_except_the_gap_pattern():
     assert kept.level is Level.PRONOUNCED_ANOMALY
 
 
-def test_reposts_keep_reaction_shape_but_skip_source_view_shapes():
+def test_reposts_compare_with_themselves_but_skip_norms_and_late_engagement():
     prepared = _prepared("honest_repost_of_foreign_telegram")
     _, versions = run_detectors(prepared, DetectorContext("telegram"))
     assert set(versions) == {"preparation", "aggregation", "linear_feed", "burst_plateau", "bounded_reaction_burst",
-                             "reactions_before_views", "reactions_exceed_views"}
-    assert "repost_source_counter" in assess(prepared.series).quality.codes
+                             "reactions_before_views", "reactions_exceed_views", "engagement_regime",
+                             "reaction_write_off", "joint_cliff"}
+    # Просмотры репоста — собственные: оговорки о чужом счётчике нет.
+    assert "repost_source_counter" not in assess(prepared.series).quality.codes
 
 
 def test_compact_output_is_bounded_sorted_and_worded():
@@ -121,6 +123,6 @@ def test_glossary_of_adr_006_holds_for_every_text_and_formula():
 
 
 def test_all_symbols_from_the_plan_are_distinct():
-    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 12
+    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 15
     assert np.all([pattern in TITLES for pattern in SYMBOLS])
     assert levels.STRONG > YOUNG_NORM_CAP >= levels.MEDIUM

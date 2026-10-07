@@ -18,7 +18,7 @@ from math import log2
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries
+from ..series import HOUR, PreparedSeries, views_belong_to_source
 from .base import DetectorContext, age_text, make_sign, number
 from .bounded_reaction_burst import _candidate_pairs, _views
 
@@ -199,7 +199,7 @@ def _rapid_views(prepared: PreparedSeries) -> tuple[Sign, ...]:
     deliberately ineligible. No norm or guessed points are used.
     """
     series = prepared.series
-    if series.is_repost or Metric.VIEWS not in series.values:
+    if views_belong_to_source(series) or Metric.VIEWS not in series.values:
         return ()
     count = bisect_right(series.observed_at, prepared.analyzed_at)
     rows = series.values[Metric.VIEWS][:count]

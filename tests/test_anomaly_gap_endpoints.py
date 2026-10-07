@@ -92,10 +92,10 @@ def test_negative_correction_during_delay_is_not_evidence(metric):
     assert not endpoints(replace(s,values={**s.values,metric:tuple(v)}))[1]
 
 
-def test_uncertain_interval_and_repost_are_excluded():
+def test_uncertain_interval_is_excluded_and_repost_compares_its_own_views():
     s=subject(); flags=[False]*len(s.observed_at); flags[4]=True
     assert not endpoints(replace(s,interval_uncertain=tuple(flags)))[1]
-    assert not endpoints(replace(s,is_repost=True))[1]
+    assert endpoints(replace(s,is_repost=True))[1] == endpoints(s)[1]
 
 
 @pytest.mark.parametrize("platform", ["telegram", "vk", "rutube"])

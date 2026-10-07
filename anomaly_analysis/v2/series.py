@@ -32,6 +32,20 @@ GAP_FACTOR = 3.0
 RESET_FRACTION = 0.2
 RESET_MIN_DROP = 10
 
+# Площадки, где счётчик просмотров репоста принадлежит источнику. Замеры
+# 1 100 репостов MAX и Telegram (12.09–05.10.2026) показали обратное: в первом
+# замере у репоста столько же просмотров, сколько у собственного поста
+# аккаунта (медиана 16 против 14 в MAX, 50 против 51 в Telegram), и итог в
+# пределах того же разброса относительно медианы аккаунта. У ВК и RuTube
+# репостов в отслеживании нет. Набор пуст — просмотры репоста собственные.
+REPOST_SOURCE_VIEW_PLATFORMS: frozenset[str] = frozenset()
+
+
+def views_belong_to_source(series: PostSeries) -> bool:
+    """Просмотры поста — чужая аудитория (репост на площадке из списка выше)."""
+    return series.is_repost and series.platform in REPOST_SOURCE_VIEW_PLATFORMS
+
+
 # Возрастные интервалы таблицы расписания анализа: 0–24 ч, 1–3 сут, 3–7 сут,
 # 7–30 сут и дальше. Индекс интервала — номер строки таблицы.
 AGE_BAND_EDGES = np.array((0, DAY, 3 * DAY, 7 * DAY, 30 * DAY), dtype=np.float64)
@@ -132,8 +146,8 @@ class MetricSeries:
     gaps: tuple[Gap, ...]
     grids: Mapping[timedelta, Grid]
     coverage: float
-    # Просмотры репоста принадлежат источнику: детекторы, зависящие от
-    # просмотров и нормы аккаунта, такую метрику пропускают.
+    # Просмотры принадлежат источнику (views_belong_to_source): детекторы,
+    # зависящие от просмотров, такую метрику пропускают.
     source_counter: bool
 
 
@@ -279,7 +293,7 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
     grids = {scale: _grid(scale, ages, values, unusable, reset, negative) for scale in scales}
     return MetricSeries(
         metric, _frozen(ages), _frozen(values), _frozen(flags), gaps, grids, coverage,
-        source_counter=series.is_repost and metric is Metric.VIEWS,
+        source_counter=views_belong_to_source(series) and metric is Metric.VIEWS,
     )
 
 

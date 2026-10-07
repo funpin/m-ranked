@@ -13,7 +13,7 @@ from datetime import timedelta
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import DAY, HOUR, PreparedSeries
+from ..series import DAY, HOUR, PreparedSeries, views_belong_to_source
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "reactions_before_views"
@@ -89,7 +89,7 @@ def _gap_endpoints(prepared: PreparedSeries, context: DetectorContext) -> tuple[
     observed negative correction make the whole comparison unavailable.
     """
     series = prepared.series
-    if series.platform != "max" or series.is_repost:
+    if series.platform != "max" or views_belong_to_source(series):
         return ()
     reactions = prepared.metrics.get(Metric.REACTIONS)
     if reactions is None or Metric.VIEWS not in prepared.metrics:

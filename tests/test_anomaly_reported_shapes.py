@@ -14,7 +14,18 @@ CASES = json.loads((Path(__file__).parent / 'fixtures/anomaly_reported_shapes.js
 R, V = Metric.REACTIONS, Metric.VIEWS
 
 
-@pytest.mark.parametrize('case', CASES, ids=lambda item: item['account'])
+OWN = [case for case in CASES if not case['publication']['repost']]
+REPOSTS = [case for case in CASES if case['publication']['repost']]
+
+
+@pytest.mark.parametrize('case', REPOSTS, ids=lambda item: item['account'])
+def test_repost_packs_are_judged_against_the_reposts_own_views(case):
+    result = assess(subject(case))
+    assert result.level >= Level.PRONOUNCED_ANOMALY
+    assert not any(sign.render.get('reportedOnly') for sign in result.signs)
+
+
+@pytest.mark.parametrize('case', OWN, ids=lambda item: item['account'])
 def test_real_unconfirmed_shapes_are_visible_and_cannot_enter_the_norm(case):
     s = subject(case)
     result = assess(s)
@@ -28,7 +39,7 @@ def test_real_unconfirmed_shapes_are_visible_and_cannot_enter_the_norm(case):
 
 
 @pytest.mark.parametrize('platform', ['telegram', 'vk', 'max', 'rutube'])
-def test_repost_candidate_uses_own_reactions_without_source_views(platform):
+def test_reaction_shape_without_any_views_is_a_weak_signal(platform):
     s = series([(1, 10000, 1), (6, 10000, 40)] + [(m, 10000, 40) for m in range(11, 247, 5)], platform=platform)
     s = replace(s, is_repost=True, values={R: s.values[R]}, qualities={R: s.qualities[R]})
     signs = detect(s)

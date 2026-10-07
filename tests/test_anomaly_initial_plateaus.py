@@ -99,7 +99,8 @@ def test_telegram_order_is_visible_but_respects_counter_evidence(kind):
     if kind == 'repost': s=replace(s,is_repost=True)
     if kind == 'uncertain': s=replace(s,interval_uncertain=(True,))
     result=assess(s)
-    if kind in {'overlap','exact'}:
+    # Просмотры репоста — его собственные: правило 1:1 действует и для него.
+    if kind in {'overlap','exact','repost'}:
         assert result.level is Level.WEAK_SIGNAL
         assert result.signs[0].pattern == 7
         assert result.signs[0].render['boundsOverlap'] == (kind=='overlap')

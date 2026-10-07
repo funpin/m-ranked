@@ -2176,7 +2176,7 @@ export interface components {
         };
         AnomalySignal: {
             /** @enum {integer} */
-            pattern: 1 | 2 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+            pattern: 1 | 2 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
             symbol: string;
             title: string;
             /** @enum {string} */
@@ -2193,7 +2193,7 @@ export interface components {
             /** @description Mini-chart parameters; kind selects the chart, the rest depends on it. */
             render: {
                 /** @enum {string} */
-                kind: "linear" | "lead" | "exceed" | "synchrony" | "plateau" | "bounded_burst" | "expected" | "gap" | "ratio" | "erv" | "reference" | "late_engagement";
+                kind: "linear" | "lead" | "exceed" | "synchrony" | "plateau" | "bounded_burst" | "expected" | "gap" | "ratio" | "erv" | "reference" | "late_engagement" | "regime" | "write_off" | "cliff";
                 startAge: number;
                 endAge: number;
             } & {

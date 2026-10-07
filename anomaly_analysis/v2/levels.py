@@ -28,11 +28,12 @@ from .detectors.bounded_reaction_burst import (
     CONFIRMED_PLATEAU_MODE, MEASUREMENT_MODE as BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE,
 )
 from .detectors.burst_plateau import RAPID_VIEW_MODE, VIEW_MEASUREMENT_MODE
+from .detectors.engagement_regime import CONFIRMED_MODE as CONFIRMED_EPISODE_MODE
 from .detectors.late_engagement import MEASUREMENT_MODE as LATE_ENGAGEMENT_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
-from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare
+from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare, views_belong_to_source
 
 # Пороги силы. Сильный признак — тот, что один даёт выраженную аномалию: у
 # детекторов это пуассоновский z в районе десяти и выше или физически
@@ -45,13 +46,14 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
-AGGREGATION_VERSION = "2.3.0"
+AGGREGATION_VERSION = "2.4.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
 GAP_PATTERN = 4
 
-SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻"}
+SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻",
+           14: "⊓", 15: "↧", 16: "⌐"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -65,6 +67,9 @@ TITLES = {
     11: "Отклик выше исторического диапазона",
     12: "Продолжение отклика выше ожидаемого",
     13: "Поздняя вовлечённость выше ранней",
+    14: "Пакет реакций, оторванный от просмотров",
+    15: "Площадка списала реакции",
+    16: "Одновременный обрыв просмотров и реакций",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
@@ -94,6 +99,8 @@ ALTERNATIVES = {
     "wide_reach_low_engagement": "пост разошёлся шире обычной аудитории, которая реагирует реже",
     "interested_audience_found_post": "пост нашла заинтересованная аудитория: подборка, профильный чат или новый увлечённый читатель архива",
     "multiple_reactions_per_viewer": "один читатель мог поставить несколько реакций; правило сравнения использует порог 1:1",
+    "platform_write_off": "площадка удалила реакции аккаунтов, которые сочла недостоверными",
+    "post_edited_reactions_reset": "пост пересоздали или изменили так, что площадка сбросила часть реакций",
 }
 QUALITY_TEXTS = {
     "reported_reaction_shape": "форма сохранённых реакций отмечена слабым сигналом без подтверждения точности или сопоставимой аудитории",
@@ -209,6 +216,8 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
 
 
 def _confirmed_plateau(sign: Sign) -> bool:
+    if sign.pattern == 14:
+        return sign.strength >= .9 and sign.render.get("plateauEvidence") == CONFIRMED_EPISODE_MODE
     return (sign.pattern == 9 and sign.family is Family.SHAPE and sign.strength >= .9
             and (sign.metric, sign.render.get("measurementMode"), sign.render.get("plateauEvidence")) in {
                 (Metric.REACTIONS, BOUNDED_REACTION_MODE, CONFIRMED_PLATEAU_MODE),
@@ -243,7 +252,7 @@ def compact(verdict: PostVerdict) -> dict[str, Any]:
 def sign_payload(sign: Sign) -> dict[str, Any]:
     title = TITLES[sign.pattern]
     if sign.render.get("measurementMode") == REPORTED_SHAPE_MODE:
-        title = "Рывок с плато: требуется проверка"
+        title = "Рывок реакций с плато по сохранённым значениям"
     elif sign.render.get("measurementMode") == BOUNDED_REACTION_MODE:
         title = ("Рывок, переходящий в плато" if sign.render.get("plateauEvidence") == CONFIRMED_PLATEAU_MODE
                  else "Резкий прирост реакций с последующим замедлением")
@@ -255,6 +264,13 @@ def sign_payload(sign: Sign) -> dict[str, Any]:
         title = "Резкий скачок просмотров с последующим плато"
     elif sign.pattern == 6 and sign.render.get("comparisonMode") == ENDPOINT_MODE:
         title = "Прирост реакций при малом приросте просмотров"
+    elif sign.pattern == 14:
+        if sign.render.get("viewsSurge"):
+            title = "Приток просмотров без отклика"
+        elif sign.render.get("mode") == "start":
+            title = "Реакции включились без новой аудитории"
+        else:
+            title = "Пакет реакций с остановкой"
     return {
         "pattern": sign.pattern, "symbol": SYMBOLS[sign.pattern], "title": title,
         "family": sign.family.value, "metric": sign.metric.value, "strength": round(sign.strength, 3),
@@ -343,7 +359,7 @@ def _quality(prepared: PreparedSeries, context: DetectorContext,
     codes = list(prepared.quality_codes)
     if prepared.truncated_start:
         codes.append("truncated_start")
-    if prepared.series.is_repost:
+    if views_belong_to_source(prepared.series):
         codes.append("repost_source_counter")
     if context.norm is None:
         codes.append("no_norm")

@@ -5325,7 +5325,7 @@ components:
       required: [pattern, symbol, title, family, metric, strength, startAt, endAt, scaleSeconds,
         formula, render, alternatives, normConfidence]
       properties:
-        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] }
+        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] }
         symbol: { type: string, maxLength: 4 }
         title: { type: string, maxLength: 120 }
         family: { type: string, enum: [velocity, shape, cross_metric, synchrony] }
@@ -5340,7 +5340,7 @@ components:
           type: object
           required: [kind, startAge, endAge]
           properties:
-            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement] }
+            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement, regime, write_off, cliff] }
             startAge: { type: integer }
             endAge: { type: integer }
           additionalProperties:
