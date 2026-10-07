@@ -31,6 +31,7 @@ from .detectors.burst_plateau import RAPID_VIEW_MODE, VIEW_MEASUREMENT_MODE
 from .detectors import engagement_regime
 from .detectors.engagement_regime import CONFIRMED_MODE as CONFIRMED_EPISODE_MODE
 from .detectors.late_engagement import MEASUREMENT_MODE as LATE_ENGAGEMENT_MODE
+from .detectors.linear_feed import STEADY_STOP_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
@@ -326,6 +327,8 @@ def _same_events(signs: Sequence[Sign]) -> list[Sign]:
 
 
 def _confirmed_plateau(sign: Sign) -> bool:
+    if sign.pattern == 1:
+        return sign.strength >= .9 and sign.render.get("plateauEvidence") == STEADY_STOP_MODE
     if sign.pattern == 14:
         return sign.strength >= .9 and sign.render.get("plateauEvidence") == CONFIRMED_EPISODE_MODE
     return (sign.pattern == 9 and sign.family is Family.SHAPE and sign.strength >= .9

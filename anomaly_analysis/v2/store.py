@@ -31,6 +31,18 @@ CONNECTION_OPTIONS = ("-c timezone=UTC -c statement_timeout=60000 -c lock_timeou
 # Значение с такой отметкой качества — не замер счётчика, а сбой: в ряд оно
 # идёт как «не получено», а не как точка.
 UNUSABLE_QUALITY = frozenset({"invalid", "suspected_reset"})
+# Telegram округляет показанное число только с тысячи («2,8K»). До 28.09.2026
+# сборщик помечал «округлёнными» и меньшие значения — почти все реакции и
+# просмотры постов Telegram того времени (25a3952c исправил сборщик, но не
+# историю). Такое значение показано целиком и точно.
+COMPACT_FROM = 1000
+
+
+def effective_quality(platform: str, quality: str | None, count: int | None) -> str:
+    if (platform == "telegram" and quality == "rounded" and count is not None
+            and 0 <= count < COMPACT_FROM):
+        return "exact"
+    return quality or "unknown"
 
 SERIES = """
 WITH target AS (
@@ -202,15 +214,22 @@ SELECT publication.id
 ACTIVITY = """
 WITH posts AS (
     SELECT publication.id, publication.primary_account_id, publication.published_at,
-           date_trunc('month', publication.published_at AT TIME ZONE 'UTC')::date AS published_month
+           date_trunc('month', publication.published_at AT TIME ZONE 'UTC')::date AS published_month,
+           account.platform::text = 'telegram' AS telegram
       FROM ingest.visible_publication publication
+      JOIN catalog.platform_account account ON account.id = publication.primary_account_id
      WHERE publication.id = ANY(%(ids)s::uuid[])
 ), observed AS (
     SELECT posts.primary_account_id, posts.id AS publication_id, posts.published_at,
            floor(extract(epoch FROM snapshot.observed_at) / 3600)::bigint AS hour,
-           CASE WHEN snapshot.reactions_quality = 'exact' AND NOT snapshot.interval_uncertain
+           -- Округлённое Telegram меньше тысячи показано точно (store.effective_quality).
+           CASE WHEN (snapshot.reactions_quality = 'exact' OR posts.telegram
+                      AND snapshot.reactions_quality = 'rounded' AND snapshot.reactions_count < 1000)
+                     AND NOT snapshot.interval_uncertain
                 THEN snapshot.reactions_count END AS reactions_count,
-           CASE WHEN snapshot.views_quality = 'exact' AND NOT snapshot.interval_uncertain
+           CASE WHEN (snapshot.views_quality = 'exact' OR posts.telegram
+                      AND snapshot.views_quality = 'rounded' AND snapshot.views_count < 1000)
+                     AND NOT snapshot.interval_uncertain
                 THEN snapshot.views_count END AS views_count
       FROM posts
       JOIN ingest.publication_points_between(%(ids)s::uuid[], %(since)s, %(until)s) snapshot
@@ -223,16 +242,22 @@ WITH posts AS (
     -- reading is not a confirmed level at the start of the window.
     SELECT posts.primary_account_id, posts.id, posts.published_at,
            floor(extract(epoch FROM before.observed_at) / 3600)::bigint,
-           before.reactions_count, before.views_count
+           CASE WHEN (before.reactions_quality = 'exact' OR posts.telegram
+                      AND before.reactions_quality = 'rounded' AND before.reactions_count < 1000)
+                     AND NOT before.interval_uncertain
+                THEN before.reactions_count END,
+           CASE WHEN (before.views_quality = 'exact' OR posts.telegram
+                      AND before.views_quality = 'rounded' AND before.views_count < 1000)
+                     AND NOT before.interval_uncertain
+                THEN before.views_count END
       FROM posts
       -- Последняя видимая точка строго до окна; синтетическая — самая ранняя,
       -- и если последней оказалась она, настоящего чтения до окна нет.
       JOIN (
           SELECT snapshot.publication_id, snapshot.published_month, snapshot.observed_at,
-                 CASE WHEN snapshot.reactions_quality = 'exact' AND NOT snapshot.interval_uncertain
-                      THEN snapshot.reactions_count END AS reactions_count,
-                 CASE WHEN snapshot.views_quality = 'exact' AND NOT snapshot.interval_uncertain
-                      THEN snapshot.views_count END AS views_count
+                 snapshot.reactions_quality::text AS reactions_quality, snapshot.reactions_count,
+                 snapshot.views_quality::text AS views_quality, snapshot.views_count,
+                 snapshot.interval_uncertain
             FROM ingest.publication_point_at(%(ids)s::uuid[],
                                              %(since)s::timestamptz - interval '1 microsecond') snapshot
            WHERE NOT snapshot.synthetic
@@ -329,7 +354,8 @@ def series_from_rows(rows: Sequence[Mapping[str, Any]],
                       first["published_at"], bool(first["is_repost"]),
                       tuple(row["observed_at"] for row in rows), values,
                       tuple(item for item in collected if item >= first["published_at"]),
-                      qualities={metric: tuple(row[f"{metric.value}_quality"] or "unknown" for row in rows)
+                      qualities={metric: tuple(effective_quality(first["platform"], row[f"{metric.value}_quality"],
+                                                                 row[f"{metric.value}_count"]) for row in rows)
                                  for metric in values},
                       interval_uncertain=tuple(row.get("interval_uncertain", True) for row in rows),
                       reaction_breakdowns=tuple(row.get("reaction_breakdown") for row in rows))

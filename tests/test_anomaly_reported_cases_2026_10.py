@@ -222,3 +222,23 @@ def test_ten_reactions_in_five_minutes_alone_is_a_weak_signal():
     # id0901006061 в MAX: +10 реакций за 5 минут, затем обычный темп. Один такой
     # пост — слабый сигнал; повтор на всех постах аккаунта — аккаунтная находка.
     assert assess(reported("17_max_small_five_minute_start")).level is Level.WEAK_SIGNAL
+
+
+def test_steady_reactions_that_stop_are_a_short_feed():
+    # СКФУ в MAX (репост): ~39 реакций в час каждую четверть часа полтора часа,
+    # затем 3 в час. Живой отклик в первые часы затухает; ровный темп с обрывом —
+    # подача (уровень 3 сам по себе при разбросе до 20 % и десятикратном обрыве).
+    result = assess(reported("08_repost_pack"))
+    assert result.level is Level.ARTIFICIAL_ACTIVITY_SIGNS
+    assert any(sign.pattern == 1 and sign.metric is R and sign.render.get("mode") == "short_reactions"
+               for sign in result.signs)
+
+
+def test_legacy_rounded_telegram_counts_below_a_thousand_are_exact():
+    # До 28.09.2026 сборщик помечал «округлёнными» все счётчики Telegram, хотя
+    # округление («2,8K») начинается с тысячи.
+    from anomaly_analysis.v2.store import effective_quality
+    assert effective_quality("telegram", "rounded", 248) == "exact"
+    assert effective_quality("telegram", "rounded", 2760) == "rounded"
+    assert effective_quality("vk", "rounded", 248) == "rounded"
+    assert effective_quality("telegram", "unknown", 12) == "unknown"

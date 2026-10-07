@@ -17,7 +17,7 @@ from ..series import HOUR, PreparedSeries
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 PATTERN = 1
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -62,6 +62,29 @@ MIN_SHARE = 0.2
 MIN_DELTA = {Metric.VIEWS: 100, Metric.REACTIONS: 30}
 NAMES = {Metric.VIEWS: "просмотры", Metric.REACTIONS: "реакции"}
 
+# Короткая подача реакций: ровный темп на пятнадцатиминутках от часа, затем
+# обрыв. Живой отклик в первые часы затухает — больше всего реакций в первые
+# минуты. СКФУ в MAX: ~42 реакции в час каждую четверть часа (разброс 3–10 %)
+# полтора часа, затем 1–3 в час. На 24 тыс. постах 12.09–05.10 — 150 постов
+# MAX (102 СКФУ, 47 Губкинский, один другой) и 38 ВК (34 у пяти аккаунтов).
+SHORT_SCALE = timedelta(minutes=15)
+# От 75 минут: ровный час с пятикратным спадом после бывает и у живого поста.
+SHORT_MIN_CELLS, SHORT_MAX_CELLS = 5, 16
+SHORT_ONSET_UNTIL = 12 * HOUR
+SHORT_MIN_TOTAL = 30.0
+SHORT_KEEP = 0.7            # последняя треть участка — не ниже 70 % первой
+SHORT_STOP = 5.0            # следующий час — впятеро медленнее
+SHORT_CONFIRMED_STOP = 10.0 # для подтверждённой подачи — вдесятеро
+SHORT_AFTER_CELLS = 4
+# Разброс скорости по пятнадцатиминуткам: до 20 % — подтверждённая подача
+# (уровень 3 сам по себе), до 35 % — выраженная. Разброс 40 % и темп 20–28 в
+# час дают и синтетические живые посты ВК — это не признак.
+SHORT_LEVELS = ((0.2, 0.95), (0.35, 0.75))
+# Медленнее 30 в час ровный темп бывает и у живого поста (три поста Telegram
+# разных аккаунтов на выборке, ~20/ч).
+SHORT_MIN_RATE = 30.0
+STEADY_STOP_MODE = "steady_feed_stop_v1"
+
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     signs: list[Sign] = []
@@ -73,7 +96,66 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
             grid = data.grids.get(scale)
             if grid is not None and grid.rates.size:
                 signs.extend(_scan(prepared, context, metric, data, grid))
+    short = _short_reactions(prepared)
+    if short is not None:
+        signs.append(short)
     return tuple(strongest(signs))
+
+
+def _short_reactions(prepared: PreparedSeries) -> Sign | None:
+    data = prepared.metrics.get(Metric.REACTIONS)
+    grid = None if data is None else data.grids.get(SHORT_SCALE)
+    if grid is None or not grid.rates.size:
+        return None
+    width = SHORT_SCALE.total_seconds()
+    rates = grid.rates * HOUR
+    starts = grid.edges[:-1]
+    valid = grid.usable & ~grid.negative & (expected_step(prepared, starts) <= width)
+    # Все окна сразу на префиксных суммах: детектор укладывается в бюджет
+    # анализа поста. Выбирается самое длинное окно, при равной длине — раннее.
+    total = np.concatenate(([0.0], np.cumsum(rates)))
+    squares = np.concatenate(([0.0], np.cumsum(rates ** 2)))
+    usable = np.concatenate(([0], np.cumsum(~valid)))
+    onsets = np.flatnonzero(starts <= SHORT_ONSET_UNTIL)
+    best = None
+    for cells in range(SHORT_MIN_CELLS, SHORT_MAX_CELLS + 1):
+        begin = onsets[onsets + cells + SHORT_AFTER_CELLS <= rates.size]
+        if not begin.size:
+            break
+        end = begin + cells
+        mean = (total[end] - total[begin]) / cells
+        spread = np.sqrt(np.maximum((squares[end] - squares[begin]) / cells - mean ** 2, 0.0))
+        third = max(1, cells // 3)
+        first = (total[begin + third] - total[begin]) / third
+        last = (total[end] - total[end - third]) / third
+        after = (total[end + SHORT_AFTER_CELLS] - total[end]) / SHORT_AFTER_CELLS
+        with np.errstate(divide="ignore", invalid="ignore"):
+            drift = last / np.maximum(first, 1e-9)
+            cv = np.where(mean > 0, spread / np.maximum(mean, 1e-9), np.inf)
+        ok = ((usable[end + SHORT_AFTER_CELLS] == usable[begin]) & (mean >= SHORT_MIN_RATE)
+              & (mean * cells * width / HOUR >= SHORT_MIN_TOTAL) & (drift >= SHORT_KEEP) & (drift <= 1 / SHORT_KEEP)
+              & (cv <= SHORT_LEVELS[-1][0]) & (after * SHORT_STOP <= mean))
+        hit = np.flatnonzero(ok)
+        if hit.size:
+            k = int(hit[0])
+            best = (int(begin[k]), cells, float(mean[k]), float(after[k]), float(cv[k]))
+    if best is None:
+        return None
+    begin, cells, mean, after, cv = best
+    end = begin + cells
+    strength = next(value for limit, value in SHORT_LEVELS if cv <= limit)
+    if after * SHORT_CONFIRMED_STOP > mean:
+        strength = min(strength, SHORT_LEVELS[-1][1])
+    start_age, end_age = float(grid.edges[begin]), float(grid.edges[end])
+    formula = (f"реакции ≈ {number(mean)}/ч ровно {age_text(end_age - start_age)} "
+               f"(t ∈ [{age_text(start_age)}; {age_text(end_age)}], разброс по 15 мин — {cv:.0%}); "
+               f"затем {number(after)}/ч. Живой отклик в первые часы затухает, а не идёт ровно и не обрывается")
+    render = {"kind": "linear", "slope": round(mean, 3), "intercept": round(float(grid.cumulative[begin]), 1),
+              "cv": round(cv, 3), "afterRate": round(after, 3), "stepDown": True, "mode": "short_reactions"}
+    if strength >= 0.9:
+        render["plateauEvidence"] = STEADY_STOP_MODE
+    return make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, strength, start_age, end_age, SHORT_SCALE,
+                     formula, render, ("reaction_counter_batch_update",))
 
 
 def _scan(prepared, context, metric, data, grid):

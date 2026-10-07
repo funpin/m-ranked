@@ -16,7 +16,7 @@ from ..series import DAY, HOUR, PreparedSeries
 from .base import DetectorContext, SiblingActivity, make_sign, number
 
 ID = "synchronous_rise"
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 PATTERN = 8
 FAMILY = Family.SYNCHRONY
 NEEDS_NORM = False
@@ -99,8 +99,13 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
             step_start, step_end = _step(prepared, metric, start_age)
             clock = datetime.fromtimestamp(own.hours[hour] * HOUR, tz=timezone.utc)
             strength = min(1.0, 0.4 + 0.15 * synchronous)
+            # Подъём мог быть найден в паре «предыдущий час + этот» (рывок на
+            # границе часа): прирост называется за ту же пару, а не «+0».
+            single = float(np.nan_to_num(subject[hour]))
+            rise = single if _rises_in(subject, WIDE_MIN_RISE)[hour] or hour == 0 \
+                else single + float(np.nan_to_num(subject[hour - 1]))
             formula = (f"реакции подросли одновременно у {synchronous + 1} постов аккаунта "
-                       f"(+{number(subject[hour])} у этого) в час {clock:%d.%m %H:00} UTC; "
+                       f"(+{number(rise)} у этого) в час {clock:%d.%m %H:00} UTC; "
                        f"у {eligible - synchronous} других постов старше 12 ч — нет")
             signs.append(make_sign(PATTERN, FAMILY, prepared, metric, strength, step_start,
                                    step_end, SCALE, formula,
