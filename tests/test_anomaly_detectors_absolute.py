@@ -92,4 +92,7 @@ def test_five_absolute_detectors_on_1200_points_are_fast():
         return time.perf_counter() - started
 
     once()
-    assert np.min([once() for _ in range(15)]) < 0.010
+    # Бюджет — на порядок регрессий (векторизованный обрыв: 39 → 0,5 мс), а не
+    # на миллисекунды: общие раннеры CI в 1,3–1,5 раза медленнее машины
+    # разработчика, и 10 мс падали на main уже при 11,2 мс. Локально — ~9 мс.
+    assert np.min([once() for _ in range(15)]) < 0.020
