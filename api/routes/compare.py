@@ -12,7 +12,7 @@ from fastapi.responses import Response
 from .. import dto, params as normalize
 from ..cached import serve
 from ..db import Database
-from ..errors import BadRequest
+from ..errors import BadRequest, NotFound
 from ..institution_profile import institution_profile
 from ..sql import compare as sql
 
@@ -227,14 +227,33 @@ def dashboard_body(period: str, revision: int, committed_at: Any, dashboard: dic
             "viewsTotal": row["views_total"], "reactionsTotal": row["reactions_total"],
             "analyzed": row["analyzed"], "anomalous": row["anomalous"],
         } for row in _json_rows(dashboard.get("daily"))],
-        "timing": [{
-            "platform": row["platform"], "weekday": row["weekday"], "hour": row["hour"],
-            "posts": row["posts"], "views24": _number(row["views24"]),
-        } for row in _json_rows(dashboard.get("timing"))],
-        "types": [{
-            "platform": row["platform"], "type": row["publication_type"], "posts": row["posts"],
-            "views24": _number(row["views24"]), "engagement24": _number(row["engagement24"], 3),
-        } for row in _json_rows(dashboard.get("types"))],
+        "timing": _timing_rows(dashboard.get("timing")),
+        "types": _type_rows(dashboard.get("types")),
+    }
+
+
+def _timing_rows(value: Any) -> list[dict[str, Any]]:
+    return [{
+        "platform": row["platform"], "weekday": row["weekday"], "hour": row["hour"],
+        "posts": row["posts"], "views24": _number(row["views24"]),
+    } for row in _json_rows(value)]
+
+
+def _type_rows(value: Any) -> list[dict[str, Any]]:
+    return [{
+        "platform": row["platform"], "type": row["publication_type"], "posts": row["posts"],
+        "views24": _number(row["views24"]), "engagement24": _number(row["engagement24"], 3),
+    } for row in _json_rows(value)]
+
+
+def institution_timing_body(institution_id: str, period: str, revision: int, committed_at: Any,
+                            row: dict[str, Any]) -> dict[str, Any]:
+    """Время и форматы одного вуза в тех же разрезах, что у панели."""
+    return {
+        "institutionId": institution_id, "period": period,
+        "datasetRevision": revision, "asOf": committed_at.isoformat(),
+        "timing": _timing_rows(row.get("timing")),
+        "types": _type_rows(row.get("types")),
     }
 
 
@@ -254,3 +273,26 @@ async def dashboard(request: Request, period: str = Query("30d")) -> Response:
 
     return await serve(request, "comparison-dashboard", {"period": resolved_period},
                        COMPARE_TAGS, build)
+
+
+@router.get("/api/v1/compare/institutions/{institutionId}/timing")
+async def institution_timing(request: Request, institutionId: str, period: str = Query("30d")) -> Response:
+    """Догружается страницей сравнения для выделенных вузов: ключ кэша — вуз и
+    период, а не набор выделенных, поэтому записи переиспользуются всеми."""
+    try:
+        institution_id = str(uuid.UUID(institutionId))
+    except ValueError:
+        raise BadRequest("institutionId должен быть UUID") from None
+    resolved_period = _choice(period, tuple(DASHBOARD_PERIODS), "period")
+
+    async def build(revision: int, committed_at: Any) -> dict[str, Any]:
+        db: Database = request.app.state.db
+        row = await db.fetch_one(sql.INSTITUTION_TIMING, {
+            "as_of": committed_at, "days": DASHBOARD_PERIODS[resolved_period], "institution_id": institution_id,
+        })
+        if not row or not row["found"]:
+            raise NotFound(f"вуз {institution_id} не найден")
+        return institution_timing_body(institution_id, resolved_period, revision, committed_at, dict(row))
+
+    return await serve(request, "comparison-institution-timing",
+                       {"id": institution_id, "period": resolved_period}, COMPARE_TAGS, build)

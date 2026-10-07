@@ -251,11 +251,26 @@ SELECT params.cohort_id,cohort.size AS cohort_sample_size,params.as_of,
 # Сравнимая мера — значение на 24-м часу: текущий счётчик вчерашнего поста
 # заведомо меньше позавчерашнего, и медиана по нему наказывала бы тех, кто
 # публикуется чаще. Суммы берутся из последнего замера: это объём за окно.
+# Формат поста — те же корзины, что у «Находок» (api.findings.MAIN_TYPES):
+# редкие и платформенные коды (опрос, документ, стикер, кнопки…) — «прочее».
+# Медиану нельзя собрать из медиан, поэтому слияние — здесь, а не в браузере.
+_TYPE_BUCKET = """CASE WHEN publication.publication_type IN ('text','photo','album','video')
+                THEN publication.publication_type ELSE 'other' END"""
+
+# Вовлечённость на 24-м часу: реакции / просмотры в Telegram, (лайки +
+# комментарии + репосты) / просмотры в остальных сетях.
+_ENGAGEMENT24 = """CASE WHEN day24.views_count > 0 AND (day24.reactions_count IS NOT NULL
+                     OR (account.platform <> 'telegram' AND (day24.comments_count IS NOT NULL OR day24.shares_count IS NOT NULL)))
+                THEN (coalesce(day24.reactions_count,0)
+                      + CASE WHEN account.platform = 'telegram' THEN 0
+                             ELSE coalesce(day24.comments_count,0) + coalesce(day24.shares_count,0) END
+                     )::numeric * 100 / day24.views_count END"""
+
 _DASHBOARD_POSTS = """
 WITH params AS (
     SELECT %(as_of)s::timestamptz AS as_of, %(days)s::integer AS days
 ), posts AS MATERIALIZED (
-    SELECT publication.id, publication.published_at, publication.publication_type::text AS publication_type,
+    SELECT publication.id, publication.published_at, {type_bucket} AS publication_type,
            account.platform::text AS platform, account.institution_id,
            CASE WHEN latest.views_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.views_count END AS views,
            CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset') THEN NULL ELSE latest.reactions_count END AS reactions,
@@ -264,12 +279,7 @@ WITH params AS (
            coalesce(recheck.effective_level, state.level) AS level,
            day24.views_count AS views24, day24.reactions_count AS reactions24,
            day24.comments_count AS comments24, day24.shares_count AS shares24,
-           CASE WHEN day24.views_count > 0 AND (day24.reactions_count IS NOT NULL
-                     OR (account.platform <> 'telegram' AND (day24.comments_count IS NOT NULL OR day24.shares_count IS NOT NULL)))
-                THEN (coalesce(day24.reactions_count,0)
-                      + CASE WHEN account.platform = 'telegram' THEN 0
-                             ELSE coalesce(day24.comments_count,0) + coalesce(day24.shares_count,0) END
-                     )::numeric * 100 / day24.views_count END AS engagement24
+           {engagement24} AS engagement24
       FROM params
       JOIN ingest.visible_publication publication
         ON publication.published_at > params.as_of - make_interval(days => params.days)
@@ -287,7 +297,27 @@ WITH params AS (
       LEFT JOIN analytics.publication_checkpoint day24 ON day24.publication_id = publication.id
        AND day24.hour_offset = 24
 )
-"""
+""".format(type_bucket=_TYPE_BUCKET, engagement24=_ENGAGEMENT24)
+
+# Время и форматы: одни и те же разрезы для всех вузов сразу и для одного
+# вуза, поэтому при одной ревизии они сходятся. Ждут CTE dated с колонками
+# platform, weekday, hour, publication_type, views24, engagement24.
+_TIMING_TYPES = """timing AS (
+    -- Когда публикуют и когда это работает: день недели и час выхода по Москве.
+    SELECT coalesce(platform, 'all') AS platform, weekday, hour, count(*)::integer AS posts,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24
+      FROM dated
+     -- День недели NULL — все дни: медиана по часу выхода считается по самим
+     -- постам, а не сводится из медиан отдельных дней.
+     GROUP BY GROUPING SETS ((platform, weekday, hour), (weekday, hour), (platform, hour), (hour))
+), types AS (
+    SELECT coalesce(platform, 'all') AS platform, publication_type,
+           count(*)::integer AS posts,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY engagement24) AS engagement24
+      FROM dated
+     GROUP BY GROUPING SETS ((platform, publication_type), (publication_type))
+)"""
 
 # Все разрезы по одному набору постов: сам набор — самая дорогая часть, и
 # четыре отдельных запроса собирали его четыре раза.
@@ -324,27 +354,40 @@ DASHBOARD = _DASHBOARD_POSTS + """, dated AS (
            count(*) FILTER (WHERE level >= 2)::integer AS anomalous
       FROM dated
      GROUP BY GROUPING SETS ((platform, day), (day))
-), timing AS (
-    -- Когда публикуют и когда это работает: день недели и час выхода по Москве.
-    SELECT coalesce(platform, 'all') AS platform, weekday, hour, count(*)::integer AS posts,
-           percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24
-      FROM dated
-     -- День недели NULL — все дни: медиана по часу выхода считается по самим
-     -- постам, а не сводится из медиан отдельных дней.
-     GROUP BY GROUPING SETS ((platform, weekday, hour), (weekday, hour), (platform, hour), (hour))
-), types AS (
-    SELECT coalesce(platform, 'all') AS platform, coalesce(publication_type, 'unknown') AS publication_type,
-           count(*)::integer AS posts,
-           percentile_cont(0.5) WITHIN GROUP (ORDER BY views24) AS views24,
-           percentile_cont(0.5) WITHIN GROUP (ORDER BY engagement24) AS engagement24
-      FROM dated
-     GROUP BY GROUPING SETS ((platform, publication_type), (publication_type))
-)
+), {timing_types}
 SELECT (SELECT coalesce(json_agg(stats), '[]') FROM stats) AS stats,
        (SELECT coalesce(json_agg(daily ORDER BY day), '[]') FROM daily) AS daily,
        (SELECT coalesce(json_agg(timing), '[]') FROM timing) AS timing,
        (SELECT coalesce(json_agg(types), '[]') FROM types) AS types
-"""
+""".replace("{timing_types}", _TIMING_TYPES)
+
+# Время и форматы одного вуза — догружаются к панели для выделенных вузов.
+# Окно, московское время и корзины форматов те же, что в DASHBOARD; набор
+# постов идёт от аккаунтов вуза и не трогает последний замер и анализ.
+# found = 0 — вуза нет или он скрыт.
+INSTITUTION_TIMING = """
+WITH params AS (
+    SELECT %(as_of)s::timestamptz AS as_of, %(days)s::integer AS days, %(institution_id)s::uuid AS institution_id
+), institution AS (
+    SELECT institution.id FROM params JOIN catalog.visible_institution institution ON institution.id = params.institution_id
+), dated AS (
+    SELECT account.platform::text AS platform, {type_bucket} AS publication_type,
+           day24.views_count AS views24, {engagement24} AS engagement24,
+           extract(isodow FROM publication.published_at AT TIME ZONE 'Europe/Moscow')::integer - 1 AS weekday,
+           extract(hour FROM publication.published_at AT TIME ZONE 'Europe/Moscow')::integer AS hour
+      FROM params
+      JOIN institution ON true
+      JOIN catalog.visible_platform_account account ON account.institution_id = institution.id AND account.enabled
+      JOIN ingest.visible_publication publication ON publication.primary_account_id = account.id
+       AND publication.published_at > params.as_of - make_interval(days => params.days)
+       AND publication.published_at <= params.as_of
+      LEFT JOIN analytics.publication_checkpoint day24 ON day24.publication_id = publication.id
+       AND day24.hour_offset = 24
+), {timing_types}
+SELECT (SELECT count(*)::integer FROM institution) AS found,
+       (SELECT coalesce(json_agg(timing), '[]') FROM timing) AS timing,
+       (SELECT coalesce(json_agg(types), '[]') FROM types) AS types
+""".replace("{type_bucket}", _TYPE_BUCKET).replace("{engagement24}", _ENGAGEMENT24).replace("{timing_types}", _TIMING_TYPES)
 
 # Кривые накопления: медиана значений на каждом фиксированном часу. Площадки
 # не смешиваются — просмотр в Telegram и во ВКонтакте значит разное.
