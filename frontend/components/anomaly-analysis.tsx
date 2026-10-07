@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import { ArrowUpRight, ChevronRight, CircleHelp, LocateFixed, UsersRound } from "lucide-react";
 import Link from "@/components/native-link";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -27,12 +28,20 @@ const MiniChart = dynamic(() => import("./anomaly-mini-chart"), {
 
 function Summary({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
   const line = summaryLine(analysis);
+  const findings = analysis.accountFindings ?? [];
   return (
     <span className="inline-flex flex-wrap items-center gap-2" data-testid="saved-anomaly-status">
       <LevelIcon level={line.level} className={cn("size-4 shrink-0", line.calm ? "text-muted-foreground" : line.tone === "red" ? "text-destructive" : "text-chart-3")} />
-      {line.calm ? <b className="font-semibold">{line.label.replace(/^./, (letter) => letter.toUpperCase())}</b>
+      {line.calm ? <b className="font-semibold">{line.label.replace(/^./, (letter) => letter.toUpperCase())}{findings.length && line.level === 0 ? " у поста" : ""}</b>
         : <><span className="text-muted-foreground text-xs font-normal">Итоговая оценка</span>
           <StatusPill tone={line.tone === "red" ? "red" : "amber"}>{line.label}</StatusPill></>}
+      {/* Пост без собственных признаков, но из аккаунтной находки: сама
+          закономерность видна только на многих постах, и «нет признаков» без
+          неё читалось бы как «всё обычно». */}
+      {line.calm && findings.length ? <span className="inline-flex items-center gap-1.5" data-testid="account-finding-summary">
+        <UsersRound className="text-chart-3 size-3.5 shrink-0" aria-hidden="true" />
+        <StatusPill tone="amber">{findings[0]!.title}{findings.length > 1 ? ` +${findings.length - 1}` : ""}</StatusPill>
+      </span> : null}
     </span>
   );
 }
@@ -45,10 +54,23 @@ function SignalHeading({ signal, expanded }: { signal: AnomalySignal; expanded: 
     <span className="inline-flex items-center gap-1.5 font-semibold"><PatternIcon pattern={signal.pattern} className="text-chart-3 size-4 shrink-0" />{signal.title}</span>
     <span className="text-muted-foreground text-xs tabular-nums">{windowDate.format(new Date(signal.startAt))}</span>
     <span className="text-muted-foreground text-xs">{METRIC_NAMES[signal.metric]}</span>
+    <SameEpisode signal={signal} />
     <CollapsibleTrigger render={<Button variant="ghost" size="sm" className="text-muted-foreground ml-auto" />} data-testid="signal-detail-toggle">
       График <ChevronRight data-icon="inline-end" className={cn("transition-transform", expanded && "rotate-90")} aria-hidden="true" />
     </CollapsibleTrigger>
   </div>;
+}
+
+/** Другие проверки, увидевшие то же событие: в уровень оно входит один раз. */
+function SameEpisode({ signal }: { signal: AnomalySignal }) {
+  const titles = Array.isArray(signal.render.sameEpisode)
+    ? signal.render.sameEpisode.filter((item): item is string => typeof item === "string") : [];
+  if (!titles.length) return null;
+  return <Tooltip><TooltipTrigger render={<Badge variant="outline" className="text-muted-foreground font-normal" data-testid="same-episode" />}>
+    +{titles.length} {titles.length === 1 ? "проверка" : "проверки"}
+  </TooltipTrigger><TooltipContent className="max-w-xs whitespace-normal">
+    То же событие нашли: {titles.join("; ")}. В оценку оно входит один раз.
+  </TooltipContent></Tooltip>;
 }
 
 function ContextRow({ window, signal, index, onShow }: {
@@ -225,7 +247,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
                   {summary.analyzedAt ? <span>Анализ {legacyDate(summary.analyzedAt)}</span> : null}
                   {analysis.originalLevel !== null && analysis.level !== null && analysis.originalLevel > analysis.level
                     ? <span data-testid="context-cap-status">Сильный признак ослаблен контекстом</span> : null}
-                  {analysis.accountFindings?.length ? <span className="inline-flex items-center gap-1" data-testid="account-finding-status">
+                  {analysis.accountFindings?.length && !summary.calm ? <span className="inline-flex items-center gap-1" data-testid="account-finding-status">
                     <UsersRound className="text-chart-3 size-3.5" aria-hidden="true" />аккаунтная находка</span> : null}
                 </span> : null}
               </span>

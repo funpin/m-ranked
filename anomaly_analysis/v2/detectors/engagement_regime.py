@@ -27,14 +27,14 @@ from datetime import timedelta
 import math
 
 import numpy as np
-from scipy.stats import poisson
+from scipy.stats import chi2, poisson
 
 from ..domain import Family, Metric, Sign
 from ..series import HOUR, PointFlag, PreparedSeries
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "engagement_regime"
-VERSION = "1.0.0"
+VERSION = "1.2.0"
 PATTERN = 14
 FAMILY = Family.CROSS_METRIC
 NEEDS_NORM = False
@@ -62,6 +62,8 @@ MIN_REACTIONS = 15
 # Пачка доставляется за часы, а не за дни. Многодневный «эпизод» на ВК —
 # это почти замёрзший счётчик просмотров старого поста, а не доля реакций.
 MAX_EPISODE = 24 * HOUR
+# Ноль в момент публикации берётся, если первый замер не позже этого.
+ORIGIN_WITHIN = HOUR
 # −log10 p: от 4 — слабый сигнал; средний, сильный и подтверждённый — по
 # таблице ниже. Подтверждённый эпизод один даёт уровень 3: пачка, которая
 # обрывается на фоне продолжающихся просмотров, не нуждается во втором методе.
@@ -69,6 +71,19 @@ MIN_SURPRISE = 4.0
 MEDIUM = (6.0, 8.0)            # surprise, ratio → слабый сигнал средней силы
 STRONG = (10.0, 15.0)          # surprise, ratio → выраженная аномалия
 CONFIRMED = (12.0, 20.0)       # surprise, ratio → признаки искусственной активности
+# Жёсткий обрыв. Пуассоновский тест сравнивает с органическим падением доли до
+# 4–8 раз и на небольшом посте значимости не набирает: 2 реакции на 200
+# просмотров после 57 на 270 — «не меньше чем в 5 раз» при 99 %. Насколько
+# такое падение редко, показала выборка 12.09–05.10.2026: нижняя граница
+# падения ≥ 8 — у 304 из 8 690 постов MAX, но 276 из них у шести аккаунтов, у
+# всех остальных — 0,3 % постов; в ВК — так же (273 из 288 при ≥ 15). Обрыв,
+# сосредоточенный в нескольких аккаунтах, — не органическая форма. Пороги —
+# нижняя граница падения при 99 %: слабый, средний, выраженный. С ними ветка
+# дала слабый сигнал 71 посту MAX и 32 ВК; вне шести аккаунтов — по одному.
+BREAK_LEVELS = ((20.0, 0.75), (10.0, 0.55), (5.0, 0.45))
+BREAK_CONFIDENCE = 0.99
+BREAK_MIN_SPAN = 6 * HOUR - 60
+BREAK_MIN_VIEWS = 50
 # Окно, где просмотры прибывали втрое быстрее, чем в эпизоде, — приток
 # просмотров без отклика: формулировка называет именно его.
 VIEWS_SURGE = 3.0
@@ -88,6 +103,9 @@ class Episode:
     window_views: float
     ratio: float
     surprise: float
+    # Во сколько раз доля после эпизода ниже доли в нём — не меньше этого с
+    # уверенностью 99 % (только для остановки).
+    bound: float = 0.0
 
     @property
     def share(self) -> float:
@@ -99,7 +117,7 @@ class Episode:
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
-    ages, reactions, views = paired(prepared)
+    ages, reactions, views = from_publication(*paired(prepared))
     episodes: list[Episode] = []
     for chunk in _chunks(ages, reactions, views):
         episodes.extend(find_episodes(*chunk, delay=context.counter_delay))
@@ -119,6 +137,20 @@ def paired(prepared: PreparedSeries) -> tuple[np.ndarray, np.ndarray, np.ndarray
     reset = (r.flags[ri] & np.uint8(PointFlag.COUNTER_RESET)) != 0
     values_r[reset] = np.nan
     return common, values_r, values_v
+
+
+def from_publication(ages: np.ndarray, reactions: np.ndarray,
+                     views: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Ряд с нулём в момент публикации, если первый замер пришёл в первый час.
+
+    Счётчики начинаются с нуля, и всё, что набралось до первого замера, — тоже
+    отклик: ВК №149026 ГУАП к пятой минуте имел 61 лайк на 73 просмотра, и без
+    этой точки эпизод начинался с уже набранного пакета. Позже первый замер
+    ничего не говорит о том, когда пришёл отклик.
+    """
+    if not ages.size or not 0 < ages[0] <= ORIGIN_WITHIN or np.isnan(reactions[0]):
+        return ages, reactions, views
+    return np.r_[0.0, ages], np.r_[0.0, reactions], np.r_[0.0, views]
 
 
 def _chunks(ages, reactions, views):
@@ -162,7 +194,7 @@ def find_episodes(ages: np.ndarray, reactions: np.ndarray, views: np.ndarray,
         if caught_up is not None:
             total_v = max(total_v, caught_up[3])
         for kind in ("stop", "start"):
-            episode = _test(kind, ages, reactions, views, start_age, end_age, total_r, total_v, dispersion)
+            episode = _test(kind, ages, reactions, views, start_age, end_age, total_r, total_v, dispersion, delay)
             if episode is not None:
                 found.append(episode)
     return found
@@ -200,6 +232,8 @@ def episode_spans(prepared: PreparedSeries, context: DetectorContext) -> list[tu
     эпизод: узкая полоса внутри двухчасового пакета вводит в заблуждение.
     """
     spans = []
+    # Подсветка — по замерам, без нуля публикации: ранние просмотры подписчиков
+    # приходят раньше реакций, и с нулём начало пакета уезжало бы вперёд.
     for ages, reactions, views in _chunks(*paired(prepared)):
         intervals = _intervals(ages, reactions, views)
         if len(intervals) < 3:
@@ -209,11 +243,20 @@ def episode_spans(prepared: PreparedSeries, context: DetectorContext) -> list[tu
                      sum(item[3] for item in intervals[a:b])) for a, b in zip(bounds, bounds[1:])]
         total_r = sum(item[2] for item in segments)
         total_v = sum(item[3] for item in segments)
-        for start, end, r, v in segments:
-            # Отрезок эпизода — доля хотя бы втрое выше, чем на остальном ряду.
+        for index, (start, end, r, v) in enumerate(segments):
+            # Отрезок эпизода — доля хотя бы втрое выше, чем на остальном ряду;
+            # соседи с долей не ниже трети — тот же эпизод, как в find_episodes.
             rest = (total_r - r) / max(total_v - v, 1.0)
-            if r >= 10 and v > 0 and r / v >= 3 * rest and end - start <= MAX_EPISODE:
-                spans.append((start, end))
+            if not (r >= 10 and v > 0 and r / v >= 3 * rest):
+                continue
+            first, last = index, index
+            while first > 0 and _share(segments[first - 1]) >= EPISODE_SHARE * r / v and segments[first - 1][2] >= 3:
+                first -= 1
+            while (last + 1 < len(segments) and _share(segments[last + 1]) >= EPISODE_SHARE * r / v
+                   and segments[last + 1][2] >= 3):
+                last += 1
+            if segments[last][1] - segments[first][0] <= MAX_EPISODE:
+                spans.append((segments[first][0], segments[last][1]))
     return spans
 
 
@@ -272,7 +315,7 @@ def _window(ages, reactions, views, start, end):
 
 
 def _test(kind, ages, reactions, views, start_age, end_age, total_r, total_v,
-          dispersion: float = 1.0) -> Episode | None:
+          dispersion: float = 1.0, delay: float = 0.0) -> Episode | None:
     share = total_r / max(total_v, 1.0)
     # Пять независимых событий — минимум: при зернистом счётчике 30 реакций
     # могут оказаться тремя пакетными обновлениями.
@@ -280,7 +323,10 @@ def _test(kind, ages, reactions, views, start_age, end_age, total_r, total_v,
         return None
     best = None
     for width, decline in WINDOWS:
-        span = (end_age, end_age + width) if kind == "stop" else (start_age - width, start_age)
+        # Просмотры, догоняющие эпизод с задержкой счётчика, уже отнесены к нему
+        # (caught_up): окно «затем» начинается после задержки, иначе они
+        # занижали бы долю после эпизода второй раз.
+        span = (end_age + delay, end_age + delay + width) if kind == "stop" else (start_age - width, start_age)
         window = _window(ages, reactions, views, *span)
         if window is None:
             continue
@@ -299,10 +345,18 @@ def _test(kind, ages, reactions, views, start_age, end_age, total_r, total_v,
             p_value = poisson.sf((total_r - 1) / dispersion, START_ALLOWANCE * floor * total_v / dispersion)
         surprise = -math.log10(max(float(p_value), 1e-300))
         ratio = share / floor
-        if ratio < MIN_RATIO or surprise < MIN_SURPRISE:
+        bound = 0.0
+        if kind == "stop" and w1 - w0 >= BREAK_MIN_SPAN and wv >= BREAK_MIN_VIEWS:
+            # Верхняя граница доли окна при 99 % — в «событиях» с учётом зернистости.
+            upper = chi2.ppf(BREAK_CONFIDENCE, 2 * (wr / dispersion + 1)) / 2 * dispersion / wv
+            bound = share / upper
+        tested = ratio >= MIN_RATIO and surprise >= MIN_SURPRISE
+        if not tested and bound < BREAK_LEVELS[-1][0]:
             continue
-        if best is None or surprise > best.surprise:
-            best = Episode(kind, start_age, end_age, total_r, total_v, w0, w1, wr, wv, ratio, surprise)
+        candidate = Episode(kind, start_age, end_age, total_r, total_v, w0, w1, wr, wv, ratio,
+                            surprise if tested else 0.0, bound)
+        if best is None or (candidate.surprise, candidate.bound) > (best.surprise, best.bound):
+            best = candidate
     return best
 
 
@@ -320,11 +374,12 @@ def grade(item: Episode) -> tuple[float, bool]:
     """Сила признака и признак подтверждённого эпизода (уровень 3 сам по себе)."""
     if item.surprise >= CONFIRMED[0] and item.ratio >= CONFIRMED[1]:
         return min(0.99, 0.9 + 0.02 * math.log2(item.ratio / CONFIRMED[1] + 1)), True
+    by_break = next((strength for limit, strength in BREAK_LEVELS if item.bound >= limit), 0.0)
     if item.surprise >= STRONG[0] and item.ratio >= STRONG[1]:
-        return 0.75, False
+        return max(0.75, by_break), False
     if item.surprise >= MEDIUM[0] and item.ratio >= MEDIUM[1]:
-        return 0.55, False
-    return 0.45, False
+        return max(0.55, by_break), False
+    return max(0.45 if item.surprise >= MIN_SURPRISE else 0.0, by_break), False
 
 
 def views_surge(item: Episode) -> bool:
@@ -358,7 +413,10 @@ def _sign(prepared: PreparedSeries, item: Episode) -> Sign:
                    f"за {window} ({item.window_share:.1%})")
     formula = (f"{episode_text}; {'затем' if item.kind == 'stop' else 'до этого'} {window_text} — "
                f"доля {times(item.ratio)} {'ниже' if item.kind == 'stop' else 'ниже, чем в эпизоде'}; "
-               f"вероятность при плавном изменении доли ≤ 10{superscript(-round(item.surprise))}")
+               + (f"вероятность при плавном изменении доли ≤ 10{superscript(-round(item.surprise))}"
+                  if item.surprise >= MIN_SURPRISE else
+                  f"с уверенностью 99 % — не меньше чем в {number(math.floor(item.bound))} раз; "
+                  f"у типичных аккаунтов площадки такого обрыва почти не бывает"))
     # «Приток просмотров» — только когда быстрые просмотры пришли после эпизода и
     # разбавили долю; перед поздним стартом реакций это значило бы обратное.
     surge = item.kind == "stop" and views_surge(item)
@@ -368,7 +426,7 @@ def _sign(prepared: PreparedSeries, item: Episode) -> Sign:
               "episodeReactions": round(item.reactions), "episodeViews": round(item.views),
               "windowReactions": round(item.window_reactions), "windowViews": round(item.window_views),
               "windowStartAge": round(item.window_start), "windowEndAge": round(item.window_end),
-              "ratio": round(item.ratio, 1), "surprise": round(item.surprise, 1)}
+              "ratio": round(item.ratio, 1), "surprise": round(item.surprise, 1), "breakBound": round(item.bound, 1)}
     if confirmed:
         render["plateauEvidence"] = CONFIRMED_MODE
     alternatives = (("pinned_post", "interested_audience_found_post") if item.kind == "start"

@@ -47,11 +47,28 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
-AGGREGATION_VERSION = "2.4.0"
+AGGREGATION_VERSION = "2.5.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
 GAP_PATTERN = 4
+# Признаки одного события, разделённые не больше чем этим, — одно событие:
+# детектор рывка доказывает соседние пятиминутки по отдельности.
+SAME_EVENT_GAP = timedelta(minutes=10)
+# RuTube: форма прихода просмотров — не признак. Видео внутри площадки почти
+# не находят, смотрят по ссылке из соцсети или с сайта: волна за час-два и
+# тишина. По журналу циклов (квитанции подтвердили 49 из 52 мест роста) так
+# выглядят 13 % постов RuTube из 30 аккаунтов — это норма площадки, а не
+# пакет. Рывок с плато и поздний скачок просмотров, а с ними рывок
+# реакций в ту же волну, ослабляются ниже порога вывода: при пороге 0,3 две
+# волны одного поста давали слабый сигнал у 3 % постов RuTube. Реакции,
+# оторванные от просмотров (6, 7, 14), и линейная подача (1: волна по ссылке
+# не бывает ровной по часам) проверяются как прежде.
+RUTUBE_WAVE_CAP = 0.15
+RUTUBE_VIEW_SHAPES = frozenset({2, 9})
+# Волна по ссылке растягивается на десятки минут; скачок, доказанный на
+# более коротком окне (при частых замерах), — уже не она.
+RUTUBE_WAVE_SCALE = timedelta(minutes=30)
 
 SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻",
            14: "⊓", 15: "↧", 16: "⌐"}
@@ -100,6 +117,7 @@ ALTERNATIVES = {
     "wide_reach_low_engagement": "пост разошёлся шире обычной аудитории, которая реагирует реже",
     "interested_audience_found_post": "пост нашла заинтересованная аудитория: подборка, профильный чат или новый увлечённый читатель архива",
     "multiple_reactions_per_viewer": "один читатель мог поставить несколько реакций; правило сравнения использует порог 1:1",
+    "external_link_wave": "видео посмотрели по ссылке из соцсети или с сайта: на RuTube такие волны обычны",
     "platform_write_off": "площадка удалила реакции аккаунтов, которые сочла недостоверными",
     "post_edited_reactions_reset": "пост пересоздали или изменили так, что площадка сбросила часть реакций",
 }
@@ -188,6 +206,7 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
             versions: dict[str, str], norm_version: int | None = None) -> PostVerdict:
     unanalyzable = _unanalyzable(prepared)
     kept = []
+    signs = _rutube_waves(prepared, signs)
     for sign in signs:
         bounded_counts = (sign.pattern == 9 and (
             sign.metric is Metric.REACTIONS and sign.render.get("measurementMode") in {BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE}
@@ -214,13 +233,7 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
             sign = replace(sign, strength=min(sign.strength, YOUNG_NORM_CAP))
         if sign.strength >= WEAK:
             kept.append(sign)
-    # Two implementations/scales observing the same event are one signal.
-    unique = []
-    for sign in sorted(kept, key=lambda item: (not _confirmed_plateau(item), -item.strength, item.pattern)):
-        if not any(sign.pattern == item.pattern and sign.metric is item.metric
-                   and sign.family is item.family and sign.interval.start < item.interval.end
-                   and item.interval.start < sign.interval.end for item in unique):
-            unique.append(sign)
+    unique = _same_events(kept)
     level = level_for(unique)
     # Keep the independent evidence that produced the level visible even when
     # one family has more than six stronger events.
@@ -243,6 +256,69 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         quality = replace(quality, codes=(*quality.codes, "reported_reaction_shape"))
     return PostVerdict(prepared.series.publication_id, level, tuple(ordered) if level else (),
                        quality, versions, norm_version)
+
+
+def _rutube_waves(prepared: PreparedSeries, signs: Sequence[Sign]) -> list[Sign]:
+    if prepared.series.platform != "rutube":
+        return list(signs)
+    def wave(sign: Sign) -> bool:
+        return (sign.pattern in RUTUBE_VIEW_SHAPES and sign.metric is Metric.VIEWS
+                and sign.scale >= RUTUBE_WAVE_SCALE)
+    waves = [sign.interval for sign in signs if wave(sign)]
+    capped = []
+    for sign in signs:
+        view_shape = wave(sign)
+        same_wave = (sign.pattern == 9 and sign.metric is Metric.REACTIONS
+                     and any(sign.interval.start <= wave.end + SAME_EVENT_GAP
+                             and wave.start <= sign.interval.end + SAME_EVENT_GAP for wave in waves))
+        if (view_shape or same_wave) and sign.strength > RUTUBE_WAVE_CAP:
+            sign = replace(sign, strength=RUTUBE_WAVE_CAP,
+                           alternatives=tuple(dict.fromkeys(("external_link_wave", *sign.alternatives))))
+        capped.append(sign)
+    return capped
+
+
+def _event(sign: Sign) -> tuple[Any, ...]:
+    """Что именно утверждает признак — у разных детекторов одного события ключ общий.
+
+    Рывок реакций (9) и пакет реакций (14) — два способа увидеть одну и ту же
+    пачку реакций на фоне просмотров: рывок доказывает её на коротком окне,
+    эпизод — по доле реакций на просмотр. Как два независимых семейства они
+    давали уровень 3 одним событием.
+    """
+    if sign.pattern == 14 or sign.pattern == 9 and sign.metric is Metric.REACTIONS:
+        return ("reaction_episode",)
+    return (sign.pattern, sign.metric, sign.family)
+
+
+def _same_events(signs: Sequence[Sign]) -> list[Sign]:
+    """Признаки одного события — один признак: сильнейший, на весь участок события.
+
+    Остальные названия уходят в `render.sameEpisode`: читатель видит, что
+    событие подтвердили несколько проверок, но в уровень оно входит один раз.
+    """
+    unique: list[Sign] = []
+    others: dict[int, list[str]] = {}
+    patterns: dict[int, set[int]] = {}
+    for sign in sorted(signs, key=lambda item: (not _confirmed_plateau(item), -item.strength, item.pattern)):
+        for index, item in enumerate(unique):
+            if (_event(sign) == _event(item) and sign.interval.start <= item.interval.end + SAME_EVENT_GAP
+                    and item.interval.start <= sign.interval.end + SAME_EVENT_GAP):
+                unique[index] = replace(item, interval=Interval(min(item.interval.start, sign.interval.start),
+                                                                max(item.interval.end, sign.interval.end)))
+                if sign.pattern != item.pattern:
+                    patterns.setdefault(index, set()).add(sign.pattern)
+                title = sign_title(sign)
+                if title != sign_title(item):
+                    others.setdefault(index, [])
+                    if title not in others[index]:
+                        others[index].append(title)
+                break
+        else:
+            unique.append(sign)
+    return [replace(item, render={**item.render, "sameEpisode": others[index],
+                                  "sameEpisodePatterns": sorted(patterns.get(index, ()))})
+            if index in others else item for index, item in enumerate(unique)]
 
 
 def _confirmed_plateau(sign: Sign) -> bool:
@@ -279,7 +355,7 @@ def compact(verdict: PostVerdict) -> dict[str, Any]:
     }
 
 
-def sign_payload(sign: Sign) -> dict[str, Any]:
+def sign_title(sign: Sign) -> str:
     title = TITLES[sign.pattern]
     if sign.render.get("measurementMode") == REPORTED_SHAPE_MODE:
         title = "Рывок реакций с плато по сохранённым значениям"
@@ -301,6 +377,11 @@ def sign_payload(sign: Sign) -> dict[str, Any]:
             title = "Реакции включились без новой аудитории"
         else:
             title = "Пакет реакций с остановкой"
+    return title
+
+
+def sign_payload(sign: Sign) -> dict[str, Any]:
+    title = sign_title(sign)
     return {
         "pattern": sign.pattern, "symbol": SYMBOLS[sign.pattern], "title": title,
         "family": sign.family.value, "metric": sign.metric.value, "strength": round(sign.strength, 3),

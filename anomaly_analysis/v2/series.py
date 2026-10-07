@@ -15,7 +15,7 @@ import numpy as np
 
 from .domain import Metric, PostSeries
 
-PREPARATION_VERSION = "2.3.0"
+PREPARATION_VERSION = "2.4.0"
 
 MINUTE, HOUR, DAY = 60, 3600, 86400
 
@@ -242,16 +242,90 @@ def engagement_at(prepared: PreparedSeries, age: float) -> float | None:
     return None if any(value is None for value in values) else float(sum(values))
 
 
+# Площадки, где успешный цикл сбора аккаунта перечитывает каждый
+# неизменившийся пост в сроке слежения. Сверка с квитанциями опроса
+# (publication_poll_receipt, 30.09–06.10.2026): RuTube — 486 из 486 циклов у
+# постов младше суток и 3 990 из 4 016 у постов 1–7 суток. У остальных
+# площадок старые посты читаются по очереди (Telegram — 91 % пятнадцатиминуток),
+# и цикл аккаунта чтения поста не доказывает.
+CYCLES_CONFIRM_READS = frozenset({"rutube"})
+
+
 def confirm_unchanged(ages: np.ndarray, collected: np.ndarray, cadence: CollectionCadence,
                       platform: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Keep actual post observations; account cycles do not confirm a post read.
+    """Отличить «не менялось» от «нет данных» по журналу сбора аккаунта.
 
-    Retained as an adapter for callers carrying legacy account-cycle metadata.
-    A successful account cycle can omit a post or metric. It cannot narrow the
-    unknown time of a change or extend a plateau. Actual unchanged per-post
-    receipts belong in the input observations with their measured values.
+    Сборщик пишет замер, только когда значения изменились, поэтому плато —
+    именно тот участок, где замеров нет. Неизменившийся пост сборщик
+    перечитывает в каждом цикле, как только начался новый интервал опроса его
+    возраста (последняя сохранённая точка не сдвигается), — но только на
+    площадках из CYCLES_CONFIRM_READS это подтверждено квитанциями. Там в
+    последнем успешном цикле перед новым замером ставится перенесённая точка с
+    прежним значением: прирост остаётся на последнем цикле, а не размазывается
+    по всему интервалу (RuTube: «18 часов» вместо одного). Интервал
+    подтверждён, если циклы шли по нему без разрыва длиннее трёх шагов. Хвост
+    после последнего замера так же продлевается до последнего цикла.
+
+    На остальных площадках цикл аккаунта может пропустить пост и ничего не
+    сужает; настоящие чтения без изменений сборщик теперь сохраняет сам
+    (скобка роста, collector_target.repository).
+
+    Возвращает возрасты точек, индекс исходной строки для каждой (перенесённая
+    точка берёт значения предыдущей) и `covered[k]` — участок от точки k−1 до
+    k подтверждён журналом.
     """
-    return ages, np.arange(ages.size), np.zeros(ages.size, dtype=bool)
+    size = ages.size
+    rows = np.arange(size)
+    covered = np.zeros(size, dtype=bool)
+    if platform not in CYCLES_CONFIRM_READS or size == 0 or not collected.size:
+        return ages, rows, covered
+    collected = np.sort(collected[collected > ages[0]])
+
+    def chain(start: float, stop: float, limit: float, own: float = 0.0) -> float:
+        """Последний цикл непрерывной цепочки от start до цикла, прочитавшего stop.
+
+        Журнал хранит начала циклов: замер stop сделан в последнем цикле,
+        начавшемся не раньше чем за `own` до него, — этот цикл видел уже новое
+        значение и в цепочку не входит.
+        """
+        left = int(np.searchsorted(collected, start, side="right"))
+        right = int(np.searchsorted(collected, stop, side="left"))
+        if right > left and stop - collected[right - 1] < own:
+            right -= 1
+        inside = collected[left:right]
+        if not inside.size:
+            return start
+        broken = np.flatnonzero(np.diff(np.concatenate(([start], inside))) > limit)
+        return float(inside[broken[0] - 1]) if broken.size else float(inside[-1])
+
+    steps = np.maximum(cadence.expected_step_seconds(platform, ages[:-1]),
+                       cadence.expected_step_seconds(platform, ages[1:]))
+    limits = GAP_FACTOR * steps
+    covered[1:] = np.diff(ages) <= limits
+    # Перенесённые точки: (позиция вставки, возраст, строка-источник).
+    inserts: list[tuple[int, float, int]] = []
+    for index in range(size - 1):
+        start, stop, step = float(ages[index]), float(ages[index + 1]), float(steps[index])
+        last = chain(start, stop, limits[index], own=step / 2)
+        if not covered[index + 1]:
+            covered[index + 1] = stop - last <= limits[index]
+        # Пост в цикле точно перечитан, если с прошлой точки начался новый
+        # интервал его опроса; цикл ближе к прошлой точке ничего не добавляет.
+        if last >= start + step and stop - last > 1.0:
+            inserts.append((index + 1, last, index))
+    tail = float(ages[-1])
+    step = float(cadence.expected_step_seconds(platform, np.array((tail,)))[0])
+    last = chain(tail, np.inf, GAP_FACTOR * step)
+    if last >= tail + step:
+        inserts.append((size, last, size - 1))
+    if not inserts:
+        return ages, rows, covered
+    where = np.array([item[0] for item in inserts])
+    return (np.insert(ages, where, [item[1] for item in inserts]),
+            np.insert(rows, where, [item[2] for item in inserts]),
+            # Участок до перенесённой точки подтверждён; следующий за ней
+            # наследует признак исходного интервала.
+            np.insert(covered, where, True))
 
 
 def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostSeries,

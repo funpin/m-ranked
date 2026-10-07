@@ -1,7 +1,7 @@
 """Аккаунтные находки: закономерность, видимая только на многих постах сразу.
 
 Пост сравнивается сам с собой, и слабая статистика одного поста не даёт
-уверенного вывода: 60 реакций в первые два часа и почти ничего потом — у
+уверенного вывода: 60 реакций в первые часы и почти ничего потом — у
 небольшой аудитории это может быть и случайностью. Если же так выглядят
 почти все посты аккаунта месяц подряд, а у других аккаунтов площадки нет,
 это уже закономерность. Находка относится к аккаунту, считается отдельно от
@@ -10,7 +10,7 @@
 Виды:
 
 * ``early_pack`` — повторяющийся стартовый пакет: доля реакций на просмотр в
-  первые два часа во много раз выше доли за следующие сутки. У живой
+  первые 2 или 6 часов (что сильнее) во много раз выше доли за остаток суток. У живой
   аудитории она выше в 1,5–2 раза (медиана когорты 1,5 в MAX и 1,0 в ВК по
   постам 12.09–05.10.2026); у аккаунта с находкой — больше чем в пять раз у
   типичного поста и больше чем в восемь у большинства.
@@ -60,7 +60,10 @@ ALTERNATIVES = {
     "late_engagement": "Регулярные читатели архива, подборки и пересылки старых постов",
 }
 
-# Стартовый пакет: окна «первые 2 ч» и «2–24 ч» по отметкам сводки.
+# Стартовый пакет: окна «первые 2 ч / 2–24 ч» и «первые 6 ч / 6–24 ч» по отметкам
+# сводки; у поста берётся большее отношение. Пакет ГУАП в MAX длится 3,5–5 ч, и
+# двухчасовое окно делило его пополам. Когорта считается тем же правилом.
+PACK_SPLITS = ("h2", "h6")
 PACK_MIN_POSTS = 15
 PACK_MIN_REACTIONS = 5
 PACK_MIN_EARLY_VIEWS = 10
@@ -112,15 +115,21 @@ class AccountFinding:
 
 
 def pack_ratio(ledger: TailLedger) -> tuple[float, int, int, int, int] | None:
-    """Во сколько раз доля реакций в первые 2 ч выше доли за 2–24 ч; None — мало данных."""
-    early, day = ledger.marks.get("h2"), ledger.marks.get("h24")
-    if early is None or day is None:
-        return None
-    r1, v1 = early.reactions, early.views
-    r2, v2 = max(0, day.reactions - early.reactions), max(0, day.views - early.views)
-    if r1 + r2 < PACK_MIN_REACTIONS or v1 < PACK_MIN_EARLY_VIEWS or v2 < PACK_MIN_LATER_VIEWS:
-        return None
-    return (r1 / v1) / max(r2 / v2, 0.5 / v2), r1, v1, r2, v2
+    """Во сколько раз доля реакций в первые 2 или 6 ч выше доли за остаток суток; None — мало данных."""
+    day = ledger.marks.get("h24")
+    best = None
+    for key in PACK_SPLITS:
+        early = ledger.marks.get(key)
+        if early is None or day is None:
+            continue
+        r1, v1 = early.reactions, early.views
+        r2, v2 = max(0, day.reactions - early.reactions), max(0, day.views - early.views)
+        if r1 + r2 < PACK_MIN_REACTIONS or v1 < PACK_MIN_EARLY_VIEWS or v2 < PACK_MIN_LATER_VIEWS:
+            continue
+        value = ((r1 / v1) / max(r2 / v2, 0.5 / v2), r1, v1, r2, v2)
+        if best is None or value[0] > best[0]:
+            best = value
+    return best
 
 
 def findings(posts: Iterable[LedgerPost], computed_for: date,
@@ -303,8 +312,8 @@ def summary(finding: AccountFinding) -> str:
     data = finding.metrics
     if finding.kind == "early_pack":
         cohort = data.get("cohort", {})
-        return (f"У {data['posts']} постов за {WINDOW_DAYS} дней доля реакций на просмотр в первые 2 часа "
-                f"в {_ru(data['median'])} раза выше, чем за следующие сутки (у {round(100 * data['share'])} % постов — "
+        return (f"У {data['posts']} постов за {WINDOW_DAYS} дней доля реакций на просмотр в первые часы "
+                f"в {_ru(data['median'])} раза выше, чем за остаток суток (у {round(100 * data['share'])} % постов — "
                 f"больше чем в {PACK_POST_RATIO:.0f} раз); у типичного аккаунта площадки — "
                 f"в {_ru(cohort.get('median', 0))} раза")
     if finding.kind == "regular_reactions":
@@ -335,7 +344,7 @@ def headline(finding: AccountFinding) -> str:
     """Короткая строка для свёрнутого вида: что происходит, одним предложением."""
     data = finding.metrics
     if finding.kind == "early_pack":
-        return f"Пакет реакций в первые 2 часа у {round(100 * data['share'])} % постов"
+        return f"Пакет реакций в первые часы у {round(100 * data['share'])} % постов"
     if finding.kind == "regular_reactions":
         return (f"{data['p10Reactions']}–{data['p90Reactions']} {_reaction_word(data['p90Reactions'])} "
                 f"у 80 % постов при любом охвате")
@@ -349,7 +358,7 @@ def figure(finding: AccountFinding) -> dict[str, Any] | None:
     data = finding.metrics
     typical = (data.get("cohort") or {}).get("median")
     if finding.kind == "early_pack":
-        value, unit, label, direction = data["median"], "times", "доля реакций: первые 2 ч / сутки", "higher"
+        value, unit, label, direction = data["median"], "times", "доля реакций: первые часы / остаток суток", "higher"
     elif finding.kind == "regular_reactions":
         value, unit, label, direction = data["extra"], "decimal", "разброс реакций сверх случайного", "lower"
     elif finding.kind == "late_growth":

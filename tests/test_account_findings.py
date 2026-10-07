@@ -43,6 +43,15 @@ def test_pack_ratio_compares_first_two_hours_with_the_rest_of_the_day():
     assert pack_ratio(post(1, 0, (5, 1), (10, 2)).ledger) is None
 
 
+def test_pack_lasting_several_hours_is_measured_at_six_hours():
+    # ГУАП в MAX: 36 реакций на 220 просмотров к 2 ч, 59 на 334 к 6 ч, затем
+    # +1 на 120. Двухчасовое окно делило пакет пополам и видело лишь ~1,6 раза.
+    ledger = TailLedger(None, None, None, marks={
+        "h2": Point(2 * HOUR, 221, 36), "h6": Point(6 * HOUR, 334, 59), "h24": Point(24 * HOUR, 452, 60)})
+    ratio, r1, v1, *_ = pack_ratio(ledger)
+    assert (r1, v1) == (59, 334) and ratio > 20
+
+
 def test_repeated_early_pack_is_found_and_names_its_posts():
     rng = random.Random(3)
     cohort = [item for account in range(2, 12) for item in organic(account, 40, rng)]
@@ -52,7 +61,7 @@ def test_repeated_early_pack_is_found_and_names_its_posts():
     assert finding.account_id == UUID(int=1) and finding.status == 2
     assert set(finding.members) == {item.publication_id for item in packed}
     assert finding.metrics["cohort"]["median"] < 3 and finding.metrics["median"] > 10
-    assert "первые 2 часа" in summary(finding)
+    assert "первые часы" in summary(finding)
 
 
 def test_too_few_posts_or_organic_accounts_give_no_finding():

@@ -46,7 +46,9 @@ def test_reference_case(case) -> None:
     if case.expected_min_level is None or case.expected_max_level is None:
         pytest.skip("выгруженный ряд ещё не размечен")
     verdict = assess(case.subject, case.siblings, norms=norms_for(case), subscribers=case.subscribers)
-    found = {sign.pattern for sign in verdict.signs}
+    # Признаки одного события сведены в один: его другие паттерны — в render.
+    found = {pattern for sign in verdict.signs
+             for pattern in (sign.pattern, *sign.render.get("sameEpisodePatterns", ()))}
     assert case.expected_min_level <= verdict.level <= case.expected_max_level, (verdict.level, found)
     assert case.expected_patterns <= found, found
     # Без нормы признаки, опирающиеся на неё, не сильнее среднего: высокий

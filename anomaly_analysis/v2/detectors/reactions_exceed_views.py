@@ -45,7 +45,10 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     signs = []
     edges = np.flatnonzero(np.diff(np.concatenate(([0], exceed.astype(np.int8), [0]))))
     for begin, end in zip(edges[::2], edges[1::2]):
-        count = int(end - begin)
+        # Считаются разные показания: перенесённая точка (то же значение в
+        # следующем цикле, series.confirm_unchanged) и контрольный замер без
+        # изменений — не новое превышение.
+        count = 1 + int(np.count_nonzero((np.diff(r[begin:end]) != 0) | (np.diff(v[begin:end]) != 0)))
         worst = int(begin + np.argmax(r[begin:end] - v[begin:end]))
         beyond = r[worst] > v[worst] * SINGLE_MARGIN + SINGLE_SLACK
         if count < MIN_CONSECUTIVE and not beyond:

@@ -126,3 +126,22 @@ def test_all_symbols_from_the_plan_are_distinct():
     assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 15
     assert np.all([pattern in TITLES for pattern in SYMBOLS])
     assert levels.STRONG > YOUNG_NORM_CAP >= levels.MEDIUM
+
+
+def test_one_reaction_pack_seen_by_two_detectors_counts_once():
+    # ГУАП ВК №149108: рывок доказан на двух соседних пятиминутках, пакет —
+    # по доле реакций на просмотр. Это одно событие, а не два семейства.
+    def reactions(pattern, family, strength, minutes):
+        return Sign(pattern, family, Metric.REACTIONS, strength,
+                    Interval(START + timedelta(minutes=minutes[0]), START + timedelta(minutes=minutes[1])),
+                    timedelta(minutes=5), "Δ = 1")
+    signs = [reactions(9, Family.SHAPE, .8, (1, 6)), reactions(9, Family.SHAPE, .75, (6, 11)),
+             reactions(14, Family.CROSS_METRIC, .75, (1, 21))]
+    result = verdict(_prepared(), DetectorContext("telegram"), signs, {})
+    (only,) = result.signs
+    assert result.level is Level.PRONOUNCED_ANOMALY
+    assert (only.interval.start, only.interval.end) == (START + timedelta(minutes=1), START + timedelta(minutes=21))
+    assert only.render["sameEpisode"] == ["Пакет реакций с остановкой"]
+    # Отдельное событие через час остаётся отдельным признаком.
+    later = verdict(_prepared(), DetectorContext("telegram"), [*signs, reactions(9, Family.SHAPE, .8, (90, 95))], {})
+    assert len(later.signs) == 2

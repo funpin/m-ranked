@@ -33,7 +33,7 @@ from zoneinfo import ZoneInfo
 
 from .domain import Metric, PostSeries
 
-VERSION = 2
+VERSION = 3
 MOSCOW = ZoneInfo("Europe/Moscow")
 HOUR = 3600
 DAY = 24 * HOUR
@@ -53,9 +53,12 @@ ROUNDED_PLATFORMS = frozenset({"telegram"})
 # Соседние замеры дальше друг от друга — рост мог прийти в любые из суток пробела.
 DAY_BRACKET = 30 * HOUR
 # Отметки для аккаунтных находок (v2/account_findings.py): первый замер и
-# ближайшие к 2, 24 и 72 часам точные совместные замеры в допуске.
+# ближайшие к 2, 6, 24 и 72 часам точные совместные замеры в допуске. Отметка
+# 6 ч — для стартовых пакетов длиной в несколько часов (ГУАП в MAX: 50–60
+# реакций за 3,5–5 ч и почти ничего потом).
 FIRST_UNTIL = 30 * 60
-MARKS = {"h2": (2 * HOUR, 1.5 * HOUR, 2.5 * HOUR), "h24": (DAY, 20 * HOUR, 28 * HOUR),
+MARKS = {"h2": (2 * HOUR, 1.5 * HOUR, 2.5 * HOUR), "h6": (6 * HOUR, 5 * HOUR, 7 * HOUR),
+         "h24": (DAY, 20 * HOUR, 28 * HOUR),
          "h72": (3 * DAY, 64 * HOUR, 80 * HOUR)}
 
 
