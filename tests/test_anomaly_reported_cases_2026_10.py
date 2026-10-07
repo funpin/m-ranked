@@ -105,3 +105,12 @@ def test_granular_counter_updates_are_not_mistaken_for_a_pack():
     series = reported("control_max_0")
     coarse = tuple(None if value is None else value * 10 for value in series.values[R])
     assert detect(engagement_regime, replace(series, values={**series.values, R: coarse})) == ()
+
+
+def test_short_burst_highlights_the_whole_pack_it_belongs_to():
+    # Рывок доказан на 15 минутах, но пакет — 0 → 64 реакции за первые ~2 часа.
+    series = reported("09_pack_range")
+    (burst,) = [sign for sign in assess(series).signs if sign.pattern == 9]
+    begin, finish = hours(series, burst)
+    assert begin < 0.5 and 1.5 < finish < 2.5
+    assert burst.render["burstEndAge"] - burst.render["burstStartAge"] <= 30 * 60

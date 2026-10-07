@@ -118,6 +118,8 @@ function Signal({ signal, index, rows, publishedAt, onShow }: {
         </div>
         {referenceExplanation(signal) ? <p className="text-muted-foreground text-xs" data-testid="reference-explanation">{referenceExplanation(signal)}</p> : null}
         {signal.render.kind === "bounded_burst" ? <p className="text-muted-foreground text-xs" data-testid="bounded-burst-explanation">{signal.formula}</p> : null}
+        {signal.render.kind === "regime" || signal.render.kind === "write_off" || signal.render.kind === "cliff"
+          ? <p className="text-muted-foreground text-xs" data-testid="signal-formula">{signal.formula}</p> : null}
         {signal.render.measurementMode === "telegram_counter_order_v1" ? <p className="text-muted-foreground text-xs">{signal.formula}</p> : null}
         <MiniChart chart={miniChart(signal, rows, publishedAt)} label={title} />
         {onShow ? <Button variant="outline" size="sm" className="w-fit" onClick={() => onShow(markerId(signal, index))}>

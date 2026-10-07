@@ -28,6 +28,7 @@ from .detectors.bounded_reaction_burst import (
     CONFIRMED_PLATEAU_MODE, MEASUREMENT_MODE as BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE,
 )
 from .detectors.burst_plateau import RAPID_VIEW_MODE, VIEW_MEASUREMENT_MODE
+from .detectors import engagement_regime
 from .detectors.engagement_regime import CONFIRMED_MODE as CONFIRMED_EPISODE_MODE
 from .detectors.late_engagement import MEASUREMENT_MODE as LATE_ENGAGEMENT_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
@@ -149,9 +150,38 @@ def run_detectors(prepared: PreparedSeries, context: DetectorContext) -> tuple[l
     signs: list[Sign] = []
     for detector in detectors:
         signs.extend(detector.detect(prepared, context))
+    signs = _widen_to_episodes(prepared, context, signs)
     signs = [replace(sign, render={"measurementMode": "exact_quality_v1", **sign.render}) for sign in signs]
     return signs, {"preparation": PREPARATION_VERSION, "aggregation": AGGREGATION_VERSION,
                    **{detector.ID: detector.VERSION for detector in detectors}}
+
+
+def _widen_to_episodes(prepared: PreparedSeries, context: DetectorContext, signs: list[Sign]) -> list[Sign]:
+    """Рывок реакций на коротком окне подсвечивает весь эпизод, в котором лежит.
+
+    Детектор рывка доказывает изменение на самом коротком убедительном окне;
+    отрезок с той же высокой долей реакций вокруг него — тот же пакет, и
+    читатель должен видеть его целиком. Формула и числа признака не меняются.
+    """
+    reactions_bursts = [sign for sign in signs if sign.pattern == 9 and sign.metric is Metric.REACTIONS]
+    if not reactions_bursts:
+        return signs
+    spans = engagement_regime.episode_spans(prepared, context)
+    published = prepared.series.published_at
+    widened = []
+    for sign in signs:
+        if sign in reactions_bursts:
+            start = (sign.interval.start - published).total_seconds()
+            end = (sign.interval.end - published).total_seconds()
+            for low, high in spans:
+                if low <= start + 60 and end - 60 <= high and (high - low) > (end - start):
+                    sign = replace(sign, interval=Interval(published + timedelta(seconds=low),
+                                                           published + timedelta(seconds=high)),
+                                   render={**sign.render, "startAge": round(low), "endAge": round(high),
+                                           "burstStartAge": round(start), "burstEndAge": round(end)})
+                    break
+        widened.append(sign)
+    return widened
 
 
 def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[Sign],

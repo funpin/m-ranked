@@ -242,23 +242,32 @@ def _without(mapping: Mapping[str, Any], key: str) -> dict[str, Any]:
     return {name: value for name, value in mapping.items() if name != key}
 
 
+def _ru(value: float, digits: int = 1) -> str:
+    """Число по-русски: десятичная запятая, неразрывный пробел между разрядами."""
+    text = f"{value:,.{digits}f}".replace(",", "\u00a0").replace(".", ",")
+    if not digits:
+        return text
+    trimmed = text.rstrip("0").rstrip(",")
+    return trimmed if trimmed and trimmed != "-" else "0"
+
+
 def summary(finding: AccountFinding) -> str:
     """Одна фраза с числами — для карточки аккаунта и ссылки со страницы поста."""
     data = finding.metrics
     if finding.kind == "early_pack":
         cohort = data.get("cohort", {})
         return (f"У {data['posts']} постов за {WINDOW_DAYS} дней доля реакций на просмотр в первые 2 часа "
-                f"в {data['median']:.1f} раза выше, чем за следующие сутки (у {data['share']:.0%} постов — "
+                f"в {_ru(data['median'])} раза выше, чем за следующие сутки (у {round(100 * data['share'])} % постов — "
                 f"больше чем в {PACK_POST_RATIO:.0f} раз); у типичного аккаунта площадки — "
-                f"в {cohort.get('median', 0):.1f} раза")
+                f"в {_ru(cohort.get('median', 0))} раза")
     if finding.kind == "regular_reactions":
         return (f"У {data['posts']} постов за {WINDOW_DAYS} дней к 72 часам от {data['p10Reactions']} до "
-                f"{data['p90Reactions']} реакций (80 % постов) при медиане просмотров {data['medianViews']}; "
-                f"разброс сверх случайного — {data['extra']:.2f} при медиане площадки "
-                f"{data.get('cohort', {}).get('median', 0):.2f}")
+                f"{data['p90Reactions']} реакций (80 % постов) при медиане просмотров {_ru(data['medianViews'], 0)}; "
+                f"разброс сверх случайного — {_ru(data['extra'], 2)} при медиане площадки "
+                f"{_ru(data.get('cohort', {}).get('median', 0), 2)}")
     ratio = data.get("ratio") or data.get("k")
     return ("Поздний отклик на посты 4–28 суток устойчиво выше, чем у аккаунтов площадки"
-            + (f" (отношение поздней доли к ранней {ratio})" if ratio else ""))
+            + (f" (поздняя доля реакций к ранней — {_ru(float(ratio), 2)})" if ratio else ""))
 
 
 def with_texts(finding: AccountFinding) -> AccountFinding:

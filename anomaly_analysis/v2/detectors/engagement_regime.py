@@ -193,6 +193,30 @@ def _dispersion(intervals, bounds) -> float:
     return max(1.0, grain, chi2 / freedom if freedom >= 5 else 1.0)
 
 
+def episode_spans(prepared: PreparedSeries, context: DetectorContext) -> list[tuple[float, float]]:
+    """Отрезки с повышенной долей реакций без проверки значимости — границы эпизодов.
+
+    Нужны, чтобы признак рывка, найденный на коротком окне, подсвечивал весь
+    эпизод: узкая полоса внутри двухчасового пакета вводит в заблуждение.
+    """
+    spans = []
+    for ages, reactions, views in _chunks(*paired(prepared)):
+        intervals = _intervals(ages, reactions, views)
+        if len(intervals) < 3:
+            continue
+        bounds = _pelt(intervals)
+        segments = [(intervals[a][0], intervals[b - 1][1], sum(item[2] for item in intervals[a:b]),
+                     sum(item[3] for item in intervals[a:b])) for a, b in zip(bounds, bounds[1:])]
+        total_r = sum(item[2] for item in segments)
+        total_v = sum(item[3] for item in segments)
+        for start, end, r, v in segments:
+            # Отрезок эпизода — доля хотя бы втрое выше, чем на остальном ряду.
+            rest = (total_r - r) / max(total_v - v, 1.0)
+            if r >= 10 and v > 0 and r / v >= 3 * rest and end - start <= MAX_EPISODE:
+                spans.append((start, end))
+    return spans
+
+
 def _share(segment) -> float:
     return segment[2] / segment[3] if segment[3] > 0 else math.inf
 
@@ -309,6 +333,20 @@ def views_surge(item: Episode) -> bool:
     return window_rate >= VIEWS_SURGE * episode_rate
 
 
+def times(ratio: float) -> str:
+    """«в 3 раза», «в 764 раза», «в 12 раз»."""
+    value = round(ratio)
+    word = "раза" if value % 10 in (2, 3, 4) and value % 100 not in (12, 13, 14) else "раз"
+    return f"в {number(value)} {word}"
+
+
+SUPERSCRIPT = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
+
+def superscript(value: int) -> str:
+    return str(value).translate(SUPERSCRIPT)
+
+
 def _sign(prepared: PreparedSeries, item: Episode) -> Sign:
     strength, confirmed = grade(item)
     duration = age_text(item.end_age - item.start_age)
@@ -319,8 +357,8 @@ def _sign(prepared: PreparedSeries, item: Episode) -> Sign:
     window_text = (f"+{number(item.window_reactions)} реакций при +{number(item.window_views)} просмотрах "
                    f"за {window} ({item.window_share:.1%})")
     formula = (f"{episode_text}; {'затем' if item.kind == 'stop' else 'до этого'} {window_text} — "
-               f"доля в {item.ratio:.0f} раз {'ниже' if item.kind == 'stop' else 'ниже, чем в эпизоде'}; "
-               f"вероятность при плавном изменении доли ≤ 10^−{item.surprise:.0f}")
+               f"доля {times(item.ratio)} {'ниже' if item.kind == 'stop' else 'ниже, чем в эпизоде'}; "
+               f"вероятность при плавном изменении доли ≤ 10{superscript(-round(item.surprise))}")
     surge = views_surge(item)
     if surge:
         formula += "; в соседнем окне просмотры прибывали заметно быстрее, чем в эпизоде"
