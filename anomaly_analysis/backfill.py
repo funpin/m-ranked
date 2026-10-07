@@ -40,6 +40,8 @@ def main() -> None:
     parser.add_argument("--after-account", type=UUID, help="Resume strictly after this completed account")
     parser.add_argument("--disable-mature-reference", action="store_true",
                         help="Remove new reference signals while preserving quality fixes")
+    parser.add_argument("--redetect-synchrony", action="store_true",
+                        help="Find synchrony signals of the window anew instead of carrying previous ones")
     arguments = parser.parse_args()
     if arguments.max_accounts < 0:
         raise SystemExit("--max-accounts must be non-negative")
@@ -102,10 +104,14 @@ def main() -> None:
                     # Синхронность по упакованной истории соседей находится не всегда:
                     # прореженные старые замеры не дают почасовых приростов. Прежние
                     # признаки 8 переносятся, как это делает работник; повтор того же
-                    # события сливается при сборке уровня.
+                    # события сливается при сборке уровня. С --redetect-synchrony
+                    # признаки окна ищутся заново по агрегатам с полной суточной
+                    # базой: так снимаются записанные работником артефакты края его
+                    # окна (база подъёма там была обрезана).
                     verdict = assess(subject, norms=norms.get(subject.platform), subscribers=subscribers,
                                      analyzed_at=moment, cadence=cadence, norm_version=version,
-                                     activity=activity, reference=reference, carried=_carried(row, moment))
+                                     activity=activity, reference=reference,
+                                     carried=_carried(row, since if arguments.redetect_synchrony else moment))
                 except Exception:  # закончить аккаунт, но не продвигать курсор при ошибках
                     account_failed += 1
                     log.exception("backfill post failed publication=%s", row.publication_id)

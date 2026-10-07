@@ -172,6 +172,10 @@ class DetectorContext:
     siblings: SiblingActivity | None = None
     subscriber_ages: np.ndarray = field(default_factory=lambda: np.zeros(0))
     subscriber_counts: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    # Раньше этого момента (epoch, с) синхронность не ищется: у края окна
+    # агрегатов суточная база обрезана, а признаки оттуда переносятся из
+    # прежнего вывода. None — граница не задана (агрегаты на всё окно).
+    synchrony_from: float | None = None
     _fits: dict = field(default_factory=dict)
 
     @property
