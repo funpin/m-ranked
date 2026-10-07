@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { Archive, HardDrive, Play, Plus, RefreshCw, Save } from "lucide-react";
+import { HardDrive, Plus, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,6 @@ import { ago, bytes, fields, Pill, Section } from "./shared";
 
 type Server = StorageOverview["servers"][number];
 type Replica = StorageOverview["backups"][number]["replicas"][number];
-type Month = StorageOverview["archive"][number];
 type Platform = Server["platforms"][number];
 
 const PLATFORMS: Platform[] = ["telegram", "vk", "max", "rutube"];
@@ -27,10 +26,6 @@ const REPLICA: Record<Replica["state"], [string, string]> = {
   verified: ["сверена", "text-success"], wanted: ["в очереди", "text-muted-foreground"],
   transferring: ["копируется", "text-warning"], deleting: ["удаляется", "text-muted-foreground"],
   deleted: ["удалена", "text-muted-foreground"], failed: ["сбой", "text-destructive"],
-};
-const GENERATION: Record<Month["generations"][number]["state"], string> = {
-  preparing: "готовится", exporting: "выгружается", replicating: "копируется на второй сервер",
-  dropping: "удаляется из базы", cold: "в архиве", failed: "не удалось",
 };
 const STATUS: Record<string, string> = {
   "server-added": "Сервер добавлен. Приём с него откроется в течение 30 секунд, агент получит состав сборщиков в течение минуты.",
@@ -281,69 +276,6 @@ function Backups({ overview, servers, now }: { overview: StorageOverview; server
   </Section>;
 }
 
-function ArchiveMonths({ overview, servers, csrf, canEdit, now }: { overview: StorageOverview; servers: Map<string, string>; csrf: string; canEdit: boolean; now: number }) {
-  const today = new Date(now).toISOString().slice(0, 10);
-  return <Section title="Холодный архив" description="Месяцы — по дате публикации постов. Пока месяц выгружается, запись в него закрыта (не дольше двух часов): поздние замеры с Сервера 1 ждут и не теряются. После удаления из базы месяц снова открыт, а поздние контрольные замеры уйдут в архив следующим поколением."
-    action={<form method="post" action="/manage/archive/run">{fields(csrf)}
-      <Button type="submit" variant="outline" disabled={!canEdit}><Play data-icon="inline-start" aria-hidden="true" />Архивировать созревшие</Button>
-    </form>}>
-    <div className="overflow-x-auto"><Table>
-      <TableHeader><TableRow><TableHead>Месяц</TableHead><TableHead className="text-right">В базе</TableHead><TableHead>Архив</TableHead><TableHead>Действия</TableHead></TableRow></TableHeader>
-      <TableBody>{overview.archive.map((month) => {
-        const cold = month.generations.filter((item) => item.state === "cold");
-        const due = month.coldFrom <= today;
-        return <TableRow key={month.month} data-month={month.month}>
-          <TableCell className="align-top font-medium tabular-nums">{month.month}{month.fence !== "active" ? <span className="text-warning block text-xs">запись закрыта на выгрузку</span> : null}</TableCell>
-          <TableCell className="text-right align-top tabular-nums">{bytes(month.hotBytes)}<span className="text-muted-foreground block text-xs">{due ? "созрел для архива" : `в архив с ${month.coldFrom}`}</span></TableCell>
-          <TableCell className="align-top">{month.generations.length ? <ul className="grid gap-2">{month.generations.map((generation) => (
-            <li key={generation.generation} className="text-xs">
-              <b>Поколение {generation.generation}</b> · <span className={generation.state === "failed" ? "text-destructive" : generation.state === "cold" ? "text-success" : "text-warning"}>{GENERATION[generation.state]}</span>
-              {generation.rowCount != null ? ` · ${number.format(generation.rowCount)} замеров, ${number.format(generation.publications ?? 0)} постов` : ""}
-              {generation.full ? <span className="block">полный {bytes(generation.full.sizeBytes)} (было в базе {bytes(generation.hotBytes)}): <Replicas replicas={generation.full.replicas} servers={servers} /></span> : null}
-              {generation.browse ? <span className="block">просмотр {bytes(generation.browse.sizeBytes)}: <Replicas replicas={generation.browse.replicas} servers={servers} /></span> : null}
-              {generation.error ? <span className="text-destructive block">{generation.error}</span> : null}
-            </li>))}</ul> : <span className="text-muted-foreground text-xs">не архивировался</span>}</TableCell>
-          <TableCell className="align-top">
-            <div className="flex flex-wrap gap-2">
-              {due && month.hotBytes ? <form method="post" action="/manage/archive/run">{fields(csrf)}<input type="hidden" name="month" value={month.month} />
-                <Button type="submit" size="sm" variant="outline" disabled={!canEdit}><Archive data-icon="inline-start" aria-hidden="true" />В архив</Button></form> : null}
-              {cold.length ? <form method="post" action="/manage/archive/analysis">{fields(csrf)}<input type="hidden" name="month" value={month.month} />
-                <Button type="submit" size="sm" variant="outline" disabled={!canEdit} title="Финальный анализ всех постов месяца заново — по данным архива и текущими детекторами">
-                  <RefreshCw data-icon="inline-start" aria-hidden="true" />Анализ заново</Button></form> : null}
-            </div>
-          </TableCell>
-        </TableRow>;
-      })}</TableBody>
-    </Table></div>
-  </Section>;
-}
-
-const JOB_KIND: Record<string, string> = { archive_now: "Архивация", archive_analysis: "Анализ архива" };
-const JOB_STATE: Record<string, [string, string]> = {
-  queued: ["в очереди", "text-muted-foreground"], running: ["выполняется", "text-warning"], done: ["готово", "text-success"],
-  failed: ["ошибка", "text-destructive"], cancelled: ["отменено", "text-muted-foreground"],
-};
-
-function Jobs({ overview, now }: { overview: StorageOverview; now: number }) {
-  if (!overview.jobs.length) return null;
-  return <Section title="Задания">
-    <ul className="divide-y rounded-lg border text-sm">{overview.jobs.map((job) => {
-      const [label, tone] = JOB_STATE[job.state] ?? [job.state, ""];
-      const params = job.params as { month?: string; platform?: string };
-      const result = job.result as { status?: string; month?: string; publications?: number; queued?: number } | null;
-      return <li key={job.id} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2.5">
-        <span>{JOB_KIND[job.kind] ?? job.kind}{params.month ? ` · ${params.month}` : ""}{params.platform ? ` · ${PLATFORM_LONG_LABELS[params.platform as Platform] ?? params.platform}` : ""}</span>
-        <span className="text-muted-foreground text-xs">
-          <span className={tone}>{label}</span> · {job.requestedBy} · {ago(job.requestedAt, now)}
-          {result?.queued != null ? ` · поставлено на анализ ${number.format(result.queued)}` : ""}
-          {result?.status === "idle" ? " · созревших месяцев нет" : result?.status === "cold" ? ` · ${result.month} в архиве` : ""}
-          {job.error ? <span className="text-destructive"> · {job.error}</span> : null}
-        </span>
-      </li>;
-    })}</ul>
-  </Section>;
-}
-
 export function ServersTab({ overview, csrf, canEdit, now, status, error }: {
   overview: StorageOverview | null; csrf: string; canEdit: boolean; now: number; status?: string; error?: string;
 }) {
@@ -360,8 +292,6 @@ export function ServersTab({ overview, csrf, canEdit, now, status, error }: {
       <AnalysisPolicy overview={overview} csrf={csrf} canEdit={canEdit} now={now} />
     </div>
     <CollectionPolicy overview={overview} csrf={csrf} canEdit={canEdit} now={now} />
-    <ArchiveMonths overview={overview} servers={servers} csrf={csrf} canEdit={canEdit} now={now} />
     <Backups overview={overview} servers={servers} now={now} />
-    <Jobs overview={overview} now={now} />
   </>;
 }
