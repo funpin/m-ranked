@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -54,6 +56,41 @@ def _row_value(row: Any, key: str, index: int) -> Any:
     if isinstance(row, Mapping):
         return row[key]
     return row[index]
+
+
+# Скобки нужны там, где интервал сбора длинный и рост между точками иначе
+# растягивается на часы; старше двух недель посты читаются редко и почти
+# не меняются. Предел числа записей держит память процесса в мегабайтах.
+UNCHANGED_READ_MAX_AGE = timedelta(days=14)
+UNCHANGED_READS_LIMIT = 50_000
+
+
+def _snapshot_input(batch: CanonicalAccountBatch, publication_id: Any, item: CanonicalPublication,
+                    metric_evidence_id: Any) -> dict[str, Any]:
+    snapshot = item.snapshot
+    return {
+        "published_month": snapshot.published_month,
+        "publication_id": publication_id,
+        "collection_run_id": batch.context.run_id,
+        "observed_at": snapshot.observed_at,
+        "collected_at": snapshot.collected_at,
+        "age_seconds": snapshot.age_seconds,
+        "sampling_bucket": snapshot.sampling_bucket,
+        "views_count": snapshot.views_count,
+        "reactions_count": snapshot.reactions_count,
+        "comments_count": snapshot.comments_count,
+        "shares_count": snapshot.shares_count,
+        "quality": snapshot.quality.value,
+        "interval_uncertain": snapshot.interval_uncertain,
+        "synthetic": snapshot.synthetic,
+        "source_fingerprint": snapshot.source_fingerprint,
+        "semantic_fingerprint": snapshot.semantic_fingerprint.hex(),
+        "views_quality": snapshot.metric_quality["views"].value,
+        "reactions_quality": snapshot.metric_quality["reactions"].value,
+        "comments_quality": snapshot.metric_quality["comments"].value,
+        "shares_quality": snapshot.metric_quality["shares"].value,
+        "metric_evidence_id": metric_evidence_id,
+    }
 
 
 def _json(value: Any) -> str:
@@ -122,6 +159,14 @@ class PostgresCollectorRepository:
         self.track_window: timedelta | None = timedelta(
             hours=int(os.getenv("TRACK_POST_FOR_HOURS", "720").strip().strip('"') or "720"))
         self.poll_receipt_policy = poll_receipt_policy or PollReceiptPolicy()
+        # Последнее чтение без изменений по посту, не попавшее в базу. Когда
+        # следующее чтение принесёт изменение, оно сохраняется перед ним как
+        # скобка: рост лёг между ними, а не на все часы с прошлой точки.
+        # Память процесса, а не таблица: после перезапуска первая скобка
+        # просто не появится, а запись на каждое чтение без изменений стоила
+        # бы базе тысяч строк в час.
+        self._unchanged_reads: dict[tuple[Any, ...], dict[str, Any]] = {}
+        self.bracket_reads = 0
         self._last_poll_receipt_prune: datetime | None = None
         self.evidence_store = evidence_store or ImmutableEvidenceStore(
             Path(os.environ.get("COLLECTOR_RAW_EVIDENCE_DIR", "data/target-raw-evidence"))
@@ -1369,6 +1414,26 @@ class PostgresCollectorRepository:
             None if evidence_ids is None else tuple(evidence_ids[index] for index in keep),
         )
 
+    def _remember_unchanged(self, group: tuple[Any, ...], latest_observed_at: Any,
+                            item: CanonicalPublication, snapshot_input: dict[str, Any]) -> None:
+        """Запоминает чтение без изменений; скобкой оно станет, только если
+        следующее чтение того же поста принесёт изменение поверх той же точки."""
+        # Повтор уже сохранённого чтения (тот же пакет ещё раз) — не новое чтение.
+        if (latest_observed_at is None or item.snapshot.age_seconds > UNCHANGED_READ_MAX_AGE.total_seconds()
+                or item.snapshot.observed_at <= utc(latest_observed_at, "latest_observed_at")):
+            return
+        self._unchanged_reads.pop(group, None)
+        self._unchanged_reads[group] = {
+            "base_observed_at": utc(latest_observed_at, "latest_observed_at"),
+            "input": snapshot_input,
+            # Для разбивки реакций скобки — её собственная, а не нового чтения.
+            "item": SimpleNamespace(snapshot=SimpleNamespace(
+                reaction_breakdown=dict(item.snapshot.reaction_breakdown))),
+        }
+        # Самые давние записи уходят первыми: словарь хранит порядок вставки.
+        while len(self._unchanged_reads) > UNCHANGED_READS_LIMIT:
+            self._unchanged_reads.pop(next(iter(self._unchanged_reads)))
+
     def _persist_publications(
         self,
         connection: Any,
@@ -1714,6 +1779,7 @@ class PostgresCollectorRepository:
                 for row in exact_rows
             }
         snapshots_to_insert = []
+        bracket_inputs: list[dict[str, Any]] = []
         snapshots_by_key: dict[tuple[Any, ...], CanonicalPublication] = {}
         virtual_latest = {
             group: (
@@ -1756,30 +1822,21 @@ class PostgresCollectorRepository:
             if self.track_window is not None and snapshot.age_seconds > self.track_window.total_seconds():
                 continue
             if unchanged and not heartbeat_due:
+                self._remember_unchanged(snapshot_group, latest_observed_at, item, _snapshot_input(
+                    batch, publication_id, item, metric_evidence_ids[item_index]))
                 continue
-            snapshot_input = {
-                "published_month": snapshot.published_month,
-                "publication_id": publication_id,
-                "collection_run_id": batch.context.run_id,
-                "observed_at": snapshot.observed_at,
-                "collected_at": snapshot.collected_at,
-                "age_seconds": snapshot.age_seconds,
-                "sampling_bucket": snapshot.sampling_bucket,
-                "views_count": snapshot.views_count,
-                "reactions_count": snapshot.reactions_count,
-                "comments_count": snapshot.comments_count,
-                "shares_count": snapshot.shares_count,
-                "quality": snapshot.quality.value,
-                "interval_uncertain": snapshot.interval_uncertain,
-                "synthetic": snapshot.synthetic,
-                "source_fingerprint": snapshot.source_fingerprint,
-                "semantic_fingerprint": snapshot.semantic_fingerprint.hex(),
-                "views_quality": snapshot.metric_quality["views"].value,
-                "reactions_quality": snapshot.metric_quality["reactions"].value,
-                "comments_quality": snapshot.metric_quality["comments"].value,
-                "shares_quality": snapshot.metric_quality["shares"].value,
-                "metric_evidence_id": metric_evidence_ids[item_index],
-            }
+            bracket = self._unchanged_reads.pop(snapshot_group, None)
+            if (bracket is not None and not unchanged and latest_observed_at is not None
+                    and bracket["base_observed_at"] == utc(latest_observed_at, "latest_observed_at")
+                    and bracket["input"]["observed_at"] < snapshot.observed_at):
+                snapshots_to_insert.append(bracket["input"])
+                bracket_inputs.append(bracket["input"])
+                snapshots_by_key[(
+                    publication_id, snapshot.published_month, snapshot.synthetic,
+                    bracket["input"]["sampling_bucket"], bracket["input"]["source_fingerprint"],
+                )] = bracket["item"]
+                self.bracket_reads += 1
+            snapshot_input = _snapshot_input(batch, publication_id, item, metric_evidence_ids[item_index])
             snapshots_to_insert.append(snapshot_input)
             snapshots_by_key[
                 (
@@ -1792,6 +1849,30 @@ class PostgresCollectorRepository:
                 snapshot.semantic_fingerprint, snapshot.observed_at,
             )
 
+        if bracket_inputs:
+            # Скобка, уже лежащая в базе (тот же пакет применён второй раз),
+            # не вставляется заново: повтор не должен упираться в триггер.
+            present = connection.execute(
+                """WITH input AS (
+                       SELECT * FROM jsonb_to_recordset(%s::jsonb) AS item(
+                           publication_id uuid, published_month date,
+                           sampling_bucket bigint, source_fingerprint text)
+                   )
+                   SELECT input.publication_id, input.sampling_bucket, input.source_fingerprint
+                     FROM input JOIN ingest.publication_metric_snapshot snapshot
+                       ON snapshot.publication_id=input.publication_id
+                      AND snapshot.published_month=input.published_month
+                      AND snapshot.sampling_bucket=input.sampling_bucket
+                      AND snapshot.source_fingerprint=input.source_fingerprint""",
+                (_json([{key: row[key] for key in ("publication_id", "published_month", "sampling_bucket",
+                                                    "source_fingerprint")} for row in bracket_inputs]),),
+            ).fetchall()
+            existing = {(_row_value(row, "publication_id", 0), int(_row_value(row, "sampling_bucket", 1)),
+                         str(_row_value(row, "source_fingerprint", 2))) for row in present}
+            if existing:
+                snapshots_to_insert = [row for row in snapshots_to_insert if not (
+                    any(row is bracket for bracket in bracket_inputs)
+                    and (row["publication_id"], int(row["sampling_bucket"]), str(row["source_fingerprint"])) in existing)]
         inserted_snapshots: dict[tuple[Any, ...], tuple[Any, int]] = {}
         if snapshots_to_insert and self.compact_working_set:
             from .working_set import store_publications
