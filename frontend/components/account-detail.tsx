@@ -15,6 +15,7 @@ import { AccountMorePublications } from "@/components/account-more-publications"
 import type { AccountLevelsLoad } from "@/lib/anomaly";
 import type { TailProfileLoad } from "@/lib/account-tail";
 import { AccountTailCard } from "@/components/account-tail-card";
+import { AccountFindingsCard, type FindingsLoad } from "@/components/account-findings-card";
 import { InstitutionFacts } from "@/components/institution-facts";
 import { SummaryTile } from "@/components/summary-tile";
 import { FileText, History, Heart, MessageCircle, Eye, Trophy } from "lucide-react";
@@ -40,7 +41,7 @@ function change(current: number | null | undefined,
   return current - previous;
 }
 
-export function AccountDetail({ account, posts, nextCursor = null, siblings = [], selectedDay, selectedTrend, anomalyLevels = null, tailProfile = null }: { account: AccountView; posts: PublicationListItem[]; nextCursor?: string | null; siblings?: readonly AccountView[]; selectedDay?: string; selectedTrend?: "median" | "total"; anomalyLevels?: Promise<AccountLevelsLoad> | null; tailProfile?: Promise<TailProfileLoad> | null }) {
+export function AccountDetail({ account, posts, nextCursor = null, siblings = [], selectedDay, selectedTrend, anomalyLevels = null, tailProfile = null, findings = null }: { account: AccountView; posts: PublicationListItem[]; nextCursor?: string | null; siblings?: readonly AccountView[]; selectedDay?: string; selectedTrend?: "median" | "total"; anomalyLevels?: Promise<AccountLevelsLoad> | null; tailProfile?: Promise<TailProfileLoad> | null; findings?: Promise<FindingsLoad> | null }) {
   const name = account.title || account.institutionShortName || account.institutionName;
   const institutionName = account.institutionName.trim();
   const showInstitutionName = institutionName !== name.trim();
@@ -94,9 +95,10 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
           </> : null}
           <InstitutionFacts profile={account.institutionProfile} />
         </section>
-        {stats ? <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} /> : null}
+        {stats ? <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} accountId={account.accountId} /> : null}
       </div>
     </Card>
+    {findings ? <AccountFindingsCard findings={findings} /> : null}
     {tailProfile ? <AccountTailCard profile={tailProfile} /> : null}
     <Card className="block p-5 text-sm mt-5 min-w-0 overflow-x-auto">
       <DaySpotlight day={selectedDay} mode={selectedTrend} /><Table className="reveal"><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead>{anomalyLevels ? <TableHead>Анализ динамики</TableHead> : null}</TableRow></TableHeader><TableBody>

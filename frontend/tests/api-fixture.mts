@@ -132,7 +132,7 @@ function anomaly(id:number,type:"posts"|"platform_posts"="posts"):Schema["Public
     signals:[signal(1,"views",39,40),signal(6,"reactions",36,38)],
     quality:{coverage:1,summary:"замеры полные, покрытие 100%",codes:[],unanalyzable:[]},
     analyzedAt:asOf,lagSeconds:40,normVersion:3,detectorVersions:{linear_feed:"2.0.0",reactions_before_views:"2.0.0"},
-    reviewStatus:"unreviewed",methodologyVersion:"anomaly-dynamics-v2",
+    reviewStatus:"unreviewed",accountFindings:[],methodologyVersion:"anomaly-dynamics-v2",
     disclaimer:"Сигнал аномальной динамики носит информационный характер и сам по себе не доказывает искусственное происхождение активности или действия университета."};
   if(type==="platform_posts" && id===10) return {...base,level:1,originalLevel:1,
     levelLabel:"слабый сигнал",levelSymbol:"◔",signals:([11,12] as const).map(pattern=>({

@@ -13,11 +13,13 @@ import { AnimatedNumber } from "@/components/animated-number";
 import { MethodNote } from "@/components/method-note";
 import { cn } from "@/lib/utils";
 import { LevelIcon } from "@/components/anomaly-icons";
+import { UsersRound } from "lucide-react";
 
 function CardBadges({ item }: { item: OverviewItem }) {
   const counts = item.anomalyCounts;
   const platform = item.platform === "all" ? "Все площадки" : PLATFORM_LABELS[item.platform];
-  if (!item.ratingRank && !counts?.level2 && !counts?.level3) return null;
+  const findings = counts?.accountFindings;
+  if (!item.ratingRank && !counts?.level2 && !counts?.level3 && !findings) return null;
   return <div className="pointer-events-none relative z-[3] -mx-[26px] -mt-[34px] mb-4 flex flex-wrap items-start justify-between gap-1.5">
     <div className="flex flex-wrap gap-1.5" role="group" aria-label="Замечания анализа за выбранный период">
       {([3, 2] as const).map(level => {
@@ -32,6 +34,15 @@ function CardBadges({ item }: { item: OverviewItem }) {
           <LevelIcon level={level} /><span>{legacyNumber(count)}</span>
         </Badge>;
       })}
+      {findings && Number.isSafeInteger(findings) && findings > 0 ? (() => {
+        // Аккаунтные находки — закономерность аккаунта, а не публикации:
+        // отдельный значок, в счётчики уровней постов они не входят.
+        const description = `Аккаунтные находки: ${legacyNumber(findings)}. ${platform}. Закономерность на многих постах аккаунта за 30 дней относительно аккаунтов площадки; уровни публикаций не меняет.`;
+        return <Badge data-testid="overview-account-findings" tabIndex={0} aria-label={description} title={description}
+          className="pointer-events-auto h-auto cursor-help bg-chart-3/15 px-2 py-1 text-[10px] font-extrabold text-chart-3 shadow-sm tabular">
+          <UsersRound aria-hidden="true" /><span>{legacyNumber(findings)}</span>
+        </Badge>;
+      })() : null}
     </div>
     {item.ratingRank ? <Badge className="pointer-events-auto ml-auto h-auto cursor-help bg-chart-2 px-2 py-1 text-[10px] font-extrabold text-background shadow-sm"
       tabIndex={0} title={`Официальное место в М‑Рейтинге ${item.platform === "all" ? "Общий" : platform}.`}>

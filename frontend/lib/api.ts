@@ -128,6 +128,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
         params: { path: { accountId } },
       }).then(unwrap);
     },
+    accountAnomalyFindings(accountId: string) {
+      return analysisClient.GET("/api/v1/accounts/{accountId}/anomaly-findings", {
+        params: { path: { accountId } },
+      }).then(unwrap);
+    },
     siteSummary() {
       return client.GET("/api/v1/site/summary", {}).then(unwrap);
     },

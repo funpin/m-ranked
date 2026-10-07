@@ -26,6 +26,9 @@ export const SIGNAL_LEGEND = [
   { pattern: 11, title: "отклик выше исторического диапазона" },
   { pattern: 12, title: "продолжение отклика выше ожидаемого" },
   { pattern: 13, title: "поздняя вовлечённость выше ранней" },
+  { pattern: 14, title: "пакет реакций, оторванный от просмотров" },
+  { pattern: 15, title: "площадка списала реакции" },
+  { pattern: 16, title: "одновременный обрыв просмотров и реакций" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;

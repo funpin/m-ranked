@@ -448,6 +448,53 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/accounts/{accountId}/daily-series:
+    get:
+      tags: [Query]
+      operationId: getAccountDailySeries
+      summary: Read the account's daily series for the last 7 or 30 full days and today
+      description: >-
+        The same points as dailySeries of the account card for a selectable span: `days` full Moscow days
+        plus today (still in progress), oldest first.
+      security: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, enum: [7, 30], default: 30 }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Daily points of the span.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [accountId, days, datasetRevision, points]
+                properties:
+                  accountId: { type: string, format: uuid }
+                  days: { type: integer, enum: [7, 30] }
+                  datasetRevision: { type: integer, format: int64, minimum: 0 }
+                  points:
+                    type: array
+                    maxItems: 31
+                    items: { $ref: '#/components/schemas/AccountDailyPoint' }
+        '304':
+          description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/accounts/{accountId}/anomaly-findings:
     get:
       tags: [Query]
@@ -2089,7 +2136,7 @@ paths:
         in: query
         required: false
         description: >-
-          Moscow calendar day from the account's seven-day series. When present,
+          Moscow calendar day from the account's daily series: one of the last 30 full days or today. When present,
           every returned publication includes its growth between that day and the
           preceding calendar day; a publication first seen that day uses zero as
           its baseline.
@@ -6315,9 +6362,11 @@ components:
         dailySeries:
           type: array
           description: >-
-            Последние семь дней по московскому времени — сколько публикаций вышло
-            в этот день и какими они оказались по медиане. Ряд всегда полон:
-            день без публикаций присутствует с нулём и пустыми медианами.
+            Последние семь полных дней и сегодняшние сутки по московскому времени
+            (восемь точек, последняя — сегодня и ещё не закончена) — сколько
+            публикаций вышло в этот день и какими они оказались по медиане. Ряд
+            всегда полон: день без публикаций присутствует с нулём и пустыми
+            медианами. Тридцать дней — getAccountDailySeries.
           items:
             $ref: '#/components/schemas/AccountDailyPoint'
         previous:

@@ -1,7 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import { use, useState } from "react";
-import { ChevronRight, CircleHelp, LocateFixed } from "lucide-react";
+import { ArrowUpRight, ChevronRight, CircleHelp, LocateFixed, UsersRound } from "lucide-react";
 import Link from "@/components/native-link";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,9 @@ import { MethodNote } from "@/components/method-note";
 import { NeighborContextTimeline } from "@/components/neighbor-context-timeline";
 import { LevelIcon, PatternIcon } from "@/components/anomaly-icons";
 import { legacyDate } from "@/lib/format";
-import { publicationHref } from "@/lib/entity-routes";
+import { accountHref, publicationHref } from "@/lib/entity-routes";
 import { FAMILY_NAMES, METRIC_NAMES, intervalText, markerId, miniChart, referenceExplanation, scaleText, summaryLine, type AnalysisLoad } from "@/lib/anomaly";
-import type { AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
+import type { AccountAnomalyFinding, AnomalySignal, HistorySnapshot, PublicationAnomalyAnalysis } from "@/lib/types";
 import type { NeighborContextLoad } from "@/lib/neighbor-context-loader";
 import type { ContextWindow } from "@/lib/neighbor-context";
 import { cn } from "@/lib/utils";
@@ -142,6 +142,28 @@ function AnalysisNote({ analysis }: { analysis: PublicationAnomalyAnalysis }) {
 
 /** Строка карточки, пока ответ анализа ещё в пути. Страница поста его не ждёт:
  *  история и графики приходят первыми, а карточка дорисовывается следом. */
+/** Аккаунтные находки, в которые входит пост. Уровень поста они не меняют —
+ *  это закономерность аккаунта, и подробности живут на его странице. */
+function AccountFindingRefs({ findings }: { findings: readonly AccountAnomalyFinding[] }) {
+  return <section className="border-border mt-3 border-t pt-3" aria-labelledby="account-findings-title" data-testid="post-account-findings">
+    <h3 id="account-findings-title" className="text-muted-foreground text-xs font-normal">
+      Пост входит в аккаунтную находку · {findings.length}
+    </h3>
+    <ul className="mt-1 grid gap-2">
+      {findings.map((finding) => <li key={finding.kind} className="grid gap-1" data-testid="post-account-finding" data-kind={finding.kind}>
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="inline-flex items-center gap-1.5 font-semibold"><UsersRound className="text-chart-3 size-4 shrink-0" aria-hidden="true" />{finding.title}</span>
+          {finding.statusLabel ? <span className="text-muted-foreground text-xs">{finding.statusLabel}</span> : null}
+          <Link href={`${accountHref(finding.accountId)}#account-findings`} className="text-primary ml-auto inline-flex items-center gap-0.5 text-xs hover:underline">
+            Страница аккаунта<ArrowUpRight className="size-3.5" aria-hidden="true" />
+          </Link>
+        </span>
+        {finding.summary ? <p className="text-muted-foreground pl-[22px] text-xs leading-relaxed">{finding.summary}.</p> : null}
+      </li>)}
+    </ul>
+  </section>;
+}
+
 export function AnomalyAnalysisSkeleton() {
   return (
     <section className="bg-muted/40 border-border mb-4 rounded-xl border px-4 py-3 text-sm" aria-busy="true" aria-label="Анализ динамики загружается" data-testid="anomaly-card-skeleton">
@@ -201,6 +223,8 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
                   {summary.analyzedAt ? <span>Анализ {legacyDate(summary.analyzedAt)}</span> : null}
                   {analysis.originalLevel !== null && analysis.level !== null && analysis.originalLevel > analysis.level
                     ? <span data-testid="context-cap-status">Сильный признак ослаблен контекстом</span> : null}
+                  {analysis.accountFindings?.length ? <span className="inline-flex items-center gap-1" data-testid="account-finding-status">
+                    <UsersRound className="text-chart-3 size-3.5" aria-hidden="true" />аккаунтная находка</span> : null}
                 </span> : null}
               </span>
             </CollapsibleTrigger>
@@ -231,6 +255,7 @@ export function AnomalyAnalysis({ analysis, loadFailed = false, neighborContext,
           </> : (
             <p className="text-muted-foreground">{analysis.status === "pending" ? "Пост ещё не проанализирован: анализ идёт по расписанию после первых замеров." : analysis.quality?.codes.includes("no_precise_metrics") ? "Недостаточно точных данных для проверки. Отсутствие сигнала не подтверждает обычность статистики." : "Признаков аномальной динамики не найдено."}</p>
           )}
+          {analysis.accountFindings?.length ? <AccountFindingRefs findings={analysis.accountFindings} /> : null}
         </CollapsibleContent>
       </Collapsible>
     </section></TooltipProvider>

@@ -1,7 +1,7 @@
 import {
-  ChartNoAxesCombined, TrendingUp, ArrowDownUp, ArrowUpToLine, ChevronsUp, CircleAlert, CircleCheck, CircleDashed, Ellipsis,
-  FastForward, History, Layers, MoveUpRight, OctagonAlert, Percent, TriangleAlert, Zap, type LucideIcon,
-  type LucideProps,
+  ArrowDownToLine, ChartNoAxesColumnDecreasing, ChartNoAxesCombined, TrendingUp, ArrowDownUp, ArrowUpToLine, ChevronsUp,
+  CircleAlert, CircleCheck, CircleDashed, Ellipsis, FastForward, History, Layers, MoveUpRight, OctagonAlert, Package,
+  Percent, TriangleAlert, Zap, type LucideIcon, type LucideProps,
 } from "lucide-react";
 
 /** Значки признаков и уровней — из набора lucide, общего с остальным
@@ -10,7 +10,7 @@ import {
 const PATTERN_ICONS: Readonly<Record<number, LucideIcon>> = {
   1: MoveUpRight, 2: Zap, 4: Ellipsis, 5: FastForward, 6: ArrowDownUp,
   7: ChevronsUp, 8: Layers, 9: ArrowUpToLine, 10: Percent, 11: ChartNoAxesCombined, 12: TrendingUp,
-  13: History,
+  13: History, 14: Package, 15: ArrowDownToLine, 16: ChartNoAxesColumnDecreasing,
 };
 
 const LEVEL_ICONS: Readonly<Record<number, LucideIcon>> = {

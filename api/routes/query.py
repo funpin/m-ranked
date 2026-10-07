@@ -223,7 +223,7 @@ async def account(
             "as_of": committed_at,
         })
         daily = await db.fetch_all(details.ACCOUNT_DAILY, {
-            "account_id": row["account_id"], "as_of": committed_at,
+            "account_id": row["account_id"], "as_of": committed_at, "span": WEEK_SPAN,
         }) if stats_row else []
         stats = dto.account_stats(stats_row, revision, committed_at,
                                   dto.account_daily(list(daily))) if stats_row else None
@@ -232,6 +232,37 @@ async def account(
     return await serve(request, "account", {
         "id": legacyId.lower(), "legacyType": resolved_type,
     }, DETAIL_TAGS, build, _pinned_revision(revision), aliases=_account_aliases)
+
+
+# Неделя — семь полных дней и сегодняшние сутки; месяц — тридцать и сегодня.
+WEEK_SPAN = 7
+DAILY_SPANS = (7, 30)
+
+
+@router.get("/accounts/{accountId}/daily-series")
+async def account_daily_series(
+    accountId: str,
+    request: Request,
+    days: int = Query(30),
+) -> Response:
+    """Дни аккаунта для переключателя «7 д / 30 д»; неделя приходит и в карточке аккаунта."""
+    if days not in DAILY_SPANS:
+        raise BadRequest("days должен быть 7 или 30")
+    try:
+        account_id = uuid.UUID(accountId)
+    except ValueError as error:
+        raise BadRequest("accountId должен быть UUID") from error
+
+    async def build(revision: int, committed_at: Any) -> dict[str, Any]:
+        db: Database = request.app.state.db
+        rows = await db.fetch_all(details.ACCOUNT_DAILY, {
+            "account_id": account_id, "as_of": committed_at, "span": days,
+        })
+        return {"accountId": str(account_id), "days": days, "datasetRevision": revision,
+                "points": dto.account_daily(list(rows))}
+
+    return await serve(request, "account-daily-series", {"id": str(account_id), "days": str(days)},
+                       DETAIL_TAGS, build)
 
 
 def _account_aliases(body: dict[str, Any]) -> list[dict[str, Any]]:
@@ -339,8 +370,9 @@ async def account_publications(
         if account_row is None:
             raise NotFound(f"аккаунт {legacyId} не найден")
         today = committed_at.astimezone(ZoneInfo("Europe/Moscow")).date()
-        if day is not None and not today - timedelta(days=6) <= day <= today:
-            raise BadRequest("day должен входить в последние 7 московских суток")
+        # День выбирают на графике аккаунта: неделя или месяц и сегодняшние сутки.
+        if day is not None and not today - timedelta(days=max(DAILY_SPANS)) <= day <= today:
+            raise BadRequest("day должен входить в последние 30 московских суток или сегодняшние")
         dimensions = f"account-publications:{account_row['account_id']}:{day.isoformat() if day else '-'}"
         after_id = normalize.scoped_cursor(cursor, revision, dimensions)
         publication_type = "posts" if account_row["platform"] == "telegram" else "platform_posts"

@@ -53,6 +53,16 @@ function Neighbour({ href, id, platform, direction }: {
   );
 }
 
+/** Через сколько после даты публикации пост впервые замерен; null — загружена не вся история. */
+function jointDelay(rows: readonly { ageHours: number }[], total?: number): string | null {
+  if (!rows.length || (total !== undefined && rows.length < total)) return null;
+  const hours = Math.min(...rows.map((row) => row.ageHours));
+  if (!Number.isFinite(hours) || hours < 0.5) return null;
+  const whole = Math.floor(hours);
+  const minutes = Math.round((hours - whole) * 60);
+  return whole ? `${whole} ч${minutes ? ` ${minutes} мин` : ""}` : `${minutes} мин`;
+}
+
 export function PublicationDetail({history,historyLimit=100,analysis=null,sampledIds=null,totalPoints}:{history:DetailHistory;historyLimit?:number;analysis?:Promise<AnalysisLoad>|null;sampledIds?:string[]|null;totalPoints?:number}) {
   const p=history.publication, telegram=p.platform === "telegram";
   const archiveUrl=deletedPublicationArchiveUrl(p.platform,p.deletedAt,p.displayExternalId ?? p.externalId,p.accountUsername,history.accountArchiveUrl);
@@ -81,6 +91,12 @@ export function PublicationDetail({history,historyLimit=100,analysis=null,sample
           {p.ambiguousAlbumReactions ? <span className="text-warning font-medium">реакции элементов альбома различаются</span> : null}
           {p.joint ? <StatusPill tone="blue">+{p.additionalAuthorCount} авт.</StatusPill> : null}
         </p>
+        {p.joint && p.historyCompleteness !== "complete"
+          ? <p className="text-muted-foreground mt-2 max-w-3xl text-sm" data-testid="joint-publication-note">
+            Совместная публикация: на стене аккаунта она появляется после одобрения соавтором, позже указанной даты
+            {jointDelay(history.items, totalPoints) ? <> — здесь через <b className="text-foreground font-semibold">{jointDelay(history.items, totalPoints)}</b></> : null}.
+            Рост до первого замера пришёлся на стену соавтора, поэтому история начинается не с нуля.
+          </p> : null}
         {maxstatDate ? <p className="text-muted-foreground mt-2 text-sm">В MAXSTAT выберите в фильтрах дату <b className="text-foreground font-semibold">{maxstatDate}</b>: сервис не сохраняет выбранный день в ссылке.</p> : null}
       </div>
       <nav className="flex shrink-0 gap-2" aria-label="Навигация по публикациям">

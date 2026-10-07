@@ -87,6 +87,16 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
     text: "Доля реакций на просмотры постов в возрасте 4–14 суток относительно первых суток — в сравнении с другими аккаунтами площадки за 28 суток. Уровень null — метод воздержался, причина в abstainReason.",
     example: "/api/v1/accounts/{uuid}/tail-profile",
   },
+  getAccountAnomalyFindings: {
+    section: "accounts", title: "Аккаунтные находки",
+    text: "Закономерности, видимые только на многих постах аккаунта за 30 дней, в сравнении с другими аккаунтами площадки: повторяющийся стартовый пакет реакций, слишком ровный отклик, необычный поздний отклик. Считаются отдельно от уровней публикаций.",
+    example: "/api/v1/accounts/{uuid}/anomaly-findings",
+  },
+  getAccountDailySeries: {
+    section: "accounts", title: "Динамика аккаунта по дням",
+    text: "Публикации, медианы и суточные суммы реакций и просмотров за последние 7 или 30 полных дней и сегодняшние сутки (последняя точка, ещё не закончена).",
+    example: "/api/v1/accounts/{uuid}/daily-series?days=30",
+  },
   getPublication: {
     section: "publications", title: "Публикация",
     text: "Публикация и последние значения её счётчиков с отметками качества.",

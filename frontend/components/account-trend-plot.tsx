@@ -1,6 +1,6 @@
 "use client";
 
-import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceArea, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, legacyNumber } from "@/lib/format";
 import { selectedDayHref } from "@/lib/day-selection";
@@ -17,10 +17,14 @@ type Mode = "median" | "total";
 
 const WEEKDAY = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 
-function dayLabel(day: string) {
+function dayLabel(day: string, compact: boolean) {
   const date = new Date(`${day}T00:00:00`);
-  return `${WEEKDAY[date.getDay()]} ${date.getDate()}.${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const short = `${date.getDate()}.${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return compact ? short : `${WEEKDAY[date.getDay()]} ${short}`;
 }
+
+/** Подпись дня на оси и в подсказке; последний день ряда — сегодняшний, он ещё идёт. */
+const TODAY = "сегодня";
 
 /**
  * Неделя канала одним графиком.
@@ -35,6 +39,11 @@ function dayLabel(day: string) {
  * Столбцы дают форму недели, а точное число берётся из подсказки. Их шкала
  * растянута втрое, поэтому они занимают нижнюю треть поля и не спорят с
  * линиями.
+ *
+ * Последняя точка — сегодняшние сутки, они ещё идут: утром медианы свежих
+ * постов неизбежно ниже. Поэтому сегодняшний столбец бледнее и обведён
+ * пунктиром, отрезок линии к нему пунктирный, а законченные дни читаются
+ * сплошной линией без него.
  */
 export default function AccountTrendPlot({ points, primary, mode = "median", selectedDay }: {
   points: readonly Point[]; primary: string; mode?: Mode; selectedDay?: string;
@@ -57,10 +66,19 @@ export default function AccountTrendPlot({ points, primary, mode = "median", sel
   // подписывать её всё равно было незачем — точное число даёт подсказка.
   const busiest = Math.max(1, ...points.map((point) => point.publishedCount));
   const ceiling = Math.max(1, ...points.map((point) => (totals ? point.totalViews : point.medianViews) ?? 0));
-  const data = points.map((point) => ({
+  const compact = points.length > 10;
+  const last = points.length - 1;
+  // Две линии на метрику: сплошная по законченным дням и пунктирный отрезок
+  // от вчерашнего дня к сегодняшнему. Общая точка — вчера, поэтому линия
+  // не рвётся.
+  const data = points.map((point, index) => ({
     ...point,
-    label: dayLabel(point.day),
+    label: index === last ? TODAY : dayLabel(point.day, compact),
     postsBand: (point.publishedCount / busiest) * ceiling * 0.3,
+    reactionsDone: index < last ? point[reactionsKey] : null,
+    reactionsToday: index >= last - 1 ? point[reactionsKey] : null,
+    viewsDone: index < last ? point[viewsKey] : null,
+    viewsToday: index >= last - 1 ? point[viewsKey] : null,
   }));
 
   // Выбранный день живёт в URL: сервер построит таблицу с суточными
@@ -77,9 +95,17 @@ export default function AccountTrendPlot({ points, primary, mode = "median", sel
     <ChartContainer config={config} className="h-[280px] w-full min-w-0 max-w-full aspect-auto sm:h-[320px] [&_.recharts-surface]:cursor-pointer">
       <ComposedChart data={data} margin={{ left: 4, right: 4, top: 8, bottom: 8 }} onClick={pick}>
         <CartesianGrid vertical={false} yAxisId="reactions" stroke="var(--border)" />
+        {last >= 0 ? <ReferenceArea yAxisId="views" x1={TODAY} x2={TODAY} fill="var(--muted)" fillOpacity={0.45}
+          ifOverflow="extendDomain" /> : null}
         <Bar yAxisId="views" dataKey="postsBand" fill="var(--muted-foreground)"
-          fillOpacity={0.2} radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive animationDuration={420} />
-        <XAxis dataKey="label" tickLine={false} axisLine={false} height={28} tickMargin={8} />
+          fillOpacity={0.2} radius={[3, 3, 0, 0]} maxBarSize={compact ? 14 : 26} isAnimationActive animationDuration={420}>
+          {data.map((point, index) => <Cell key={point.day} fillOpacity={index === last ? 0.08 : 0.2}
+            stroke={index === last ? "var(--muted-foreground)" : undefined} strokeOpacity={0.6}
+            strokeDasharray={index === last ? "3 3" : undefined} />)}
+        </Bar>
+        <XAxis dataKey="label" tickLine={false} axisLine={false} height={28} tickMargin={8}
+          interval={compact ? "preserveStartEnd" : 0} minTickGap={compact ? 12 : 4}
+          tick={(props) => <DayTick {...props} />} />
         {/* Повёрнутых подписей у осей нет: вдвоём они съедали восемьдесят
             пикселей ширины, а какая шкала чья, говорит легенда над графиком
             цветом. */}
@@ -89,12 +115,18 @@ export default function AccountTrendPlot({ points, primary, mode = "median", sel
           width={52} allowDecimals={false} tickFormatter={axisNumber} tickMargin={6} />
         <ChartTooltip cursor={{ strokeDasharray: "4 4" }}
           content={(props) => <TrendTooltip {...props} primary={primary} mode={mode} />} />
-        <Line yAxisId="reactions" dataKey={reactionsKey} type="monotone" stroke="var(--chart-1)"
+        <Line yAxisId="reactions" dataKey="reactionsDone" name={reactionsLabel} type="monotone" stroke="var(--chart-1)"
           strokeWidth={2.5} dot={(props) => markedDot(props, selectedDay ?? null, "var(--chart-1)")} activeDot={{ r: 5 }}
           connectNulls={false} isAnimationActive animationDuration={420} />
-        <Line yAxisId="views" dataKey={viewsKey} type="monotone" stroke="var(--chart-2)"
+        <Line yAxisId="reactions" dataKey="reactionsToday" type="monotone" stroke="var(--chart-1)" strokeOpacity={0.7}
+          strokeWidth={2} strokeDasharray="5 4" dot={(props) => todayDot(props, last, "var(--chart-1)")} activeDot={{ r: 5 }}
+          connectNulls={false} isAnimationActive animationDuration={420} legendType="none" tooltipType="none" />
+        <Line yAxisId="views" dataKey="viewsDone" name={viewsLabel} type="monotone" stroke="var(--chart-2)"
           strokeWidth={2.5} dot={(props) => markedDot(props, selectedDay ?? null, "var(--chart-2)")} activeDot={{ r: 5 }}
           connectNulls={false} isAnimationActive animationDuration={420} />
+        <Line yAxisId="views" dataKey="viewsToday" type="monotone" stroke="var(--chart-2)" strokeOpacity={0.7}
+          strokeWidth={2} strokeDasharray="5 4" dot={(props) => todayDot(props, last, "var(--chart-2)")} activeDot={{ r: 5 }}
+          connectNulls={false} isAnimationActive animationDuration={420} legendType="none" tooltipType="none" />
       </ComposedChart>
     </ChartContainer>
   );
@@ -108,7 +140,8 @@ function TrendTooltip({ active, payload, primary, mode }: {
   if (!point) return null;
   return (
     <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
-      <div className="font-medium">{point.label}</div>
+      <div className="font-medium">{point.label === TODAY
+        ? <>Сегодня <span className="text-muted-foreground font-normal">· сутки ещё идут</span></> : point.label}</div>
       <div className="flex items-center gap-2">
         <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[2px] bg-muted-foreground/40" />
         <span className="text-foreground tabular">Публикаций в день: {point.publishedCount}</span>
@@ -129,6 +162,21 @@ function TrendTooltip({ active, payload, primary, mode }: {
       </div>
     </div>
   );
+}
+
+/** Подпись сегодняшнего дня приглушена и курсивом: значения ещё растут. */
+function DayTick({ x, y, payload }: { x?: number | string; y?: number | string; payload?: { value?: string } }) {
+  const today = payload?.value === TODAY;
+  return <text x={x} y={y} dy={12} textAnchor="middle" fontSize={12}
+    fill={today ? "var(--muted-foreground)" : "var(--foreground)"} fillOpacity={today ? 1 : 0.7}
+    fontStyle={today ? "italic" : undefined}>{payload?.value}</text>;
+}
+
+/** Сегодняшняя точка — полый кружок: значение неокончательное. */
+function todayDot(props: unknown, last: number, color: string) {
+  const { cx, cy, index, key } = props as { cx?: number; cy?: number; index?: number; key?: string };
+  if (index !== last || cx === undefined || cy === undefined) return <g key={key} />;
+  return <circle key={key} cx={cx} cy={cy} r={4} fill="var(--background)" stroke={color} strokeWidth={2} />;
 }
 
 /** Кружок рисуется только у выбранного дня: остальные точки читаются по линии. */

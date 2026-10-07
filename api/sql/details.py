@@ -729,9 +729,10 @@ SELECT
 """
 
 ACCOUNT_DAILY = """
--- Недельная динамика аккаунта: сколько постов вышло в каждый из последних
--- семи дней, какими они оказались по медиане, и сколько за эти сутки набрали
--- все отслеживаемые посты вместе.
+-- Динамика аккаунта по дням: сколько постов вышло в каждый из последних
+-- %(span)s полных дней и сегодня (неделя — восемь точек, месяц — тридцать
+-- одна), какими они оказались по медиане, и сколько за эти сутки набрали все
+-- отслеживаемые посты вместе. Сегодняшние сутки ещё идут: экран помечает их.
 --
 -- Медианы считаются по постам этого дня, а суммы — по всем постам площадки:
 -- это разные вопросы. Медиана отвечает «каким вышел типичный пост», сумма —
@@ -744,7 +745,7 @@ ACCOUNT_DAILY = """
 WITH bounds AS (
     SELECT (%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date AS today
 ), days AS (
-    SELECT generate_series(bounds.today - 6, bounds.today, interval '1 day')::date AS metric_day
+    SELECT generate_series(bounds.today - %(span)s::integer, bounds.today, interval '1 day')::date AS metric_day
       FROM bounds
 ), published AS (
     SELECT (publication.published_at AT TIME ZONE 'Europe/Moscow')::date AS metric_day,
@@ -753,7 +754,7 @@ WITH bounds AS (
      CROSS JOIN bounds
      WHERE publication.primary_account_id=%(account_id)s::uuid
        AND publication.published_at<=%(as_of)s::timestamptz
-       AND (publication.published_at AT TIME ZONE 'Europe/Moscow')::date >= bounds.today - 6
+       AND (publication.published_at AT TIME ZONE 'Europe/Moscow')::date >= bounds.today - %(span)s::integer
 ), valued AS (
     SELECT published.metric_day,
            CASE WHEN latest.reactions_quality IN ('invalid','suspected_reset')
@@ -801,7 +802,7 @@ WITH bounds AS (
           FROM tracked
           JOIN ingest.publication_metric_snapshot s
             ON s.publication_id=tracked.id AND s.published_month=tracked.published_month
-         WHERE s.observed_at >= ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
+         WHERE s.observed_at >= ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - %(span)s::integer - 1)::timestamp)
                     AT TIME ZONE 'Europe/Moscow')
            AND s.observed_at < %(as_of)s::timestamptz + interval '1 microsecond'
            AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
@@ -814,7 +815,7 @@ WITH bounds AS (
                p.reactions_count, p.reactions_quality, p.views_count, p.views_quality
           FROM tracked
          CROSS JOIN LATERAL ingest.packed_points_between(tracked.id,
-                 ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - 7)::timestamp)
+                 ((((%(as_of)s::timestamptz AT TIME ZONE 'Europe/Moscow')::date - %(span)s::integer - 1)::timestamp)
                     AT TIME ZONE 'Europe/Moscow'),
                  %(as_of)s::timestamptz + interval '1 microsecond') p
          WHERE p.visible

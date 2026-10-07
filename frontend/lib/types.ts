@@ -61,4 +61,6 @@ export type CollectorGap = components["schemas"]["CollectorGap"];
 export type PublicationAnomalyAnalysis = components["schemas"]["PublicationAnomalyAnalysis"];
 export type AccountAnomalyLevels = components["schemas"]["AccountAnomalyLevels"];
 export type AccountTailProfile = components["schemas"]["AccountTailProfile"];
+export type AccountAnomalyFindings = components["schemas"]["AccountAnomalyFindings"];
+export type AccountAnomalyFinding = components["schemas"]["AccountAnomalyFinding"];
 export type AnomalySignal = components["schemas"]["AnomalySignal"];

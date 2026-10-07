@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "0222726b84e68fe30db2ce5c06cdc4ed872f1243c6924fd518f39a3e72097465",
+  "sourceSha256": "d594e87b24c9268e347d9d846a618285f573818dbfcda4633d3092e38abcd017",
   "version": "1.0.0",
   "operations": [
     {
@@ -575,6 +575,49 @@
         {
           "name": "disclaimer",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "operationId": "getAccountDailySeries",
+      "path": "/api/v1/accounts/{accountId}/daily-series",
+      "summary": "Read the account's daily series for the last 7 or 30 full days and today",
+      "parameters": [
+        {
+          "name": "accountId",
+          "in": "path",
+          "required": true,
+          "type": "uuid"
+        },
+        {
+          "name": "days",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "enum": [
+            7,
+            30
+          ],
+          "default": 30
+        }
+      ],
+      "response": null,
+      "fields": [
+        {
+          "name": "accountId",
+          "type": "uuid"
+        },
+        {
+          "name": "days",
+          "type": "integer"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "points",
+          "type": "object[]"
         }
       ]
     },
