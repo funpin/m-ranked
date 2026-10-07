@@ -349,7 +349,7 @@ def figure(finding: AccountFinding) -> dict[str, Any] | None:
     data = finding.metrics
     typical = (data.get("cohort") or {}).get("median")
     if finding.kind == "early_pack":
-        value, unit, label, direction = data["median"], "times", "доля реакций в первые 2 ч к следующим суткам", "higher"
+        value, unit, label, direction = data["median"], "times", "доля реакций: первые 2 ч / сутки", "higher"
     elif finding.kind == "regular_reactions":
         value, unit, label, direction = data["extra"], "decimal", "разброс реакций сверх случайного", "lower"
     elif finding.kind == "late_growth":

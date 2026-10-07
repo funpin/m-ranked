@@ -6,13 +6,14 @@ type Schema = components["schemas"];
 // Недельный ряд: полный, с днём без публикаций посередине — так проверяется и
 // провал, и то, что ряд не рвётся.
 function weekly() {
-  const counts = [3, 5, 0, 2, 4, 1, 2];
-  const reactions = [5, 7, null, 4, 9, 3, 6];
-  const views = [50, 80, null, 40, 95, 30, 60];
+  // Семь полных дней и восьмая точка — сегодняшние сутки, как в ответе API.
+  const counts = [3, 5, 0, 2, 4, 1, 2, 1];
+  const reactions = [5, 7, null, 4, 9, 3, 6, 2];
+  const views = [50, 80, null, 40, 95, 30, 60, 20];
   // Суммы намеренно не повторяют медианы: по ним видно, что переключатель у
   // графика рисует другой ряд, а не тот же самый в другом масштабе.
-  const totalReactions = [60, 140, 12, 44, 180, 18, 72];
-  const totalViews = [900, 2400, 180, 640, 3100, 300, 1200];
+  const totalReactions = [60, 140, 12, 44, 180, 18, 72, 9];
+  const totalViews = [900, 2400, 180, 640, 3100, 300, 1200, 150];
   return counts.map((published, index) => ({
     day: new Date(Date.UTC(2026, 6, 1 + index)).toISOString().slice(0, 10),
     publishedCount: published,

@@ -118,13 +118,13 @@ export default function AccountTrendPlot({ points, primary, mode = "median", sel
         <Line yAxisId="reactions" dataKey="reactionsDone" name={reactionsLabel} type="monotone" stroke="var(--chart-1)"
           strokeWidth={2.5} dot={(props) => markedDot(props, selectedDay ?? null, "var(--chart-1)")} activeDot={{ r: 5 }}
           connectNulls={false} isAnimationActive animationDuration={420} />
-        <Line yAxisId="reactions" dataKey="reactionsToday" type="monotone" stroke="var(--chart-1)" strokeOpacity={0.7}
+        <Line yAxisId="reactions" dataKey="reactionsToday" className="trend-today" type="monotone" stroke="var(--chart-1)" strokeOpacity={0.7}
           strokeWidth={2} strokeDasharray="5 4" dot={(props) => todayDot(props, last, "var(--chart-1)")} activeDot={{ r: 5 }}
           connectNulls={false} isAnimationActive animationDuration={420} legendType="none" tooltipType="none" />
         <Line yAxisId="views" dataKey="viewsDone" name={viewsLabel} type="monotone" stroke="var(--chart-2)"
           strokeWidth={2.5} dot={(props) => markedDot(props, selectedDay ?? null, "var(--chart-2)")} activeDot={{ r: 5 }}
           connectNulls={false} isAnimationActive animationDuration={420} />
-        <Line yAxisId="views" dataKey="viewsToday" type="monotone" stroke="var(--chart-2)" strokeOpacity={0.7}
+        <Line yAxisId="views" dataKey="viewsToday" className="trend-today" type="monotone" stroke="var(--chart-2)" strokeOpacity={0.7}
           strokeWidth={2} strokeDasharray="5 4" dot={(props) => todayDot(props, last, "var(--chart-2)")} activeDot={{ r: 5 }}
           connectNulls={false} isAnimationActive animationDuration={420} legendType="none" tooltipType="none" />
       </ComposedChart>

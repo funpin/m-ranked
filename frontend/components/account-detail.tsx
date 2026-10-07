@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { PLATFORM_LABELS, PLATFORM_LONG_LABELS } from "@/lib/format";
 import { metricEvidence } from "@/lib/metric-evidence";
@@ -14,12 +15,11 @@ import { PublicationRow } from "@/components/account-publication-row";
 import { AccountMorePublications } from "@/components/account-more-publications";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
 import type { TailProfileLoad } from "@/lib/account-tail";
-import { AccountTailCard } from "@/components/account-tail-card";
-import { AccountFindingsCard, type FindingsLoad } from "@/components/account-findings-card";
+import { AccountAnalysisCard, type FindingsLoad } from "@/components/account-analysis-card";
 import { InstitutionFacts } from "@/components/institution-facts";
 import { SummaryTile } from "@/components/summary-tile";
 import { FileText, History, Heart, MessageCircle, Eye, Trophy } from "lucide-react";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { PageTitle } from "@/components/page-title";
 
 
@@ -64,11 +64,12 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
         обзоре и при переходе между постами. */}
     <NavigationBoundary fallback={<AccountSkeleton chrome={false} />}>
     <Card className="block p-4 text-sm sm:p-5">
-      <p className="text-xs leading-relaxed text-muted-foreground">{stats ? `Публикации ${PLATFORM_LONG_LABELS[account.platform]} в базе за последние ${stats.retentionDays} дней.${telegram ? "" : " Недоступные метрики — прочерк."}` : "Сводка публикаций ещё не рассчитана."}</p>
-      <div className="mt-3 grid min-w-0 items-stretch gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+      {stats ? null : <p className="mb-3 text-xs leading-relaxed text-muted-foreground">Сводка публикаций ещё не рассчитана.</p>}
+      <div className="grid min-w-0 items-stretch gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <section aria-label="Сводка вуза" className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-2">
           {stats ? <>
           <Tile value={String(stats.postCount)} label="публикаций в базе" icon={<FileText />}
+            note={`Публикации ${PLATFORM_LONG_LABELS[account.platform]} в базе за последние ${stats.retentionDays} дней.${telegram ? "" : " Метрики, которые площадка не отдаёт, показаны прочерком."}`}
             delta={change(stats.postCount, previous.postCount)} deltaLabel="публикаций за сутки" />
           <Tile value={String(stats.monitored)} label="с полной историей" icon={<History />}
             note="Публикации, для которых в базе отмечена полная история наблюдений. Показатель относится к аккаунту на выбранной площадке."
@@ -98,8 +99,9 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
         {stats ? <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} accountId={account.accountId} /> : null}
       </div>
     </Card>
-    {findings ? <AccountFindingsCard findings={findings} /> : null}
-    {tailProfile ? <AccountTailCard profile={tailProfile} /> : null}
+    {findings || tailProfile ? <Suspense fallback={<Skeleton className="mt-5 h-12 w-full rounded-xl" aria-label="Анализ аккаунта загружается" />}>
+      <AccountAnalysisCard findings={findings} tail={tailProfile} platform={account.platform} />
+    </Suspense> : null}
     <Card className="block p-5 text-sm mt-5 min-w-0 overflow-x-auto">
       <DaySpotlight day={selectedDay} mode={selectedTrend} /><Table className="reveal"><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead>{anomalyLevels ? <TableHead>Анализ динамики</TableHead> : null}</TableRow></TableHeader><TableBody>
       {posts.map((post) => <PublicationRow key={post.publicationId} post={post} account={account} primary={primary}

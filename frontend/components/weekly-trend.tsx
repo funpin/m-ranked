@@ -51,7 +51,19 @@ const MODES: { id: TrendMode; label: string; hint: string }[] = [
  */
 export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accountId }: { points: readonly Point[]; primary: string; selectedDay?: string; selectedTrend?: TrendMode; accountId?: string }) {
   const [mode, setMode] = useState<TrendMode>(selectedTrend ?? "median");
-  const [span, setSpan] = useState<Span>(7);
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  // Период живёт в адресе: переключатель «Медианы / Всего за день» перестраивает
+  // блок, и состояние компонента терялось бы; ссылку можно и переслать.
+  const [span, setSpanState] = useState<Span>(search.get("span") === "30" ? 30 : 7);
+  const setSpan = (next: Span) => {
+    setSpanState(next);
+    const params = new URLSearchParams(search.toString());
+    if (next === 30) params.set("span", "30"); else params.delete("span");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
   // Месяц приходит отдельным запросом только по нажатию: карточка аккаунта
   // несёт неделю, а месячный ряд нужен не каждому читателю.
   const [month, setMonth] = useState<readonly Point[] | null>(null);
@@ -62,13 +74,12 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accou
     fetch(`/api/v1/accounts/${accountId}/daily-series?days=30`, { headers: { accept: "application/json" }, signal: controller.signal })
       .then((response) => response.ok ? response.json() : Promise.reject(new Error(String(response.status))))
       .then((body: { points: Point[] }) => setMonth(body.points))
-      .catch(() => { if (!controller.signal.aborted) { setMonthFailed(true); setSpan(7); } });
+      // Ссылка с span=30 остаётся рабочей: при сбое показываем неделю и строку о сбое.
+      .catch(() => { if (!controller.signal.aborted) setMonthFailed(true); });
     return () => controller.abort();
   }, [span, month, accountId]);
-  const shown = span === 30 && month ? month : points;
-  const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
+  const monthly = span === 30 && !monthFailed;
+  const shown = monthly && month ? month : points;
   const chooseMode = (next: TrendMode) => {
     setMode(next);
     router.replace(selectedDayHref(pathname, search.toString(), selectedDay, next), { scroll: false });
@@ -82,7 +93,7 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accou
     <section className="grid min-w-0 content-start gap-2 rounded-lg border border-border/70 bg-background/30 p-3" aria-label="Динамика за неделю">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold leading-5">{span === 30 ? "Месяц" : "Неделя"}
+          <h2 className="text-sm font-semibold leading-5">{monthly ? "Месяц" : "Неделя"}
             <span className="text-muted-foreground ml-1.5 text-xs font-normal">{period(shown)}</span></h2>
           <span className="block text-xs leading-4 text-muted-foreground">
           {published ? <>вышло <b className="text-foreground tabular">{published}</b> публикаций за {days} дней</> : `за ${days} дней публикаций не было`}
@@ -114,13 +125,14 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accou
       </div>
       {shown.length > 1
         ? <>
-            {span === 30 && !month ? <Skeleton className="h-[280px] w-full sm:h-[320px]" role="status" aria-label="Загрузка месячного ряда" />
+            {monthly && !month ? <Skeleton className="h-[280px] w-full sm:h-[320px]" role="status" aria-label="Загрузка месячного ряда" />
               : <AccountTrendPlot points={shown} primary={primary} mode={mode} selectedDay={selectedDay} />}
             {/* Режим указан в переключателе; легенда связывает цвет с
                 показателем и шкалой и сохраняет высоту при смене режима. */}
-            <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground" aria-label="Легенда графика">
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-1">
+            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground" aria-label="Легенда графика">
               {[
-                { color: "var(--muted-foreground)", faded: true, name: "Публикации", side: "", description: "Публикаций в день — столбцы; сегодняшний столбец пунктирный, сутки ещё идут" },
+                { color: "var(--muted-foreground)", faded: true, name: "Публикации", side: "", description: "Публикаций в день — столбцы" },
                 { color: "var(--chart-1)", name: primary === "лайков" ? "Лайки" : "Реакции", side: "слева", description: `${totals ? "Всего" : "Медиана"} ${primary} — левая шкала` },
                 { color: "var(--chart-2)", name: "Просмотры", side: "справа", description: `${totals ? "Всего" : "Медиана"} просмотров — правая шкала` },
               ].map((item) => (
@@ -132,8 +144,9 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accou
               ))}
             </ul>
             <p className="min-h-8 text-xs leading-4 text-muted-foreground sm:min-h-4">{totals
-              ? "Выберите день на графике — покажем суточный прирост."
-              : "Выберите день на графике — покажем его публикации."}</p>
+              ? "Нажмите на день — покажем суточный прирост"
+              : "Нажмите на день — покажем его публикации"}</p>
+            </div>
           </>
         : <p className="text-muted-foreground py-10 text-center text-sm">Недельного ряда ещё нет.</p>}
     </section>

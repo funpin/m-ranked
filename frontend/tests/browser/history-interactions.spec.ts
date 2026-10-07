@@ -128,13 +128,16 @@ test("account table shows the analysis level without waiting for it",async({page
 
 test("account page explains late engagement against the platform without waiting for it",async({page})=>{
   await page.goto("/channels/1");
-  const card=page.getByTestId("account-tail-card");
-  await expect(card.getByRole("heading",{name:"Отклик на старые публикации"})).toBeVisible();
-  await expect(card.getByTestId("account-tail-status")).toContainText("устойчиво необычный");
-  await expect(card).toContainText("3,10×");
-  await expect(card).toContainText("выше, чем у 98 % аккаунтов");
-  await expect(card).toContainText("Счётчики площадки округлены");
-  await expect(card.getByRole("img",{name:/Сутки с поздними реакциями: 20 из 21/})).toBeVisible();
+  const card=page.getByTestId("account-analysis-card");
+  // Свёрнутая строка называет статус, подробности — по раскрытию.
+  await expect(card.getByTestId("account-analysis-toggle")).toContainText("Отклик на старые посты: устойчиво необычный");
+  await card.getByTestId("account-analysis-toggle").click();
+  const row=card.getByTestId("account-finding");
+  await expect(row).toContainText("Выше, чем у 98 % аккаунтов площадки");
+  await expect(row).toContainText("3,1×");
+  await row.getByRole("button",{name:"подробнее"}).click();
+  await expect(row).toContainText("Счётчики площадки округлены");
+  await expect(row.getByRole("img",{name:/Сутки с поздними реакциями: 20 из 21/})).toBeVisible();
   await expect(card).not.toContainText(/накрут|мошен/);
 });
 

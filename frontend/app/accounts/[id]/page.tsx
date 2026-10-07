@@ -10,7 +10,7 @@ import type { AccountView } from "@/lib/types";
 import { anomalyReportVisible } from "@/lib/anomaly-visibility";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
 import type { TailProfileLoad } from "@/lib/account-tail";
-import type { FindingsLoad } from "@/components/account-findings-card";
+import type { FindingsLoad } from "@/components/account-analysis-card";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ day?: string | string[]; trend?: string | string[] }> };

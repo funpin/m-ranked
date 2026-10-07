@@ -141,10 +141,13 @@ test("страница аккаунта поясняет сокращение и
 test("недельный график площадки рисуется двумя линиями со своими шкалами", async ({ page }) => {
   await page.goto("/accounts/00000001-0000-4000-8000-000000000001");
   const trend = page.getByRole("region", { name: "Динамика за неделю" });
-  await expect(trend).toContainText("вышло 17 публикаций за 7 дней");
+  await expect(trend).toContainText("вышло 17 публикаций за 7 дней, сегодня — 1");
   // Две линии на двух шкалах: медианы реакций и просмотров живут в разных
-  // порядках величин и общей шкалы не терпят.
-  await expect(trend.locator("path.recharts-line-curve")).toHaveCount(2);
+  // порядках величин и общей шкалы не терпят. У каждой — пунктирный отрезок
+  // к сегодняшним суткам, которые ещё идут.
+  await expect(trend.locator("path.recharts-line-curve")).toHaveCount(4);
+  await expect(trend.locator(".trend-today path.recharts-line-curve, path.recharts-line-curve.trend-today")).toHaveCount(2);
+  await expect(trend.getByText("сегодня", { exact: true })).toBeVisible();
   await expect(trend.locator(".recharts-yAxis")).toHaveCount(2);
   // Обе шкалы подписаны: без подписей две линии в разных порядках величин
   // читаются как одна кривая неизвестного масштаба. Подписи в этой версии
@@ -152,8 +155,8 @@ test("недельный график площадки рисуется двум
   // считаются по самой картинке.
   const labelled = await trend.locator("svg.recharts-surface text").count();
   expect(labelled).toBeGreaterThan(10);
-  // Публикации дня — фоновыми столбцами, по одному на каждый день ряда.
-  await expect(trend.locator(".recharts-bar-rectangle")).toHaveCount(6);
+  // Публикации дня — фоновыми столбцами, по одному на каждый день ряда с публикациями.
+  await expect(trend.locator(".recharts-bar-rectangle")).toHaveCount(7);
   await expect(trend.getByRole("listitem", { name: "Публикаций в день — столбцы" })).toBeVisible();
 });
 
@@ -242,9 +245,9 @@ test("переключатель у графика меняет ряд, а ст�
   await toggle.getByRole("button", { name: "Всего за день" }).click();
   await expect(toggle.getByRole("button", { name: "Всего за день" })).toHaveAttribute("aria-pressed", "true");
   await expect(trend.getByRole("listitem", { name: "Всего просмотров — правая шкала" })).toBeVisible();
-  // Линий по-прежнему две, и столбцы публикаций на месте в обоих режимах.
-  await expect(trend.locator("path.recharts-line-curve")).toHaveCount(2);
-  await expect(trend.locator(".recharts-bar-rectangle")).toHaveCount(6);
+  // Линий по-прежнему две (с отрезками к сегодня), и столбцы публикаций на месте в обоих режимах.
+  await expect(trend.locator("path.recharts-line-curve")).toHaveCount(4);
+  await expect(trend.locator(".recharts-bar-rectangle")).toHaveCount(7);
   await expect(trend.getByRole("listitem", { name: "Публикаций в день — столбцы" })).toBeVisible();
 });
 
