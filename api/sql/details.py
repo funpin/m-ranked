@@ -519,8 +519,9 @@ SELECT publication.id AS publication_id, alias.legacy_id,alias.entity_type,
 
 HISTORY = """
 WITH account AS MATERIALIZED (
-    SELECT publication.primary_account_id
+    SELECT publication.primary_account_id,platform_account.platform::text AS platform
       FROM ingest.visible_publication publication
+      JOIN catalog.platform_account platform_account ON platform_account.id=publication.primary_account_id
      WHERE publication.id=%(publication_id)s::uuid
 ), ranked AS MATERIALIZED (
     SELECT snapshot.*,
@@ -552,6 +553,7 @@ WITH account AS MATERIALIZED (
            lag(decorated.shares_count) OVER chronology AS previous_shares,
            lag(decorated.reaction_breakdown) OVER chronology AS previous_breakdown,
            lag(decorated.observed_at) OVER chronology AS previous_observed_at,
+           lag(decorated.synthetic) OVER chronology AS previous_synthetic,
            row_number() OVER (ORDER BY decorated.observed_at DESC,decorated.published_month DESC,decorated.id DESC) AS position
       FROM decorated
     WINDOW chronology AS (ORDER BY decorated.observed_at,decorated.published_month,decorated.id)
@@ -575,19 +577,45 @@ SELECT windowed.id AS snapshot_id,windowed.*,
               'from',windowed.previous_observed_at,
               'to',windowed.observed_at,
               'successfulPolls',coalesce(interval_results.successful_polls,0),
-              'failedPolls',coalesce(interval_results.failed_polls,0)
+              'failedPolls',coalesce(interval_results.failed_polls,0),
+              'unchangedAt',unchanged.at
             ) END AS collector_interval
   FROM windowed
  CROSS JOIN account
   LEFT JOIN LATERAL (
     SELECT count(*) FILTER (WHERE result.status='succeeded')::integer AS successful_polls,
-           count(*) FILTER (WHERE result.status NOT IN ('running','succeeded'))::integer AS failed_polls
+           count(*) FILTER (WHERE result.status NOT IN ('running','succeeded'))::integer AS failed_polls,
+           max(result.started_at) FILTER (WHERE result.status='succeeded'
+                                            AND result.completed_at<windowed.observed_at) AS last_success_at
       FROM ingest.collection_account_result result
      WHERE result.platform_account_id=account.primary_account_id
        AND result.started_at>windowed.previous_observed_at
        AND result.started_at<=windowed.observed_at
        AND result.completed_at<=%(as_of)s::timestamptz
   ) interval_results ON windowed.previous_observed_at IS NOT NULL
+ -- Последнее чтение без изменений. Сборщик не пишет неизменившиеся чтения,
+ -- и без этой отметки рост последнего цикла рисовался на все часы с прошлой
+ -- точки (RuTube: «18 часов» вместо одного). Неизменившийся пост сборщик
+ -- перечитывает в каждом цикле, как только начался новый интервал опроса его
+ -- возраста (collector_runtime.public_web.snapshot_interval_minutes, значения
+ -- по умолчанию): цикл не раньше конца этого интервала после прошлой точки
+ -- пост читал. Сверка с квитанциями опроса (07.10.2026): RuTube — все циклы,
+ -- посты младше суток на остальных площадках — 98–99 пятнадцатиминуток из ста.
+ -- Начало цикла, а не конец: само чтение было не раньше, значение — то же.
+ CROSS JOIN LATERAL (
+    SELECT CASE WHEN windowed.previous_synthetic IS NOT TRUE
+                 AND (windowed.views_count IS DISTINCT FROM windowed.previous_views
+                      OR windowed.reactions_count IS DISTINCT FROM windowed.previous_reactions
+                      OR windowed.comments_count IS DISTINCT FROM windowed.previous_comments
+                      OR windowed.shares_count IS DISTINCT FROM windowed.previous_shares)
+                 AND interval_results.last_success_at>=windowed.previous_observed_at+make_interval(mins=>
+                     CASE WHEN account.platform='rutube' THEN
+                          CASE WHEN windowed.age_seconds<72*3600 THEN 60 WHEN windowed.age_seconds<7*86400 THEN 180
+                               WHEN windowed.age_seconds<14*86400 THEN 360 ELSE 720 END
+                     ELSE CASE WHEN windowed.age_seconds<86400 THEN 5 WHEN windowed.age_seconds<72*3600 THEN 15
+                               WHEN windowed.age_seconds<7*86400 THEN 30 ELSE 60 END END)
+                THEN interval_results.last_success_at END AS at
+ ) unchanged
  CROSS JOIN LATERAL (
     SELECT computed.entries,
            CASE WHEN computed.entries IS NULL THEN NULL

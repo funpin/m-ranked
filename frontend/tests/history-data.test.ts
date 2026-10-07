@@ -39,3 +39,27 @@ test("a long history is previewed: chart sample plus full table tail, no lineage
   assert.ok((preview.rows as { rawEvidence: object }[]).every((item) => Object.keys(item.rawEvidence).length === 0));
   assert.equal((preview.rows[0] as { snapshotId: string }).snapshotId, "1");
 });
+
+test("an unchanged read before growth becomes a chart point with the previous values", async () => {
+  const { withUnchangedReads } = await import("../lib/history-data");
+  const counter = (value: number | null) => ({ value, observedAt: null, quality: "exact" });
+  const base = { ageHours: 0, comments: counter(0), shares: counter(null), deltaComments: 0, deltaShares: null,
+    reactionsBreakdown: null, deltaReactionsBreakdown: null, reactionsBreakdownEntries: null, deltaReactionsBreakdownEntries: null,
+    synthetic: false, intervalUncertain: false, quality: "exact", rawEvidence: {} };
+  // RuTube e6953fb9: 1 просмотр в 14:16, через 18 ч — 1 749; последний цикл без изменений — 07:15.
+  const rows = [
+    { ...base, snapshotId: "1", observedAt: "2026-09-28T14:16:15Z", views: counter(1), reactions: counter(0),
+      deltaViews: null, deltaReactions: null, collectorInterval: null },
+    { ...base, snapshotId: "2", observedAt: "2026-09-29T08:16:27Z", ageHours: 18.25, views: counter(1749), reactions: counter(97),
+      deltaViews: 1748, deltaReactions: 97, collectorInterval: { from: "2026-09-28T14:16:15Z", to: "2026-09-29T08:16:27Z",
+        successfulPolls: 18, failedPolls: 0, unchangedAt: "2026-09-29T07:15:02Z" } },
+  ] as never[];
+  const plotted = withUnchangedReads(rows);
+  assert.deepEqual(plotted.map((row) => [row.observedAt, row.views.value, row.reactions.value, row.unchangedFor ?? null]), [
+    ["2026-09-28T14:16:15Z", 1, 0, null],
+    ["2026-09-29T07:15:02Z", 1, 0, "2"],
+    ["2026-09-29T08:16:27Z", 1749, 97, null],
+  ]);
+  // Чтение не позже прошлой точки (например, в выборке) ничего не добавляет.
+  assert.equal(withUnchangedReads([rows[1]!]).length, 1);
+});

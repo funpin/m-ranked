@@ -78,8 +78,44 @@ export function previewHistory(items: readonly HistorySnapshot[], tableLimit: nu
   const chart = new Set(sampled.map((row) => row.snapshotId));
   return {
     rows: clean.filter((row) => table.has(row.snapshotId) || chart.has(row.snapshotId))
-      .map((row) => table.has(row.snapshotId) ? row : { ...row, collectorInterval: null }),
+      // Интервал точки графика нужен только с чтением без изменений: по нему
+      // график ставит точку перед ростом (withUnchangedReads).
+      .map((row) => table.has(row.snapshotId) || row.collectorInterval?.unchangedAt ? row : { ...row, collectorInterval: null }),
     sampledIds: sampled.map((row) => row.snapshotId),
     totalPoints: clean.length,
   };
+}
+
+/** Строка графика: сохранённая точка или чтение без изменений перед ней. */
+export type PlotRow = HistorySnapshot & { unchangedFor?: string };
+
+/**
+ * Чтения без изменений сборщик не сохраняет, и рост последнего цикла линия
+ * растягивала на все часы с прошлой точки: у RuTube выходило «18 часов» вместо
+ * одного. API называет начало последнего успешного цикла, в котором пост был
+ * прочитан с прежними значениями (`collectorInterval.unchangedAt`), — здесь в
+ * этот момент ставится точка с прежними значениями. Только на линии
+ * накопления: столбцы прироста и таблица показывают сохранённые точки.
+ */
+export function withUnchangedReads(rows: readonly HistorySnapshot[]): PlotRow[] {
+  const result: PlotRow[] = [];
+  rows.forEach((row, index) => {
+    const at = row.collectorInterval?.unchangedAt;
+    const previous = rows[index - 1];
+    if (at && previous && Date.parse(at) > Date.parse(previous.observedAt) && Date.parse(at) < Date.parse(row.observedAt)) {
+      const held = (counter: HistorySnapshot["views"], delta: number | null) => ({
+        ...counter, observedAt: at,
+        value: counter.value === null || delta === null ? null : counter.value - delta,
+      });
+      result.push({
+        ...row, snapshotId: `${row.snapshotId}:unchanged`, unchangedFor: row.snapshotId, observedAt: at,
+        ageHours: row.ageHours - (Date.parse(row.observedAt) - Date.parse(at)) / 3_600_000,
+        views: held(row.views, row.deltaViews), reactions: held(row.reactions, row.deltaReactions),
+        comments: held(row.comments, row.deltaComments), shares: held(row.shares, row.deltaShares),
+        deltaViews: 0, deltaReactions: 0, deltaComments: 0, deltaShares: 0, collectorInterval: null,
+      });
+    }
+    result.push(row);
+  });
+  return result;
 }

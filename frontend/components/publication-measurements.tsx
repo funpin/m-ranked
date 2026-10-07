@@ -480,9 +480,10 @@ function CollectorIntervalCell({ row, coverage }: { row: HistorySnapshot; covera
   const summary = state.kind === "gap"
     ? `Подтверждённый пропуск: ${duration(state.missingSeconds)}. В остальное время сбор шёл.`
     : "Сбор шёл; промежуточные опросы без изменений не сохранялись.";
+  const unchanged = interval.unchangedAt ? ` Последнее чтение без изменений — ${legacyDate(interval.unchangedAt)}: рост пришёл после него.` : "";
   return <td className="min-w-44 !whitespace-normal"><InlineHint
     testId="collector-status-trigger"
-    content={`${summary} За интервал: успешных циклов — ${interval.successfulPolls}, с ошибкой — ${interval.failedPolls}.`}
+    content={`${summary} За интервал: успешных циклов — ${interval.successfulPolls}, с ошибкой — ${interval.failedPolls}.${unchanged}`}
   >{state.kind === "gap"
       ? <Badge variant="destructive" data-testid="collector-gap-badge">Пропуск {duration(state.missingSeconds)}</Badge>
       : <Badge variant="secondary" data-testid="collector-covered-badge">Сбор шёл</Badge>}

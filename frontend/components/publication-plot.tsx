@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEve
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, XAxis, YAxis, usePlotArea, useXAxisScale } from "recharts";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { axisNumber, legacyDate } from "@/lib/format";
-import { elapsedSincePublication } from "@/lib/history-data";
+import { elapsedSincePublication, withUnchangedReads, type PlotRow } from "@/lib/history-data";
 import { historyMetricValue, historyMetricTooltip, historyRatioTooltip, metricLabel, metricNoun as noun, type HistoryMetric as Metric } from "@/lib/history-metrics";
 import { cn } from "@/lib/utils";
 import { PatternIcon } from "@/components/anomaly-icons";
@@ -150,8 +150,9 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   const chartId = useId();
 
   const at = useCallback((row: HistorySnapshot) => Date.parse(row.observedAt), []);
+  const plotted = useMemo((): PlotRow[] => delta ? rows : withUnchangedReads(rows), [rows, delta]);
   const data = useMemo(() => {
-    const points = rows.map((row) => {
+    const points = plotted.map((row) => {
       const point: Record<string, number | null | string | boolean> = {
         t: at(row), snapshotId: row.snapshotId, evidence: evidenceIds.has(row.snapshotId),
       };
@@ -181,7 +182,7 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       grouped.push(merged);
     }
     return grouped;
-  }, [rows, metrics, delta, evidenceIds, at]);
+  }, [plotted, metrics, delta, evidenceIds, at]);
 
   const firstAt = rows.length ? at(rows[0]!) : 0;
   const lastAt = rows.length ? at(rows[rows.length - 1]!) : 1;
@@ -231,11 +232,11 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
     : undefined;
 
   /** Resolves a pointer position on the plot to the sample nearest that instant. */
-  const nearestRow = useCallback((instant: unknown) => {
-    if (typeof instant !== "number" || !rows.length) return null;
-    return rows.reduce((best, row) =>
-      Math.abs(at(row) - instant) < Math.abs(at(best) - instant) ? row : best, rows[0]!);
-  }, [rows, at]);
+  const nearestRow = useCallback((instant: unknown): PlotRow | null => {
+    if (typeof instant !== "number" || !plotted.length) return null;
+    return plotted.reduce((best, row) =>
+      Math.abs(at(row) - instant) < Math.abs(at(best) - instant) ? row : best, plotted[0]!);
+  }, [plotted, at]);
 
   // В режиме «Авто» шкала строится только по показанным метрикам: первая идёт
   // слева, вторая справа. Раньше сторона выбиралась по месту метрики в полном
@@ -271,7 +272,8 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
       const fraction = Math.max(0, Math.min(1, (event.clientX - left) / width));
       row = nearestRow(firstAt + fraction * (lastAt - firstAt));
     }
-    if (row) onActivate(row.snapshotId);
+    // Чтение без изменений не сохранено: открывается точка роста за ним.
+    if (row) onActivate(row.unchangedFor ?? row.snapshotId);
   }, [nearestRow, rows.length, scale, visible.length, firstAt, lastAt, onActivate]);
   const tooltipContent = useCallback((props: { active?: boolean; label?: unknown; payload?: unknown }) => (
     <SnapshotTooltip {...props} metrics={metrics} hidden={hidden} platform={platform} publishedAt={publishedAt} delta={delta} nearestRow={nearestRow} />
@@ -281,6 +283,8 @@ export default function PublicationPlot({ rows, metrics, delta, selectedId, onSe
   const dots = useMemo(() => new Map(metrics.map((metric) => [metric.key, (props: unknown) => {
     // Recharts types the per-point dot props loosely; the shape this chart
     // supplies is narrowed at the boundary.
+    // Чтение без изменений отдельной отметки не получает: значение у него то
+    // же, что у прошлой точки, и кружок читался бы как «здесь данных нет».
     const dot = props as { cx?: number; cy?: number; payload?: { evidence?: boolean }; key?: string };
     if (!dot.payload?.evidence) return <g key={dot.key} />;
     return <SampleDot key={dot.key} cx={dot.cx} cy={dot.cy} fill={metric.color} evidence />;
@@ -406,7 +410,7 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, pu
   platform: string;
   publishedAt: string;
   delta: boolean;
-  nearestRow: (instant: unknown) => HistorySnapshot | null;
+  nearestRow: (instant: unknown) => PlotRow | null;
 }) {
   if (!active) return null;
   // Столбец может быть группой замеров. Тогда подписи берутся из самой
@@ -439,6 +443,7 @@ function SnapshotTooltip({ active, label, payload, metrics, hidden, platform, pu
     <div className="border-border/50 bg-background grid min-w-[12rem] gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
       <TooltipTime observedAt={row.observedAt} publishedAt={publishedAt} />
       {row.synthetic ? <div className="text-muted-foreground">Момент публикации · синтетическая точка</div> : null}
+      {row.unchangedFor ? <div className="text-muted-foreground max-w-[16rem] whitespace-normal">Цикл сбора без изменений: рост пришёл после него</div> : null}
       {metrics.filter((metric) => !hidden.has(metric.key)).map((metric) => (
         <div key={metric.key} className="flex items-center gap-2">
           <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[2px]" style={{ background: metric.color }} />

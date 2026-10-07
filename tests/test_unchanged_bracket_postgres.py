@@ -92,3 +92,39 @@ def test_heartbeat_or_growth_without_unchanged_reads_adds_nothing() -> None:
              JOIN ingest.publication_identity identity ON identity.publication_id = snapshot.publication_id
             WHERE identity.platform_account_id = %s AND NOT snapshot.synthetic""", (account_id,)).fetchone()["n"]
     assert count == 3
+
+
+def test_history_places_growth_after_the_last_cycle_for_data_without_a_bracket() -> None:
+    # Данные до скобки: каждое чтение — новым процессом, память о чтениях без
+    # изменений теряется. История поста по журналу циклов называет последнее
+    # чтение без изменений — график ставит туда точку.
+    psycopg = pytest.importorskip("psycopg")
+    from psycopg.rows import dict_row
+    from api.sql import details
+
+    dsn = _dsn("MRANKED_TEST_POSTGRES_DSN")
+    admin = psycopg.connect(_dsn("MRANKED_TEST_POSTGRES_ADMIN_DSN"), autocommit=True, row_factory=dict_row)
+    institution_id, account_id = uuid4(), uuid4()
+    account = AccountRef(account_id, institution_id, Platform.RUTUBE, f"bracket_{account_id.hex}", "public_web")
+    admin.execute("INSERT INTO catalog.institution(id,canonical_name) VALUES (%s,%s)",
+                  (institution_id, f"bracket {institution_id}"))
+    admin.execute("""INSERT INTO catalog.platform_account(id,institution_id,platform,canonical_external_id,access_mode)
+                     VALUES (%s,%s,'rutube',%s,'public_web')""", (account_id, institution_id, account.canonical_external_id))
+    published = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=20)
+    base = {"views": 1, "reactions": 0, "comments": 0, "shares": None}
+    for hour in range(0, 18):
+        _persist(PostgresCollectorRepository(dsn), account, published, published + timedelta(minutes=15, hours=hour), base)
+    _persist(PostgresCollectorRepository(dsn), account, published, published + timedelta(minutes=15, hours=18),
+             {"views": 1749, "reactions": 97, "comments": 0, "shares": None})
+
+    publication_id = admin.execute(
+        "SELECT publication_id FROM ingest.publication_identity WHERE platform_account_id=%s", (account_id,)
+    ).fetchone()["publication_id"]
+    rows = admin.execute(details.HISTORY, {
+        "publication_id": publication_id, "published_month": published.date().replace(day=1),
+        "as_of": datetime.now(timezone.utc), "after_snapshot_id": None, "fetch_limit": 100}).fetchall()
+    growth = next(row for row in rows if row["views_count"] == 1749)
+    interval = growth["collector_interval"]
+    # Семнадцать циклов без изменений и цикл самого роста.
+    assert interval["successfulPolls"] == 18
+    assert datetime.fromisoformat(interval["unchangedAt"]) == published + timedelta(minutes=15, hours=17)

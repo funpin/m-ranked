@@ -6157,6 +6157,14 @@ components:
         failedPolls:
           type: integer
           minimum: 0
+        unchangedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start of the last successful account cycle before this point that read the post with the
+            previous values. Unchanged reads are not stored, so without it growth of the last cycle would be drawn
+            across the whole interval. Null when the run journal cannot place such a read or the values did not change.
     CollectorGap:
       type: object
       additionalProperties: false
