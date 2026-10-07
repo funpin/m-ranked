@@ -181,10 +181,11 @@ def answers(connection, ids) -> dict[str, list]:
         result[f"progress:{back}"] = connection.execute(anomaly_store.PROGRESS, {
             "ids": [post["id"] for post in posts], "published": [post["published_at"] for post in posts],
             "last": [max(post["published_at"], as_of - back) for post in posts]}).fetchall()
+    activity_posts = [row["id"] for row in connection.execute(anomaly_store.ACTIVITY_POSTS, {
+        "accounts": ids["accounts"], "published_since": as_of - timedelta(days=40)}).fetchall()]
     for since in (as_of - timedelta(hours=20), as_of - timedelta(days=6)):
         result[f"activity:{since}"] = connection.execute(anomaly_store.ACTIVITY, {
-            "accounts": ids["accounts"], "published_since": as_of - timedelta(days=40), "months": months,
-            "since": since, "until": as_of}).fetchall()
+            "ids": activity_posts, "months": months, "since": since, "until": as_of}).fetchall()
     for horizon in (6, 48):
         result[f"comparison:{horizon}"] = connection.execute(compare.COMPARISON, {
             "aggregation": "median", "as_of": as_of, "horizon_hours": horizon, "hot_days": 70,

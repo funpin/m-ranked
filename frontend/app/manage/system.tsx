@@ -174,7 +174,7 @@ function Backups({ backups, now, csrf, canRefresh, outcome }: {
   const busy = !!backups && (backups.running || backups.requested);
   return (
     <Section title="Резервные копии" className="mt-5"
-      description="Полный снимок базы (pg_dump, zstd). На сервере хранятся не больше двух копий: проверенная восстановлением и самая новая. Обновление удаляет остальные, затем снимает новую копию. Снимок идёт с ограничением скорости, чтобы не мешать сбору, и может занять до получаса."
+      description="Полный снимок базы (pg_dump, zstd). На основном сервере — самая новая копия; на серверах из политики хранения — она и последняя проверенная восстановлением. Обновление удаляет лишние локальные копии, затем снимает новую. Снимок идёт с ограничением скорости, чтобы не мешать сбору, и может занять до получаса."
       action={<form method="post" action="/manage/backup/refresh">{fields(csrf)}
         <Button type="submit" disabled={!canRefresh || busy} title={canRefresh ? undefined : "Доступно роли ADMIN"}>
           <DatabaseBackup data-icon="inline-start" aria-hidden="true" />{busy ? "Копия обновляется…" : "Обновить резервную копию"}

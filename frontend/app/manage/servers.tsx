@@ -33,7 +33,6 @@ const STATUS: Record<string, string> = {
   "policy-collection": "Политика сбора сохранена: сборщики применят её с ближайшего цикла.",
   "policy-storage": "Политика хранения сохранена: размещение копий пересчитается в течение минуты.",
   "policy-analysis": "Политика анализа сохранена: анализ применит её в течение минуты.",
-  "job-queued": "Задание поставлено в очередь и начнётся в течение минуты.",
 };
 const ERROR: Record<string, string> = {
   "server-id": "Имя сервера: латиница в нижнем регистре, цифры и дефис, 2–40 символов, начинается с буквы. Оно должно совпадать с именем в сертификате сервера.",
@@ -41,13 +40,10 @@ const ERROR: Record<string, string> = {
   "server-state": "Такое состояние для этого сервера недоступно.", "server-platforms": "Площадки назначаются только серверу-сборщику.",
   "server-reserve": "Запас места — целое число гигабайт от 0 до 1000.", "server-exists": "Сервер с таким именем уже есть.",
   "server-missing": "Сервер не найден.", "policy-collection": "Проверьте значения политики сбора: целые числа в указанных пределах.",
-  "policy-cold-days": "Срок горячего хранения — от 30 до 3650 дней.", "policy-backup-copies": "Число резервных копий — от 1 до 14.",
+  "policy-backup-copies": "Число резервных копий — от 1 до 14.",
   "policy-backup-nodes": "Выберите хотя бы один сервер для резервных копий.",
-  "policy-archive-nodes": "Полный архив хранится минимум на двух серверах: после удаления месяца из базы это единственные его копии.",
-  "policy-cold-before-analysis": "Финальный анализ должен проходить не позже ухода месяца в архив: срок анализа не больше срока горячего хранения.",
   "policy-analysis": "Срок финального анализа — от 3 до 3650 дней или пусто.", "policy-storage": "Политика хранения не прошла проверку.",
-  "archive-month": "Месяц указывается в виде ГГГГ-ММ.", "archive-platform": "Неизвестная площадка.",
-  "job-busy": "Такое задание уже стоит в очереди или выполняется.", unknown: "Неизвестная команда.",
+  unknown: "Неизвестная команда.",
 };
 
 function percent(part: number | null, total: number | null) {
@@ -99,7 +95,7 @@ function ServerForm({ server, csrf, canEdit }: { server: Server; csrf: string; c
       {server.role === "collector" ? <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Площадки сбора</legend>
         <div className="flex flex-wrap gap-4">{PLATFORMS.map((platform) => <Check key={platform} name={`platform_${platform}`} label={PLATFORM_LONG_LABELS[platform]} checked={server.platforms.includes(platform)} disabled={!canEdit} />)}</div>
       </fieldset> : null}
-      <Check name="stores_objects" label="Хранит резервные копии и архив" checked={server.storesObjects} disabled={!canEdit} />
+      <Check name="stores_objects" label="Хранит резервные копии" checked={server.storesObjects} disabled={!canEdit} />
       <Field label="Запас свободного места, ГБ" hint="Копия не ляжет на сервер, если после неё останется меньше.">
         <Input name="reserve_gb" type="number" min={0} max={1000} defaultValue={Math.round(server.reserveBytes / 1024 ** 3)} required disabled={!canEdit} />
       </Field>
@@ -168,7 +164,7 @@ function AddServer({ csrf, canEdit }: { csrf: string; canEdit: boolean }) {
       <fieldset className="grid gap-2 md:col-span-2"><legend className="mb-1 text-sm">Площадки сбора (для сборщика)</legend>
         <div className="flex flex-wrap gap-4">{PLATFORMS.map((platform) => <Check key={platform} name={`platform_${platform}`} label={PLATFORM_LONG_LABELS[platform]} checked={false} disabled={!canEdit} />)}</div>
       </fieldset>
-      <Check name="stores_objects" label="Хранит резервные копии и архив" checked disabled={!canEdit} />
+      <Check name="stores_objects" label="Хранит резервные копии" checked disabled={!canEdit} />
       <Field label="Запас свободного места, ГБ"><Input name="reserve_gb" type="number" min={0} max={1000} defaultValue={3} required disabled={!canEdit} /></Field>
       <div className="md:col-span-2"><Button type="submit" disabled={!canEdit}><Plus data-icon="inline-start" aria-hidden="true" />Добавить сервер</Button></div>
     </form>
@@ -187,22 +183,20 @@ function Updated({ overview, name, now }: { overview: StorageOverview; name: str
 function StoragePolicy({ overview, csrf, canEdit, now }: { overview: StorageOverview; csrf: string; canEdit: boolean; now: number }) {
   const value = policyValue(overview, "storage");
   const backupNodes = (value.backupNodes as string[] | undefined) ?? [];
-  const archiveNodes = (value.archiveNodes as string[] | undefined) ?? [];
+  const verifiedNodes = (value.verifiedBackupNodes as string[] | undefined) ?? [];
   const candidates = overview.servers.filter((server) => server.storesObjects && server.state !== "disabled");
-  return <Section title="Политика хранения" description="Замеры месяца публикации уходят в холодный архив, когда со дня конца месяца прошёл срок горячего хранения. Архив месяца — два файла: полный Parquet для восстановления (на выбранных серверах) и компактный файл просмотра (всегда на основном сервере), из которого пост открывается за миллисекунды.">
+  return <Section title="Политика хранения" description="История замеров живёт в базе целиком: замеры старше двух суток упакованы в строку поста. Резервные копии базы — полные снимки — хранятся на выбранных серверах.">
     <form method="post" action="/manage/policies/storage" className="grid gap-4 md:grid-cols-2">
       {fields(csrf)}
-      <Field label="Горячее хранение, дней после конца месяца" hint="От 30. Пример: 30 — замеры постов сентября уходят в архив 31 октября.">
-        <Input name="coldAfterDays" type="number" min={30} max={3650} defaultValue={Number(value.coldAfterDays ?? 30)} required disabled={!canEdit} />
-      </Field>
       <Field label="Хранить резервных копий базы" hint="Более старые выводятся, когда у новых есть сверенные копии.">
         <Input name="backupCopies" type="number" min={1} max={14} defaultValue={Number(value.backupCopies ?? 1)} required disabled={!canEdit} />
       </Field>
-      <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Резервные копии хранятся на</legend>
+      <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Самые новые копии хранятся на</legend>
         {candidates.map((server) => <Check key={server.id} name={`backup_${server.id}`} label={server.displayName} checked={backupNodes.includes(server.id)} disabled={!canEdit} />)}
       </fieldset>
-      <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Полный архив хранится на (минимум два)</legend>
-        {candidates.map((server) => <Check key={server.id} name={`archive_${server.id}`} label={server.displayName} checked={archiveNodes.includes(server.id)} disabled={!canEdit} />)}
+      <fieldset className="grid gap-2"><legend className="mb-1 text-sm">Последняя проверенная восстановлением копия — на</legend>
+        {candidates.map((server) => <Check key={server.id} name={`verified_${server.id}`} label={server.displayName} checked={verifiedNodes.includes(server.id)} disabled={!canEdit} />)}
+        <p className="text-muted-foreground text-xs">Пусто — там же, где самые новые. Основной сервер держит её у себя, пока сверенная копия не ляжет на выбранный.</p>
       </fieldset>
       <div className="md:col-span-2"><Button type="submit" disabled={!canEdit}><Save data-icon="inline-start" aria-hidden="true" />Сохранить и переразместить</Button>
         <p className="text-muted-foreground mt-2 text-xs">Файлы переезжают сами: агенты копируют их по 8 МБ с докачкой и сверкой SHA-256, а старая копия удаляется только после сверки всех новых.</p>
@@ -215,10 +209,10 @@ function StoragePolicy({ overview, csrf, canEdit, now }: { overview: StorageOver
 function AnalysisPolicy({ overview, csrf, canEdit, now }: { overview: StorageOverview; csrf: string; canEdit: boolean; now: number }) {
   const value = policyValue(overview, "analysis");
   const [low, high] = overview.limits.finalAnalysisDays;
-  return <Section title="Политика анализа" description="Пост анализируется, пока не достигнет срока финального анализа: тогда он проходит последний анализ по всему ряду и замораживается. Месяц уходит в архив только после финального анализа всех его постов.">
+  return <Section title="Политика анализа" description="Пост анализируется, пока не достигнет срока финального анализа: тогда он проходит последний анализ по всему ряду и замораживается.">
     <form method="post" action="/manage/policies/analysis" className="grid gap-3 md:grid-cols-2">
       {fields(csrf)}
-      <Field label="Финальный анализ на возрасте поста, дней" hint="Пусто — как в окружении службы анализа (обычно 30). Не больше срока горячего хранения.">
+      <Field label="Финальный анализ на возрасте поста, дней" hint="Пусто — как в окружении службы анализа (обычно 30).">
         <Input name="finalAnalysisDays" type="number" min={low} max={high} defaultValue={value.finalAnalysisDays == null ? "" : Number(value.finalAnalysisDays)} disabled={!canEdit} />
       </Field>
       <div className="self-end"><Button type="submit" disabled={!canEdit}><Save data-icon="inline-start" aria-hidden="true" />Сохранить</Button></div>

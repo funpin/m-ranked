@@ -33,17 +33,28 @@ SET plan_cache_mode = force_generic_plan
 AS $$
 DECLARE
     v_id bigint;
+    v_row record;
 BEGIN
-    SELECT s.id INTO v_id
-      FROM ingest.publication_metric_snapshot s
-     WHERE s.publication_id = p_publication_id AND s.published_month = p_published_month
-       AND (p_synthetic IS NULL OR s.synthetic = p_synthetic)
-       AND NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
+    -- Строки поста — от последней; видимость проверяется точечно по
+    -- уникальному ключу бакета. Обычно видима первая же строка. Одним
+    -- запросом с NOT EXISTS планировщик материализовал все строки поста и
+    -- сверял каждую.
+    FOR v_row IN
+        SELECT s.id, s.sampling_bucket, s.correction_sequence
+          FROM ingest.publication_metric_snapshot s
+         WHERE s.publication_id = p_publication_id AND s.published_month = p_published_month
+           AND (p_synthetic IS NULL OR s.synthetic = p_synthetic)
+         ORDER BY s.observed_at DESC, s.id DESC
+    LOOP
+        IF NOT EXISTS (SELECT 1 FROM ingest.publication_metric_snapshot successor
                         WHERE successor.published_month = p_published_month
                           AND successor.publication_id = p_publication_id
-                          AND successor.sampling_bucket = s.sampling_bucket
-                          AND successor.correction_sequence > s.correction_sequence)
-     ORDER BY s.observed_at DESC, s.id DESC LIMIT 1;
+                          AND successor.sampling_bucket = v_row.sampling_bucket
+                          AND successor.correction_sequence > v_row.correction_sequence) THEN
+            v_id := v_row.id;
+            EXIT;
+        END IF;
+    END LOOP;
 
     RETURN QUERY
     SELECT candidate.* FROM (
