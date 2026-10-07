@@ -1,5 +1,5 @@
 import { StatusPill } from "@/components/ui";
-import { LevelIcon } from "@/components/anomaly-icons";
+import { LevelIcon } from "@/components/anomaly-level-icon";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
 import { cn } from "@/lib/utils";
 

@@ -18,37 +18,41 @@ for (const platform of ["telegram", "vk", "max", "rutube"]) {
     const legacy = platform === "telegram" ? "channels=2" : "institutions=2";
     const response = await page.goto(`/compare?platform=${platform}&period=24&submitted=true&${legacy}`);
     expect(response?.status()).toBe(200);
-    await expect(page.getByTestId("compare-dashboard")).toBeVisible();
+    // Потоковая отрисовка на мгновение держит копию панели в скрытом
+    // контейнере React (div[hidden]) — панель ищется в основном содержимом.
+    await expect(page.getByRole("main").getByTestId("compare-dashboard")).toBeVisible();
     await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
-    await expect(page.getByTestId("platform-tabs").getByRole("tab", { selected: true })).toHaveAttribute("data-value", platform);
-    if (platform !== "telegram") await expect(page.getByTestId("highlight-chip")).toContainText("Бета");
+    await expect(page.getByRole("main").getByTestId("platform-tabs").getByRole("tab", { selected: true })).toHaveAttribute("data-value", platform);
+    if (platform !== "telegram") await expect(page.getByRole("main").getByTestId("highlight-chip")).toContainText("Бета");
   });
 }
 
 test("comparison dashboard: platform tabs, highlight, ranking metric, table sort and period", async ({ page }) => {
   await page.goto("/compare");
-  const dashboard = page.getByTestId("compare-dashboard");
+  // Потоковая отрисовка на мгновение держит копию в скрытом контейнере React.
+  const main = page.getByRole("main");
+  const dashboard = main.getByTestId("compare-dashboard");
   await expect(dashboard).toBeVisible();
-  await expect(page.getByTestId("compare-kpi")).toHaveCount(6);
+  await expect(main.getByTestId("compare-kpi")).toHaveCount(6);
   // Все вузы без ограничения: 12 вузов фикстуры в рейтинге и в таблице.
-  await expect(page.getByTestId("compare-table").locator("tbody tr")).toHaveCount(12);
+  await expect(main.getByTestId("compare-table").locator("tbody tr")).toHaveCount(12);
   // На телефоне у вкладки короткая подпись «ВК», поэтому ищем по значению.
-  await page.getByTestId("platform-tabs").locator('[role="tab"][data-value="vk"]').click();
+  await main.getByTestId("platform-tabs").locator('[role="tab"][data-value="vk"]').click();
   await expect(page).toHaveURL(/platform=vk/);
-  await page.getByTestId("highlight-search").fill("Альфа");
+  await main.getByTestId("highlight-search").fill("Альфа");
   await page.getByRole("option").first().click();
-  await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
+  await expect(main.getByTestId("highlight-chip")).toContainText("Альфа");
   await expect(page).toHaveURL(/highlight=00000009-0000-4000-8000-000000000001/);
-  await expect(page.getByTestId("compare-table").locator('tr[data-highlighted="true"]')).toHaveCount(1);
+  await expect(main.getByTestId("compare-table").locator('tr[data-highlighted="true"]')).toHaveCount(1);
   await page.getByRole("combobox", { name: "Мера рейтинга" }).selectOption("engagement24");
-  await expect(page.getByTestId("ranking-card")).toContainText("Вовлечённость за 24 часа");
-  const table = page.getByTestId("compare-table");
+  await expect(main.getByTestId("ranking-card")).toContainText("Вовлечённость за 24 часа");
+  const table = main.getByTestId("compare-table");
   await table.getByRole("button", { name: /Публикаций/ }).click();
   await expect(table.getByRole("columnheader", { name: /Публикаций/ })).toHaveAttribute("aria-sort", "descending");
   await page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "7 д", exact: true }).click();
   await expect(page).toHaveURL(/period=7d/);
   await expect(page).toHaveURL(/platform=vk/);
-  await expect(page.getByTestId("highlight-chip")).toContainText("Альфа");
+  await expect(main.getByTestId("highlight-chip")).toContainText("Альфа");
   await expect(page.locator('[data-testid="ranking-chart"] .recharts-bar-rectangle').first()).toBeVisible();
 });
 

@@ -122,7 +122,8 @@ test("icon-only direction submits and survives browser history", async ({ page }
 
 test("comparison shows sourced student facts and preserves a measured zero", async ({ page }) => {
   await page.goto("/compare?platform=rutube");
-  const table=page.getByTestId("compare-table");
+  // Потоковая отрисовка на мгновение держит копию таблицы в скрытом контейнере React.
+  const table=page.getByRole("main").getByTestId("compare-table");
   await expect(table.getByRole("columnheader", { name: /Студенты/ })).toBeVisible();
   const row=table.locator("tbody tr").filter({ hasText: "Альфа" });
   await expect(row.locator("td").nth(4)).toHaveText("0");
@@ -147,18 +148,20 @@ test("contributor image failures leave readable fallbacks", async ({ page }) => 
 test("comparison controls fill their rows and stay inside the toolbar at all widths", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "The test checks every viewport itself");
   await page.goto("/compare");
+  // Потоковая отрисовка на мгновение держит копию в скрытом контейнере React.
+  const main = page.getByRole("main");
   for (const width of [320,390,640,768,1024,1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBe(0);
-    const inside=await page.getByTestId("highlight-search").evaluate(input => {
+    const inside=await main.getByTestId("highlight-search").evaluate(input => {
       const search=input.getBoundingClientRect();
-      const toolbar=document.querySelector('[data-testid="compare-dashboard"] > div')!.getBoundingClientRect();
+      const toolbar=document.querySelector('main [data-testid="compare-dashboard"] > div')!.getBoundingClientRect();
       return search.right <= toolbar.right;
     });
     expect(inside, `search outside toolbar at ${width}px`).toBe(true);
-    await expect(page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "7 д", exact: true })).toBeVisible();
-    await expect(page.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "30 д", exact: true })).toBeVisible();
-    const layout = await page.getByTestId("compare-filter-row").evaluate(row => {
+    await expect(main.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "7 д", exact: true })).toBeVisible();
+    await expect(main.getByRole("tablist", { name: "Период" }).getByRole("tab", { name: "30 д", exact: true })).toBeVisible();
+    const layout = await main.getByTestId("compare-filter-row").evaluate(row => {
       const bounds=row.getBoundingClientRect();
       const boxes=[...row.children].map(el=>{const b=el.getBoundingClientRect();return {y:Math.round(b.top),right:b.right};});
       return {right:bounds.right,boxes};

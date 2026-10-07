@@ -15,7 +15,8 @@ import { PublicationRow } from "@/components/account-publication-row";
 import { AccountMorePublications } from "@/components/account-more-publications";
 import type { AccountLevelsLoad } from "@/lib/anomaly";
 import type { TailProfileLoad } from "@/lib/account-tail";
-import { AccountAnalysisCard, type FindingsLoad } from "@/components/account-analysis-card";
+import type { FindingsLoad } from "@/components/account-analysis-card";
+import { AccountAnalysis } from "@/components/account-analysis-lazy";
 import { InstitutionFacts } from "@/components/institution-facts";
 import { SummaryTile } from "@/components/summary-tile";
 import { FileText, History, Heart, MessageCircle, Eye, Trophy } from "lucide-react";
@@ -100,7 +101,7 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
       </div>
     </Card>
     {findings || tailProfile ? <Suspense fallback={<Skeleton className="mt-5 h-12 w-full rounded-xl" aria-label="Анализ аккаунта загружается" />}>
-      <AccountAnalysisCard findings={findings} tail={tailProfile} platform={account.platform} />
+      <AccountAnalysis findings={findings} tail={tailProfile} platform={account.platform} />
     </Suspense> : null}
     <Card className="block p-5 text-sm mt-5 min-w-0 overflow-x-auto">
       <DaySpotlight day={selectedDay} mode={selectedTrend} /><Table className="reveal"><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead>{anomalyLevels ? <TableHead>Анализ динамики</TableHead> : null}</TableRow></TableHeader><TableBody>

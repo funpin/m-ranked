@@ -148,9 +148,15 @@ export function WeeklyTrend({ points, primary, selectedDay, selectedTrend, accou
                 </li>
               ))}
             </ul>
-            <p className="min-h-8 text-xs leading-4 text-muted-foreground sm:min-h-4">{totals
-              ? "Нажмите на день — покажем суточный прирост"
-              : "Нажмите на день — покажем его публикации"}</p>
+            {/* Обе подсказки лежат в одной ячейке, неактивная скрыта: ширина
+                строки не зависит от режима, и легенда с подсказкой не
+                переносятся на вторую строку только в одном из них. */}
+            <p className="grid min-h-8 text-xs leading-4 text-muted-foreground sm:min-h-4">
+              {([["median", "Нажмите на день — покажем его публикации"], ["total", "Нажмите на день — покажем суточный прирост"]] as const).map(([id, text]) => (
+                <span key={id} className={cn("col-start-1 row-start-1", (id === "total") !== totals && "invisible")}
+                  aria-hidden={(id === "total") !== totals}>{text}</span>
+              ))}
+            </p>
             </div>
           </>
         : <p className="text-muted-foreground py-10 text-center text-sm">Недельного ряда ещё нет.</p>}
