@@ -152,11 +152,13 @@ function MetricChart(props: {
       </div>
       <div className="flex shrink-0 items-center gap-2" aria-label={delta ? "Режим масштаба прироста" : "Режим масштаба"}>
         <span className="text-muted-foreground text-xs font-medium">Масштаб</span>
+        {/* Тот же сегментный вид, что у переключателей графика аккаунта: без
+            собственной рамки у каждой кнопки. */}
         <ToggleGroup
           disabled={!hydrated}
           size="sm"
-          variant="outline"
-          spacing={0}
+          spacing={1}
+          className="rounded-lg bg-muted/70 p-0.5"
           value={[scale]}
           onValueChange={(next) => {
             // Base UI reports an empty selection when the pressed item is
@@ -168,8 +170,10 @@ function MetricChart(props: {
             setScale(value);
           }}
         >
-          <ToggleGroupItem value="shared">1:1</ToggleGroupItem>
-          <ToggleGroupItem value="auto">Авто</ToggleGroupItem>
+          {([["shared", "1:1", "Одна шкала для всех показателей"], ["auto", "Авто", "Своя шкала у каждого показателя"]] as const).map(([value, label, hint]) => (
+            <ToggleGroupItem key={value} value={value} title={hint}
+              className="px-2.5 tabular aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm">{label}</ToggleGroupItem>
+          ))}
         </ToggleGroup>
       </div>
     </div>
