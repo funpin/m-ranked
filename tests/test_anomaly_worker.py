@@ -9,6 +9,7 @@ from anomaly_analysis.metrics import write_textfile
 from anomaly_analysis.v2.domain import Level
 from anomaly_analysis.v2.schedule import ScheduleConfig
 from anomaly_analysis.v2.series import CollectionCadence
+from anomaly_analysis.v2.tail_ledger import VERSION as TAIL_LEDGER_VERSION
 from anomaly_analysis.v2.store import DueRow, Progress
 from anomaly_analysis.v2.worker import final_analysis_days, Worker
 from anomaly_reference.mature_norms import synthetic_cases
@@ -232,7 +233,7 @@ def test_a_post_without_a_current_tail_ledger_is_analyzed_once_even_without_new_
     _worker(store, now).run_once()
     [write] = store.written
     assert write.reason == "tail_ledger"
-    assert write.tail_ledger["v"] == 3 and write.tail_ledger["marks"]["h24"] and write.tail_ledger["start"] and write.tail_ledger["growth"]
+    assert write.tail_ledger["v"] == TAIL_LEDGER_VERSION and write.tail_ledger["marks"]["h24"] and write.tail_ledger["start"] and write.tail_ledger["growth"]
     assert 13 in {sign.pattern for sign in write.verdict.signs}
 
 

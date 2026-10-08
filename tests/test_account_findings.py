@@ -5,7 +5,7 @@ import random
 from uuid import UUID
 
 from anomaly_analysis.v2.account_findings import (
-    PACK_MIN_POSTS, REGULAR_MIN_POSTS, LedgerPost, findings, pack_ratio, summary,
+    PACK_MIN_POSTS, REGULAR_MIN_POSTS, LedgerPost, _regular_stats, findings, pack_ratio, summary,
 )
 from anomaly_analysis.v2.tail_ledger import Point, TailLedger
 
@@ -84,6 +84,55 @@ def test_regular_reactions_flag_counts_that_ignore_post_appeal():
     kinds = {(item.account_id, item.kind) for item in result}
     assert (UUID(int=1), "regular_reactions") in kinds
     assert not any(account != UUID(int=1) for account, _ in kinds)
+
+
+def daily_posts(account: int, days: int, per_day: int, reactions, rng: random.Random,
+                platform: str = "max", views=None, institution: int | None = None) -> list[LedgerPost]:
+    """По `per_day` постов в сутки с 08.09 (10:00–22:00 МСК); `reactions(day, rng)` — реакции к 72 ч."""
+    posts = []
+    for day in range(days):
+        for slot in range(per_day):
+            index = day * per_day + slot
+            published = datetime(2026, 9, 8, 7, tzinfo=timezone.utc) + timedelta(days=day, hours=2 * slot)
+            views_72 = views(day, rng) if views else rng.randint(700, 1100)
+            r72 = reactions(day, rng)
+            marks = {"h2": Point(2 * HOUR, views_72 // 3, r72 // 2),
+                     "h24": Point(24 * HOUR, views_72 - 20, max(0, r72 - 2)), "h72": Point(72 * HOUR, views_72, r72)}
+            posts.append(LedgerPost(UUID(int=account * 10_000 + index), UUID(int=account), platform, published,
+                                    False, TailLedger(None, None, None, marks=marks),
+                                    UUID(int=10**6 + institution) if institution is not None else None))
+    return posts
+
+
+def _poisson(mean: float, rng: random.Random) -> int:
+    return max(1, round(rng.gauss(mean, mean ** 0.5)))
+
+
+def test_regular_reactions_within_a_day_survive_a_change_of_level():
+    # ЮЗГУ в MAX: ~95 реакций на каждом посте, с 19.09 — ~250; внутри дня —
+    # только пуассоновский шум. Разброс за месяц раздут скачком уровня.
+    rng = random.Random(11)
+    cohort = [item for account in range(2, 12) for item in organic(account, 40, rng)]
+    stepped = daily_posts(1, 25, 6, lambda day, rng: _poisson(95 if day < 11 else 250, rng), rng)
+    (finding,) = [item for item in findings(cohort + stepped, TODAY) if item.kind == "regular_reactions"]
+    assert finding.account_id == UUID(int=1)
+    assert finding.metrics["measure"] == "day" and finding.metrics["windowExtra"] > 0.3
+    assert finding.metrics["dayExtra"] <= 0.08 and "внутри" in summary(finding)
+
+
+def test_fewer_reactions_differences_than_chance_are_a_persistent_finding():
+    rng = random.Random(13)
+    flat = daily_posts(1, 20, 5, lambda day, rng: 100 + rng.randint(-2, 2), rng)
+    (finding,) = [item for item in findings(flat, TODAY) if item.kind == "regular_reactions"]
+    assert finding.metrics["subPoisson"] and finding.status == 2
+    assert "меньше, чем дал бы случай" in summary(finding)
+
+
+def test_one_post_a_day_keeps_the_window_measure():
+    rng = random.Random(17)
+    single = daily_posts(1, REGULAR_MIN_POSTS + 2, 1, lambda day, rng: _poisson(75, rng), rng)
+    stats = _regular_stats(single)
+    assert stats["dayExtra"] is None and stats["measure"] == "window" and stats["days"] == 0
 
 
 def test_reposts_count_for_packs_but_not_for_regularity():
@@ -180,3 +229,141 @@ def test_few_or_small_waves_are_not_a_finding():
     # Три волны — мало; много дней, но по 9 постов — не волна по всей стене.
     events = _waves(1, [3, 12, 22], 15) + _waves(2, list(range(0, 30, 2)), 9)
     assert not [item for item in findings(posts, TODAY, synchrony=events) if item.kind == "synchronous_waves"]
+
+
+def _shift(account: int, start_day: int, rng: random.Random, *, until_day: int = 99, days: int = 25, high: float = 240,
+           platform: str = "max", institution: int | None = None, views=None) -> list[LedgerPost]:
+    return daily_posts(account, days, 5, lambda day, rng: _poisson(high if start_day <= day < until_day else 95, rng),
+                       rng, platform, views, institution)
+
+
+def _kind(result, kind: str, account: int = 1):
+    return [item for item in result if item.kind == kind and item.account_id == UUID(int=account)]
+
+
+def test_engagement_rising_from_a_date_without_more_views_is_a_finding():
+    rng = random.Random(21)
+    cohort = [item for account in range(2, 12) for item in organic(account, 40, rng)]
+    (finding,) = _kind(findings(cohort + _shift(1, 11, rng), TODAY), "engagement_shift")
+    data = finding.metrics
+    assert finding.status == 2 and data["cut"] == "2026-09-19"
+    assert data["ratio"] > 2 and data["separation"] >= 0.9 and 0.8 < data["viewsRatio"] < 1.25
+    assert len(finding.members) >= 0.9 * data["after"]
+    assert "19.09" in summary(finding) and not _kind(findings(cohort, TODAY), "engagement_shift", 2)
+
+
+def test_a_rise_that_fades_by_the_end_of_the_window_is_not_persistent():
+    rng = random.Random(23)
+    (finding,) = _kind(findings(_shift(1, 11, rng, until_day=21, days=28), TODAY), "engagement_shift")
+    assert finding.status == 1
+
+
+def test_engagement_rising_because_views_collapsed_or_slowly_is_not_a_finding():
+    rng = random.Random(25)
+    collapsed = daily_posts(1, 25, 5, lambda day, rng: _poisson(95, rng), rng,
+                            views=lambda day, rng: rng.randint(700, 1100) if day < 11 else rng.randint(70, 110))
+    gradual = daily_posts(2, 25, 5, lambda day, rng: _poisson(95 * (1 + 0.5 * day / 25), rng), rng)
+    assert not [item for item in findings(collapsed + gradual, TODAY) if item.kind == "engagement_shift"]
+
+
+def test_the_same_rise_on_the_institutions_other_platforms_is_listed_as_support():
+    rng = random.Random(27)
+    posts = (_shift(1, 11, rng, institution=7) + _shift(2, 12, rng, platform="vk", institution=7, high=280)
+             + _shift(3, 11, rng, platform="vk", institution=8) + _shift(4, 11, rng, platform="telegram", institution=7,
+                                                                       until_day=0))
+    (finding,) = _kind(findings(posts, TODAY), "engagement_shift")
+    assert [(item["platform"], item["cut"]) for item in finding.metrics["corroboration"]] == [("vk", "2026-09-20")]
+    assert "VK" in summary(finding)
+
+
+def _diurnal(night_start_utc: int, day: int, night: int) -> list[int]:
+    """Почасовой профиль: шесть часов с `night_start_utc` — по `night`, остальные — по `day`."""
+    hours = [day] * 24
+    for offset in range(6):
+        hours[(night_start_utc + offset) % 24] = night
+    return hours
+
+
+def night_posts(account: int, count: int, views: list[int], reactions, platform: str = "max") -> list[LedgerPost]:
+    posts = []
+    for index in range(count):
+        published = datetime(2026, 9, 8, 9, tzinfo=timezone.utc) + timedelta(hours=7 * index)
+        hourly = reactions(index) if callable(reactions) else reactions
+        ledger = TailLedger(None, None, None, marks={"h72": Point(72 * HOUR, 900, 90)},
+                            hours=(tuple(views), tuple(hourly)))
+        posts.append(LedgerPost(UUID(int=account * 10_000 + index), UUID(int=account), platform, published,
+                                False, ledger))
+    return posts
+
+
+# Московская аудитория: ночь 01–07 МСК = 22–04 UTC.
+MOSCOW_VIEWS = _diurnal(22, 20, 1)
+FOLLOWING = [round(value / 10) for value in MOSCOW_VIEWS]
+
+
+def test_reactions_at_night_while_views_sleep_are_a_finding():
+    cohort = [item for account in range(2, 8) for item in night_posts(account, 40, MOSCOW_VIEWS, FOLLOWING)]
+    # МАИ в MAX: 36 % поздних реакций ночью при 3 % просмотров.
+    bot = night_posts(1, 40, MOSCOW_VIEWS, _diurnal(22, 2, 3))
+    (finding,) = _kind(findings(cohort + bot, TODAY), "night_reactions")
+    data = finding.metrics
+    assert finding.status == 2 and data["nightStartMsk"] == 1 and data["shiftHours"] == 0
+    assert data["reactionShare"] > 0.3 and data["viewShare"] < 0.05
+    assert len(finding.members) == 40 and "01:00–07:00 МСК" in summary(finding)
+    assert not [item for item in findings(cohort, TODAY) if item.kind == "night_reactions"]
+
+
+def test_the_audience_night_follows_its_own_time_zone():
+    # Иркутск (UTC+8): ночь 01–07 местного = 17–23 UTC = 20:00–02:00 МСК.
+    local = _diurnal(17, 20, 1)
+    honest = night_posts(1, 40, local, [round(value / 10) for value in local])
+    assert not [item for item in findings(honest, TODAY) if item.kind == "night_reactions"]
+    bot = night_posts(2, 40, local, _diurnal(17, 2, 3))
+    (finding,) = _kind(findings(bot, TODAY), "night_reactions", 2)
+    assert finding.metrics["nightStartMsk"] == 20 and finding.metrics["shiftHours"] == -5
+    assert "другом часовом поясе" in summary(finding)
+
+
+def test_no_night_in_the_views_or_hourless_ledgers_give_no_finding():
+    flat = night_posts(1, 40, [10] * 24, _diurnal(22, 2, 3))
+    old = [LedgerPost(item.publication_id, UUID(int=2), item.platform, item.published_at, False,
+                      TailLedger(None, None, None, marks=item.ledger.marks)) for item in night_posts(2, 40, MOSCOW_VIEWS, FOLLOWING)]
+    assert not [item for item in findings(flat + old, TODAY) if item.kind == "night_reactions"]
+
+
+def test_night_reactions_in_one_half_of_the_window_are_not_yet_persistent():
+    first_half = night_posts(1, 40, MOSCOW_VIEWS, lambda index: _diurnal(22, 2, 3) if index < 20 else FOLLOWING)
+    (finding,) = _kind(findings(first_half, TODAY), "night_reactions")
+    assert finding.status == 1
+
+
+def test_a_night_no_russian_time_zone_could_have_is_not_a_night():
+    # Провал просмотров в 15–21 МСК: ни в одном часовом поясе России это не ночь
+    # (КБГУ во ВКонтакте — артефакт выдачи, а не аудитория).
+    afternoon = _diurnal(12, 20, 1)
+    posts = night_posts(1, 40, afternoon, _diurnal(12, 2, 3))
+    assert not [item for item in findings(posts, TODAY) if item.kind == "night_reactions"]
+
+
+def test_a_gradual_rise_on_another_platform_four_days_apart_still_supports():
+    rng = random.Random(29)
+    posts = _shift(1, 11, rng, institution=7) + _shift(2, 15, rng, platform="vk", institution=7, high=280)
+    (finding,) = _kind(findings(posts, TODAY), "engagement_shift")
+    assert [item["platform"] for item in finding.metrics["corroboration"]] == ["vk"]
+
+
+def test_headlines_name_only_what_the_numbers_show():
+    from anomaly_analysis.v2.account_findings import headline
+    rng = random.Random(31)
+    (shift,) = _kind(findings(_shift(1, 11, rng), TODAY), "engagement_shift")
+    assert headline(shift).endswith("при тех же просмотрах") and shift.title == "Скачок доли реакций на просмотр"
+    grown = _shift(1, 11, rng, high=500, views=lambda day, rng: round(rng.randint(700, 1100) * (1 if day < 11 else 1.6)))
+    (shift,) = _kind(findings(grown, TODAY), "engagement_shift")
+    assert "при тех же просмотрах" not in headline(shift) and "просмотры" in headline(shift)
+    stepped = daily_posts(1, 25, 6, lambda day, rng: _poisson(95 if day < 11 else 250, rng), rng)
+    (regular,) = _kind(findings(stepped, TODAY), "regular_reactions")
+    assert headline(regular) == "Посты одного дня получают почти одинаковое число реакций"
+    bot = night_posts(1, 40, MOSCOW_VIEWS, _diurnal(22, 2, 3))
+    cohort = [item for account in range(2, 8) for item in night_posts(account, 40, MOSCOW_VIEWS, _diurnal(22, 20, 2))]
+    (night,) = _kind(findings(bot + cohort, TODAY), "night_reactions")
+    assert "в 0," not in summary(night) and "у типичного аккаунта площадки отношение" in summary(night)

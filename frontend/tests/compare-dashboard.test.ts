@@ -3,7 +3,8 @@ import test from "node:test";
 import {
   HIGHLIGHT_COLORS, MAX_HIGHLIGHTS, dailyRows, institutionLevels, levelSharesByPlatform, resolveScope, formatValue, highlightMap, hourlyReach, incompleteDay, institutionLabels,
   institutionOptions, institutionRows, median, normalizeDashboardPeriod, normalizeDashboardPlatform, percentileRank,
-  platformSummary, sortRows, timingGrid, toggleHighlight, typeName, typeRows, type Dashboard, type DashboardStat,
+  platformSummary, sortRows, timingGrid, toggleHighlight, typeName, typeRows, withoutPersistentFindings, findingsNote,
+  type Dashboard, type DashboardStat,
 } from "../lib/compare-dashboard";
 import { hourlyOverlay, typeComparison } from "../lib/compare-timing";
 
@@ -192,4 +193,26 @@ test("anomaly levels narrow to one university and its analysed platforms", () =>
   assert.deepEqual(levelSharesByPlatform(data, B), []);
   assert.deepEqual(levelSharesByPlatform(data, A).map((row) => row.platform), ["Telegram", "ВКонтакте"]);
   assert.equal(levelSharesByPlatform(data).length, 4);
+});
+
+test("account findings follow the selected platform and only persistent ones hide an institution", () => {
+  const flagged: Dashboard = { ...data, institutions: [
+    { ...data.institutions[0]!, accountFindings: [
+      { platform: "telegram", kind: "regular_reactions", status: 1 },
+      { platform: "vk", kind: "engagement_shift", status: 2 },
+    ] },
+    data.institutions[1]!,
+  ] };
+  const telegram = institutionRows(flagged, "telegram");
+  assert.deepEqual(telegram[0]!.findings.map((item) => item.kind), ["regular_reactions"]);
+  assert.equal(telegram[0]!.persistentFindings, false);
+  assert.deepEqual(withoutPersistentFindings(telegram).map((row) => row.name), ["Альфа"]);
+  const vk = institutionRows(flagged, "vk");
+  assert.equal(vk[0]!.persistentFindings, true);
+  assert.deepEqual(withoutPersistentFindings(vk).map((row) => row.name), ["Бета Институт"]);
+  assert.equal(institutionRows(flagged, "all")[0]!.persistentFindings, true);
+  assert.match(findingsNote(vk[0]!)!, /Скачок доли реакций на просмотр \(устойчиво\)/);
+  assert.equal(findingsNote(vk[1]!), null);
+  // Старый ответ API без поля — без находок.
+  assert.deepEqual(institutionRows(data, "vk")[0]!.findings, []);
 });

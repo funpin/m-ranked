@@ -17,7 +17,7 @@ from .detectors import SiblingActivity
 from .domain import Metric, PostSeries, PostVerdict
 from .levels import quality_payload, sign_payload
 from .norms import NORM_MODEL_VERSION, Norm, NormSet, NormStatus, norm_from_payload, norm_to_payload
-from .tail_ledger import VERSION as TAIL_LEDGER_VERSION
+from .tail_ledger import READABLE_VERSIONS as TAIL_LEDGER_READABLE, VERSION as TAIL_LEDGER_VERSION
 
 # Серия читается пачкой: 50 постов одним запросом (план, раздел 11).
 SERIES_BATCH = 50
@@ -663,9 +663,9 @@ class PostgresAnomalyStore:
                      FROM analytics.post_anomaly_state state
                      JOIN ingest.visible_publication publication ON publication.id = state.publication_id
                     WHERE state.published_at > %s AND state.published_at <= %s
-                      AND state.tail_ledger_version = %s AND NOT publication.is_repost
+                      AND state.tail_ledger_version = ANY(%s) AND NOT publication.is_repost
                       AND publication.deleted_at IS NULL""",
-                (published_after, published_until, TAIL_LEDGER_VERSION)).fetchall()
+                (published_after, published_until, list(TAIL_LEDGER_READABLE))).fetchall()
 
     def write_tail_profiles(self, profiles: Sequence[Any], keep_since: date) -> None:
         """Профили суток одной транзакцией; строки старше `keep_since` удаляются."""
@@ -687,14 +687,14 @@ class PostgresAnomalyStore:
         with self._factory() as connection:
             return connection.execute(
                 """SELECT state.publication_id, publication.primary_account_id AS account_id,
-                          account.platform::text AS platform, state.published_at, publication.is_repost,
-                          state.tail_ledger
+                          account.platform::text AS platform, account.institution_id, state.published_at,
+                          publication.is_repost, state.tail_ledger
                      FROM analytics.post_anomaly_state state
                      JOIN ingest.visible_publication publication ON publication.id = state.publication_id
                      JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
                     WHERE state.published_at >= %s AND state.published_at < %s
-                      AND state.tail_ledger_version = %s AND publication.deleted_at IS NULL""",
-                (published_after, published_until, TAIL_LEDGER_VERSION)).fetchall()
+                      AND state.tail_ledger_version = ANY(%s) AND publication.deleted_at IS NULL""",
+                (published_after, published_until, list(TAIL_LEDGER_READABLE))).fetchall()
 
     def read_late_members(self, accounts: Sequence[UUID], published_after: datetime,
                           published_until: datetime) -> dict[UUID, list[UUID]]:

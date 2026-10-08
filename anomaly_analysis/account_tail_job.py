@@ -52,7 +52,8 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
         ledger = ledger_from_payload(row["tail_ledger"])
         if ledger is not None:
             posts.append(LedgerPost(row["publication_id"], row["account_id"], row["platform"],
-                                    row["published_at"], bool(row["is_repost"]), ledger))
+                                    row["published_at"], bool(row["is_repost"]), ledger,
+                                    row.get("institution_id")))
     tail_status = {item.account_id: (item.platform, item.status, {**item.metrics})
                    for item in tail_profiles if item.status is not None}
     persistent = [account for account, (_, status, _) in tail_status.items() if status == 2]

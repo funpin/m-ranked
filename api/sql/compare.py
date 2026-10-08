@@ -432,3 +432,11 @@ SELECT institution.id, alias.legacy_id, institution.canonical_name, institution.
  GROUP BY institution.id, alias.legacy_id, institution.canonical_name, institution.short_name
  ORDER BY lower(coalesce(institution.short_name, institution.canonical_name))
 """
+
+# Аккаунтные находки видимых аккаунтов: значок у вуза и переключатель «скрыть
+# вузы с устойчивыми находками». Таблицу целиком переписывает ночное задание.
+DASHBOARD_FINDINGS = """
+SELECT account.institution_id, finding.platform, finding.kind, finding.status
+  FROM analytics.account_anomaly_finding finding
+  JOIN catalog.visible_platform_account account ON account.id = finding.account_id AND account.enabled
+"""
