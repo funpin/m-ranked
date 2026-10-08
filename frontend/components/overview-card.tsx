@@ -43,7 +43,7 @@ function CardBadges({ item }: { item: OverviewItem }) {
         // отдельный значок, в счётчики уровней постов они не входят.
         const description = `Аккаунтные находки: ${legacyNumber(findings)}. ${platform}. Закономерность на многих постах аккаунта за 30 дней относительно аккаунтов площадки; уровни публикаций не меняет.`;
         return <Badge data-testid="overview-account-findings" tabIndex={0} aria-label={description} title={description}
-          className="pointer-events-auto h-auto cursor-help bg-chart-3/15 px-2 py-1 text-[10px] font-extrabold text-chart-3 shadow-sm tabular">
+          className="pointer-events-auto h-auto cursor-help bg-[color-mix(in_oklch,var(--chart-3)_15%,var(--card))] px-2 py-1 text-[10px] font-extrabold text-chart-3 shadow-sm tabular">
           <UsersRound aria-hidden="true" /><span>{legacyNumber(findings)}</span>
         </Badge>;
       })() : null}

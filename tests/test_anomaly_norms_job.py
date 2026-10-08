@@ -95,7 +95,10 @@ def test_a_norm_that_hides_the_reference_is_rejected():
     assert store.written[0]["failures"] == ["telegram:p09_burst_plateau_telegram"]
 
 
-def test_sharp_shift_against_the_previous_accepted_norm_goes_to_review():
+def test_sharp_shift_keeps_that_platform_on_its_accepted_norm_and_accepts_the_rest(monkeypatch):
+    # Синтетический фон мал: его клетки ниже порога надёжности сдвига. Здесь
+    # проверяется перенос площадки, не отсечка клеток.
+    monkeypatch.setattr("anomaly_analysis.v2.norms.DRIFT_MIN_CONFIDENCE", 0.0)
     organic = _background()
     first = FakeStore(organic)
     NormJob(first, CADENCE, [], clock=lambda: NOW).run()
@@ -103,10 +106,16 @@ def test_sharp_shift_against_the_previous_accepted_norm_goes_to_review():
     shifted = [replace(item, values={metric: tuple(None if value is None else value * (10 if metric.value != "views" else 1)
                                                    for value in column)
                                      for metric, column in item.values.items()})
-               for item in organic]
+               if item.platform == "vk" else item for item in organic]
     previous = FakeStore(shifted)
     NormJob(previous, CADENCE, [], clock=lambda: NOW).run()
     store = FakeStore(organic, previous=previous.written[0]["norms"])
     _, status = NormJob(store, CADENCE, [], clock=lambda: NOW).run()
-    assert status is NormStatus.DRIFT_REVIEW and store.written[0]["drift"]["vk"]["shift_mads"] > 1
+    written = store.written[0]
+    assert status is NormStatus.ACCEPTED, written["failures"]
+    assert written["drift"]["vk"]["shift_mads"] > 1 and written["drift"]["vk"]["carried"] is True
+    # ВК остаётся на прежней принятой норме, Telegram берёт свежую.
+    assert written["norms"]["vk"] is previous.written[0]["norms"]["vk"]
+    assert written["norms"]["telegram"] is not previous.written[0]["norms"]["telegram"]
+    assert "carried" not in written["drift"]["telegram"]
     assert first.written[0]["status"] is NormStatus.ACCEPTED
