@@ -42,8 +42,9 @@ test("comparison timing follows highlighted universities and curves pick on clic
   });
   await page.goto(`/compare?platform=telegram&highlight=${ALPHA}`);
   const main = page.getByRole("main");
+  // Без явной прокрутки: потоковая отрисовка заменяет разметку панели, и
+  // прокрутка к ещё не заменённому узлу падала на «not attached».
   const hourly = main.getByTestId("hourly-card");
-  await hourly.scrollIntoViewIfNeeded();
   await expect(hourly.locator(".recharts-line")).toHaveCount(2);
   await expect(hourly.getByText("Час выхода, московское время")).toBeVisible();
   await expect(main.getByTestId("types-chart-count")).toContainText("Доля публикаций, %");
@@ -57,7 +58,6 @@ test("comparison timing follows highlighted universities and curves pick on clic
   await expect(heatmap.getByTestId("heatmap-readout")).toContainText("публ.");
 
   const curves = main.getByTestId("curves-card");
-  await curves.scrollIntoViewIfNeeded();
   const before = await main.getByTestId("highlight-chip").count();
   await curves.locator("[data-testid=curves-backdrop] g[data-institution]").first().dispatchEvent("click");
   await expect(main.getByTestId("highlight-chip")).toHaveCount(before + 1);
@@ -77,7 +77,9 @@ test("comparison ranking, map and presence pick a university on click", async ({
   // Название у строки рейтинга — в одну строку и тоже выбирает вуз.
   const name = main.getByTestId("ranking-chart").locator(".recharts-yAxis-tick-labels text").nth(3);
   await expect(name.locator("tspan")).toHaveCount(0);
-  await name.click();
+  // Проверяется обработчик подписи, а не попадание мышью в 11-пиксельный текст:
+  // под нагрузкой CI клик по SVG-тексту изредка промахивался.
+  await name.dispatchEvent("click");
   await expect(chips).toHaveCount(3);
   // Уровни анализа сами переходят к последнему выделенному вузу.
   const levels = main.getByTestId("levels-card");
