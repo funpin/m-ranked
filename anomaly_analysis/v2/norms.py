@@ -28,8 +28,8 @@ from scipy.optimize import least_squares
 
 from .domain import Level, Metric, PostSeries
 from .series import (
-    AGE_BAND_EDGES, DAY, HOUR, PreparedSeries, age_band, engagement_at, value_at, views_belong_to_source,
-    views_estimate_at,
+    AGE_BAND_EDGES, DAY, HOUR, PreparedSeries, age_band, counter_estimate_at, engagement_estimate_at, value_at,
+    views_belong_to_source,
 )
 
 NORM_MODEL_VERSION = "2.2.0"
@@ -236,15 +236,15 @@ def _collect(posts: Sequence[PreparedSeries], excluded: frozenset[UUID], final_a
                     if value is not None and 0 <= value <= final:
                         samples.shares.setdefault((metric.value, band), []).append(value / final)
                         contributed = True
-        # ERV — той же оценкой просмотров, что у детектора: только по точным
+        # ERV — той же оценкой счётчиков, что у детектора: только по точным
         # просмотрам норма Telegram собиралась бы из постов, не дошедших до
         # тысячи, — показанное с тысячи число округлено.
         if Metric.VIEWS in series.values and not views_belong_to_source(series):
             for band, end in enumerate(ends):
-                seen = views_estimate_at(prepared, float(end))
-                engaged = engagement_at(prepared, float(end))
-                if seen is not None and engaged is not None and seen.low > 0 and engaged > 0:
-                    samples.ervs.setdefault(band, []).append(float(np.log(engaged / seen.value)))
+                seen = counter_estimate_at(prepared, Metric.VIEWS, float(end))
+                engaged = engagement_estimate_at(prepared, float(end))
+                if seen is not None and engaged is not None and seen.low > 0 and engaged.low > 0:
+                    samples.ervs.setdefault(band, []).append(float(np.log(engaged.value / seen.value)))
                     samples.contributors.setdefault((ERV, band), set()).add(index)
                     contributed = True
         # Empty/unusable rows provide no evidence for the norm's maturity.

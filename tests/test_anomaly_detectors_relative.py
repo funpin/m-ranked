@@ -14,7 +14,9 @@ from anomaly_analysis.v2.detectors import (
 )
 from anomaly_analysis.v2.levels import _context
 from anomaly_analysis.v2.domain import Metric
-from anomaly_analysis.v2.series import AGE_BAND_EDGES, CollectionCadence, engagement_at, prepare, views_estimate_at
+from anomaly_analysis.v2.series import (
+    AGE_BAND_EDGES, CollectionCadence, counter_estimate_at, engagement_estimate_at, prepare,
+)
 from anomaly_reference.mature_norms import norms_for, synthetic_cases
 
 CASES = synthetic_cases()
@@ -96,7 +98,7 @@ def test_erv_is_found_through_rounded_telegram_views(name, direction):
     low, high = sign.render["views_range"]
     assert low < high and high / low - 1 <= 0.05
     assert abs(sign.render["z"] - exact.render["z"]) < 0.2
-    assert "просмотры округлены площадкой" in sign.formula
+    assert f"просмотры {low:.0f}–{high:.0f}" in sign.formula
 
 
 def test_erv_inside_the_rounding_corridor_on_one_bound_is_not_a_sign():
@@ -110,11 +112,11 @@ def test_erv_inside_the_rounding_corridor_on_one_bound_is_not_a_sign():
     # а нижняя — выше: признак держится лишь на части коридора.
     band = sign.render["band"]
     cell = context.norm.cells[("erv", band)]
-    engaged = engagement_at(prepared, float(AGE_BAND_EDGES[band + 1]))
+    engaged = engagement_estimate_at(prepared, float(AGE_BAND_EDGES[band + 1])).value
     spread = max(1.4826 * cell.log_erv.mad, erv_outlier.SPREAD_FLOOR)
     median = float(np.log(engaged / high)) - (erv_outlier.MIN_Z - 0.01) * spread
     # По оценке просмотров отклонение по-прежнему за порогом.
-    assert (float(np.log(engaged / views_estimate_at(prepared, float(AGE_BAND_EDGES[band + 1])).value))
+    assert (float(np.log(engaged / counter_estimate_at(prepared, Metric.VIEWS, float(AGE_BAND_EDGES[band + 1])).value))
             - median) / spread >= erv_outlier.MIN_Z
     shifted = replace(context.norm, cells={**context.norm.cells, ("erv", band):
                                            replace(cell, log_erv=replace(cell.log_erv, median=median))})
