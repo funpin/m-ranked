@@ -10,6 +10,7 @@ import { tailSummary, type TailProfileLoad } from "@/lib/account-tail";
 import { PLATFORM_LABELS } from "@/lib/format";
 import type { AccountAnomalyFinding, AccountAnomalyFindings } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { figureComparison as comparison } from "@/lib/finding-figure";
 
 export type FindingsLoad = AccountAnomalyFindings | null;
 
@@ -204,19 +205,6 @@ function format(value: number, unit: Figure["unit"]): string {
   if (unit === "percent") return `${Math.round(value * 100)} %`;
   if (unit === "times") return `${value < 10 ? value.toFixed(value < 1 ? 2 : 1).replace(".", ",") : Math.round(value)}×`;
   return value.toFixed(2).replace(".", ",");
-}
-
-/** «в 6,8 раза выше» — во сколько раз аккаунт отличается от типичного в сторону находки. */
-function comparison(figure: Figure): string | null {
-  const { value, typical, unit } = figure;
-  if (unit === "percent") return value - typical >= 0.05 ? `+${Math.round((value - typical) * 100)} п. п.` : null;
-  const ratio = figure.direction === "lower" ? typical / Math.max(value, 1e-3) : value / Math.max(typical, 1e-3);
-  if (!Number.isFinite(ratio) || ratio < 1.5) return null;
-  const whole = Math.round(ratio);
-  const text = ratio < 10 ? ratio.toFixed(1).replace(".", ",") : String(whole);
-  // «в 2,5 раза», «в 23 раза», «в 15 раз»
-  const word = ratio < 10 || (whole % 10 >= 2 && whole % 10 <= 4 && (whole % 100 < 12 || whole % 100 > 14)) ? "раза" : "раз";
-  return `в ${text} ${word} ${figure.direction === "lower" ? "ниже" : "выше"}`;
 }
 
 const plural = (count: number) => count % 10 === 1 && count % 100 !== 11 ? "находка"
