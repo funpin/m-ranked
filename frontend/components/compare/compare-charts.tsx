@@ -44,6 +44,55 @@ function yTitle(value: string, side: "left" | "right" = "left", color = "var(--m
 
 const NO_OVERLAYS: readonly TimingOverlay[] = [];
 
+/** Название вуза у строки рейтинга: одна строка с многоточием — Recharts
+ *  иначе переносит длинное имя, и оно наезжает на соседние строки. Полное
+ *  название — в подсказке; нажатие выбирает вуз, как и клик по строке. */
+const NAME_TICK_CHARS = 18;
+function NameTick({ x, y, payload, rows, highlights, onPick }: {
+  x?: number | string; y?: number | string; payload?: { value?: unknown; index?: number };
+  rows: readonly { id: string; name: string; fullName: string }[]; highlights: Highlights; onPick?: Pick;
+}) {
+  const row = payload?.index === undefined ? undefined : rows[payload.index];
+  const text = String(payload?.value ?? "");
+  const color = row ? highlights.get(row.id) : undefined;
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fontWeight={color ? 700 : 400}
+      fill={color ?? "var(--muted-foreground)"} className={onPick && row ? "cursor-pointer" : undefined}
+      onClick={onPick && row ? () => onPick(row.id) : undefined}>
+      <title>{row?.fullName ?? text}</title>
+      {text.length > NAME_TICK_CHARS ? `${text.slice(0, NAME_TICK_CHARS - 1)}…` : text}
+    </text>
+  );
+}
+
+/** Круглая верхняя граница шкалы: 1, 2, 2,5 или 5 × 10ⁿ, не меньше значения. */
+function niceCeil(value: number) {
+  const power = 10 ** Math.floor(Math.log10(value));
+  return [1, 2, 2.5, 5, 10].map((step) => step * power).find((bound) => bound >= value)!;
+}
+
+/** Выбор вуза кликом по графику: в рейтингах — по всей строке вуза, даже если
+ *  столбик почти нулевой. Повторный клик снимает выделение, как в таблице. */
+type Pick = (id: string) => void;
+function rowPicker<T extends { id: string }>(rows: readonly T[], onPick?: Pick) {
+  return onPick ? (state: { activeIndex?: number | string | null }) => {
+    const row = state.activeIndex === null || state.activeIndex === undefined ? undefined : rows[Number(state.activeIndex)];
+    if (row) onPick(row.id);
+  } : undefined;
+}
+/** Клик по самому столбику выбирает вуз сразу и не доходит до строки:
+ *  иначе выделение переключилось бы дважды. */
+function barPicker(onPick?: Pick) {
+  return onPick ? (item: unknown, _index: number, event?: { stopPropagation?: () => void }) => {
+    event?.stopPropagation?.();
+    const id = (item as { payload?: { id?: string } }).payload?.id;
+    if (id) onPick(id);
+  } : undefined;
+}
+const pickNote = (highlights: Highlights, id: string) => highlights.has(id)
+  ? "Нажмите, чтобы снять выделение"
+  : highlights.size < MAX_HIGHLIGHTS ? "Нажмите, чтобы выделить вуз" : `Выделено ${MAX_HIGHLIGHTS} из ${MAX_HIGHLIGHTS}`;
+
 const PARTIAL_LABEL = "день не закончился";
 /** В подсказке незаконченный день показывается один раз: пунктирный ряд
  *  повторяет значение предыдущего дня, только чтобы провести линию. */
@@ -56,12 +105,14 @@ function withoutPartialEchoes<T extends { dataKey?: unknown; payload?: Record<st
 
 function TooltipBox({ title, lines, note }: { title: string; lines: [string, string][]; note?: string }) {
   return (
-    <div className="border-border/50 bg-background grid min-w-40 gap-1 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
-      <div className="font-medium">{title}</div>
+    // Ширина ограничена: длинное полное название переносится, а не выталкивает
+    // числа за край карточки.
+    <div className="border-border/50 bg-background grid w-max max-w-72 min-w-40 gap-1 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
+      <div className="font-medium text-pretty">{title}</div>
       {lines.map(([label, value]) => (
         <div key={label} className="flex justify-between gap-4">
           <span className="text-muted-foreground">{label}</span>
-          <span className="text-foreground font-mono font-medium tabular-nums">{value}</span>
+          <span className="text-foreground shrink-0 font-mono font-medium whitespace-nowrap tabular-nums">{value}</span>
         </div>
       ))}
       {note ? <div className="text-muted-foreground">{note}</div> : null}
@@ -71,12 +122,12 @@ function TooltipBox({ title, lines, note }: { title: string; lines: [string, str
 
 /** Сортировка всех вузов по одной мере: горизонтальные полосы, высота растёт с
  *  числом вузов, поэтому ограничения на их число нет. Пунктир — медиана. */
-export function RankingChart({ rows, metric, highlights, descending = true }: {
-  rows: readonly InstitutionRow[]; metric: Metric; highlights: Highlights; descending?: boolean;
+export function RankingChart({ rows, metric, highlights, descending = true, onPick }: {
+  rows: readonly InstitutionRow[]; metric: Metric; highlights: Highlights; descending?: boolean; onPick?: Pick;
 }) {
   const data = useMemo(() => sortRows(rows, metric, descending)
     .filter((row) => metricValue(row, metric) !== null)
-    .map((row) => ({ id: row.id, name: row.name, value: metricValue(row, metric)!, row })), [rows, metric, descending]);
+    .map((row) => ({ id: row.id, name: row.name, fullName: row.fullName, value: metricValue(row, metric)!, row })), [rows, metric, descending]);
   const middle = median(data.map((item) => item.value));
   const config = { value: { label: METRICS[metric].short, color: BASE_BAR } } satisfies ChartConfig;
   if (!data.length) return <EmptyChart />;
@@ -84,11 +135,12 @@ export function RankingChart({ rows, metric, highlights, descending = true }: {
   return (
     <ChartContainer config={config} className="aspect-auto w-full" style={{ height: Math.max(220, data.length * 22 + 48) }}
       data-testid="ranking-chart" role="img" aria-label={`Вузы по показателю: ${METRICS[metric].label}`}>
-      <BarChart data={data} layout="vertical" margin={{ left: 4, right: 48, top: 22, bottom: 8 }} barCategoryGap={3}>
+      <BarChart data={data} layout="vertical" margin={{ left: 4, right: 48, top: 22, bottom: 8 }} barCategoryGap={3}
+        onClick={rowPicker(data, onPick)} className={onPick ? "cursor-pointer" : undefined}>
         <CartesianGrid horizontal={false} />
         <XAxis type="number" tickFormatter={(value) => formatValue(value, metric)} tickLine={false} axisLine={false} />
         <YAxis type="category" dataKey="name" width={132} tickLine={false} axisLine={false} interval={0}
-          tick={{ fontSize: 11 }} tickFormatter={(value: string) => (value.length > 20 ? `${value.slice(0, 19)}…` : value)} />
+          tick={(props) => <NameTick {...props} rows={data} highlights={highlights} onPick={onPick} />} />
         <ChartTooltip cursor={{ fillOpacity: 0.4 }} content={({ active, payload }) => {
           const item = active ? payload?.[0]?.payload as (typeof data)[number] | undefined : undefined;
           if (!item) return null;
@@ -96,14 +148,14 @@ export function RankingChart({ rows, metric, highlights, descending = true }: {
             [METRICS[metric].short, formatValue(item.value, metric)],
             ["Публикаций", formatInteger(item.row.posts)],
             ["Проанализировано", formatInteger(item.row.analyzed)],
-          ]} />;
+          ]} note={onPick ? pickNote(highlights, item.id) : undefined} />;
         }} />
         {middle !== null ? (
           <ReferenceLine x={middle} stroke="var(--foreground)" strokeOpacity={0.5} strokeDasharray="4 4">
             <Label value={`медиана ${formatValue(middle, metric)}`} position="top" fontSize={10} fill="var(--muted-foreground)" />
           </ReferenceLine>
         ) : null}
-        <Bar dataKey="value" radius={[0, 4, 4, 0]} isAnimationActive={false}
+        <Bar dataKey="value" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={barPicker(onPick)}
           label={{ position: "right", fontSize: 10, fill: "var(--muted-foreground)", formatter: (value: unknown) => formatValue(value as number, metric) }}>
           {data.map((item) => (
             <Cell key={item.id} fill={highlights.get(item.id) ?? (anyHighlight ? MUTED_BAR : BASE_BAR)} />
@@ -116,8 +168,8 @@ export function RankingChart({ rows, metric, highlights, descending = true }: {
 
 /** Карта вузов в двух мерах сразу; размер точки — подписчики. Логарифмическая
  *  шкала: охваты вузов различаются на порядки. */
-export function ScatterMap({ rows, x, y, highlights }: {
-  rows: readonly InstitutionRow[]; x: Metric; y: Metric; highlights: Highlights;
+export function ScatterMap({ rows, x, y, highlights, onPick }: {
+  rows: readonly InstitutionRow[]; x: Metric; y: Metric; highlights: Highlights; onPick?: Pick;
 }) {
   const points = useMemo(() => rows
     .map((row) => ({ id: row.id, name: row.fullName, short: row.name, x: metricValue(row, x), y: metricValue(row, y), z: Math.max(row.subscribers ?? 0, 1) }))
@@ -146,9 +198,10 @@ export function ScatterMap({ rows, x, y, highlights }: {
           return <TooltipBox title={point.name} lines={[
             [METRICS[x].short, formatValue(point.x, x)], [METRICS[y].short, formatValue(point.y, y)],
             ["Подписчики", formatCompact(point.z)],
-          ]} />;
+          ]} note={onPick ? pickNote(highlights, point.id) : undefined} />;
         }} />
-        <Scatter data={points} isAnimationActive={false}>
+        <Scatter data={points} isAnimationActive={false} className={onPick ? "cursor-pointer" : undefined}
+          onClick={onPick ? (point: { payload?: { id?: string } }) => { if (point.payload?.id) onPick(point.payload.id); } : undefined}>
           {points.map((point) => {
             const color = highlights.get(point.id);
             return <Cell key={point.id} fill={color ?? BASE_BAR} fillOpacity={color ? 0.95 : anyHighlight ? 0.2 : 0.55}
@@ -210,6 +263,10 @@ export function CurvesChart({ data, platform, rows, highlights, field, onPick }:
     return result;
   }, [platform, highlights, names]);
   const canAdd = highlights.size < MAX_HIGHLIGHTS;
+  // Шкала — по всем линиям, а не только по нарисованным рядам Recharts: иначе
+  // верхние вузы уходят за край и в них не попасть.
+  const yMax = useMemo(() => niceCeil(Math.max(1, ...chart.flatMap((row) =>
+    Object.entries(row).flatMap(([key, value]) => key !== "hour" && typeof value === "number" ? [value] : [])))), [chart]);
   if (!chart.some((point) => point.median !== null)) return <EmptyChart />;
   const measure = field === "views" ? "Просмотры" : "Реакции";
   return (
@@ -221,8 +278,8 @@ export function CurvesChart({ data, platform, rows, highlights, field, onPick }:
           ticks={data.hours} tickFormatter={(value) => hourLabel(Number(value))} interval="preserveStartEnd" minTickGap={6}
           tickLine={false} axisLine={false}
           height={X_TITLE_HEIGHT} label={xTitle("Время после выхода поста")} />
-        <YAxis tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={52 + AXIS_TITLE_GUTTER}
-          label={yTitle(`${measure}, медиана`)} />
+        <YAxis domain={[0, yMax]} tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false}
+          width={52 + AXIS_TITLE_GUTTER} label={yTitle(`${measure}, медиана`)} />
         <CurveBackdrop rows={chart} ids={background} hovered={hovered} onHover={setHovered} onPick={pick} />
         <ChartTooltip content={(props) => {
           const hour = Number(props.label);
@@ -233,7 +290,7 @@ export function CurvesChart({ data, platform, rows, highlights, field, onPick }:
               [`Медиана ${PLATFORM_NAMES[platform]}`, formatInteger(point.median ?? null)],
             ]} note={canAdd ? "Нажмите на линию, чтобы выделить вуз" : `Выделено ${MAX_HIGHLIGHTS} из ${MAX_HIGHLIGHTS} — снимите вуз, чтобы добавить`} />;
           }
-          return <ChartTooltipContent active={props.active} payload={props.payload} label={props.label} indicator="line" labelFormatter={(value) => `${hourLabel(Number(value))} после выхода`}
+          return <ChartTooltipContent active={props.active} payload={props.payload} label={props.label} indicator="line" labelFormatter={(_, payload) => `${hourLabel(Number(payload?.[0]?.payload?.hour))} после выхода`}
             valueFormatter={(value) => formatInteger(Number(value))} />;
         }} />
         <Line dataKey="median" stroke="var(--color-median)" strokeWidth={3} dot={{ r: 3 }} isAnimationActive={false} connectNulls />
@@ -275,9 +332,10 @@ export function LevelsDonut({ levels }: { levels: readonly number[] }) {
 }
 
 /** Состав уровней по площадкам: каждая полоса — 100 % проанализированных постов. */
-export function LevelsByPlatform({ data }: { data: Dashboard }) {
-  const rows = useMemo(() => levelSharesByPlatform(data), [data]);
+export function LevelsByPlatform({ data, institutionId = null }: { data: Dashboard; institutionId?: string | null }) {
+  const rows = useMemo(() => levelSharesByPlatform(data, institutionId), [data, institutionId]);
   const config = Object.fromEntries(LEVEL_NAMES.map((name, level) => [`level${level}`, { label: name, color: LEVEL_COLORS[level] }])) satisfies ChartConfig;
+  if (!rows.length) return <EmptyChart text="У вуза нет проанализированных постов за период." />;
   return (
     <ChartContainer config={config} className="aspect-auto h-[240px] w-full" data-testid="levels-by-platform" role="img"
       aria-label="Уровни анализа по площадкам">
@@ -501,7 +559,7 @@ export function RadarProfile({ rows, highlights, onPick }: { rows: readonly Inst
 }
 
 /** Присутствие в соцсетях: публикации вуза по площадкам, все вузы. */
-export function PresenceChart({ rows, highlights }: { rows: readonly InstitutionRow[]; highlights: Highlights }) {
+export function PresenceChart({ rows, highlights, onPick }: { rows: readonly InstitutionRow[]; highlights: Highlights; onPick?: Pick }) {
   const data = useMemo(() => [...rows]
     .filter((row) => row.posts > 0)
     .sort((left, right) => right.posts - left.posts)
@@ -511,20 +569,22 @@ export function PresenceChart({ rows, highlights }: { rows: readonly Institution
   return (
     <ChartContainer config={config} className="aspect-auto w-full" style={{ height: data.length * 20 + 94 }}
       data-testid="presence-chart" role="img" aria-label="Публикации вузов по соцсетям">
-      <BarChart data={data} layout="vertical" margin={{ left: 4, right: 12, top: 4 }} barCategoryGap={3}>
+      <BarChart data={data} layout="vertical" margin={{ left: 4, right: 12, top: 4 }} barCategoryGap={3}
+        onClick={rowPicker(data, onPick)} className={onPick ? "cursor-pointer" : undefined}>
         <CartesianGrid horizontal={false} />
         <XAxis type="number" tickLine={false} axisLine={false} height={X_TITLE_HEIGHT} label={xTitle("Публикаций за период")} />
         <YAxis type="category" dataKey="name" width={132} tickLine={false} axisLine={false} interval={0}
-          tick={({ x, y, payload }) => {
-            const item = data.find((row) => row.name === payload.value);
-            const color = item ? highlights.get(item.id) : undefined;
-            const text = String(payload.value);
-            return <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fontWeight={color ? 700 : 400}
-              fill={color ?? "var(--muted-foreground)"}>{text.length > 20 ? `${text.slice(0, 19)}…` : text}</text>;
-          }} />
-        <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => formatInteger(Number(value))} />} />
+          tick={(props) => <NameTick {...props} rows={data} highlights={highlights} onPick={onPick} />} />
+        <ChartTooltip content={(props) => {
+          const item = props.payload?.[0]?.payload as (typeof data)[number] | undefined;
+          return <>
+            <ChartTooltipContent active={props.active} payload={props.payload} label={props.label}
+              valueFormatter={(value) => formatInteger(Number(value))} />
+            {onPick && item && props.active ? <div className="text-muted-foreground mt-1 text-xs">{pickNote(highlights, item.id)}</div> : null}
+          </>;
+        }} />
         {NETWORKS.map((network, index) => (
-          <Bar key={network} dataKey={network} stackId="posts" fill={`var(--color-${network})`} isAnimationActive={false}
+          <Bar key={network} dataKey={network} stackId="posts" fill={`var(--color-${network})`} isAnimationActive={false} onClick={barPicker(onPick)}
             radius={index === NETWORKS.length - 1 ? [0, 4, 4, 0] : 0} />
         ))}
         <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />

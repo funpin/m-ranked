@@ -26,7 +26,8 @@ import { STICKY_CONTROL_SURFACE_CLASS } from "@/components/filter-toolbar";
 import {
   DASHBOARD_PLATFORMS, LEVEL_COLORS, LEVEL_NAMES, MAX_HIGHLIGHTS, METRICS, NETWORKS, PLATFORM_NAMES,
   formatCompact, formatInteger, formatPercent, formatValue, highlightMap, institutionLabels, institutionOptions,
-  institutionRows, periodDays, platformSummary, sortRows, timingGrid, toggleHighlight,
+  institutionLevels, institutionRows, periodDays, platformSummary, resolveScope, sortRows, timingGrid, toggleHighlight,
+  type Scope,
   type Dashboard, type DashboardPeriod, type DashboardPlatform, type HighlightMap, type InstitutionRow, type Metric,
   type Network,
 } from "@/lib/compare-dashboard";
@@ -91,11 +92,12 @@ function Kpi({ icon: Icon, label, value, hint, note, tone }: {
   return (
     <Card className="gap-2 py-4" data-testid="compare-kpi">
       <CardHeader className="px-4">
-        {/* Знак методики — в конце текста подписи: при переносе он не отрывается. */}
         <CardDescription className="flex items-start gap-1.5">
           <Icon className="mt-[0.2rem] size-3.5 shrink-0" aria-hidden="true" />
-          <span className="min-w-0">{label}{note ? <span className="ml-1 inline-flex align-middle"><MethodNote title={label}>{note}</MethodNote></span> : null}</span>
+          <span className="min-w-0">{label}</span>
         </CardDescription>
+        {/* Знак методики — в углу карточки: подпись переносится, не таща его за собой. */}
+        {note ? <CardAction className="-mt-1 -mr-1"><MethodNote title={label}>{note}</MethodNote></CardAction> : null}
         <CardTitle className={cn("font-heading text-2xl font-bold tabular-nums", tone === "danger" && "text-destructive")}>{value}</CardTitle>
       </CardHeader>
       {hint ? <CardFooter className="text-muted-foreground px-4 text-xs">{hint}</CardFooter> : null}
@@ -258,6 +260,20 @@ function InstitutionTable({ rows, highlights, onToggle }: {
 }
 
 type Overlay = { id: string; name: string; status: string };
+
+/** Выбор разреза карточки: все вузы или один из выделенных. Без выделения не нужен. */
+function ScopeSelect({ value, onChange, ids, labels, label }: {
+  value: string; onChange: (scope: Scope) => void; ids: readonly string[];
+  labels: ReadonlyMap<string, { name: string }>; label: string;
+}) {
+  if (!ids.length) return null;
+  return (
+    <NativeSelect value={value} onChange={(event) => onChange(event.target.value)} aria-label={label}>
+      <NativeSelectOption value="all">Все вузы</NativeSelectOption>
+      {ids.map((id) => <NativeSelectOption key={id} value={id}>{labels.get(id)?.name ?? id}</NativeSelectOption>)}
+    </NativeSelect>
+  );
+}
 const NO_TIMING = { timing: [], types: [] };
 
 function OverlayRetry({ onRetry, names }: { onRetry: () => void; names?: string }) {
@@ -298,7 +314,10 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
   const highlightIds = useMemo(() => [...highlights.keys()], [highlights]);
   // Кнопка «Выбрать вуз» в пустом профиле переводит фокус в поиск.
   const [focusRequest, setFocusRequest] = useState(0);
-  const [heatmapScope, setHeatmapScope] = useState("all");
+  // Карточки с разрезом по одному вузу сами переходят к последнему
+  // выделенному; в карточке можно вернуть «Все вузы» или выбрать другой.
+  const [heatmapScope, setHeatmapScope] = useState<Scope>("auto");
+  const [levelsScope, setLevelsScope] = useState<Scope>("auto");
 
   const rows = useMemo(() => institutionRows(data, platform), [data, platform]);
   const activeRows = useMemo(() => rows.filter((row) => row.posts > 0), [rows]);
@@ -307,7 +326,10 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
   const labels = useMemo(() => institutionLabels(data), [data]);
   const timing = useInstitutionTiming(highlightIds, period);
   // Вуз для тепловой карты — один из выделенных; снятый вуз возвращает «все вузы».
-  const heatmapId = highlights.has(heatmapScope) ? heatmapScope : "all";
+  const heatmapId = resolveScope(heatmapScope, highlightIds);
+  const levelsId = resolveScope(levelsScope, highlightIds);
+  const levelStats = levelsId === "all" ? summary : institutionLevels(data, levelsId, platform);
+  const levelsName = levelsId === "all" ? null : labels.get(levelsId)?.name;
   const heatmapState = heatmapId === "all" ? null : timing.states.get(heatmapId);
   // Пока данные вуза не пришли, сетка пуста: числа всех вузов под именем вуза
   // ввели бы в заблуждение.
@@ -442,8 +464,8 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
           action={<NativeSelect value={rankingMetric} onChange={(event) => setRankingMetric(event.target.value as Metric)} aria-label="Мера рейтинга">
             {RANKING_METRICS.map((metric) => <NativeSelectOption key={metric} value={metric}>{METRICS[metric].short}</NativeSelectOption>)}
           </NativeSelect>}
-          footer="Пунктир — медиана по вузам. Выделенные вузы подсвечены цветом, остальные приглушены.">
-          <RankingChart rows={activeRows} metric={rankingMetric} highlights={highlights} />
+          footer="Пунктир — медиана по вузам. Выделенные вузы подсвечены цветом, остальные приглушены. Нажмите на строку вуза, чтобы выделить его.">
+          <RankingChart rows={activeRows} metric={rankingMetric} highlights={highlights} onPick={toggle} />
         </ChartCard>
       </Section>
 
@@ -452,7 +474,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
           <ChartCard className="xl:col-span-3" title={preset.label} testId="scatter-card"
             note="Обе оси логарифмические: вузы различаются на порядки. Пунктиры — медианы, они делят карту на четыре квадранта."
             action={<Segmented label="Пара мер" value={scatter} onChange={setScatter} options={SCATTER_PRESETS.map((item) => ({ value: item.id, label: item.label }))} />}>
-            <ScatterMap rows={activeRows} x={preset.x} y={preset.y} highlights={highlights} />
+            <ScatterMap rows={activeRows} x={preset.x} y={preset.y} highlights={highlights} onPick={toggle} />
           </ChartCard>
           <ChartCard className="xl:col-span-2" title="Профиль вуза" testId="radar-card"
             description={highlights.size ? "Выделенные вузы" : undefined}
@@ -480,28 +502,31 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
       <Section id="anomalies" title="Аномальная динамика" icon={ShieldAlert}
         description="Выводы модуля анализа по постам периода. Сигнал информационный и сам по себе не доказывает накрутку.">
         <div className="grid gap-4 lg:grid-cols-3">
-          <ChartCard title="Уровни анализа" description={`${formatInteger(summary.analyzed)} проанализированных постов`} testId="levels-card"
+          <ChartCard title="Уровни анализа" testId="levels-card"
+            description={`${formatInteger(levelStats.analyzed)} проанализированных постов${levelsName ? ` · ${levelsName}` : ""}`}
+            action={<ScopeSelect value={levelsId} onChange={setLevelsScope} ids={highlightIds} labels={labels} label="Чьи посты показать" />}
             note="Высший уровень дают сильные признаки из разных семейств методов или подтверждённый короткий рывок с плато. «С аномалиями» — уровни «выраженная аномалия» и «признаки искусственной активности».">
-            <LevelsDonut levels={summary.levels} />
+            <LevelsDonut levels={levelStats.levels} />
             <ul className="mt-3 grid gap-1 text-xs">
               {LEVEL_NAMES.map((name, level) => (
                 <li key={name} className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: LEVEL_COLORS[level] }} />{name}</span>
-                  <span className="text-muted-foreground tabular-nums">{formatInteger(summary.levels[level])}</span>
+                  <span className="text-muted-foreground tabular-nums">{formatInteger(levelStats.levels[level])}</span>
                 </li>
               ))}
             </ul>
           </ChartCard>
-          <ChartCard className="lg:col-span-2" title="Уровни по соцсетям" description="Каждая полоса — все проанализированные посты площадки"
-            testId="levels-platform-card">
-            <LevelsByPlatform data={data} />
+          <ChartCard className="lg:col-span-2" title="Уровни по соцсетям" testId="levels-platform-card"
+            description={levelsName ? `${levelsName}: каждая полоса — проанализированные посты вуза на площадке`
+              : "Каждая полоса — все проанализированные посты площадки"}>
+            <LevelsByPlatform data={data} institutionId={levelsId === "all" ? null : levelsId} />
           </ChartCard>
         </div>
         <div className="mt-4">
           <ChartCard title="Доля постов с аномалиями по вузам" testId="anomaly-ranking-card"
             description={`${anomalyRows.length} участников с ≥5 проанализированными постами`}
             note={METRICS.anomalyShare.hint}>
-            <RankingChart rows={anomalyRows} metric="anomalyShare" highlights={highlights} />
+            <RankingChart rows={anomalyRows} metric="anomalyShare" highlights={highlights} onPick={toggle} />
           </ChartCard>
         </div>
       </Section>
@@ -520,7 +545,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         {platform === "all" ? (
           <div className="mt-4">
             <ChartCard title="Присутствие в соцсетях" testId="presence-card" description="Публикации каждого вуза по площадкам за период">
-              <PresenceChart rows={activeRows} highlights={highlights} />
+              <PresenceChart rows={activeRows} highlights={highlights} onPick={toggle} />
             </ChartCard>
           </div>
         ) : null}
@@ -531,10 +556,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         <div className="grid gap-4 xl:grid-cols-2">
           <ChartCard title="Когда публикуют" testId="heatmap-card"
             description={`День недели и час выхода, московское время · ${heatmapId === "all" ? "все вузы" : labels.get(heatmapId)?.name}`}
-            action={highlights.size ? <NativeSelect value={heatmapId} onChange={(event) => setHeatmapScope(event.target.value)} aria-label="Чьи публикации показать">
-              <NativeSelectOption value="all">Все вузы</NativeSelectOption>
-              {highlightIds.map((id) => <NativeSelectOption key={id} value={id}>{labels.get(id)?.name ?? id}</NativeSelectOption>)}
-            </NativeSelect> : undefined}
+            action={<ScopeSelect value={heatmapId} onChange={setHeatmapScope} ids={highlightIds} labels={labels} label="Чьи публикации показать" />}
             footer={heatmapState?.status === "error" ? <OverlayRetry onRetry={timing.retry} />
               : heatmapState?.status === "loading" ? <span role="status">Загружаем: {labels.get(heatmapId)?.name}…</span> : undefined}>
             <TimingHeatmap grid={heatmapGrid} loading={heatmapState?.status === "loading"} />

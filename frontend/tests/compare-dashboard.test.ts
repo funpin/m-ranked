@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  HIGHLIGHT_COLORS, MAX_HIGHLIGHTS, dailyRows, formatValue, highlightMap, hourlyReach, incompleteDay, institutionLabels,
+  HIGHLIGHT_COLORS, MAX_HIGHLIGHTS, dailyRows, institutionLevels, levelSharesByPlatform, resolveScope, formatValue, highlightMap, hourlyReach, incompleteDay, institutionLabels,
   institutionOptions, institutionRows, median, normalizeDashboardPeriod, normalizeDashboardPlatform, percentileRank,
   platformSummary, sortRows, timingGrid, toggleHighlight, typeName, typeRows, type Dashboard, type DashboardStat,
 } from "../lib/compare-dashboard";
@@ -174,4 +174,22 @@ test("a university's hourly line skips hours with too few posts", () => {
   const overlay = hourlyOverlay(source, "vk");
   assert.equal(overlay[9], null);
   assert.equal(overlay[10], 300);
+});
+
+test("a scoped card follows the latest highlight unless told otherwise", () => {
+  assert.equal(resolveScope("auto", []), "all");
+  assert.equal(resolveScope("auto", [A, B]), B);
+  assert.equal(resolveScope("all", [A, B]), "all");
+  assert.equal(resolveScope(A, [A, B]), A);
+  // Снятый вуз возвращает карточку к последнему выделенному.
+  assert.equal(resolveScope(A, [B]), B);
+});
+
+test("anomaly levels narrow to one university and its analysed platforms", () => {
+  assert.deepEqual(institutionLevels(data, A, "all"), { analyzed: 20, levels: [16, 2, 1, 1] });
+  assert.deepEqual(institutionLevels(data, B, "telegram"), { analyzed: 0, levels: [0, 0, 0, 0] });
+  // У Беты на VK ноль проанализированных — площадка не показывается.
+  assert.deepEqual(levelSharesByPlatform(data, B), []);
+  assert.deepEqual(levelSharesByPlatform(data, A).map((row) => row.platform), ["Telegram", "ВКонтакте"]);
+  assert.equal(levelSharesByPlatform(data).length, 4);
 });
