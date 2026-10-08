@@ -274,3 +274,64 @@ def test_the_same_rise_on_the_institutions_other_platforms_is_listed_as_support(
     (finding,) = _kind(findings(posts, TODAY), "engagement_shift")
     assert [(item["platform"], item["cut"]) for item in finding.metrics["corroboration"]] == [("vk", "2026-09-20")]
     assert "VK" in summary(finding)
+
+
+def _diurnal(night_start_utc: int, day: int, night: int) -> list[int]:
+    """Почасовой профиль: шесть часов с `night_start_utc` — по `night`, остальные — по `day`."""
+    hours = [day] * 24
+    for offset in range(6):
+        hours[(night_start_utc + offset) % 24] = night
+    return hours
+
+
+def night_posts(account: int, count: int, views: list[int], reactions, platform: str = "max") -> list[LedgerPost]:
+    posts = []
+    for index in range(count):
+        published = datetime(2026, 9, 8, 9, tzinfo=timezone.utc) + timedelta(hours=7 * index)
+        hourly = reactions(index) if callable(reactions) else reactions
+        ledger = TailLedger(None, None, None, marks={"h72": Point(72 * HOUR, 900, 90)},
+                            hours=(tuple(views), tuple(hourly)))
+        posts.append(LedgerPost(UUID(int=account * 10_000 + index), UUID(int=account), platform, published,
+                                False, ledger))
+    return posts
+
+
+# Московская аудитория: ночь 01–07 МСК = 22–04 UTC.
+MOSCOW_VIEWS = _diurnal(22, 20, 1)
+FOLLOWING = [round(value / 10) for value in MOSCOW_VIEWS]
+
+
+def test_reactions_at_night_while_views_sleep_are_a_finding():
+    cohort = [item for account in range(2, 8) for item in night_posts(account, 40, MOSCOW_VIEWS, FOLLOWING)]
+    # МАИ в MAX: 36 % поздних реакций ночью при 3 % просмотров.
+    bot = night_posts(1, 40, MOSCOW_VIEWS, _diurnal(22, 2, 3))
+    (finding,) = _kind(findings(cohort + bot, TODAY), "night_reactions")
+    data = finding.metrics
+    assert finding.status == 2 and data["nightStartMsk"] == 1 and data["shiftHours"] == 0
+    assert data["reactionShare"] > 0.3 and data["viewShare"] < 0.05
+    assert len(finding.members) == 40 and "01:00–07:00 МСК" in summary(finding)
+    assert not [item for item in findings(cohort, TODAY) if item.kind == "night_reactions"]
+
+
+def test_the_audience_night_follows_its_own_time_zone():
+    # Иркутск (UTC+8): ночь 01–07 местного = 17–23 UTC = 20:00–02:00 МСК.
+    local = _diurnal(17, 20, 1)
+    honest = night_posts(1, 40, local, [round(value / 10) for value in local])
+    assert not [item for item in findings(honest, TODAY) if item.kind == "night_reactions"]
+    bot = night_posts(2, 40, local, _diurnal(17, 2, 3))
+    (finding,) = _kind(findings(bot, TODAY), "night_reactions", 2)
+    assert finding.metrics["nightStartMsk"] == 20 and finding.metrics["shiftHours"] == -5
+    assert "другом часовом поясе" in summary(finding)
+
+
+def test_no_night_in_the_views_or_hourless_ledgers_give_no_finding():
+    flat = night_posts(1, 40, [10] * 24, _diurnal(22, 2, 3))
+    old = [LedgerPost(item.publication_id, UUID(int=2), item.platform, item.published_at, False,
+                      TailLedger(None, None, None, marks=item.ledger.marks)) for item in night_posts(2, 40, MOSCOW_VIEWS, FOLLOWING)]
+    assert not [item for item in findings(flat + old, TODAY) if item.kind == "night_reactions"]
+
+
+def test_night_reactions_in_one_half_of_the_window_are_not_yet_persistent():
+    first_half = night_posts(1, 40, MOSCOW_VIEWS, lambda index: _diurnal(22, 2, 3) if index < 20 else FOLLOWING)
+    (finding,) = _kind(findings(first_half, TODAY), "night_reactions")
+    assert finding.status == 1

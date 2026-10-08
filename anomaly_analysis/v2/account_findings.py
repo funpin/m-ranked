@@ -33,6 +33,16 @@
   одни и те же 15 минут получала бо́льшая часть стены (в среднем 27–45 %
   старых постов на 15-минутку против 4–5 % у медианного вуза ВК), а доля
   лайков на просмотр старых постов — 8–13 % против 1,1–1,3 %.
+* ``engagement_shift`` — отклик вырос без роста аудитории: с некоторой даты доля
+  реакций на просмотр (R72/V72) у постов вдвое и больше выше, чем две недели до
+  неё, почти все посты после даты выше 90 % прежних, просмотры прежние. Тот же
+  сдвиг у других аккаунтов вуза в ±3 сутках показывается как подтверждение.
+* ``night_reactions`` — реакции приходят ночью аудитории (определённой по
+  провалу её просмотров), когда просмотров почти нет.
+
+``regular_reactions`` меряет разброс и за окно, и внутри суток публикации:
+скачок общего уровня раздувает первый, но не второй; разброс меньше
+пуассоновского (недоразброс) — самая сильная форма.
 
 Это статистическая необычность относительно площадки, а не доказательство
 искусственного происхождения (ADR-006); у каждого вида есть честные
@@ -59,6 +69,7 @@ TITLES = {
     "late_engagement": "Необычный отклик на старые посты",
     "synchronous_waves": "Волны реакций сразу на многих постах",
     "engagement_shift": "Отклик вырос без роста аудитории",
+    "night_reactions": "Реакции приходят ночью, когда просмотров нет",
 }
 ALTERNATIVES = {
     "early_pack": ("Подписчики-активисты реагируют сразу после публикации, а поздние читатели почти не "
@@ -71,6 +82,8 @@ ALTERNATIVES = {
                           "отмечают старые посты; активисты отмечают всю ленту после события"),
     "engagement_shift": ("Конкурс или акция вуза, призыв реагировать на посты, смена формата постов; приток "
                          "новых активных подписчиков (тогда растут и просмотры)"),
+    "night_reactions": ("Студенты на практике или за рубежом, ночные смены, иностранная аудитория (тогда "
+                        "ночью растут и просмотры)"),
 }
 
 # Стартовый пакет: окна «первые 2 ч / 2–24 ч» и «первые 6 ч / 6–24 ч» по отметкам
@@ -137,6 +150,24 @@ SHIFT_ONSET_SHARE = 0.95
 # Подтверждение: тот же вуз, другая площадка, лучший срез в ±3 сутках.
 SHIFT_SUPPORT_DAYS = 3
 SHIFT_SUPPORT_RATIO = 1.5
+# Ночные реакции: почасовой поздний прирост сводки v4 (24 ч–14 сут). Ночь —
+# шесть подряд часов с наименьшей долей просмотров у самой аудитории аккаунта:
+# часового пояса вуза в каталоге нет, а у вузов Сибири и Дальнего Востока
+# «московская ночь» — их утро (БГУ в MAX: 26 % поздних просмотров в 01–07 МСК).
+# Если провала нет (ночью больше 12 % просмотров), ночь не определена. МАИ в
+# MAX 10.09–01.10.2026: 36 % поздних реакций ночью при 3 % просмотров, НИТУ
+# МИСИС — 10 % при 1,3 %; у остальных аккаунтов MAX доля реакций ночью не выше
+# доли просмотров больше чем в полтора раза.
+NIGHT_HOURS = 6
+NIGHT_MAX_VIEW_SHARE = 0.12
+NIGHT_MIN_REACTIONS = 200
+NIGHT_HALF_MIN_REACTIONS = 50
+NIGHT_MIN_SHARE = 0.10
+NIGHT_LIFT = 4.0
+NIGHT_MEMBER_REACTIONS = 5
+NIGHT_MSK_START = 1
+NIGHT_SHIFT_NOTE_HOURS = 2
+MOSCOW_UTC_OFFSET = 3
 PLATFORM_TITLES = {"telegram": "Telegram", "vk": "VK", "max": "MAX", "rutube": "Rutube"}
 
 
@@ -221,6 +252,8 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
              for account, items in by_account.items()}
     shifts = {account: _shift_stats(items) for account, items in by_account.items()}
     shift_cohort = _cohort(by_account, _shift_stats, "ratio")
+    nights = {account: _night_stats(items) for account, items in by_account.items()}
+    night_cohort = _cohort(by_account, _night_stats, "lift")
     wave_cohort: dict[str, list[float]] = {}
     for account, stats in waves.items():
         wave_cohort.setdefault(by_account[account][0].platform, []).append(stats["share"])
@@ -264,6 +297,13 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
                        "corroboration": _corroboration(account, items, shift, by_account, shifts)}
             result.append(AccountFinding(account, platform, "engagement_shift", status, start, computed_for,
                                          metrics, tuple(shift["members"])))
+        night = nights[account]
+        if night is not None and _night_found(night):
+            halves = [_night_stats(half, night["nightStartUtc"], NIGHT_HALF_MIN_REACTIONS) for half in _halves(items)]
+            status = 2 if all(item is not None and _night_found(item) for item in halves) else 1
+            metrics = {**_public(night), "cohort": _without(night_cohort.get(platform, {}), "medians")}
+            result.append(AccountFinding(account, platform, "night_reactions", status, start, computed_for,
+                                         metrics, tuple(night["members"])))
     for account, (platform, status, metrics) in (tail_status or {}).items():
         if status == 2:
             # Участники — посты с признаком позднего отклика и посты, у которых
@@ -490,6 +530,45 @@ def _corroboration(account: UUID, items: Sequence[LedgerPost], shift: Mapping[st
     return sorted(support, key=lambda item: (-item["ratio"], item["platform"]))
 
 
+def _night_stats(items: Sequence[LedgerPost], night_start: int | None = None,
+                 min_reactions: int = NIGHT_MIN_REACTIONS) -> dict[str, Any] | None:
+    """Доли позднего прироста реакций и просмотров в ночь аудитории; None — мало данных или нет ночи."""
+    posts = [post for post in items if not post.is_repost and post.ledger.hours is not None]
+    views, reactions = [0] * 24, [0] * 24
+    for post in posts:
+        for hour in range(24):
+            views[hour] += post.ledger.hours[0][hour]
+            reactions[hour] += post.ledger.hours[1][hour]
+    total_views, total_reactions = sum(views), sum(reactions)
+    if total_reactions < min_reactions or not total_views:
+        return None
+
+    def window(start: int) -> list[int]:
+        return [(start + offset) % 24 for offset in range(NIGHT_HOURS)]
+
+    if night_start is None:
+        night_start = min(range(24), key=lambda start: (sum(views[hour] for hour in window(start)), start))
+    night = window(night_start)
+    view_share = sum(views[hour] for hour in night) / total_views
+    if view_share > NIGHT_MAX_VIEW_SHARE:
+        return None
+    reaction_share = sum(reactions[hour] for hour in night) / total_reactions
+    start_msk = (night_start + MOSCOW_UTC_OFFSET) % 24
+    shift = (start_msk - NIGHT_MSK_START + 12) % 24 - 12
+    return {
+        "posts": len(posts), "views": total_views, "reactions": total_reactions,
+        "nightStartUtc": night_start, "nightStartMsk": start_msk, "shiftHours": shift,
+        "viewShare": round(view_share, 4), "reactionShare": round(reaction_share, 4),
+        "lift": round(reaction_share / max(view_share, 0.005), 2),
+        "members": [post.publication_id for post in posts
+                    if sum(post.ledger.hours[1][hour] for hour in night) >= NIGHT_MEMBER_REACTIONS],
+    }
+
+
+def _night_found(stats: Mapping[str, Any]) -> bool:
+    return stats["reactionShare"] >= NIGHT_MIN_SHARE and stats["reactionShare"] >= NIGHT_LIFT * stats["viewShare"]
+
+
 def _cohort(by_account, measure, key: str) -> dict[str, dict[str, Any]]:
     values: dict[str, list[float]] = {}
     for items in by_account.values():
@@ -575,6 +654,16 @@ def summary(finding: AccountFinding) -> str:
                 f"в {PLATFORM_TITLES.get(item['platform'], item['platform'])} (×{_ru(item['ratio'])})"
                 for item in support)
         return text
+    if finding.kind == "night_reactions":
+        start = data["nightStartMsk"]
+        text = (f"Ночью аудитории ({start:02d}:00–{(start + NIGHT_HOURS) % 24:02d}:00 МСК) приходит "
+                f"{_ru(100 * data['reactionShare'])} % поздних реакций и только {_ru(100 * data['viewShare'])} % "
+                f"поздних просмотров — в {_ru(data['lift'])} раза больше; у типичного аккаунта площадки — в "
+                f"{_ru(data.get('cohort', {}).get('median', 0))} раза")
+        if abs(data["shiftHours"]) > NIGHT_SHIFT_NOTE_HOURS:
+            text += (f"; ночь определена по просмотрам: судя по ним, вуз в другом часовом поясе "
+                     f"(≈ UTC{MOSCOW_UTC_OFFSET - data['shiftHours']:+d})")
+        return text
     ratio = data.get("ratio") or data.get("k")
     return ("Поздний отклик на посты 4–28 суток устойчиво выше, чем у аккаунтов площадки"
             + (f" (поздняя доля реакций к ранней — {_ru(float(ratio), 2)})" if ratio else ""))
@@ -612,6 +701,9 @@ def headline(finding: AccountFinding) -> str:
     if finding.kind == "engagement_shift":
         return (f"С {date.fromisoformat(data['cut']):%d.%m} реакций на просмотр в {_ru(data['ratio'])} раза "
                 f"больше при тех же просмотрах")
+    if finding.kind == "night_reactions":
+        return (f"{_ru(100 * data['reactionShare'], 0)} % поздних реакций ночью при "
+                f"{_ru(100 * data['viewShare'])} % просмотров")
     return "Старые посты получают реакции чаще, чем у других аккаунтов"
 
 
@@ -629,6 +721,8 @@ def figure(finding: AccountFinding) -> dict[str, Any] | None:
         value, unit, label, direction = data["share"], "percent", "постов в волнах реакций", "higher"
     elif finding.kind == "engagement_shift":
         value, unit, label, direction = data["ratio"], "times", "рост доли реакций на просмотр", "higher"
+    elif finding.kind == "night_reactions":
+        value, unit, label, direction = data["lift"], "times", "доля реакций ночью к доле просмотров", "higher"
     else:
         value, unit, label, direction = data.get("ratio"), "times", "поздняя доля реакций к ранней", "higher"
     if value is None or typical is None:
