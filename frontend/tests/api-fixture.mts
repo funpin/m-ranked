@@ -291,7 +291,19 @@ const server = createServer(async (request, response) => {
   if(accountId) return Number(accountId[1]) > 1000 ? json({title:"Not Found",status:404},404) : json(account(Number(accountId[1]),url.searchParams.get("legacyType") as "channels"|"platform_accounts"));
   const pubId=/^\/api\/v1\/publications\/(\d+)$/.exec(url.pathname);
   if(pubId) return json(publication(Number(pubId[1]),url.searchParams.get("legacyType") as "posts"|"platform_posts"));
-  if(/^\/api\/v1\/accounts\/\d+\/publications$/.test(url.pathname)) {const day=url.searchParams.get("day");return json({items:[postItem(1,url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts",day),postItem(2,"posts",day)],nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);}
+  const accountPosts=/^\/api\/v1\/accounts\/(\d+)\/publications$/.exec(url.pathname);
+  if(accountPosts) {
+    const day=url.searchParams.get("day");
+    // У аккаунта 5 есть вторая страница. Её курсор, как на проде, годится
+    // только для того дня, по которому выдана первая.
+    const paged=accountPosts[1]==="5";
+    const cursor=url.searchParams.get("cursor");
+    if(paged&&cursor){
+      if(cursor!==`page2:${day??"-"}`) return json({title:"Bad Request",status:400,detail:"курсор повреждён или устарел"},400);
+      return json({items:[postItem(3,"platform_posts",day)],nextCursor:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);
+    }
+    return json({items:[postItem(1,url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts",day),postItem(2,"posts",day)],nextCursor:paged?`page2:${day??"-"}`:null,datasetRevision:revision,asOf} satisfies Schema["AccountPublicationPage"]);
+  }
   // Уровни аккаунта: первый пост с выраженной аномалией, второй ещё не проанализирован.
   const levelsId=/^\/api\/v1\/accounts\/(\d+)\/anomaly-levels$/.exec(url.pathname);
   if(levelsId) {const type=url.searchParams.get("legacyType") === "channels" ? "posts" : "platform_posts";return json({accountId:uuid(1,Number(levelsId[1])),datasetRevision:revision,items:[{publicationId:publication(1,type).publicationId,level:2,levelLabel:"выраженная аномалия",levelSymbol:"◑"}]} satisfies Schema["AccountAnomalyLevels"]);}

@@ -107,7 +107,10 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
       <DaySpotlight day={selectedDay} mode={selectedTrend} /><Table className="reveal"><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead>{anomalyLevels ? <TableHead>Анализ динамики</TableHead> : null}</TableRow></TableHeader><TableBody>
       {posts.map((post) => <PublicationRow key={post.publicationId} post={post} account={account} primary={primary}
         level={anomalyLevels ? <AnomalyLevelCell levels={anomalyLevels} publicationId={post.publicationId} /> : null} />)}
-      {nextCursor ? <AccountMorePublications account={account} primary={primary} cursor={nextCursor} shown={posts.length}
+      {/* Курсор несёт день и ревизию первой страницы. При выборе другого дня
+          страница та же, и без ключа догрузка продолжала бы старый список:
+          его курсор API отвергает как чужой, а догруженные строки остаются. */}
+      {nextCursor ? <AccountMorePublications key={nextCursor} account={account} primary={primary} cursor={nextCursor} shown={posts.length}
         day={selectedTrend === "total" ? selectedDay : undefined} columns={anomalyLevels ? 9 : 8} withLevels={Boolean(anomalyLevels)} /> : null}
       {!posts.length ? <TableRow><TableCell colSpan={anomalyLevels ? 9 : 8} className="space-y-3 py-10 text-center text-muted-foreground">Публикации ещё не собраны.</TableCell></TableRow> : null}
     </TableBody></Table></Card>
