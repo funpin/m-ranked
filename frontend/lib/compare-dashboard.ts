@@ -15,6 +15,10 @@ export type Network = (typeof NETWORKS)[number];
 export const PLATFORM_NAMES: Record<DashboardPlatform, string> = {
   all: "Все соцсети", telegram: "Telegram", vk: "ВКонтакте", max: "MAX", rutube: "Rutube",
 };
+/** «нет аккаунта во ВКонтакте» — предлог зависит от названия. */
+const PLATFORM_IN: Record<Network, string> = {
+  telegram: "в Telegram", vk: "во ВКонтакте", max: "в MAX", rutube: "на Rutube",
+};
 export const PLATFORM_COLORS: Record<Network, string> = {
   telegram: "var(--platform-telegram)", vk: "var(--platform-vk)",
   max: "var(--platform-max)", rutube: "var(--platform-rutube)",
@@ -26,12 +30,30 @@ export const LEVEL_COLORS = ["var(--muted-foreground)", "var(--chart-10)", "var(
 export const HIGHLIGHT_COLORS = ["var(--chart-2)", "var(--chart-6)", "var(--chart-1)", "var(--chart-4)", "var(--chart-10)", "var(--chart-8)"] as const;
 export const MAX_HIGHLIGHTS = HIGHLIGHT_COLORS.length;
 
+/** Выделенные вузы: id → цвет, порядок — порядок выбора. */
+export type HighlightMap = ReadonlyMap<string, string>;
+
+export function highlightMap(ids: readonly string[]): HighlightMap {
+  return new Map(ids.slice(0, MAX_HIGHLIGHTS).map((id, index) => [id, HIGHLIGHT_COLORS[index]!]));
+}
+
+/** Цвет закреплён за вузом, пока он выделен: снятие одного вуза не
+ *  перекрашивает остальные, новый получает первый свободный цвет. */
+export function toggleHighlight(current: HighlightMap, id: string): HighlightMap {
+  const next = new Map(current);
+  if (next.delete(id)) return next;
+  if (next.size >= MAX_HIGHLIGHTS) return current;
+  const used = new Set(next.values());
+  next.set(id, HIGHLIGHT_COLORS.find((color) => !used.has(color))!);
+  return next;
+}
+
 export const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
+/** Форматы — корзины API: редкие и платформенные коды уже сведены в «прочее». */
 const TYPE_NAMES: Record<string, string> = {
-  text: "Текст", photo: "Фото", video: "Видео", album: "Альбом", document: "Документ", poll: "Опрос",
-  webpage: "Ссылка", link: "Ссылка", media: "Медиа", audio: "Аудио", clip: "Клип", unknown: "Прочее",
+  text: "Текст", photo: "Фото", album: "Альбом", video: "Видео", other: "Прочее",
 };
-export const typeName = (value: string) => TYPE_NAMES[value] ?? value;
+export const typeName = (value: string) => TYPE_NAMES[value] ?? TYPE_NAMES.other!;
 
 export function normalizeDashboardPlatform(value: string | undefined): DashboardPlatform {
   return DASHBOARD_PLATFORMS.includes(value as DashboardPlatform) ? value as DashboardPlatform : "all";
@@ -108,6 +130,29 @@ export function institutionRows(data: Dashboard, platform: DashboardPlatform): I
   return rows;
 }
 
+/** Вариант в поиске вуза: все вузы, а не только площадки вкладки, — с
+ *  пометкой, почему вуза не будет на графиках. */
+export type InstitutionOption = { id: string; name: string; fullName: string; note: string | null; weight: number };
+
+export function institutionOptions(data: Dashboard, platform: DashboardPlatform): InstitutionOption[] {
+  const networks: readonly Network[] = platform === "all" ? NETWORKS : [platform];
+  return data.institutions.map((institution) => {
+    const posts = statFor(data, institution.institutionId, platform)?.posts ?? 0;
+    const note = !networks.some((network) => institution.platforms.includes(network))
+      ? `нет аккаунта ${PLATFORM_IN[platform as Network]}`
+      : posts ? null : "нет публикаций за период";
+    return {
+      id: institution.institutionId, name: institution.shortName || institution.name, fullName: institution.name,
+      note, weight: statFor(data, institution.institutionId, "all")?.viewsTotal ?? 0,
+    };
+  });
+}
+
+/** Имена выделенных вузов не зависят от вкладки площадки. */
+export function institutionLabels(data: Dashboard): ReadonlyMap<string, { name: string; fullName: string }> {
+  return new Map(data.institutions.map((item) => [item.institutionId, { name: item.shortName || item.name, fullName: item.name }]));
+}
+
 export function metricValue(row: InstitutionRow, metric: Metric): number | null {
   return row[metric];
 }
@@ -160,11 +205,12 @@ export function percentileRank(rows: readonly InstitutionRow[], row: Institution
   return Math.round(((below + equal / 2) / (values.length - 1)) * 100);
 }
 
-/** Кривые накопления для графика: одна строка на час, столбец на вуз. */
+/** Кривые накопления для графика: одна строка на час, столбец на вуз. Час —
+ *  число: ось времени логарифмическая, промежутки между точками честные. */
 export function curveRows(data: Dashboard, platform: Network, institutionIds: readonly string[], field: "views" | "reactions") {
   const curves = new Map(data.curves.filter((curve) => curve.platform === platform).map((curve) => [curve.institutionId ?? "median", curve]));
   return data.hours.map((hour, index) => {
-    const point: Record<string, number | null | string> = { hour: hourLabel(hour) };
+    const point: Record<string, number | null> = { hour };
     point.median = curves.get("median")?.[field][index] ?? null;
     for (const id of institutionIds) point[id] = curves.get(id)?.[field][index] ?? null;
     return point;
@@ -175,9 +221,24 @@ export function hourLabel(hour: number) {
   return hour < 24 ? `${hour} ч` : `${hour / 24} д`;
 }
 
+/** Московская дата среза: этот день ещё не закончился. */
+export function moscowDay(at: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow" }).format(new Date(at));
+}
+
+/** Последний день окна, если это день среза: посты ещё выходят и набирают
+ *  просмотры, поэтому его значение — не обрыв, а незаконченный день. */
+export function incompleteDay(data: Dashboard): string | null {
+  const day = moscowDay(data.asOf);
+  return data.daily.some((row) => row.day === day) ? day : null;
+}
+
+/** Ряды по дням. Незаконченный день вынесен в ключи *_partial (вместе с
+ *  предыдущим днём, чтобы нарисовать соединяющий пунктир), а в основных
+ *  ключах он пуст: сплошная линия обрывается на последнем полном дне. */
 export function dailyRows(data: Dashboard) {
   const days = [...new Set(data.daily.map((row) => row.day))].sort();
-  return days.map((day) => {
+  const rows = days.map((day) => {
     const point: Record<string, number | string | null> = { day };
     for (const row of data.daily.filter((item) => item.day === day)) {
       point[`posts_${row.platform}`] = row.posts;
@@ -187,10 +248,23 @@ export function dailyRows(data: Dashboard) {
     }
     return point;
   });
+  const last = rows.at(-1), previous = rows.at(-2);
+  if (last && last.day === incompleteDay(data)) {
+    for (const key of Object.keys(last)) {
+      if (key === "day") continue;
+      if (previous) previous[`${key}_partial`] = previous[key] ?? null;
+      last[`${key}_partial`] = last[key] ?? null;
+      last[key] = null;
+    }
+  }
+  return rows;
 }
 
+/** Время и форматы: у панели — все вузы, у догрузки — один вуз. */
+export type TimingSource = Pick<Dashboard, "timing" | "types">;
+
 /** Сетка «день недели × час» для тепловой карты. */
-export function timingGrid(data: Dashboard, platform: DashboardPlatform) {
+export function timingGrid(data: TimingSource, platform: DashboardPlatform) {
   const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => ({ posts: 0, views24: null as number | null })));
   for (const cell of data.timing) {
     if (cell.platform !== platform || cell.weekday === null) continue;
@@ -201,18 +275,21 @@ export function timingGrid(data: Dashboard, platform: DashboardPlatform) {
 
 /** Медиана просмотров за 24 часа по часу выхода — «когда публиковать».
  *  Строки без дня недели — медиана по всем постам этого часа. */
-export function hourlyReach(data: Dashboard, platform: DashboardPlatform) {
+export function hourlyReach(data: TimingSource, platform: DashboardPlatform) {
   return Array.from({ length: 24 }, (_, hour) => {
     const cell = data.timing.find((item) => item.platform === platform && item.weekday === null && item.hour === hour);
     return { hour: `${String(hour).padStart(2, "0")}:00`, posts: cell?.posts ?? 0, views24: cell?.views24 ?? null };
   });
 }
 
-export function typeRows(data: Dashboard, platform: DashboardPlatform) {
-  return data.types
-    .filter((row) => row.platform === platform)
-    .map((row) => ({ type: typeName(row.type), posts: row.posts, views24: row.views24, engagement24: row.engagement24 }))
-    .sort((left, right) => right.posts - left.posts);
+/** Форматы по убыванию числа постов, «Прочее» — последним; доля — от всех постов. */
+export function typeRows(data: TimingSource, platform: DashboardPlatform) {
+  const rows = data.types.filter((row) => row.platform === platform);
+  const total = rows.reduce((sum, row) => sum + row.posts, 0);
+  return rows
+    .map((row) => ({ code: row.type, type: typeName(row.type), posts: row.posts, share: total ? (row.posts * 100) / total : 0,
+      views24: row.views24, engagement24: row.engagement24 }))
+    .sort((left, right) => Number(left.code === "other") - Number(right.code === "other") || right.posts - left.posts);
 }
 
 /** Уровни анализа по площадкам в процентах — для полосы «100 %». */

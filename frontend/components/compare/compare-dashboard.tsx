@@ -1,17 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity, ArrowDownUp, CalendarClock, ChartBar, ChartNetwork, ChartScatter, Clock, Eye, Heart, LayoutGrid, Newspaper,
-  Search, ShieldAlert, Sparkles, Table2, TrendingUp, University, X,
+  ShieldAlert, Sparkles, Table2, TrendingUp, University,
 } from "lucide-react";
 import Link from "@/components/native-link";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button-variants";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -20,12 +18,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MethodNote } from "@/components/method-note";
 import { TimingHeatmap } from "./timing-heatmap";
+import { HighlightBar } from "./highlight-bar";
+import { useInstitutionTiming } from "./use-institution-timing";
 import { cn } from "@/lib/utils";
+import { OVERLAY_MIN_POSTS } from "@/lib/compare-timing";
 import { STICKY_CONTROL_SURFACE_CLASS } from "@/components/filter-toolbar";
 import {
-  DASHBOARD_PLATFORMS, HIGHLIGHT_COLORS, LEVEL_COLORS, LEVEL_NAMES, MAX_HIGHLIGHTS, METRICS, NETWORKS, PLATFORM_NAMES,
-  formatCompact, formatInteger, formatPercent, formatValue, institutionRows, platformSummary, sortRows,
-  type Dashboard, type DashboardPeriod, type DashboardPlatform, type InstitutionRow, type Metric, type Network,
+  DASHBOARD_PLATFORMS, LEVEL_COLORS, LEVEL_NAMES, MAX_HIGHLIGHTS, METRICS, NETWORKS, PLATFORM_NAMES,
+  formatCompact, formatInteger, formatPercent, formatValue, highlightMap, institutionLabels, institutionOptions,
+  institutionRows, platformSummary, sortRows, timingGrid, toggleHighlight,
+  type Dashboard, type DashboardPeriod, type DashboardPlatform, type HighlightMap, type InstitutionRow, type Metric,
+  type Network,
 } from "@/lib/compare-dashboard";
 
 function ChartSkeleton({ height = 300 }: { height?: number }) {
@@ -71,12 +74,11 @@ function Section({ id, title, description, icon: Icon, children }: {
 }) {
   return (
     <section id={id} aria-labelledby={`${id}-title`} className="min-w-0 scroll-mt-48">
-      <div className="mb-3 flex items-center gap-2">
+      {/* Иконка — в строке заголовка: описание в несколько строк её не сдвигает. */}
+      <div className="mb-3 grid grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-x-2">
         <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-md"><Icon className="size-4" aria-hidden="true" /></span>
-        <div>
-          <h2 id={`${id}-title`} className="font-heading text-lg leading-tight font-semibold">{title}</h2>
-          {description ? <p className="text-muted-foreground text-sm">{description}</p> : null}
-        </div>
+        <h2 id={`${id}-title`} className="font-heading text-lg leading-tight font-semibold">{title}</h2>
+        {description ? <p className="text-muted-foreground col-start-2 text-sm">{description}</p> : null}
       </div>
       {children}
     </section>
@@ -89,9 +91,10 @@ function Kpi({ icon: Icon, label, value, hint, note, tone }: {
   return (
     <Card className="gap-2 py-4" data-testid="compare-kpi">
       <CardHeader className="px-4">
-        <CardDescription className="flex items-center gap-1.5">
-          <Icon className="size-3.5" aria-hidden="true" />{label}
-          {note ? <MethodNote title={label}>{note}</MethodNote> : null}
+        {/* Знак методики — в конце текста подписи: при переносе он не отрывается. */}
+        <CardDescription className="flex items-start gap-1.5">
+          <Icon className="mt-[0.2rem] size-3.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0">{label}{note ? <span className="ml-1 inline-flex align-middle"><MethodNote title={label}>{note}</MethodNote></span> : null}</span>
         </CardDescription>
         <CardTitle className={cn("font-heading text-2xl font-bold tabular-nums", tone === "danger" && "text-destructive")}>{value}</CardTitle>
       </CardHeader>
@@ -107,9 +110,12 @@ function ChartCard({ title, description, note, action, footer, children, classNa
   return (
     <Card className={cn("min-w-0", className)} data-testid={testId}>
       <CardHeader>
-        <CardTitle as="h3" className="flex items-center gap-1 text-base">{title}{note ? <MethodNote title={title}>{note}</MethodNote> : null}</CardTitle>
-        {description ? <CardDescription>{description}</CardDescription> : null}
-        {action ? <CardAction>{action}</CardAction> : null}
+        {/* Колонка закреплена: когда переключатели уходят вниз, описание не
+            встаёт сбоку от заголовка в освободившуюся вторую колонку. */}
+        <CardTitle as="h3" className="col-start-1 flex items-center gap-1 text-base">{title}{note ? <MethodNote title={title}>{note}</MethodNote> : null}</CardTitle>
+        {description ? <CardDescription className="col-start-1">{description}</CardDescription> : null}
+        {/* В узкой карточке переключатели уходят под заголовок, а не сжимают его. */}
+        {action ? <CardAction className="@max-xl/card-header:col-start-1 @max-xl/card-header:row-span-1 @max-xl/card-header:row-start-auto @max-xl/card-header:justify-self-start @max-xl/card-header:mt-1">{action}</CardAction> : null}
       </CardHeader>
       <CardContent className="min-w-0">{children}</CardContent>
       {footer ? <CardFooter className="text-muted-foreground text-xs">{footer}</CardFooter> : null}
@@ -132,65 +138,6 @@ function Segmented<T extends string>({ value, options, onChange, label }: {
   );
 }
 
-/** Выбор выделенных вузов: поиск по названию, до шести цветных меток. Все
- *  вузы остаются на графиках — выделение только подсвечивает. */
-function HighlightPicker({ rows, highlights, onToggle, onClear }: {
-  rows: readonly InstitutionRow[]; highlights: ReadonlyMap<string, string>;
-  onToggle: (id: string) => void; onClear: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const deferred = useDeferredValue(query);
-  const matches = useMemo(() => {
-    const needle = deferred.trim().toLocaleLowerCase("ru");
-    return rows.filter((row) => !highlights.has(row.id)
-      && (!needle || row.name.toLocaleLowerCase("ru").includes(needle) || row.fullName.toLocaleLowerCase("ru").includes(needle)))
-      .slice(0, 8);
-  }, [rows, highlights, deferred]);
-  const names = new Map(rows.map((row) => [row.id, row.name]));
-  const full = highlights.size >= MAX_HIGHLIGHTS;
-  return (
-    <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 md:col-span-1">
-      <div className="relative w-full">
-        <InputGroup className="h-8">
-        <InputGroupAddon><Search className="size-4" aria-hidden="true" /></InputGroupAddon>
-        <InputGroupInput value={query} disabled={full} placeholder={full ? `Выделено ${MAX_HIGHLIGHTS} из ${MAX_HIGHLIGHTS}` : "Выделить вуз на графиках…"}
-          aria-label="Найти вуз для выделения" className="text-sm md:text-sm" data-testid="highlight-search"
-          onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && matches[0]) { event.preventDefault(); onToggle(matches[0].id); setQuery(""); }
-            if (event.key === "Escape") setOpen(false);
-          }} />
-        </InputGroup>
-        {open && !full && matches.length ? (
-          <ul role="listbox" aria-label="Вузы" className="bg-popover text-popover-foreground ring-foreground/10 absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-lg p-1 text-sm shadow-md ring-1">
-            {matches.map((row) => (
-              <li key={row.id} role="option" aria-selected={false}>
-                <button type="button" className="hover:bg-accent w-full rounded-md px-2 py-1.5 text-left"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => { onToggle(row.id); setQuery(""); }}>
-                  <span className="font-medium">{row.name}</span>
-                  {row.fullName !== row.name ? <span className="text-muted-foreground block truncate text-xs">{row.fullName}</span> : null}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-      {[...highlights].map(([id, color]) => (
-        <Badge key={id} variant="outline" className="max-w-full gap-1.5 rounded-full py-1 pr-1 pl-2" data-testid="highlight-chip">
-          <span className="size-2.5 rounded-full" style={{ background: color }} aria-hidden="true" />
-          <span className="min-w-0 truncate" title={names.get(id)}>{names.get(id) ?? "вуз"}</span>
-          <Button variant="ghost" size="icon-xs" className="rounded-full" onClick={() => onToggle(id)} aria-label={`Снять выделение: ${names.get(id) ?? "вуз"}`}>
-            <X aria-hidden="true" /></Button>
-        </Badge>
-      ))}
-      {highlights.size ? <Button variant="link" size="sm" className="text-muted-foreground hover:text-foreground px-1" onClick={onClear}>Сбросить</Button> : null}
-    </div>
-  );
-}
-
 /** Полоса уровней анализа в строке таблицы: доли 0–3 одной строкой. */
 function LevelBar({ levels }: { levels: readonly number[] }) {
   const total = levels.reduce((sum, value) => sum + value, 0);
@@ -205,6 +152,10 @@ function LevelBar({ levels }: { levels: readonly number[] }) {
 }
 
 type SortKey = "name" | "posts" | Metric | "analyzed" | "students";
+// Ширины колонок и минимальная ширина таблицы — из одного списка. «Аномалии»:
+// полоса уровней 96 + зазор 8 + процент 48 + отступы ячейки 16.
+const TABLE_COLUMN_WIDTHS = [44, 285, 118, 90, 125, 130, 145, 140, 145, 150, 140, 172];
+const TABLE_WIDTH = TABLE_COLUMN_WIDTHS.reduce((sum, width) => sum + width, 0);
 const TABLE_COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   { key: "name", label: "Вуз" },
   { key: "posts", label: "Публикаций", numeric: true },
@@ -220,7 +171,7 @@ const TABLE_COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
 ];
 
 function InstitutionTable({ rows, highlights, onToggle }: {
-  rows: readonly InstitutionRow[]; highlights: ReadonlyMap<string, string>; onToggle: (id: string) => void;
+  rows: readonly InstitutionRow[]; highlights: HighlightMap; onToggle: (id: string) => void;
 }) {
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean }>({ key: "views24", descending: true });
   const sorted = useMemo(() => {
@@ -239,9 +190,9 @@ function InstitutionTable({ rows, highlights, onToggle }: {
   }, [rows, sort]);
   return (
     <div className="min-w-0" data-testid="compare-table">
-      <Table className="min-w-[1647px] table-fixed">
+      <Table className="table-fixed" style={{ minWidth: TABLE_WIDTH }}>
         <colgroup>
-          {[44, 285, 118, 90, 125, 130, 145, 140, 145, 150, 140, 135].map((width, index) => <col key={index} style={{ width }} />)}
+          {TABLE_COLUMN_WIDTHS.map((width, index) => <col key={index} style={{ width }} />)}
         </colgroup>
         <TableHeader>
           <TableRow>
@@ -292,7 +243,7 @@ function InstitutionTable({ rows, highlights, onToggle }: {
                 <TableCell className="text-right tabular-nums">{formatCompact(row.viewsTotal || null)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatInteger(row.analyzed)}</TableCell>
                 <TableCell className="text-right">
-                  <span className="inline-flex items-center justify-end gap-2">
+                  <span className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
                     <LevelBar levels={row.levels} />
                     <span className={cn("w-12 tabular-nums", (row.anomalyShare ?? 0) >= 10 && "text-destructive font-medium")}>{formatPercent(row.anomalyShare)}</span>
                   </span>
@@ -304,6 +255,26 @@ function InstitutionTable({ rows, highlights, onToggle }: {
       </Table>
     </div>
   );
+}
+
+type Overlay = { id: string; name: string; status: string };
+
+function OverlayRetry({ onRetry, names }: { onRetry: () => void; names?: string }) {
+  return (
+    <span role="status">
+      Не удалось загрузить данные{names ? `: ${names}` : " вуза"}.{" "}
+      <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onRetry}>Повторить</Button>
+    </span>
+  );
+}
+
+/** Подпись под графиками с выделенными вузами: что ещё грузится или не пришло. */
+function OverlayStatus({ overlays, onRetry }: { overlays: readonly Overlay[]; onRetry: () => void }) {
+  const failed = overlays.filter((item) => item.status === "error");
+  const loading = overlays.filter((item) => item.status === "loading");
+  if (failed.length) return <OverlayRetry onRetry={onRetry} names={failed.map((item) => item.name).join(", ")} />;
+  if (loading.length) return <span role="status">Загружаем: {loading.map((item) => item.name).join(", ")}…</span>;
+  return null;
 }
 
 const SHORT_PLATFORM_NAMES: Record<DashboardPlatform, string> = {
@@ -321,16 +292,29 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
   const [scatter, setScatter] = useState(SCATTER_PRESETS[0]!.id);
   const [curveField, setCurveField] = useState<"views" | "reactions">("views");
   const [curveNetwork, setCurveNetwork] = useState<Network>(initialPlatform === "all" ? "telegram" : initialPlatform);
-  const [highlightIds, setHighlightIds] = useState<string[]>(() =>
-    initialHighlights.filter((id) => data.institutions.some((item) => item.institutionId === id)).slice(0, MAX_HIGHLIGHTS));
+  const [highlights, setHighlights] = useState<HighlightMap>(() => highlightMap(
+    initialHighlights.filter((id) => data.institutions.some((item) => item.institutionId === id)).slice(0, MAX_HIGHLIGHTS)));
+  const highlightIds = useMemo(() => [...highlights.keys()], [highlights]);
+  // Кнопка «Выбрать вуз» в пустом профиле переводит фокус в поиск.
+  const [focusRequest, setFocusRequest] = useState(0);
+  const [heatmapScope, setHeatmapScope] = useState("all");
 
   const rows = useMemo(() => institutionRows(data, platform), [data, platform]);
   const activeRows = useMemo(() => rows.filter((row) => row.posts > 0), [rows]);
   const summary = useMemo(() => platformSummary(data, platform, rows), [data, platform, rows]);
-  const highlights = useMemo(() => new Map(highlightIds.map((id, index) => [id, HIGHLIGHT_COLORS[index]!])), [highlightIds]);
-  // Без выделения радару нужны примеры: три вуза с наибольшим охватом поста.
-  const radarHighlights = useMemo(() => highlights.size ? highlights
-    : new Map(sortRows(activeRows, "views24").slice(0, 3).map((row, index) => [row.id, HIGHLIGHT_COLORS[index]!])), [highlights, activeRows]);
+  const options = useMemo(() => institutionOptions(data, platform), [data, platform]);
+  const labels = useMemo(() => institutionLabels(data), [data]);
+  const timing = useInstitutionTiming(highlightIds, period);
+  // Вуз для тепловой карты — один из выделенных; снятый вуз возвращает «все вузы».
+  const heatmapId = highlights.has(heatmapScope) ? heatmapScope : "all";
+  const heatmapState = heatmapId === "all" ? null : timing.states.get(heatmapId);
+  const heatmapGrid = useMemo(() => timingGrid(heatmapState?.status === "ready" ? heatmapState.data : data, platform),
+    [heatmapState, data, platform]);
+  const overlays = useMemo(() => highlightIds.map((id) => {
+    const state = timing.states.get(id);
+    return { id, name: labels.get(id)?.name ?? id, color: highlights.get(id)!, status: state?.status ?? "loading",
+      source: state?.status === "ready" ? state.data : null };
+  }), [highlightIds, highlights, labels, timing.states]);
   const curveRowsForNetwork = useMemo(() => institutionRows(data, curveNetwork).filter((row) => row.posts > 0), [data, curveNetwork]);
   const anomalyRows = useMemo(() => activeRows.filter((row) => row.analyzed >= 5), [activeRows]);
 
@@ -378,9 +362,11 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     }
   }, [activeSection]);
 
-  const toggle = useCallback((id: string) => setHighlightIds((current) =>
-    current.includes(id) ? current.filter((item) => item !== id)
-      : current.length >= MAX_HIGHLIGHTS ? current : [...current, id]), []);
+  const toggle = useCallback((id: string) => setHighlights((current) => toggleHighlight(current, id)), []);
+  const pickInstitution = useCallback(() => {
+    toolbar.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    setFocusRequest((value) => value + 1);
+  }, []);
   const changePlatform = (value: DashboardPlatform) => {
     setPlatform(value);
     if (value !== "all") setCurveNetwork(value);
@@ -419,12 +405,13 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
               ))}
             </TabsList>
           </Tabs>
-          <HighlightPicker rows={rows} highlights={highlights} onToggle={toggle} onClear={() => setHighlightIds([])} />
+          <HighlightBar options={options} labels={labels} highlights={highlights} onToggle={toggle}
+            onClear={() => setHighlights(new Map())} focusRequest={focusRequest} />
         </div>
-        <nav aria-label="Разделы страницы" data-testid="compare-section-nav" className="mt-2 hidden gap-1 whitespace-nowrap md:flex md:flex-nowrap md:overflow-x-auto">
+        <nav aria-label="Разделы страницы" data-testid="compare-section-nav" className="no-scrollbar -mx-2.5 mt-2 flex gap-1 overflow-x-auto px-2.5 whitespace-nowrap">
           {SECTIONS.map(({ id, label, icon: Icon }) => (
             <a key={id} href={`#${id}`} aria-current={activeSection === id ? "location" : undefined}
-              className={cn(buttonVariants({ variant: activeSection === id ? "secondary" : "ghost", size: "sm" }),
+              className={cn(buttonVariants({ variant: activeSection === id ? "secondary" : "ghost", size: "sm" }), "shrink-0",
                 activeSection === id ? "text-foreground" : "text-muted-foreground")}>
               <Icon aria-hidden="true" />{label}
             </a>
@@ -463,9 +450,9 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
             <ScatterMap rows={activeRows} x={preset.x} y={preset.y} highlights={highlights} />
           </ChartCard>
           <ChartCard className="xl:col-span-2" title="Профиль вуза" testId="radar-card"
-            description={highlights.size ? "Выделенные вузы" : "Три вуза с наибольшим охватом поста — выделите свои"}
+            description={highlights.size ? "Выделенные вузы" : undefined}
             note="Место вуза среди всех вузов по шести мерам: 100 — лучший, 0 — последний. «Чистота динамики» — обратная доля постов с аномалиями.">
-            <RadarProfile rows={activeRows} highlights={radarHighlights} />
+            <RadarProfile rows={activeRows} highlights={highlights} onPick={pickInstitution} />
           </ChartCard>
         </div>
       </Section>
@@ -473,14 +460,15 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
       <Section id="growth" title="Как набираются просмотры" icon={TrendingUp}
         description="Медиана значения поста на фиксированных часах после выхода — от первого часа до недели.">
         <ChartCard title={`${curveField === "views" ? "Просмотры" : "Реакции"} по возрасту поста · ${PLATFORM_NAMES[curveNetwork]}`} testId="curves-card"
-          note="Площадки не смешиваются: просмотр в Telegram и во ВКонтакте значит разное. Тонкие линии — все вузы площадки, жирная — медиана площадки."
+          note="Площадки не смешиваются: просмотр в Telegram и во ВКонтакте значит разное. Тонкие линии — все вузы площадки, жирная — медиана площадки. Наведите на линию, чтобы узнать вуз, нажмите — чтобы выделить."
           action={<div className="flex flex-wrap gap-2">
             {platform === "all" ? <Segmented label="Площадка кривых" value={curveNetwork} onChange={setCurveNetwork}
               options={NETWORKS.map((network) => ({ value: network, label: PLATFORM_NAMES[network] }))} /> : null}
             <Segmented label="Мера кривых" value={curveField} onChange={setCurveField}
               options={[{ value: "views", label: "Просмотры" }, { value: "reactions", label: "Реакции" }]} />
           </div>}>
-          <CurvesChart data={data} platform={curveNetwork} rows={curveRowsForNetwork} highlights={highlights} field={curveField} />
+          <CurvesChart data={data} platform={curveNetwork} rows={curveRowsForNetwork} highlights={highlights} field={curveField}
+            onPick={toggle} canAdd={highlights.size < MAX_HIGHLIGHTS} />
         </ChartCard>
       </Section>
 
@@ -533,19 +521,31 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
         ) : null}
       </Section>
 
-      <Section id="timing" title="Время и форматы" icon={CalendarClock} description="Когда вузы публикуют и что работает лучше.">
+      <Section id="timing" title="Время и форматы" icon={CalendarClock}
+        description={highlights.size ? "Когда публикуют и что работает лучше: все вузы и выделенные." : "Когда публикуют и что работает лучше — по всем вузам. Выделите вуз, чтобы сравнить его со всеми."}>
         <div className="grid gap-4 xl:grid-cols-2">
-          <ChartCard title="Когда публикуют" description="День недели и час выхода, московское время" testId="heatmap-card">
-            <TimingHeatmap data={data} platform={platform} />
+          <ChartCard title="Когда публикуют" testId="heatmap-card"
+            description={`День недели и час выхода, московское время · ${heatmapId === "all" ? "все вузы" : labels.get(heatmapId)?.name}`}
+            action={highlights.size ? <NativeSelect value={heatmapId} onChange={(event) => setHeatmapScope(event.target.value)} aria-label="Чьи публикации показать">
+              <NativeSelectOption value="all">Все вузы</NativeSelectOption>
+              {highlightIds.map((id) => <NativeSelectOption key={id} value={id}>{labels.get(id)?.name ?? id}</NativeSelectOption>)}
+            </NativeSelect> : undefined}
+            footer={heatmapState?.status === "error" ? <OverlayRetry onRetry={timing.retry} /> : undefined}>
+            <TimingHeatmap grid={heatmapGrid} loading={heatmapState?.status === "loading"} />
           </ChartCard>
           <ChartCard title="Час выхода и охват" testId="hourly-card"
-            note="Столбцы — сколько постов вышло в этот час; линия — медиана просмотров за первые сутки у постов этого часа.">
-            <HourlyReachChart data={data} platform={platform} />
+            note={`Столбцы — сколько постов всех вузов вышло в этот час; линии — медиана просмотров за первые сутки у постов этого часа: серая — все вузы, цветные — выделенные (часы, где у вуза меньше ${OVERLAY_MIN_POSTS} постов, пропущены).`}
+            footer={<OverlayStatus overlays={overlays} onRetry={timing.retry} />}>
+            <HourlyReachChart data={data} platform={platform} overlays={overlays} />
           </ChartCard>
         </div>
         <div className="mt-4">
-          <ChartCard title="Форматы публикаций" testId="types-card" description="Сколько публикаций каждого формата и медиана их просмотров за 24 часа">
-            <TypesChart data={data} platform={platform} />
+          <ChartCard title="Форматы публикаций" testId="types-card"
+            description={highlights.size ? "Доля каждого формата в публикациях и медиана просмотров за 24 часа: все вузы и выделенные"
+              : "Сколько публикаций каждого формата и медиана их просмотров за 24 часа"}
+            note="Основные форматы — текст, фото, альбом и видео; опросы, документы, ссылки, стикеры и другие редкие форматы собраны в «Прочее»."
+            footer={<OverlayStatus overlays={overlays} onRetry={timing.retry} />}>
+            <TypesChart data={data} platform={platform} overlays={overlays} />
           </ChartCard>
         </div>
       </Section>

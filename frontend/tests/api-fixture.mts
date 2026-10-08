@@ -215,7 +215,7 @@ function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
     }
     for (let hour = 7; hour < 24; hour += 1) timing.push({ platform: platform as Schema["PlatformValue"], weekday: null, hour, posts: 10 + hour, views24: 300 + hour * 15 });
   }
-  const types = [...networks, "all"].flatMap((platform) => ["photo", "album", "video", "text"].map((type, index) => ({
+  const types = [...networks, "all"].flatMap((platform) => (["photo", "album", "video", "text", "other"] as const).map((type, index) => ({
     platform: platform as Schema["PlatformValue"], type, posts: 40 - index * 8, views24: 500 + index * 150, engagement24: 3 + index })));
   return { period, hours, datasetRevision: revision, asOf, institutions, stats, curves, daily, timing, types };
 }

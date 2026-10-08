@@ -47,6 +47,11 @@ export const OPERATION_TEXT: Record<string, OperationText> = {
     text: "Все вузы сразу: медианы через 24 часа, кривые накопления по часам жизни поста, публикации и доля аномалий по дням, время выхода.",
     example: "/api/v1/compare/dashboard?period=30d",
   },
+  getComparisonInstitutionTiming: {
+    section: "comparison", title: "Время и форматы вуза",
+    text: "Когда один вуз публикует и какие форматы использует: те же разрезы, что у панели сравнения, — день недели и час выхода по Москве, форматы и медианы просмотров через 24 часа.",
+    example: "/api/v1/compare/institutions/{institutionId}/timing?period=30d",
+  },
   getComparison: {
     section: "comparison", title: "Сравнение выбранных вузов",
     text: "Кривые одной метрики для выбранных вузов или каналов на постоянной когорте публикаций до заданного часа.",

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlatformLogo } from "@/components/platform-logo";
-import type { Dashboard, Network } from "@/lib/compare-dashboard";
+import { timingGrid, type Dashboard, type Network } from "@/lib/compare-dashboard";
 import { PLATFORM_LONG_LABELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Ribbon } from "./ribbon";
@@ -105,7 +105,7 @@ export function LandingRhythm({ data }: { data: Dashboard }) {
           <HourlyReachChart data={data} platform={platform} />
         </RhythmTile>
         <RhythmTile title="Дни недели." height={260} text="Когда вузы публикуют чаще всего: день недели и час выхода.">
-          <TimingHeatmap data={data} platform={platform} />
+          <TimingHeatmap grid={timingGrid(data, platform)} />
         </RhythmTile>
         <RhythmTile title="Итоги анализа." height={240} text="Какая доля постов каждой площадки оказалась на каждом уровне анализа динамики.">
           <LevelsByPlatform data={data} />

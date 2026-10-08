@@ -1,19 +1,21 @@
 "use client";
-import { Empty, EmptyDescription } from "@/components/ui/empty";
+import { Empty, EmptyContent, EmptyDescription } from "@/components/ui/empty";
 
-import { useMemo } from "react";
+import { useMemo, useState, type ComponentProps } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, Label, Line, LineChart, Pie, PieChart,
   PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ReferenceLine, Scatter, ScatterChart,
-  XAxis, YAxis, ZAxis,
+  XAxis, YAxis, ZAxis, useXAxisScale, useYAxisScale,
 } from "recharts";
+import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import {
   LEVEL_COLORS, LEVEL_NAMES, METRICS, NETWORKS, PLATFORM_COLORS, PLATFORM_NAMES,
-  curveRows, dailyRows, formatCompact, formatInteger, formatPercent, formatValue, hourlyReach, levelSharesByPlatform,
-  median, metricValue, percentileRank, sortRows, typeRows,
-  type Dashboard, type DashboardPlatform, type InstitutionRow, type Metric, type Network,
+  curveRows, dailyRows, formatCompact, formatInteger, formatPercent, formatValue, hourLabel, hourlyReach, incompleteDay,
+  levelSharesByPlatform, median, metricValue, percentileRank, sortRows,
+  type Dashboard, type DashboardPlatform, type InstitutionRow, type Metric, type Network, type TimingSource,
 } from "@/lib/compare-dashboard";
+import { hourlyOverlay, typeComparison } from "@/lib/compare-timing";
 
 /** Выделенные вузы: id → цвет. Остальные рисуются нейтрально. */
 export type Highlights = ReadonlyMap<string, string>;
@@ -25,7 +27,36 @@ const dayLabel = (value: string) => {
   return `${Number(day)}.${month}`;
 };
 
-function TooltipBox({ title, lines }: { title: string; lines: [string, string][] }) {
+/** Подписи осей: только там, где без них неясно, что откладывается. Цвет
+ *  подписи — цвет ряда, если на графике две шкалы. Ширина оси Y под
+ *  повёрнутую подпись больше на AXIS_TITLE_GUTTER. */
+const AXIS_TITLE_GUTTER = 16;
+type AxisLabel = ComponentProps<typeof XAxis>["label"];
+/** Ось X с подписью выше обычной: деления сверху, подпись — под ними. */
+const X_TITLE_HEIGHT = 44;
+function xTitle(value: string): AxisLabel {
+  return { value, position: "insideBottom", offset: 0, style: { fontSize: 11, fill: "var(--muted-foreground)" } };
+}
+function yTitle(value: string, side: "left" | "right" = "left", color = "var(--muted-foreground)"): AxisLabel {
+  return { value, angle: side === "left" ? -90 : 90, position: side === "left" ? "insideLeft" : "insideRight",
+    style: { fontSize: 11, fill: color, textAnchor: "middle" } };
+}
+
+/** Выделенный вуз на графиках «Времени и форматов»: данные догружаются. */
+export type Overlay = { id: string; name: string; color: string; source: TimingSource | null };
+const NO_OVERLAYS: readonly Overlay[] = [];
+
+const PARTIAL_LABEL = "день не закончился";
+/** В подсказке незаконченный день показывается один раз: пунктирный ряд
+ *  повторяет значение предыдущего дня, только чтобы провести линию. */
+function withoutPartialEchoes<T extends { dataKey?: unknown; payload?: Record<string, unknown> }>(payload: readonly T[] | undefined) {
+  return (payload ?? []).filter((item) => {
+    const key = String(item.dataKey ?? "");
+    return !key.endsWith("_partial") || item.payload?.[key.slice(0, -"_partial".length)] == null;
+  });
+}
+
+function TooltipBox({ title, lines, note }: { title: string; lines: [string, string][]; note?: string }) {
   return (
     <div className="border-border/50 bg-background grid min-w-40 gap-1 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
       <div className="font-medium">{title}</div>
@@ -35,6 +66,7 @@ function TooltipBox({ title, lines }: { title: string; lines: [string, string][]
           <span className="text-foreground font-mono font-medium tabular-nums">{value}</span>
         </div>
       ))}
+      {note ? <div className="text-muted-foreground">{note}</div> : null}
     </div>
   );
 }
@@ -101,12 +133,12 @@ export function ScatterMap({ rows, x, y, highlights }: {
   return (
     <ChartContainer config={config} className="aspect-auto h-[360px] w-full" data-testid="scatter-chart" role="img"
       aria-label={`${METRICS[x].short} и ${METRICS[y].short} по вузам`}>
-      <ScatterChart margin={{ left: 4, right: 16, top: 12, bottom: 20 }}>
+      <ScatterChart margin={{ left: 8, right: 16, top: 12 }}>
         <CartesianGrid />
-        <XAxis type="number" dataKey="x" scale="log" domain={["auto", "auto"]} tickFormatter={(value) => formatValue(value, x)} tickLine={false}>
-          <Label value={METRICS[x].short} position="insideBottom" offset={-12} fontSize={11} fill="var(--muted-foreground)" />
-        </XAxis>
-        <YAxis type="number" dataKey="y" scale="log" domain={["auto", "auto"]} tickFormatter={(value) => formatValue(value, y)} tickLine={false} width={56} />
+        <XAxis type="number" dataKey="x" scale="log" domain={["auto", "auto"]} tickFormatter={(value) => formatValue(value, x)} tickLine={false}
+          height={X_TITLE_HEIGHT} label={xTitle(METRICS[x].short)} />
+        <YAxis type="number" dataKey="y" scale="log" domain={["auto", "auto"]} tickFormatter={(value) => formatValue(value, y)} tickLine={false}
+          width={56 + AXIS_TITLE_GUTTER} label={yTitle(METRICS[y].short)} />
         <ZAxis type="number" dataKey="z" range={[30, 420]} scale="sqrt" />
         {midX !== null ? <ReferenceLine x={midX} stroke="var(--border)" strokeDasharray="4 4" /> : null}
         {midY !== null ? <ReferenceLine y={midY} stroke="var(--border)" strokeDasharray="4 4" /> : null}
@@ -130,29 +162,77 @@ export function ScatterMap({ rows, x, y, highlights }: {
   );
 }
 
+/** Серые кривые всех вузов одним слоем: каждая линия отзывается на курсор и
+ *  нажатие, поэтому вуз, идущий выше остальных, находится без перебора.
+ *  Невидимая широкая обводка — зона попадания по тонкой линии. */
+function CurveBackdrop({ rows, ids, hovered, onHover, onPick }: {
+  rows: readonly Record<string, number | null>[]; ids: readonly string[]; hovered: string | null;
+  onHover: (id: string | null) => void; onPick: (id: string) => void;
+}) {
+  const x = useXAxisScale();
+  const y = useYAxisScale();
+  if (!x || !y) return null;
+  const paths = ids.map((id) => {
+    const points = rows.flatMap((row) => {
+      const value = row[id];
+      const px = x(row.hour!), py = value === null || value === undefined ? undefined : y(value);
+      return px === undefined || py === undefined ? [] : [`${px},${py}`];
+    });
+    return { id, d: points.length > 1 ? `M${points.join("L")}` : null };
+  });
+  return (
+    <g data-testid="curves-backdrop" onPointerLeave={() => onHover(null)}>
+      {paths.map(({ id, d }) => d ? (
+        <g key={id} data-institution={id} className="cursor-pointer" onPointerEnter={() => onHover(id)} onClick={() => onPick(id)}>
+          <path d={d} fill="none" stroke="var(--muted-foreground)" strokeOpacity={hovered === id ? 0.95 : 0.14}
+            strokeWidth={hovered === id ? 2 : 1} />
+          <path d={d} fill="none" stroke="transparent" strokeWidth={9} />
+        </g>
+      ) : null)}
+    </g>
+  );
+}
+
 /** Как набираются просмотры: медиана всех вузов площадки — жирная линия,
- *  выделенные — цветом, остальные — тонкий фон, чтобы видеть разброс. */
-export function CurvesChart({ data, platform, rows, highlights, field }: {
+ *  выделенные — цветом, остальные — тонкий фон, чтобы видеть разброс.
+ *  Наведение на фоновую линию называет вуз, нажатие — выделяет его. */
+export function CurvesChart({ data, platform, rows, highlights, field, onPick, canAdd }: {
   data: Dashboard; platform: Network; rows: readonly InstitutionRow[]; highlights: Highlights; field: "views" | "reactions";
+  onPick: (id: string) => void; canAdd: boolean;
 }) {
   const ids = useMemo(() => rows.map((row) => row.id), [rows]);
   const chart = useMemo(() => curveRows(data, platform, ids, field), [data, platform, ids, field]);
+  const [hovered, setHovered] = useState<string | null>(null);
   const names = new Map(rows.map((row) => [row.id, row.name]));
   const config: ChartConfig = { median: { label: `Медиана ${PLATFORM_NAMES[platform]}`, color: "var(--foreground)" } };
   for (const [id, color] of highlights) config[id] = { label: names.get(id) ?? id, color };
   if (!chart.some((point) => point.median !== null)) return <EmptyChart />;
+  const measure = field === "views" ? "Просмотры" : "Реакции";
   return (
-    <ChartContainer config={config} className="aspect-auto h-[340px] w-full" data-testid="curves-chart" role="img"
+    <ChartContainer config={config} className="aspect-auto h-[360px] w-full" data-testid="curves-chart" role="img"
       aria-label="Накопление по часам после публикации">
-      <LineChart data={chart} margin={{ left: 4, right: 16, top: 8, bottom: 4 }}>
+      <LineChart data={chart} margin={{ left: 8, right: 16, top: 8 }}>
         <CartesianGrid vertical={false} />
-        <XAxis dataKey="hour" tickLine={false} axisLine={false} />
-        <YAxis tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={52} />
-        <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-        {ids.filter((id) => !highlights.has(id)).map((id) => (
-          <Line key={id} dataKey={id} stroke="var(--muted-foreground)" strokeOpacity={0.14} strokeWidth={1}
-            dot={false} activeDot={false} isAnimationActive={false} connectNulls tooltipType="none" legendType="none" />
-        ))}
+        <XAxis dataKey="hour" type="number" scale="log" domain={[data.hours[0] ?? 1, data.hours.at(-1) ?? 168]}
+          ticks={data.hours} tickFormatter={(value) => hourLabel(Number(value))} interval="preserveStartEnd" minTickGap={6}
+          tickLine={false} axisLine={false}
+          height={X_TITLE_HEIGHT} label={xTitle("Время после выхода поста")} />
+        <YAxis tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={52 + AXIS_TITLE_GUTTER}
+          label={yTitle(`${measure}, медиана`)} />
+        <CurveBackdrop rows={chart} ids={ids.filter((id) => !highlights.has(id))} hovered={hovered} onHover={setHovered}
+          onPick={(id) => { setHovered(null); onPick(id); }} />
+        <ChartTooltip content={(props) => {
+          const hour = Number(props.label);
+          const point = chart.find((row) => row.hour === hour);
+          if (hovered && point) {
+            return <TooltipBox title={names.get(hovered) ?? ""} lines={[
+              [`${measure} на ${hourLabel(hour)}`, formatInteger(point[hovered] ?? null)],
+              [`Медиана ${PLATFORM_NAMES[platform]}`, formatInteger(point.median ?? null)],
+            ]} note={canAdd ? "Нажмите на линию, чтобы выделить вуз" : `Выделено ${highlights.size} из ${highlights.size} — снимите вуз, чтобы добавить`} />;
+          }
+          return <ChartTooltipContent active={props.active} payload={props.payload} label={props.label} indicator="line" labelFormatter={(value) => `${hourLabel(Number(value))} после выхода`}
+            valueFormatter={(value) => formatInteger(Number(value))} />;
+        }} />
         <Line dataKey="median" stroke="var(--color-median)" strokeWidth={3} dot={{ r: 3 }} isAnimationActive={false} connectNulls />
         {[...highlights.keys()].filter((id) => ids.includes(id)).map((id) => (
           <Line key={id} dataKey={id} stroke={`var(--color-${id})`} strokeWidth={2.25} dot={{ r: 2.5 }} isAnimationActive={false} connectNulls />
@@ -213,91 +293,157 @@ export function LevelsByPlatform({ data }: { data: Dashboard }) {
   );
 }
 
+/** Незаконченный день: тот же цвет пунктиром, без отдельной записи в легенде. */
+function partialLines(keys: readonly { key: string; yAxisId?: string; dashed?: boolean }[]) {
+  return keys.map(({ key, yAxisId, dashed }) => (
+    <Line key={`${key}_partial`} yAxisId={yAxisId} dataKey={`${key}_partial`} stroke={`var(--color-${key})`} strokeWidth={2}
+      strokeDasharray={dashed ? "1 4" : "3 4"} dot={false} type="monotone" connectNulls isAnimationActive={false} legendType="none" />
+  ));
+}
+
+function partialConfig(config: ChartConfig) {
+  for (const [key, item] of Object.entries(config)) config[`${key}_partial`] = { ...item, label: `${item.label}, ${PARTIAL_LABEL}` };
+  return config;
+}
+
 /** Динамика по дням: каждая линия показывает свою площадку, без накопления. */
 export function DailyChart({ data, platform }: { data: Dashboard; platform: DashboardPlatform }) {
   const rows = useMemo(() => dailyRows(data), [data]);
+  const partial = incompleteDay(data);
   const networks: readonly Network[] = platform === "all" ? NETWORKS : [platform];
-  const config: ChartConfig = { [`anomaly_${platform}`]: { label: "Доля аномалий", color: "var(--chart-10)" } };
+  const anomaly = `anomaly_${platform}`;
+  const config: ChartConfig = { [anomaly]: { label: "Доля аномалий", color: "var(--chart-10)" } };
   for (const network of networks) config[`posts_${network}`] = { label: PLATFORM_NAMES[network], color: PLATFORM_COLORS[network] };
+  partialConfig(config);
   if (!rows.length) return <EmptyChart />;
   return (
     <ChartContainer config={config} className="aspect-auto h-[300px] w-full" data-testid="daily-chart" role="img"
       aria-label="Публикации и доля аномалий по дням">
-      <ComposedChart data={rows} margin={{ left: 4, right: 4, top: 8 }}>
+      <ComposedChart data={rows} margin={{ left: 4, right: 4, top: 14 }}>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="day" tickFormatter={dayLabel} tickLine={false} axisLine={false} minTickGap={16} />
-        <YAxis yAxisId="posts" tickLine={false} axisLine={false} width={40} />
-        <YAxis yAxisId="share" orientation="right" tickFormatter={(value) => `${value}%`} tickLine={false} axisLine={false} width={40} />
-        <ChartTooltip content={<ChartTooltipContent labelFormatter={(value) => dayLabel(String(value))}
+        <YAxis yAxisId="posts" tickLine={false} axisLine={false} width={40 + AXIS_TITLE_GUTTER} label={yTitle("Публикаций в день")} />
+        <YAxis yAxisId="share" orientation="right" tickFormatter={(value) => `${value}%`} tickLine={false} axisLine={false}
+          width={40 + AXIS_TITLE_GUTTER} label={yTitle("Доля аномалий", "right", "var(--chart-10)")} />
+        <ChartTooltip content={(props) => <ChartTooltipContent active={props.active} label={props.label} payload={withoutPartialEchoes(props.payload)}
+          labelFormatter={(value) => `${dayLabel(String(value))}${value === partial ? `, ${PARTIAL_LABEL}` : ""}`}
           valueFormatter={(value, name) => String(name).startsWith("anomaly") ? formatPercent(Number(value)) : formatInteger(Number(value))} />} />
+        {partial ? <ReferenceLine yAxisId="posts" x={partial} stroke="var(--border)" strokeDasharray="2 3">
+          <Label value={PARTIAL_LABEL} position="insideTopRight" fontSize={10} fill="var(--muted-foreground)" />
+        </ReferenceLine> : null}
         {networks.map((network) => (
           <Line key={network} yAxisId="posts" dataKey={`posts_${network}`} type="monotone"
             stroke={`var(--color-posts_${network})`} strokeWidth={2} dot={false} isAnimationActive={false} />
         ))}
-        <Line yAxisId="share" dataKey={`anomaly_${platform}`} stroke={`var(--color-anomaly_${platform})`} strokeWidth={2}
+        <Line yAxisId="share" dataKey={anomaly} stroke={`var(--color-${anomaly})`} strokeWidth={2}
           strokeDasharray="5 4" dot={false} type="monotone" connectNulls isAnimationActive={false} />
+        {partial ? partialLines([...networks.map((network) => ({ key: `posts_${network}`, yAxisId: "posts" })),
+          { key: anomaly, yAxisId: "share", dashed: true }]) : null}
         <ChartLegend content={<ChartLegendContent />} />
       </ComposedChart>
     </ChartContainer>
   );
 }
 
-/** Час выхода: сколько публикуют и сколько типичный пост набирает за сутки. */
-export function HourlyReachChart({ data, platform }: { data: Dashboard; platform: DashboardPlatform }) {
-  const rows = useMemo(() => hourlyReach(data, platform), [data, platform]);
-  const config = {
-    posts: { label: "Публикаций", color: "var(--chart-9)" },
-    views24: { label: "Просмотры за 24 ч, медиана", color: "var(--chart-3)" },
-  } satisfies ChartConfig;
+/** Час выхода: сколько публикуют и сколько типичный пост набирает за сутки.
+ *  Выделенные вузы — своими линиями медианы поверх общей. */
+export function HourlyReachChart({ data, platform, overlays = NO_OVERLAYS }: {
+  data: Dashboard; platform: DashboardPlatform; overlays?: readonly Overlay[];
+}) {
+  const rows = useMemo(() => {
+    const base: Record<string, string | number | null>[] = hourlyReach(data, platform);
+    for (const overlay of overlays) {
+      if (!overlay.source) continue;
+      hourlyOverlay(overlay.source, platform).forEach((row, hour) => {
+        base[hour]![`views_${overlay.id}`] = row.views24;
+        base[hour]![`posts_${overlay.id}`] = row.posts;
+      });
+    }
+    return base;
+  }, [data, platform, overlays]);
+  const ready = overlays.filter((overlay) => overlay.source);
+  const config: ChartConfig = {
+    posts: { label: "Публикаций, все вузы", color: "var(--chart-9)" },
+    views24: { label: ready.length ? "Все вузы" : "Просмотры за 24 ч, медиана", color: ready.length ? "var(--muted-foreground)" : "var(--chart-3)" },
+  };
+  for (const overlay of ready) config[`views_${overlay.id}`] = { label: overlay.name, color: overlay.color };
   return (
-    <ChartContainer config={config} className="aspect-auto h-[280px] w-full" data-testid="hourly-chart" role="img"
+    <ChartContainer config={config} className="aspect-auto h-[300px] w-full" data-testid="hourly-chart" role="img"
       aria-label="Публикации и охват по часу выхода">
       <ComposedChart data={rows} margin={{ left: 4, right: 4, top: 8 }}>
         <CartesianGrid vertical={false} />
-        <XAxis dataKey="hour" tickLine={false} axisLine={false} interval={2} />
-        <YAxis yAxisId="posts" tickLine={false} axisLine={false} width={40} />
-        <YAxis yAxisId="views" orientation="right" tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={48} />
+        <XAxis dataKey="hour" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={10} height={X_TITLE_HEIGHT} label={xTitle("Час выхода, московское время")} />
+        <YAxis yAxisId="posts" tickLine={false} axisLine={false} width={40 + AXIS_TITLE_GUTTER}
+          label={yTitle("Публикаций", "left", "var(--chart-9)")} />
+        <YAxis yAxisId="views" orientation="right" tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false}
+          width={48 + AXIS_TITLE_GUTTER} label={yTitle("Просмотры за 24 ч, медиана", "right", ready.length ? undefined : "var(--chart-3)")} />
         <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => formatInteger(Number(value))} />} />
-        <Bar yAxisId="posts" dataKey="posts" fill="var(--color-posts)" fillOpacity={0.55} radius={[3, 3, 0, 0]} isAnimationActive={false} />
-        <Line yAxisId="views" dataKey="views24" stroke="var(--color-views24)" strokeWidth={2.25} dot={false} type="monotone" connectNulls isAnimationActive={false} />
+        <Bar yAxisId="posts" dataKey="posts" fill="var(--color-posts)" fillOpacity={ready.length ? 0.3 : 0.55} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+        <Line yAxisId="views" dataKey="views24" stroke="var(--color-views24)" strokeWidth={ready.length ? 2 : 2.25}
+          strokeDasharray={ready.length ? "4 3" : undefined} dot={false} type="monotone" connectNulls isAnimationActive={false} />
+        {ready.map((overlay) => (
+          <Line key={overlay.id} yAxisId="views" dataKey={`views_${overlay.id}`} stroke={`var(--color-views_${overlay.id})`}
+            strokeWidth={2.25} dot={{ r: 2 }} type="monotone" isAnimationActive={false} />
+        ))}
         <ChartLegend content={<ChartLegendContent />} />
       </ComposedChart>
     </ChartContainer>
   );
 }
 
-/** Форматы публикаций: сколько их и как они работают. */
-export function TypesChart({ data, platform }: { data: Dashboard; platform: DashboardPlatform }) {
-  const rows = useMemo(() => typeRows(data, platform), [data, platform]);
-  const config = {
-    posts: { label: "Публикаций", color: "var(--chart-5)" },
-    views24: { label: "Просмотры за 24 ч, медиана", color: "var(--chart-11)" },
-  } satisfies ChartConfig;
+/** Форматы публикаций: две панели с общим порядком форматов, у каждой —
+ *  своя подписанная шкала. С выделенными вузами левая панель показывает долю
+ *  формата: у вуза сотни постов, у всех вузов — десятки тысяч. */
+export function TypesChart({ data, platform, overlays = NO_OVERLAYS }: {
+  data: Dashboard; platform: DashboardPlatform; overlays?: readonly Overlay[];
+}) {
+  const ready = useMemo(() => overlays.filter((overlay): overlay is Overlay & { source: TimingSource } => Boolean(overlay.source)), [overlays]);
+  const rows = useMemo(() => typeComparison(data, platform, ready.map(({ id, source }) => ({ id, source }))), [data, platform, ready]);
   if (!rows.length) return <EmptyChart />;
-  return (
-    <ChartContainer config={config} className="aspect-auto w-full" style={{ height: Math.max(200, rows.length * 44 + 60) }}
-      data-testid="types-chart" role="img" aria-label="Форматы публикаций">
-      <BarChart data={rows} layout="vertical" margin={{ left: 4, right: 40 }} barGap={2}>
-        <CartesianGrid horizontal={false} />
-        <XAxis type="number" xAxisId="posts" hide />
-        <XAxis type="number" xAxisId="views" hide />
-        <YAxis type="category" dataKey="type" width={80} tickLine={false} axisLine={false} />
-        <ChartTooltip content={({ active, payload }) => {
-          const item = active ? payload?.[0]?.payload as (typeof rows)[number] | undefined : undefined;
-          if (!item) return null;
-          return <TooltipBox title={item.type} lines={[
-            ["Публикаций", formatInteger(item.posts)], ["Просмотры за 24 ч", formatInteger(item.views24)],
-            ["Вовлечённость", formatPercent(item.engagement24)],
-          ]} />;
-        }} />
-        <Bar xAxisId="posts" dataKey="posts" fill="var(--color-posts)" radius={4} isAnimationActive={false}
-          label={{ position: "right", fontSize: 10, fill: "var(--muted-foreground)", formatter: (value: unknown) => formatInteger(value as number) }} />
-        <Bar xAxisId="views" dataKey="views24" fill="var(--color-views24)" radius={4} isAnimationActive={false}
-          label={{ position: "right", fontSize: 10, fill: "var(--muted-foreground)", formatter: (value: unknown) => formatCompact(value as number) }} />
-        <ChartLegend content={<ChartLegendContent />} />
-      </BarChart>
-    </ChartContainer>
-  );
+  const compare = ready.length > 0;
+  const height = Math.max(200, rows.length * (28 + ready.length * 12) + 72);
+  const config: ChartConfig = {
+    base: { label: compare ? "Все вузы" : "Публикаций", color: compare ? "var(--muted-foreground)" : "var(--chart-5)" },
+    views: { label: compare ? "Все вузы" : "Просмотры за 24 ч, медиана", color: compare ? "var(--muted-foreground)" : "var(--chart-11)" },
+  };
+  for (const overlay of ready) config[overlay.id] = { label: overlay.name, color: overlay.color };
+  const panel = (kind: "count" | "views") => {
+    const valueKey = kind === "views" ? "views24" : compare ? "share" : "posts";
+    const format = (value: unknown) => kind === "views" ? formatCompact(value as number)
+      : compare ? formatPercent(value as number) : formatInteger(value as number);
+    const title = kind === "views" ? "Просмотры за 24 ч, медиана" : compare ? "Доля публикаций, %" : "Публикаций";
+    return (
+      <ChartContainer config={config} className="aspect-auto w-full" style={{ height }} data-testid={`types-chart-${kind}`}
+        role="img" aria-label={`Форматы публикаций: ${title}`}>
+        <BarChart data={rows} layout="vertical" margin={{ left: 4, right: 44 }} barGap={1}>
+          <CartesianGrid horizontal={false} />
+          <XAxis type="number" tickFormatter={format} tickLine={false} axisLine={false} height={X_TITLE_HEIGHT} label={xTitle(title)} />
+          <YAxis type="category" dataKey="type" width={72} tickLine={false} axisLine={false} />
+          <ChartTooltip content={({ active, payload }) => {
+            const item = active ? payload?.[0]?.payload as (typeof rows)[number] | undefined : undefined;
+            if (!item) return null;
+            return <TooltipBox title={String(item.type)} lines={[
+              ["Все вузы: публикаций", `${formatInteger(item.posts as number)} (${formatPercent(item.share as number)})`],
+              ["Все вузы: просмотры за 24 ч", formatInteger(item.views24 as number | null)],
+              ...ready.flatMap((overlay): [string, string][] => [
+                [`${overlay.name}: публикаций`, `${formatInteger(item[`posts_${overlay.id}`] as number)} (${formatPercent(item[`share_${overlay.id}`] as number)})`],
+                [`${overlay.name}: просмотры за 24 ч`, formatInteger(item[`views_${overlay.id}`] as number | null)],
+              ]),
+            ]} />;
+          }} />
+          <Bar dataKey={valueKey} name={kind === "views" ? "views" : "base"} fill={`var(--color-${kind === "views" ? "views" : "base"})`}
+            fillOpacity={compare ? 0.45 : 1} radius={4} isAnimationActive={false}
+            label={{ position: "right", fontSize: 10, fill: "var(--muted-foreground)", formatter: format }} />
+          {ready.map((overlay) => (
+            <Bar key={overlay.id} dataKey={kind === "views" ? `views_${overlay.id}` : `share_${overlay.id}`} name={overlay.id}
+              fill={`var(--color-${overlay.id})`} radius={4} isAnimationActive={false} />
+          ))}
+          {compare ? <ChartLegend content={<ChartLegendContent />} /> : null}
+        </BarChart>
+      </ChartContainer>
+    );
+  };
+  return <div className="grid gap-6 xl:grid-cols-2" data-testid="types-chart">{panel("count")}{panel("views")}</div>;
 }
 
 const RADAR_AXES: { metric: Metric; label: string; inverse?: boolean }[] = [
@@ -311,7 +457,7 @@ const RADAR_AXES: { metric: Metric; label: string; inverse?: boolean }[] = [
 
 /** Профиль вуза: место среди всех вузов по шести мерам, 100 — лучший. Меры
  *  разного масштаба приведены к процентилям, поэтому их можно сравнивать. */
-export function RadarProfile({ rows, highlights }: { rows: readonly InstitutionRow[]; highlights: Highlights }) {
+export function RadarProfile({ rows, highlights, onPick }: { rows: readonly InstitutionRow[]; highlights: Highlights; onPick: () => void }) {
   const chosen = rows.filter((row) => highlights.has(row.id));
   const data = RADAR_AXES.map((axis) => {
     const point: Record<string, string | number | null> = { axis: axis.label };
@@ -320,7 +466,16 @@ export function RadarProfile({ rows, highlights }: { rows: readonly InstitutionR
   });
   const config: ChartConfig = {};
   for (const row of chosen) config[row.id] = { label: row.name, color: highlights.get(row.id)! };
-  if (!chosen.length) return <EmptyChart text="Выделите вузы, чтобы сравнить их профили." />;
+  if (!chosen.length) {
+    return (
+      <Empty className="h-[300px] rounded-lg border p-4" data-testid="radar-empty">
+        <EmptyDescription className="text-sm">{highlights.size
+          ? "У выделенных вузов нет публикаций на этой площадке за период."
+          : "Выберите до шести вузов, чтобы сравнить их профили по шести мерам."}</EmptyDescription>
+        <EmptyContent><Button variant="outline" size="sm" onClick={onPick}>Выбрать вуз</Button></EmptyContent>
+      </Empty>
+    );
+  }
   return (
     <div className="min-w-0">
       <ChartContainer config={config} className="mx-auto aspect-auto h-[300px] w-full max-w-[440px]" data-testid="radar-chart" role="img"
@@ -355,11 +510,11 @@ export function PresenceChart({ rows, highlights }: { rows: readonly Institution
   const config = Object.fromEntries(NETWORKS.map((network) => [network, { label: PLATFORM_NAMES[network], color: PLATFORM_COLORS[network] }])) satisfies ChartConfig;
   if (!data.length) return <EmptyChart />;
   return (
-    <ChartContainer config={config} className="aspect-auto w-full" style={{ height: data.length * 20 + 72 }}
+    <ChartContainer config={config} className="aspect-auto w-full" style={{ height: data.length * 20 + 94 }}
       data-testid="presence-chart" role="img" aria-label="Публикации вузов по соцсетям">
       <BarChart data={data} layout="vertical" margin={{ left: 4, right: 12, top: 4 }} barCategoryGap={3}>
         <CartesianGrid horizontal={false} />
-        <XAxis type="number" tickLine={false} axisLine={false} />
+        <XAxis type="number" tickLine={false} axisLine={false} height={X_TITLE_HEIGHT} label={xTitle("Публикаций за период")} />
         <YAxis type="category" dataKey="name" width={132} tickLine={false} axisLine={false} interval={0}
           tick={({ x, y, payload }) => {
             const item = data.find((row) => row.name === payload.value);
@@ -382,22 +537,29 @@ export function PresenceChart({ rows, highlights }: { rows: readonly Institution
 /** Охват по дням: линия каждой площадки показывает её собственное значение. */
 export function ReachAreaChart({ data, platform }: { data: Dashboard; platform: DashboardPlatform }) {
   const rows = useMemo(() => dailyRows(data), [data]);
+  const partial = incompleteDay(data);
   const networks: readonly Network[] = platform === "all" ? NETWORKS : [platform];
-  const config = Object.fromEntries(networks.map((network) => [`views_${network}`, { label: PLATFORM_NAMES[network], color: PLATFORM_COLORS[network] }])) satisfies ChartConfig;
+  const config = partialConfig(Object.fromEntries(networks.map((network) => [`views_${network}`, { label: PLATFORM_NAMES[network], color: PLATFORM_COLORS[network] }])));
   if (!rows.length) return <EmptyChart />;
   return (
     <ChartContainer config={config} className="aspect-auto h-[300px] w-full" data-testid="reach-chart" role="img"
       aria-label="Просмотры публикаций по дню выхода">
-      <LineChart data={rows} margin={{ left: 4, right: 12, top: 8 }}>
+      <LineChart data={rows} margin={{ left: 4, right: 12, top: 14 }}>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="day" tickFormatter={dayLabel} tickLine={false} axisLine={false} minTickGap={16} />
-        <YAxis tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={70} />
-        <ChartTooltip content={<ChartTooltipContent labelFormatter={(value) => dayLabel(String(value))}
+        <YAxis tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={70 + AXIS_TITLE_GUTTER}
+          label={yTitle("Просмотры постов дня, сумма")} />
+        <ChartTooltip content={(props) => <ChartTooltipContent active={props.active} label={props.label} payload={withoutPartialEchoes(props.payload)}
+          labelFormatter={(value) => `${dayLabel(String(value))}${value === partial ? `, ${PARTIAL_LABEL}` : ""}`}
           valueFormatter={(value) => formatInteger(Number(value))} />} />
+        {partial ? <ReferenceLine x={partial} stroke="var(--border)" strokeDasharray="2 3">
+          <Label value={PARTIAL_LABEL} position="insideTopRight" fontSize={10} fill="var(--muted-foreground)" />
+        </ReferenceLine> : null}
         {networks.map((network) => (
           <Line key={network} dataKey={`views_${network}`} type="monotone"
             stroke={`var(--color-views_${network})`} strokeWidth={2} dot={false} isAnimationActive={false} />
         ))}
+        {partial ? partialLines(networks.map((network) => ({ key: `views_${network}` }))) : null}
         <ChartLegend content={<ChartLegendContent />} />
       </LineChart>
     </ChartContainer>
