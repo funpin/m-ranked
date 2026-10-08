@@ -140,3 +140,39 @@ def test_telegram_rounded_counters_are_accepted_with_a_mark_and_never_become_a_p
     unknown = {Metric.VIEWS: ("unknown",) * len(points), Metric.REACTIONS: ("unknown",) * len(points)}
     assert build_ledger(_series(points, platform="telegram", qualities=unknown)).late is None
     assert build_ledger(_series(points, platform="max", qualities=rounded)).late is None
+
+
+def test_hourly_late_growth_goes_to_the_utc_hour_of_the_later_reading():
+    # Публикация в 09:00 UTC; поздние замеры через полчаса: 33:00 → 10:00 UTC
+    # следующих суток. Пары дальше часа, до суток и с уменьшением не считаются.
+    points = [(2 * HOUR, 100, 5), (23.5 * HOUR, 900, 30), (24.5 * HOUR, 1000, 32),
+              (25 * HOUR, 1010, 35), (25.5 * HOUR, 1030, 34), (28 * HOUR, 1100, 50),
+              (28.5 * HOUR, 1105, 53)]
+    ledger = build_ledger(_series(points))
+    views, reactions = ledger.hours
+    assert len(views) == len(reactions) == 24
+    # 24,5 → 25 ч: 10:00 UTC (+10 просмотров, +3 реакции); 25 → 25,5 ч: 10:30
+    # UTC (+20, реакции упали — 0); 28 → 28,5 ч: 13:30 UTC (+5, +3).
+    assert views[10] == 30 and reactions[10] == 3
+    assert views[13] == 5 and reactions[13] == 3
+    # 23,5 → 24,5 ч — более поздний замер старше суток, но более ранний нет:
+    # пара не целиком в позднем окне и не считается; 25,5 → 28 ч — разрыв > 1 ч.
+    assert sum(views) == 35 and sum(reactions) == 6
+
+
+def test_hourly_layout_skips_inexact_readings_and_reposts():
+    # Округлённый замер выпадает из ряда, и его соседи дальше часа друг от друга.
+    points = [(25 * HOUR, 1000, 30), (25.75 * HOUR, 1100, 40), (26.5 * HOUR, 1200, 50)]
+    rounded = ("exact", "rounded", "exact")
+    ledger = build_ledger(_series(points, qualities={Metric.VIEWS: rounded, Metric.REACTIONS: ("exact",) * 3}))
+    assert ledger.hours is None
+    assert build_ledger(_series(points, repost=True)).hours is None
+
+
+def test_version_three_ledgers_are_still_readable_without_hours():
+    points = [(24 * HOUR, 1000, 30), *_daily(4 * DAY + 6 * HOUR, 5, 1500, 40, 10, 2)]
+    payload = {**build_ledger(_series(points)).payload(), "v": 3}
+    payload.pop("hours", None)
+    old = ledger_from_payload(payload)
+    assert old is not None and old.hours is None and old.early.views == 1000
+    assert build_ledger(_series(points)).payload()["v"] == 4
