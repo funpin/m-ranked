@@ -1,6 +1,7 @@
 """Сборка уровня v2 и глоссарий ADR-006 для всех текстов вывода."""
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -64,6 +65,19 @@ def test_signs_on_unanalyzable_intervals_are_dropped_except_the_gap_pattern():
     assert dropped.level is Level.NONE and dropped.quality.unanalyzable
     kept = verdict(prepared, context, [sign(4, Family.SHAPE, 0.9, hours=inside, norm=0.9, start=published)], {})
     assert kept.level is Level.PRONOUNCED_ANOMALY
+
+
+def test_erv_compares_interval_ends_and_survives_gaps_inside():
+    # ERV на конце интервала закрывает пробелы коридором счётчиков: пробел
+    # внутри суток его не отменяет, как и у других сравнений по концам.
+    prepared = _prepared("honest_gaps_telegram")
+    context = DetectorContext("telegram")
+    inside, published = (31, 37), prepared.series.published_at
+    erv = replace(sign(10, Family.CROSS_METRIC, 0.5, hours=inside, norm=0.9, start=published),
+                  metric=Metric.REACTIONS, render={"kind": "erv", "z": 4.5})
+    assert verdict(prepared, context, [erv], {}).level is Level.WEAK_SIGNAL
+    other = replace(erv, render={"kind": "erv_growth"})
+    assert verdict(prepared, context, [other], {}).level is Level.NONE
 
 
 def test_reposts_compare_with_themselves_but_skip_norms_and_late_engagement():
