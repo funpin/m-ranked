@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from bisect import bisect_left
 from dataclasses import dataclass, fields
 from datetime import datetime, timedelta
 from enum import IntFlag
@@ -228,6 +229,92 @@ def value_at(data: MetricSeries | None, age: float) -> float | None:
     if right == 0 or right == data.ages.size or data.flags[right]:
         return None
     return float(np.interp(age, data.ages[right-1:right+1], data.values[right-1:right+1]))
+
+
+# Показанное число Telegram с тысячи («1,27K») — кратное своему шагу показа,
+# степени десяти. Исходного текста нет, поэтому шаг берётся наибольший из
+# возможных и откладывается в обе стороны: так покрыты и округление, и
+# отбрасывание разрядов. Другие площадки такого контракта не дают.
+COMPACT_PLATFORMS = frozenset({"telegram"})
+# Оценка просмотров между замерами годится, пока её коридор не шире 5 %:
+# доля реакций сравнивается в лог-шкале с разбросом не уже 15 %.
+VIEW_BRACKET_MAX_WIDTH = 0.05
+
+
+def max_display_unit(count: int) -> int:
+    unit = 1
+    while unit < 10**9 and count % (unit * 10) == 0:
+        unit *= 10
+    return unit
+
+
+def counter_bounds(value: int | None, quality: str, uncertain: bool, *,
+                   compact_allowed: bool = True) -> tuple[int, int] | None:
+    """Где может лежать счётчик, показанный значением `value`."""
+    if uncertain or value is None or quality not in {"exact", "rounded"}:
+        return None
+    if quality == "exact":
+        return value, value
+    if not compact_allowed or value <= 0:
+        return None
+    unit = max_display_unit(value)
+    return max(0, value - unit), value + unit
+
+
+@dataclass(frozen=True, slots=True)
+class ViewEstimate:
+    value: float
+    low: float
+    high: float
+
+    @property
+    def rounded(self) -> bool:
+        return self.low != self.high
+
+
+def views_estimate_at(prepared: PreparedSeries, age: float) -> ViewEstimate | None:
+    """Просмотры на возрасте `age` — точные или с коридором округления.
+
+    Точное значение берётся, как у value_at. Иначе — по замерам с обеих
+    сторон, включая округлённые: накопленный счётчик не убывает, поэтому он
+    не ниже нижней границы любого более раннего замера и не выше верхней
+    любого более позднего. Шаг «1,1K» берётся в сто, и коридор по одному
+    соседу был бы шире нужного; соседи с более мелким шагом его сужают.
+    Оценка — линейная по серединам коридоров ближайших замеров; шире
+    VIEW_BRACKET_MAX_WIDTH коридор не годится. Снятые просмотры делают
+    коридор пустым, и оценки нет.
+    """
+    series = prepared.series
+    exact = value_at(prepared.metrics.get(Metric.VIEWS), age)
+    if exact is not None:
+        return ViewEstimate(exact, exact, exact)
+    column = series.values.get(Metric.VIEWS)
+    if column is None:
+        return None
+    published = series.published_at.timestamp()
+    compact = series.platform in COMPACT_PLATFORMS
+    rows = [((at.timestamp() - published), bounds) for at, value, quality, uncertain in zip(
+                series.observed_at, column, series.qualities[Metric.VIEWS], series.interval_uncertain)
+            if at <= prepared.analyzed_at
+            and (bounds := counter_bounds(value, quality, uncertain, compact_allowed=compact)) is not None]
+    ages = [item[0] for item in rows]
+    right = bisect_left(ages, age)
+    if right < len(rows) and ages[right] == age:
+        before = after = rows[right]
+        left, right = right + 1, right
+    elif 0 < right < len(rows):
+        before, after = rows[right - 1], rows[right]
+        left = right
+    else:
+        return None
+    low = float(max(bounds[0] for _, bounds in rows[:left]))
+    high = float(min(bounds[1] for _, bounds in rows[right:]))
+    if low <= 0 or high < low or high / low - 1 > VIEW_BRACKET_MAX_WIDTH:
+        return None
+    middle = [(bounds[0] + bounds[1]) / 2 for _, bounds in (before, after)]
+    value = (middle[0] if before is after else
+             float(np.interp(age, (before[0], after[0]), middle)))
+    return ViewEstimate(min(max(value, low), high), low, high)
 
 
 def engagement_at(prepared: PreparedSeries, age: float) -> float | None:

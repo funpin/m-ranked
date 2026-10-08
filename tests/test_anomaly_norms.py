@@ -193,3 +193,28 @@ def test_platform_norm_cells_fit_the_table_without_numpy_warnings(platform):
         norms = build_norms(platform, posts, final_age=7 * DAY)
     for norm in (norms.platform, *norms.accounts.values()):
         assert all(0 <= band <= 4 for _, band in norm.cells), norm.cells.keys()
+
+
+def _as_displayed(series: PostSeries) -> PostSeries:
+    """Просмотры, как их показывает Telegram: с тысячи — три значащие цифры."""
+    def shown(value):
+        if value < 1000:
+            return value
+        unit = 10 ** (len(str(value)) - 3)
+        return value // unit * unit
+    views = series.values[Metric.VIEWS]
+    return replace(series, values={**series.values, Metric.VIEWS: tuple(shown(value) for value in views)},
+                   qualities={Metric.VIEWS: tuple("rounded" if value >= 1000 else "exact" for value in views),
+                              Metric.REACTIONS: ("exact",) * len(views)})
+
+
+def test_erv_norm_counts_posts_whose_views_passed_a_thousand():
+    rng = np.random.default_rng(11)
+    series = [make_post(rng, account, index) for account in range(3) for index in range(20)]
+    exact = build_norms("telegram", {UUID(int=1): [prepared(item) for item in series]}, final_age=FINAL)
+    shown = build_norms("telegram", {UUID(int=1): [prepared(_as_displayed(item)) for item in series]},
+                        final_age=FINAL)
+    before, after = exact.platform.cells[(ERV, 0)], shown.platform.cells[(ERV, 0)]
+    # Все посты дошли до тысячи задолго до суток, и ни один не выпал из клетки.
+    assert after.sample_size == before.sample_size == len(series)
+    assert abs(after.log_erv.median - before.log_erv.median) < 0.01

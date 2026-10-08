@@ -10,7 +10,7 @@ import pytest
 
 from anomaly_analysis.v2.domain import Metric, PostSeries
 from anomaly_analysis.v2.series import (
-    SCALES, CollectionCadence, PointFlag, age_band, prepare, views_belong_to_source,
+    SCALES, CollectionCadence, PointFlag, age_band, prepare, views_belong_to_source, views_estimate_at,
 )
 
 PUBLISHED = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
@@ -18,10 +18,12 @@ CADENCE = CollectionCadence()
 H, M = 3600, 60
 
 
-def post(ages, values, *, platform="telegram", is_repost=False):
+def post(ages, values, *, platform="telegram", is_repost=False, qualities=None):
     return PostSeries(UUID(int=1), UUID(int=2), platform, PUBLISHED, is_repost,
                       tuple(PUBLISHED + timedelta(seconds=int(age)) for age in ages),
-                      {Metric(name): tuple(column) for name, column in values.items()})
+                      {Metric(name): tuple(column) for name, column in values.items()},
+                      qualities=None if qualities is None else {
+                          Metric(name): tuple(column) for name, column in qualities.items()})
 
 
 def later(hours):
@@ -157,3 +159,51 @@ def _timed(action) -> float:
     started = time.perf_counter()
     action()
     return time.perf_counter() - started
+
+
+def _rounded(values):
+    return ["exact" if value < 1000 else "rounded" for value in values]
+
+
+def test_views_past_a_thousand_are_estimated_inside_the_display_rounding():
+    # Замер Пермского Политеха 07.10.2026: 996 точно на четвёртом часу, дальше
+    # «1,03K» и т. д. К суткам точных просмотров нет.
+    ages = [4 * H, 20.7 * H, 22.7 * H, 25.9 * H]
+    values = [996, 1150, 1220, 1260]
+    prepared = prepare(post(ages, {"views": values}, qualities={"views": _rounded(values)}), later(26), CADENCE)
+    assert prepared.metrics[Metric.VIEWS].ages[-1] == 4 * H
+    estimate = views_estimate_at(prepared, 24 * H)
+    assert estimate is not None and estimate.rounded
+    # Не ниже «1,22K» минус шаг и не выше «1,26K» плюс шаг.
+    assert (estimate.low, estimate.high) == (1210, 1270)
+    assert estimate.low <= estimate.value <= estimate.high
+
+
+def test_coarse_display_unit_is_narrowed_by_finer_neighbours():
+    # «1,1K» — шаг до ста; соседние «1,09K» и «1,12K» сужают коридор до 1 080–1 130.
+    ages = [22 * H, 23 * H, 25 * H]
+    values = [1090, 1100, 1120]
+    prepared = prepare(post(ages, {"views": values}, qualities={"views": _rounded(values)}), later(26), CADENCE)
+    estimate = views_estimate_at(prepared, 24 * H)
+    assert (estimate.low, estimate.high) == (1080, 1130)
+
+
+@pytest.mark.parametrize("platform,ages,values", [
+    # Коридор шире 5 %: между замерами сутки роста.
+    ("telegram", [2 * H, 40 * H], [1100, 2400]),
+    # Округлённое число без контракта показа площадки — не оценка.
+    ("vk", [23 * H, 25 * H], [1210, 1230]),
+    # Снятые просмотры: счётчик убыл, коридор пуст.
+    ("telegram", [23 * H, 25 * H], [1500, 1210]),
+])
+def test_views_are_not_estimated_without_a_tight_monotone_bracket(platform, ages, values):
+    prepared = prepare(post(ages, {"views": values}, platform=platform, qualities={"views": _rounded(values)}),
+                       later(41), CADENCE)
+    assert views_estimate_at(prepared, 24 * H) is None
+
+
+def test_exact_views_are_taken_as_they_are():
+    ages = np.arange(0, 30 * H + 1, 15 * M)
+    prepared = prepare(post(ages, {"views": list(ages // 100)}), later(30), CADENCE)
+    estimate = views_estimate_at(prepared, 24 * H)
+    assert not estimate.rounded and estimate.value == 24 * H // 100
