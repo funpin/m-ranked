@@ -95,7 +95,10 @@ def test_a_norm_that_hides_the_reference_is_rejected():
     assert store.written[0]["failures"] == ["telegram:p09_burst_plateau_telegram"]
 
 
-def test_sharp_shift_keeps_that_platform_on_its_accepted_norm_and_accepts_the_rest():
+def test_sharp_shift_keeps_that_platform_on_its_accepted_norm_and_accepts_the_rest(monkeypatch):
+    # Синтетический фон мал: его клетки ниже порога надёжности сдвига. Здесь
+    # проверяется перенос площадки, не отсечка клеток.
+    monkeypatch.setattr("anomaly_analysis.v2.norms.DRIFT_MIN_CONFIDENCE", 0.0)
     organic = _background()
     first = FakeStore(organic)
     NormJob(first, CADENCE, [], clock=lambda: NOW).run()

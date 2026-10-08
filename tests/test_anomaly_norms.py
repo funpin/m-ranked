@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -8,7 +9,7 @@ import pytest
 
 from anomaly_analysis.v2.domain import Level, Metric, PostSeries
 from anomaly_analysis.v2.norms import (
-    ANCHOR_MADS, DECAY_EXPONENT_BOUNDS, ERV, NormStatus, ReferencePost, build_norms,
+    ANCHOR_MADS, DECAY_EXPONENT_BOUNDS, ERV, MAD_FLOOR, NormStatus, ReferencePost, build_norms,
     check_reference, drift, fit_decay, norm_from_payload, norm_to_payload, review,
 )
 from anomaly_analysis.v2.series import DAY, HOUR, CollectionCadence, prepare
@@ -135,6 +136,18 @@ def test_sharp_platform_shift_goes_to_drift_review():
     assert drift(shifted, previous).sharp
     assert review(passed, drift(shifted, previous)) is NormStatus.DRIFT_REVIEW
     assert not drift(previous, None).sharp
+
+
+def test_a_cell_built_on_one_post_does_not_count_as_drift():
+    previous = build_norms("telegram", platform_posts(30, 5), final_age=FINAL).platform
+    key = next(iter(previous.cells))
+    lonely = replace(previous.cells[key], sample_size=1, confidence=0.02)
+    tiny = replace(previous, cells={**previous.cells, key: lonely})
+    cell = lonely.log_rate or lonely.log_erv
+    moved = replace(lonely, **{("log_rate" if lonely.log_rate else "log_erv"): replace(cell, median=cell.median + 1, mad=MAD_FLOOR)})
+    floor = replace(tiny, cells={**tiny.cells, key: moved})
+    # Клетка по одному посту с разбросом на полу дала бы тысячу разбросов сдвига.
+    assert not drift(previous, floor).sharp
 
 
 def test_reference_check_rejects_a_norm_that_hides_the_reference():

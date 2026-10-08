@@ -71,6 +71,11 @@ ANCHOR_SHARE = 0.25
 # резкое изменение нормы площадки, которое нельзя принять без разбора.
 DRIFT_MADS = 1.0
 DRIFT_EXPONENT = 0.25
+# Сдвиг меряется только по клеткам, надёжным в обеих нормах: клетка по одному
+# посту имеет разброс на полу MAD_FLOOR, и любая разница медиан даёт тысячи
+# разбросов (Rutube 29.09–08.10: «1126 MAD» от клетки реакций по одному посту,
+# хотя клетки по сотням постов сдвинулись меньше чем на разброс).
+DRIFT_MIN_CONFIDENCE = LOW_CONFIDENCE
 
 ERV = "erv"
 COUNTERS = (Metric.VIEWS, Metric.REACTIONS, Metric.COMMENTS, Metric.SHARES)
@@ -401,7 +406,7 @@ def drift(new: Norm, previous: Norm | None) -> Drift:
     shifts = [0.0]
     for key, cell in new.cells.items():
         old = previous.cells.get(key)
-        if old is None:
+        if old is None or min(_support(cell), _support(old)) < DRIFT_MIN_CONFIDENCE:
             continue
         for current, before in ((cell.log_rate, old.log_rate), (cell.log_erv, old.log_erv)):
             if current is not None and before is not None:
@@ -409,6 +414,10 @@ def drift(new: Norm, previous: Norm | None) -> Drift:
     exponents = [0.0] + [abs(fit.b - previous.decay[metric].b)
                          for metric, fit in new.decay.items() if metric in previous.decay]
     return Drift(max(shifts), max(exponents))
+
+
+def _support(cell: NormCell) -> float:
+    return cell.confidence if cell.confidence is not None else min(1.0, cell.sample_size / FULL_CONFIDENCE_POSTS)
 
 
 @dataclass(frozen=True, slots=True)
