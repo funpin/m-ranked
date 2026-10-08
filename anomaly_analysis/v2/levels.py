@@ -214,7 +214,13 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
     kept = []
     signs = _rutube_waves(prepared, signs)
     for sign in signs:
-        bounded_counts = (sign.pattern == 9 and (
+        # ERV сравнивает концы интервала, а пробелы и округление закрывает
+        # коридором счётчиков (series.counter_estimate_at): точная метрика и
+        # покрытие интервала ему не нужны. Пост Пермского Политеха в Telegram:
+        # 15,7 % против 2,0 % по норме, покрытие суток 14 %, просмотры с 4-го
+        # часа округлены.
+        erv = sign.pattern == 10 and sign.render.get("kind") == "erv"
+        bounded_counts = erv or (sign.pattern == 9 and (
             sign.metric is Metric.REACTIONS and sign.render.get("measurementMode") in {BOUNDED_REACTION_MODE, REPORTED_SHAPE_MODE}
             or sign.metric is Metric.VIEWS and sign.render.get("measurementMode") == VIEW_MEASUREMENT_MODE)
             or sign.pattern == 7 and sign.family is Family.CROSS_METRIC
