@@ -137,21 +137,32 @@ class NormJob:
             norm_sets[platform] = combine(platform, raw)
         previous = self.store.latest_accepted_norm_version()
         assessor = reference_assessor(self.cadence)
-        checks, drifts = {}, {}
+        checks, drifts, carried = {}, {}, set()
+        for platform, norms in list(norm_sets.items()):
+            before = self.store.read_norms(previous, platform) if previous is not None else None
+            drifts[platform] = drift(norms.platform, before.platform if before else None)
+            # Резкий сдвиг одной площадки не держит остальные: она остаётся на
+            # прежней принятой норме до разбора, остальные берут свежую. Пока
+            # весь набор уходил на разбор, сдвиг Rutube с 29.09 оставил без
+            # нормы 76 аккаунтов всех площадок. Завтра площадка снова
+            # сравнится с той же принятой нормой — сдвиг не уползает тихо.
+            if drifts[platform].sharp and before is not None:
+                norm_sets[platform] = before
+                carried.add(platform)
         for platform, norms in norm_sets.items():
             posts, norms_by_case = reference_posts(self.reference, norms, self.cadence)
             checks[platform] = check_reference(
                 norms, posts, lambda subject, siblings, used: assessor(subject, siblings,
                                                                        norms_by_case[subject.publication_id]))
-            before = self.store.read_norms(previous, platform) if previous is not None else None
-            drifts[platform] = drift(norms.platform, before.platform if before else None)
             self.summary[platform] = {"posts": norms.platform.posts, "accounts": len(norms.accounts),
                                       "confidence": norms.platform.confidence}
-        status, failures = decide(checks, drifts)
+        status, failures = decide(checks, {platform: item for platform, item in drifts.items()
+                                           if platform not in carried})
         version = self.store.write_norm_version(
             NORM_MODEL_VERSION, status, list(norm_sets.values()), reference_failures=failures,
             drift={platform: {"shift_mads": round(item.max_shift_mads, 4),
-                              "exponent_shift": round(item.max_exponent_shift, 4)}
+                              "exponent_shift": round(item.max_exponent_shift, 4),
+                              **({"carried": True} if platform in carried else {})}
                    for platform, item in drifts.items()},
             previous_version_id=previous)
         log.info("norm version %s: %s (%s)", version, status.value, ", ".join(failures) or "reference passed")
