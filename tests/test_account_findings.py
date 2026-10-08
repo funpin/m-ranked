@@ -132,3 +132,51 @@ def test_posts_that_gain_reactions_days_later_are_a_finding():
     texts = with_texts(finding).metrics
     assert texts["headline"].startswith("У 100 % постов") and texts["figure"]["unit"] == "percent"
     assert texts["figure"]["typical"] == 0.0
+
+
+def _waves(account: int, days: list[int], posts_per_day: int, platform: str = "vk"):
+    """Признак 8 у `posts_per_day` постов аккаунта утром каждого из дней окна (номер дня от начала)."""
+    from anomaly_analysis.v2.account_findings import SynchronyEvent
+    start = datetime(2026, 9, 6, 7, tzinfo=timezone.utc)   # 10:00 МСК, первый день окна
+    return [SynchronyEvent(UUID(int=account), platform, UUID(int=account * 10_000 + post_index),
+                           start + timedelta(days=day, minutes=post_index % 3 * 30))
+            for day in days for post_index in range(posts_per_day)]
+
+
+def _vk(account: int, count: int, rng: random.Random) -> list[LedgerPost]:
+    return [LedgerPost(item.publication_id, item.account_id, "vk", item.published_at, False, item.ledger)
+            for item in organic(account, count, rng)]
+
+
+def test_reaction_waves_over_much_of_the_wall_on_many_days_are_a_finding():
+    from anomaly_analysis.v2.account_findings import headline, with_texts
+    rng = random.Random(11)
+    posts = [item for account in range(1, 12) for item in _vk(account, 40, rng)]
+    # Аккаунт 1: шесть утр за месяц признак 8 сразу у 12 постов (ЮЗГУ ВК с 21.09).
+    # У других — редкие совпадения у трёх постов: обычный общий толчок.
+    events = _waves(1, [2, 6, 10, 17, 21, 25], 12) + _waves(2, [4], 3) + _waves(3, [12, 20], 4)
+    result = findings(posts, TODAY, synchrony=events)
+    (finding,) = [item for item in result if item.kind == "synchronous_waves"]
+    assert finding.account_id == UUID(int=1) and finding.status == 2
+    assert finding.metrics["days"] == 6 and finding.metrics["maxPosts"] == 12
+    assert set(finding.members) == {UUID(int=10_000 + index) for index in range(12)}
+    assert finding.metrics["cohort"]["median"] == 0
+    texts = with_texts(finding).metrics
+    assert texts["figure"]["unit"] == "percent" and texts["figure"]["value"] == 0.3
+    assert headline(finding) == "6 дней с волной реакций сразу на многих постах"
+
+
+def test_waves_in_one_half_of_the_window_are_not_yet_persistent():
+    rng = random.Random(12)
+    posts = [item for account in range(1, 6) for item in _vk(account, 40, rng)]
+    result = findings(posts, TODAY, synchrony=_waves(1, [17, 20, 23, 26], 12))
+    (finding,) = [item for item in result if item.kind == "synchronous_waves"]
+    assert finding.status == 1
+
+
+def test_few_or_small_waves_are_not_a_finding():
+    rng = random.Random(13)
+    posts = [item for account in range(1, 6) for item in _vk(account, 40, rng)]
+    # Три волны — мало; много дней, но по 9 постов — не волна по всей стене.
+    events = _waves(1, [3, 12, 22], 15) + _waves(2, list(range(0, 30, 2)), 9)
+    assert not [item for item in findings(posts, TODAY, synchrony=events) if item.kind == "synchronous_waves"]

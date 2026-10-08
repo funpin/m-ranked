@@ -26,6 +26,13 @@
   делает медианы старых постов на графике аккаунта выше свежих.
 * ``late_engagement`` — устойчиво необычный поздний отклик из профиля
   account_tail (ADR-015); участники — посты окна с поздним приростом.
+* ``synchronous_waves`` — волны реакций сразу по многим постам: дни, когда
+  синхронный подъём (признак 8) получили 10 и больше постов аккаунта. У
+  типичного аккаунта площадки таких дней за месяц нет; на 08.09–07.10.2026
+  находка у двух аккаунтов ВК, ЮЗГУ (7 дней) и КГУ (6). В эти дни лайки за
+  одни и те же 15 минут получала бо́льшая часть стены (в среднем 27–45 %
+  старых постов на 15-минутку против 4–5 % у медианного вуза ВК), а доля
+  лайков на просмотр старых постов — 8–13 % против 1,1–1,3 %.
 
 Это статистическая необычность относительно площадки, а не доказательство
 искусственного происхождения (ADR-006); у каждого вида есть честные
@@ -40,9 +47,9 @@ from statistics import median
 from typing import Any, Iterable, Mapping, Sequence
 from uuid import UUID
 
-from .tail_ledger import Point, TailLedger
+from .tail_ledger import MOSCOW, Point, TailLedger
 
-METHOD_VERSION = "account-findings-v1"
+METHOD_VERSION = "account-findings-v2"
 WINDOW_DAYS = 30
 STATUS_LABELS = {1: "необычный", 2: "устойчиво необычный"}
 TITLES = {
@@ -50,6 +57,7 @@ TITLES = {
     "regular_reactions": "Слишком ровный отклик",
     "late_growth": "Посты добирают реакции через дни",
     "late_engagement": "Необычный отклик на старые посты",
+    "synchronous_waves": "Волны реакций сразу на многих постах",
 }
 ALTERNATIVES = {
     "early_pack": ("Подписчики-активисты реагируют сразу после публикации, а поздние читатели почти не "
@@ -58,6 +66,8 @@ ALTERNATIVES = {
                           "однотипные посты по расписанию"),
     "late_growth": "Пост попал в рекомендации или подборку спустя дни; пересылки в чаты",
     "late_engagement": "Регулярные читатели архива, подборки и пересылки старых постов",
+    "synchronous_waves": ("Ссылка на стену в популярном сообществе или рассылке: пришедшие листают ленту и "
+                          "отмечают старые посты; активисты отмечают всю ленту после события"),
 }
 
 # Стартовый пакет: окна «первые 2 ч / 2–24 ч» и «первые 6 ч / 6–24 ч» по отметкам
@@ -88,6 +98,12 @@ GROWTH_MIN_SHARE = 0.3
 GROWTH_MIN_RUN = 8
 GROWTH_STRONG_SHARE = 0.4
 GROWTH_STRONG_RUN = 15
+# Синхронные волны: день — волна, если признак 8 в этот день (по Москве) у
+# стольких постов аккаунта; находка — от четырёх таких дней за окно, устойчивая —
+# от двух в каждой половине окна.
+WAVE_MIN_POSTS = 10
+WAVE_MIN_DAYS = 4
+WAVE_HALF_DAYS = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +114,16 @@ class LedgerPost:
     published_at: datetime
     is_repost: bool
     ledger: TailLedger
+
+
+@dataclass(frozen=True, slots=True)
+class SynchronyEvent:
+    """Признак синхронного подъёма (8) на посте: час подъёма из сохранённого вывода."""
+
+    account_id: UUID
+    platform: str
+    publication_id: UUID
+    hour: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,11 +162,13 @@ def pack_ratio(ledger: TailLedger) -> tuple[float, int, int, int, int] | None:
 
 def findings(posts: Iterable[LedgerPost], computed_for: date,
              late_members: Mapping[UUID, Sequence[UUID]] | None = None,
-             tail_status: Mapping[UUID, tuple[str, int, Mapping[str, Any]]] | None = None) -> list[AccountFinding]:
+             tail_status: Mapping[UUID, tuple[str, int, Mapping[str, Any]]] | None = None,
+             synchrony: Iterable[SynchronyEvent] = ()) -> list[AccountFinding]:
     """Находки по постам окна [computed_for − 30 сут; computed_for).
 
     `tail_status` — статус профиля позднего отклика аккаунта (площадка, статус,
-    метрики), `late_members` — посты окна с поздним приростом реакций.
+    метрики), `late_members` — посты окна с поздним приростом реакций,
+    `synchrony` — признаки синхронного подъёма постов окна.
     """
     start = computed_for - timedelta(days=WINDOW_DAYS)
     by_account: dict[UUID, list[LedgerPost]] = {}
@@ -151,6 +179,14 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
     pack_cohort = _cohort(by_account, _pack_stats, "median")
     regular_cohort = _cohort(by_account, _regular_stats, "extra")
     growth_cohort = _cohort(by_account, _growth_stats, "share")
+    events: dict[UUID, list[SynchronyEvent]] = {}
+    for event in synchrony:
+        events.setdefault(event.account_id, []).append(event)
+    waves = {account: _wave_stats(items, events.get(account, ()), start, computed_for)
+             for account, items in by_account.items()}
+    wave_cohort: dict[str, list[float]] = {}
+    for account, stats in waves.items():
+        wave_cohort.setdefault(by_account[account][0].platform, []).append(stats["share"])
     for account, items in by_account.items():
         platform = items[0].platform
         pack = _pack_stats(items)
@@ -174,6 +210,13 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
             metrics = {**_public(growth), "cohort": _without(growth_cohort.get(platform, {}), "medians")}
             result.append(AccountFinding(account, platform, "late_growth", status, start, computed_for,
                                          metrics, tuple(growth["members"])))
+        wave = waves[account]
+        if wave["days"] >= WAVE_MIN_DAYS:
+            status = 2 if min(wave["firstHalfDays"], wave["secondHalfDays"]) >= WAVE_HALF_DAYS else 1
+            shares = sorted(wave_cohort.get(platform, ()))
+            metrics = {**_public(wave), "cohort": {"accounts": len(shares), "median": round(median(shares), 3)}}
+            result.append(AccountFinding(account, platform, "synchronous_waves", status, start, computed_for,
+                                         metrics, tuple(wave["members"])))
     for account, (platform, status, metrics) in (tail_status or {}).items():
         if status == 2:
             # Участники — посты с признаком позднего отклика и посты, у которых
@@ -270,6 +313,29 @@ def _growth_stats(items: Sequence[LedgerPost]) -> dict[str, Any] | None:
     }
 
 
+def _wave_stats(items: Sequence[LedgerPost], events: Iterable[SynchronyEvent], start: date,
+                end: date) -> dict[str, Any]:
+    """Дни-волны: признак 8 в один день у WAVE_MIN_POSTS и больше постов окна."""
+    posts = {post.publication_id for post in items}
+    by_day: dict[date, set[UUID]] = {}
+    for event in events:
+        day = event.hour.astimezone(MOSCOW).date()
+        if event.publication_id in posts and start <= day < end:
+            by_day.setdefault(day, set()).add(event.publication_id)
+    wave_days = sorted(day for day, members in by_day.items() if len(members) >= WAVE_MIN_POSTS)
+    members = sorted(set().union(*(by_day[day] for day in wave_days)), key=str) if wave_days else []
+    middle = start + (end - start) / 2
+    return {
+        "posts": len(posts), "days": len(wave_days),
+        "firstHalfDays": sum(day < middle for day in wave_days),
+        "secondHalfDays": sum(day >= middle for day in wave_days),
+        "maxPosts": max((len(by_day[day]) for day in wave_days), default=0),
+        "dates": [day.isoformat() for day in wave_days],
+        "share": round(len(members) / len(posts), 3) if posts else 0.0,
+        "members": members,
+    }
+
+
 def _cohort(by_account, measure, key: str) -> dict[str, dict[str, Any]]:
     values: dict[str, list[float]] = {}
     for items in by_account.values():
@@ -328,6 +394,11 @@ def summary(finding: AccountFinding) -> str:
                 f"(медиана {_ru(data['medianDay'] or 0, 0)} → {_ru(data['medianLate'] or 0, 0)}); подряд — до "
                 f"{data['run']} постов; у типичного аккаунта площадки — "
                 f"{round(100 * data.get('cohort', {}).get('median', 0))} % постов")
+    if finding.kind == "synchronous_waves":
+        return (f"За {WINDOW_DAYS} дней — {_days(data['days'])}, когда реакции подросли одновременно у "
+                f"{WAVE_MIN_POSTS} и больше постов аккаунта (до {data['maxPosts']} за день); в волнах — "
+                f"{round(100 * data['share'])} % постов окна; у типичного аккаунта площадки — "
+                f"{round(100 * data.get('cohort', {}).get('median', 0))} %")
     ratio = data.get("ratio") or data.get("k")
     return ("Поздний отклик на посты 4–28 суток устойчиво выше, чем у аккаунтов площадки"
             + (f" (поздняя доля реакций к ранней — {_ru(float(ratio), 2)})" if ratio else ""))
@@ -342,6 +413,14 @@ def _reaction_word(count: int) -> str:
     return "реакций"
 
 
+def _days(count: int) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        return f"{count} день"
+    if count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
+        return f"{count} дня"
+    return f"{count} дней"
+
+
 def headline(finding: AccountFinding) -> str:
     """Короткая строка для свёрнутого вида: что происходит, одним предложением."""
     data = finding.metrics
@@ -352,6 +431,8 @@ def headline(finding: AccountFinding) -> str:
                 f"у 80 % постов при любом охвате")
     if finding.kind == "late_growth":
         return f"У {round(100 * data['share'])} % постов реакции через дни выросли втрое и больше"
+    if finding.kind == "synchronous_waves":
+        return f"{_days(data['days'])} с волной реакций сразу на многих постах"
     return "Старые посты получают реакции чаще, чем у других аккаунтов"
 
 
@@ -365,6 +446,8 @@ def figure(finding: AccountFinding) -> dict[str, Any] | None:
         value, unit, label, direction = data["extra"], "decimal", "разброс реакций сверх случайного", "lower"
     elif finding.kind == "late_growth":
         value, unit, label, direction = data["share"], "percent", "постов, добравших реакции через дни", "higher"
+    elif finding.kind == "synchronous_waves":
+        value, unit, label, direction = data["share"], "percent", "постов в волнах реакций", "higher"
     else:
         value, unit, label, direction = data.get("ratio"), "times", "поздняя доля реакций к ранней", "higher"
     if value is None or typical is None:

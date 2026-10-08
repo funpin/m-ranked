@@ -1,8 +1,8 @@
 """Ночной профиль позднего отклика и аккаунтные находки: python -m anomaly_analysis.account_tail_job.
 
 Читает только сводки постов (analytics.post_anomaly_state.tail_ledger,
-~200 байт на пост), которые работник анализа уже построил из прочитанных им
-рядов; замеры не читаются. Пишет строку на аккаунт в
+~200 байт на пост) и часы признаков синхронного подъёма из их выводов — то,
+что работник анализа уже построил из прочитанных им рядов; замеры не читаются. Пишет строку на аккаунт в
 analytics.account_tail_profile и удаляет строки старше срока хранения, затем
 переписывает analytics.account_anomaly_finding. Метод и пороги —
 anomaly_analysis/v2/account_tail.py и v2/account_findings.py.
@@ -17,7 +17,9 @@ from pathlib import Path
 import time
 
 from .metrics import write_textfile
-from .v2.account_findings import METHOD_VERSION as FINDINGS_VERSION, WINDOW_DAYS, LedgerPost, findings, with_texts
+from .v2.account_findings import (
+    METHOD_VERSION as FINDINGS_VERSION, WINDOW_DAYS, LedgerPost, SynchronyEvent, findings, with_texts,
+)
 from .v2.account_tail import POSTS_FROM_DAYS, POSTS_UNTIL_DAYS, PostLedger, profiles, window_end
 from .v2.store import PostgresAnomalyStore
 from .v2.tail_ledger import MOSCOW, ledger_from_payload
@@ -55,7 +57,9 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
                    for item in tail_profiles if item.status is not None}
     persistent = [account for account, (_, status, _) in tail_status.items() if status == 2]
     late = store.read_late_members(persistent, start, end)
-    result = [with_texts(item) for item in findings(posts, computed_for, late, tail_status)]
+    synchrony = [SynchronyEvent(row["account_id"], row["platform"], row["publication_id"], row["hour"])
+                 for row in store.read_synchrony_events(start, end)]
+    result = [with_texts(item) for item in findings(posts, computed_for, late, tail_status, synchrony)]
     store.write_account_findings(result, FINDINGS_VERSION)
     return result
 

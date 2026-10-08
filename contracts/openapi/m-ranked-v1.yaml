@@ -5506,7 +5506,7 @@ components:
         reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
         accountFindings:
           type: array
-          maxItems: 4
+          maxItems: 5
           description: 'Аккаунтные находки, в которые входит пост; уровень поста они не меняют.'
           items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         methodologyVersion: { type: string, const: anomaly-dynamics-v2 }
@@ -5741,7 +5741,7 @@ components:
       properties:
         accountId: { type: string, format: uuid }
         accountUsername: { type: [string, 'null'] }
-        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement] }
+        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves] }
         platform: { type: string, enum: [telegram, vk, max, rutube] }
         status: { type: integer, minimum: 1, maximum: 2 }
         statusLabel: { type: [string, 'null'] }
@@ -5777,7 +5777,7 @@ components:
         datasetRevision: { type: integer, format: int64, minimum: 0 }
         items:
           type: array
-          maxItems: 4
+          maxItems: 5
           items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         disclaimer: { type: string }
     AccountTailProfile:
