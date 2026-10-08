@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import {
   LEVEL_COLORS, LEVEL_NAMES, MAX_HIGHLIGHTS, METRICS, NETWORKS, PLATFORM_COLORS, PLATFORM_NAMES,
-  curveRows, dailyRows, formatCompact, formatInteger, formatPercent, formatValue, hourLabel, hourlyReach, incompleteDay,
+  curveRows, dailyRows, findingsNote, formatCompact, formatInteger, formatPercent, formatValue, hourLabel, hourlyReach, incompleteDay,
   levelSharesByPlatform, median, metricValue, percentileRank, sortRows,
   type Dashboard, type DashboardPlatform, type InstitutionRow, type Metric, type Network,
 } from "@/lib/compare-dashboard";
@@ -50,17 +50,20 @@ const NO_OVERLAYS: readonly TimingOverlay[] = [];
 const NAME_TICK_CHARS = 18;
 function NameTick({ x, y, payload, rows, highlights, onPick }: {
   x?: number | string; y?: number | string; payload?: { value?: unknown; index?: number };
-  rows: readonly { id: string; name: string; fullName: string }[]; highlights: Highlights; onPick?: Pick;
+  rows: readonly { id: string; name: string; fullName: string; flag?: string | null; strong?: boolean }[];
+  highlights: Highlights; onPick?: Pick;
 }) {
   const row = payload?.index === undefined ? undefined : rows[payload.index];
   const text = String(payload?.value ?? "");
   const color = row ? highlights.get(row.id) : undefined;
+  const limit = row?.flag ? NAME_TICK_CHARS - 2 : NAME_TICK_CHARS;
   return (
     <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fontWeight={color ? 700 : 400}
       fill={color ?? "var(--muted-foreground)"} className={onPick && row ? "cursor-pointer" : undefined}
       onClick={onPick && row ? () => onPick(row.id) : undefined}>
-      <title>{row?.fullName ?? text}</title>
-      {text.length > NAME_TICK_CHARS ? `${text.slice(0, NAME_TICK_CHARS - 1)}…` : text}
+      <title>{[row?.fullName ?? text, row?.flag].filter(Boolean).join("\n")}</title>
+      {row?.flag ? <tspan fill={row.strong ? "var(--destructive)" : "var(--chart-10)"} data-testid="ranking-findings-flag">⚑ </tspan> : null}
+      {text.length > limit ? `${text.slice(0, limit - 1)}…` : text}
     </text>
   );
 }
@@ -127,7 +130,8 @@ export function RankingChart({ rows, metric, highlights, descending = true, onPi
 }) {
   const data = useMemo(() => sortRows(rows, metric, descending)
     .filter((row) => metricValue(row, metric) !== null)
-    .map((row) => ({ id: row.id, name: row.name, fullName: row.fullName, value: metricValue(row, metric)!, row })), [rows, metric, descending]);
+    .map((row) => ({ id: row.id, name: row.name, fullName: row.fullName, value: metricValue(row, metric)!, row,
+      flag: findingsNote(row), strong: row.persistentFindings })), [rows, metric, descending]);
   const middle = median(data.map((item) => item.value));
   const config = { value: { label: METRICS[metric].short, color: BASE_BAR } } satisfies ChartConfig;
   if (!data.length) return <EmptyChart />;
@@ -148,6 +152,7 @@ export function RankingChart({ rows, metric, highlights, descending = true, onPi
             [METRICS[metric].short, formatValue(item.value, metric)],
             ["Публикаций", formatInteger(item.row.posts)],
             ["Проанализировано", formatInteger(item.row.analyzed)],
+            ...(item.row.findings.length ? [["Находки аккаунтов", `${item.row.findings.length}${item.row.persistentFindings ? ", есть устойчивые" : ""}`] as [string, string]] : []),
           ]} note={onPick ? pickNote(highlights, item.id) : undefined} />;
         }} />
         {middle !== null ? (

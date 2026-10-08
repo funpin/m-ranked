@@ -3,8 +3,8 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  Activity, ArrowDownUp, CalendarClock, ChartBar, ChartNetwork, ChartScatter, Clock, Eye, Heart, LayoutGrid, Newspaper,
-  ShieldAlert, Sparkles, Table2, TrendingUp, University,
+  Activity, ArrowDownUp, CalendarClock, ChartBar, ChartNetwork, ChartScatter, Clock, Eye, EyeOff, Flag, Heart, LayoutGrid,
+  Newspaper, ShieldAlert, Sparkles, Table2, TrendingUp, University,
 } from "lucide-react";
 import Link from "@/components/native-link";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button-variants";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useStuck } from "@/components/use-stuck";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,7 +26,7 @@ import { OVERLAY_MIN_POSTS, type TimingOverlay } from "@/lib/compare-timing";
 import { STICKY_CONTROL_SURFACE_CLASS } from "@/components/filter-toolbar";
 import {
   DASHBOARD_PLATFORMS, LEVEL_COLORS, LEVEL_NAMES, MAX_HIGHLIGHTS, METRICS, NETWORKS, PLATFORM_NAMES,
-  formatCompact, formatInteger, formatPercent, formatValue, highlightMap, institutionLabels, institutionOptions,
+  findingsNote, withoutPersistentFindings, formatCompact, formatInteger, formatPercent, formatValue, highlightMap, institutionLabels, institutionOptions,
   institutionLevels, institutionRows, periodDays, platformSummary, resolveScope, sortRows, timingGrid, toggleHighlight,
   type Scope,
   type Dashboard, type DashboardPeriod, type DashboardPlatform, type HighlightMap, type InstitutionRow, type Metric,
@@ -140,6 +141,18 @@ function Segmented<T extends string>({ value, options, onChange, label }: {
   );
 }
 
+/** Значок аккаунтных находок вуза: подсказка — виды и устойчивость. */
+function FindingsFlag({ row }: { row: InstitutionRow }) {
+  const note = findingsNote(row);
+  if (!note) return null;
+  return (
+    <span data-testid="compare-findings-flag" role="img" aria-label={note} title={note}
+      className={cn("inline-flex shrink-0", row.persistentFindings ? "text-destructive" : "text-amber-600 dark:text-amber-400")}>
+      <Flag className="size-3.5" aria-hidden="true" />
+    </span>
+  );
+}
+
 /** Полоса уровней анализа в строке таблицы: доли 0–3 одной строкой. */
 function LevelBar({ levels }: { levels: readonly number[] }) {
   const total = levels.reduce((sum, value) => sum + value, 0);
@@ -221,7 +234,10 @@ function InstitutionTable({ rows, highlights, onToggle }: {
                     title={color ? "Снять выделение" : "Выделить на графиках"}>
                     <span className="size-2.5 shrink-0 rounded-full border" style={{ background: color ?? "transparent" }} aria-hidden="true" />
                     <span className="min-w-0 flex-1" title={row.fullName}>
-                      <span className="block truncate font-medium">{row.name}</span>
+                      <span className="flex min-w-0 items-center gap-1">
+                        <span className="truncate font-medium">{row.name}</span>
+                        <FindingsFlag row={row} />
+                      </span>
                       {row.fullName !== row.name ? <span className="text-muted-foreground block truncate text-xs">{row.fullName}</span> : null}
                     </span>
                   </button>
@@ -298,10 +314,16 @@ const SHORT_PLATFORM_NAMES: Record<DashboardPlatform, string> = {
   all: "Все", telegram: "TG", vk: "ВК", max: "MAX", rutube: "RT",
 };
 
-export function CompareDashboard({ data, period, initialPlatform, initialHighlights }: {
+export function CompareDashboard({ data, period, initialPlatform, initialHighlights, findingsVisible = true,
+  initialClean = false }: {
   data: Dashboard; period: DashboardPeriod; initialPlatform: DashboardPlatform; initialHighlights: readonly string[];
+  /** Аккаунтные находки скрыты вместе с прочим анализом (ANOMALY_REPORT_VISIBLE=false). */
+  findingsVisible?: boolean; initialClean?: boolean;
 }) {
   const [platform, setPlatform] = useState(initialPlatform);
+  // «Скрыть вузы с устойчивыми находками»: рейтинги, карта, таблица и графики
+  // по вузам — без них; сводка остаётся по всем постам площадки.
+  const [clean, setClean] = useState(findingsVisible && initialClean);
   const toolbar = useRef<HTMLDivElement>(null);
   useStuck(toolbar);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("summary");
@@ -319,7 +341,12 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
   const [heatmapScope, setHeatmapScope] = useState<Scope>("auto");
   const [levelsScope, setLevelsScope] = useState<Scope>("auto");
 
-  const rows = useMemo(() => institutionRows(data, platform), [data, platform]);
+  const allRows = useMemo(() => {
+    const result = institutionRows(data, platform);
+    return findingsVisible ? result : result.map((row) => ({ ...row, findings: [], persistentFindings: false }));
+  }, [data, platform, findingsVisible]);
+  const hiddenByFindings = useMemo(() => allRows.filter((row) => row.posts > 0 && row.persistentFindings).length, [allRows]);
+  const rows = useMemo(() => clean ? withoutPersistentFindings(allRows) : allRows, [allRows, clean]);
   const activeRows = useMemo(() => rows.filter((row) => row.posts > 0), [rows]);
   const summary = useMemo(() => platformSummary(data, platform, rows), [data, platform, rows]);
   const options = useMemo(() => institutionOptions(data, platform), [data, platform]);
@@ -342,7 +369,10 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     const state = timing.states.get(id);
     return state?.status === "ready" ? [{ id, name: labels.get(id)?.name ?? id, color: highlights.get(id)!, source: state.data }] : [];
   }), [highlightIds, highlights, labels, timing.states]);
-  const curveRowsForNetwork = useMemo(() => institutionRows(data, curveNetwork).filter((row) => row.posts > 0), [data, curveNetwork]);
+  const curveRowsForNetwork = useMemo(() => {
+    const result = institutionRows(data, curveNetwork).filter((row) => row.posts > 0);
+    return clean && findingsVisible ? withoutPersistentFindings(result) : result;
+  }, [data, curveNetwork, clean, findingsVisible]);
   const anomalyRows = useMemo(() => activeRows.filter((row) => row.analyzed >= 5), [activeRows]);
 
   // Площадка и выделение — в адресе: ссылкой можно поделиться, а смена
@@ -352,8 +382,10 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
     url.searchParams.set("platform", platform);
     if (highlightIds.length) url.searchParams.set("highlight", highlightIds.join(","));
     else url.searchParams.delete("highlight");
+    if (clean) url.searchParams.set("clean", "1");
+    else url.searchParams.delete("clean");
     window.history.replaceState(window.history.state, "", url);
-  }, [platform, highlightIds]);
+  }, [platform, highlightIds, clean]);
 
   useEffect(() => {
     let frame = 0;
@@ -404,6 +436,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
   const periodHref = (value: DashboardPeriod) => {
     const params = new URLSearchParams({ period: value, platform });
     if (highlightIds.length) params.set("highlight", highlightIds.join(","));
+    if (clean) params.set("clean", "1");
     return `/compare?${params}`;
   };
 
@@ -435,6 +468,21 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
           <HighlightBar options={options} labels={labels} highlights={highlights} onToggle={toggle}
             onClear={() => setHighlights(new Map())} focusRequest={focusRequest} />
         </div>
+        {findingsVisible && (hiddenByFindings || clean) ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <Toggle variant="outline" pressed={clean} onPressedChange={setClean} data-testid="compare-clean-toggle"
+              className={cn("gap-1.5 px-2.5", clean ? "text-foreground" : "text-muted-foreground")}>
+              <EyeOff aria-hidden="true" />Скрыть вузы с устойчивыми находками ({formatInteger(hiddenByFindings)})
+            </Toggle>
+            <MethodNote title="Устойчивые находки">
+              Аккаунтные находки — закономерности многих постов аккаунта за 30 дней относительно аккаунтов площадки:
+              повторяющийся стартовый пакет, слишком ровный отклик, рост отклика без роста аудитории, ночные реакции и
+              другие. «Устойчиво» — в обеих половинах окна. Переключатель убирает такие вузы из рейтингов, карты,
+              таблицы и графиков по вузам; сводка остаётся по всем постам площадки. Находка — статистическая
+              необычность, а не доказательство накрутки.
+            </MethodNote>
+          </div>
+        ) : null}
         <nav aria-label="Разделы страницы" data-testid="compare-section-nav" className="no-scrollbar -mx-2.5 mt-2 flex gap-1 overflow-x-auto px-2.5 whitespace-nowrap">
           {SECTIONS.map(({ id, label, icon: Icon }) => (
             <a key={id} href={`#${id}`} aria-current={activeSection === id ? "location" : undefined}

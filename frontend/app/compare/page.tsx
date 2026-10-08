@@ -4,6 +4,7 @@ import { CompareDashboard } from "@/components/compare/compare-dashboard";
 import { CompareDashboardSkeleton } from "@/components/compare/compare-skeleton";
 import { ApiFailureState, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
+import { anomalyReportVisible } from "@/lib/anomaly-visibility";
 import {
   MAX_HIGHLIGHTS, normalizeDashboardPeriod, normalizeDashboardPlatform, type DashboardPeriod,
 } from "@/lib/compare-dashboard";
@@ -27,9 +28,9 @@ export const metadata: Metadata = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Панель приходит отдельным потоком: заголовок и каркас страницы видны сразу. */
-async function Dashboard({ period, platform, highlight, legacyInstitutions }: {
+async function Dashboard({ period, platform, highlight, legacyInstitutions, clean }: {
   period: DashboardPeriod; platform: ReturnType<typeof normalizeDashboardPlatform>;
-  highlight: string[]; legacyInstitutions: number[];
+  highlight: string[]; legacyInstitutions: number[]; clean: boolean;
 }) {
   let data;
   try {
@@ -42,7 +43,8 @@ async function Dashboard({ period, platform, highlight, legacyInstitutions }: {
     .filter((item) => item.legacyId !== null && legacyInstitutions.includes(item.legacyId))
     .map((item) => item.institutionId);
   const initialHighlights = [...new Set([...highlight, ...fromLegacy])].slice(0, MAX_HIGHLIGHTS);
-  return <CompareDashboard data={data} period={period} initialPlatform={platform} initialHighlights={initialHighlights} />;
+  return <CompareDashboard data={data} period={period} initialPlatform={platform} initialHighlights={initialHighlights}
+    findingsVisible={anomalyReportVisible()} initialClean={clean} />;
 }
 
 export default async function ComparePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -60,7 +62,8 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
         активность, аудитория и <b>аномальная динамика</b> по каждой соцсети и по всем сразу.</>}
     />
     <Suspense key={period} fallback={<CompareDashboardSkeleton />}>
-      <Dashboard period={period} platform={platform} highlight={highlight} legacyInstitutions={legacyInstitutions} />
+      <Dashboard period={period} platform={platform} highlight={highlight} legacyInstitutions={legacyInstitutions}
+        clean={first(params.clean) === "1"} />
     </Suspense>
   </>;
 }

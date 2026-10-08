@@ -5589,6 +5589,17 @@ components:
                   vk: { type: [integer, 'null'], format: int64, minimum: 0 }
                   max: { type: [integer, 'null'], format: int64, minimum: 0 }
                   rutube: { type: [integer, 'null'], format: int64, minimum: 0 }
+              accountFindings:
+                description: Аккаунтные находки видимых аккаунтов вуза (getAccountAnomalyFindings) — площадка, вид и статус; 2 — устойчиво.
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [platform, kind, status]
+                  properties:
+                    platform: { $ref: '#/components/schemas/PlatformValue' }
+                    kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions] }
+                    status: { type: integer, minimum: 1, maximum: 2 }
         stats:
           type: array
           items: { $ref: '#/components/schemas/ComparisonDashboardStat' }

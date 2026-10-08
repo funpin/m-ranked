@@ -633,6 +633,9 @@ def test_comparison_dashboard_body_matches_the_contract():
           "views": 100.0, "reactions": None}],
         [{"id": institution, "legacy_id": 7, "canonical_name": "Университет", "short_name": "У",
           "telegram": 10, "vk": 20, "max": 0, "rutube": None, "platforms": ["vk", "telegram"]}],
+        [{"institution_id": institution, "platform": "vk", "kind": "engagement_shift", "status": 2},
+         {"institution_id": institution, "platform": "telegram", "kind": "regular_reactions", "status": 1},
+         {"institution_id": uuid.uuid4(), "platform": "max", "kind": "night_reactions", "status": 2}],
     )
     registry = Registry().with_resource("urn:contract", Resource.from_contents(contract, default_specification=DRAFT202012))
     errors = list(Draft202012Validator({"$ref": "urn:contract#/components/schemas/ComparisonDashboard"},
@@ -645,6 +648,9 @@ def test_comparison_dashboard_body_matches_the_contract():
     assert body["institutions"][0]["subscribers"]["max"] == 0
     assert body["institutions"][0]["subscribers"]["rutube"] is None
     assert body["institutions"][0]["students"] is None
+    assert body["institutions"][0]["accountFindings"] == [
+        {"platform": "telegram", "kind": "regular_reactions", "status": 1},
+        {"platform": "vk", "kind": "engagement_shift", "status": 2}]
 
 
 def test_comparison_builder_bounds_subscribers_by_the_same_snapshot(monkeypatch):
@@ -668,8 +674,11 @@ def test_comparison_builder_bounds_subscribers_by_the_same_snapshot(monkeypatch)
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=ReadDatabase())))
     body = asyncio.run(compare.dashboard(request, "30d"))
     assert body["datasetRevision"] == 42
-    assert len(calls) == 3
+    assert len(calls) == 4
+    # Находки истории не имеют: ночное задание переписывает их целиком.
     for query, values in calls:
+        if query is compare.sql.DASHBOARD_FINDINGS:
+            continue
         assert values["as_of"] == as_of, query
 
 

@@ -64,6 +64,19 @@ export function normalizeDashboardPeriod(value: string | undefined): DashboardPe
 export const periodDays = (period: DashboardPeriod) => (period === "7d" ? 7 : 30);
 
 /** Строка вуза в выбранном разрезе площадок. */
+export type InstitutionFinding = NonNullable<Dashboard["institutions"][number]["accountFindings"]>[number];
+
+/** Названия аккаунтных находок — как на странице аккаунта. */
+export const FINDING_TITLES: Record<InstitutionFinding["kind"], string> = {
+  early_pack: "Повторяющийся стартовый пакет реакций",
+  regular_reactions: "Слишком ровный отклик",
+  late_growth: "Посты добирают реакции через дни",
+  late_engagement: "Необычный отклик на старые посты",
+  synchronous_waves: "Волны реакций сразу на многих постах",
+  engagement_shift: "Отклик вырос без роста аудитории",
+  night_reactions: "Реакции приходят ночью, когда просмотров нет",
+};
+
 export type InstitutionRow = {
   id: string; name: string; fullName: string;
   posts: number; postsPerDay: number; subscribers: number | null;
@@ -76,6 +89,10 @@ export type InstitutionRow = {
   anomalyShare: number | null;
   /** Посты по площадкам — для профиля присутствия. */
   byNetwork: Record<Network, number>;
+  /** Аккаунтные находки на выбранной площадке (на всех — в режиме «все»). */
+  findings: InstitutionFinding[];
+  /** Хотя бы одна устойчивая находка (статус 2) на выбранной площадке. */
+  persistentFindings: boolean;
 };
 
 export type Metric =
@@ -107,6 +124,7 @@ export function institutionRows(data: Dashboard, platform: DashboardPlatform): I
     const byNetwork = Object.fromEntries(NETWORKS.map((network) => [network, byKey.get(`${institution.institutionId}|${network}`)?.posts ?? 0])) as Record<Network, number>;
     const levels = (stat?.levels ?? [0, 0, 0, 0]) as [number, number, number, number];
     const analyzed = stat?.analyzed ?? 0;
+    const findings = (institution.accountFindings ?? []).filter((item) => networks.includes(item.platform as Network));
     const availableSubscribers = networks.filter(network => institution.platforms.includes(network))
       .map(network => institution.subscribers[network]).filter((value): value is number => value !== null && value !== undefined);
     rows.push({
@@ -125,6 +143,7 @@ export function institutionRows(data: Dashboard, platform: DashboardPlatform): I
       analyzed, levels,
       anomalyShare: analyzed ? ((levels[2] + levels[3]) * 100) / analyzed : null,
       byNetwork,
+      findings, persistentFindings: findings.some((item) => item.status === 2),
     });
   }
   return rows;
@@ -337,3 +356,17 @@ export const formatCompact = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : Math.abs(value) >= 10_000 ? compact.format(value) : integer.format(value);
 export const formatPercent = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : `${decimal.format(value)}%`;
+
+/** Переключатель «Скрыть вузы с устойчивыми находками». */
+export function withoutPersistentFindings<T extends Pick<InstitutionRow, "persistentFindings">>(rows: readonly T[]): T[] {
+  return rows.filter((row) => !row.persistentFindings);
+}
+
+/** Подсказка к значку находок: вид, площадка в режиме «все», устойчивость; null — находок нет. */
+export function findingsNote(row: Pick<InstitutionRow, "findings">): string | null {
+  if (!row.findings.length) return null;
+  const platforms = new Set(row.findings.map((item) => item.platform));
+  return "Находки аккаунтов: " + row.findings.map((item) => `${FINDING_TITLES[item.kind]}`
+    + (platforms.size > 1 ? ` — ${PLATFORM_NAMES[item.platform as Network]}` : "")
+    + (item.status === 2 ? " (устойчиво)" : "")).join("; ");
+}

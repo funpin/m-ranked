@@ -184,9 +184,15 @@ def _json_rows(value: Any) -> list[dict[str, Any]]:
 
 
 def dashboard_body(period: str, revision: int, committed_at: Any, dashboard: dict[str, Any],
-                   curves: list[dict[str, Any]], institutions: list[dict[str, Any]]) -> dict[str, Any]:
+                   curves: list[dict[str, Any]], institutions: list[dict[str, Any]],
+                   findings: list[dict[str, Any]] = ()) -> dict[str, Any]:
     """Всё, что рисует страница сравнения, одним ответом без ограничения числа
-    вузов. Медианы — значения на 24-м часу; суммы — по последнему замеру."""
+    вузов. Медианы — значения на 24-м часу; суммы — по последнему замеру.
+    `findings` — аккаунтные находки видимых аккаунтов вуза (площадка, вид, статус)."""
+    by_institution: dict[str, list[dict[str, Any]]] = {}
+    for row in sorted(findings, key=lambda item: (item["platform"], item["kind"])):
+        by_institution.setdefault(str(row["institution_id"]), []).append(
+            {"platform": row["platform"], "kind": row["kind"], "status": int(row["status"])})
     curve_rows: dict[tuple[Any, str], dict[str, list[Any]]] = {}
     for row in curves:
         key = (str(row["institution_id"]) if row["institution_id"] else None, row["platform"])
@@ -208,6 +214,7 @@ def dashboard_body(period: str, revision: int, committed_at: Any, dashboard: dic
             "platforms": sorted(row["platforms"] or []),
             "subscribers": {platform: int(row[platform]) if row[platform] is not None else None for platform in PLATFORMS},
             "students": institution_profile({"institution_id": row["id"]})["students"],
+            "accountFindings": by_institution.get(str(row["id"]), []),
         } for row in institutions],
         "stats": [{
             "institutionId": row["institution_id"], "platform": row["platform"],
@@ -268,8 +275,9 @@ async def dashboard(request: Request, period: str = Query("30d")) -> Response:
         dashboard_row = await db.fetch_one(sql.DASHBOARD, values)
         curves = await db.fetch_all(sql.DASHBOARD_CURVES, values)
         institutions = await db.fetch_all(sql.DASHBOARD_INSTITUTIONS, values)
+        findings = await db.fetch_all(sql.DASHBOARD_FINDINGS, {})
         return dashboard_body(resolved_period, revision, committed_at,
-                              dict(dashboard_row or {}), curves, institutions)
+                              dict(dashboard_row or {}), curves, institutions, findings)
 
     return await serve(request, "comparison-dashboard", {"period": resolved_period},
                        COMPARE_TAGS, build)
