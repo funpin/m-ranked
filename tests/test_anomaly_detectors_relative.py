@@ -1,6 +1,7 @@
 """Детекторы относительно нормы: паттерны 2, 4, 5, 10, мультимасштаб, пересылки."""
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 import re
 import time
@@ -12,7 +13,10 @@ from anomaly_analysis.v2.detectors import (
     NORM_RELATIVE_DETECTORS, DetectorContext, erv_outlier, gap_growth, late_spike, reactions_catch_up,
 )
 from anomaly_analysis.v2.levels import _context
-from anomaly_analysis.v2.series import CollectionCadence, prepare
+from anomaly_analysis.v2.domain import Metric
+from anomaly_analysis.v2.series import (
+    AGE_BAND_EDGES, CollectionCadence, counter_estimate_at, engagement_estimate_at, prepare,
+)
 from anomaly_reference.mature_norms import norms_for, synthetic_cases
 
 CASES = synthetic_cases()
@@ -63,6 +67,60 @@ def test_erv_outside_the_account_norm_in_both_directions_is_only_a_weak_signal(n
     (sign,) = run(erv_outlier, name)
     assert np.sign(sign.render["z"]) == direction and abs(sign.render["z"]) >= 3
     assert 0.45 <= sign.strength <= erv_outlier.MAX_STRENGTH
+
+
+def _telegram_display(series):
+    """Тот же ряд, каким его показывает Telegram: с тысячи — три значащие цифры."""
+    def shown(value):
+        if value is None or value < 1000:
+            return value
+        unit = 10 ** (len(str(value)) - 3)
+        return value // unit * unit
+    views = tuple(shown(value) for value in series.values[Metric.VIEWS])
+    qualities = {metric: tuple("rounded" if metric is Metric.VIEWS and value is not None and value >= 1000
+                               else "exact" for value in series.values[Metric.VIEWS])
+                 for metric in series.values}
+    return replace(series, platform="telegram", values={**series.values, Metric.VIEWS: views},
+                   qualities=qualities, interval_uncertain=())
+
+
+@pytest.mark.parametrize("name,direction", [("p10_high_erv_vk", 1), ("p10_low_erv_vk", -1)])
+def test_erv_is_found_through_rounded_telegram_views(name, direction):
+    case = CASES[name]
+    subject = _telegram_display(case.subject)
+    prepared = prepare(subject, subject.observed_at[-1], CollectionCadence())
+    _, context = context_for(name)
+    # Точные просмотры кончаются на первой тысяче — задолго до конца интервала.
+    assert prepared.metrics[Metric.VIEWS].values[-1] < 1000
+    (sign,) = erv_outlier.detect(prepared, replace(context, platform="telegram"))
+    exact = run(erv_outlier, name)[0]
+    assert np.sign(sign.render["z"]) == direction
+    low, high = sign.render["views_range"]
+    assert low < high and high / low - 1 <= 0.05
+    assert abs(sign.render["z"] - exact.render["z"]) < 0.2
+    assert f"просмотры {low:.0f}–{high:.0f}" in sign.formula
+
+
+def test_erv_inside_the_rounding_corridor_on_one_bound_is_not_a_sign():
+    case = CASES["p10_high_erv_vk"]
+    subject = _telegram_display(case.subject)
+    prepared = prepare(subject, subject.observed_at[-1], CollectionCadence())
+    _, context = context_for("p10_high_erv_vk")
+    (sign,) = erv_outlier.detect(prepared, replace(context, platform="telegram"))
+    low, high = sign.render["views_range"]
+    # Норма сдвинута так, что верхняя граница просмотров даёт z ровно на пороге,
+    # а нижняя — выше: признак держится лишь на части коридора.
+    band = sign.render["band"]
+    cell = context.norm.cells[("erv", band)]
+    engaged = engagement_estimate_at(prepared, float(AGE_BAND_EDGES[band + 1])).value
+    spread = max(1.4826 * cell.log_erv.mad, erv_outlier.SPREAD_FLOOR)
+    median = float(np.log(engaged / high)) - (erv_outlier.MIN_Z - 0.01) * spread
+    # По оценке просмотров отклонение по-прежнему за порогом.
+    assert (float(np.log(engaged / counter_estimate_at(prepared, Metric.VIEWS, float(AGE_BAND_EDGES[band + 1])).value))
+            - median) / spread >= erv_outlier.MIN_Z
+    shifted = replace(context.norm, cells={**context.norm.cells, ("erv", band):
+                                           replace(cell, log_erv=replace(cell.log_erv, median=median))})
+    assert erv_outlier.detect(prepared, replace(context, platform="telegram", norm=shifted)) == ()
 
 
 def test_natural_forward_wave_is_capped_and_lower_with_subscriber_growth():
