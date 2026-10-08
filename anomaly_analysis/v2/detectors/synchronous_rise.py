@@ -4,6 +4,12 @@
 него и ещё у нескольких старых постов аккаунта, а подписчики не прибывают,
 общий внешний толчок (упоминание в новостях) объясняет это хуже, чем
 одновременная доставка.
+
+Второй режим — медленная волна: реакции не скачут за час, а несколько часов
+подряд ровно капают сразу на многих старых постах (Московский Политех в MAX
+06.10: 28 постов возрастом до девяти суток по 2–4 реакции в час десять часов,
+реакций к просмотрам 26 % при обычных 1–2 %). Каждый час ниже порога подъёма,
+доказательство несут сумма за окно, число постов и реакции сверх просмотров.
 """
 from __future__ import annotations
 
@@ -16,7 +22,7 @@ from ..series import DAY, HOUR, PreparedSeries
 from .base import DetectorContext, SiblingActivity, make_sign, number
 
 ID = "synchronous_rise"
-VERSION = "2.2.2"
+VERSION = "2.3.0"
 PATTERN = 8
 FAMILY = Family.SYNCHRONY
 NEEDS_NORM = False
@@ -48,6 +54,24 @@ MIN_SYNCHRONOUS_SIBLINGS = 2
 # по +14…+19 при пороге 20.
 WIDE_MIN_RISE = 10
 WIDE_MIN_SIBLINGS = 4
+# Медленная волна: прирост за окно WAVE_HOURS против собственного хвоста поста
+# за сутки до окна — тот же пуассоновский z, но по сумме, а не по часу. Хвост
+# должен быть известен (полусутки замеров), иначе у края окна агрегатов пустая
+# база снова превратила бы ровный темп в волну.
+WAVE_HOURS = 6
+WAVE_MIN_RISE = 8
+WAVE_MIN_SIBLINGS = 6
+WAVE_MIN_KNOWN_HOURS = 3
+WAVE_MIN_HISTORY_HOURS = 12
+# Волну подтверждают соседи с полусуточной историей; сам пост, если волна по
+# аккаунту уже подтверждена, может иметь и короче — у MAX пробелы сбора часто
+# оставляют за сутки шесть-десять покрытых часов (Политех 06.10: из 28 постов
+# волны полную историю имели восемь).
+WAVE_MIN_SUBJECT_HISTORY_HOURS = 6
+# В волне реакции опережают просмотры: доля реакций на новый просмотр у постов
+# волны хотя бы втрое выше доли тех же постов вне окна. Внешний толчок
+# (упоминание, рассылка) приводит людей, и просмотры растут вместе с реакциями.
+WAVE_MIN_ENGAGEMENT_RATIO = 3.0
 # Прирост подписчиков больше процента за окно — первым объяснением идёт
 # внешний толчок, и признак не выставляется.
 MAX_SUBSCRIBER_GROWTH = 0.01
@@ -117,7 +141,87 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
                                    step_end, SCALE, formula,
                                    {"kind": "synchrony", "posts": synchronous + 1, "quiet": eligible - synchronous,
                                     "hour": clock.isoformat()}, ("account_mentioned_externally",)))
+        signs.extend(_waves(prepared, context, own, subject, sibling_rows, taken))
     return tuple(signs)
+
+
+def _wave_rise(hourly: np.ndarray, end: int,
+               min_history: int = WAVE_MIN_HISTORY_HOURS) -> tuple[float, float] | None:
+    """Прирост за окно, кончающееся часом `end`, и ожидание по хвосту поста.
+
+    None — окно или сутки до него почти не покрыты замерами: судить не о чем."""
+    start = end - WAVE_HOURS + 1
+    if start < min_history:
+        return None
+    window = hourly[start:end + 1]
+    known = window[~np.isnan(window)]
+    history = hourly[max(0, start - BASELINE_HOURS):start]
+    history = history[~np.isnan(history)]
+    if known.size < WAVE_MIN_KNOWN_HOURS or history.size < min_history:
+        return None
+    baseline = max(float(np.median(history)), EMPTY_BASELINE)
+    return float(known.sum()), baseline * known.size
+
+
+def _waving(hourly: np.ndarray, end: int, min_history: int = WAVE_MIN_HISTORY_HOURS) -> bool:
+    measured = _wave_rise(hourly, end, min_history)
+    if measured is None:
+        return False
+    rise, expected = measured
+    return rise >= WAVE_MIN_RISE and (rise - expected) / np.sqrt(expected) >= MIN_Z
+
+
+def _waves(prepared: PreparedSeries, context: DetectorContext, own, subject: np.ndarray,
+           sibling_rows: np.ndarray, taken: list[int]) -> list[Sign]:
+    """Медленная синхронная волна: окна, где реакции росли сразу у многих постов."""
+    siblings = context.siblings
+    published = prepared.series.published_at.timestamp()
+    own_views = own.views[0]
+    signs: list[Sign] = []
+    last_end = -WAVE_HOURS
+    for end in range(WAVE_HOURS - 1, subject.size):
+        start = end - WAVE_HOURS + 1
+        if end - last_end < WAVE_HOURS or own.ages[0, start] < MIN_AGE:
+            continue
+        if context.synchrony_from is not None and own.hours[start] * HOUR < context.synchrony_from:
+            continue
+        # Резкий подъём в том же окне уже описан почасовым режимом.
+        if any(start - 1 <= hour <= end + 1 for hour in taken) \
+                or not _waving(subject, end, WAVE_MIN_SUBJECT_HISTORY_HOURS):
+            continue
+        waving = [index for index in range(sibling_rows.shape[0])
+                  if siblings.ages[index, start] >= MIN_AGE and _waving(sibling_rows[index], end)]
+        if len(waving) < WAVE_MIN_SIBLINGS:
+            continue
+        rows = np.vstack([subject, sibling_rows[waving]])
+        views = np.vstack([own_views, siblings.views[waving]])
+        inside = np.zeros(subject.size, dtype=bool)
+        inside[start:end + 1] = True
+        wave_reactions, wave_views = np.nansum(rows[:, inside]), np.nansum(views[:, inside])
+        usual_reactions, usual_views = np.nansum(rows[:, ~inside]), np.nansum(views[:, ~inside])
+        usual = usual_reactions / usual_views if usual_views > 0 else None
+        wave = wave_reactions / wave_views if wave_views > 0 else np.inf
+        if usual is None or usual <= 0 or wave < WAVE_MIN_ENGAGEMENT_RATIO * usual:
+            continue
+        start_age = float(own.hours[start] * HOUR - published)
+        end_age = float(own.hours[end] * HOUR + HOUR - published)
+        growth = context.subscriber_growth(start_age - HOUR, end_age)
+        if growth is not None and growth > MAX_SUBSCRIBER_GROWTH:
+            continue
+        last_end = end
+        rise, expected = _wave_rise(subject, end, WAVE_MIN_SUBJECT_HISTORY_HOURS)  # type: ignore[misc]
+        first = datetime.fromtimestamp(own.hours[start] * HOUR, tz=timezone.utc)
+        last = datetime.fromtimestamp(own.hours[end] * HOUR + HOUR, tz=timezone.utc)
+        times = "∞" if not np.isfinite(wave) else f"{number(wave / usual)}"
+        formula = (f"реакции росли одновременно у {len(waving) + 1} постов аккаунта "
+                   f"{first:%d.%m %H:00}–{last:%H:00} UTC (+{number(rise)} у этого за {WAVE_HOURS} ч "
+                   f"при обычных ~{number(expected)}); реакций на новый просмотр в {times} раза больше обычного")
+        strength = min(1.0, 0.4 + 0.05 * len(waving))
+        signs.append(make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, strength, start_age, end_age,
+                               timedelta(hours=WAVE_HOURS), formula,
+                               {"kind": "synchrony_wave", "posts": len(waving) + 1, "hour": first.isoformat(),
+                                "hours": WAVE_HOURS}, ("account_mentioned_externally",)))
+    return signs
 
 
 def _step(prepared: PreparedSeries, metric: Metric, start_age: float) -> tuple[float, float]:
