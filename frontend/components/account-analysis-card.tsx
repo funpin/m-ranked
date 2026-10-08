@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { ChevronRight, CircleCheck, History, Layers, Package, ScanLine, TrendingUp } from "lucide-react";
+import { ArrowUpFromLine, ChevronRight, CircleCheck, History, Layers, Moon, Package, ScanLine, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { StatusPill } from "@/components/ui";
@@ -21,7 +21,7 @@ const METHOD = "Закономерности, которые видны толь
 
 const ICONS: Record<string, LucideIcon> = {
   early_pack: Package, regular_reactions: ScanLine, late_growth: TrendingUp, late_engagement: History,
-  synchronous_waves: Layers,
+  synchronous_waves: Layers, engagement_shift: ArrowUpFromLine, night_reactions: Moon,
 };
 
 type Figure = NonNullable<AccountAnomalyFinding["figure"]>;
