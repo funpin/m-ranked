@@ -87,19 +87,20 @@ def test_regular_reactions_flag_counts_that_ignore_post_appeal():
 
 
 def daily_posts(account: int, days: int, per_day: int, reactions, rng: random.Random,
-                platform: str = "max") -> list[LedgerPost]:
+                platform: str = "max", views=None, institution: int | None = None) -> list[LedgerPost]:
     """По `per_day` постов в сутки с 08.09 (10:00–22:00 МСК); `reactions(day, rng)` — реакции к 72 ч."""
     posts = []
     for day in range(days):
         for slot in range(per_day):
             index = day * per_day + slot
             published = datetime(2026, 9, 8, 7, tzinfo=timezone.utc) + timedelta(days=day, hours=2 * slot)
-            views = rng.randint(700, 1100)
+            views_72 = views(day, rng) if views else rng.randint(700, 1100)
             r72 = reactions(day, rng)
-            marks = {"h2": Point(2 * HOUR, views // 3, r72 // 2), "h24": Point(24 * HOUR, views - 50, r72 - 2),
-                     "h72": Point(72 * HOUR, views, r72)}
+            marks = {"h2": Point(2 * HOUR, views_72 // 3, r72 // 2),
+                     "h24": Point(24 * HOUR, views_72 - 20, max(0, r72 - 2)), "h72": Point(72 * HOUR, views_72, r72)}
             posts.append(LedgerPost(UUID(int=account * 10_000 + index), UUID(int=account), platform, published,
-                                    False, TailLedger(None, None, None, marks=marks)))
+                                    False, TailLedger(None, None, None, marks=marks),
+                                    UUID(int=10**6 + institution) if institution is not None else None))
     return posts
 
 
@@ -228,3 +229,48 @@ def test_few_or_small_waves_are_not_a_finding():
     # Три волны — мало; много дней, но по 9 постов — не волна по всей стене.
     events = _waves(1, [3, 12, 22], 15) + _waves(2, list(range(0, 30, 2)), 9)
     assert not [item for item in findings(posts, TODAY, synchrony=events) if item.kind == "synchronous_waves"]
+
+
+def _shift(account: int, start_day: int, rng: random.Random, *, until_day: int = 99, days: int = 25, high: float = 240,
+           platform: str = "max", institution: int | None = None, views=None) -> list[LedgerPost]:
+    return daily_posts(account, days, 5, lambda day, rng: _poisson(high if start_day <= day < until_day else 95, rng),
+                       rng, platform, views, institution)
+
+
+def _kind(result, kind: str, account: int = 1):
+    return [item for item in result if item.kind == kind and item.account_id == UUID(int=account)]
+
+
+def test_engagement_rising_from_a_date_without_more_views_is_a_finding():
+    rng = random.Random(21)
+    cohort = [item for account in range(2, 12) for item in organic(account, 40, rng)]
+    (finding,) = _kind(findings(cohort + _shift(1, 11, rng), TODAY), "engagement_shift")
+    data = finding.metrics
+    assert finding.status == 2 and data["cut"] == "2026-09-19"
+    assert data["ratio"] > 2 and data["separation"] >= 0.9 and 0.8 < data["viewsRatio"] < 1.25
+    assert len(finding.members) >= 0.9 * data["after"]
+    assert "19.09" in summary(finding) and not _kind(findings(cohort, TODAY), "engagement_shift", 2)
+
+
+def test_a_rise_that_fades_by_the_end_of_the_window_is_not_persistent():
+    rng = random.Random(23)
+    (finding,) = _kind(findings(_shift(1, 11, rng, until_day=21, days=28), TODAY), "engagement_shift")
+    assert finding.status == 1
+
+
+def test_engagement_rising_because_views_collapsed_or_slowly_is_not_a_finding():
+    rng = random.Random(25)
+    collapsed = daily_posts(1, 25, 5, lambda day, rng: _poisson(95, rng), rng,
+                            views=lambda day, rng: rng.randint(700, 1100) if day < 11 else rng.randint(70, 110))
+    gradual = daily_posts(2, 25, 5, lambda day, rng: _poisson(95 * (1 + 0.5 * day / 25), rng), rng)
+    assert not [item for item in findings(collapsed + gradual, TODAY) if item.kind == "engagement_shift"]
+
+
+def test_the_same_rise_on_the_institutions_other_platforms_is_listed_as_support():
+    rng = random.Random(27)
+    posts = (_shift(1, 11, rng, institution=7) + _shift(2, 12, rng, platform="vk", institution=7, high=280)
+             + _shift(3, 11, rng, platform="vk", institution=8) + _shift(4, 11, rng, platform="telegram", institution=7,
+                                                                       until_day=0))
+    (finding,) = _kind(findings(posts, TODAY), "engagement_shift")
+    assert [(item["platform"], item["cut"]) for item in finding.metrics["corroboration"]] == [("vk", "2026-09-20")]
+    assert "VK" in summary(finding)

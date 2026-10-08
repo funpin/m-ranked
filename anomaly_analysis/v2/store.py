@@ -687,8 +687,8 @@ class PostgresAnomalyStore:
         with self._factory() as connection:
             return connection.execute(
                 """SELECT state.publication_id, publication.primary_account_id AS account_id,
-                          account.platform::text AS platform, state.published_at, publication.is_repost,
-                          state.tail_ledger
+                          account.platform::text AS platform, account.institution_id, state.published_at,
+                          publication.is_repost, state.tail_ledger
                      FROM analytics.post_anomaly_state state
                      JOIN ingest.visible_publication publication ON publication.id = state.publication_id
                      JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id

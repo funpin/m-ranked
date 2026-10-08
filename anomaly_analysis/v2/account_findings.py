@@ -58,6 +58,7 @@ TITLES = {
     "late_growth": "Посты добирают реакции через дни",
     "late_engagement": "Необычный отклик на старые посты",
     "synchronous_waves": "Волны реакций сразу на многих постах",
+    "engagement_shift": "Отклик вырос без роста аудитории",
 }
 ALTERNATIVES = {
     "early_pack": ("Подписчики-активисты реагируют сразу после публикации, а поздние читатели почти не "
@@ -68,6 +69,8 @@ ALTERNATIVES = {
     "late_engagement": "Регулярные читатели архива, подборки и пересылки старых постов",
     "synchronous_waves": ("Ссылка на стену в популярном сообществе или рассылке: пришедшие листают ленту и "
                           "отмечают старые посты; активисты отмечают всю ленту после события"),
+    "engagement_shift": ("Конкурс или акция вуза, призыв реагировать на посты, смена формата постов; приток "
+                         "новых активных подписчиков (тогда растут и просмотры)"),
 }
 
 # Стартовый пакет: окна «первые 2 ч / 2–24 ч» и «первые 6 ч / 6–24 ч» по отметкам
@@ -114,6 +117,27 @@ GROWTH_STRONG_RUN = 15
 WAVE_MIN_POSTS = 10
 WAVE_MIN_DAYS = 4
 WAVE_HALF_DAYS = 2
+# Скачок отклика: доля реакций на просмотр (R72 / V72) у постов после даты среза
+# против двух недель до неё. ЮЗГУ в MAX с 19.09.2026: медиана 9,9 % → 24,9 %,
+# просмотры 753 → 830, все посты после среза выше 90-го перцентиля до него. У
+# аккаунтов MAX наибольший такой сдвиг за месяц — медиана ×1,26, p90 ×1,64.
+SHIFT_BEFORE_DAYS = 14
+SHIFT_AFTER_DAYS = 10
+SHIFT_MIN_BEFORE = 12
+SHIFT_MIN_AFTER = 8
+SHIFT_MIN_VIEWS = 50
+SHIFT_MIN_REACTIONS = 5
+SHIFT_RATIO = 2.0
+SHIFT_SEPARATION = 0.8
+SHIFT_VIEWS_RANGE = (0.5, 2.0)
+SHIFT_STRONG_SEPARATION = 0.9
+SHIFT_RECENT_DAYS = 7
+SHIFT_RECENT_RATIO = 1.5
+SHIFT_ONSET_SHARE = 0.95
+# Подтверждение: тот же вуз, другая площадка, лучший срез в ±3 сутках.
+SHIFT_SUPPORT_DAYS = 3
+SHIFT_SUPPORT_RATIO = 1.5
+PLATFORM_TITLES = {"telegram": "Telegram", "vk": "VK", "max": "MAX", "rutube": "Rutube"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +148,7 @@ class LedgerPost:
     published_at: datetime
     is_repost: bool
     ledger: TailLedger
+    institution_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +219,8 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
         events.setdefault(event.account_id, []).append(event)
     waves = {account: _wave_stats(items, events.get(account, ()), start, computed_for)
              for account, items in by_account.items()}
+    shifts = {account: _shift_stats(items) for account, items in by_account.items()}
+    shift_cohort = _cohort(by_account, _shift_stats, "ratio")
     wave_cohort: dict[str, list[float]] = {}
     for account, stats in waves.items():
         wave_cohort.setdefault(by_account[account][0].platform, []).append(stats["share"])
@@ -229,6 +256,14 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
             metrics = {**_public(wave), "cohort": {"accounts": len(shares), "median": round(median(shares), 3)}}
             result.append(AccountFinding(account, platform, "synchronous_waves", status, start, computed_for,
                                          metrics, tuple(wave["members"])))
+        shift = shifts[account]
+        if shift is not None and _shift_found(shift):
+            status = 2 if (shift["separation"] >= SHIFT_STRONG_SEPARATION and shift["erRecent"] is not None
+                           and shift["erRecent"] >= SHIFT_RECENT_RATIO * shift["erBefore"]) else 1
+            metrics = {**_public(shift), "cohort": _without(shift_cohort.get(platform, {}), "medians"),
+                       "corroboration": _corroboration(account, items, shift, by_account, shifts)}
+            result.append(AccountFinding(account, platform, "engagement_shift", status, start, computed_for,
+                                         metrics, tuple(shift["members"])))
     for account, (platform, status, metrics) in (tail_status or {}).items():
         if status == 2:
             # Участники — посты с признаком позднего отклика и посты, у которых
@@ -384,6 +419,77 @@ def _wave_stats(items: Sequence[LedgerPost], events: Iterable[SynchronyEvent], s
     }
 
 
+def _shift_stats(items: Sequence[LedgerPost]) -> dict[str, Any] | None:
+    """Лучший срез: наибольшие рост медианы R72/V72 после даты и отделимость при сопоставимых просмотрах."""
+    rows = sorted(((post.published_at.astimezone(MOSCOW).date(), post.publication_id, mark.reactions, mark.views)
+                   for post in items if not post.is_repost and (mark := post.ledger.marks.get("h72")) is not None
+                   and mark.views >= SHIFT_MIN_VIEWS), key=lambda row: (row[0], str(row[1])))
+    if len(rows) < SHIFT_MIN_BEFORE + SHIFT_MIN_AFTER:
+        return None
+    candidates = []
+    for cut in sorted({row[0] for row in rows}):
+        before = [row for row in rows if cut - timedelta(days=SHIFT_BEFORE_DAYS) <= row[0] < cut]
+        after = [row for row in rows if cut <= row[0] < cut + timedelta(days=SHIFT_AFTER_DAYS)]
+        if len(before) < SHIFT_MIN_BEFORE or len(after) < SHIFT_MIN_AFTER:
+            continue
+        reactions_before = median(row[2] for row in before)
+        er_before = median(row[2] / row[3] for row in before)
+        views_ratio = median(row[3] for row in after) / median(row[3] for row in before)
+        if reactions_before < SHIFT_MIN_REACTIONS or er_before <= 0 or not (
+                SHIFT_VIEWS_RANGE[0] <= views_ratio <= SHIFT_VIEWS_RANGE[1]):
+            continue
+        er_after = median(row[2] / row[3] for row in after)
+        ratio = er_after / er_before
+        ordered = sorted(row[2] / row[3] for row in before)
+        p90 = ordered[min(len(ordered) - 1, math.ceil(0.9 * len(ordered)) - 1)]
+        above = [row for row in after if row[2] / row[3] > p90]
+        candidates.append((ratio * len(above) / len(after), ratio, cut, before, after, er_before, er_after,
+                           views_ratio, above))
+    if not candidates:
+        return None
+    # Срез — там, где рост и отделимость вместе наибольшие; из почти равных
+    # (через сутки после скачка «до» почти не меняется) — самый ранний: начало.
+    top = max(item[0] for item in candidates)
+    _, ratio, cut, before, after, er_before, er_after, views_ratio, above = next(
+        item for item in candidates if item[0] >= SHIFT_ONSET_SHARE * top)
+    last = rows[-1][0]
+    recent = [row[2] / row[3] for row in rows if row[0] > last - timedelta(days=SHIFT_RECENT_DAYS) and row[0] >= cut]
+    return {
+        "cut": cut.isoformat(), "ratio": round(ratio, 3), "separation": round(len(above) / len(after), 3),
+        "viewsRatio": round(views_ratio, 3), "erBefore": round(er_before, 4), "erAfter": round(er_after, 4),
+        "erRecent": round(median(recent), 4) if recent else None,
+        "before": len(before), "after": len(after),
+        "medianReactionsBefore": median(row[2] for row in before),
+        "medianReactionsAfter": median(row[2] for row in after),
+        "medianViewsBefore": median(row[3] for row in before), "medianViewsAfter": median(row[3] for row in after),
+        "members": [row[1] for row in above],
+    }
+
+
+def _shift_found(stats: Mapping[str, Any]) -> bool:
+    return stats["ratio"] >= SHIFT_RATIO and stats["separation"] >= SHIFT_SEPARATION
+
+
+def _corroboration(account: UUID, items: Sequence[LedgerPost], shift: Mapping[str, Any],
+                   by_account: Mapping[UUID, Sequence[LedgerPost]],
+                   shifts: Mapping[UUID, Mapping[str, Any] | None]) -> list[dict[str, Any]]:
+    """Тот же сдвиг у других аккаунтов вуза: лучший срез рядом по времени."""
+    institution = items[0].institution_id
+    if institution is None:
+        return []
+    cut = date.fromisoformat(shift["cut"])
+    support = []
+    for other, posts in by_account.items():
+        stats = shifts.get(other)
+        if other == account or posts[0].institution_id != institution or stats is None:
+            continue
+        if abs((date.fromisoformat(stats["cut"]) - cut).days) <= SHIFT_SUPPORT_DAYS and \
+                stats["ratio"] >= SHIFT_SUPPORT_RATIO:
+            support.append({"platform": posts[0].platform, "accountId": str(other), "cut": stats["cut"],
+                            "ratio": stats["ratio"]})
+    return sorted(support, key=lambda item: (-item["ratio"], item["platform"]))
+
+
 def _cohort(by_account, measure, key: str) -> dict[str, dict[str, Any]]:
     values: dict[str, list[float]] = {}
     for items in by_account.values():
@@ -455,6 +561,20 @@ def summary(finding: AccountFinding) -> str:
                 f"{WAVE_MIN_POSTS} и больше постов аккаунта (до {data['maxPosts']} за день); в волнах — "
                 f"{round(100 * data['share'])} % постов окна; у типичного аккаунта площадки — "
                 f"{round(100 * data.get('cohort', {}).get('median', 0))} %")
+    if finding.kind == "engagement_shift":
+        cut = date.fromisoformat(data["cut"])
+        text = (f"С {cut:%d.%m} доля реакций на просмотр у постов выросла в {_ru(data['ratio'])} раза "
+                f"({_ru(100 * data['erBefore'])} % → {_ru(100 * data['erAfter'])} %), а просмотры — "
+                f"{_ru(data['medianViewsBefore'], 0)} → {_ru(data['medianViewsAfter'], 0)}; "
+                f"{round(100 * data['separation'])} % постов после этой даты выше 90 % постов двух недель до неё; "
+                f"у типичного аккаунта площадки наибольший такой рост за месяц — в "
+                f"{_ru(data.get('cohort', {}).get('median', 0))} раза")
+        support = data.get("corroboration") or []
+        if support:
+            text += "; в те же дни отклик вырос и " + ", ".join(
+                f"в {PLATFORM_TITLES.get(item['platform'], item['platform'])} (×{_ru(item['ratio'])})"
+                for item in support)
+        return text
     ratio = data.get("ratio") or data.get("k")
     return ("Поздний отклик на посты 4–28 суток устойчиво выше, чем у аккаунтов площадки"
             + (f" (поздняя доля реакций к ранней — {_ru(float(ratio), 2)})" if ratio else ""))
@@ -489,6 +609,9 @@ def headline(finding: AccountFinding) -> str:
         return f"У {round(100 * data['share'])} % постов реакции через дни выросли втрое и больше"
     if finding.kind == "synchronous_waves":
         return f"{_days(data['days'])} с волной реакций сразу на многих постах"
+    if finding.kind == "engagement_shift":
+        return (f"С {date.fromisoformat(data['cut']):%d.%m} реакций на просмотр в {_ru(data['ratio'])} раза "
+                f"больше при тех же просмотрах")
     return "Старые посты получают реакции чаще, чем у других аккаунтов"
 
 
@@ -504,6 +627,8 @@ def figure(finding: AccountFinding) -> dict[str, Any] | None:
         value, unit, label, direction = data["share"], "percent", "постов, добравших реакции через дни", "higher"
     elif finding.kind == "synchronous_waves":
         value, unit, label, direction = data["share"], "percent", "постов в волнах реакций", "higher"
+    elif finding.kind == "engagement_shift":
+        value, unit, label, direction = data["ratio"], "times", "рост доли реакций на просмотр", "higher"
     else:
         value, unit, label, direction = data.get("ratio"), "times", "поздняя доля реакций к ранней", "higher"
     if value is None or typical is None:
