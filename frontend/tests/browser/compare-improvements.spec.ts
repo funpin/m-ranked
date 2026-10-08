@@ -63,3 +63,25 @@ test("comparison timing follows highlighted universities and curves pick on clic
   await expect(main.getByTestId("highlight-chip")).toHaveCount(before + 1);
   await expect(curves.getByText("Время после выхода поста")).toBeVisible();
 });
+
+test("comparison ranking, map and presence pick a university on click", async ({ page }) => {
+  test.skip(page.viewportSize()!.width < 1024, "широкая компоновка");
+  await page.goto("/compare");
+  const main = page.getByRole("main");
+  const chips = main.getByTestId("highlight-chip");
+  await expect(chips).toHaveCount(0);
+  await main.getByTestId("ranking-chart").locator(".recharts-bar-rectangle").nth(1).click();
+  await expect(chips).toHaveCount(1);
+  await main.getByTestId("scatter-chart").locator(".recharts-scatter-symbol").first().click();
+  await expect(chips).toHaveCount(2);
+  // Название у строки рейтинга — в одну строку и тоже выбирает вуз.
+  const name = main.getByTestId("ranking-chart").locator(".recharts-yAxis-tick-labels text").nth(3);
+  await expect(name.locator("tspan")).toHaveCount(0);
+  await name.click();
+  await expect(chips).toHaveCount(3);
+  // Уровни анализа сами переходят к последнему выделенному вузу.
+  const levels = main.getByTestId("levels-card");
+  await expect(levels.getByRole("combobox", { name: "Чьи посты показать" })).not.toHaveValue("all");
+  await levels.getByRole("combobox", { name: "Чьи посты показать" }).selectOption("all");
+  await expect(levels).not.toContainText(" · ");
+});

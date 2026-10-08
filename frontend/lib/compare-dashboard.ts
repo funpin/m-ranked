@@ -292,15 +292,33 @@ export function typeRows(data: TimingSource, platform: DashboardPlatform) {
     .sort((left, right) => Number(left.code === "other") - Number(right.code === "other") || right.posts - left.posts);
 }
 
-/** Уровни анализа по площадкам в процентах — для полосы «100 %». */
-export function levelSharesByPlatform(data: Dashboard) {
-  return NETWORKS.map((network) => {
-    const stat = statFor(data, null, network);
+/** Уровни анализа по площадкам в процентах — для полосы «100 %». Для вуза —
+ *  только площадки, где у него есть проанализированные посты. */
+export function levelSharesByPlatform(data: Dashboard, institutionId: string | null = null) {
+  return NETWORKS.flatMap((network) => {
+    const stat = statFor(data, institutionId, network);
     const analyzed = stat?.analyzed ?? 0;
+    if (institutionId && !analyzed) return [];
     const point: Record<string, number | string> = { platform: PLATFORM_NAMES[network], analyzed };
     (stat?.levels ?? [0, 0, 0, 0]).forEach((count, level) => { point[`level${level}`] = analyzed ? (count * 100) / analyzed : 0; });
-    return point;
+    return [point];
   });
+}
+
+/** Уровни анализа вуза на вкладке площадки. */
+export function institutionLevels(data: Dashboard, institutionId: string, platform: DashboardPlatform) {
+  const stat = statFor(data, institutionId, platform);
+  return { analyzed: stat?.analyzed ?? 0, levels: (stat?.levels ?? [0, 0, 0, 0]) as [number, number, number, number] };
+}
+
+/** Чей разрез показывает карточка: «auto» — последний выделенный вуз (так
+ *  карточка сама переходит к только что выбранному), «all» — все вузы, иначе
+ *  выбранный в карточке вуз, пока он выделен. */
+export type Scope = "auto" | "all" | (string & {});
+export function resolveScope(scope: Scope, highlightIds: readonly string[]): string {
+  if (scope === "all") return "all";
+  if (scope !== "auto" && highlightIds.includes(scope)) return scope;
+  return highlightIds.at(-1) ?? "all";
 }
 
 const integer = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
