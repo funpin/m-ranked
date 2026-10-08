@@ -8,10 +8,12 @@ import type { FindingInstitution } from "@/lib/types";
 
 // Combobox со своим позиционером и списком весит десятки КиБ, а нужен только
 // в режиме «Мой вуз»: в первую загрузку «Все вузы» он не попадает. Заглушка
-// той же высоты и ширины, чтобы панель не прыгала.
+// той же высоты и ширины, чтобы панель не прыгала. Только на клиенте: поле,
+// отрисованное сервером, принимало ввод до гидратации и теряло его — список
+// не открывался (на медленном телефоне и в CI под нагрузкой).
 const InstitutionCombobox = dynamic(
   () => import("@/components/findings/institution-combobox").then((module) => module.InstitutionCombobox),
-  { loading: () => <div aria-hidden="true" className="border-input h-8 w-full rounded-md border sm:w-64" /> },
+  { ssr: false, loading: () => <div aria-hidden="true" className="border-input h-8 w-full rounded-md border sm:w-64" /> },
 );
 
 function browserStorage(): Storage | null {
