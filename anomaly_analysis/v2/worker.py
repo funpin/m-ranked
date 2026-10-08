@@ -190,6 +190,9 @@ class Worker:
         series = self.store.read_series([SeriesTarget(row.publication_id, row.published_at) for row in due])
         accounts = sorted({item.account_id for item in series.values()}, key=str)
         window_start = now - timedelta(seconds=self.config.activity_lookback_seconds)
+        # Одна граница: раньше неё признаки синхронности переносятся из прежнего
+        # вывода и не ищутся заново (база подъёма там обрезана началом окна).
+        detectable_from = window_start + timedelta(hours=BASELINE_HOURS)
         self._load_accounts(accounts, now, window_start)
         writes: list[StateWrite] = []
         postponed: list[tuple[UUID, datetime]] = []
@@ -208,7 +211,7 @@ class Worker:
                     subscribers=self._subscribers.get(subject.account_id) or (), analyzed_at=now,
                     cadence=self.cadence, norm_version=self.norm_version,
                     activity=self._activity.get(subject.account_id), reference=self.reference,
-                    carried=_carried(row, window_start + timedelta(hours=BASELINE_HOURS)))
+                    carried=_carried(row, detectable_from), synchrony_from=detectable_from)
                 writes.append(StateWrite(
                     row.publication_id, row.published_at, now, decision.next_due_at, verdict=verdict,
                     analyzed_points=len(subject.observed_at), last_point_observed_at=subject.observed_at[-1],
