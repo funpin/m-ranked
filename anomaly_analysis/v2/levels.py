@@ -235,8 +235,12 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         # внутри лишь укрупняет отрезок. Губкинский в MAX: +265 реакций за 6 ч
         # с пробелом сбора 2,6 ч внутри снимались целиком.
         episode = sign.pattern == 14
+        # Медленная волна (признак 8) складывает только покрытые часы окна:
+        # пробел уменьшает сумму, а не придумывает её. У MAX окно в шесть
+        # часов почти всегда задевает пробел сбора.
+        wave = sign.pattern == 8 and sign.render.get("kind") == "synchrony_wave"
         if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_counts
-                and not endpoint_comparison and not late_endpoints and not episode
+                and not endpoint_comparison and not late_endpoints and not episode and not wave
                 and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:
