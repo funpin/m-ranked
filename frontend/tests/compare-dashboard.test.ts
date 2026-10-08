@@ -113,6 +113,8 @@ test("query values normalise to supported platforms and periods", () => {
 });
 
 test("search options list every university and say why one is missing from the charts", () => {
+  const none: Dashboard = { ...data, institutions: [{ ...data.institutions[1]!, platforms: [] }] };
+  assert.equal(institutionOptions(none, "all")[0]!.note, "нет аккаунтов в соцсетях");
   const rutube = institutionOptions(data, "rutube");
   assert.deepEqual(rutube.map((option) => option.note), ["нет аккаунта на Rutube", "нет аккаунта на Rutube"]);
   const vk = institutionOptions({ ...data, stats: data.stats.filter((item) => item.institutionId !== B) }, "vk");
@@ -160,7 +162,7 @@ test("formats keep one order with other last and compare a university by share",
   assert.deepEqual(typeRows(base, "all").map((row) => [row.type, row.share]), [["Фото", 30], ["Видео", 20], ["Прочее", 50]]);
   assert.equal(typeName("poll"), "Прочее");
   const own = { timing: [], types: [{ platform: "all" as const, type: "video" as const, posts: 4, views24: 90, engagement24: 2 }] };
-  const rows = typeComparison(base, "all", [{ id: A, source: own }]);
+  const rows = typeComparison(base, "all", [{ id: A, name: "Альфа", color: "red", source: own }]);
   assert.deepEqual(rows.map((row) => [row.type, row[`share_${A}`], row[`views_${A}`]]), [["Фото", 0, null], ["Видео", 100, 90], ["Прочее", 0, null]]);
 });
 
@@ -170,6 +172,6 @@ test("a university's hourly line skips hours with too few posts", () => {
     { platform: "vk" as const, weekday: null, hour: 10, posts: 3, views24: 300 },
   ] };
   const overlay = hourlyOverlay(source, "vk");
-  assert.equal(overlay[9]!.views24, null);
-  assert.equal(overlay[10]!.views24, 300);
+  assert.equal(overlay[9], null);
+  assert.equal(overlay[10], 300);
 });

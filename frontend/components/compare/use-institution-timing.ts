@@ -29,18 +29,17 @@ function load(id: string, period: DashboardPeriod): Promise<InstitutionTiming> {
 export function useInstitutionTiming(ids: readonly string[], period: DashboardPeriod) {
   const [results, setResults] = useState<ReadonlyMap<string, TimingState>>(new Map());
   const [attempt, setAttempt] = useState(0);
-  const key = ids.join(",");
 
   useEffect(() => {
     let alive = true;
-    for (const id of key ? key.split(",") : []) {
-      load(id, period).then(
-        (data) => { if (alive) setResults((current) => new Map(current).set(id, { status: "ready", data })); },
-        () => { if (alive) setResults((current) => new Map(current).set(id, { status: "error" })); },
-      );
-    }
+    // Уже пришедший ответ не перезаписывается: иначе каждое новое выделение
+    // заново перерисовывало бы всю панель ради тех же данных.
+    const settle = (id: string, next: TimingState) => {
+      if (alive) setResults((current) => current.get(id)?.status === "ready" ? current : new Map(current).set(id, next));
+    };
+    for (const id of ids) load(id, period).then((data) => settle(id, { status: "ready", data }), () => settle(id, { status: "error" }));
     return () => { alive = false; };
-  }, [key, period, attempt]);
+  }, [ids, period, attempt]);
 
   const states = useMemo(() => new Map(ids.map((id) => [id, results.get(id) ?? LOADING])), [ids, results]);
   const retry = useCallback(() => {

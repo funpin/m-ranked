@@ -139,7 +139,7 @@ export function institutionOptions(data: Dashboard, platform: DashboardPlatform)
   return data.institutions.map((institution) => {
     const posts = statFor(data, institution.institutionId, platform)?.posts ?? 0;
     const note = !networks.some((network) => institution.platforms.includes(network))
-      ? `нет аккаунта ${PLATFORM_IN[platform as Network]}`
+      ? platform === "all" ? "нет аккаунтов в соцсетях" : `нет аккаунта ${PLATFORM_IN[platform]}`
       : posts ? null : "нет публикаций за период";
     return {
       id: institution.institutionId, name: institution.shortName || institution.name, fullName: institution.name,

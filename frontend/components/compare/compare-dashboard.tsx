@@ -21,12 +21,12 @@ import { TimingHeatmap } from "./timing-heatmap";
 import { HighlightBar } from "./highlight-bar";
 import { useInstitutionTiming } from "./use-institution-timing";
 import { cn } from "@/lib/utils";
-import { OVERLAY_MIN_POSTS } from "@/lib/compare-timing";
+import { OVERLAY_MIN_POSTS, type TimingOverlay } from "@/lib/compare-timing";
 import { STICKY_CONTROL_SURFACE_CLASS } from "@/components/filter-toolbar";
 import {
   DASHBOARD_PLATFORMS, LEVEL_COLORS, LEVEL_NAMES, MAX_HIGHLIGHTS, METRICS, NETWORKS, PLATFORM_NAMES,
   formatCompact, formatInteger, formatPercent, formatValue, highlightMap, institutionLabels, institutionOptions,
-  institutionRows, platformSummary, sortRows, timingGrid, toggleHighlight,
+  institutionRows, periodDays, platformSummary, sortRows, timingGrid, toggleHighlight,
   type Dashboard, type DashboardPeriod, type DashboardPlatform, type HighlightMap, type InstitutionRow, type Metric,
   type Network,
 } from "@/lib/compare-dashboard";
@@ -258,6 +258,7 @@ function InstitutionTable({ rows, highlights, onToggle }: {
 }
 
 type Overlay = { id: string; name: string; status: string };
+const NO_TIMING = { timing: [], types: [] };
 
 function OverlayRetry({ onRetry, names }: { onRetry: () => void; names?: string }) {
   return (
@@ -308,12 +309,16 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
   // Вуз для тепловой карты — один из выделенных; снятый вуз возвращает «все вузы».
   const heatmapId = highlights.has(heatmapScope) ? heatmapScope : "all";
   const heatmapState = heatmapId === "all" ? null : timing.states.get(heatmapId);
-  const heatmapGrid = useMemo(() => timingGrid(heatmapState?.status === "ready" ? heatmapState.data : data, platform),
-    [heatmapState, data, platform]);
-  const overlays = useMemo(() => highlightIds.map((id) => {
+  // Пока данные вуза не пришли, сетка пуста: числа всех вузов под именем вуза
+  // ввели бы в заблуждение.
+  const heatmapGrid = useMemo(() => timingGrid(heatmapId === "all" ? data
+    : heatmapState?.status === "ready" ? heatmapState.data : NO_TIMING, platform), [heatmapId, heatmapState, data, platform]);
+  // Графикам — только пришедшие данные; подписи под ними — что ещё в пути.
+  const overlayStatus = useMemo(() => highlightIds.map((id) => ({
+    id, name: labels.get(id)?.name ?? id, status: timing.states.get(id)?.status ?? "loading" })), [highlightIds, labels, timing.states]);
+  const overlays = useMemo(() => highlightIds.flatMap((id): TimingOverlay[] => {
     const state = timing.states.get(id);
-    return { id, name: labels.get(id)?.name ?? id, color: highlights.get(id)!, status: state?.status ?? "loading",
-      source: state?.status === "ready" ? state.data : null };
+    return state?.status === "ready" ? [{ id, name: labels.get(id)?.name ?? id, color: highlights.get(id)!, source: state.data }] : [];
   }), [highlightIds, highlights, labels, timing.states]);
   const curveRowsForNetwork = useMemo(() => institutionRows(data, curveNetwork).filter((row) => row.posts > 0), [data, curveNetwork]);
   const anomalyRows = useMemo(() => activeRows.filter((row) => row.analyzed >= 5), [activeRows]);
@@ -373,7 +378,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
   };
 
   const preset = SCATTER_PRESETS.find((item) => item.id === scatter) ?? SCATTER_PRESETS[0]!;
-  const days = period === "7d" ? 7 : 30;
+  const days = periodDays(period);
   const periodHref = (value: DashboardPeriod) => {
     const params = new URLSearchParams({ period: value, platform });
     if (highlightIds.length) params.set("highlight", highlightIds.join(","));
@@ -468,7 +473,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
               options={[{ value: "views", label: "Просмотры" }, { value: "reactions", label: "Реакции" }]} />
           </div>}>
           <CurvesChart data={data} platform={curveNetwork} rows={curveRowsForNetwork} highlights={highlights} field={curveField}
-            onPick={toggle} canAdd={highlights.size < MAX_HIGHLIGHTS} />
+            onPick={toggle} />
         </ChartCard>
       </Section>
 
@@ -530,12 +535,13 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
               <NativeSelectOption value="all">Все вузы</NativeSelectOption>
               {highlightIds.map((id) => <NativeSelectOption key={id} value={id}>{labels.get(id)?.name ?? id}</NativeSelectOption>)}
             </NativeSelect> : undefined}
-            footer={heatmapState?.status === "error" ? <OverlayRetry onRetry={timing.retry} /> : undefined}>
+            footer={heatmapState?.status === "error" ? <OverlayRetry onRetry={timing.retry} />
+              : heatmapState?.status === "loading" ? <span role="status">Загружаем: {labels.get(heatmapId)?.name}…</span> : undefined}>
             <TimingHeatmap grid={heatmapGrid} loading={heatmapState?.status === "loading"} />
           </ChartCard>
           <ChartCard title="Час выхода и охват" testId="hourly-card"
             note={`Столбцы — сколько постов всех вузов вышло в этот час; линии — медиана просмотров за первые сутки у постов этого часа: серая — все вузы, цветные — выделенные (часы, где у вуза меньше ${OVERLAY_MIN_POSTS} постов, пропущены).`}
-            footer={<OverlayStatus overlays={overlays} onRetry={timing.retry} />}>
+            footer={<OverlayStatus overlays={overlayStatus} onRetry={timing.retry} />}>
             <HourlyReachChart data={data} platform={platform} overlays={overlays} />
           </ChartCard>
         </div>
@@ -544,7 +550,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
             description={highlights.size ? "Доля каждого формата в публикациях и медиана просмотров за 24 часа: все вузы и выделенные"
               : "Сколько публикаций каждого формата и медиана их просмотров за 24 часа"}
             note="Основные форматы — текст, фото, альбом и видео; опросы, документы, ссылки, стикеры и другие редкие форматы собраны в «Прочее»."
-            footer={<OverlayStatus overlays={overlays} onRetry={timing.retry} />}>
+            footer={<OverlayStatus overlays={overlayStatus} onRetry={timing.retry} />}>
             <TypesChart data={data} platform={platform} overlays={overlays} />
           </ChartCard>
         </div>

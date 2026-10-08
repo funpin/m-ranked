@@ -1,7 +1,7 @@
 "use client";
 import { Empty, EmptyContent, EmptyDescription } from "@/components/ui/empty";
 
-import { useMemo, useState, type ComponentProps } from "react";
+import { memo, useMemo, useState, type ComponentProps } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, Label, Line, LineChart, Pie, PieChart,
   PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ReferenceLine, Scatter, ScatterChart,
@@ -10,12 +10,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import {
-  LEVEL_COLORS, LEVEL_NAMES, METRICS, NETWORKS, PLATFORM_COLORS, PLATFORM_NAMES,
+  LEVEL_COLORS, LEVEL_NAMES, MAX_HIGHLIGHTS, METRICS, NETWORKS, PLATFORM_COLORS, PLATFORM_NAMES,
   curveRows, dailyRows, formatCompact, formatInteger, formatPercent, formatValue, hourLabel, hourlyReach, incompleteDay,
   levelSharesByPlatform, median, metricValue, percentileRank, sortRows,
-  type Dashboard, type DashboardPlatform, type InstitutionRow, type Metric, type Network, type TimingSource,
+  type Dashboard, type DashboardPlatform, type InstitutionRow, type Metric, type Network,
 } from "@/lib/compare-dashboard";
-import { hourlyOverlay, typeComparison } from "@/lib/compare-timing";
+import { hourlyOverlay, overlayKey, typeComparison, type TimingOverlay } from "@/lib/compare-timing";
 
 /** Выделенные вузы: id → цвет. Остальные рисуются нейтрально. */
 export type Highlights = ReadonlyMap<string, string>;
@@ -42,9 +42,7 @@ function yTitle(value: string, side: "left" | "right" = "left", color = "var(--m
     style: { fontSize: 11, fill: color, textAnchor: "middle" } };
 }
 
-/** Выделенный вуз на графиках «Времени и форматов»: данные догружаются. */
-export type Overlay = { id: string; name: string; color: string; source: TimingSource | null };
-const NO_OVERLAYS: readonly Overlay[] = [];
+const NO_OVERLAYS: readonly TimingOverlay[] = [];
 
 const PARTIAL_LABEL = "день не закончился";
 /** В подсказке незаконченный день показывается один раз: пунктирный ряд
@@ -165,21 +163,21 @@ export function ScatterMap({ rows, x, y, highlights }: {
 /** Серые кривые всех вузов одним слоем: каждая линия отзывается на курсор и
  *  нажатие, поэтому вуз, идущий выше остальных, находится без перебора.
  *  Невидимая широкая обводка — зона попадания по тонкой линии. */
-function CurveBackdrop({ rows, ids, hovered, onHover, onPick }: {
+const CurveBackdrop = memo(function CurveBackdrop({ rows, ids, hovered, onHover, onPick }: {
   rows: readonly Record<string, number | null>[]; ids: readonly string[]; hovered: string | null;
   onHover: (id: string | null) => void; onPick: (id: string) => void;
 }) {
   const x = useXAxisScale();
   const y = useYAxisScale();
-  if (!x || !y) return null;
-  const paths = ids.map((id) => {
+  // Пути пересчитываются только при смене данных или масштаба, не на наведение.
+  const paths = useMemo(() => !x || !y ? [] : ids.map((id) => {
     const points = rows.flatMap((row) => {
       const value = row[id];
       const px = x(row.hour!), py = value === null || value === undefined ? undefined : y(value);
       return px === undefined || py === undefined ? [] : [`${px},${py}`];
     });
     return { id, d: points.length > 1 ? `M${points.join("L")}` : null };
-  });
+  }), [x, y, rows, ids]);
   return (
     <g data-testid="curves-backdrop" onPointerLeave={() => onHover(null)}>
       {paths.map(({ id, d }) => d ? (
@@ -191,21 +189,27 @@ function CurveBackdrop({ rows, ids, hovered, onHover, onPick }: {
       ) : null)}
     </g>
   );
-}
+});
 
 /** Как набираются просмотры: медиана всех вузов площадки — жирная линия,
  *  выделенные — цветом, остальные — тонкий фон, чтобы видеть разброс.
  *  Наведение на фоновую линию называет вуз, нажатие — выделяет его. */
-export function CurvesChart({ data, platform, rows, highlights, field, onPick, canAdd }: {
+export function CurvesChart({ data, platform, rows, highlights, field, onPick }: {
   data: Dashboard; platform: Network; rows: readonly InstitutionRow[]; highlights: Highlights; field: "views" | "reactions";
-  onPick: (id: string) => void; canAdd: boolean;
+  onPick: (id: string) => void;
 }) {
   const ids = useMemo(() => rows.map((row) => row.id), [rows]);
   const chart = useMemo(() => curveRows(data, platform, ids, field), [data, platform, ids, field]);
   const [hovered, setHovered] = useState<string | null>(null);
-  const names = new Map(rows.map((row) => [row.id, row.name]));
-  const config: ChartConfig = { median: { label: `Медиана ${PLATFORM_NAMES[platform]}`, color: "var(--foreground)" } };
-  for (const [id, color] of highlights) config[id] = { label: names.get(id) ?? id, color };
+  const names = useMemo(() => new Map(rows.map((row) => [row.id, row.name])), [rows]);
+  const background = useMemo(() => ids.filter((id) => !highlights.has(id)), [ids, highlights]);
+  const pick = useMemo(() => (id: string) => { setHovered(null); onPick(id); }, [onPick]);
+  const config = useMemo(() => {
+    const result: ChartConfig = { median: { label: `Медиана ${PLATFORM_NAMES[platform]}`, color: "var(--foreground)" } };
+    for (const [id, color] of highlights) result[id] = { label: names.get(id) ?? id, color };
+    return result;
+  }, [platform, highlights, names]);
+  const canAdd = highlights.size < MAX_HIGHLIGHTS;
   if (!chart.some((point) => point.median !== null)) return <EmptyChart />;
   const measure = field === "views" ? "Просмотры" : "Реакции";
   return (
@@ -219,8 +223,7 @@ export function CurvesChart({ data, platform, rows, highlights, field, onPick, c
           height={X_TITLE_HEIGHT} label={xTitle("Время после выхода поста")} />
         <YAxis tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false} width={52 + AXIS_TITLE_GUTTER}
           label={yTitle(`${measure}, медиана`)} />
-        <CurveBackdrop rows={chart} ids={ids.filter((id) => !highlights.has(id))} hovered={hovered} onHover={setHovered}
-          onPick={(id) => { setHovered(null); onPick(id); }} />
+        <CurveBackdrop rows={chart} ids={background} hovered={hovered} onHover={setHovered} onPick={pick} />
         <ChartTooltip content={(props) => {
           const hour = Number(props.label);
           const point = chart.find((row) => row.hour === hour);
@@ -228,7 +231,7 @@ export function CurvesChart({ data, platform, rows, highlights, field, onPick, c
             return <TooltipBox title={names.get(hovered) ?? ""} lines={[
               [`${measure} на ${hourLabel(hour)}`, formatInteger(point[hovered] ?? null)],
               [`Медиана ${PLATFORM_NAMES[platform]}`, formatInteger(point.median ?? null)],
-            ]} note={canAdd ? "Нажмите на линию, чтобы выделить вуз" : `Выделено ${highlights.size} из ${highlights.size} — снимите вуз, чтобы добавить`} />;
+            ]} note={canAdd ? "Нажмите на линию, чтобы выделить вуз" : `Выделено ${MAX_HIGHLIGHTS} из ${MAX_HIGHLIGHTS} — снимите вуз, чтобы добавить`} />;
           }
           return <ChartTooltipContent active={props.active} payload={props.payload} label={props.label} indicator="line" labelFormatter={(value) => `${hourLabel(Number(value))} после выхода`}
             valueFormatter={(value) => formatInteger(Number(value))} />;
@@ -237,7 +240,7 @@ export function CurvesChart({ data, platform, rows, highlights, field, onPick, c
         {[...highlights.keys()].filter((id) => ids.includes(id)).map((id) => (
           <Line key={id} dataKey={id} stroke={`var(--color-${id})`} strokeWidth={2.25} dot={{ r: 2.5 }} isAnimationActive={false} connectNulls />
         ))}
-        <ChartLegend content={<ChartLegendContent />} />
+        <ChartLegend itemSorter={null} content={<ChartLegendContent />} />
       </LineChart>
     </ChartContainer>
   );
@@ -348,25 +351,21 @@ export function DailyChart({ data, platform }: { data: Dashboard; platform: Dash
 /** Час выхода: сколько публикуют и сколько типичный пост набирает за сутки.
  *  Выделенные вузы — своими линиями медианы поверх общей. */
 export function HourlyReachChart({ data, platform, overlays = NO_OVERLAYS }: {
-  data: Dashboard; platform: DashboardPlatform; overlays?: readonly Overlay[];
+  data: Dashboard; platform: DashboardPlatform; overlays?: readonly TimingOverlay[];
 }) {
   const rows = useMemo(() => {
     const base: Record<string, string | number | null>[] = hourlyReach(data, platform);
     for (const overlay of overlays) {
-      if (!overlay.source) continue;
-      hourlyOverlay(overlay.source, platform).forEach((row, hour) => {
-        base[hour]![`views_${overlay.id}`] = row.views24;
-        base[hour]![`posts_${overlay.id}`] = row.posts;
-      });
+      hourlyOverlay(overlay.source, platform).forEach((views, hour) => { base[hour]![overlayKey("views", overlay.id)] = views; });
     }
     return base;
   }, [data, platform, overlays]);
-  const ready = overlays.filter((overlay) => overlay.source);
+  const compare = overlays.length > 0;
   const config: ChartConfig = {
     posts: { label: "Публикаций, все вузы", color: "var(--chart-9)" },
-    views24: { label: ready.length ? "Все вузы" : "Просмотры за 24 ч, медиана", color: ready.length ? "var(--muted-foreground)" : "var(--chart-3)" },
+    views24: { label: compare ? "Все вузы" : "Просмотры за 24 ч, медиана", color: compare ? "var(--muted-foreground)" : "var(--chart-3)" },
   };
-  for (const overlay of ready) config[`views_${overlay.id}`] = { label: overlay.name, color: overlay.color };
+  for (const overlay of overlays) config[overlayKey("views", overlay.id)] = { label: overlay.name, color: overlay.color };
   return (
     <ChartContainer config={config} className="aspect-auto h-[300px] w-full" data-testid="hourly-chart" role="img"
       aria-label="Публикации и охват по часу выхода">
@@ -376,16 +375,16 @@ export function HourlyReachChart({ data, platform, overlays = NO_OVERLAYS }: {
         <YAxis yAxisId="posts" tickLine={false} axisLine={false} width={40 + AXIS_TITLE_GUTTER}
           label={yTitle("Публикаций", "left", "var(--chart-9)")} />
         <YAxis yAxisId="views" orientation="right" tickFormatter={(value) => formatCompact(value)} tickLine={false} axisLine={false}
-          width={48 + AXIS_TITLE_GUTTER} label={yTitle("Просмотры за 24 ч, медиана", "right", ready.length ? undefined : "var(--chart-3)")} />
+          width={48 + AXIS_TITLE_GUTTER} label={yTitle("Просмотры за 24 ч, медиана", "right", compare ? undefined : "var(--chart-3)")} />
         <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => formatInteger(Number(value))} />} />
-        <Bar yAxisId="posts" dataKey="posts" fill="var(--color-posts)" fillOpacity={ready.length ? 0.3 : 0.55} radius={[3, 3, 0, 0]} isAnimationActive={false} />
-        <Line yAxisId="views" dataKey="views24" stroke="var(--color-views24)" strokeWidth={ready.length ? 2 : 2.25}
-          strokeDasharray={ready.length ? "4 3" : undefined} dot={false} type="monotone" connectNulls isAnimationActive={false} />
-        {ready.map((overlay) => (
-          <Line key={overlay.id} yAxisId="views" dataKey={`views_${overlay.id}`} stroke={`var(--color-views_${overlay.id})`}
+        <Bar yAxisId="posts" dataKey="posts" fill="var(--color-posts)" fillOpacity={compare ? 0.3 : 0.55} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+        <Line yAxisId="views" dataKey="views24" stroke="var(--color-views24)" strokeWidth={compare ? 2 : 2.25}
+          strokeDasharray={compare ? "4 3" : undefined} dot={false} type="monotone" connectNulls isAnimationActive={false} />
+        {overlays.map((overlay) => (
+          <Line key={overlay.id} yAxisId="views" dataKey={overlayKey("views", overlay.id)} stroke={`var(--color-${overlayKey("views", overlay.id)})`}
             strokeWidth={2.25} dot={{ r: 2 }} type="monotone" isAnimationActive={false} />
         ))}
-        <ChartLegend content={<ChartLegendContent />} />
+        <ChartLegend itemSorter={null} content={<ChartLegendContent />} />
       </ComposedChart>
     </ChartContainer>
   );
@@ -395,18 +394,17 @@ export function HourlyReachChart({ data, platform, overlays = NO_OVERLAYS }: {
  *  своя подписанная шкала. С выделенными вузами левая панель показывает долю
  *  формата: у вуза сотни постов, у всех вузов — десятки тысяч. */
 export function TypesChart({ data, platform, overlays = NO_OVERLAYS }: {
-  data: Dashboard; platform: DashboardPlatform; overlays?: readonly Overlay[];
+  data: Dashboard; platform: DashboardPlatform; overlays?: readonly TimingOverlay[];
 }) {
-  const ready = useMemo(() => overlays.filter((overlay): overlay is Overlay & { source: TimingSource } => Boolean(overlay.source)), [overlays]);
-  const rows = useMemo(() => typeComparison(data, platform, ready.map(({ id, source }) => ({ id, source }))), [data, platform, ready]);
+  const rows = useMemo(() => typeComparison(data, platform, overlays), [data, platform, overlays]);
   if (!rows.length) return <EmptyChart />;
-  const compare = ready.length > 0;
-  const height = Math.max(200, rows.length * (28 + ready.length * 12) + 72);
+  const compare = overlays.length > 0;
+  const height = Math.max(200, rows.length * (28 + overlays.length * 12) + 72);
   const config: ChartConfig = {
     base: { label: compare ? "Все вузы" : "Публикаций", color: compare ? "var(--muted-foreground)" : "var(--chart-5)" },
     views: { label: compare ? "Все вузы" : "Просмотры за 24 ч, медиана", color: compare ? "var(--muted-foreground)" : "var(--chart-11)" },
   };
-  for (const overlay of ready) config[overlay.id] = { label: overlay.name, color: overlay.color };
+  for (const overlay of overlays) config[overlay.id] = { label: overlay.name, color: overlay.color };
   const panel = (kind: "count" | "views") => {
     const valueKey = kind === "views" ? "views24" : compare ? "share" : "posts";
     const format = (value: unknown) => kind === "views" ? formatCompact(value as number)
@@ -425,20 +423,21 @@ export function TypesChart({ data, platform, overlays = NO_OVERLAYS }: {
             return <TooltipBox title={String(item.type)} lines={[
               ["Все вузы: публикаций", `${formatInteger(item.posts as number)} (${formatPercent(item.share as number)})`],
               ["Все вузы: просмотры за 24 ч", formatInteger(item.views24 as number | null)],
-              ...ready.flatMap((overlay): [string, string][] => [
-                [`${overlay.name}: публикаций`, `${formatInteger(item[`posts_${overlay.id}`] as number)} (${formatPercent(item[`share_${overlay.id}`] as number)})`],
-                [`${overlay.name}: просмотры за 24 ч`, formatInteger(item[`views_${overlay.id}`] as number | null)],
+              ...overlays.flatMap((overlay): [string, string][] => [
+                [`${overlay.name}: публикаций`, `${formatInteger(item[overlayKey("posts", overlay.id)] as number)} (${formatPercent(item[overlayKey("share", overlay.id)] as number)})`],
+                [`${overlay.name}: просмотры за 24 ч`, formatInteger(item[overlayKey("views", overlay.id)] as number | null)],
               ]),
             ]} />;
           }} />
           <Bar dataKey={valueKey} name={kind === "views" ? "views" : "base"} fill={`var(--color-${kind === "views" ? "views" : "base"})`}
             fillOpacity={compare ? 0.45 : 1} radius={4} isAnimationActive={false}
             label={{ position: "right", fontSize: 10, fill: "var(--muted-foreground)", formatter: format }} />
-          {ready.map((overlay) => (
-            <Bar key={overlay.id} dataKey={kind === "views" ? `views_${overlay.id}` : `share_${overlay.id}`} name={overlay.id}
+          {overlays.map((overlay) => (
+            <Bar key={overlay.id} dataKey={overlayKey(kind === "views" ? "views" : "share", overlay.id)} name={overlay.id}
               fill={`var(--color-${overlay.id})`} radius={4} isAnimationActive={false} />
           ))}
-          {compare ? <ChartLegend content={<ChartLegendContent />} /> : null}
+          {/* Ключи рядов — доли и медианы, а подписи в config — по name: легенда ищет по нему. */}
+          {compare ? <ChartLegend itemSorter={null} content={<ChartLegendContent nameKey="value" />} /> : null}
         </BarChart>
       </ChartContainer>
     );

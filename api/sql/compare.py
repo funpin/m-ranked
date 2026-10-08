@@ -359,35 +359,33 @@ SELECT (SELECT coalesce(json_agg(stats), '[]') FROM stats) AS stats,
        (SELECT coalesce(json_agg(daily ORDER BY day), '[]') FROM daily) AS daily,
        (SELECT coalesce(json_agg(timing), '[]') FROM timing) AS timing,
        (SELECT coalesce(json_agg(types), '[]') FROM types) AS types
-""".replace("{timing_types}", _TIMING_TYPES)
+""".format(timing_types=_TIMING_TYPES)
 
 # Время и форматы одного вуза — догружаются к панели для выделенных вузов.
 # Окно, московское время и корзины форматов те же, что в DASHBOARD; набор
 # постов идёт от аккаунтов вуза и не трогает последний замер и анализ.
-# found = 0 — вуза нет или он скрыт.
+# found ложно — вуза нет или он скрыт.
 INSTITUTION_TIMING = """
 WITH params AS (
     SELECT %(as_of)s::timestamptz AS as_of, %(days)s::integer AS days, %(institution_id)s::uuid AS institution_id
-), institution AS (
-    SELECT institution.id FROM params JOIN catalog.visible_institution institution ON institution.id = params.institution_id
 ), dated AS (
     SELECT account.platform::text AS platform, {type_bucket} AS publication_type,
            day24.views_count AS views24, {engagement24} AS engagement24,
            extract(isodow FROM publication.published_at AT TIME ZONE 'Europe/Moscow')::integer - 1 AS weekday,
            extract(hour FROM publication.published_at AT TIME ZONE 'Europe/Moscow')::integer AS hour
       FROM params
-      JOIN institution ON true
-      JOIN catalog.visible_platform_account account ON account.institution_id = institution.id AND account.enabled
+      JOIN catalog.visible_platform_account account ON account.institution_id = params.institution_id AND account.enabled
       JOIN ingest.visible_publication publication ON publication.primary_account_id = account.id
        AND publication.published_at > params.as_of - make_interval(days => params.days)
        AND publication.published_at <= params.as_of
       LEFT JOIN analytics.publication_checkpoint day24 ON day24.publication_id = publication.id
        AND day24.hour_offset = 24
 ), {timing_types}
-SELECT (SELECT count(*)::integer FROM institution) AS found,
+SELECT EXISTS (SELECT FROM params JOIN catalog.visible_institution institution
+                ON institution.id = params.institution_id) AS found,
        (SELECT coalesce(json_agg(timing), '[]') FROM timing) AS timing,
        (SELECT coalesce(json_agg(types), '[]') FROM types) AS types
-""".replace("{type_bucket}", _TYPE_BUCKET).replace("{engagement24}", _ENGAGEMENT24).replace("{timing_types}", _TIMING_TYPES)
+""".format(type_bucket=_TYPE_BUCKET, engagement24=_ENGAGEMENT24, timing_types=_TIMING_TYPES)
 
 # Кривые накопления: медиана значений на каждом фиксированном часу. Площадки
 # не смешиваются — просмотр в Telegram и во ВКонтакте значит разное.

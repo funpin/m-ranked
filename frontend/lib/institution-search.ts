@@ -12,7 +12,7 @@ export type SearchTarget = {
 };
 
 export type PreparedTarget<T> = {
-  item: T; index: number; short: string; words: string[]; haystack: string; weight: number;
+  item: T; short: string; words: string[]; haystack: string; weight: number;
 };
 
 const SEPARATORS = /[«»"“”„‟'‘’`´()[\]{}\-‐‑‒–—−.,;:!?/\\|_+*#№…]/g;
@@ -24,11 +24,11 @@ export function normalizeSearchText(value: string): string {
 
 /** Готовит список один раз: на каждую букву запроса — только сравнение строк. */
 export function prepareTargets<T>(items: readonly T[], pick: (item: T) => SearchTarget): PreparedTarget<T>[] {
-  return items.map((item, index) => {
+  return items.map((item) => {
     const target = pick(item);
     const short = normalizeSearchText(target.shortName || target.name);
     const haystack = `${short} ${normalizeSearchText(target.name)}`;
-    return { item, index, short, words: haystack.split(" "), haystack, weight: target.weight ?? 0 };
+    return { item, short, words: haystack.split(" "), haystack, weight: target.weight ?? 0 };
   });
 }
 
@@ -40,7 +40,8 @@ function rank(target: PreparedTarget<unknown>, query: string, tokens: readonly s
   return 3;
 }
 
-/** Пустой запрос — весь список в исходном порядке. */
+/** Пустой запрос — весь список в исходном порядке; при равенстве он же
+ *  сохраняется (сортировка устойчива). */
 export function searchInstitutions<T>(prepared: readonly PreparedTarget<T>[], query: string): T[] {
   const normalized = normalizeSearchText(query);
   if (!normalized) return prepared.map((target) => target.item);
@@ -48,8 +49,6 @@ export function searchInstitutions<T>(prepared: readonly PreparedTarget<T>[], qu
   return prepared
     .map((target) => ({ target, rank: rank(target, normalized, tokens) }))
     .filter((match): match is { target: PreparedTarget<T>; rank: number } => match.rank !== null)
-    .sort((left, right) => left.rank - right.rank
-      || right.target.weight - left.target.weight
-      || left.target.index - right.target.index)
+    .sort((left, right) => left.rank - right.rank || right.target.weight - left.target.weight)
     .map((match) => match.target.item);
 }

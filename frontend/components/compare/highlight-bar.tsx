@@ -36,6 +36,9 @@ export function HighlightBar({ options, labels, highlights, onToggle, onClear, f
 }) {
   const [draft, setDraft] = useState("");
   const [active, setActive] = useState(false);
+  // Заглушка остаётся под пальцем, пока код поиска не загрузится: фокус и
+  // напечатанное не теряются на время подмены.
+  const activate = () => { void importCombobox().then(() => setActive(true)); };
   const live = active || focusRequest > 0;
   const notes = new Map(options.map((option) => [option.id, option.note]));
   return (
@@ -43,7 +46,7 @@ export function HighlightBar({ options, labels, highlights, onToggle, onClear, f
       <div className="w-full">
         {live ? <HighlightCombobox options={options} highlights={highlights} onToggle={onToggle}
           initialQuery={draft} focusRequest={focusRequest} />
-          : <SearchShell value={draft} onValue={setDraft} onActivate={() => setActive(true)} />}
+          : <SearchShell value={draft} onValue={setDraft} onActivate={activate} />}
       </div>
       {[...highlights].map(([id, color]) => {
         const label = labels.get(id);
