@@ -211,7 +211,7 @@ test("account findings follow the selected platform and only persistent ones hid
   assert.equal(vk[0]!.persistentFindings, true);
   assert.deepEqual(withoutPersistentFindings(vk).map((row) => row.name), ["Бета Институт"]);
   assert.equal(institutionRows(flagged, "all")[0]!.persistentFindings, true);
-  assert.match(findingsNote(vk[0]!)!, /Отклик вырос без роста аудитории \(устойчиво\)/);
+  assert.match(findingsNote(vk[0]!)!, /Скачок доли реакций на просмотр \(устойчиво\)/);
   assert.equal(findingsNote(vk[1]!), null);
   // Старый ответ API без поля — без находок.
   assert.deepEqual(institutionRows(data, "vk")[0]!.findings, []);

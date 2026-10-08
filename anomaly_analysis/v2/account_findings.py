@@ -33,10 +33,10 @@
   одни и те же 15 минут получала бо́льшая часть стены (в среднем 27–45 %
   старых постов на 15-минутку против 4–5 % у медианного вуза ВК), а доля
   лайков на просмотр старых постов — 8–13 % против 1,1–1,3 %.
-* ``engagement_shift`` — отклик вырос без роста аудитории: с некоторой даты доля
+* ``engagement_shift`` — скачок доли реакций на просмотр: с некоторой даты доля
   реакций на просмотр (R72/V72) у постов вдвое и больше выше, чем две недели до
   неё, почти все посты после даты выше 90 % прежних, просмотры прежние. Тот же
-  сдвиг у других аккаунтов вуза в ±3 сутках показывается как подтверждение.
+  сдвиг у других аккаунтов вуза в ±5 сутках показывается как подтверждение.
 * ``night_reactions`` — реакции приходят ночью аудитории (определённой по
   провалу её просмотров), когда просмотров почти нет.
 
@@ -68,7 +68,7 @@ TITLES = {
     "late_growth": "Посты добирают реакции через дни",
     "late_engagement": "Необычный отклик на старые посты",
     "synchronous_waves": "Волны реакций сразу на многих постах",
-    "engagement_shift": "Отклик вырос без роста аудитории",
+    "engagement_shift": "Скачок доли реакций на просмотр",
     "night_reactions": "Реакции приходят ночью, когда просмотров нет",
 }
 ALTERNATIVES = {
@@ -147,8 +147,11 @@ SHIFT_STRONG_SEPARATION = 0.9
 SHIFT_RECENT_DAYS = 7
 SHIFT_RECENT_RATIO = 1.5
 SHIFT_ONSET_SHARE = 0.95
-# Подтверждение: тот же вуз, другая площадка, лучший срез в ±3 сутках.
-SHIFT_SUPPORT_DAYS = 3
+# «При тех же просмотрах» — только если медиана просмотров почти не изменилась.
+SHIFT_SAME_VIEWS = (0.8, 1.25)
+# Подтверждение: тот же вуз, другая площадка, лучший срез в ±5 сутках. Рост
+# бывает постепенным, и срезы площадок расходятся: ЮЗГУ — VK 20.09, MAX 24.09.
+SHIFT_SUPPORT_DAYS = 5
 SHIFT_SUPPORT_RATIO = 1.5
 # Ночные реакции: почасовой поздний прирост сводки v4 (24 ч–14 сут). Ночь —
 # шесть подряд часов с наименьшей долей просмотров у самой аудитории аккаунта:
@@ -167,6 +170,10 @@ NIGHT_LIFT = 4.0
 NIGHT_MEMBER_REACTIONS = 5
 NIGHT_MSK_START = 1
 NIGHT_SHIFT_NOTE_HOURS = 2
+# Сдвиг ночи аудитории от московской (часы, «−5» — ночь на пять часов раньше
+# по МСК): от Камчатки (UTC+12, −9) до Калининграда (UTC+2, +1). Провал вне
+# этих поясов — не ночь (КБГУ во ВКонтакте: просмотры «спят» в 15–21 МСК).
+NIGHT_SHIFT_RANGE = (-9, 1)
 MOSCOW_UTC_OFFSET = 3
 PLATFORM_TITLES = {"telegram": "Telegram", "vk": "VK", "max": "MAX", "rutube": "Rutube"}
 
@@ -555,6 +562,8 @@ def _night_stats(items: Sequence[LedgerPost], night_start: int | None = None,
     reaction_share = sum(reactions[hour] for hour in night) / total_reactions
     start_msk = (night_start + MOSCOW_UTC_OFFSET) % 24
     shift = (start_msk - NIGHT_MSK_START + 12) % 24 - 12
+    if not NIGHT_SHIFT_RANGE[0] <= shift <= NIGHT_SHIFT_RANGE[1]:
+        return None
     return {
         "posts": len(posts), "views": total_views, "reactions": total_reactions,
         "nightStartUtc": night_start, "nightStartMsk": start_msk, "shiftHours": shift,
@@ -658,8 +667,8 @@ def summary(finding: AccountFinding) -> str:
         start = data["nightStartMsk"]
         text = (f"Ночью аудитории ({start:02d}:00–{(start + NIGHT_HOURS) % 24:02d}:00 МСК) приходит "
                 f"{_ru(100 * data['reactionShare'])} % поздних реакций и только {_ru(100 * data['viewShare'])} % "
-                f"поздних просмотров — в {_ru(data['lift'])} раза больше; у типичного аккаунта площадки — в "
-                f"{_ru(data.get('cohort', {}).get('median', 0))} раза")
+                f"поздних просмотров — в {_ru(data['lift'])} раза больше; у типичного аккаунта площадки отношение "
+                f"этих долей — {_ru(data.get('cohort', {}).get('median', 0))}")
         if abs(data["shiftHours"]) > NIGHT_SHIFT_NOTE_HOURS:
             text += (f"; ночь определена по просмотрам: судя по ним, вуз в другом часовом поясе "
                      f"(≈ UTC{MOSCOW_UTC_OFFSET - data['shiftHours']:+d})")
@@ -691,6 +700,8 @@ def headline(finding: AccountFinding) -> str:
     data = finding.metrics
     if finding.kind == "early_pack":
         return f"Пакет реакций в первые часы у {round(100 * data['share'])} % постов"
+    if finding.kind == "regular_reactions" and data.get("measure") == "day":
+        return "Посты одного дня получают почти одинаковое число реакций"
     if finding.kind == "regular_reactions":
         return (f"{data['p10Reactions']}–{data['p90Reactions']} {_reaction_word(data['p90Reactions'])} "
                 f"у 80 % постов при любом охвате")
@@ -699,8 +710,10 @@ def headline(finding: AccountFinding) -> str:
     if finding.kind == "synchronous_waves":
         return f"{_days(data['days'])} с волной реакций сразу на многих постах"
     if finding.kind == "engagement_shift":
-        return (f"С {date.fromisoformat(data['cut']):%d.%m} реакций на просмотр в {_ru(data['ratio'])} раза "
-                f"больше при тех же просмотрах")
+        text = f"С {date.fromisoformat(data['cut']):%d.%m} реакций на просмотр в {_ru(data['ratio'])} раза больше"
+        if SHIFT_SAME_VIEWS[0] <= data["viewsRatio"] <= SHIFT_SAME_VIEWS[1]:
+            return text + " при тех же просмотрах"
+        return text + f", просмотры изменились в {_ru(data['viewsRatio'])} раза"
     if finding.kind == "night_reactions":
         return (f"{_ru(100 * data['reactionShare'], 0)} % поздних реакций ночью при "
                 f"{_ru(100 * data['viewShare'])} % просмотров")

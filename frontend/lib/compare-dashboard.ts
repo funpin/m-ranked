@@ -73,7 +73,7 @@ export const FINDING_TITLES: Record<InstitutionFinding["kind"], string> = {
   late_growth: "Посты добирают реакции через дни",
   late_engagement: "Необычный отклик на старые посты",
   synchronous_waves: "Волны реакций сразу на многих постах",
-  engagement_shift: "Отклик вырос без роста аудитории",
+  engagement_shift: "Скачок доли реакций на просмотр",
   night_reactions: "Реакции приходят ночью, когда просмотров нет",
 };
 

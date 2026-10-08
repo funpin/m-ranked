@@ -335,3 +335,35 @@ def test_night_reactions_in_one_half_of_the_window_are_not_yet_persistent():
     first_half = night_posts(1, 40, MOSCOW_VIEWS, lambda index: _diurnal(22, 2, 3) if index < 20 else FOLLOWING)
     (finding,) = _kind(findings(first_half, TODAY), "night_reactions")
     assert finding.status == 1
+
+
+def test_a_night_no_russian_time_zone_could_have_is_not_a_night():
+    # Провал просмотров в 15–21 МСК: ни в одном часовом поясе России это не ночь
+    # (КБГУ во ВКонтакте — артефакт выдачи, а не аудитория).
+    afternoon = _diurnal(12, 20, 1)
+    posts = night_posts(1, 40, afternoon, _diurnal(12, 2, 3))
+    assert not [item for item in findings(posts, TODAY) if item.kind == "night_reactions"]
+
+
+def test_a_gradual_rise_on_another_platform_four_days_apart_still_supports():
+    rng = random.Random(29)
+    posts = _shift(1, 11, rng, institution=7) + _shift(2, 15, rng, platform="vk", institution=7, high=280)
+    (finding,) = _kind(findings(posts, TODAY), "engagement_shift")
+    assert [item["platform"] for item in finding.metrics["corroboration"]] == ["vk"]
+
+
+def test_headlines_name_only_what_the_numbers_show():
+    from anomaly_analysis.v2.account_findings import headline
+    rng = random.Random(31)
+    (shift,) = _kind(findings(_shift(1, 11, rng), TODAY), "engagement_shift")
+    assert headline(shift).endswith("при тех же просмотрах") and shift.title == "Скачок доли реакций на просмотр"
+    grown = _shift(1, 11, rng, high=500, views=lambda day, rng: round(rng.randint(700, 1100) * (1 if day < 11 else 1.6)))
+    (shift,) = _kind(findings(grown, TODAY), "engagement_shift")
+    assert "при тех же просмотрах" not in headline(shift) and "просмотры" in headline(shift)
+    stepped = daily_posts(1, 25, 6, lambda day, rng: _poisson(95 if day < 11 else 250, rng), rng)
+    (regular,) = _kind(findings(stepped, TODAY), "regular_reactions")
+    assert headline(regular) == "Посты одного дня получают почти одинаковое число реакций"
+    bot = night_posts(1, 40, MOSCOW_VIEWS, _diurnal(22, 2, 3))
+    cohort = [item for account in range(2, 8) for item in night_posts(account, 40, MOSCOW_VIEWS, _diurnal(22, 20, 2))]
+    (night,) = _kind(findings(bot + cohort, TODAY), "night_reactions")
+    assert "в 0," not in summary(night) and "у типичного аккаунта площадки отношение" in summary(night)
