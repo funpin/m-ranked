@@ -215,7 +215,7 @@ function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
     }
     for (let hour = 7; hour < 24; hour += 1) timing.push({ platform: platform as Schema["PlatformValue"], weekday: null, hour, posts: 10 + hour, views24: 300 + hour * 15 });
   }
-  const types = [...networks, "all"].flatMap((platform) => ["photo", "album", "video", "text"].map((type, index) => ({
+  const types = [...networks, "all"].flatMap((platform) => (["photo", "album", "video", "text", "other"] as const).map((type, index) => ({
     platform: platform as Schema["PlatformValue"], type, posts: 40 - index * 8, views24: 500 + index * 150, engagement24: 3 + index })));
   return { period, hours, datasetRevision: revision, asOf, institutions, stats, curves, daily, timing, types };
 }
@@ -380,6 +380,20 @@ const server = createServer(async (request, response) => {
   if (sitemapPage) return json({ page: Number(sitemapPage[1]), datasetRevision: revision, asOf, items: Number(sitemapPage[1]) === 0
     ? [{ publicationId: uuid(5,1), lastModified: "2026-07-07T15:00:00Z" }, { publicationId: uuid(5,2), lastModified: "2026-07-08T00:00:00Z" }] : [] });
   if (url.pathname === "/api/v1/compare/dashboard") return json(dashboard(url.searchParams.get("period") === "7d" ? "7d" : "30d"));
+  const institutionTiming = /^\/api\/v1\/compare\/institutions\/([0-9a-f-]{36})\/timing$/.exec(url.pathname);
+  if (institutionTiming) {
+    // Доля общих разрезов: у вуза те же часы и форматы, только меньше постов.
+    const period = url.searchParams.get("period") === "7d" ? "7d" : "30d";
+    const board = dashboard(period);
+    const index = board.institutions.findIndex((item) => item.institutionId === institutionTiming[1]);
+    if (index < 0) return json({ type: "about:blank", title: "Not Found", status: 404, detail: "вуз не найден" }, 404);
+    const scale = (posts: number) => Math.max(0, Math.round(posts / (index + 2)));
+    return json({
+      institutionId: institutionTiming[1]!, period, datasetRevision: revision, asOf: board.asOf,
+      timing: board.timing.map((cell) => ({ ...cell, posts: scale(cell.posts) + 3, views24: cell.views24 === null ? null : cell.views24 + index * 40 })),
+      types: board.types.map((row) => ({ ...row, posts: scale(row.posts) + 1, views24: row.views24 === null ? null : row.views24 + index * 25 })),
+    } satisfies Schema["ComparisonInstitutionTiming"]);
+  }
   if (url.pathname === "/api/v1/compare/candidates") return json({
     items: selectionIds.map((id) => ({ selectionId: `selection-${id}`, selectionType: platform === "telegram" ? "channels" : "institutions",
       selectionLegacyId: id, selectionLabel: names[id - 1]!, selectionDescription: names[id - 1]!, institutionId: `institution-${id}`, canonicalName: names[id - 1]! })),

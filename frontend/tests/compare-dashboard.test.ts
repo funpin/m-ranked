@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  formatValue, hourlyReach, institutionRows, median, normalizeDashboardPeriod, normalizeDashboardPlatform,
-  percentileRank, platformSummary, sortRows, timingGrid, type Dashboard, type DashboardStat,
+  HIGHLIGHT_COLORS, MAX_HIGHLIGHTS, dailyRows, formatValue, highlightMap, hourlyReach, incompleteDay, institutionLabels,
+  institutionOptions, institutionRows, median, normalizeDashboardPeriod, normalizeDashboardPlatform, percentileRank,
+  platformSummary, sortRows, timingGrid, toggleHighlight, typeName, typeRows, type Dashboard, type DashboardStat,
 } from "../lib/compare-dashboard";
+import { hourlyOverlay, typeComparison } from "../lib/compare-timing";
 
 const A = "00000009-0000-4000-8000-000000000001";
 const B = "00000009-0000-4000-8000-000000000002";
@@ -108,4 +110,68 @@ test("query values normalise to supported platforms and periods", () => {
   assert.equal(normalizeDashboardPeriod("7d"), "7d");
   assert.equal(normalizeDashboardPeriod("24"), "30d");
   assert.equal(formatValue(12.345, "engagement24"), "12,3%");
+});
+
+test("search options list every university and say why one is missing from the charts", () => {
+  const none: Dashboard = { ...data, institutions: [{ ...data.institutions[1]!, platforms: [] }] };
+  assert.equal(institutionOptions(none, "all")[0]!.note, "нет аккаунтов в соцсетях");
+  const rutube = institutionOptions(data, "rutube");
+  assert.deepEqual(rutube.map((option) => option.note), ["нет аккаунта на Rutube", "нет аккаунта на Rutube"]);
+  const vk = institutionOptions({ ...data, stats: data.stats.filter((item) => item.institutionId !== B) }, "vk");
+  assert.deepEqual(vk.map((option) => [option.name, option.note]), [["Альфа", null], ["Бета Институт", "нет публикаций за период"]]);
+  assert.equal(institutionOptions(data, "telegram")[1]!.note, "нет аккаунта в Telegram");
+  // Имя метки не зависит от вкладки: Бета есть только во ВКонтакте.
+  assert.equal(institutionLabels(data).get(B)?.name, "Бета Институт");
+});
+
+test("a highlighted university keeps its colour when another one is removed", () => {
+  const ids = Array.from({ length: MAX_HIGHLIGHTS }, (_, index) => `id-${index}`);
+  let map = highlightMap(ids.slice(0, 3));
+  map = toggleHighlight(map, "id-0");
+  assert.equal(map.get("id-1"), HIGHLIGHT_COLORS[1]);
+  map = toggleHighlight(map, "id-9");
+  assert.equal(map.get("id-9"), HIGHLIGHT_COLORS[0]);
+  const full = highlightMap(ids);
+  assert.equal(toggleHighlight(full, "extra"), full);
+});
+
+test("the unfinished last day moves into dashed keys and keeps the previous point to join them", () => {
+  const daily: Dashboard["daily"] = [
+    { platform: "vk", day: "2026-09-22", posts: 10, viewsTotal: 100, reactionsTotal: 1, analyzed: 10, anomalous: 1 },
+    { platform: "vk", day: "2026-09-23", posts: 12, viewsTotal: 120, reactionsTotal: 1, analyzed: 10, anomalous: 2 },
+    { platform: "vk", day: "2026-09-24", posts: 2, viewsTotal: 5, reactionsTotal: 0, analyzed: 0, anomalous: 0 },
+  ];
+  // 2026-09-24T00:00Z — уже 03:00 24 сентября по Москве.
+  const partial = { ...data, daily };
+  assert.equal(incompleteDay(partial), "2026-09-24");
+  const rows = dailyRows(partial);
+  assert.equal(rows[2]!.posts_vk, null);
+  assert.equal(rows[2]!.posts_vk_partial, 2);
+  assert.equal(rows[1]!.posts_vk, 12);
+  assert.equal(rows[1]!.posts_vk_partial, 12);
+  assert.equal(rows[0]!.posts_vk_partial, undefined);
+  assert.equal(incompleteDay({ ...data, daily: daily.slice(0, 2) }), null);
+});
+
+test("formats keep one order with other last and compare a university by share", () => {
+  const base = { timing: [], types: [
+    { platform: "all" as const, type: "other" as const, posts: 50, views24: 10, engagement24: 1 },
+    { platform: "all" as const, type: "photo" as const, posts: 30, views24: 20, engagement24: 1 },
+    { platform: "all" as const, type: "video" as const, posts: 20, views24: 30, engagement24: 1 },
+  ] };
+  assert.deepEqual(typeRows(base, "all").map((row) => [row.type, row.share]), [["Фото", 30], ["Видео", 20], ["Прочее", 50]]);
+  assert.equal(typeName("poll"), "Прочее");
+  const own = { timing: [], types: [{ platform: "all" as const, type: "video" as const, posts: 4, views24: 90, engagement24: 2 }] };
+  const rows = typeComparison(base, "all", [{ id: A, name: "Альфа", color: "red", source: own }]);
+  assert.deepEqual(rows.map((row) => [row.type, row[`share_${A}`], row[`views_${A}`]]), [["Фото", 0, null], ["Видео", 100, 90], ["Прочее", 0, null]]);
+});
+
+test("a university's hourly line skips hours with too few posts", () => {
+  const source = { types: [], timing: [
+    { platform: "vk" as const, weekday: null, hour: 9, posts: 2, views24: 900 },
+    { platform: "vk" as const, weekday: null, hour: 10, posts: 3, views24: 300 },
+  ] };
+  const overlay = hourlyOverlay(source, "vk");
+  assert.equal(overlay[9], null);
+  assert.equal(overlay[10], 300);
 });

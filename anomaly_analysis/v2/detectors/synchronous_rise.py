@@ -16,7 +16,7 @@ from ..series import DAY, HOUR, PreparedSeries
 from .base import DetectorContext, SiblingActivity, make_sign, number
 
 ID = "synchronous_rise"
-VERSION = "2.2.1"
+VERSION = "2.2.2"
 PATTERN = 8
 FAMILY = Family.SYNCHRONY
 NEEDS_NORM = False
@@ -74,7 +74,13 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         subject = own_rows[0]
         taken: list[int] = []
         strong = _rises(subject, MIN_RISE)
-        for hour in np.flatnonzero(_rises(subject, WIDE_MIN_RISE) & (subject_ages >= MIN_AGE)):
+        candidates = _rises(subject, WIDE_MIN_RISE) & (subject_ages >= MIN_AGE)
+        if context.synchrony_from is not None:
+            # До границы суточная база обрезана началом окна (у самого края —
+            # пуста), и ровный темп выглядит подъёмом у всех постов разом.
+            # Признаки отсюда уже найдены прежними анализами и переносятся.
+            candidates &= own.hours * HOUR >= context.synchrony_from
+        for hour in np.flatnonzero(candidates):
             # Подъём пары часов отмечается на втором часе, поэтому то же событие
             # может всплыть на час позже допуска.
             if any(abs(hour - other) <= TOLERANCE_HOURS + 1 for other in taken):

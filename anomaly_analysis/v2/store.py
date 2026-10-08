@@ -719,6 +719,23 @@ class PostgresAnomalyStore:
             members.setdefault(row["account_id"], []).append(row["publication_id"])
         return members
 
+    def read_synchrony_events(self, published_after: datetime,
+                              published_until: datetime) -> list[dict[str, Any]]:
+        """Признаки синхронного подъёма реакций (8) у постов окна: час подъёма по посту."""
+        with self._factory() as connection:
+            return connection.execute(
+                """SELECT publication.primary_account_id AS account_id, account.platform::text AS platform,
+                          state.publication_id, (signal->'render'->>'hour')::timestamptz AS hour
+                     FROM analytics.post_anomaly_state state
+                     JOIN ingest.visible_publication publication ON publication.id = state.publication_id
+                     JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
+                    CROSS JOIN LATERAL jsonb_array_elements(state.signals) signal
+                    WHERE state.published_at >= %s AND state.published_at < %s
+                      AND publication.deleted_at IS NULL
+                      AND (signal->>'pattern')::int = 8 AND signal->>'metric' = 'reactions'
+                      AND signal->'render'->>'hour' IS NOT NULL""",
+                (published_after, published_until)).fetchall()
+
     def write_account_findings(self, findings: Sequence[Any], method_version: str) -> None:
         """Находки целиком одной транзакцией: неподтвердившиеся удаляются."""
         with self._factory() as connection, connection.transaction(), connection.cursor() as cursor:

@@ -742,6 +742,45 @@ paths:
           $ref: '#/components/responses/InvalidRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/compare/institutions/{institutionId}/timing:
+    get:
+      tags: [Query]
+      operationId: getComparisonInstitutionTiming
+      summary: Read when one institution publishes and which formats it uses
+      description: >-
+        The timing and format cuts of the comparison dashboard for a single institution: the same
+        period window, Moscow time and format buckets, so at one revision they add up to the
+        dashboard aggregates. The comparison page loads it for highlighted institutions only.
+      security: []
+      parameters:
+        - name: institutionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: period
+          in: query
+          schema: { type: string, enum: ['7d', '30d'], default: '30d' }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Timing and format cuts for the institution.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/PublicCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonInstitutionTiming'
+        '304':
+          description: The supplied validator matches this representation.
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/site/summary:
     get:
       tags: [Query]
@@ -5506,7 +5545,7 @@ components:
         reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
         accountFindings:
           type: array
-          maxItems: 4
+          maxItems: 5
           description: 'Аккаунтные находки, в которые входит пост; уровень поста они не меняют.'
           items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         methodologyVersion: { type: string, const: anomaly-dynamics-v2 }
@@ -5587,28 +5626,48 @@ components:
               anomalous: { type: integer, minimum: 0 }
         timing:
           type: array
-          items:
-            type: object
-            additionalProperties: false
-            required: [platform, weekday, hour, posts, views24]
-            properties:
-              platform: { $ref: '#/components/schemas/PlatformValue' }
-              weekday: { type: [integer, 'null'], minimum: 0, maximum: 6, description: 'Null aggregates every weekday.' }
-              hour: { type: integer, minimum: 0, maximum: 23 }
-              posts: { type: integer, minimum: 0 }
-              views24: { type: [number, 'null'] }
+          items: { $ref: '#/components/schemas/ComparisonTimingCell' }
         types:
           type: array
-          items:
-            type: object
-            additionalProperties: false
-            required: [platform, type, posts, views24, engagement24]
-            properties:
-              platform: { $ref: '#/components/schemas/PlatformValue' }
-              type: { type: string }
-              posts: { type: integer, minimum: 0 }
-              views24: { type: [number, 'null'] }
-              engagement24: { type: [number, 'null'] }
+          items: { $ref: '#/components/schemas/ComparisonTypeStat' }
+    ComparisonTimingCell:
+      type: object
+      additionalProperties: false
+      required: [platform, weekday, hour, posts, views24]
+      properties:
+        platform: { $ref: '#/components/schemas/PlatformValue' }
+        weekday: { type: [integer, 'null'], minimum: 0, maximum: 6, description: 'Moscow weekday, Monday is 0. Null aggregates every weekday.' }
+        hour: { type: integer, minimum: 0, maximum: 23, description: Moscow hour of publication. }
+        posts: { type: integer, minimum: 0 }
+        views24: { type: [number, 'null'], description: Median views at the 24th hour. }
+    ComparisonTypeStat:
+      type: object
+      additionalProperties: false
+      required: [platform, type, posts, views24, engagement24]
+      properties:
+        platform: { $ref: '#/components/schemas/PlatformValue' }
+        type:
+          type: string
+          enum: [text, photo, album, video, other]
+          description: Publication format; rare and platform-specific formats are merged into other.
+        posts: { type: integer, minimum: 0 }
+        views24: { type: [number, 'null'] }
+        engagement24: { type: [number, 'null'] }
+    ComparisonInstitutionTiming:
+      type: object
+      additionalProperties: false
+      required: [institutionId, period, datasetRevision, asOf, timing, types]
+      properties:
+        institutionId: { type: string, format: uuid }
+        period: { type: string, enum: ['7d', '30d'] }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        asOf: { type: string, format: date-time }
+        timing:
+          type: array
+          items: { $ref: '#/components/schemas/ComparisonTimingCell' }
+        types:
+          type: array
+          items: { $ref: '#/components/schemas/ComparisonTypeStat' }
     ComparisonDashboardStat:
       type: object
       additionalProperties: false
@@ -5741,7 +5800,7 @@ components:
       properties:
         accountId: { type: string, format: uuid }
         accountUsername: { type: [string, 'null'] }
-        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement] }
+        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves] }
         platform: { type: string, enum: [telegram, vk, max, rutube] }
         status: { type: integer, minimum: 1, maximum: 2 }
         statusLabel: { type: [string, 'null'] }
@@ -5777,7 +5836,7 @@ components:
         datasetRevision: { type: integer, format: int64, minimum: 0 }
         items:
           type: array
-          maxItems: 4
+          maxItems: 5
           items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         disclaimer: { type: string }
     AccountTailProfile:

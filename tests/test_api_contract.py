@@ -99,6 +99,7 @@ COMPARE_GROUP = {
     ("/api/v1/compare/candidates", "GET"),
     ("/api/v1/compare", "GET"),
     ("/api/v1/compare/dashboard", "GET"),
+    ("/api/v1/compare/institutions/{institutionId}/timing", "GET"),
 }
 
 MEDIA_GROUP = {

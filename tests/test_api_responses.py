@@ -671,3 +671,74 @@ def test_comparison_builder_bounds_subscribers_by_the_same_snapshot(monkeypatch)
     assert len(calls) == 3
     for query, values in calls:
         assert values["as_of"] == as_of, query
+
+
+def test_comparison_institution_timing_body_matches_the_contract():
+    import datetime
+    import json
+    import uuid
+
+    from api.routes import compare
+
+    institution = str(uuid.uuid4())
+    body = compare.institution_timing_body(
+        institution, "7d", 9, datetime.datetime(2026, 10, 6, tzinfo=datetime.timezone.utc),
+        {"found": 1,
+         "timing": [{"platform": "telegram", "weekday": None, "hour": 23, "posts": 2, "views24": 410.5},
+                    {"platform": "all", "weekday": 6, "hour": 0, "posts": 1, "views24": None}],
+         "types": [{"platform": "all", "publication_type": "other", "posts": 1, "views24": 50.0,
+                    "engagement24": 0.12345}]})
+    registry = Registry().with_resource("urn:contract", Resource.from_contents(
+        yaml.safe_load(CONTRACT.read_text(encoding="utf-8")), default_specification=DRAFT202012))
+    errors = list(Draft202012Validator({"$ref": "urn:contract#/components/schemas/ComparisonInstitutionTiming"},
+                                       registry=registry).iter_errors(json.loads(json.dumps(body, default=str))))
+    assert not errors, [f"{list(error.path)}: {error.message}" for error in errors]
+    assert body["timing"][0]["views24"] == 410 and body["types"][0]["engagement24"] == 0.123
+
+
+def test_comparison_institution_timing_route_validates_and_keys_by_institution(monkeypatch):
+    import asyncio
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from api.errors import BadRequest, NotFound
+    from api.routes import compare
+
+    as_of = datetime(2026, 10, 6, tzinfo=timezone.utc)
+    served, found = [], {"value": 1}
+    class ReadDatabase:
+        async def fetch_one(self, query, values):
+            assert query is compare.sql.INSTITUTION_TIMING
+            served.append(values)
+            return {"found": found["value"], "timing": [], "types": []}
+    async def serve(_request, namespace, key, _tags, build):
+        served.append((namespace, key))
+        return await build(3, as_of)
+    monkeypatch.setattr(compare, "serve", serve)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=ReadDatabase())))
+    institution = "6F9619FF-8B86-D011-B42D-00C04FC964FF"
+
+    body = asyncio.run(compare.institution_timing(request, institution, "7d"))
+    assert served[0] == ("comparison-institution-timing", {"id": institution.lower(), "period": "7d"})
+    assert served[1] == {"as_of": as_of, "days": 7, "institution_id": institution.lower()}
+    assert body["institutionId"] == institution.lower() and body["datasetRevision"] == 3
+
+    found["value"] = 0
+    with pytest.raises(NotFound):
+        asyncio.run(compare.institution_timing(request, institution, "30d"))
+    with pytest.raises(BadRequest):
+        asyncio.run(compare.institution_timing(request, "not-a-uuid", "30d"))
+    with pytest.raises(BadRequest):
+        asyncio.run(compare.institution_timing(request, institution, "90d"))
+
+
+def test_comparison_format_buckets_match_findings():
+    """Страница сравнения и «Находки» делят посты на одни и те же форматы."""
+    import re
+
+    from api.findings import MAIN_TYPES
+    from api.sql import compare
+
+    listed = re.search(r"publication_type IN \(([^)]*)\)", compare._TYPE_BUCKET).group(1)
+    assert tuple(item.strip(" '") for item in listed.split(",")) == MAIN_TYPES
+    assert "'unknown'" not in compare.DASHBOARD

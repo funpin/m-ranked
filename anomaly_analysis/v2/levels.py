@@ -144,17 +144,22 @@ def assess(subject: PostSeries, siblings: Sequence[PostSeries] = (), *, norms: N
            subscribers: Iterable[tuple[datetime, int]] = (), analyzed_at: datetime | None = None,
            cadence: CollectionCadence | None = None, norm_version: int | None = None,
            activity: SiblingActivity | None = None, carried: Sequence[Sign] = (),
-           reference: MatureReference | ReferenceSet | None = None) -> PostVerdict:
+           reference: MatureReference | ReferenceSet | None = None,
+           synchrony_from: datetime | None = None) -> PostVerdict:
     """Вывод по посту.
 
     `siblings` — другие посты того же аккаунта рядами; работник вместо них
     передаёт готовые почасовые агрегаты `activity`. `carried` — признаки
     прежнего вывода, чей участок уже вне окна агрегатов: синхронный подъём,
     найденный неделю назад, не исчезает оттого, что окно ушло вперёд.
+    `synchrony_from` — та же граница переноса: раньше неё синхронность заново
+    не ищется, суточная база там обрезана началом окна.
     """
     moment = analyzed_at or (subject.observed_at[-1] if subject.observed_at else subject.published_at)
     prepared = prepare(subject, moment, cadence or CollectionCadence())
     context = _context(prepared, siblings, norms, subscribers, activity)
+    if synchrony_from is not None:
+        context.synchrony_from = synchrony_from.timestamp()
     signs, versions = run_detectors(prepared, context)
     if reference is not None:
         signs.extend(reference.detect(subject, moment))

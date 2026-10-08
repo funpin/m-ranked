@@ -44,6 +44,15 @@ COMPARISON_336H_BUDGET = (5_000.0, 260_000)
 # Timings vary run to run; blocks are the stable signal. Before the split,
 # production measured 1.16 s / 389k blocks for 7d (2026-10-04).
 # To re-baseline: run against a restored copy, update these values, commit.
+# Сравнение вузов: панель (DASHBOARD) читает посты окна, последний замер и
+# анализ; кривые (DASHBOARD_CURVES) — все точки на фиксированных часах за
+# окно; догрузка по вузу (INSTITUTION_TIMING) — посты и 24-й час одного вуза.
+# Восстановленная копия прода (данные по 2026-10-06), одна машина, без JIT:
+# DASHBOARD 7d 143 ms / 23.5k, 30d 369 ms / 23.9k; CURVES 7d 93 ms / 72k,
+# 30d 399 ms / 332k; INSTITUTION_TIMING (самый активный вуз) 30d 7 ms / 4.7k.
+COMPARE_DASHBOARD_BUDGET = (1_000.0, 50_000)
+COMPARE_CURVES_BUDGET = (1_000.0, 700_000)
+COMPARE_INSTITUTION_BUDGET = (100.0, 10_000)
 FINDINGS_NORMS_BUDGET = (1_000.0, 15_000)
 FINDINGS_7D_BUDGET = (500.0, 20_000)
 FINDINGS_30D_BUDGET = (1_000.0, 25_000)
@@ -101,6 +110,20 @@ def _fixture(connection: psycopg.Connection[Any]) -> dict[str, Any]:
     ).fetchone()
     assert row is not None
     return dict(row)
+
+
+def _busiest_institution(connection: psycopg.Connection[Any], as_of: Any) -> Any:
+    """Вуз с наибольшим числом постов за 30 дней — худший случай догрузки."""
+    row = connection.execute(
+        """SELECT account.institution_id FROM catalog.visible_platform_account account
+             JOIN ingest.visible_publication publication ON publication.primary_account_id=account.id
+            WHERE account.enabled AND publication.published_at>%s::timestamptz-interval '30 days'
+              AND publication.published_at<=%s::timestamptz
+            GROUP BY account.institution_id ORDER BY count(*) DESC LIMIT 1""",
+        (as_of, as_of),
+    ).fetchone()
+    assert row is not None
+    return row["institution_id"]
 
 
 def _comparison_ids(connection: psycopg.Connection[Any], platform: str,
@@ -199,11 +222,19 @@ def test_public_screen_query_budgets() -> None:
                 "entity_uuid": None, "legacy_id": fixture["publication_legacy_id"],
                 "legacy_type": "posts",
             }, DEFAULT_BUDGET),
-            ("anomaly-load", analysis.LOAD, {
-                "publication": fixture["publication_id"], "after": None,
-                "fetch_limit": 51, "limit": 50,
+            ("anomaly-state", analysis.STATE, {
+                "publication": fixture["publication_id"],
             }, DEFAULT_BUDGET),
         ]
+        for days in (7, 30):
+            checks += [
+                (f"compare-dashboard-{days}d", compare.DASHBOARD, common | {"days": days}, COMPARE_DASHBOARD_BUDGET),
+                (f"compare-dashboard-curves-{days}d", compare.DASHBOARD_CURVES, common | {"days": days},
+                 COMPARE_CURVES_BUDGET),
+                (f"compare-institution-timing-{days}d", compare.INSTITUTION_TIMING, common | {
+                    "days": days, "institution_id": _busiest_institution(connection, fixture["as_of"]),
+                }, COMPARE_INSTITUTION_BUDGET),
+            ]
         for name, statement, parameters, budget in checks:
             _assert_budget(name, _plan(connection, statement, parameters), budget)
 

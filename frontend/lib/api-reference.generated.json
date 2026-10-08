@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "eb3dc0adc1e714235ac3748702e81c87bf47793ed00af866a4462bddb68773d8",
+  "sourceSha256": "2a3c653ae99347aa020fc1ca47190d9ee604e18d583de939f8111a8b380b2950",
   "version": "1.0.0",
   "operations": [
     {
@@ -1153,6 +1153,57 @@
         {
           "name": "daily",
           "type": "object[]"
+        },
+        {
+          "name": "timing",
+          "type": "object[]"
+        },
+        {
+          "name": "types",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "operationId": "getComparisonInstitutionTiming",
+      "path": "/api/v1/compare/institutions/{institutionId}/timing",
+      "summary": "Read when one institution publishes and which formats it uses",
+      "parameters": [
+        {
+          "name": "institutionId",
+          "in": "path",
+          "required": true,
+          "type": "uuid"
+        },
+        {
+          "name": "period",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "7d",
+            "30d"
+          ],
+          "default": "30d"
+        }
+      ],
+      "response": "ComparisonInstitutionTiming",
+      "fields": [
+        {
+          "name": "institutionId",
+          "type": "uuid"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
         },
         {
           "name": "timing",
