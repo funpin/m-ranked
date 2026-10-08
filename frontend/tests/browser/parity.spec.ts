@@ -39,7 +39,10 @@ test("comparison dashboard: platform tabs, highlight, ranking metric, table sort
   // На телефоне у вкладки короткая подпись «ВК», поэтому ищем по значению.
   await main.getByTestId("platform-tabs").locator('[role="tab"][data-value="vk"]').click();
   await expect(page).toHaveURL(/platform=vk/);
-  await main.getByTestId("highlight-search").fill("Альфа");
+  // Поле поиска — заглушка до первого касания: Combobox грузится по требованию.
+  await main.getByTestId("highlight-search").click();
+  await expect(main.getByRole("combobox", { name: "Найти вуз для выделения" })).toBeFocused();
+  await page.keyboard.type("Альфа");
   await page.getByRole("option").first().click();
   await expect(main.getByTestId("highlight-chip")).toContainText("Альфа");
   await expect(page).toHaveURL(/highlight=00000009-0000-4000-8000-000000000001/);
@@ -58,7 +61,8 @@ test("comparison dashboard: platform tabs, highlight, ranking metric, table sort
 
 test("comparison charts and names stay inside their cards", async ({ page }) => {
   test.skip(page.viewportSize()!.width < 1024, "широкая компоновка");
-  await page.goto("/compare");
+  // Профиль рисуется для выделенных вузов: сам он вузы не выбирает.
+  await page.goto("/compare?highlight=00000009-0000-4000-8000-000000000001,00000009-0000-4000-8000-000000000002");
   await expect(page.getByTestId("radar-chart")).toBeVisible();
   const layout = await page.evaluate(() => {
     const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
