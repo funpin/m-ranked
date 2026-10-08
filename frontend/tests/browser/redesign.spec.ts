@@ -210,6 +210,25 @@ test("в режиме всего нажатие показывает суточ�
   await expect(rows.nth(1).locator("td").first()).toHaveCSS("opacity", "1");
 });
 
+test("догрузка после выбора дня продолжает список этого дня", async ({ page }) => {
+  // Браузер догружает страницы сам, а стенд не проксирует /api: запрос
+  // уходит прямо в двойник API.
+  await page.route("**/api/v1/**", (route) =>
+    route.continue({ url: route.request().url().replace(/^http:\/\/[^/]+/, "http://127.0.0.1:18091") }));
+  await page.goto("/accounts/00000002-0000-4000-8000-000000000005?trend=total");
+  const more = page.getByTestId("account-publications-more");
+  await expect(more).toHaveText("Показать ещё 100");
+  const trend = page.getByRole("region", { name: "Динамика за неделю" });
+  await trend.locator(".recharts-bar-rectangle").first().click();
+  await expect(page).toHaveURL((url) => url.searchParams.get("day") === "2026-07-01");
+  await expect(page.getByRole("status")).toContainText("прирост за сутки");
+  // Курсор первой страницы выдан для другого дня: без сброса блок догрузки
+  // продолжал бы старый список, и API отвечал бы 400.
+  await more.click();
+  await expect(page.getByText("Это все публикации аккаунта в базе.")).toBeVisible();
+  await expect(more).toHaveCount(0);
+});
+
 test("значки ссылаются на общий набор, а не возят свои контуры", async ({ page }) => {
   const response = await page.goto("/review");
   const html = (await response!.text());
