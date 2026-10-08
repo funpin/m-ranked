@@ -88,6 +88,16 @@ REGULAR_MIN_POSTS = 30
 REGULAR_MIN_MEDIAN = 20
 REGULAR_MAX_EXTRA = 0.08
 REGULAR_HALF_EXTRA = 0.10
+# Разброс внутри московских суток публикации: скачок общего уровня (ЮЗГУ в MAX,
+# ~95 реакций на пост до 19.09 и ~250 после) раздувает разброс за окно, хотя
+# посты одного дня по-прежнему получают почти одно и то же число реакций.
+REGULAR_DAY_MIN_POSTS = 3
+REGULAR_MIN_DAYS = 8
+REGULAR_HALF_MIN_DAYS = 4
+# Недоразброс: χ² разброса внутри дней ниже 1-го перцентиля (z = −2,326) при
+# пуассоновской гипотезе. Посты отличаются меньше, чем дал бы чистый случай.
+SUBPOISSON_Z = -2.326
+SUBPOISSON_MIN_DF = 20
 MIN_HALF_POSTS = 7
 # Поздняя докачка: реакции через 3–14 суток против реакций к суткам.
 GROWTH_MIN_AGE = 3 * 24 * 3600
@@ -199,8 +209,10 @@ def findings(posts: Iterable[LedgerPost], computed_for: date,
                                          _without(metrics, "medians"), tuple(pack["members"])))
         regular = _regular_stats(items)
         if regular is not None and regular["extra"] <= REGULAR_MAX_EXTRA:
-            halves = [_regular_stats(half, min_posts=MIN_HALF_POSTS) for half in _halves(items)]
-            status = 2 if all(item is not None and item["extra"] <= REGULAR_HALF_EXTRA for item in halves) else 1
+            halves = [_regular_stats(half, min_posts=MIN_HALF_POSTS, min_days=REGULAR_HALF_MIN_DAYS)
+                      for half in _halves(items)]
+            steady = all(item is not None and item["extra"] <= REGULAR_HALF_EXTRA for item in halves)
+            status = 2 if steady or regular["subPoisson"] else 1
             metrics = {**_public(regular), "cohort": _without(regular_cohort.get(platform, {}), "medians")}
             result.append(AccountFinding(account, platform, "regular_reactions", status, start, computed_for,
                                          metrics, tuple(regular["members"])))
@@ -261,8 +273,9 @@ def _pack_found(stats: Mapping[str, Any]) -> bool:
     return stats["median"] >= PACK_MEDIAN_RATIO and stats["share"] >= PACK_MIN_SHARE
 
 
-def _regular_stats(items: Sequence[LedgerPost], min_posts: int = REGULAR_MIN_POSTS) -> dict[str, Any] | None:
-    rows = [(post.publication_id, mark) for post in items
+def _regular_stats(items: Sequence[LedgerPost], min_posts: int = REGULAR_MIN_POSTS,
+                   min_days: int = REGULAR_MIN_DAYS) -> dict[str, Any] | None:
+    rows = [(post, mark) for post in items
             if not post.is_repost and (mark := post.ledger.marks.get("h72")) is not None and mark.reactions > 0
             and mark.views > 0]
     if len(rows) < min_posts:
@@ -278,14 +291,49 @@ def _regular_stats(items: Sequence[LedgerPost], min_posts: int = REGULAR_MIN_POS
     view_logs = [math.log(value) for value in views]
     view_mean = sum(view_logs) / len(view_logs)
     ordered = sorted(reactions)
+    window_extra = round(math.sqrt(max(variance - poisson, 0.0)), 4)
+    day = _day_spread([(post.published_at, mark.reactions) for post, mark in rows], min_days)
+    extra, measure = window_extra, "window"
+    if day["dayExtra"] is not None and day["dayExtra"] < window_extra:
+        extra, measure = day["dayExtra"], "day"
     return {
-        "posts": len(rows), "extra": round(math.sqrt(max(variance - poisson, 0.0)), 4),
+        "posts": len(rows), "extra": extra, "measure": measure, "windowExtra": window_extra, **day,
         "sdLogReactions": round(math.sqrt(variance), 4),
         "sdLogViews": round(math.sqrt(sum((value - view_mean) ** 2 for value in view_logs) / len(view_logs)), 4),
         "medianReactions": median(reactions), "medianViews": median(views),
         "p10Reactions": ordered[len(ordered) // 10], "p90Reactions": ordered[(9 * len(ordered)) // 10],
-        "members": [publication for publication, _ in rows],
+        "members": [post.publication_id for post, _ in rows],
     }
+
+
+def _day_spread(rows: Sequence[tuple[datetime, int]], min_days: int) -> dict[str, Any]:
+    """Разброс реакций между постами одних московских суток и проверка недоразброса.
+
+    dayExtra — как extra, но по отклонениям log R от медианы своих суток:
+    объединённая несмещённая дисперсия минус пуассоновская доля mean(1/R).
+    χ² = Σ (R − m)² / m по суткам (m — среднее суток) при df = Σ(n − 1).
+    """
+    by_day: dict[date, list[int]] = {}
+    for published, value in rows:
+        by_day.setdefault(published.astimezone(MOSCOW).date(), []).append(value)
+    days = [values for values in by_day.values() if len(values) >= REGULAR_DAY_MIN_POSTS]
+    if len(days) < min_days:
+        return {"dayExtra": None, "days": len(days), "chi2": None, "chi2Df": None, "subPoisson": False}
+    squares = df = 0.0
+    inverse = []
+    chi2 = 0.0
+    for values in days:
+        center = math.log(median(values))
+        squares += sum((math.log(value) - center) ** 2 for value in values)
+        df += len(values) - 1
+        inverse += [1 / value for value in values]
+        average = sum(values) / len(values)
+        chi2 += sum((value - average) ** 2 for value in values) / average
+    pooled = squares / df
+    day_extra = round(math.sqrt(max(pooled - sum(inverse) / len(inverse), 0.0)), 4)
+    critical = df * (1 - 2 / (9 * df) + SUBPOISSON_Z * math.sqrt(2 / (9 * df))) ** 3
+    return {"dayExtra": day_extra, "days": len(days), "chi2": round(chi2, 1), "chi2Df": int(df),
+            "subPoisson": df >= SUBPOISSON_MIN_DF and chi2 < critical}
 
 
 def _growth_stats(items: Sequence[LedgerPost]) -> dict[str, Any] | None:
@@ -385,10 +433,18 @@ def summary(finding: AccountFinding) -> str:
                 f"больше чем в {PACK_POST_RATIO:.0f} раз); у типичного аккаунта площадки — "
                 f"в {_ru(cohort.get('median', 0))} раза")
     if finding.kind == "regular_reactions":
-        return (f"У {data['posts']} постов за {WINDOW_DAYS} дней к 72 часам от {data['p10Reactions']} до "
+        within = data.get("measure") == "day"
+        text = (f"У {data['posts']} постов за {WINDOW_DAYS} дней к 72 часам от {data['p10Reactions']} до "
                 f"{data['p90Reactions']} реакций (80 % постов) при медиане просмотров {_ru(data['medianViews'], 0)}; "
-                f"разброс сверх случайного — {_ru(data['extra'], 2)} при медиане площадки "
-                f"{_ru(data.get('cohort', {}).get('median', 0), 2)}")
+                f"разброс сверх случайного{' внутри дня публикации' if within else ''} — {_ru(data['extra'], 2)} "
+                f"при медиане площадки {_ru(data.get('cohort', {}).get('median', 0), 2)}")
+        if within:
+            text += (f" (за весь месяц — {_ru(data['windowExtra'], 2)}: общий уровень менялся, а посты одного дня "
+                     f"получали почти одинаково)")
+        if data.get("subPoisson"):
+            text += (f"; посты одного дня отличаются меньше, чем дал бы случай (χ² = {_ru(data['chi2'], 1)} "
+                     f"при {data['chi2Df']} степенях свободы, p < 0,01) — у независимых людей так не бывает")
+        return text
     if finding.kind == "late_growth":
         return (f"У {data['boosted']} из {data['posts']} постов реакции через 3–14 суток выросли втрое и больше "
                 f"(медиана {_ru(data['medianDay'] or 0, 0)} → {_ru(data['medianLate'] or 0, 0)}); подряд — до "

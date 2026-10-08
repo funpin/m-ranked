@@ -5,7 +5,7 @@ import random
 from uuid import UUID
 
 from anomaly_analysis.v2.account_findings import (
-    PACK_MIN_POSTS, REGULAR_MIN_POSTS, LedgerPost, findings, pack_ratio, summary,
+    PACK_MIN_POSTS, REGULAR_MIN_POSTS, LedgerPost, _regular_stats, findings, pack_ratio, summary,
 )
 from anomaly_analysis.v2.tail_ledger import Point, TailLedger
 
@@ -84,6 +84,54 @@ def test_regular_reactions_flag_counts_that_ignore_post_appeal():
     kinds = {(item.account_id, item.kind) for item in result}
     assert (UUID(int=1), "regular_reactions") in kinds
     assert not any(account != UUID(int=1) for account, _ in kinds)
+
+
+def daily_posts(account: int, days: int, per_day: int, reactions, rng: random.Random,
+                platform: str = "max") -> list[LedgerPost]:
+    """По `per_day` постов в сутки с 08.09 (10:00–22:00 МСК); `reactions(day, rng)` — реакции к 72 ч."""
+    posts = []
+    for day in range(days):
+        for slot in range(per_day):
+            index = day * per_day + slot
+            published = datetime(2026, 9, 8, 7, tzinfo=timezone.utc) + timedelta(days=day, hours=2 * slot)
+            views = rng.randint(700, 1100)
+            r72 = reactions(day, rng)
+            marks = {"h2": Point(2 * HOUR, views // 3, r72 // 2), "h24": Point(24 * HOUR, views - 50, r72 - 2),
+                     "h72": Point(72 * HOUR, views, r72)}
+            posts.append(LedgerPost(UUID(int=account * 10_000 + index), UUID(int=account), platform, published,
+                                    False, TailLedger(None, None, None, marks=marks)))
+    return posts
+
+
+def _poisson(mean: float, rng: random.Random) -> int:
+    return max(1, round(rng.gauss(mean, mean ** 0.5)))
+
+
+def test_regular_reactions_within_a_day_survive_a_change_of_level():
+    # ЮЗГУ в MAX: ~95 реакций на каждом посте, с 19.09 — ~250; внутри дня —
+    # только пуассоновский шум. Разброс за месяц раздут скачком уровня.
+    rng = random.Random(11)
+    cohort = [item for account in range(2, 12) for item in organic(account, 40, rng)]
+    stepped = daily_posts(1, 25, 6, lambda day, rng: _poisson(95 if day < 11 else 250, rng), rng)
+    (finding,) = [item for item in findings(cohort + stepped, TODAY) if item.kind == "regular_reactions"]
+    assert finding.account_id == UUID(int=1)
+    assert finding.metrics["measure"] == "day" and finding.metrics["windowExtra"] > 0.3
+    assert finding.metrics["dayExtra"] <= 0.08 and "внутри" in summary(finding)
+
+
+def test_fewer_reactions_differences_than_chance_are_a_persistent_finding():
+    rng = random.Random(13)
+    flat = daily_posts(1, 20, 5, lambda day, rng: 100 + rng.randint(-2, 2), rng)
+    (finding,) = [item for item in findings(flat, TODAY) if item.kind == "regular_reactions"]
+    assert finding.metrics["subPoisson"] and finding.status == 2
+    assert "меньше, чем дал бы случай" in summary(finding)
+
+
+def test_one_post_a_day_keeps_the_window_measure():
+    rng = random.Random(17)
+    single = daily_posts(1, REGULAR_MIN_POSTS + 2, 1, lambda day, rng: _poisson(75, rng), rng)
+    stats = _regular_stats(single)
+    assert stats["dayExtra"] is None and stats["measure"] == "window" and stats["days"] == 0
 
 
 def test_reposts_count_for_packs_but_not_for_regularity():
