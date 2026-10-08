@@ -4,6 +4,12 @@ ERV сравнивается с нормой того же возраста по
 меняется. Оба направления информативны: только реакции поднимают ERV, только
 просмотры роняют. Честно «выстреливший» пост тоже выходит за норму, поэтому
 признак сам по себе не сильнее слабого сигнала (исследование, раздел 5).
+
+Telegram с тысячи показывает просмотры округлёнными («1,27K»), и заметный
+пост к суткам точных просмотров уже не имеет; конец интервала может попасть и
+в пробел сбора. Тогда счётчики берутся с коридором (series.counter_estimate_at),
+и признак ставится, только если ERV выходит за норму при любых значениях
+внутри коридоров.
 """
 from __future__ import annotations
 
@@ -13,11 +19,13 @@ import numpy as np
 
 from ..domain import Family, Metric, Sign
 from ..norms import ERV
-from ..series import AGE_BAND_EDGES, PreparedSeries, engagement_at, value_at
+from ..series import (
+    AGE_BAND_EDGES, PreparedSeries, counter_estimate_at, engagement_estimate_at, views_belong_to_source,
+)
 from .base import DetectorContext, age_text, make_sign
 
 ID = "erv_outlier"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 PATTERN = 10
 FAMILY = Family.CROSS_METRIC
 NEEDS_NORM = True
@@ -31,11 +39,16 @@ ENGAGEMENT = (Metric.REACTIONS, Metric.COMMENTS, Metric.SHARES)
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
-    views = prepared.metrics.get(Metric.VIEWS)
-    if prepared.series.is_repost or context.norm is None or views is None or views.source_counter:
+    series = prepared.series
+    views = series.values.get(Metric.VIEWS)
+    if series.is_repost or context.norm is None or views is None or views_belong_to_source(series):
+        return ()
+    observed = [at for at, value in zip(series.observed_at, views)
+                if value is not None and at <= prepared.analyzed_at]
+    if not observed:
         return ()
     ends = AGE_BAND_EDGES[1:]
-    reached = np.flatnonzero(ends <= views.ages[-1])
+    reached = np.flatnonzero(ends <= (observed[-1] - series.published_at).total_seconds())
     if not reached.size:
         return ()
     band = int(reached[-1])
@@ -43,22 +56,29 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     if cell is None or cell.log_erv is None:
         return ()
     end = float(ends[band])
-    seen = value_at(views, end)
-    engaged = engagement_at(prepared, end)
-    if seen is None or engaged is None or seen <= 0 or engaged <= 0:
+    seen = counter_estimate_at(prepared, Metric.VIEWS, end)
+    engaged = engagement_estimate_at(prepared, end)
+    if seen is None or engaged is None or seen.low <= 0 or engaged.low <= 0:
         return ()
-    value = float(np.log(engaged / seen))
+    value = float(np.log(engaged.value / seen.value))
     spread = max(1.4826 * cell.log_erv.mad, SPREAD_FLOOR)
     z = (value - cell.log_erv.median) / spread
-    if abs(z) < MIN_Z:
+    # Крайние ERV внутри коридоров: признак должен держаться на обоих.
+    bounds = [(float(np.log(top / bottom)) - cell.log_erv.median) / spread
+              for top, bottom in ((engaged.low, seen.high), (engaged.high, seen.low))]
+    if abs(z) < MIN_Z or bounds[0] * bounds[1] <= 0 or min(map(abs, bounds)) < MIN_Z:
         return ()
     strength = min(MAX_STRENGTH, 0.45 + 0.02 * (abs(z) - MIN_Z))
     start = float(AGE_BAND_EDGES[band])
     formula = (f"ERV {np.exp(value):.1%} против {np.exp(cell.log_erv.median):.1%} по норме "
-               f"(z = {z:+.1f} в лог-шкале), возраст {age_text(end)}")
+               f"(z = {z:+.1f} в лог-шкале), возраст {age_text(end)}"
+               + (f"; просмотры {seen.low:.0f}–{seen.high:.0f}" if seen.rounded else "")
+               + (f", взаимодействия {engaged.low:.0f}–{engaged.high:.0f}" if engaged.rounded else ""))
     alternatives = ("viral_post",) if z > 0 else ("wide_reach_low_engagement",)
     return (make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, strength, start, end,
                       timedelta(seconds=end - start), formula,
                       {"kind": "erv", "erv": round(float(np.exp(value)), 5),
                        "median": round(float(np.exp(cell.log_erv.median)), 5), "z": round(float(z), 2),
-                       "band": band}, alternatives, context.norm.confidence_for(ERV, band)),)
+                       "band": band, **({"views_range": [seen.low, seen.high]} if seen.rounded else {}),
+                       **({"engagement_range": [engaged.low, engaged.high]} if engaged.rounded else {})},
+                      alternatives, context.norm.confidence_for(ERV, band)),)

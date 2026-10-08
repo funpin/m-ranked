@@ -26,7 +26,7 @@ from typing import Mapping
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries, views_belong_to_source
+from ..series import HOUR, PreparedSeries, counter_bounds, max_display_unit, views_belong_to_source
 from .base import DetectorContext, age_text, make_sign, number, strongest
 
 ID = "bounded_reaction_burst"
@@ -80,30 +80,10 @@ def reaction_bounds(total: int | None, quality: str,
     for count in breakdown.values():
         if type(count) is not int or count <= 0:
             return None
-        unit = _max_display_unit(count)
+        unit = max_display_unit(count)
         lower += max(0, count - unit)
         upper += count + unit
     return lower, upper
-
-
-def _max_display_unit(count: int) -> int:
-    unit = 1
-    while unit < 10**9 and count % (unit * 10) == 0:
-        unit *= 10
-    return unit
-
-
-def _view_bounds(value, quality, uncertain, *, compact_allowed=True):
-    if uncertain or value is None or quality not in {"exact", "rounded"}:
-        return None
-    if quality == "exact":
-        return value, value
-    if not compact_allowed:
-        return None
-    if value <= 0:
-        return None
-    unit = _max_display_unit(value)
-    return max(0, value - unit), value + unit
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
@@ -297,7 +277,7 @@ def _views(prepared, count):
     series = prepared.series
     if Metric.VIEWS not in series.values:
         return []
-    return [_view_bounds(value, quality, uncertain, compact_allowed=series.platform == "telegram")
+    return [counter_bounds(value, quality, uncertain, compact_allowed=series.platform == "telegram")
             for value, quality, uncertain in zip(
                 series.values[Metric.VIEWS][:count], series.qualities[Metric.VIEWS][:count],
                 series.interval_uncertain[:count])]
