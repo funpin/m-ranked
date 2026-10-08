@@ -33,7 +33,9 @@ from zoneinfo import ZoneInfo
 
 from .domain import Metric, PostSeries
 
-VERSION = 3
+VERSION = 4
+# Сводки третьей версии читаются: в них нет только почасовой раскладки.
+READABLE_VERSIONS = (3, 4)
 MOSCOW = ZoneInfo("Europe/Moscow")
 HOUR = 3600
 DAY = 24 * HOUR
@@ -60,6 +62,14 @@ FIRST_UNTIL = 30 * 60
 MARKS = {"h2": (2 * HOUR, 1.5 * HOUR, 2.5 * HOUR), "h6": (6 * HOUR, 5 * HOUR, 7 * HOUR),
          "h24": (DAY, 20 * HOUR, 28 * HOUR),
          "h72": (3 * DAY, 64 * HOUR, 80 * HOUR)}
+# Почасовая раскладка позднего прироста (v4) для аккаунтной находки о ночных
+# реакциях: пары соседних точных замеров в возрасте от суток до 14 суток не
+# дальше часа друг от друга; прирост — в час (UTC) более позднего замера.
+# Просмотры и реакции берутся из одних и тех же пар, поэтому редкий ночной
+# опрос сокращает их одинаково.
+HOURLY_FROM = DAY
+HOURLY_UNTIL = LATE_UNTIL
+HOURLY_MAX_GAP = HOUR
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +93,9 @@ class TailLedger:
     rounded: bool = False
     # Только точные замеры: первый (не позже получаса) и ближайшие к 2/24/72 ч.
     marks: Mapping[str, Point] = field(default_factory=dict)
+    # Поздний прирост (просмотры[24], реакции[24]) по часу UTC; None — нет пар
+    # или сводка третьей версии.
+    hours: tuple[tuple[int, ...], tuple[int, ...]] | None = None
 
     @property
     def late(self) -> tuple[int, int] | None:
@@ -102,11 +115,12 @@ class TailLedger:
             "growth": dict(self.growth),
             "rounded": self.rounded,
             "marks": {key: point.payload() for key, point in self.marks.items()},
+            **({"hours": [list(self.hours[0]), list(self.hours[1])]} if self.hours else {}),
         }
 
 
 def ledger_from_payload(payload: Mapping[str, Any] | None) -> TailLedger | None:
-    if not payload or payload.get("v") != VERSION:
+    if not payload or payload.get("v") not in READABLE_VERSIONS:
         return None
 
     def point(value) -> Point | None:
@@ -116,7 +130,14 @@ def ledger_from_payload(payload: Mapping[str, Any] | None) -> TailLedger | None:
                       tuple(payload.get("covered") or ()),
                       {str(day): int(value) for day, value in (payload.get("growth") or {}).items()},
                       bool(payload.get("rounded", False)),
-                      {str(key): point(value) for key, value in (payload.get("marks") or {}).items()})
+                      {str(key): point(value) for key, value in (payload.get("marks") or {}).items()},
+                      _hours_from(payload.get("hours")))
+
+
+def _hours_from(value) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
+    if not value or len(value) != 2 or any(len(item) != 24 for item in value):
+        return None
+    return tuple(int(item) for item in value[0]), tuple(int(item) for item in value[1])
 
 
 def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> TailLedger:
@@ -153,7 +174,24 @@ def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> Tai
     start, end = _late_window(joint)
     covered, growth = _days(exact_r, published)
     rounded = any(point is not None and point.age in inexact for point in (early, start, end))
-    return TailLedger(early, start, end, covered, growth, rounded, marks)
+    return TailLedger(early, start, end, covered, growth, rounded, marks,
+                      _hours(joint, inexact, published))
+
+
+def _hours(points: list[Point], inexact: set[float],
+           published: float) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
+    """Поздний прирост по часу UTC более позднего из соседних точных замеров."""
+    views, reactions = [0] * 24, [0] * 24
+    counted = False
+    for left, right in zip(points, points[1:]):
+        if (left.age < HOURLY_FROM or right.age > HOURLY_UNTIL or right.age - left.age > HOURLY_MAX_GAP
+                or left.age in inexact or right.age in inexact):
+            continue
+        hour = int((published + right.age) // HOUR) % 24
+        views[hour] += max(0, right.views - left.views)
+        reactions[hour] += max(0, right.reactions - left.reactions)
+        counted = True
+    return (tuple(views), tuple(reactions)) if counted else None
 
 
 def _marks(points: list[Point]) -> dict[str, Point]:
