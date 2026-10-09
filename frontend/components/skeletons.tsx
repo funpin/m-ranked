@@ -223,22 +223,19 @@ export function AccountSkeleton({ chrome = true }: { chrome?: boolean }) {
           {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-10 w-44" />)}
         </div>
       </> : null}
-      <div className="bg-card grid gap-3 rounded-xl border p-4 sm:p-5">
-        <Skeleton className="h-4 w-80 max-w-full" />
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-2">
+      {/* Лента карточек: сегменты сверху, «Обзор» и «Динамика» в ряд. */}
+      <div className="grid gap-3">
+        <Skeleton className="h-8 w-96 max-w-full rounded-lg" />
+        <div className="flex gap-4 overflow-hidden">
+          <div className="bg-card grid w-[min(86vw,29rem)] shrink-0 grid-cols-2 content-start gap-2.5 rounded-xl border p-3">
             {Array.from({ length: 8 }, (_, index) => (
-              <div key={index} className={`grid content-start gap-1 rounded-lg border p-2.5 ${index < 4 ? "min-h-20 sm:min-h-[72px]" : "min-h-[92px]"}`}>
+              <div key={index} className="grid min-h-[92px] content-start gap-1 rounded-lg border p-2.5">
                 <Skeleton className="h-4 w-24 max-w-full" />
-                <div className="flex items-center justify-between gap-2">
-                  <Skeleton className="h-7 w-16" />
-                  {index < 6 ? <Skeleton className="h-5 w-10" /> : null}
-                </div>
-                {index >= 4 ? <Skeleton className="h-3 w-20 max-w-full" /> : null}
+                <Skeleton className="h-7 w-16" />
               </div>
             ))}
           </div>
-          <Skeleton className="h-[422px] w-full rounded-lg sm:h-[438px]" />
+          <Skeleton className="h-[440px] w-[min(86vw,46rem)] shrink-0 rounded-xl" />
         </div>
       </div>
       <div className="bg-card grid gap-3 rounded-xl border p-5 shadow-sm">

@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+export { bytes } from "./units";
+
 /** Скрытые поля каждой формы управления: CSRF, ожидаемая версия строки и код операции. */
 export function fields(csrf: string, version = 0) {
   return <>
@@ -15,13 +17,6 @@ export function fields(csrf: string, version = 0) {
 export function plural(value: number, one: string, few: string, many: string) {
   const n = Math.abs(value) % 100;
   return n > 10 && n < 20 ? many : n % 10 === 1 ? one : n % 10 >= 2 && n % 10 <= 4 ? few : many;
-}
-
-export function bytes(value: number | null | undefined) {
-  if (value == null) return "—";
-  let unit = 0, n = value;
-  while (n >= 1024 && unit < 4) { n /= 1024; unit++; }
-  return `${unit ? n.toFixed(1) : Math.trunc(n)} ${["Б", "КБ", "МБ", "ГБ", "ТБ"][unit]}`;
 }
 
 /** «5 мин назад» относительно момента отрисовки страницы. */

@@ -1,5 +1,4 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { PLATFORM_LABELS, PLATFORM_LONG_LABELS } from "@/lib/format";
 import { metricEvidence } from "@/lib/metric-evidence";
@@ -18,6 +17,8 @@ import type { TailProfileLoad } from "@/lib/account-tail";
 import type { FindingsLoad } from "@/components/account-analysis-card";
 import { AccountAnalysis } from "@/components/account-analysis-lazy";
 import { InstitutionFacts } from "@/components/institution-facts";
+import { AccountRibbon } from "@/components/account-ribbon";
+import { AccountStanding, AccountTiming } from "@/components/account-compare-lazy";
 import { SummaryTile } from "@/components/summary-tile";
 import { FileText, History, Heart, MessageCircle, Eye, Trophy } from "lucide-react";
 import { Suspense, type ReactNode } from "react";
@@ -64,10 +65,10 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
         данными подменяются заготовкой — так же, как при смене фильтра в
         обзоре и при переходе между постами. */}
     <NavigationBoundary fallback={<AccountSkeleton chrome={false} />}>
-    <Card className="block p-4 text-sm sm:p-5">
-      {stats ? null : <p className="mb-3 text-xs leading-relaxed text-muted-foreground">Сводка публикаций ещё не рассчитана.</p>}
-      <div className="grid min-w-0 items-stretch gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-        <section aria-label="Сводка вуза" className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-2">
+    <AccountRibbon label="Показатели аккаунта" slides={[
+      { id: "overview", label: "Обзор", width: "w-[min(86vw,29rem)]", content:
+        <section aria-label="Сводка вуза" className="bg-card grid h-full min-w-0 grid-cols-2 content-start gap-2.5 rounded-xl border p-3 text-sm">
+          {stats ? null : <p className="col-span-2 text-xs leading-relaxed text-muted-foreground">Сводка публикаций ещё не рассчитана.</p>}
           {stats ? <>
           <Tile value={String(stats.postCount)} label="публикаций в базе" icon={<FileText />}
             note={`Публикации ${PLATFORM_LONG_LABELS[account.platform]} в базе за последние ${stats.retentionDays} дней.${telegram ? "" : " Метрики, которые площадка не отдаёт, показаны прочерком."}`}
@@ -96,14 +97,21 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
             deltaLabel={previous.ratingPeriod ? `место против периода «${previous.ratingPeriod}»` : "место в рейтинге"} />
           </> : null}
           <InstitutionFacts profile={account.institutionProfile} />
-        </section>
-        {stats ? <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} accountId={account.accountId} /> : null}
-      </div>
-    </Card>
-    {findings || tailProfile ? <Suspense fallback={<Skeleton className="mt-5 h-12 w-full rounded-xl" aria-label="Анализ аккаунта загружается" />}>
-      <AccountAnalysis findings={findings} tail={tailProfile} platform={account.platform} />
-    </Suspense> : null}
-    <Card className="block p-5 text-sm mt-5 min-w-0 overflow-x-auto">
+        </section> },
+      ...(stats ? [{ id: "dynamics", label: "Динамика", width: "w-[min(86vw,46rem)]", content:
+        <div className="bg-card h-full min-w-0 rounded-xl border p-1 [&>section]:h-full [&>section]:border-0 [&>section]:bg-transparent">
+          <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} accountId={account.accountId} />
+        </div> }] : []),
+      ...(findings || tailProfile ? [{ id: "analysis", label: "Анализ", width: "w-[min(86vw,32rem)]", content:
+        <Suspense fallback={<div className="bg-card h-full min-h-48 w-full rounded-xl border" role="status" aria-label="Анализ аккаунта загружается" />}>
+          <AccountAnalysis findings={findings} tail={tailProfile} platform={account.platform} />
+        </Suspense> }] : []),
+      { id: "standing", label: "Сравнение", width: "w-[min(86vw,24rem)]", content:
+        <AccountStanding institutionId={account.institutionId} platform={account.platform} /> },
+      { id: "timing", label: "Время и форматы", width: "w-[min(86vw,40rem)]", content:
+        <AccountTiming institutionId={account.institutionId} platform={account.platform} /> },
+    ]} />
+    <Card className="block p-5 text-sm mt-4 min-w-0 overflow-x-auto">
       <DaySpotlight day={selectedDay} mode={selectedTrend} /><Table className="reveal"><TableHeader><TableRow><TableHead>Публикация</TableHead><TableHead>Опубликовано, МСК</TableHead><TableHead>Возраст</TableHead><TableHead>История</TableHead><TableHead>{telegram ? "Реакции" : primary}</TableHead><TableHead>Просмотры</TableHead><TableHead>Комментарии</TableHead><TableHead>Тип</TableHead>{anomalyLevels ? <TableHead>Анализ динамики</TableHead> : null}</TableRow></TableHeader><TableBody>
       {posts.map((post) => <PublicationRow key={post.publicationId} post={post} account={account} primary={primary}
         level={anomalyLevels ? <AnomalyLevelCell levels={anomalyLevels} publicationId={post.publicationId} /> : null} />)}

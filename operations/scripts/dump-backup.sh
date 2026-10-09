@@ -28,6 +28,14 @@ umask 077
 # и не медленнее; pg_restore той же версии читает его без флагов.
 : "${BACKUP_COMPRESSION:=zstd:3}"
 : "${BACKUP_METRICS_FILE:=}"
+# Таблицы, чьи строки в снимок не идут — только их структура. Сюда входят
+# лишь кэши, которые система строит заново сама: восстановленная база
+# работает с пустой таблицей как раньше, просто первое время считает ответ
+# на лету. analytics.publication_history_page — готовая выдача истории
+# постов с законченным сбором (0043): ~180 МБ сжатого zlib, который zstd уже
+# не ужимает, — около восьмой части снимка; служба history-pages заполняет её
+# заново за несколько суток. Пустая строка — снимок целиком.
+: "${BACKUP_EXCLUDE_TABLE_DATA=analytics.publication_history_page}"
 # Неудачный запуск намеренно оставляет .partial для разбора: по нему
 # видно, на чём дамп оборвался. Но разбирают его в тот же день, а файл
 # весит столько же, сколько готовый снимок, и следующий сбой добавляет
@@ -57,6 +65,15 @@ if [[ ! "$BACKUP_CPUS" =~ ^(0\.[1-9][0-9]?|[1-2](\.[0-9]+)?)$ ]]; then
   echo "BACKUP_CPUS must be between 0.1 and 2" >&2
   exit 64
 fi
+
+exclude_args=()
+for table in $BACKUP_EXCLUDE_TABLE_DATA; do
+  if [[ ! "$table" =~ ^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$ ]]; then
+    echo "BACKUP_EXCLUDE_TABLE_DATA must list schema.table names: $table" >&2
+    exit 64
+  fi
+  exclude_args+=("--exclude-table-data=$table")
+done
 
 if [[ ! "$BACKUP_PARTIAL_MAX_AGE_HOURS" =~ ^[0-9]+$ ]] \
    || (( BACKUP_PARTIAL_MAX_AGE_HOURS < 1 || BACKUP_PARTIAL_MAX_AGE_HOURS > 168 )); then
@@ -133,7 +150,7 @@ export PGPASSWORD
 docker run --rm -i --log-driver=none --name "$dumper" --network "container:$MRANKED_DB_CONTAINER" \
   --cpus "$BACKUP_CPUS" --memory 512m --pids-limit 64 \
   -e PGPASSWORD -e PGAPPNAME="$dumper" "$image" \
-  pg_dump -h 127.0.0.1 -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" -Fc --compress="$BACKUP_COMPRESSION" --no-password \
+  pg_dump -h 127.0.0.1 -U "$BACKUP_DB_USER" -d "$BACKUP_DATABASE" -Fc --compress="$BACKUP_COMPRESSION" --no-password "${exclude_args[@]}" \
   | python3 "$script_dir/backup-stream.py" \
     "$partial" "$BACKUP_MAX_DUMP_BYTES" "$reserve" "$BACKUP_MAX_BYTES_PER_SECOND" &
 wait $!

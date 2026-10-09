@@ -1,9 +1,9 @@
 "use client";
 
-import { use, useState } from "react";
+import { use } from "react";
 import { ArrowUpFromLine, ChevronRight, CircleCheck, History, Layers, Moon, Package, ScanLine, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { StatusPill } from "@/components/ui";
 import { MethodNote } from "@/components/method-note";
 import { tailSummary, type TailProfileLoad } from "@/lib/account-tail";
@@ -33,8 +33,8 @@ type Row = {
   headline: string; figure: Figure | null; details: React.ReactNode;
 };
 
-/** Один блок вместо двух карточек: свёрнутая строка с находками, по раскрытию —
- *  строки с линейкой «типично ↔ этот аккаунт» и подробностями по требованию. */
+/** Карточка ленты: находки сразу видны строками с линейкой «типично ↔ этот
+ *  аккаунт», а длинное объяснение каждой открывается отдельным окном. */
 export function AccountAnalysisCard({ findings, tail, platform }: {
   findings: Promise<FindingsLoad> | null; tail: Promise<TailProfileLoad> | null; platform: string;
 }) {
@@ -43,66 +43,65 @@ export function AccountAnalysisCard({ findings, tail, platform }: {
   const rows = buildRows(loadedFindings, loadedTail);
   const found = rows.filter((row) => row.finding);
   const notable = rows.filter((row) => !row.finding && row.notable);
-  if (!rows.length) return null;
   return (
-    <Collapsible render={<section className="bg-card mt-5 min-w-0 rounded-xl border text-sm" id="account-findings"
-      aria-labelledby="account-analysis-title" data-testid="account-analysis-card" />}>
-      <div className="flex items-center gap-1 pr-3">
-        <h2 id="account-analysis-title" className="m-0 min-w-0 flex-1">
-          <CollapsibleTrigger data-testid="account-analysis-toggle"
-            className="group focus-visible:ring-ring/50 flex w-full items-center gap-2 rounded-xl px-4 py-3 text-left focus-visible:ring-[3px] focus-visible:outline-none">
-            <ChevronRight className="text-muted-foreground size-4 shrink-0 transition-transform group-data-[panel-open]:rotate-90" aria-hidden="true" />
-            <span className="font-heading shrink-0 font-semibold">Анализ аккаунта</span>
-            {found.length
-              ? <span className="flex min-w-0 items-center gap-2">
-                <StatusPill tone="amber">{found.length} {plural(found.length)}</StatusPill>
-                <span className="text-muted-foreground hidden truncate text-xs font-normal sm:inline">
-                  {found.map((row) => row.title).join(", ")}
-                </span>
-              </span>
-              : notable.length
-                ? <span className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs font-normal">
-                  {notable.map((row) => <span key={row.key} className="truncate">{row.title}: {row.status}</span>)}
-                </span>
-                : <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs font-normal">
-                  <CircleCheck className="size-3.5" aria-hidden="true" />находок нет
-                </span>}
-          </CollapsibleTrigger>
-        </h2>
+    <section className="bg-card flex h-full min-w-0 flex-col rounded-xl border p-4 text-sm" id="account-findings"
+      aria-labelledby="account-analysis-title" data-testid="account-analysis-card">
+      <div className="mb-1 flex items-start gap-2">
+        <div className="min-w-0 flex-1" data-testid="account-analysis-summary">
+          <h2 id="account-analysis-title" className="font-heading text-sm font-semibold">Анализ аккаунта</h2>
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            {found.length ? <>{found.length} {plural(found.length)} за 30 дней</>
+              : notable.length ? notable.map((row) => `${row.title}: ${row.status}`).join(" · ")
+                : rows.length ? "Находок нет: аккаунт ведёт себя как типичный для площадки" : "Данных для анализа пока мало"}
+          </p>
+        </div>
+        {found.length ? <StatusPill tone="amber">{found.length} {plural(found.length)}</StatusPill> : null}
         <MethodNote title="Анализ аккаунта">{METHOD}</MethodNote>
       </div>
-      <CollapsibleContent>
-        <ul className="divide-border border-border divide-y border-t px-4">
+      {rows.length ? (
+        <ul className="divide-border -mx-1 mt-2 divide-y">
           {rows.map((row) => <AnalysisRow key={row.key} row={row} platform={platform} />)}
         </ul>
-      </CollapsibleContent>
-    </Collapsible>
+      ) : (
+        <p className="text-muted-foreground mt-auto flex items-center gap-1.5 py-6 text-xs">
+          <CircleCheck className="size-4" aria-hidden="true" />Признаков, общих для многих постов, не найдено.
+        </p>
+      )}
+    </section>
   );
 }
 
 function AnalysisRow({ row, platform }: { row: Row; platform: string }) {
-  const [open, setOpen] = useState(false);
   const Icon = ICONS[row.key] ?? History;
   return (
-    <Collapsible open={open} onOpenChange={setOpen} render={<li data-testid="account-finding" data-kind={row.key}
-      className="grid min-w-0 gap-x-8 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] sm:items-center" />}>
-      <div className="grid min-w-0 gap-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Icon className={cn("size-4 shrink-0", row.finding ? "text-chart-3" : "text-muted-foreground")} aria-hidden="true" />
-          <span className="font-semibold">{row.title}</span>
-          {row.status ? <StatusPill tone={row.strong ? "amber" : "neutral"}>{row.status}</StatusPill> : null}
+    <li data-testid="account-finding" data-kind={row.key} className="grid min-w-0 gap-2 px-1 py-3">
+      <div className="flex min-w-0 items-start gap-2">
+        <Icon className={cn("mt-0.5 size-4 shrink-0", row.finding ? "text-chart-3" : "text-muted-foreground")} aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-semibold">{row.title}</span>
+            {row.status ? <StatusPill tone={row.strong ? "amber" : "neutral"}>{row.status}</StatusPill> : null}
+          </div>
+          <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">{row.headline}</p>
         </div>
-        <p className="text-muted-foreground pl-6 text-xs leading-relaxed">
-          {row.headline}
-          {row.details ? <CollapsibleTrigger className="text-foreground/80 hover:text-foreground focus-visible:ring-ring/50 ml-2 inline-flex items-center gap-0.5 rounded-sm underline-offset-2 hover:underline focus-visible:ring-[3px] focus-visible:outline-none">
-            {open ? "скрыть" : "подробнее"}
-            <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} aria-hidden="true" />
-          </CollapsibleTrigger> : null}
-        </p>
+        {row.details ? (
+          <Dialog>
+            <DialogTrigger className="text-foreground/80 hover:bg-muted hover:text-foreground focus-visible:ring-ring/50 inline-flex shrink-0 items-center gap-0.5 rounded-md px-2 py-1 text-xs focus-visible:ring-[3px] focus-visible:outline-none">
+              подробнее<ChevronRight className="size-3" aria-hidden="true" />
+            </DialogTrigger>
+            <DialogContent className="max-w-xl" data-testid="account-finding-details">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><Icon className="text-chart-3 size-4" aria-hidden="true" />{row.title}</DialogTitle>
+                <DialogDescription>{row.headline}</DialogDescription>
+              </DialogHeader>
+              {row.figure ? <Ruler figure={row.figure} platform={platform} muted={!row.finding} showGap={row.notable} /> : null}
+              <div className="grid gap-3 text-xs leading-relaxed">{row.details}</div>
+            </DialogContent>
+          </Dialog>
+        ) : null}
       </div>
-      {row.figure ? <Ruler figure={row.figure} platform={platform} muted={!row.finding} showGap={row.notable} /> : <span />}
-      {row.details ? <CollapsibleContent className="grid gap-3 pl-6 text-xs leading-relaxed sm:col-span-2">{row.details}</CollapsibleContent> : null}
-    </Collapsible>
+      {row.figure ? <div className="pl-6"><Ruler figure={row.figure} platform={platform} muted={!row.finding} showGap={row.notable} /></div> : null}
+    </li>
   );
 }
 
@@ -121,7 +120,7 @@ function Ruler({ figure, platform, muted, showGap }: { figure: Figure; platform:
   // такая подпись спорила бы со статусом «обычный для площадки».
   const gap = showGap ? comparison(figure) : null;
   return (
-    <figure className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 pl-6 sm:pl-0" aria-label={`${figure.label}: ${format(value, figure.unit)}, типично ${format(typical, figure.unit)}`}>
+    <figure className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1" aria-label={`${figure.label}: ${format(value, figure.unit)}, типично ${format(typical, figure.unit)}`}>
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="text-muted-foreground min-w-0 truncate" title={figure.label}>{figure.label}</span>
         <b className={cn("font-heading tabular shrink-0 text-sm", muted ? "text-foreground" : "text-chart-3")}>{format(value, figure.unit)}</b>

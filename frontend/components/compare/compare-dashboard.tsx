@@ -627,7 +627,7 @@ export function CompareDashboard({ data, period, initialPlatform, initialHighlig
       </Section>
 
       <Section id="table" title="Все вузы" icon={ChartNetwork} description="Сортировка — по клику на заголовок, выделение — по клику на вуз.">
-        <Card className="py-2"><CardContent className="px-2"><InstitutionTable rows={rows} highlights={highlights} onToggle={toggle} /></CardContent></Card>
+        <InstitutionTable rows={rows} highlights={highlights} onToggle={toggle} />
       </Section>
     </div>
   );

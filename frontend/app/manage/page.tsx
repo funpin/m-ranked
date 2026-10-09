@@ -11,7 +11,7 @@ import { LiveRefresh } from "./live-refresh";
 import { ChannelsTab } from "./channels";
 import { plural } from "./shared";
 import { ServersTab } from "./servers";
-import { SystemTab } from "./system";
+import { SystemTab, type SystemRange } from "./system";
 import { VisitorsTab } from "./visitors";
 import { PageTitle } from "@/components/page-title";
 
@@ -39,7 +39,7 @@ const commandErrors: Record<string, string> = {
 const TABS = [
   { id: "channels", label: "Каналы", title: "Управление каналами", description: "Добавляйте, временно отключайте или полностью удаляйте мониторинг каналов.", icon: LayoutList },
   { id: "visitors", label: "Посетители", title: "Посетители сайта", description: "Уникальные посетители без cookie: кто на сайте сейчас и как меняется посещаемость.", icon: Users },
-  { id: "system", label: "Система", title: "Состояние системы", description: "Сбор, анализ, ресурсы сервера, трафик и хранилище по снимкам сервера раз в минуту.", icon: Activity },
+  { id: "system", label: "Система", title: "Состояние системы", description: "CPU, RAM, диск и сеть — вживую каждые 5 секунд; сбор, анализ, трафик и хранилище — по снимкам сервера раз в минуту.", icon: Activity },
   { id: "servers", label: "Серверы", title: "Серверы и хранение", description: "Серверы-сборщики и место на дисках, политики сбора, хранения и анализа, резервные копии и холодный архив.", icon: Server },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
@@ -97,7 +97,8 @@ export default async function ManagePage({ searchParams }: { searchParams: Promi
     return <>{header()}<ManageTabs active={tab} /><VisitorsTab visitors={visitors} range={range} /></>;
   }
   if (tab === "system") {
-    const range = first(query.range) === "week" ? "week" : "day";
+    const requested = first(query.range);
+    const range: SystemRange = requested === "1h" || requested === "3h" || requested === "week" ? requested : "day";
     const [overview, status] = await Promise.all([reader.system(range).catch(() => null), reader.status().catch(() => null)]);
     return <>{header()}<ManageTabs active={tab} /><SystemTab overview={overview} status={status} range={range} now={now} csrf={csrf} canRefreshBackup={canDelete} backupOutcome={first(query.backup_status)} /></>;
   }

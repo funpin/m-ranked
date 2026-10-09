@@ -16,6 +16,7 @@ from .config import Settings
 from .db import Database
 from .errors import ApiProblem, handle, handle_validation
 from .limits import BodyLimit
+from .live_host import HostMonitor
 from .outbox import OutboxMarker
 from .security import AuthConfig
 from .security_events import SecurityTelemetry
@@ -58,6 +59,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     outbox = OutboxMarker(settings.outbox_dsn) if settings.outbox_dsn else None
     # Посещения пишутся административным соединением; без него маячок молчит.
     counter = VisitCounter(database) if settings.admin_dsn else None
+    monitor = HostMonitor(interval=settings.live_monitor_seconds) if settings.live_monitor_seconds else None
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -69,6 +71,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await cache_metrics.start()
         if counter is not None:
             await counter.start()
+        if monitor is not None:
+            await monitor.start()
         try:
             yield
         finally:
@@ -79,6 +83,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await cache_metrics.stop()
             if counter is not None:
                 await counter.stop()
+            if monitor is not None:
+                await monitor.stop()
             await cache_call(cache.close())
             await database.close()
 
@@ -97,6 +103,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.cache = cache
     app.state.cache_metrics = cache_metrics
     app.state.visits = counter
+    app.state.host_monitor = monitor
     # Неверная настройка админки закрывает админку, а не весь API: публичное
     # чтение к учётным записям отношения не имеет, и ронять из-за них сайт
     # целиком — менять одну неприятность на другую, большую.

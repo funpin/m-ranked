@@ -308,6 +308,7 @@ def account(row: dict[str, Any], revision: int, stats: dict[str, Any] | None = N
         "enabled": row["enabled"],
         "publicationCount": row["publication_count"],
         "latestObservedAt": iso(row.get("latest_observed_at", row.get("observed_at"))),
+        "subscriberCount": row.get("subscriber_count", (stats or {}).get("subscriberCount")),
         "datasetRevision": revision,
         "asOf": iso(row["as_of"]),
         "stats": stats,

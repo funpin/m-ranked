@@ -17,12 +17,22 @@ const output = process.env.BUNDLE_REPORT ?? "reports/bundle-budget.json";
 // findings page's lazy Combobox/Popover share Base UI internals (Field,
 // Dialog) with the admin dialogs, and Turbopack regroups them: 235.1 KiB with
 // no findings code in the /manage chunks.
+// /manage 260 KiB, October 2026: the login-04 sign-in with InputOTP, the
+// data-table for institutions (Base UI Checkbox, filters, paging, bulk
+// actions) and the live System tab poller measured 247.8 KiB. Charts stay
+// lazy; the admin page is behind authentication and not on the public gate.
+// /accounts/[id] 215 KiB, October 2026: the card became a horizontal ribbon of
+// sections (client scroll-snap navigation, about 1.5 KiB); the comparison
+// slides, their heatmap and the analysis load as separate chunks near the
+// viewport. Measured 205.8 KiB, 13.9 KiB of it the weekly trend's animated
+// toggle that the page already carried.
 const DEFAULT_BUDGET = 205 * 1024;
 const ROUTE_BUDGETS = new Map([
   ["/compare", 235 * 1024],
   ["/statistics", 260 * 1024],
   ["/publications/[id]", 275 * 1024],
-  ["/manage", 240 * 1024],
+  ["/manage", 260 * 1024],
+  ["/accounts/[id]", 215 * 1024],
 ]);
 
 const results = [];

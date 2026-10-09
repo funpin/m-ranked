@@ -1,4 +1,5 @@
-const CACHE_CONTROL = "public, max-age=21600";
+// Картинка custom emoji по номеру не меняется: кэш на месяц, без перепроверок.
+const CACHE_CONTROL = "public, max-age=2592000, immutable";
 const NOT_FOUND_DETAIL = "Реакция не найдена";
 const ALLOWED_MEDIA_TYPES = new Set([
   "image/webp",

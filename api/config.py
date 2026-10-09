@@ -82,6 +82,9 @@ class Settings:
         default_factory=lambda: os.environ.get("API_DEPLOYMENT_PROFILE", "a").strip().lower() or "a"
     )
     workers: int = field(default_factory=lambda: _int("API_WORKERS", 1, 1, 32))
+    # Шаг живого мониторинга машины для панели (api/live_host.py), секунды;
+    # 0 выключает. Буфер в памяти держит три часа точек.
+    live_monitor_seconds: int = field(default_factory=lambda: _int("API_LIVE_MONITOR_SECONDS", 5, 0, 60))
 
     # Верхняя граница тела запроса не зависит от настройки обратного прокси.
     max_body_bytes: int = field(

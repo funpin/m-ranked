@@ -235,3 +235,19 @@ test("servers and policies commands are ADMIN-only and forward their form fields
     assert.equal((await submitManage(request(path, `csrf_token=${csrf}`), server().fetcher)).status, 404, path);
   }
 });
+
+test("bulk table actions get the command result as JSON instead of a redirect", async () => {
+  const body = `csrf_token=${csrf}&expected_row_version=3&correlation_id=${correlation}`;
+  const json = { "x-mranked-response": "json" };
+  const ok = await submitManage(request("/manage/platform-accounts/7/disable", body, json),
+    server(() => Response.json({ location: "/manage?platform_status=account-disabled" })).fetcher);
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { location: "/manage?platform_status=account-disabled" });
+  const conflict = await submitManage(request("/manage/platform-accounts/7/disable", body, json),
+    server(() => Response.json({ detail: "stale" }, { status: 409 })).fetcher);
+  assert.equal(conflict.status, 200);
+  assert.deepEqual(await conflict.json(), { location: `/manage?command_error=conflict&correlation_id=${correlation}` });
+  // Без заголовка — прежний переход для HTML-формы.
+  const form = await submitManage(request("/manage/platform-accounts/7/disable", body), server().fetcher);
+  assert.equal(form.status, 303);
+});

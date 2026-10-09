@@ -19,7 +19,7 @@ test("emoji facade preserves bytes, MIME, cache header, and target URL", async (
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "image/png");
-  assert.equal(response.headers.get("cache-control"), "public, max-age=21600");
+  assert.equal(response.headers.get("cache-control"), "public, max-age=2592000, immutable");
   assert.equal(response.headers.get("content-length"), "4");
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), new Uint8Array([0, 1, 2, 255]));
   assert.equal(

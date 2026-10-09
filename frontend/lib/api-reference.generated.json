@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "71d7de269ef8248164d690e7b99132f2aa16c861c6024346ad8bdbc85cb62635",
+  "sourceSha256": "ff18c73a78b3ae336b00bbbfbc7aba3124baf855e039b9a5746055b214e143f5",
   "version": "1.0.0",
   "operations": [
     {
@@ -1514,6 +1514,10 @@
         {
           "name": "latestObservedAt",
           "type": "string | null"
+        },
+        {
+          "name": "subscriberCount",
+          "type": "integer | null"
         },
         {
           "name": "datasetRevision",

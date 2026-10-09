@@ -130,7 +130,10 @@ def _backfill(monkeypatch, *flags) -> list:
         def write_states(self, writes):
             written.extend(writes)
 
-    monkeypatch.setenv("MRANKED_STORAGE_PATH", "/private/tmp" if sys.platform == "darwin" else "/tmp")
+    # Запас диска проверяет сама машина: тесту нужен заведомо свободный диск,
+    # а не диск того, кто их запускает (раньше тест падал на 20 % свободного).
+    monkeypatch.setattr(backfill.shutil, "disk_usage", lambda path: backfill.shutil._ntuple_diskusage(100 * 10**9, 10 * 10**9, 90 * 10**9))
+    monkeypatch.setattr(backfill.os, "statvfs", lambda path: type("Fs", (), {"f_files": 100, "f_favail": 90})())
     monkeypatch.setattr(backfill, "PostgresAnomalyStore", Store)
     monkeypatch.setenv("ANOMALY_DATABASE_URL", "postgresql://example.invalid/x")
     monkeypatch.setattr(sys, "argv", ["backfill", "--days", "35", *flags])

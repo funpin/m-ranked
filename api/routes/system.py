@@ -1,7 +1,9 @@
-"""Состояние системы для панели: снимки сервера за сутки или неделю."""
+"""Состояние системы для панели: снимки сервера за час, три часа, сутки или неделю
+и живой буфер ресурсов машины с шагом в несколько секунд."""
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -29,7 +31,7 @@ ORDER BY observed_at
 
 @router.get("/api/v1/admin/system", tags=["Admin"])
 async def system(request: Request, _: Annotated[Principal, Depends(READ)],
-                 period: Annotated[Literal["day", "week"], Query(alias="range")] = "day") -> Response:
+                 period: Annotated[Literal["1h", "3h", "day", "week"], Query(alias="range")] = "day") -> Response:
     now = request.app.state.clock()
     cached = _CACHE.get(period)
     if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
@@ -64,3 +66,29 @@ async def system(request: Request, _: Annotated[Principal, Depends(READ)],
     }
     _CACHE[period] = (time.monotonic(), body)
     return JSONResponse(body, headers=NO_STORE)
+
+
+def _iso(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, timezone.utc).isoformat()
+
+
+@router.get("/api/v1/admin/system/live", tags=["Admin"])
+async def live(request: Request, _: Annotated[Principal, Depends(READ)],
+               since: Annotated[datetime | None, Query()] = None) -> Response:
+    """Точки живого буфера после since: панель дочитывает только новые."""
+    monitor = request.app.state.host_monitor
+    if monitor is None:
+        return JSONResponse({"intervalSeconds": None, "cores": None, "memoryTotalBytes": None,
+                             "diskTotalBytes": None, "diskFreeBytes": None, "points": []}, headers=NO_STORE)
+    moment = None
+    if since is not None:
+        moment = (since if since.tzinfo else since.replace(tzinfo=timezone.utc)).timestamp()
+    points = [{**point, "at": _iso(point["at"])} for point in monitor.since(moment)]
+    return JSONResponse({
+        "intervalSeconds": monitor.interval,
+        "cores": monitor.cores,
+        "memoryTotalBytes": monitor.memory_total,
+        "diskTotalBytes": monitor.disk_total,
+        "diskFreeBytes": monitor.disk_free,
+        "points": points,
+    }, headers=NO_STORE)

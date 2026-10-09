@@ -3,6 +3,15 @@ import { accountHref } from "@/lib/entity-routes";
 import { PLATFORM_LABELS } from "@/lib/format";
 import type { AccountView } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Users } from "lucide-react";
+
+const compact = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 });
+const exact = new Intl.NumberFormat("ru-RU");
+
+function subscribersWord(value: number) {
+  const n = value % 100;
+  return n > 10 && n < 20 ? "подписчиков" : n % 10 === 1 ? "подписчик" : n % 10 >= 2 && n % 10 <= 4 ? "подписчика" : "подписчиков";
+}
 
 const TONE: Record<string, string> = {
   telegram: "border-platform-telegram/40 bg-platform-telegram/10 text-platform-telegram",
@@ -37,7 +46,7 @@ export function ChannelSwitch({ accounts, currentId }: { accounts: readonly Acco
             prefetch={false}
             aria-current={current ? "page" : undefined}
             className={cn(
-              "inline-flex max-w-[16rem] items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium no-underline transition-colors",
+              "inline-flex max-w-[20rem] items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium no-underline transition-colors",
               current
                 ? TONE[account.platform] ?? "border-border bg-muted"
                 : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -45,6 +54,14 @@ export function ChannelSwitch({ accounts, currentId }: { accounts: readonly Acco
           >
             <span className="font-black tracking-wide">{PLATFORM_LABELS[account.platform]}</span>
             <span className="truncate">{label}</span>
+            {account.subscriberCount != null ? (
+              <span data-testid="channel-subscribers" title={`${exact.format(account.subscriberCount)} ${subscribersWord(account.subscriberCount)}`}
+                className={cn("ml-0.5 inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+                  current ? "bg-background/70 text-foreground" : "bg-muted text-foreground/80")}>
+                <Users aria-hidden="true" className="size-3" />{compact.format(account.subscriberCount)}
+                <span className="sr-only"> {subscribersWord(account.subscriberCount)}</span>
+              </span>
+            ) : null}
           </Link>
         );
       })}

@@ -351,6 +351,7 @@ WITH page AS (
 SELECT page.*, canonical.legacy_id, canonical.entity_type,
        channel.legacy_id AS channel_legacy_id, generic.legacy_id AS platform_account_legacy_id,
        coalesce(totals.publication_count,0)::bigint AS publication_count, totals.observed_at,
+       subscriber.subscriber_count,
        %(as_of)s::timestamptz AS as_of
   FROM page
   JOIN LATERAL (
@@ -363,6 +364,14 @@ SELECT page.*, canonical.legacy_id, canonical.entity_type,
   LEFT JOIN LATERAL (SELECT min(legacy_id) AS legacy_id FROM catalog.legacy_entity_alias
        WHERE target_uuid=page.id AND entity_type='platform_accounts') generic ON true
   LEFT JOIN totals ON totals.platform_account_id=page.id
+  -- Последнее известное число подписчиков: переключатель площадок вуза
+  -- показывает его у каждой сети.
+  LEFT JOIN LATERAL (
+      SELECT snapshot.subscriber_count FROM ingest.account_metric_snapshot_active snapshot
+       WHERE snapshot.platform_account_id=page.id AND snapshot.subscriber_count IS NOT NULL
+         AND snapshot.observed_at<=%(as_of)s::timestamptz
+         AND snapshot.collected_at<=%(as_of)s::timestamptz AND snapshot.quality<>'invalid'
+       ORDER BY snapshot.observed_at DESC,snapshot.id DESC LIMIT 1) subscriber ON true
  ORDER BY page.id
 """
 

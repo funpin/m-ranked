@@ -135,6 +135,7 @@ ADMIN_GROUP = {
     ("/api/v1/admin/platform-accounts/{accountId}/enabled", "PUT"),
     ("/api/v1/admin/visitors", "GET"),
     ("/api/v1/admin/system", "GET"),
+    ("/api/v1/admin/system/live", "GET"),
 }
 
 

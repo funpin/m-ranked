@@ -16,13 +16,13 @@ const ReachAreaChart = dynamic(() => import("@/components/compare/compare-charts
   ssr: false, loading: () => <ChartSkeleton height={300} />,
 });
 const HourlyReachChart = dynamic(() => import("@/components/compare/compare-charts").then((module) => module.HourlyReachChart), {
-  ssr: false, loading: () => <ChartSkeleton height={280} />,
+  ssr: false, loading: () => <ChartSkeleton height={300} />,
 });
 const LevelsByPlatform = dynamic(() => import("@/components/compare/compare-charts").then((module) => module.LevelsByPlatform), {
   ssr: false, loading: () => <ChartSkeleton height={240} />,
 });
 const TimingHeatmap = dynamic(() => import("@/components/compare/timing-heatmap").then((module) => module.TimingHeatmap), {
-  ssr: false, loading: () => <ChartSkeleton height={240} />,
+  ssr: false, loading: () => <ChartSkeleton height={260} />,
 });
 
 const NETWORKS = ["telegram", "vk", "max", "rutube"] as const satisfies readonly Network[];
@@ -31,11 +31,14 @@ function ChartSkeleton({ height }: { height: number }) {
   return <Skeleton className="w-full rounded-lg" style={{ height }} aria-label="График загружается" role="status" />;
 }
 
-/** Рисует график, только когда место под него рядом с экраном. */
+/** Рисует график, только когда место под него рядом с экраном. Место под
+ *  заглушку — той же высоты, что сам график (height), а график проявляется
+ *  только прозрачностью: подмена ничего не сдвигает, даже если приходится
+ *  на появление плитки. */
 function WhenNear({ height, children }: { height: number; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const near = useNear(box);
-  return <div ref={box} style={{ minHeight: height }}>{near ? children : <ChartSkeleton height={height} />}</div>;
+  return <div ref={box} style={{ minHeight: height }}>{near ? <div className="landing-chart-in">{children}</div> : <ChartSkeleton height={height} />}</div>;
 }
 
 /** Переключатель-«таблетка»: выбранный пункт поднимается карточкой. */
@@ -100,7 +103,7 @@ export function LandingRhythm({ data }: { data: Dashboard }) {
           }))]} />
       </div>
       <Ribbon label="Ритм площадок">
-        <RhythmTile title="Час выхода." height={280}
+        <RhythmTile title="Час выхода." height={300}
           text="Столбцы — сколько публикаций выходит в каждый час, линия — сколько типичный пост этого часа набирает за первые сутки.">
           <HourlyReachChart data={data} platform={platform} />
         </RhythmTile>

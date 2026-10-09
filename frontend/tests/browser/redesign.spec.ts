@@ -213,8 +213,10 @@ test("в режиме всего нажатие показывает суточ�
 test("догрузка после выбора дня продолжает список этого дня", async ({ page }) => {
   // Браузер догружает страницы сам, а стенд не проксирует /api: запрос
   // уходит прямо в двойник API.
-  await page.route("**/api/v1/**", (route) =>
-    route.continue({ url: route.request().url().replace(/^http:\/\/[^/]+/, "http://127.0.0.1:18091") }));
+  await page.route("**/api/v1/**", async (route) =>
+    // Запрос выполняет сам Playwright: подмена адреса в route.continue на
+    // другой порт часть сборок Chromium отклоняет (ERR_BLOCKED_BY_CLIENT).
+    route.fulfill({ response: await route.fetch({ url: route.request().url().replace(/^http:\/\/[^/]+/, "http://127.0.0.1:18091") }) }));
   await page.goto("/accounts/00000002-0000-4000-8000-000000000005?trend=total");
   const more = page.getByTestId("account-publications-more");
   await expect(more).toHaveText("Показать ещё 100");
@@ -227,6 +229,29 @@ test("догрузка после выбора дня продолжает сп�
   await more.click();
   await expect(page.getByText("Это все публикации аккаунта в базе.")).toBeVisible();
   await expect(more).toHaveCount(0);
+});
+
+test("карточка аккаунта — лента разделов, у площадок вуза видны подписчики", async ({ page }) => {
+  // Сравнение карточка догружает из браузера; стенд не проксирует /api.
+  await page.route("**/api/v1/compare/**", async (route) =>
+    route.fulfill({ response: await route.fetch({ url: route.request().url().replace(/^http:\/\/[^/]+/, "http://127.0.0.1:18091") }) }));
+  await page.goto("/accounts/00000002-0000-4000-8000-000000000002");
+  const switcher = page.getByRole("navigation", { name: "Площадки вуза" });
+  await expect(switcher.getByTestId("channel-subscribers")).toHaveText(["5,2 тыс. подписчика", "12,5 тыс. подписчиков"]);
+  const ribbon = page.getByTestId("account-ribbon");
+  const sections = ribbon.getByRole("navigation", { name: "Разделы карточки" });
+  await expect(sections.getByRole("button")).toHaveText(["Обзор", "Динамика", "Анализ", "Сравнение", "Время и форматы"]);
+  await expect(sections.getByRole("button", { name: "Обзор" })).toHaveAttribute("aria-current", "true");
+  await sections.getByRole("button", { name: "Сравнение" }).click();
+  await expect(sections.getByRole("button", { name: "Сравнение" })).toHaveAttribute("aria-current", "true");
+  const standing = page.getByTestId("account-standing");
+  await expect(standing).toBeInViewport();
+  await expect(standing.getByRole("listitem")).toHaveCount(5);
+  await expect(standing).toContainText(/выше, чем у \d+ % из 12 вузов/);
+  await expect(page.getByTestId("account-timing").getByTestId("timing-heatmap")).toBeVisible();
+  await expect(page.getByTestId("account-formats").getByRole("listitem")).not.toHaveCount(0);
+  // Таблица постов осталась под лентой.
+  await expect(page.locator("tbody tr[data-published-day]").first()).toBeVisible();
 });
 
 test("значки ссылаются на общий набор, а не возят свои контуры", async ({ page }) => {

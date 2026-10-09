@@ -101,7 +101,7 @@ function statisticsPublication(id:number,platform:"telegram"|"vk"|"max"|"rutube"
 const counter = (value:number|null):Schema["CounterMetric"] => ({value,observedAt:asOf,quality:value === null ? "unsupported" : "exact"});
 function account(id:number,legacyType:"channels"|"platform_accounts"="channels"):Schema["Account"] {
   const platform=legacyType === "channels" ? "telegram" : id === 3 ? "max" : id === 4 ? "rutube" : "vk";
-  return {accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id),legacyId:id,legacyType,channelLegacyId:platform === "telegram" ? id : null,platformAccountLegacyId:id,institutionId:`institution-${id}`,institutionLegacyId:id,institutionName:names[0]!,institutionShortName:null,platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Канал ${id}`,url:`https://example.test/account/${id}`,archiveUrl:platform === "max" ? "https://maxstat.ru/channel/-70908719079458/post" : null,accessMode:"public",enabled:true,publicationCount:2,latestObservedAt:asOf,datasetRevision:revision,asOf,
+  return {accountId:uuid(platform === "telegram" ? 1 : platform === "vk" ? 2 : platform === "max" ? 3 : 4,id),legacyId:id,legacyType,channelLegacyId:platform === "telegram" ? id : null,platformAccountLegacyId:id,institutionId:uuid(9,id),institutionLegacyId:id,institutionName:names[0]!,institutionShortName:null,platform,canonicalExternalId:`external-${id}`,username:`fixture_${id}`,title:`Канал ${id}`,url:`https://example.test/account/${id}`,archiveUrl:platform === "max" ? "https://maxstat.ru/channel/-70908719079458/post" : null,accessMode:"public",enabled:true,publicationCount:2,subscriberCount:id === 3 ? null : id === 2 ? 12_480 : 5_243,latestObservedAt:asOf,datasetRevision:revision,asOf,
     institutionProfile:id === 2 ? undefined : {trackingStartedAt:"2026-07-01T22:30:00Z",students:{value:8202,referenceYear:2026,referenceDate:"2026-09-30",approximate:false,sourceUrl:"https://mipt.ru/vikon/sveden/files/eiw/Svedeniya_o_chislennosti_obuchayuschixsya_ot_30.09.2026%281%29.pdf",sourceLabel:"МФТИ · ведомость от 30.09.2026",scope:"Бакалавриат, специалитет и магистратура, все формы обучения. Без филиалов, СПО и аспирантуры.",verifiedAt:"2026-10-02"}},
     stats:{retentionDays:70,postCount:2,monitored:1,medianReactions:aggregate(5),medianViews:aggregate(50),medianComments:aggregate(0),ratingRank:2,ratingPeriod:"2026-Q2",subscriberCount:100,lastError:null,lastCheckedAt:asOf,dailySeries:weekly(),
       previous:{postCount:1,monitored:1,medianReactions:4,medianViews:44,medianComments:0,
@@ -258,10 +258,25 @@ const server = createServer(async (request, response) => {
     const days=Array.from({length},(_,index)=>{const day=new Date(Date.UTC(2026,8,30-length+1+index));return {day:day.toISOString().slice(0,10),visitors:40+((index*37)%55),views:120+((index*53)%140)};});
     return json({range:length===30?"month":"week",online:3,onlineWindowSeconds:300,today:days[days.length-1],days});
   }
+  if(url.pathname==="/api/v1/admin/system/live") {
+    if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
+    // Живой буфер привязан к настоящим часам: в браузере видно, как он растёт.
+    const step=5_000,last=Math.floor(Date.now()/step)*step,since=Date.parse(url.searchParams.get("since")??"");
+    const wave=(t:number,period:number,phase=0)=>Math.sin(t/period+phase);
+    const points=Array.from({length:720},(_,index)=>last-(719-index)*step).filter((at)=>Number.isNaN(since)||at>since).map((at)=>{
+      const t=at/1000;
+      return {at:new Date(at).toISOString(),cpu:Math.round((38+18*wave(t,90)+9*wave(t,13,1))*10)/10,memory:Math.round((64+3*wave(t,600,2))*10)/10,
+        memoryUsedBytes:Math.round(4*1024**3*(0.64+0.03*wave(t,600,2))),swapUsedBytes:150*1024**2,load:Math.round((1.6+0.5*wave(t,120))*100)/100,
+        netRxBytesPerSecond:Math.round(180_000+120_000*Math.abs(wave(t,25))),netTxBytesPerSecond:Math.round(420_000+300_000*Math.abs(wave(t,31,1))),
+        diskReadBytesPerSecond:Math.round(40_000+30_000*Math.abs(wave(t,17))),diskWriteBytesPerSecond:Math.round(900_000+600_000*Math.abs(wave(t,23,2)))};
+    });
+    return json({intervalSeconds:5,cores:2,memoryTotalBytes:4*1024**3,diskTotalBytes:49*1024**3,diskFreeBytes:15.5*1024**3,points});
+  }
   if(url.pathname==="/api/v1/admin/system") {
     if(!sessionRole) return json({detail:"Требуется вход администратора"},401);
-    const week=url.searchParams.get("range")==="week";
-    const count=week?168:288,step=week?3600_000:300_000,end=Date.parse("2026-09-30T12:00:00Z");
+    const requested=url.searchParams.get("range")??"day";
+    const range=["1h","3h","day","week"].includes(requested)?requested:"day";
+    const count={"1h":60,"3h":180,day:288,week:168}[range]!,step={"1h":60_000,"3h":60_000,day:300_000,week:3600_000}[range]!,end=Date.parse("2026-09-30T12:00:00Z");
     const series=Array.from({length:count},(_,index)=>({at:new Date(end-(count-1-index)*step).toISOString(),cpu:20+(index*7)%35,memory:55+(index*3)%20,load:0.4+((index*11)%30)/20,
       requestsPerMinute:30+(index*13)%60,humanErrors:index%41===0?2:0,botRejected:index%17===0?5:0,hitRatio:80+(index*5)%18,p95Ms:120+(index*29)%400,
       analysisLagMinutes:3+(index*7)%25,ingestDelayMinutes:(index*3)%6,collectedOk:200+(index*17)%90,collectedFailed:index%9===0?3:0}));
@@ -270,7 +285,7 @@ const server = createServer(async (request, response) => {
       ["ingest","Приём с Сервера 1","ok","последний пакет 1 мин назад"],["analysis","Очередь анализа","ok","отставание 6 мин, в очереди 12"],
       ["units","Службы","ok","все службы работают"],["disk","Диск","ok","свободно 14.4 ГБ (27%)"],["memory","Память","ok","занято 61%"],
       ["backup","Резервная копия","ok","последняя 9.2 ч назад"],["errors","Ошибки для людей","ok","0 ответов 5xx за час"]].map(([key,label,state,detail])=>({key,label,state,detail}));
-    return json({range:week?"week":"day",sampledAt:asOf,checks,
+    return json({range,sampledAt:asOf,checks,
       host:{cpuPercent:23.5,cores:2,load:[0.42,0.51,0.48],memoryTotalBytes:4*1024**3,memoryUsedBytes:2.5*1024**3,swapUsedBytes:0,diskTotalBytes:49*1024**3,diskFreeBytes:13.4*1024**3,unitsActive:24,unitsTotal:27,failedUnits:[]},
       pipeline:{ingestAcceptedAt:asOf,analysisLagSeconds:360,analysisBacklog:12,analysisCompletedAt:asOf,normsRunAt:asOf,tailRunAt:asOf,backupAt:asOf},
       restarts:{"m-ranked-target-web.service":1},

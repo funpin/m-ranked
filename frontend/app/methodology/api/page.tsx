@@ -79,13 +79,13 @@ export default function ApiReferencePage() {
                     <p className="text-muted-foreground text-sm leading-relaxed">{operation.text}</p>
                   </div>
                   {operation.parameters.length > 0 && (
-                    <div className="ring-foreground/10 focus-within:ring-ring/60 rounded-xl ring-1 focus-within:ring-2">
-                      <Table className="text-sm" containerProps={{ tabIndex: 0, role: "region", "aria-label": `Параметры: ${operation.title}` }}>
+                    <div className="ring-border focus-within:ring-ring/60 overflow-hidden rounded-lg ring-1 focus-within:ring-2">
+                      <Table frame={false} containerProps={{ tabIndex: 0, role: "region", "aria-label": `Параметры: ${operation.title}` }}>
                         <TableCaption className="sr-only">Параметры: {operation.title}</TableCaption>
-                        <TableHeader className="bg-muted/50">
-                          <TableRow className="hover:bg-transparent">
+                        <TableHeader>
+                          <TableRow>
                             {["Параметр", "Тип", "Значения", "Описание"].map((label) => (
-                              <TableHead key={label} scope="col" className="text-muted-foreground px-3 text-xs font-medium tracking-wide uppercase">{label}</TableHead>
+                              <TableHead key={label} scope="col">{label}</TableHead>
                             ))}
                           </TableRow>
                         </TableHeader>

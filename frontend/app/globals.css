@@ -371,3 +371,48 @@
     }
   }
 }
+
+/* Иллюстрация формы входа: карточки один раз мягко выплывают, а под
+   курсором покачиваются. Бесконечная анимация отвлекала бы от ввода кода. */
+@media (prefers-reduced-motion: no-preference) {
+  .login-art .la-float-a, .login-art .la-float-b, .login-art .la-float-c, .login-art .la-float-slow {
+    animation: la-enter 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .login-art .la-float-b { animation-delay: 0.15s; }
+  .login-art .la-float-c { animation-delay: 0.3s; }
+  .login-art .la-float-slow { animation-delay: 0.05s; }
+  .login-art:hover .la-float-a { animation: la-float 7s ease-in-out infinite; }
+  .login-art:hover .la-float-b { animation: la-float 8.5s ease-in-out -2s infinite; }
+  .login-art:hover .la-float-c { animation: la-float 6s ease-in-out -4s infinite; }
+  .login-art:hover .la-float-slow { animation: la-float 11s ease-in-out -1s infinite; }
+}
+@keyframes la-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes la-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* Абстракция «поле рейтинга» (components/landing/rank-field.tsx): светлые
+   колонны в тёмной теме и графитовые в светлой — как столбцы знака. */
+.rank-field {
+  --rank-ink-top: #3b3e48; --rank-ink-left: #22242b; --rank-ink-right: #16181d;
+  --rank-soft-top: #eceef3; --rank-soft-left: #d3d7df; --rank-soft-right: #c0c5cf;
+  overflow: visible;
+}
+:root[data-theme="dark"] .rank-field {
+  --rank-ink-top: #f3f4f7; --rank-ink-left: #c9ccd5; --rank-ink-right: #a0a4b0;
+  --rank-soft-top: #3b3e48; --rank-soft-left: #2b2e36; --rank-soft-right: #222429;
+}
+.rank-prism { transform-box: view-box; }
+@media (prefers-reduced-motion: no-preference) {
+  .rank-prism { animation: rank-grow 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rank-sweep { display: none; }
+}
+@keyframes rank-grow {
+  from { transform: scaleY(0.04); opacity: 0; }
+}

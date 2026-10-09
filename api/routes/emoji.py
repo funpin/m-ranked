@@ -26,5 +26,7 @@ async def custom_emoji(emojiId: str) -> Response:
         raise ApiProblem(404, "Resource not found", "Реакция временно недоступна",
                          "urn:m-ranked:problem:not-found",
                          headers={"Cache-Control": "public, max-age=600"}) from error
+    # Картинка custom emoji по номеру не меняется: месяц и immutable — повторы
+    # отдаёт кэш nginx и браузера, а не холодный запрос в Telegram (до 10 с).
     return Response(asset.content, media_type=asset.media_type,
-                    headers={"Cache-Control": "public, max-age=21600"})
+                    headers={"Cache-Control": "public, max-age=2592000, immutable"})

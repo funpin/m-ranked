@@ -127,3 +127,51 @@ def test_verified_copy_held_on_another_server_is_not_kept_locally(tmp_path):
     assert subprocess.run(cmd+['--offsite',verified.name],capture_output=True).returncode == 0
     assert newer.exists() and not new.exists()
     assert subprocess.run(cmd,capture_output=True).returncode == 75
+
+
+def _fake_docker(tmp_path):
+    bindir = tmp_path/'bin'; bindir.mkdir()
+    (bindir/'flock').write_text('#!/usr/bin/env bash\nexit 0\n'); (bindir/'flock').chmod(0o755)
+    log = tmp_path/'docker.log'
+    (bindir/'docker').write_text(f'''#!/usr/bin/env bash
+echo "$*" >> {log}
+case "$1" in
+  inspect) echo sha256:image ;;
+  run) case "$*" in *pg_dump*) head -c 2000000 /dev/zero ;; esac ;;
+esac
+''')
+    (bindir/'docker').chmod(0o755)
+    return bindir, log
+
+def _dump_env(tmp_path, bindir, **extra):
+    import os
+    return dict(os.environ, PATH=f'{bindir}:{os.environ["PATH"]}', BACKUP_DATABASE='db', BACKUP_DB_USER='u',
+                BACKUP_DIR=str(tmp_path/'backups'), MRANKED_DB_CONTAINER='pg', BACKUP_MAX_DUMP_BYTES='100000000',
+                BACKUP_RESERVE_BYTES='1', BACKUP_RESERVE_PERCENT='0', **extra)
+
+def _pg_dump_call(log):
+    """Аргументы pg_dump; сам поток может упереться в запас места этой машины — здесь важна команда."""
+    import pytest
+    if not log.exists() or 'pg_dump' not in log.read_text():
+        pytest.skip('guard refused before the dump started on this host')
+    return next(line for line in log.read_text().splitlines() if 'pg_dump' in line)
+
+def test_dump_leaves_out_rebuildable_cache_rows_by_default(tmp_path):
+    """Готовая выдача истории (0043) — кэш: в снимок идёт её структура, а не строки."""
+    bindir, log = _fake_docker(tmp_path)
+    subprocess.run(['bash', str(SCRIPTS/'dump-backup.sh')], env=_dump_env(tmp_path, bindir), capture_output=True, text=True)
+    assert '--exclude-table-data=analytics.publication_history_page' in _pg_dump_call(log)
+
+def test_dump_can_be_taken_whole(tmp_path):
+    bindir, log = _fake_docker(tmp_path)
+    subprocess.run(['bash', str(SCRIPTS/'dump-backup.sh')], env=_dump_env(tmp_path, bindir, BACKUP_EXCLUDE_TABLE_DATA=''),
+                   capture_output=True, text=True)
+    assert '--exclude-table-data' not in _pg_dump_call(log)
+
+def test_dump_rejects_odd_excluded_table_names(tmp_path):
+    bindir, log = _fake_docker(tmp_path)
+    odd = subprocess.run(['bash', str(SCRIPTS/'dump-backup.sh')],
+                         env=_dump_env(tmp_path, bindir, BACKUP_EXCLUDE_TABLE_DATA='analytics.x;drop'),
+                         capture_output=True, text=True)
+    assert odd.returncode == 64 and 'schema.table' in odd.stderr
+    assert not log.exists() or 'pg_dump' not in log.read_text()

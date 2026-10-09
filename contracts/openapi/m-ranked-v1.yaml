@@ -1172,7 +1172,8 @@ paths:
       description: >-
         Requires VIEWER, EDITOR or ADMIN. Server state from the one-minute samples of the ops-sample
         timer: health checks, host resources, pipeline timestamps, collection outcomes and chart series
-        (five-minute points for a day, hourly points for a week). Cached for 15 seconds per API process.
+        (one-minute points for one and three hours, five-minute points for a day, hourly points for a
+        week). Cached for 15 seconds per API process.
       security:
       - adminSession: []
       parameters:
@@ -1182,6 +1183,8 @@ paths:
         schema:
           type: string
           enum:
+          - 1h
+          - 3h
           - day
           - week
           default: day
@@ -1203,6 +1206,42 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/AdminUnavailable'
+  /api/v1/admin/system/live:
+    get:
+      tags:
+      - Admin
+      operationId: getSystemLive
+      summary: getSystemLive
+      description: >-
+        Requires VIEWER, EDITOR or ADMIN. Host resources sampled from /proc by the API process every few
+        seconds and kept in memory for three hours (no database writes). The buffer is empty right after
+        an API restart. With since, only points newer than that moment are returned, so the panel polls
+        incrementally.
+      security:
+      - adminSession: []
+      parameters:
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Private live buffer; never cached.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSystemLive'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/admin/storage:
     get:
       tags:
@@ -3395,6 +3434,97 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AdminStorageBackup'
+    AdminSystemLivePoint:
+      type: object
+      additionalProperties: false
+      required:
+      - at
+      - cpu
+      - memory
+      - memoryUsedBytes
+      - swapUsedBytes
+      - load
+      - netRxBytesPerSecond
+      - netTxBytesPerSecond
+      - diskReadBytesPerSecond
+      - diskWriteBytesPerSecond
+      properties:
+        at:
+          type: string
+          format: date-time
+        cpu:
+          type:
+          - number
+          - 'null'
+        memory:
+          type:
+          - number
+          - 'null'
+        memoryUsedBytes:
+          type:
+          - integer
+          - 'null'
+        swapUsedBytes:
+          type:
+          - integer
+          - 'null'
+        load:
+          type:
+          - number
+          - 'null'
+        netRxBytesPerSecond:
+          type:
+          - number
+          - 'null'
+        netTxBytesPerSecond:
+          type:
+          - number
+          - 'null'
+        diskReadBytesPerSecond:
+          type:
+          - number
+          - 'null'
+        diskWriteBytesPerSecond:
+          type:
+          - number
+          - 'null'
+    AdminSystemLive:
+      type: object
+      additionalProperties: false
+      required:
+      - intervalSeconds
+      - cores
+      - memoryTotalBytes
+      - diskTotalBytes
+      - diskFreeBytes
+      - points
+      properties:
+        intervalSeconds:
+          type:
+          - number
+          - 'null'
+          description: Sampling step; null when live monitoring is disabled.
+        cores:
+          type:
+          - integer
+          - 'null'
+        memoryTotalBytes:
+          type:
+          - integer
+          - 'null'
+        diskTotalBytes:
+          type:
+          - integer
+          - 'null'
+        diskFreeBytes:
+          type:
+          - integer
+          - 'null'
+        points:
+          type: array
+          description: Oldest first.
+          items:
+            $ref: '#/components/schemas/AdminSystemLivePoint'
     AdminSystem:
       type: object
       additionalProperties: false
@@ -3412,6 +3542,8 @@ components:
         range:
           type: string
           enum:
+          - 1h
+          - 3h
           - day
           - week
         sampledAt:
@@ -5187,6 +5319,13 @@ components:
           - string
           - 'null'
           format: date-time
+        subscriberCount:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+          description: Latest known subscriber count of the account, when the platform reports one.
         datasetRevision:
           type: integer
           format: int64

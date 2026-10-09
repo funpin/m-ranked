@@ -1,5 +1,12 @@
 # Storage optimization
 
+Current measurements for an optimisation decision come from the read-only
+report `operations/scripts/storage-report.sh` (SQL in
+`operations/sql/storage-report.sql`): relation sizes with partitions rolled
+up, index use, dead rows, packed-history bytes per point and per array, slow
+statements, dump sizes and durations, and human page timings by path template.
+It prints no addresses, user agents or row contents.
+
 ## Collector working-buffer rollout — 2026-09-28
 
 Owner chose the working buffer: last 24 effective publication observations,
@@ -251,6 +258,58 @@ the policy is now:
 The daytime-load caution above still applies: the dump keeps its 10 MB/s and
 0.5 CPU limits. `mranked-doctor --section pipeline,storage` shows ingest lag and
 backup state during a run.
+
+## October 9, 2026: report findings and prepared changes
+
+Source: `storage-report.sh` run by the owner on S2 (report v1). Database 18 GB,
+filesystem 33 of 50 GB used, 17 GB available. Nothing below has been applied to
+production; every step marked *approval* waits for the owner's explicit «делай».
+
+**Where the space is.** The hot layer (`publication_metric_snapshot`) holds
+2.73 M rows in 10.7 GB — 2,096 heap bytes per row against ~410 expected (0059).
+The September partition carries the pages of the 12.5 M rows it held before
+packing: 4.6 GB of indexes for 1.39 M live rows, while October holds the same
+number of rows in 0.6 GB. `reaction_breakdown_2026_09_pkey` is 797 MB against
+101 MB for October. Small churn tables keep pre-0061 bloat:
+`publication_availability_state` 715 MB for 70.7 k rows,
+`post_anomaly_state` 501 MB for 65 k, `publication_latest` 227 MB for 68.6 k.
+Packed history costs 47 bytes per point including indexes (853 MB, 19 M points).
+
+**Why nightly dumps failed.** Six of nine nights between Sep 30 and Oct 6 failed
+within a second: admission requires the 11 GB reserve plus 1.5× the newest dump
+(1.5 × 2.41 GB) free, and S2 had less. Manual runs and Oct 7–8 succeeded once
+the newest dump was 1.46 GB. The cause is free space, not the dump itself;
+without reclaim it returns as the database grows.
+
+**Why pages are slow.** `/publications/:uuid` p50 0.74 s, p95 2.3 s, 15 % cache
+hits; the database container was at 96 % CPU with 1.17 GiB RAM and 256 MB
+shared buffers. The hottest index (`…_key9`, 10 billion scans) is 1 GB and the
+replay index 2.3 GB, so history reads go to disk. JIT is on in the cluster.
+`/emoji/:n` p95 10 s is a cold Telegram fetch behind a 6-hour cache.
+
+Prepared in this branch (estimates, not measured reclaim):
+
+| Change | Kind | Expected effect |
+|---|---|---|
+| Weekly `reindex-churn.sql` also rebuilds hot snapshot/reaction partition indexes > 8 MB (CONCURRENTLY, smallest first); the wrapper checks free space for the largest index first | service change, *approval* to deploy | ≈4.5 GB returned on the first run; hot indexes stay sized to live rows |
+| September heap | none needed | autovacuum truncates a fully empty partition: posts published by Sep 30 stop tracking Oct 30, packing follows within 72 h — ≈4–4.5 GB around Nov 2, if no late rows remain (report v2 shows it) |
+| `reclaim-churn-heaps.sql`: one-off VACUUM FULL of the three small tables, 2 s lock wait, 120 s cap, night | *approval* | ≈1.3 GB; seconds of exclusive lock per table |
+| Migration 0076: `transfer_inbox` vacuums at 2 % dead rows | migration | stops dead-row growth (12.9 % now) |
+| Dump omits `publication_history_page` rows (rebuildable cache) | backup config | ≈12 % smaller and faster dump (~180 MB) |
+| Migration 0077: `api_read` without JIT (like 0026, per role) | migration, API restart | removes LLVM compile time from API queries |
+| Emoji responses `max-age=30d, immutable` | release | repeats served from nginx/browser cache |
+| Report v2: hot partitions per row, disk vs memory reads, sampled active queries (no `pg_stat_statements`; enabling it needs a DB restart, which is not requested) | read-only | next decisions on measured data |
+
+Not proposed now: delta-encoding packed arrays (`observed_at` 7.45 B/point,
+`snapshot_id` 5.94) could roughly halve the 853 MB of history, but changes the
+0059 format and every reader; decide after the reclaim above. `shared_buffers`
+and container memory need a DB restart.
+
+Rollout order after approval: release with 0076/0077 and restart API (0077
+applies to new sessions); install the reindex wrapper and run it once at night,
+watching ingest lag in `mranked-doctor --section pipeline,storage`; run
+`reclaim-churn-heaps.sql`; set `BACKUP_EXCLUDE_TABLE_DATA` in the dump env;
+rerun `storage-report.sh` and record measured bytes here.
 
 ## Baseline and conditional budget (decimal GB)
 

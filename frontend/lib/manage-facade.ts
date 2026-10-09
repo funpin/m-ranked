@@ -48,12 +48,18 @@ function failure(status: number, detail: string | object[]): NextResponse {
 
 type CommandError = "conflict" | "forbidden" | "invalid" | "not-found" | "unavailable" | "failed";
 
-function commandFailure(code: CommandError, correlation: string): NextResponse {
+/** Итог команды: для HTML-формы — переход 303, для массовых действий таблицы
+ *  (заголовок X-Mranked-Response: json) — тот же адрес в JSON. Иначе каждая
+ *  из сотни команд тянула бы за собой отрисовку всей страницы /manage. */
+function commandResult(location: string, json: boolean): NextResponse {
+  return json
+    ? NextResponse.json({ location }, { status: 200, headers: JSON_HEADERS })
+    : new NextResponse(null, { status: 303, headers: { ...NO_STORE, Location: location } });
+}
+
+function commandFailure(code: CommandError, correlation: string, json = false): NextResponse {
   const query = new URLSearchParams({ command_error: code, correlation_id: correlation });
-  return new NextResponse(null, {
-    status: 303,
-    headers: { ...NO_STORE, Location: `/manage?${query.toString()}` },
-  });
+  return commandResult(`/manage?${query.toString()}`, json);
 }
 
 /** This only prepares SSR; FastAPI independently authenticates and authorizes every read/command. */
@@ -243,6 +249,7 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
   const headers = forwardingHeaders(request);
   headers.set("X-XSRF-TOKEN", csrf);
   headers.set("Content-Type", "application/json");
+  const json = request.headers.get("x-mranked-response") === "json";
   const correlation = fields.correlation_id ?? crypto.randomUUID();
   if (!UUID.test(correlation)) return failure(400, "Некорректный идентификатор команды");
   headers.set("X-Correlation-Id", correlation);
@@ -255,20 +262,20 @@ export async function submitManage(request: NextRequest, fetcher: typeof fetch =
       method: "POST", headers, body: JSON.stringify({ path, fields }), cache: "no-store", redirect: "error",
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(900_000)]),
     });
-  } catch { return commandFailure("unavailable", correlation); }
+  } catch { return commandFailure("unavailable", correlation, json); }
   const payload = await boundedJson(upstream);
   if (!upstream.ok) {
-    if (upstream.status === 401) return new NextResponse(null, { status: 303, headers: { ...NO_STORE, Location: "/manage?sign_in=failed" } });
-    if (upstream.status === 404) return commandFailure("not-found", correlation);
-    if (upstream.status === 403) return commandFailure("forbidden", correlation);
-    if (upstream.status === 409) return commandFailure("conflict", correlation);
+    if (upstream.status === 401) return commandResult("/manage?sign_in=failed", json);
+    if (upstream.status === 404) return commandFailure("not-found", correlation, json);
+    if (upstream.status === 403) return commandFailure("forbidden", correlation, json);
+    if (upstream.status === 409) return commandFailure("conflict", correlation, json);
     if (upstream.status === 400 && payload?.type === "urn:m-ranked:problem:legacy-form"
       && typeof payload.detail === "string" && SAFE_DETAILS.has(payload.detail))
-      return commandFailure("invalid", correlation);
+      return commandFailure("invalid", correlation, json);
     return commandFailure(upstream.status === 502 || upstream.status === 503 || upstream.status === 504
-      ? "unavailable" : "failed", correlation);
+      ? "unavailable" : "failed", correlation, json);
   }
   if (typeof payload?.location !== "string" || !/^\/manage(?:\?[A-Za-z0-9_=&-]*)?$/.test(payload.location))
     return failure(502, "Некорректный адрес результата команды");
-  return new NextResponse(null, { status: 303, headers: { ...NO_STORE, Location: payload.location } });
+  return commandResult(payload.location, json);
 }

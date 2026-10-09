@@ -129,15 +129,16 @@ test("account table shows the analysis level without waiting for it",async({page
 test("account page explains late engagement against the platform without waiting for it",async({page})=>{
   await page.goto("/channels/1");
   const card=page.getByTestId("account-analysis-card");
-  // Свёрнутая строка называет статус, подробности — по раскрытию.
-  await expect(card.getByTestId("account-analysis-toggle")).toContainText("Отклик на старые посты: устойчиво необычный");
-  await card.getByTestId("account-analysis-toggle").click();
+  // Карточка ленты называет статус, длинное объяснение — в отдельном окне.
+  await expect(card.getByTestId("account-analysis-summary")).toContainText("Отклик на старые посты: устойчиво необычный");
   const row=card.getByTestId("account-finding");
   await expect(row).toContainText("Выше, чем у 98 % аккаунтов площадки");
   await expect(row).toContainText("3,1×");
+  await expect(row).not.toContainText("Счётчики площадки округлены");
   await row.getByRole("button",{name:"подробнее"}).click();
-  await expect(row).toContainText("Счётчики площадки округлены");
-  await expect(row.getByRole("img",{name:/Сутки с поздними реакциями: 20 из 21/})).toBeVisible();
+  const details=page.getByTestId("account-finding-details");
+  await expect(details).toContainText("Счётчики площадки округлены");
+  await expect(details.getByRole("img",{name:/Сутки с поздними реакциями: 20 из 21/})).toBeVisible();
   await expect(card).not.toContainText(/накрут|мошен/);
 });
 
@@ -227,7 +228,7 @@ test("publication page with the expanded analysis card meets axe AA and exposes 
 test("a long history arrives as a preview and loads the rest on the first zoom",async({page,request})=>{
   test.setTimeout(60_000);
   // В проде /api/v1 отдаёт nginx; у стенда API — отдельный процесс фикстуры.
-  await page.route("**/api/v1/**",(route)=>route.continue({url:route.request().url().replace(/^http:\/\/[^/]+/,"http://127.0.0.1:18091")}));
+  await page.route("**/api/v1/**",async(route)=>route.fulfill({response:await route.fetch({url:route.request().url().replace(/^http:\/\/[^/]+/,"http://127.0.0.1:18091")})}));
   const preview=await (await request.get("/posts/99")).text();
   const full=await (await request.get("/posts/99?history_limit=3000")).text();
   // Сервер рисует двадцать строк таблицы и отдаёт выборку, а не 1205 точек.
@@ -373,7 +374,7 @@ test("dragging the time range back and forth never breaks the page",async({page}
   test.setTimeout(90_000);
   const errors:string[]=[];
   page.on("pageerror",(error)=>errors.push(error.message));
-  await page.route("**/api/v1/**",(route)=>route.continue({url:route.request().url().replace(/^http:\/\/[^/]+/,"http://127.0.0.1:18091")}));
+  await page.route("**/api/v1/**",async(route)=>route.fulfill({response:await route.fetch({url:route.request().url().replace(/^http:\/\/[^/]+/,"http://127.0.0.1:18091")})}));
   await page.goto("/posts/99");
   const chart=page.getByRole("img",{name:"Накопление показателей",exact:true});
   await expect(chart).toHaveAttribute("data-chart-ready","true",{timeout:30_000});

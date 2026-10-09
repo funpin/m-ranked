@@ -137,13 +137,28 @@ test("admin tabs show visitors and system state and the table scrolls inside its
   await page.getByRole("link",{name:"Месяц"}).click();
   await expect(page).toHaveURL(/tab=visitors&range=month/);
 
+  // В проде /api/v1/admin раздаёт nginx; здесь живой буфер берётся у фикстуры API.
+  await page.route("**/api/v1/admin/system/live**",async(route)=>{
+    const url=new URL(route.request().url());
+    await route.fulfill({response:await route.fetch({url:`http://127.0.0.1:18091${url.pathname}${url.search}`})});
+  });
   await page.getByRole("link",{name:"Система"}).click();
   await expect(page.getByRole("heading",{name:"Состояние системы"})).toBeVisible();
   await expect(page.getByTestId("live-refresh")).toBeVisible();
   await expect(page.getByTestId("system-checks").locator("li")).toHaveCount(11);
   await expect(page.getByText("1 требует внимания")).toBeVisible();
-  await expect(page.locator('[data-slot="chart"]')).toHaveCount(5);
-  await expect(page.locator('[data-storage="project"]')).toContainText("релизы 1.0 ГБ");
+  // Ресурсы — кольца и живые спарклайны из буфера API, хранилище — сразу под ними.
+  const host=page.getByTestId("host-cards");
+  for(const label of ["CPU","RAM","Disk","Network","Services"]) await expect(host.locator(`[data-metric="${label}"]`)).toBeVisible();
+  await expect(host.locator('[data-metric="CPU"] [data-slot="chart"]')).toHaveCount(2);
+  await expect(host.locator('[data-metric="Network"]')).toContainText("/с");
+  await expect(page.getByTestId("storage-cards")).toContainText("релизы");
+  await expect(page.getByTestId("storage-cards")).toContainText("1.0 ГБ");
+  await expect(page.getByTestId("pipeline-stages").locator("li")).toHaveCount(6);
+  await expect(page.getByTestId("collection-platforms").locator("li")).toHaveCount(4);
+  await page.getByRole("link",{name:"1 час"}).click();
+  await expect(page).toHaveURL(/tab=system&range=1h/);
+  await expect(page.getByText("Дисковый ввод-вывод")).toBeVisible();
   // Резервные копии: список с отметкой проверки; кнопка обновления — только ADMIN.
   await expect(page.getByTestId("backup-state")).toHaveText("готова");
   await expect(page.getByText("проверена восстановлением")).toHaveCount(1);
@@ -155,4 +170,36 @@ for(const tab of ["visitors","system"]) test(`admin ${tab} tab passes accessibil
   await page.goto(`/manage?tab=${tab}`);
   await expect(page.locator('[data-slot="chart"]').first()).toBeVisible();
   expect((await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze()).violations).toEqual([]);
+});
+
+test("the catalog table filters, pages by institution and pauses selected accounts in bulk",async({page})=>{
+  await signIn(page,"editor");
+  const table=page.getByTestId("platform-table");
+  await page.getByLabel("Площадка").selectOption("vk");
+  await expect(table.locator("tbody tr")).toHaveCount(2);
+  await page.getByLabel("Поиск по вузам и аккаунтам").fill("бета");
+  await expect(table.locator("tbody tr")).toHaveCount(1);
+  await page.getByRole("button",{name:"Сбросить"}).click();
+  await expect(table.locator("tbody tr")).toHaveCount(8);
+  await expect(page.getByTestId("catalog-pagination")).toContainText("Страница 1 из 1");
+
+  const posted:{path:string;body:string;mode:string|undefined}[]=[];
+  await page.route("**/manage/platform-accounts/*/disable",async(route)=>{
+    const request=route.request();
+    posted.push({path:new URL(request.url()).pathname,body:request.postData()??"",mode:request.headers()["x-mranked-response"]});
+    await route.fulfill({json:{location:"/manage?platform_status=account-disabled"}});
+  });
+  await page.getByLabel("Площадка").selectOption("telegram");
+  await page.getByRole("checkbox",{name:"Выбрать все аккаунты на странице"}).click();
+  await expect(page.getByTestId("bulk-actions")).toContainText("Выбрано 2");
+  await page.getByRole("button",{name:"Остановить сбор"}).click();
+  await expect(page.getByRole("status").filter({hasText:"Готово: 2"})).toBeVisible();
+  expect(posted.map((item)=>item.path).sort()).toEqual(["/manage/platform-accounts/10/disable","/manage/platform-accounts/20/disable"]);
+  for(const item of posted){
+    const form=new URLSearchParams(item.body);
+    expect(item.mode).toBe("json");
+    expect(form.get("expected_row_version")).toBe("7");
+    expect(form.get("csrf_token")).toBe("fixture-csrf-token");
+    expect(form.get("correlation_id")).toMatch(/^[0-9a-f-]{36}$/);
+  }
 });

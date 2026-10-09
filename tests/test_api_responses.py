@@ -366,7 +366,7 @@ def test_emoji_validation_and_success_headers(client, validator_for, monkeypatch
     assert response.status_code == 200
     assert response.content == b"\x89PNG\r\n"
     assert response.headers["content-type"] == "image/png"
-    assert response.headers["cache-control"] == "public, max-age=21600"
+    assert response.headers["cache-control"] == "public, max-age=2592000, immutable"
 
     invalid = client.get("/api/v1/emoji/not-a-number")
     assert_contract_response(invalid, validator_for, "/api/v1/emoji/{emojiId}", "404")

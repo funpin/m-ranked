@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
-import { Pause, Pencil, Play, Trash2 } from "lucide-react";
+import { CircleCheck, CirclePause, Pause, Pencil, Play, Trash2, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableCell } from "@/components/ui/table";
 import { PlatformChip } from "@/components/platform-chip";
 import { DeleteCatalogForm } from "@/components/catalog-forms";
 import type { CatalogStatus, ManagedAccount, ManagedInstitution, OfficialRating } from "@/lib/catalog-api";
+import { cn } from "@/lib/utils";
+import { CatalogDataTable, type AccountState, type CatalogGroup } from "./catalog-table";
 import { fields } from "./shared";
 
 const ACCESS_MODES: Record<string, string> = {
@@ -39,32 +41,28 @@ function IconAction({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-function InstitutionCell({ institution, csrf, canEdit, withRating = true }: {
+function InstitutionInfo({ institution, csrf, canEdit, withRating = true }: {
   institution: ManagedInstitution; csrf: string; canEdit: boolean; withRating?: boolean;
 }) {
-  // Непрозрачный фон: ячейка вуза охватывает несколько строк, и подсветка
-  // строки иначе красила бы её только при наведении на первую из них.
-  return (
-    <TableCell rowSpan={Math.max(1, institution.accounts.length)} className="bg-card min-w-56 space-y-1 align-top">
-      <b title={institution.name}>{institution.shortName || institution.name}</b>
-      <small>{institution.name}</small>
-      {withRating ? <small><Rating rating={institution.officialRatings?.all} label="Общий М‑Рейтинг" /></small> : null}
-      <details className="group/rename mt-2 [&_form]:mt-3 [&_form]:grid [&_form]:gap-3">
-        <summary aria-label="Редактировать название"
-          className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer list-none items-center gap-1.5 text-xs [&::-webkit-details-marker]:hidden">
-          <Pencil className="size-3" aria-hidden="true" />Переименовать
-        </summary>
-        <form method="post" action={`/manage/institutions/${institution.legacyId}`}>
-          <Label className="grid gap-1.5 text-sm leading-normal font-normal">Полное название
-            <Input name="name" defaultValue={institution.name} required disabled={!canEdit} /></Label>
-          <Label className="grid gap-1.5 text-sm leading-normal font-normal">Сокращение
-            <Input name="short_name" defaultValue={institution.shortName || institution.name} required disabled={!canEdit} /></Label>
-          {fields(csrf, institution.rowVersion)}
-          <Button type="submit" disabled={!canEdit}>Сохранить</Button>
-        </form>
-      </details>
-    </TableCell>
-  );
+  return <>
+    <b title={institution.name}>{institution.shortName || institution.name}</b>
+    <small>{institution.name}</small>
+    {withRating ? <small><Rating rating={institution.officialRatings?.all} label="Общий М‑Рейтинг" /></small> : null}
+    <details className="group/rename mt-2 [&_form]:mt-3 [&_form]:grid [&_form]:gap-3">
+      <summary aria-label="Редактировать название"
+        className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer list-none items-center gap-1.5 text-xs [&::-webkit-details-marker]:hidden">
+        <Pencil className="size-3" aria-hidden="true" />Переименовать
+      </summary>
+      <form method="post" action={`/manage/institutions/${institution.legacyId}`}>
+        <Label className="grid gap-1.5 text-sm leading-normal font-normal">Полное название
+          <Input name="name" defaultValue={institution.name} required disabled={!canEdit} /></Label>
+        <Label className="grid gap-1.5 text-sm leading-normal font-normal">Сокращение
+          <Input name="short_name" defaultValue={institution.shortName || institution.name} required disabled={!canEdit} /></Label>
+        {fields(csrf, institution.rowVersion)}
+        <Button type="submit" disabled={!canEdit}>Сохранить</Button>
+      </form>
+    </details>
+  </>;
 }
 
 function statusText(account: ManagedAccount, status: CatalogStatus | null) {
@@ -77,10 +75,18 @@ function statusText(account: ManagedAccount, status: CatalogStatus | null) {
   return integration === "configured" ? "работает" : "сбор выключен";
 }
 
+function accountState(text: string): AccountState {
+  return text === "работает" ? "ok" : text === "отключён" ? "off" : "attention";
+}
+
+/** Статус как в data-table shadcn: контурный бейдж со значком, не только цветом. */
 function AccountStatus({ account, status }: { account: ManagedAccount; status: CatalogStatus | null }) {
   const text = statusText(account, status);
-  const tone = text === "работает" ? "bg-success/10 text-success" : text === "отключён" ? "bg-muted text-muted-foreground" : "bg-warning/10 text-warning";
-  return <Badge className={`h-auto text-xs ${tone}`}>{text}</Badge>;
+  const state = accountState(text);
+  const Icon = state === "ok" ? CircleCheck : state === "off" ? CirclePause : TriangleAlert;
+  return <Badge variant="outline" className="text-muted-foreground h-6 gap-1 px-2 text-xs font-medium">
+    <Icon aria-hidden="true" className={cn("size-3.5!", state === "ok" ? "fill-success text-card" : state === "attention" ? "text-warning" : "")} />{text}
+  </Badge>;
 }
 
 function PlatformLabel({ account }: { account: ManagedAccount }) {
@@ -123,54 +129,40 @@ function Actions({ account, csrf, canEdit, canDelete }: {
   );
 }
 
-/** Таблица аккаунтов: прокрутка внутри карточки, заголовок закреплён. */
+/** Вузы и аккаунты: ячейки и формы рисует сервер, поиск, фильтры, страницы
+ *  и массовые действия — клиентская таблица CatalogDataTable. */
 export function AccountsTable({ institutions, status, csrf, canEdit, canDelete }: {
   institutions: ManagedInstitution[]; status: CatalogStatus | null; csrf: string; canEdit: boolean; canDelete: boolean;
 }) {
-  return (
-    <div data-testid="platform-table-scroll"
-      className="bg-card max-h-[70vh] min-w-0 overflow-auto overscroll-contain rounded-lg border [&_[data-slot=table-container]]:overflow-visible [&_small]:text-muted-foreground [&_small]:mt-1 [&_small]:block [&_td]:align-top [&_td]:whitespace-normal">
-      <Table data-testid="platform-table">
-        <TableHeader className="bg-card sticky top-0 z-20 shadow-[inset_0_-1px_0_var(--border)] [&_tr]:border-0">
-          <TableRow className="hover:bg-transparent">
-            <TableHead>Вуз</TableHead>
-            <TableHead>Платформа</TableHead>
-            <TableHead>Аккаунт</TableHead>
-            <TableHead>Данные</TableHead>
-            <TableHead>Статус</TableHead>
-            <TableHead className="text-right"><span className="sr-only">Действия</span></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {institutions.flatMap((institution) => institution.accounts.length
-            ? institution.accounts.map((account, index) => (
-              <TableRow key={account.id}>
-                {index === 0 ? <InstitutionCell institution={institution} csrf={csrf} canEdit={canEdit} /> : null}
-                <TableCell><PlatformLabel account={account} /></TableCell>
-                <TableCell className="min-w-48"><AccountName account={account} /></TableCell>
-                <TableCell className="min-w-40">
-                  <small className="!mt-0">
-                    {account.channelId !== null
-                      ? <>{account.subscribers || "—"} подписчиков<br /></>
-                      : <>{ACCESS_MODES[account.legacyAccessMode ?? account.accessMode] || account.legacyAccessMode || account.accessMode}<br /></>}
-                    <Rating rating={institution.officialRatings?.[account.platform]} label={`М‑Рейтинг ${account.platform.toUpperCase()}`} />
-                  </small>
-                </TableCell>
-                <TableCell>
-                  <AccountStatus account={account} status={status} />
-                  {account.lastErrorCode
-                    ? <small className="text-destructive">{account.lastErrorCode === "legacy_collection_error" ? "Ошибка предыдущего сбора" : "Ошибка сбора данных"}</small>
-                    : null}
-                </TableCell>
-                <TableCell><Actions account={account} csrf={csrf} canEdit={canEdit} canDelete={canDelete} /></TableCell>
-              </TableRow>
-            ))
-            : [<TableRow key={institution.id}>
-              <InstitutionCell institution={institution} csrf={csrf} canEdit={canEdit} withRating={false} />
-              <TableCell colSpan={5} className="text-muted-foreground">Аккаунты ещё не привязаны</TableCell>
-            </TableRow>])}
-        </TableBody>
-      </Table>
-    </div>
-  );
+  const lower = (...values: (string | null | undefined)[]) => values.filter(Boolean).join(" ").toLowerCase();
+  const groups: CatalogGroup[] = institutions.map((institution) => ({
+    id: institution.id,
+    search: lower(institution.name, institution.shortName),
+    header: <InstitutionInfo institution={institution} csrf={csrf} canEdit={canEdit} withRating={institution.accounts.length > 0} />,
+    accounts: institution.accounts.map((account) => ({
+      id: account.id, legacyId: account.legacyId, rowVersion: account.rowVersion, enabled: account.enabled, platform: account.platform,
+      state: accountState(statusText(account, status)),
+      search: lower(account.title, account.username, account.externalKey, account.nativeId, account.url),
+      cells: <>
+        <TableCell><PlatformLabel account={account} /></TableCell>
+        <TableCell className="min-w-48"><AccountName account={account} /></TableCell>
+        <TableCell className="min-w-40">
+          <small className="!mt-0">
+            {account.channelId !== null
+              ? <>{account.subscribers || "—"} подписчиков<br /></>
+              : <>{ACCESS_MODES[account.legacyAccessMode ?? account.accessMode] || account.legacyAccessMode || account.accessMode}<br /></>}
+            <Rating rating={institution.officialRatings?.[account.platform]} label={`М‑Рейтинг ${account.platform.toUpperCase()}`} />
+          </small>
+        </TableCell>
+        <TableCell>
+          <AccountStatus account={account} status={status} />
+          {account.lastErrorCode
+            ? <small className="text-destructive">{account.lastErrorCode === "legacy_collection_error" ? "Ошибка предыдущего сбора" : "Ошибка сбора данных"}</small>
+            : null}
+        </TableCell>
+        <TableCell><Actions account={account} csrf={csrf} canEdit={canEdit} canDelete={canDelete} /></TableCell>
+      </>,
+    })),
+  }));
+  return <CatalogDataTable groups={groups} csrf={csrf} canEdit={canEdit} canDelete={canDelete} />;
 }

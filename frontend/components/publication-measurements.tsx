@@ -42,7 +42,7 @@ const COLUMN_ICONS: Record<string, LucideIcon> = {
 
 function ColumnHead({ icon: Icon, label, delta = false, align = "text-center" }: { icon: LucideIcon; label: string; delta?: boolean; align?: string }) {
   return (
-    <th scope="col" className={cn("bg-card text-muted-foreground sticky top-0 z-[5] h-10 px-3 font-medium shadow-[inset_0_-1px_0_var(--border)]", align)}>
+    <th scope="col" className={cn("bg-muted text-foreground sticky top-0 z-[5] h-10 px-3 font-medium shadow-[inset_0_-1px_0_var(--border)]", align)}>
       <span className="inline-flex cursor-help items-center justify-center gap-0.5 align-middle" tabIndex={0} title={label}>
         <Icon className="size-4 shrink-0" aria-hidden="true" />
         {delta ? <span aria-hidden="true" className="text-[10px] leading-none font-semibold">Δ</span> : null}

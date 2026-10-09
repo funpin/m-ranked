@@ -258,7 +258,7 @@ function Replicas({ replicas, servers }: { replicas: Replica[]; servers: Map<str
 
 function Backups({ overview, servers, now }: { overview: StorageOverview; servers: Map<string, string>; now: number }) {
   return <Section title="Резервные копии по серверам" description="Законченный снимок базы попадает в хранилище основного сервера в течение минуты и копируется на серверы из политики хранения.">
-    {overview.backups.length ? <div className="overflow-x-auto"><Table>
+    {overview.backups.length ? <Table containerProps={{ tabIndex: 0, role: "region", "aria-label": "Снимки в хранилище" }}>
       <TableHeader><TableRow><TableHead>Снимок</TableHead><TableHead className="text-right">Размер</TableHead><TableHead>Снят</TableHead><TableHead>Копии</TableHead></TableRow></TableHeader>
       <TableBody>{overview.backups.map((backup) => <TableRow key={backup.id} className={backup.retired ? "opacity-60" : undefined}>
         <TableCell className="font-mono text-xs">{backup.name}{backup.retired ? " · выведена" : ""}</TableCell>
@@ -266,7 +266,7 @@ function Backups({ overview, servers, now }: { overview: StorageOverview; server
         <TableCell>{ago(backup.createdAt, now)}</TableCell>
         <TableCell><Replicas replicas={backup.replicas} servers={servers} /></TableCell>
       </TableRow>)}</TableBody>
-    </Table></div> : <p className="text-muted-foreground">Резервных копий в хранилище пока нет: агент основного сервера зарегистрирует ближайший снимок.</p>}
+    </Table> : <p className="text-muted-foreground">Резервных копий в хранилище пока нет: агент основного сервера зарегистрирует ближайший снимок.</p>}
   </Section>;
 }
 

@@ -51,7 +51,9 @@ ProtectControlGroups=true
 ProtectClock=true
 ProtectHostname=true
 ProtectProc=invisible
-ProcSubset=pid
+# Без ProcSubset=pid: живой мониторинг панели (api/live_host.py) читает
+# /proc/stat, meminfo, loadavg и diskstats. Чужие процессы по-прежнему
+# скрыты ProtectProc=invisible, запись в /proc закрыта ProtectKernelTunables.
 RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true

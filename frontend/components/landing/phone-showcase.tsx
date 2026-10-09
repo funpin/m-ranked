@@ -66,7 +66,7 @@ export function PhoneDashboard({ days, networks }: { days: string[]; networks: P
                 top -= height;
                 return height > 0 ? (
                   <rect key={`${day}-${network.platform}`} x={index * barWidth + barWidth * 0.14} y={top} width={barWidth * 0.72}
-                    height={height} rx={0.35} fill={TONE(network.platform)} fillOpacity={0.92} style={{ "--i": index } as CSSProperties} />
+                    height={height} rx={0.35} fill={TONE(network.platform)} fillOpacity={0.92} />
                 ) : null;
               });
             })}

@@ -181,6 +181,13 @@ def test_installer_ships_the_anomaly_units_where_the_full_history_lives() -> Non
     assert "m-ranked-target-anomaly-tail.timer" in installer.UNITS_ANOMALY
 
 
+def test_api_can_read_host_counters_for_live_monitoring() -> None:
+    unit = text("m-ranked-target-api.service")
+    # ProcSubset=pid спрятал бы /proc/stat и meminfo от api/live_host.py.
+    assert not any(line.startswith("ProcSubset=") for line in unit.splitlines())
+    assert "ProtectProc=invisible" in unit
+
+
 def test_ops_sample_reads_only_and_stays_small() -> None:
     unit = text("m-ranked-target-ops-sample.service")
     assert "python -m api.tools.ops_sample" in unit

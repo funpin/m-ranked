@@ -88,15 +88,31 @@ for (const theme of ["light", "dark"]) {
   });
 }
 
-test("первый экран без цифр: сводка ниже сгиба, а трёхмерная модель догружается отдельно", async ({ page }) => {
+test("первый экран без цифр: сводка ниже сгиба, а мазок — лёгкий SVG без WebGL", async ({ page }) => {
   await page.goto("/");
   const stats = page.getByTestId("landing-stats");
   const top = await stats.evaluate((node) => node.getBoundingClientRect().top);
   expect(top).toBeGreaterThanOrEqual(await page.evaluate(() => window.innerHeight));
   const scene = page.getByTestId("hero-scene");
   await expect(scene).toBeAttached();
-  const webgl = await page.evaluate(() => Boolean(document.createElement("canvas").getContext("webgl2")));
-  if (webgl) await expect(scene).toHaveAttribute("data-ready", "true", { timeout: 15_000 });
+  expect(await scene.evaluate((node) => node.tagName.toLowerCase())).toBe("svg");
+  await expect(page.locator(".landing canvas")).toHaveCount(0);
+});
+
+test("прокрутка главной: упор вверх не перезагружает страницу, оглавление ведёт к разделам, линейка показывает долю пройденного", async ({ page }) => {
+  await page.goto("/");
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY)).toBe("none");
+  test.skip(page.viewportSize()!.width < 1280, "линейка — только на широком экране");
+  const thumb = page.locator(".landing-ruler-thumb i");
+  await expect(thumb).toHaveText("000 %");
+  // Оглавление: строка — ссылка на раздел; после перехода она становится текущей.
+  const index = page.getByRole("navigation", { name: "Разделы главной" });
+  await expect(index.getByRole("link", { name: "Соцсети вузов" })).toHaveAttribute("aria-current", "location");
+  await index.getByRole("link", { name: "Анализ" }).click();
+  await expect(index.getByRole("link", { name: "Анализ" })).toHaveAttribute("aria-current", "location", { timeout: 5_000 });
+  await expect(page.locator("#landing-analysis")).toBeInViewport();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(thumb).toHaveText("100 %");
 });
 
 test("в шапке — авторы проекта рядом с GitHub", async ({ page }) => {

@@ -5,6 +5,7 @@ import { GithubMark } from "@/components/github-mark";
 import { ARTICLES } from "@/lib/methodology";
 import { REPOSITORY_URL } from "@/lib/repository";
 import { PageTitle } from "@/components/page-title";
+import { RankField } from "@/components/landing/rank-field";
 
 const DESCRIPTION = "Как m-ranked собирает публичные счётчики соцсетей вузов, проверяет их, сравнивает вузы и анализирует динамику публикаций.";
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ const PRINCIPLES = [
 export default function MethodologyIndex() {
   return (
     <div className="grid gap-14 pb-10">
+      <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
       <header className="grid max-w-3xl gap-5">
         <p className="text-muted-foreground text-xs font-medium tracking-[0.14em] uppercase">Документация</p>
         <h1 className="font-heading text-5xl leading-[1] font-bold tracking-tight sm:text-6xl"><PageTitle text="Методология" /></h1>
@@ -31,6 +33,8 @@ export default function MethodologyIndex() {
           что именно сообщает анализ динамики. Каждая статья ссылается на код, который можно прочитать.
         </p>
       </header>
+      <RankField className="text-foreground mx-auto w-full max-w-sm max-lg:hidden" label="Абстракция: вузы на одной шкале" />
+      </div>
 
       <ul className="grid gap-3 sm:grid-cols-3">
         {PRINCIPLES.map(({ icon: Icon, title, text }) => (
