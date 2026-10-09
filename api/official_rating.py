@@ -8,7 +8,6 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
@@ -19,10 +18,6 @@ from .errors import ApiProblem
 BASE = "https://www.m-rating.ru/"
 CATEGORIES = {"social": "social", "telegram": "tg", "vk": "vk", "max": "ok",
               "rutube": "rt"}
-
-
-def _resource() -> Path:
-    return Path(__file__).with_name("data") / "official-m-rating-channel-codes.json"
 
 
 def _allow(url: str) -> bool:
@@ -140,16 +135,24 @@ async def refresh(request, actor: str, correlation: uuid.UUID, *, update_coverag
             source, source_url = await _fetch(client, urljoin(BASE, path_match.group(1)), 8*1024*1024)
         parsed = [_parse_month(config, month, source, source_url)
                   for month in _filled_months(source)]
-        codes = json.loads(_resource().read_text(encoding="utf-8"))
-        # Уже записанные периоды не переписываются: ежедневная проверка
-        # приносит только новый месяц и молча проходит мимо прежних.
-        known = {row["period"] for row in await database.admin_fetch_all(
-            "SELECT DISTINCT period FROM rating.official_institution_rating_observation")}
-        pending = [month for month in parsed if month["period"] not in known]
-        for month in pending:
+        codes = await _institution_codes(database, parsed[-1]["evidence"]["items"])
+        # Записанные периоды не переписываются, но дополняются вузами, у
+        # которых за этот период ещё ничего нет: так новый или впервые
+        # привязанный вуз получает всю опубликованную историю, а не только
+        # следующий месяц. Обычно таких нет, и прогон проходит мимо.
+        recorded: dict[str, set[str]] = {}
+        for row in await database.admin_fetch_all(
+                "SELECT DISTINCT period,institution_id::text AS institution_id"
+                " FROM rating.official_institution_rating_observation"):
+            recorded.setdefault(row["period"], set()).add(row["institution_id"])
+        for month in parsed:
+            missing = {institution: code for institution, code in codes.items()
+                       if institution not in recorded.get(month["period"], set())}
+            if not missing:
+                continue
             # Каждому периоду свой корреляционный идентификатор: импорт
             # отвергает повторное использование одного и того же.
-            await _import_month(database, codes, month, actor,
+            await _import_month(database, missing, month, actor,
                                 uuid.uuid5(correlation, month["period"]))
         if update_coverage:
             await _update_coverage(database, parsed[-1], actor, correlation)
@@ -187,43 +190,41 @@ async def _update_coverage(database: Any, parsed: dict[str, Any], actor: str,
                 """, {"actor": actor, "id": correlation, "value": value})
 
 
-async def _import_month(database: Any, codes: dict[str, Any], parsed: dict[str, Any],
+async def _institution_codes(database: Any, items: list[dict[str, Any]]) -> dict[str, str]:
+    """Коды вузов в М-Рейтинге, по идентификатору вуза.
+
+    Код хранится у вуза (catalog.institution_external_id). Вуз без кода база
+    привязывает сама, если его полное название совпадает с названием в
+    источнике; вуз, которого в М-Рейтинге нет, так и остаётся без кода.
+    """
+    rows = await database.admin_fetch_all(
+        "SELECT institution_id::text AS institution_id,code"
+        " FROM ops_and_admin.official_rating_codes(%(items)s::jsonb)",
+        {"items": json.dumps([{"code": item["code"], "name": item["name"]} for item in items],
+                             ensure_ascii=False)})
+    if len(rows) > 10000:
+        raise ValueError("official rating institution limit")
+    return {row["institution_id"]: row["code"] for row in rows}
+
+
+async def _import_month(database: Any, codes: dict[str, str], parsed: dict[str, Any],
                         actor: str, correlation: uuid.UUID) -> None:
-    """Записывает один период официального рейтинга."""
+    """Записывает один период официального рейтинга для переданных вузов."""
+    institutions = [{"institutionId": institution, "category": category,
+                     "rank": rating[0] if rating else None,
+                     "score": rating[1] if rating else None}
+                    for institution, code in sorted(codes.items())
+                    for category in CATEGORIES
+                    for rating in (parsed["rankings"][category].get(code),)]
+    import_payload = {"period": parsed["period"], "sourceUrl": parsed["sourceUrl"],
+                      "sourceSha256": parsed["sourceSha256"],
+                      "fetchedAt": parsed["fetchedAt"].isoformat(),
+                      "evidence": parsed["evidence"],
+                      "available": len(parsed["rankings"]["social"]),
+                      "institutions": institutions, "accounts": []}
     async with database.admin() as connection:
         async with connection.transaction():
             await connection.execute("SELECT pg_advisory_xact_lock(782194601)")
-            channels = await (await connection.execute("""
-                SELECT account.id,account.institution_id,account.current_username
-                FROM catalog.visible_platform_account account
-                JOIN catalog.legacy_entity_alias alias ON alias.target_uuid=account.id
-                  AND alias.entity_type='channels'
-                WHERE account.platform='telegram' AND lower(account.current_username)=ANY(%(names)s)
-                ORDER BY account.current_username COLLATE \"C\",alias.legacy_id LIMIT 10001
-                """, {"names": list(codes)})).fetchall()
-            if len(channels) > 10000:
-                raise ValueError("official rating account limit")
-            institutions, accounts, seen = [], [], set()
-            for channel in channels:
-                code = codes.get(channel["current_username"].casefold())
-                telegram = parsed["rankings"]["telegram"].get(code)
-                if telegram:
-                    accounts.append({"accountId": str(channel["id"]), "rank": telegram[0],
-                                     "score": telegram[1]})
-                if channel["institution_id"] not in seen:
-                    seen.add(channel["institution_id"])
-                    for category in CATEGORIES:
-                        rating = parsed["rankings"][category].get(code)
-                        institutions.append({"institutionId": str(channel["institution_id"]),
-                                             "category": category,
-                                             "rank": rating[0] if rating else None,
-                                             "score": rating[1] if rating else None})
-            import_payload = {"period": parsed["period"], "sourceUrl": parsed["sourceUrl"],
-                              "sourceSha256": parsed["sourceSha256"],
-                              "fetchedAt": parsed["fetchedAt"].isoformat(),
-                              "evidence": parsed["evidence"],
-                              "available": len(parsed["rankings"]["social"]),
-                              "institutions": institutions, "accounts": accounts}
             result = await (await connection.execute(
                 "SELECT ops_and_admin.import_official_rating(%(payload)s::jsonb,%(actor)s,%(id)s) AS result",
                 {"payload": json.dumps(import_payload, ensure_ascii=False),

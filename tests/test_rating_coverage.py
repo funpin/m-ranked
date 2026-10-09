@@ -10,9 +10,10 @@ from api import official_rating
 
 @pytest.mark.parametrize("button", [False, True])
 def test_only_admin_button_refreshes_coverage_even_when_the_month_is_known(monkeypatch, button):
-    parsed = {"period": "Сентябрь 2026", "rankings": {"social": {str(i): (i, 1.0) for i in range(233)}}}
+    parsed = {"period": "Сентябрь 2026", "evidence": {"items": []}, "rankings": {"social": {str(i): (i, 1.0) for i in range(233)}}}
     database = SimpleNamespace(admin_fetch_one=AsyncMock(return_value=None),
-                               admin_fetch_all=AsyncMock(return_value=[{"period": parsed["period"]}]))
+                               admin_fetch_all=AsyncMock(return_value=[{"period": parsed["period"],
+                                                                         "institution_id": "a"}]))
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=database)))
     monkeypatch.setattr(official_rating, "_fetch", AsyncMock(side_effect=[
         (b'year: 2026, ratingsJson: "ratings.json"', "https://m-rating.ru/js/config.js"),
@@ -21,6 +22,7 @@ def test_only_admin_button_refreshes_coverage_even_when_the_month_is_known(monke
     monkeypatch.setattr(official_rating, "_parse_month", lambda *_: parsed)
     update = AsyncMock()
     monkeypatch.setattr(official_rating, "_update_coverage", update)
+    monkeypatch.setattr(official_rating, "_institution_codes", AsyncMock(return_value={"a": "1"}))
     importer = AsyncMock()
     monkeypatch.setattr(official_rating, "_import_month", importer)
     correlation = uuid.uuid4()

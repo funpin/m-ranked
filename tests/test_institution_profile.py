@@ -13,7 +13,7 @@ from test_account_archive_url import _row
 
 def test_reviewed_sources_have_unique_stable_ids_and_explicit_provenance():
     rows = json.loads(STUDENT_COUNTS.read_text())
-    assert len(rows) == len({row["institutionId"] for row in rows}) == 84
+    assert len(rows) == len({row["institutionId"] for row in rows}) == 85
     for row in rows:
         uuid.UUID(row["institutionId"])
         assert type(row["value"]) is int and row["value"] >= 0
