@@ -166,3 +166,71 @@ def test_a_year_without_any_published_month_is_rejected() -> None:
                                               "vk": None, "ok": None, "rt": None}}]}]}).encode()
     with pytest.raises(ValueError):
         _filled_months(source)
+
+
+def test_official_rating_backfills_institutions_missing_from_recorded_periods(monkeypatch) -> None:
+    """Код хранится у вуза, а записанный месяц дополняется вузами без записей.
+
+    Прежде записанный период пропускался целиком, и вуз, привязанный позже,
+    получал рейтинг только со следующего месяца.
+    """
+    import asyncio
+    import contextlib
+    import uuid
+    from types import SimpleNamespace
+
+    from api import official_rating
+
+    def month(name):
+        return {"name": name, "items": [
+            {"code": "7", "name": "Старый вуз", "scores": {"social": 2, "vk": 2, "ok": 2, "rt": 2}},
+            {"code": "22", "name": "Новый вуз", "scores": {"social": 1, "vk": 1, "ok": 1, "rt": 1}}]}
+    source = json.dumps({"months": [month("Июль"), month("Август")]}).encode()
+
+    async def fetch(client, url, maximum):
+        if url.endswith("config.js"):
+            return b'ratingsJson: "data/r.json", year: 2026', url
+        return source, url
+    monkeypatch.setattr(official_rating, "_fetch", fetch)
+
+    payloads, code_requests = [], []
+
+    class Connection:
+        async def execute(self, sql, params=None):
+            if params and "payload" in params:
+                payloads.append(json.loads(params["payload"]))
+            return SimpleNamespace(fetchone=self._result)
+
+        async def _result(self):
+            return {"result": {"outcome": "succeeded"}}
+
+        def transaction(self):
+            return contextlib.nullcontext()
+
+    class Database:
+        async def admin_fetch_one(self, sql, params):
+            return {"result": None}
+
+        async def admin_fetch_all(self, sql, params=None):
+            if "official_rating_codes" in sql:
+                code_requests.append(json.loads(params["items"]))
+                return [{"institution_id": "old", "code": "7"},
+                        {"institution_id": "new", "code": "22"}]
+            return [{"period": "Июль 2026", "institution_id": "old"},
+                    {"period": "Август 2026", "institution_id": "old"}]
+
+        @contextlib.asynccontextmanager
+        async def admin(self):
+            yield Connection()
+
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=Database())))
+    asyncio.run(official_rating.refresh(request, "test", uuid.uuid4()))
+
+    assert code_requests == [[{"code": "7", "name": "Старый вуз"},
+                              {"code": "22", "name": "Новый вуз"}]]
+    assert [payload["period"] for payload in payloads] == ["Июль 2026", "Август 2026"]
+    for payload in payloads:
+        assert {item["institutionId"] for item in payload["institutions"]} == {"new"}
+        assert {item["category"]: item["rank"] for item in payload["institutions"]} == {
+            "social": 2, "telegram": None, "vk": 2, "max": 2, "rutube": 2}
+        assert payload["accounts"] == []

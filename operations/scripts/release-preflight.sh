@@ -16,10 +16,6 @@ git rev-parse --verify --quiet "$deployed^{commit}" >/dev/null || {
   echo "коммит $deployed не найден: сначала git fetch" >&2
   exit 1
 }
-git cat-file -e HEAD:api/data/official-m-rating-channel-codes.json || {
-  echo "NO-GO: справочник официального рейтинга отсутствует в Git-архиве релиза" >&2
-  exit 1
-}
 
 section() { printf '\n== %s ==\n' "$1"; }
 changed() { git diff --name-only "$deployed..HEAD" -- "$@"; }
