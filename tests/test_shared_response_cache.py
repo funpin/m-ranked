@@ -4,6 +4,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import os
+import zlib
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +14,7 @@ import pytest
 import redis.asyncio as redis
 from starlette.requests import Request
 
-from api.cache import RedisResponseCache, ResponseCache, cache_call
+from api.cache import _COMPRESSED, RedisResponseCache, ResponseCache, cache_call
 from api.cache_metrics import CacheMetricsPublisher, render_cache_metrics
 from api.cached import cache_key, serve
 
@@ -280,7 +281,10 @@ def test_redis_keys_and_values_do_not_contain_secrets() -> None:
             )
             keys = await raw.keys(f"{namespace}:*")
             values = [await raw.get(key) for key in keys if b":entry:" in key]
-            material = b"\n".join(keys + [value for value in values if value])
+            # Записи сжаты: проверяется запись целиком в распакованном виде.
+            plain = [zlib.decompress(value[len(_COMPRESSED):]) if value.startswith(_COMPRESSED) else value
+                     for value in values if value]
+            material = b"\n".join(keys + plain)
             assert values, "the safe public response must actually reach Redis"
             assert secret.encode() not in material
             assert b"authorization" not in material.lower()

@@ -55,8 +55,10 @@ UMask=0077
 LimitNOFILE=4096
 TasksMax=32
 CPUQuota=25%
-MemoryHigh=128M
-MemoryMax=192M
+# Проход держит разобранные истории постов за сутки: при 128M служба
+# постоянно упиралась в мягкий предел (2,3 млн срабатываний к 10.10).
+MemoryHigh=192M
+MemoryMax=256M
 MemorySwapMax=0
 
 [Install]

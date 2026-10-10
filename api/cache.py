@@ -34,6 +34,7 @@ import json
 import logging
 import re
 import time
+import zlib
 from inspect import isawaitable
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -46,6 +47,13 @@ import redis.asyncio as redis
 from redis.exceptions import RedisError
 
 CHANNEL = "mranked_cache"
+# Запись в Redis сжимается: история поста — десятки килобайт JSON, и без
+# сжатия кэш на 8192 записи требовал около полугигабайта при бюджете Redis
+# в 256 МБ. 10.10 Redis сидел на пределе памяти своей службы и стоял 60 %
+# времени — кэш отвечал таймаутами, страницы пересобирались из базы.
+# Маркер не может начинать JSON, поэтому прежние записи читаются как есть.
+_COMPRESSED = b"\x00z"
+_COMPRESS_FROM_BYTES = 512
 logger = logging.getLogger(__name__)
 _SAFE_TAG = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 _SECRET = re.compile(
@@ -290,7 +298,7 @@ class RedisResponseCache:
 
     @staticmethod
     def _encode(entry: Entry) -> bytes:
-        return json.dumps({
+        raw = json.dumps({
             "value": entry.value,
             "etag": entry.etag,
             "expiresAt": entry.expires_at,
@@ -299,9 +307,19 @@ class RedisResponseCache:
             "freshUntil": entry.fresh_until,
             "revision": entry.revision,
         }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if len(raw) < _COMPRESS_FROM_BYTES:
+            return raw
+        # Уровень 1: JSON ответов сжимается в 5–10 раз за доли миллисекунды.
+        return _COMPRESSED + zlib.compress(raw, 1)
 
     @staticmethod
     def _decode(raw: bytes) -> Entry:
+        if raw.startswith(_COMPRESSED):
+            try:
+                raw = zlib.decompress(raw[len(_COMPRESSED):])
+            except zlib.error as error:
+                # Битая запись — промах, как любая нечитаемая, а не ошибка 500.
+                raise ValueError("corrupt compressed cache entry") from error
         value = json.loads(raw)
         return Entry(
             value["value"], value["etag"], float(value["expiresAt"]),
@@ -371,6 +389,11 @@ class RedisResponseCache:
                 # The expiry timestamp as score lets invalidation prune dead
                 # references even when this hot tag is continuously extended.
                 pipe.zadd(self._tag_key(tag), {entry_key: entry.expires_at})
+                # Мёртвые ссылки убираются и здесь: пометка уведомлением при
+                # нынешних настройках не идёт (invalidate выходит сразу), и
+                # без этого набор тега рос на каждый когда-либо записанный
+                # адрес. Вытеснение их не берёт — у набора нет срока жизни.
+                pipe.zremrangebyscore(self._tag_key(tag), "-inf", now)
             await pipe.execute()
             overflow = int(await self._redis.zcard(f"{self._namespace}:lru")) - self._capacity
             if overflow > 0:
@@ -388,7 +411,7 @@ class RedisResponseCache:
                         for tag in self._decode(raw_entry).tags:
                             cleanup.zrem(self._tag_key(tag), victim_key)
                     await cleanup.execute()
-        except (RedisError, OSError):
+        except (RedisError, OSError, ValueError, TypeError):
             self._errors += 1
             logger.warning("Redis response cache unavailable during put")
 
