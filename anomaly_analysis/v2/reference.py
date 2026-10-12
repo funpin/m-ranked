@@ -129,6 +129,9 @@ class Post:
     nulls: tuple[tuple[Metric, float, float], ...] = ()
     rhythm: float = 0.25
     is_repost: bool = False
+    # Вид реакции, которым приходят добавленные реакции (поток одной реакции);
+    # без него добавка делится между видами, как органика.
+    stream_key: str | None = None
 
 
 def _poisson(rng: random.Random, mean: float) -> int:
@@ -161,6 +164,24 @@ def _rhythm(post: Post, age: float) -> float:
     return 1 + post.rhythm * math.cos(2 * math.pi * (hours - 15) / 24)
 
 
+# Состав живых реакций Telegram: доли постоянны, делятся без случайности,
+# чтобы шум остальных рядов эталона не сдвигался.
+TELEGRAM_KINDS = (("❤", 0.6), ("👍", 0.25), ("🔥", 0.15))
+
+
+def _kinds(organic: int, injected: int, stream_key: str | None) -> dict[str, int]:
+    organic, injected = max(0, organic), max(0, injected)
+    shared = organic + (0 if stream_key else injected)
+    row, left = {}, shared
+    for key, share in TELEGRAM_KINDS[:-1]:
+        row[key] = math.floor(shared * share)
+        left -= row[key]
+    row[TELEGRAM_KINDS[-1][0]] = left
+    if stream_key:
+        row[stream_key] = row.get(stream_key, 0) + injected
+    return row
+
+
 def _engagement(ratio: float, age: float) -> float:
     # Живая доля реакций на просмотр медленно падает с возрастом поста.
     return ratio * (1 + age / (2 * DAY)) ** -0.25
@@ -185,6 +206,9 @@ def build(post: Post, rng: random.Random, publication_id: UUID, account_id: UUID
                           + round(injected(metric, first)))
     columns: dict[Metric, list[int]] = {metric: [totals[metric]] for metric in metrics}
     carry = {metric: 0.0 for metric in metrics}
+    # Реакции порознь: органические и добавленные — для состава по видам.
+    added_reactions = round(injected(R, first)) if R in metrics else 0
+    kinds = [_kinds(totals[R] - added_reactions, added_reactions, post.stream_key)] if R in metrics else []
     for left, right in zip(ages, ages[1:]):
         middle = (left + right) / 2
         rhythm = _rhythm(post, middle)
@@ -205,13 +229,20 @@ def build(post: Post, rng: random.Random, publication_id: UUID, account_id: UUID
             columns[metric].append(totals[metric])
             if metric is V:
                 views_delta = delta + whole
+            if metric is R:
+                added_reactions += whole
+                kinds.append(_kinds(totals[R] - added_reactions, added_reactions, post.stream_key))
     values: dict[Metric, tuple[int | None, ...]] = {}
     for metric, column in columns.items():
         values[metric] = tuple(
             None if any(item is metric and low <= age <= high for item, low, high in post.nulls)
             else value for age, value in zip(ages, column))
+    # Состав по видам отдаёт только Telegram и только где сумма прочитана.
+    reaction_kinds = (tuple(None if total is None else row for total, row in zip(values[R], kinds))
+                      if post.platform == "telegram" and R in values else ())
     return PostSeries(publication_id, account_id, post.platform, post.published_at, post.is_repost,
-                      tuple(post.published_at + timedelta(seconds=age) for age in ages), values)
+                      tuple(post.published_at + timedelta(seconds=age) for age in ages), values,
+                      reaction_kinds=reaction_kinds)
 
 
 def subscribers(published_at: datetime, horizon: float, base: int, rng: random.Random,
@@ -400,6 +431,12 @@ def cases() -> tuple[Case, ...]:
              Post("vk", _at(15, 12), (_vk(500),), 2 * DAY,
                   {V: (Ramp(1 * HOUR, 6.5 * HOUR, 500),), R: (Ramp(1 * HOUR, 6.5 * HOUR, 250),)}),
              Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (16,)),
+        Case("p17_reaction_stream_telegram", "synthetic",
+             "Telegram: прочие реакции идут за просмотрами, а «🙈» с первого по третий час "
+             "добавляется своим потоком (+90) и обрывается (Пермский Политех, 07.10.2026).",
+             Post("telegram", _at(16, 11), (_tg(4000),), 2 * DAY, {R: (Ramp(1 * HOUR, 3 * HOUR, 90),)},
+                  stream_key="🙈"),
+             Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (17,)),
         Case("honest_organic_telegram", "synthetic",
              "Telegram: органическое степенное затухание, 30 суток, шаг сбора по возрасту.",
              Post("telegram", _at(17, 9), (_tg(5200),), 30 * DAY), **HONEST),

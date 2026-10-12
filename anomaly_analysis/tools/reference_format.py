@@ -48,6 +48,7 @@ def post_payload(series: PostSeries) -> dict[str, Any]:
         "interval_uncertain": list(series.interval_uncertain),
         "reaction_breakdowns": [dict(row) if row is not None else None
                                 for row in series.reaction_breakdowns],
+        "reaction_kinds": [dict(row) if row is not None else None for row in series.reaction_kinds],
         "values": {metric.value: list(series.values[metric])
                    for metric in Metric if metric in series.values},
     }
@@ -139,6 +140,7 @@ def _series(payload: Mapping[str, Any], *, default_quality: str = "unknown") -> 
                        [default_quality] * len(payload["age_seconds"]))) for name in payload["values"]},
         interval_uncertain=tuple(payload.get("interval_uncertain", ())),
         reaction_breakdowns=tuple(payload.get("reaction_breakdowns", ())),
+        reaction_kinds=tuple(payload.get("reaction_kinds", ())),
     )
 
 

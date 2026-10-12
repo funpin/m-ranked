@@ -219,3 +219,20 @@ def test_a_collection_gap_over_the_band_end_is_bridged_by_equal_reads():
     assert prepared.metrics[Metric.REACTIONS].gaps
     estimate = engagement_estimate_at(prepared, 24 * H)
     assert (estimate.value, estimate.low, estimate.high) == (195, 195, 195)
+
+
+def test_a_withdrawn_reaction_does_not_empty_the_bracket():
+    # Пермский Политех в Telegram, 09.10: реакций было 197, одну сняли, и по обе
+    # стороны конца трёх суток (пробел 69,4–75,1 ч) счётчик точно 196.
+    ages = list(np.arange(0, 60 * H, 15 * M)) + [60.5 * H, 69.2 * H, 69.4 * H, 75.1 * H]
+    reactions = [min(197, int(age // 300)) for age in ages[:-4]] + [196, 196, 196, 196]
+    prepared = prepare(post(ages, {"reactions": reactions}), later(76), CADENCE)
+    estimate = counter_estimate_at(prepared, Metric.REACTIONS, 72 * H)
+    assert (estimate.value, estimate.low, estimate.high) == (196, 196, 196)
+
+
+def test_neighbours_that_disagree_still_give_no_estimate():
+    # Снятие между ближайшими замерами: где был счётчик на конце, неизвестно.
+    ages = [60 * H, 69 * H, 75 * H]
+    prepared = prepare(post(ages, {"reactions": [197, 197, 150]}), later(76), CADENCE)
+    assert counter_estimate_at(prepared, Metric.REACTIONS, 72 * H) is None

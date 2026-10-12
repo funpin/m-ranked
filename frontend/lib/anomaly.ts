@@ -29,11 +29,13 @@ export const SIGNAL_LEGEND = [
   { pattern: 14, title: "пакет реакций, оторванный от просмотров" },
   { pattern: 15, title: "площадка списала реакции" },
   { pattern: 16, title: "одновременный обрыв просмотров и реакций" },
+  { pattern: 17, title: "поток одной реакции" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;
 export const FAMILY_NAMES = {
   velocity: "скорость", shape: "форма", cross_metric: "согласие метрик", synchrony: "синхронность",
+  composition: "состав реакций",
 } as const;
 
 export type Tone = "neutral" | "amber" | "red";
@@ -200,6 +202,14 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
     return { type: "bars", percent: true, bars: [
       { label: "просмотры: скорость после", value: kept("viewsBefore", "viewsAfter"), highlight: true },
       { label: "реакции: скорость после", value: kept("reactionsBefore", "reactionsAfter"), highlight: true },
+    ] };
+  }
+  if (render.kind === "stream") {
+    // Доля одного вида реакции среди новых реакций окна против его доли вне окна.
+    const all = numberAt(render, "allDelta") ?? 0;
+    return { type: "bars", percent: true, bars: [
+      { label: "в окне", value: all > 0 ? (numberAt(render, "keyDelta") ?? 0) / all : 0, highlight: true },
+      { label: "вне окна", value: numberAt(render, "outsideShare") ?? 0, highlight: false },
     ] };
   }
   if (render.kind === "erv") {

@@ -32,7 +32,7 @@ class Store:
     def read_subscribers(self, *args):
         return {}
 
-    def read_series(self, targets):
+    def read_series(self, targets, kinds_for=None):
         return {} if self.missing else {self.subject.publication_id: self.subject}
 
     def write_states(self, writes):

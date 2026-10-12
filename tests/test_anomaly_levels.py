@@ -85,7 +85,7 @@ def test_reposts_compare_with_themselves_but_skip_norms_and_late_engagement():
     _, versions = run_detectors(prepared, DetectorContext("telegram"))
     assert set(versions) == {"preparation", "aggregation", "linear_feed", "burst_plateau", "bounded_reaction_burst",
                              "reactions_before_views", "reactions_exceed_views", "engagement_regime",
-                             "reaction_write_off", "joint_cliff"}
+                             "reaction_write_off", "joint_cliff", "reaction_stream"}
     # Просмотры репоста — собственные: оговорки о чужом счётчике нет.
     assert "repost_source_counter" not in assess(prepared.series).quality.codes
 
@@ -137,7 +137,7 @@ def test_glossary_of_adr_006_holds_for_every_text_and_formula():
 
 
 def test_all_symbols_from_the_plan_are_distinct():
-    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 15
+    assert len(set(SYMBOLS.values())) == len(SYMBOLS) == 16
     assert np.all([pattern in TITLES for pattern in SYMBOLS])
     assert levels.STRONG > YOUNG_NORM_CAP >= levels.MEDIUM
 

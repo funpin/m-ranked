@@ -5592,10 +5592,10 @@ components:
       required: [pattern, symbol, title, family, metric, strength, startAt, endAt, scaleSeconds,
         formula, render, alternatives, normConfidence]
       properties:
-        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] }
+        pattern: { type: integer, enum: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] }
         symbol: { type: string, maxLength: 4 }
         title: { type: string, maxLength: 120 }
-        family: { type: string, enum: [velocity, shape, cross_metric, synchrony] }
+        family: { type: string, enum: [velocity, shape, cross_metric, synchrony, composition] }
         metric: { type: string, enum: [views, reactions, comments, shares] }
         strength: { type: number, minimum: 0, maximum: 1 }
         startAt: { type: string, format: date-time }
@@ -5607,7 +5607,7 @@ components:
           type: object
           required: [kind, startAge, endAge]
           properties:
-            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement, regime, write_off, cliff] }
+            kind: { type: string, enum: [linear, lead, exceed, synchrony, plateau, bounded_burst, expected, gap, ratio, erv, reference, late_engagement, regime, write_off, cliff, stream] }
             startAge: { type: integer }
             endAge: { type: integer }
           additionalProperties:
@@ -5679,7 +5679,7 @@ components:
         normVersion: { type: [integer, 'null'], format: int64, minimum: 1 }
         detectorVersions:
           type: object
-          maxProperties: 16
+          maxProperties: 32
           additionalProperties: { type: string }
         reviewStatus: { $ref: '#/components/schemas/AnomalyReviewState' }
         accountFindings:

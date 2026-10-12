@@ -31,6 +31,9 @@ class Family(str, Enum):
     SHAPE = "shape"
     CROSS_METRIC = "cross_metric"
     SYNCHRONY = "synchrony"
+    # Кто реагирует: состав реакций по видам во времени (Telegram). Не зависит
+    # ни от формы роста суммы, ни от просмотров — независимый метод.
+    COMPOSITION = "composition"
 
 
 class Level(IntEnum):
@@ -42,7 +45,7 @@ class Level(IntEnum):
 
 # Паттерн 3 — свойство паттернов 1, 2 и 4 на другом масштабе, а не отдельный
 # признак: он виден в поле `scale`, собственного номера у признака нет.
-SIGN_PATTERNS = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
+SIGN_PATTERNS = frozenset({1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17})
 
 
 def _utc(value: datetime, name: str) -> datetime:
@@ -78,6 +81,10 @@ class PostSeries:
     # Individual displayed counters, when retained. Never infer rounding of a
     # sum from its last digit: its components may have different precision.
     reaction_breakdowns: tuple[Mapping[str, int] | None, ...] = ()
+    # Состав реакций по видам при любой точности суммы — только там, где он
+    # прочитан (у Telegram — первые сутки поста). В отличие от
+    # reaction_breakdowns, точные суммы им не заменяются.
+    reaction_kinds: tuple[Mapping[str, int] | None, ...] = ()
 
     def __post_init__(self) -> None:
         if self.platform not in PLATFORMS:
@@ -118,6 +125,13 @@ class PostSeries:
             raise ValueError("reaction breakdown counts must be non-negative integers")
         object.__setattr__(self, "reaction_breakdowns", tuple(
             None if row is None else MappingProxyType(dict(row)) for row in breakdowns))
+        kinds = tuple(self.reaction_kinds)
+        if kinds and len(kinds) != len(instants):
+            raise ValueError("reaction kinds are not aligned with observed_at")
+        if any(type(value) is not int or value < 0 for row in kinds if row is not None for value in row.values()):
+            raise ValueError("reaction kind counts must be non-negative integers")
+        object.__setattr__(self, "reaction_kinds", tuple(
+            None if row is None else MappingProxyType(dict(row)) for row in kinds))
         object.__setattr__(self, "collected",
                            tuple(sorted(_utc(item, "collected") for item in self.collected)))
 

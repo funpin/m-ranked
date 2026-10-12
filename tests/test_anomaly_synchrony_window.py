@@ -124,7 +124,7 @@ def _backfill(monkeypatch, *flags) -> list:
         def read_subscribers(self, accounts, since, until):
             return {}
 
-        def read_series(self, targets):
+        def read_series(self, targets, kinds_for=None):
             return {subject.publication_id: subject}
 
         def write_states(self, writes):

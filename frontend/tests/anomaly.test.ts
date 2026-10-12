@@ -59,7 +59,7 @@ test("interval boundaries become the nearest saved points and markers keep their
   const [marker] = signalMarkers(analysis());
   assert.equal(marker!.pattern, 1);
   assert.equal(marker!.to - marker!.from, 24 * 3600_000);
-  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 15);
+  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 16);
 });
 
 test("linear signal draws its fitted line only inside the interval", () => {
@@ -89,6 +89,12 @@ test("cross-metric signals overlay reactions and views, ERV and synchrony are ba
   assert.deepEqual(erv.type === "bars" ? erv.bars.map((bar) => bar.value) : [], [0.13, 0.037]);
   const sync = miniChart(signal({ pattern: 8, render: { kind: "synchrony", startAge: 0, endAge: 3600, posts: 5, quiet: 2 } }), rows, PUBLISHED);
   assert.deepEqual(sync.type === "bars" ? sync.bars.map((bar) => bar.value) : [], [5, 2]);
+  // Поток одной реакции: доля вида среди новых реакций окна против доли вне окна.
+  const stream = miniChart(signal({ pattern: 17, metric: "reactions", family: "composition", render: {
+    kind: "stream", startAge: 1080, endAge: 12480, reaction: "🙈", keyDelta: 115, allDelta: 130, outsideShare: 0.42,
+  } } as unknown as Partial<AnomalySignal>), rows, PUBLISHED);
+  assert.deepEqual(stream.type === "bars" ? stream.bars.map((bar) => [bar.label, Number(bar.value.toFixed(3))]) : [],
+    [["в окне", 0.885], ["вне окна", 0.42]]);
 });
 
 test("a production late-engagement signal renders saved rates without age fields", () => {

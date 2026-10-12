@@ -22,6 +22,7 @@ class FakeStore:
         self.norm_version = norm_version
         self.written, self.postponed, self.rechecks = [], [], []
         self.series_reads: list = []
+        self.kinds_requests: list = []
         self.progress_enabled = True
         self.analysis_policy = None
 
@@ -62,8 +63,9 @@ class FakeStore:
                                                  subject.observed_at[-1] if subject.observed_at else None)
         return found
 
-    def read_series(self, targets):
+    def read_series(self, targets, kinds_for=None):
         self.series_reads.extend(target.publication_id for target in targets)
+        self.kinds_requests.append(None if kinds_for is None else set(kinds_for))
         return {target.publication_id: self.series[target.publication_id]
                 for target in targets if target.publication_id in self.series}
 
@@ -255,3 +257,29 @@ def test_an_invalid_or_empty_analysis_policy_keeps_the_environment_value():
     for policy in (None, {}, {"finalAnalysisDays": None}, {"finalAnalysisDays": True},
                    {"finalAnalysisDays": "20"}, {"finalAnalysisDays": 1}):
         assert final_analysis_days(policy) is None
+
+
+def test_reaction_kinds_are_read_at_age_milestones_only():
+    from datetime import datetime, timezone
+    from anomaly_analysis.v2.worker import kinds_due
+    published = datetime(2026, 10, 7, 8, 15, tzinfo=timezone.utc)
+    row = DueRow(UUID(int=1), published, published, None, None, None, 0, ())
+    assert kinds_due(row, published + timedelta(minutes=20))
+    # 2ч45м → 3ч15м пересекает отметку трёх часов; 3ч15м → 3ч30м — нет.
+    assert kinds_due(replace(row, analyzed_at=published + timedelta(hours=2.75)), published + timedelta(hours=3.25))
+    assert not kinds_due(replace(row, analyzed_at=published + timedelta(hours=3.25)), published + timedelta(hours=3.5))
+    assert not kinds_due(replace(row, analyzed_at=published + timedelta(hours=30)), published + timedelta(hours=33))
+
+
+def test_a_stream_sign_is_carried_while_kinds_are_not_read():
+    from datetime import datetime, timezone
+    from anomaly_analysis.v2.domain import Family, Interval, Metric, Sign
+    from anomaly_analysis.v2.levels import sign_payload
+    from anomaly_analysis.v2.worker import _carried
+    at = datetime(2026, 10, 7, 9, tzinfo=timezone.utc)
+    payload = sign_payload(Sign(17, Family.COMPOSITION, Metric.REACTIONS, .75, Interval(at, at + timedelta(hours=2)),
+                                timedelta(hours=2), "поток"))
+    row = DueRow(UUID(int=1), at, at, at, at, None, 0, (payload,))
+    assert _carried(row, at - timedelta(days=1)) == ()
+    (sign,) = _carried(row, at - timedelta(days=1), stream=True)
+    assert sign.pattern == 17 and sign.family is Family.COMPOSITION

@@ -309,6 +309,12 @@ def counter_estimate_at(prepared: PreparedSeries, metric: Metric, age: float) ->
         return None
     low = float(max(bounds[0] for _, bounds in rows[:left]))
     high = float(min(bounds[1] for _, bounds in rows[right:]))
+    if high < low:
+        # Реакцию сняли: 197 когда-то раньше, но 196 по обе стороны конца
+        # интервала (Пермский Политех в Telegram, 09.10). Дальние замеры тогда
+        # коридор не сужают; судят ближайшие, и только их расхождение — снятый
+        # счётчик без оценки.
+        low, high = float(before[1][0]), float(after[1][1])
     if high < low or high > low * (1 + COUNTER_BRACKET_MAX_WIDTH):
         return None
     middle = [(bounds[0] + bounds[1]) / 2 for _, bounds in (before, after)]
