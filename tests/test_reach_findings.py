@@ -66,3 +66,87 @@ def test_packs_in_one_week_only_are_not_persistent():
 
 def test_a_few_packs_are_not_a_finding():
     assert not of(view_pack_findings(cohort() + spread(1, 80, 4, packs=True), TODAY))
+
+
+from anomaly_analysis.v2.account_findings import LedgerPost  # noqa: E402
+from anomaly_analysis.v2.reach_findings import flat_day_findings, wave_findings  # noqa: E402
+from anomaly_analysis.v2.tail_ledger import Point, TailLedger  # noqa: E402
+
+BASE = datetime(2026, 9, 8, 9, tzinfo=timezone.utc)
+
+
+def wall(account, count=60, waves=(), platform="vk", late=(5000, 100)):
+    """count постов по 12 ч; волна — (час от BASE, сколько последних постов, просмотров на пост)."""
+    items = []
+    for i in range(count):
+        published = BASE + timedelta(hours=12 * i)
+        surges = []
+        for at_hour, last_n, views in waves:
+            moment = BASE + timedelta(hours=at_hour)
+            older = [j for j in range(count) if BASE + timedelta(hours=12 * j) <= moment - timedelta(days=1)]
+            if i in older[-last_n:]:
+                surges.append((int(moment.timestamp() // 3600), views, 0))
+        ledger = TailLedger(Point(86400, 1000, 30), Point(4 * 86400, 1200, 32),
+                            Point(10 * 86400, 1200 + late[0] // count, 32 + late[1] // count), surges=tuple(surges))
+        items.append(LedgerPost(UUID(int=account * 10_000 + i), UUID(int=account), platform, published, False, ledger))
+    return items
+
+
+WAVES = [(24 * 12 + h, 15, 1300) for h in range(10)] + [(24 * 25 + h, 15, 1300) for h in range(6)]
+
+
+def test_waves_over_the_latest_posts_on_two_weeks_are_persistent():
+    others = [p for a in range(2, 12) for p in wall(a)]
+    (finding,) = of(wave_findings(wall(1, waves=WAVES) + others, TODAY))
+    assert finding.kind == "view_waves" and finding.status == 2
+    assert finding.metrics["days"] == 2 and finding.metrics["hours"] == 16 and finding.metrics["latestN"] == 15
+
+
+def test_scattered_surges_are_not_a_wave():
+    # 12 постов в один час, но не последние подряд: каждый третий из старых.
+    hour = int((BASE + timedelta(days=20)).timestamp() // 3600)
+    items = [LedgerPost(p.publication_id, p.account_id, p.platform, p.published_at, False,
+                        TailLedger(p.ledger.early, p.ledger.start, p.ledger.end,
+                                   surges=((hour, 900, 0),) if k % 3 == 0 and k < 36 else ()))
+             for k, p in enumerate(wall(1))]
+    assert not of(wave_findings(items, TODAY))
+
+
+def test_hour_shared_by_most_accounts_of_the_platform_is_not_a_wave():
+    everyone = [p for a in range(1, 12) for p in wall(a, waves=[(24 * 15, 20, 800)])]
+    assert wave_findings(everyone, TODAY) == []
+
+
+def test_wave_with_ordinary_response_is_not_a_finding():
+    # Тот же приток, но реакции идут как у поздних просмотров аккаунта.
+    items = wall(1, waves=WAVES)
+    items = [LedgerPost(p.publication_id, p.account_id, p.platform, p.published_at, False,
+                        TailLedger(p.ledger.early, p.ledger.start, p.ledger.end,
+                                   surges=tuple((h, v, v // 50) for h, v, _ in p.ledger.surges)))
+             for p in items]
+    assert not of(wave_findings(items + [p for a in range(2, 12) for p in wall(a)], TODAY))
+
+
+def flat(account, night_share, count=40, platform="max"):
+    hours_views = [100] * 24
+    for hour in range(20, 24):
+        hours_views[hour] = int(100 * night_share)
+    ledger = TailLedger(Point(86400, 500, 10), None, None, hours=(tuple(hours_views), (0,) * 24))
+    return [LedgerPost(UUID(int=account * 10_000 + i), UUID(int=account), platform,
+                       BASE + timedelta(hours=17 * i), False, ledger) for i in range(count)]
+
+
+def test_views_without_a_night_trough_are_a_finding():
+    others = [p for a in range(2, 12) for p in flat(a, 0.15)]
+    (finding,) = of(flat_day_findings(others + flat(1, 0.9), TODAY))
+    assert finding.kind == "flat_daily_views" and finding.metrics["amplitude"] >= 0.5 and finding.status == 2
+
+
+def test_ordinary_night_trough_is_not_a_finding():
+    others = [p for a in range(2, 12) for p in flat(a, 0.15)]
+    assert not of(flat_day_findings(others + flat(1, 0.2), TODAY))
+
+
+def test_small_audience_gives_no_rhythm_finding():
+    others = [p for a in range(2, 12) for p in flat(a, 0.15)]
+    assert not of(flat_day_findings(others + flat(1, 0.9, count=5), TODAY))
