@@ -111,3 +111,9 @@ def test_daily_breadth_is_described_with_its_denominator():
     assert entry["observed"] >= entry["active"] > 0 and entry["reactions"] == entry["active"]
     assert len(metrics["days"]) == 21 and metrics["windowEnd"] == (END - timedelta(days=1)).date().isoformat()
     assert isinstance(END, datetime)
+
+
+def test_computed_for_is_the_moscow_date_of_as_of():
+    from anomaly_analysis.account_tail_job import computed_for_from
+    # 21:30 UTC 07.10 — уже 08.10 в Москве.
+    assert computed_for_from("2026-10-07T21:30:00+00:00") == date(2026, 10, 8)

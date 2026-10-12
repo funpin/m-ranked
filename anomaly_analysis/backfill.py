@@ -33,6 +33,16 @@ log = logging.getLogger("anomaly_analysis.backfill")
 PLATFORMS = ("telegram", "vk", "max", "rutube")
 
 
+def parse_as_of(value: str | None) -> datetime:
+    """Момент анализа: по умолчанию сейчас; для проверки на копии БД — фиксированный."""
+    if value is None:
+        return datetime.now(timezone.utc)
+    moment = datetime.fromisoformat(value)
+    if moment.tzinfo is None:
+        raise SystemExit("--as-of needs a time zone, e.g. 2026-10-08T00:00:00+00:00")
+    return moment.astimezone(timezone.utc)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Re-analyse every post of the window with full account activity")
     parser.add_argument("--days", type=int, default=35)
@@ -42,6 +52,7 @@ def main() -> None:
                         help="Remove new reference signals while preserving quality fixes")
     parser.add_argument("--redetect-synchrony", action="store_true",
                         help="Find synchrony signals of the window anew instead of carrying previous ones")
+    parser.add_argument("--as-of", help="Analyse as of this ISO moment with time zone (local copies only)")
     arguments = parser.parse_args()
     if arguments.max_accounts < 0:
         raise SystemExit("--max-accounts must be non-negative")
@@ -67,7 +78,7 @@ def main() -> None:
     store = PostgresAnomalyStore(dsn)
     schedule = ScheduleConfig.from_environment(os.environ)
     cadence = CollectionCadence.from_environment(os.environ)
-    now = datetime.now(timezone.utc)
+    now = parse_as_of(arguments.as_of)
     since = now - timedelta(days=arguments.days)
     version = store.latest_accepted_norm_version()
     norms = {platform: store.read_norms(version, platform) for platform in PLATFORMS} if version else {}
@@ -93,7 +104,7 @@ def main() -> None:
             chunk = rows[start:start + SERIES_BATCH]
             series = store.read_series([SeriesTarget(row.publication_id, row.published_at) for row in chunk])
             writes: list[StateWrite] = []
-            moment = datetime.now(timezone.utc)
+            moment = now if arguments.as_of else datetime.now(timezone.utc)
             for row in chunk:
                 subject = series.get(row.publication_id)
                 if subject is None or not subject.observed_at:

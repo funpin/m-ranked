@@ -9,8 +9,9 @@ anomaly_analysis/v2/account_tail.py и v2/account_findings.py.
 """
 from __future__ import annotations
 
+import argparse
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 import logging
 import os
 from pathlib import Path
@@ -65,7 +66,16 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
     return result
 
 
+def computed_for_from(as_of: str | None) -> date:
+    """Сутки расчёта — московская дата момента: по умолчанию сейчас."""
+    from .backfill import parse_as_of
+    return parse_as_of(as_of).astimezone(MOSCOW).date()
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Nightly account tail profiles and account findings")
+    parser.add_argument("--as-of", help="Compute as of this ISO moment with time zone (local copies only)")
+    arguments = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     dsn = os.environ.get("ANOMALY_DATABASE_URL", "").strip()
     if not dsn:
@@ -73,7 +83,7 @@ def main() -> None:
     metrics_value = os.environ.get("ANOMALY_TAIL_METRICS_FILE", "").strip()
     started = time.monotonic()
     # Окно заканчивается московской полночью: последние полные сутки — вчера.
-    computed_for = datetime.now(timezone.utc).astimezone(MOSCOW).date()
+    computed_for = computed_for_from(arguments.as_of)
     store = PostgresAnomalyStore(dsn)
     result, posts = run(store, computed_for)
     found = run_findings(store, computed_for, result)
