@@ -85,6 +85,8 @@ class PostSeries:
     # прочитан (у Telegram — первые сутки поста). В отличие от
     # reaction_breakdowns, точные суммы им не заменяются.
     reaction_kinds: tuple[Mapping[str, int] | None, ...] = ()
+    # Тип записи площадки (photo, video, album …); None — не прочитан.
+    publication_type: str | None = None
 
     def __post_init__(self) -> None:
         if self.platform not in PLATFORMS:

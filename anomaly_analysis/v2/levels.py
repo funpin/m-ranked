@@ -35,7 +35,9 @@ from .detectors.linear_feed import STEADY_STOP_MODE
 from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
-from .series import DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare, views_belong_to_source
+from .series import (
+    DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare, views_not_audience_reason,
+)
 
 # Пороги силы. Сильный признак — тот, что один даёт выраженную аномалию: у
 # детекторов это пуассоновский z в районе десяти и выше или физически
@@ -135,6 +137,7 @@ QUALITY_TEXTS = {
     "uncertain_observations": "замеры с неопределённым интервалом исключены из точных проверок",
     "truncated_start": "начало истории отсутствует: рост до первого замера не оценивается",
     "repost_source_counter": "пост — репост: просмотры принадлежат источнику, проверяются только реакции",
+    "vk_video_views": "видео ВК: просмотры записи не включают ленту клипов, проверяются только реакции",
     "no_norm": "нормы ещё нет: признаки относительно нормы не сильнее слабого сигнала",
     "young_norm": "норма молодая: признаки относительно нормы не сильнее слабого сигнала",
     "gaps": "в замерах есть пробелы: форма роста недоступной метрики внутри них неизвестна; прирост между пригодными замерами проверяется отдельно",
@@ -497,8 +500,9 @@ def _quality(prepared: PreparedSeries, context: DetectorContext,
     codes = list(prepared.quality_codes)
     if prepared.truncated_start:
         codes.append("truncated_start")
-    if views_belong_to_source(prepared.series):
-        codes.append("repost_source_counter")
+    reason = views_not_audience_reason(prepared.series)
+    if reason is not None:
+        codes.append(reason)
     if context.norm is None:
         codes.append("no_norm")
     elif context.norm.young:

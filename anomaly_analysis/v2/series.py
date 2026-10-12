@@ -42,9 +42,24 @@ RESET_MIN_DROP = 10
 REPOST_SOURCE_VIEW_PLATFORMS: frozenset[str] = frozenset()
 
 
+# Видеозаписи ВК (клипы): просмотры записи на стене не включают ленту клипов,
+# где их и смотрят; клип МАИ 06.09 — 850 реакций при 1 140 просмотрах записи.
+# Сравнения «реакции против просмотров» у них ни о чём не говорят.
+NOT_AUDIENCE_TYPES = {"vk": frozenset({"video"})}
+
+
+def views_not_audience_reason(series: PostSeries) -> str | None:
+    """Почему просмотры поста — не его аудитория; None — его."""
+    if series.is_repost and series.platform in REPOST_SOURCE_VIEW_PLATFORMS:
+        return "repost_source_counter"
+    if series.publication_type in NOT_AUDIENCE_TYPES.get(series.platform, ()):
+        return "vk_video_views"
+    return None
+
+
 def views_belong_to_source(series: PostSeries) -> bool:
-    """Просмотры поста — чужая аудитория (репост на площадке из списка выше)."""
-    return series.is_repost and series.platform in REPOST_SOURCE_VIEW_PLATFORMS
+    """Просмотры поста — не его аудитория: репост с чужим счётчиком или видео ВК."""
+    return views_not_audience_reason(series) is not None
 
 
 # Возрастные интервалы таблицы расписания анализа: 0–24 ч, 1–3 сут, 3–7 сут,

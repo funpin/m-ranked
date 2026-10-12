@@ -48,7 +48,7 @@ def effective_quality(platform: str, quality: str | None, count: int | None) -> 
 SERIES = """
 WITH target AS (
     SELECT publication.id, publication.primary_account_id, account.platform::text AS platform,
-           publication.published_at, publication.is_repost,
+           publication.published_at, publication.is_repost, publication.publication_type,
            date_trunc('month', publication.published_at AT TIME ZONE 'UTC')::date AS published_month
       FROM ingest.visible_publication publication
       JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
@@ -56,6 +56,7 @@ WITH target AS (
 )
 SELECT DISTINCT ON (target.id, snapshot.observed_at)
        target.id, target.primary_account_id, target.platform, target.published_at, target.is_repost,
+       target.publication_type,
        snapshot.observed_at, snapshot.interval_uncertain,
        snapshot.views_count, snapshot.views_quality::text AS views_quality,
        snapshot.reactions_count, snapshot.reactions_quality::text AS reactions_quality,
@@ -446,7 +447,8 @@ def series_from_rows(rows: Sequence[Mapping[str, Any]],
                                  for metric in values},
                       interval_uncertain=tuple(row.get("interval_uncertain", True) for row in rows),
                       reaction_breakdowns=tuple(row.get("reaction_breakdown") for row in rows),
-                      reaction_kinds=tuple(kinds.get(row["observed_at"]) for row in rows) if kinds else ())
+                      reaction_kinds=tuple(kinds.get(row["observed_at"]) for row in rows) if kinds else (),
+                      publication_type=first.get("publication_type"))
 
 
 def change_kind(previous: StoredState | None, level: int,

@@ -236,3 +236,24 @@ def test_neighbours_that_disagree_still_give_no_estimate():
     ages = [60 * H, 69 * H, 75 * H]
     prepared = prepare(post(ages, {"reactions": [197, 197, 150]}), later(76), CADENCE)
     assert counter_estimate_at(prepared, Metric.REACTIONS, 72 * H) is None
+
+
+def _typed(platform="vk", kind="video", repost=False):
+    from anomaly_analysis.v2.domain import Metric as M, PostSeries as PS
+    start = datetime(2026, 9, 10, 9, tzinfo=timezone.utc)
+    at = tuple(start + timedelta(minutes=5 * i) for i in range(1, 4))
+    return PS(UUID(int=1), UUID(int=2), platform, start, repost, at,
+              {M.VIEWS: (10, 20, 30), M.REACTIONS: (5, 9, 12)}, publication_type=kind)
+
+
+def test_vk_video_views_are_not_the_post_audience():
+    from anomaly_analysis.v2.series import views_belong_to_source, views_not_audience_reason
+    assert views_not_audience_reason(_typed()) == "vk_video_views"
+    assert views_belong_to_source(_typed())
+
+
+def test_other_vk_types_and_other_platforms_keep_their_views():
+    from anomaly_analysis.v2.series import views_belong_to_source
+    assert not views_belong_to_source(_typed(kind="photo"))
+    assert not views_belong_to_source(_typed(platform="telegram"))
+    assert not views_belong_to_source(_typed(kind=None))
