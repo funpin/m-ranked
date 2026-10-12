@@ -32,12 +32,16 @@ from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
 from .domain import Metric, PostSeries
+from .series import max_display_unit
 
-VERSION = 4
-# Сводки третьей версии читаются: в них нет только почасовой раскладки.
-READABLE_VERSIONS = (3, 4)
+VERSION = 5
+# Сводки третьей версии читаются: в них нет только почасовой раскладки;
+# четвёртой — часов притока (surges).
+READABLE_VERSIONS = (3, 4, 5)
 MOSCOW = ZoneInfo("Europe/Moscow")
 HOUR = 3600
+# С этого значения Telegram показывает просмотры сокращённо («1,2K»).
+COMPACT_FROM = 1000
 DAY = 24 * HOUR
 
 # Ранняя точка — ближайший к суткам совместно точный замер.
@@ -70,6 +74,17 @@ MARKS = {"h2": (2 * HOUR, 1.5 * HOUR, 2.5 * HOUR), "h6": (6 * HOUR, 5 * HOUR, 7 
 HOURLY_FROM = DAY
 HOURLY_UNTIL = LATE_UNTIL
 HOURLY_MAX_GAP = HOUR
+# Часы притока (v5) для аккаунтной находки «волны просмотров по стене»:
+# календарный час, в который пост старше суток получил не меньше
+# max(SURGE_MIN_VIEWS, SURGE_SHARE × просмотров к суткам) по соседним замерам
+# не дальше часа друг от друга. Округлённые просмотры Telegram — по нижней
+# границе прироста. Хранится не больше SURGE_MAX самых крупных часов.
+SURGE_FROM = DAY
+SURGE_UNTIL = 30 * DAY
+SURGE_MAX_GAP = HOUR
+SURGE_MIN_VIEWS = 100
+SURGE_SHARE = 0.15
+SURGE_MAX = 48
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +111,8 @@ class TailLedger:
     # Поздний прирост (просмотры[24], реакции[24]) по часу UTC; None — нет пар
     # или сводка третьей версии.
     hours: tuple[tuple[int, ...], tuple[int, ...]] | None = None
+    # Часы притока: (час UTC от эпохи, просмотры, реакции); пусто — нет или v3/v4.
+    surges: tuple[tuple[int, int, int], ...] = ()
 
     @property
     def late(self) -> tuple[int, int] | None:
@@ -116,6 +133,7 @@ class TailLedger:
             "rounded": self.rounded,
             "marks": {key: point.payload() for key, point in self.marks.items()},
             **({"hours": [list(self.hours[0]), list(self.hours[1])]} if self.hours else {}),
+            **({"surges": [list(item) for item in self.surges]} if self.surges else {}),
         }
 
 
@@ -131,7 +149,8 @@ def ledger_from_payload(payload: Mapping[str, Any] | None) -> TailLedger | None:
                       {str(day): int(value) for day, value in (payload.get("growth") or {}).items()},
                       bool(payload.get("rounded", False)),
                       {str(key): point(value) for key, value in (payload.get("marks") or {}).items()},
-                      _hours_from(payload.get("hours")))
+                      _hours_from(payload.get("hours")),
+                      tuple(tuple(int(value) for value in item) for item in payload.get("surges") or ()))
 
 
 def _hours_from(value) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
@@ -175,7 +194,7 @@ def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> Tai
     covered, growth = _days(exact_r, published)
     rounded = any(point is not None and point.age in inexact for point in (early, start, end))
     return TailLedger(early, start, end, covered, growth, rounded, marks,
-                      _hours(joint, inexact, published))
+                      _hours(joint, inexact, published), _surges(series, joint, early, published))
 
 
 def _hours(points: list[Point], inexact: set[float],
@@ -192,6 +211,27 @@ def _hours(points: list[Point], inexact: set[float],
         reactions[hour] += max(0, right.reactions - left.reactions)
         counted = True
     return (tuple(views), tuple(reactions)) if counted else None
+
+
+def _surges(series: PostSeries, points: list[Point], early: Point | None,
+            published: float) -> tuple[tuple[int, int, int], ...]:
+    """Календарные часы крупного притока просмотров поста старше суток."""
+    if early is None:
+        return ()
+    threshold = max(SURGE_MIN_VIEWS, SURGE_SHARE * early.views)
+    compact = series.platform in ROUNDED_PLATFORMS
+    hours: dict[int, list[int]] = {}
+    for left, right in zip(points, points[1:]):
+        if left.age < SURGE_FROM or right.age > SURGE_UNTIL or right.age - left.age > SURGE_MAX_GAP:
+            continue
+        # Показанное «1,2K» — коридор: прирост берётся наименьший возможный.
+        unit_left = max_display_unit(left.views) if compact and left.views >= COMPACT_FROM else 0
+        unit_right = max_display_unit(right.views) if compact and right.views >= COMPACT_FROM else 0
+        bucket = hours.setdefault(int((published + right.age) // HOUR), [0, 0])
+        bucket[0] += max(0, (right.views - unit_right) - (left.views + unit_left))
+        bucket[1] += max(0, right.reactions - left.reactions)
+    found = [(hour, views, reactions) for hour, (views, reactions) in hours.items() if views >= threshold]
+    return tuple(sorted(sorted(found, key=lambda item: -item[1])[:SURGE_MAX]))
 
 
 def _marks(points: list[Point]) -> dict[str, Point]:

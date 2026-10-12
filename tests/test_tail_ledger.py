@@ -175,4 +175,50 @@ def test_version_three_ledgers_are_still_readable_without_hours():
     payload.pop("hours", None)
     old = ledger_from_payload(payload)
     assert old is not None and old.hours is None and old.early.views == 1000
-    assert build_ledger(_series(points)).payload()["v"] == 4
+    assert build_ledger(_series(points)).payload()["v"] == 5
+
+
+def _old_post_with_wave(rounded=False):
+    from datetime import datetime, timedelta, timezone
+    from uuid import UUID
+    from anomaly_analysis.v2.domain import Metric, PostSeries
+    start = datetime(2026, 9, 20, 9, tzinfo=timezone.utc)
+    at, views, reactions = [], [], []
+    for minute in range(5, 4 * 24 * 60, 30):
+        at.append(start + timedelta(minutes=minute))
+        base = min(1500, minute)                       # ~1 500 к суткам, потом почти стоит
+        wave = 0 if minute < 50 * 60 else min(3, (minute - 50 * 60) // 60 + 1) * 1300
+        views.append(base + wave)
+        reactions.append(min(60, minute // 30))
+    quality = tuple("rounded" if rounded and v >= 1000 else "exact" for v in views)
+    shown = tuple(v // 100 * 100 if rounded and v >= 1000 else v for v in views)
+    return PostSeries(UUID(int=1), UUID(int=2), "telegram" if rounded else "vk", start, False, tuple(at),
+                      {Metric.VIEWS: shown, Metric.REACTIONS: tuple(reactions)},
+                      qualities={Metric.VIEWS: quality, Metric.REACTIONS: ("exact",) * len(at)})
+
+
+def test_wave_hours_of_an_old_post_are_recorded():
+    from anomaly_analysis.v2.tail_ledger import build_ledger, ledger_from_payload
+    ledger = build_ledger(_old_post_with_wave())
+    assert len(ledger.surges) == 3 and all(views >= 1000 for _, views, _ in ledger.surges)
+    assert ledger_from_payload(ledger.payload()).surges == ledger.surges
+
+
+def test_first_day_hours_are_not_surges():
+    from anomaly_analysis.v2.tail_ledger import build_ledger
+    series = _old_post_with_wave()
+    first_day = int((series.published_at.timestamp() + 86400) // 3600)
+    assert all(hour >= first_day for hour, _, _ in build_ledger(series).surges)
+
+
+def test_version_four_payload_is_read_without_surges():
+    from anomaly_analysis.v2.tail_ledger import build_ledger, ledger_from_payload
+    payload = {**build_ledger(_old_post_with_wave()).payload(), "v": 4}
+    payload.pop("surges", None)
+    assert ledger_from_payload(payload).surges == ()
+
+
+def test_rounded_telegram_surges_use_the_lower_bound():
+    from anomaly_analysis.v2.tail_ledger import build_ledger
+    ledger = build_ledger(_old_post_with_wave(rounded=True))
+    assert ledger.surges and all(views < 1300 for _, views, _ in ledger.surges)
