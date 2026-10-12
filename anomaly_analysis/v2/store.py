@@ -847,6 +847,31 @@ class PostgresAnomalyStore:
                       AND signal->'render'->>'hour' IS NOT NULL""",
                 (published_after, published_until)).fetchall()
 
+    def read_post_levels(self, published_after: datetime, published_until: datetime) -> list[dict[str, Any]]:
+        """Выводы постов окна для находок по охватам (v2/reach_findings.py).
+
+        `patterns` — номера признаков у постов уровня 3; `view_pack` — признак 1
+        режима «short_views» не слабее выраженной аномалии. Репосты не входят:
+        у них чужое содержание.
+        """
+        with self._factory() as connection:
+            return connection.execute(
+                """SELECT state.publication_id, publication.primary_account_id AS account_id,
+                          account.platform::text AS platform, state.published_at, state.level,
+                          CASE WHEN state.level = 3 THEN ARRAY(
+                              SELECT DISTINCT (signal->>'pattern')::int
+                                FROM jsonb_array_elements(state.signals) signal) ELSE '{}'::int[] END AS patterns,
+                          EXISTS (SELECT 1 FROM jsonb_array_elements(state.signals) signal
+                                   WHERE (signal->>'pattern')::int = 1 AND signal->>'metric' = 'views'
+                                     AND signal->'render'->>'mode' = 'short_views'
+                                     AND (signal->>'strength')::numeric >= 0.7) AS view_pack
+                     FROM analytics.post_anomaly_state state
+                     JOIN ingest.visible_publication publication ON publication.id = state.publication_id
+                     JOIN catalog.visible_platform_account account ON account.id = publication.primary_account_id
+                    WHERE state.published_at >= %s AND state.published_at < %s
+                      AND publication.deleted_at IS NULL AND NOT publication.is_repost""",
+                (published_after, published_until)).fetchall()
+
     def write_account_findings(self, findings: Sequence[Any], method_version: str) -> None:
         """Находки целиком одной транзакцией: неподтвердившиеся удаляются."""
         with self._factory() as connection, connection.transaction(), connection.cursor() as cursor:

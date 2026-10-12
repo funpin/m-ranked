@@ -600,6 +600,13 @@ def _halves(items: Sequence[LedgerPost]) -> tuple[list[LedgerPost], list[LedgerP
     return ordered[:middle], ordered[middle:]
 
 
+def _halves_by_time(items: Sequence[Any], start: date, end: date) -> tuple[list[Any], list[Any]]:
+    """Посты первой и второй половины окна по дате публикации (по 15 суток)."""
+    middle = start + (end - start) / 2
+    return ([post for post in items if post.published_at.date() < middle],
+            [post for post in items if post.published_at.date() >= middle])
+
+
 def _public(stats: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in stats.items() if key != "members"}
 
