@@ -257,3 +257,39 @@ def test_other_vk_types_and_other_platforms_keep_their_views():
     assert not views_belong_to_source(_typed(kind="photo"))
     assert not views_belong_to_source(_typed(platform="telegram"))
     assert not views_belong_to_source(_typed(kind=None))
+
+
+def _tg(views, qualities, step_minutes=30):
+    start = datetime(2026, 10, 1, 10, tzinfo=timezone.utc)
+    at = tuple(start + timedelta(minutes=step_minutes * (i + 1)) for i in range(len(views)))
+    return PostSeries(UUID(int=1), UUID(int=2), "telegram", start, False, at,
+                      {Metric.VIEWS: tuple(views), Metric.REACTIONS: tuple(20 for _ in views)},
+                      qualities={Metric.VIEWS: tuple(qualities), Metric.REACTIONS: ("exact",) * len(views)})
+
+
+def test_rounded_telegram_views_get_a_bounded_series():
+    from anomaly_analysis.v2.series import CollectionCadence, prepare
+    series = _tg([800, 950, 1200, 1800, 2400, 3000], ["exact", "exact", "rounded", "rounded", "rounded", "rounded"])
+    prepared = prepare(series, series.observed_at[-1], CollectionCadence())
+    bounded = prepared.bounded_views
+    assert bounded is not None and bounded.data.values.size == 6
+    assert (bounded.low[0], bounded.high[0]) == (800, 800)
+    assert (bounded.low[2], bounded.high[2]) == (1100, 1300)   # шаг «1.2K» — сотня в обе стороны
+    # Точные просмотры прежние: округлённые в них не попадают.
+    assert prepared.metrics[Metric.VIEWS].values.size == 2
+
+
+def test_growth_bounds_are_conservative_and_monotone():
+    from anomaly_analysis.v2.series import CollectionCadence, growth_bounds, prepare
+    series = _tg([800, 950, 1200, 1800, 2400, 3000], ["exact", "exact"] + ["rounded"] * 4)
+    bounded = prepare(series, series.observed_at[-1], CollectionCadence()).bounded_views
+    ages = bounded.data.ages
+    low, high = growth_bounds(bounded, ages[1], ages[5])
+    assert low == 3000 - 1000 - 950 and high == 3000 + 1000 - 950   # шаг «3K» — тысяча
+    assert growth_bounds(bounded, ages[0] - 60, ages[1]) is None    # до первого замера коридора нет
+
+
+def test_exact_only_telegram_has_no_bounded_series():
+    from anomaly_analysis.v2.series import CollectionCadence, prepare
+    exact = _tg([100, 200, 300], ["exact"] * 3)
+    assert prepare(exact, exact.observed_at[-1], CollectionCadence()).bounded_views is None

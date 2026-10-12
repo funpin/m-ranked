@@ -179,6 +179,9 @@ class PreparedSeries:
     truncated_start: bool
     stale_seconds: float
     quality_codes: tuple[str, ...] = ()
+    # Просмотры Telegram с коридором показа «1,2K» (BoundedViews); None — у
+    # площадки нет округлённых просмотров или у поста их не было.
+    bounded_views: "BoundedViews | None" = None
 
 
 def age_band(ages: np.ndarray) -> np.ndarray:
@@ -227,7 +230,63 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
         truncated_start=bool(ages.size) and float(ages[0]) > first_step,
         stale_seconds=float(analyzed_at.timestamp() - published - ages[-1]) if ages.size else 0.0,
         quality_codes=tuple(quality_codes),
+        bounded_views=_bounded_views(series, keep, ages, rows, cadence, scales, covered),
     )
+
+
+BOUNDED_MAX_SCALE = timedelta(hours=6)
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedViews:
+    """Просмотры с коридором: точные и показанные «1,2K». Середины коридоров — в `data`.
+
+    `low`/`high` выровнены с `data.ages`; у точной точки они равны.
+    """
+
+    data: MetricSeries
+    low: np.ndarray
+    high: np.ndarray
+
+
+def _bounded_views(series: PostSeries, keep: np.ndarray, ages: np.ndarray, rows: np.ndarray,
+                   cadence: CollectionCadence, scales: tuple[timedelta, ...],
+                   covered: np.ndarray) -> BoundedViews | None:
+    column = series.values.get(Metric.VIEWS)
+    if series.platform not in COMPACT_PLATFORMS or column is None or views_belong_to_source(series):
+        return None
+    pairs = [bounds for bounds, active in zip(
+        (counter_bounds(value, quality, uncertain) for value, quality, uncertain in zip(
+            column, series.qualities[Metric.VIEWS], series.interval_uncertain)), keep) if active]
+    if not any(pair is not None and pair[0] != pair[1] for pair in pairs):
+        return None
+    low = np.array([np.nan if pair is None else pair[0] for pair in pairs], dtype=np.float64)[rows]
+    high = np.array([np.nan if pair is None else pair[1] for pair in pairs], dtype=np.float64)[rows]
+    # Сетки только тех масштабов, что читает линейная подача: суточные не нужны.
+    wanted = tuple(scale for scale in scales if scale <= BOUNDED_MAX_SCALE)
+    data = _metric(Metric.VIEWS, ages, (low + high) / 2, series, cadence, wanted, covered)
+    if data is None:
+        return None
+    present = ~np.isnan(low)
+    return BoundedViews(data, _frozen(low[present]), _frozen(high[present]))
+
+
+def growth_bounds(bounded: BoundedViews, start_age: float, end_age: float) -> tuple[float, float] | None:
+    """Наименьший и наибольший прирост на [start_age; end_age] при любых значениях в коридорах.
+
+    Счётчик не убывает: в момент t он не ниже нижней границы любой точки до t
+    и не выше верхней любой точки после t. None — по краю нет замеров.
+    """
+    ages = bounded.data.ages
+    before_start = int(np.searchsorted(ages, start_age, side="right")) - 1
+    after_start = int(np.searchsorted(ages, start_age, side="left"))
+    before_end = int(np.searchsorted(ages, end_age, side="right")) - 1
+    after_end = int(np.searchsorted(ages, end_age, side="left"))
+    if before_start < 0 or before_end < 0 or after_start >= ages.size or after_end >= ages.size:
+        return None
+    lowest = max(0.0, float(bounded.low[before_end]) - float(bounded.high[after_start]))
+    highest = max(0.0, float(bounded.high[after_end]) - float(bounded.low[before_start]))
+    return lowest, highest
 
 
 def value_at(data: MetricSeries | None, age: float) -> float | None:
