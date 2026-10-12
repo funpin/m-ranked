@@ -13,11 +13,11 @@ from datetime import timedelta
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries
+from ..series import HOUR, PreparedSeries, growth_bounds
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
-VERSION = "2.4.0"
+VERSION = "2.5.0"
 PATTERN = 1
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -90,12 +90,17 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     signs: list[Sign] = []
     for metric in METRICS:
         data = prepared.metrics.get(metric)
+        # Просмотры Telegram с тысячи показаны «1,2K»: точных точек там нет,
+        # ряд берётся с коридором показа, а условия — по худшему случаю.
+        bounded = prepared.bounded_views if metric is Metric.VIEWS else None
+        if bounded is not None:
+            data = bounded.data
         if data is None or data.source_counter:
             continue
         for scale in SCALES:
             grid = data.grids.get(scale)
             if grid is not None and grid.rates.size:
-                signs.extend(_scan(prepared, context, metric, data, grid))
+                signs.extend(_scan(prepared, context, metric, data, grid, bounded))
     short = _short_reactions(prepared)
     if short is not None:
         signs.append(short)
@@ -158,7 +163,7 @@ def _short_reactions(prepared: PreparedSeries) -> Sign | None:
                      formula, render, ("reaction_counter_batch_update",))
 
 
-def _scan(prepared, context, metric, data, grid):
+def _scan(prepared, context, metric, data, grid, bounded=None):
     width = grid.scale.total_seconds()
     starts = grid.edges[:-1]
     steps = expected_step(prepared, starts)
@@ -185,7 +190,7 @@ def _scan(prepared, context, metric, data, grid):
         while index + 1 < flat.size and flat[index + 1] and abs(means[index + 1] / level - 1) <= 0.3:
             index += 1
         begin, end = _refine(rates, valid, first, index + window)
-        sign = _judge(prepared, metric, data, grid, rates, observed, begin, end)
+        sign = _judge(prepared, metric, data, grid, rates, observed, begin, end, bounded)
         if sign is not None:
             signs.append(sign)
         index += 1
@@ -239,7 +244,32 @@ def _after(prepared, grid, rates, valid, end) -> np.ndarray:
     return np.asarray(cells[:AFTER_CELLS])
 
 
-def _judge(prepared, metric, data, grid, rates, valid, begin, end):
+def _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, stepped_down):
+    """Ступенька и обрыв по худшему случаю внутри коридоров «1,2K».
+
+    Прирост участка — наименьший возможный, фон и хвост — наибольшие. None —
+    при любых значениях в коридорах ни ступеньки, ни обрыва нет.
+    """
+    growth = growth_bounds(bounded, start_age, end_age)
+    if growth is None:
+        return None
+    delta = growth[0]
+    mean = delta / duration * HOUR
+    if stepped_down:
+        tail = growth_bounds(bounded, end_age, end_age + AFTER_CELLS * width)
+        stepped_down = tail is not None and mean >= STEP_DOWN * max(tail[1] / (AFTER_CELLS * width) * HOUR, 1.0)
+    if stepped_up:
+        # Фон — наибольший возможный темп за шесть часов до участка (от первого замера).
+        first = max(float(bounded.data.ages[0]), start_age - BACKGROUND_WINDOW)
+        before = growth_bounds(bounded, first, start_age) if first < start_age else None
+        stepped_up = before is not None and mean >= STEP_UP * max(
+            before[1] / max(start_age - first, width) * HOUR, 1.0)
+    if not stepped_up and not stepped_down:
+        return None
+    return delta, stepped_up, stepped_down
+
+
+def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None):
     width = grid.scale.total_seconds()
     start_age, end_age = float(grid.edges[begin]), float(grid.edges[end])
     duration = end_age - start_age
@@ -267,6 +297,13 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end):
         return None
     start_value = float(grid.cumulative[begin])
     delta = float(grid.cumulative[end] - start_value)
+    mode = None
+    if bounded is not None:
+        verdict = _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, stepped_down)
+        if verdict is None:
+            return None
+        delta, stepped_up, stepped_down = verdict
+        mode = "bounded_views"
     if delta < max(MIN_DELTA[metric], MIN_SHARE * start_value):
         return None
     hours = (grid.edges[begin:end + 1] - start_age) / HOUR
@@ -285,5 +322,6 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end):
                                "cv": round(cv, 3),
                                "background": round(float(np.median(background)), 3) if background.size else None,
                                "afterRate": round(float(after.mean()), 3) if after.size else None,
-                               "stepDown": bool(stepped_down)},
+                               "stepDown": bool(stepped_down),
+                               **({"measurementMode": mode} if mode else {})},
                      ("recommendation_feed", "smoothed_large_audience"))
