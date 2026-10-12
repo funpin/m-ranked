@@ -13,7 +13,7 @@ from datetime import timedelta
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries, growth_bounds
+from ..series import HOUR, PreparedSeries, growth_bounds, value_at
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
@@ -85,6 +85,28 @@ SHORT_LEVELS = ((0.2, 0.95), (0.35, 0.75))
 SHORT_MIN_RATE = 30.0
 STEADY_STOP_MODE = "steady_feed_stop_v1"
 
+# Короткая подача просмотров с публикации: пакет, заказанный к выходу поста.
+# Косыгин в ВК: ~400/ч 2–3 ч с публикации, ~1 000 и обрыв в 25 раз, 2 реакции
+# на 1 000 просмотров против 9 у остального поста. Поздняя ветка (начало не
+# раньше 6 ч, длительность от 4 ч) такой пакет не видит. Живой приток с первых
+# минут затухает; ровный с обрывом бывает и у попадания в рекомендации, но
+# тогда реакции идут как у остального поста — поэтому без низкого отклика
+# признак не выше слабого сигнала.
+VIEW_SHORT_SCALE = timedelta(minutes=15)
+VIEW_SHORT_ONSET_UNTIL = 12 * HOUR
+VIEW_SHORT_CELLS = (8, 40)             # 2–10 ч
+VIEW_SHORT_MIN_RATE = 150.0            # просмотров в час
+VIEW_SHORT_BACKGROUND = 3.0            # темп не ниже трёх фонов
+VIEW_SHORT_SPREAD = 2.0                # часовые темпы в пределах ×2
+VIEW_SHORT_MAX_CV = 0.35
+VIEW_SHORT_STOP = 5.0
+VIEW_SHORT_HARD_STOP = 10.0
+VIEW_SHORT_AFTER = 2 * HOUR
+VIEW_SHORT_RESPONSE = 1 / 3            # реакций на просмотр в пакете ≤ трети остального поста
+VIEW_SHORT_SILENT_PER_K = 1.0
+VIEW_SHORT_MIN_REST_REACTIONS = 10
+VIEW_SHORT_EXPLICIT, VIEW_SHORT_PRONOUNCED, VIEW_SHORT_UNCHECKED, VIEW_SHORT_ORDINARY = 0.95, 0.75, 0.6, 0.5
+
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     signs: list[Sign] = []
@@ -104,6 +126,9 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     short = _short_reactions(prepared)
     if short is not None:
         signs.append(short)
+    pack = _short_views(prepared)
+    if pack is not None:
+        signs.append(pack)
     return tuple(strongest(signs))
 
 
@@ -161,6 +186,120 @@ def _short_reactions(prepared: PreparedSeries) -> Sign | None:
         render["plateauEvidence"] = STEADY_STOP_MODE
     return make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, strength, start_age, end_age, SHORT_SCALE,
                      formula, render, ("reaction_counter_batch_update",))
+
+
+def _short_views(prepared: PreparedSeries) -> Sign | None:
+    bounded = prepared.bounded_views
+    data = bounded.data if bounded is not None else prepared.metrics.get(Metric.VIEWS)
+    if data is None or data.source_counter:
+        return None
+    grid = data.grids.get(VIEW_SHORT_SCALE)
+    width = VIEW_SHORT_SCALE.total_seconds()
+    after_cells = int(VIEW_SHORT_AFTER / width)
+    if grid is None or grid.rates.size < VIEW_SHORT_CELLS[0] + after_cells:
+        return None
+    rates = grid.rates * HOUR
+    size = rates.size
+    starts = grid.edges[:-1]
+    valid = grid.usable & ~grid.negative & (expected_step(prepared, starts) <= width)
+    begins = np.flatnonzero(starts <= VIEW_SHORT_ONSET_UNTIL)
+    if not begins.size:
+        return None
+    # Все пары (начало, длина) сразу на префиксных суммах: детектор укладывается
+    # в бюджет анализа поста. Выбирается самое раннее начало, при нём — самый
+    # длинный участок.
+    lengths = np.arange(VIEW_SHORT_CELLS[0], VIEW_SHORT_CELLS[1] + 1)
+    total = np.concatenate(([0.0], np.cumsum(rates)))
+    squares = np.concatenate(([0.0], np.cumsum(rates ** 2)))
+    bad = np.concatenate(([0], np.cumsum(~valid)))
+    ends = begins[:, None] + lengths[None, :]
+    inside = ends + after_cells <= size
+    ends_at = np.minimum(ends, size - after_cells)
+    first = begins[:, None]
+    mean = (total[ends_at] - total[first]) / lengths
+    spread = np.sqrt(np.maximum((squares[ends_at] - squares[first]) / lengths - mean ** 2, 0.0))
+    after = (total[ends_at + after_cells] - total[ends_at]) / after_cells
+    # Часовые темпы участка: суммы по четыре ячейки с шагом в час от начала.
+    hours = lengths // 4
+    block = np.concatenate((total[4:] - total[:-4], np.zeros(4)))
+    picks = np.minimum(begins[:, None] + 4 * np.arange(hours.max())[None, :], block.size - 1)
+    blocks = block[picks]
+    low = np.minimum.accumulate(blocks, axis=1)[:, hours - 1]
+    high = np.maximum.accumulate(blocks, axis=1)[:, hours - 1]
+    end_ages = grid.edges[ends_at]
+    published = prepared.series.published_at.timestamp()
+    clock = ((published + end_ages + MSK_OFFSET) // HOUR).astype(np.int64) % 24
+    daytime = np.isin(clock, np.fromiter(DAY_HOURS_MSK, dtype=np.int64))
+    feed_limit = FEED_LIMIT.get(prepared.series.platform)
+    at_limit = (np.zeros_like(daytime) if feed_limit is None
+                else (feed_limit[0] <= end_ages) & (end_ages <= feed_limit[1]))
+    background = np.where(begins >= 4, (total[begins] - total[np.maximum(begins - 4, 0)]) / 4, np.nan)
+    background = np.where(np.isnan(background)[:, None], after, background[:, None])
+    ok = (inside & (bad[ends_at + after_cells] == bad[first]) & (mean >= VIEW_SHORT_MIN_RATE)
+          & (spread <= VIEW_SHORT_MAX_CV * mean) & (low * VIEW_SHORT_SPREAD >= high)
+          # Участок кончается там, где обрыв: первая ячейка за ним уже медленная.
+          # Иначе хвост пакета попадает в окно «после», а конец — раньше
+          # настоящего, и граница ленты ВК не узнаётся.
+          & (rates[ends_at] * VIEW_SHORT_STOP <= mean) & (after * VIEW_SHORT_STOP <= mean)
+          & daytime & ~at_limit & (mean >= VIEW_SHORT_BACKGROUND * np.maximum(background, 1.0)))
+    rows = np.flatnonzero(ok.any(axis=1))
+    if not rows.size:
+        return None
+    row = int(rows[0])
+    column = int(np.flatnonzero(ok[row])[-1])
+    begin, end = int(begins[row]), int(ends[row, column])
+    return _pack_sign(prepared, grid, bounded, begin, end, float(mean[row, column]), float(after[row, column]))
+
+
+def _pack_sign(prepared, grid, bounded, begin, end, mean, after) -> Sign | None:
+    start_age, end_age = float(grid.edges[begin]), float(grid.edges[end])
+    duration = end_age - start_age
+    mode = None
+    views = float(grid.cumulative[end] - grid.cumulative[begin])
+    if bounded is not None:
+        pack = growth_bounds(bounded, start_age, end_age)
+        tail = growth_bounds(bounded, end_age, end_age + VIEW_SHORT_AFTER)
+        if pack is None or tail is None:
+            return None
+        views = pack[0]
+        mean, after = views / duration * HOUR, tail[1] / VIEW_SHORT_AFTER * HOUR
+        if mean < VIEW_SHORT_MIN_RATE or after * VIEW_SHORT_STOP > mean:
+            return None
+        mode = "bounded_views"
+    reactions = prepared.metrics.get(Metric.REACTIONS)
+    last_age = float(reactions.ages[-1]) if reactions is not None and reactions.ages.size else end_age
+    r_start, r_end, r_last = (value_at(reactions, age) for age in (start_age, end_age, last_age))
+    v_last = float(grid.cumulative[-1])
+    strength = VIEW_SHORT_UNCHECKED
+    pack_per_k = rest_per_k = None
+    alternatives = ("paid_promotion", "site_embed", "mailing_link")
+    if None not in (r_start, r_end, r_last):
+        pack_reactions = max(0.0, r_end - r_start)
+        rest_reactions = max(0.0, r_last - pack_reactions)
+        pack_per_k = 1000 * pack_reactions / max(views, 1.0)
+        rest_per_k = 1000 * rest_reactions / max(1.0, v_last - views)
+        if rest_reactions >= VIEW_SHORT_MIN_REST_REACTIONS:
+            if pack_per_k > VIEW_SHORT_RESPONSE * rest_per_k:
+                strength, alternatives = VIEW_SHORT_ORDINARY, ("recommendation_feed", "paid_promotion", "site_embed")
+            elif after * VIEW_SHORT_HARD_STOP <= mean or pack_per_k <= VIEW_SHORT_SILENT_PER_K:
+                strength = VIEW_SHORT_EXPLICIT
+            else:
+                strength = VIEW_SHORT_PRONOUNCED
+    formula = (f"просмотры: +{number(views)} за {age_text(duration)} ровным темпом ≈ {number(mean)}/ч "
+               f"(t ∈ [{age_text(start_age)}; {age_text(end_age)}]), затем {number(after)}/ч")
+    if pack_per_k is not None:
+        formula += (f"; реакций на 1 000 просмотров в участке — {pack_per_k:.1f}, "
+                    f"у остального поста — {rest_per_k:.1f}")
+    formula += ". Живой приток в первые часы затухает, а не идёт ровно и не обрывается"
+    render = {"kind": "linear", "mode": "short_views", "stepDown": True, "packViews": round(views),
+              "slope": round(mean, 3), "intercept": round(float(grid.cumulative[begin]), 1),
+              "afterRate": round(after, 3),
+              "packReactionsPerK": None if pack_per_k is None else round(pack_per_k, 2),
+              "restReactionsPerK": None if rest_per_k is None else round(rest_per_k, 2)}
+    if mode:
+        render["measurementMode"] = mode
+    return make_sign(PATTERN, FAMILY, prepared, Metric.VIEWS, strength, start_age, end_age, VIEW_SHORT_SCALE,
+                     formula, render, alternatives)
 
 
 def _scan(prepared, context, metric, data, grid, bounded=None):
