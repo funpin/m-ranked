@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from . import (
     bounded_reaction_burst, burst_plateau, engagement_regime, erv_outlier, gap_growth, joint_cliff, late_engagement,
-    late_spike, linear_feed, reaction_write_off, reactions_before_views, reactions_catch_up, reactions_exceed_views,
-    synchronous_rise,
+    late_spike, linear_feed, reaction_stream, reaction_write_off, reactions_before_views, reactions_catch_up,
+    reactions_exceed_views, synchronous_rise,
 )
 from .base import Detector, DetectorContext, SiblingActivity
 
@@ -17,13 +17,13 @@ from .base import Detector, DetectorContext, SiblingActivity
 # норму не попадает.
 ABSOLUTE_DETECTORS = (linear_feed, reactions_before_views, reactions_exceed_views,
                       synchronous_rise, burst_plateau, bounded_reaction_burst, late_engagement,
-                      engagement_regime, reaction_write_off, joint_cliff)
+                      engagement_regime, reaction_write_off, joint_cliff, reaction_stream)
 NORM_RELATIVE_DETECTORS = (late_spike, gap_growth, reactions_catch_up, erv_outlier)
 # Репост: просмотры собственные (series.views_belong_to_source), но содержание
 # чужое, а нормы и поздний отклик строятся без репостов. Остаются проверки,
 # которые сравнивают пост с самим собой.
 REPOST_DETECTORS = (linear_feed, burst_plateau, bounded_reaction_burst, reactions_before_views,
-                    reactions_exceed_views, engagement_regime, reaction_write_off, joint_cliff)
+                    reactions_exceed_views, engagement_regime, reaction_write_off, joint_cliff, reaction_stream)
 
 __all__ = ["ABSOLUTE_DETECTORS", "Detector", "DetectorContext", "NORM_RELATIVE_DETECTORS",
            "REPOST_DETECTORS", "SiblingActivity"]

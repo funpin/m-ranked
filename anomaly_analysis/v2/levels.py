@@ -48,7 +48,7 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
-AGGREGATION_VERSION = "2.5.0"
+AGGREGATION_VERSION = "2.6.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
@@ -72,7 +72,7 @@ RUTUBE_VIEW_SHAPES = frozenset({2, 9})
 RUTUBE_WAVE_SCALE = timedelta(minutes=30)
 
 SYMBOLS = {1: "⟋", 2: "⚡", 4: "⋯", 5: "≈", 6: "⇅", 7: "≫", 8: "⫴", 9: "▭", 10: "◇", 11: "↥", 12: "↗", 13: "↻",
-           14: "⊓", 15: "↧", 16: "⌐"}
+           14: "⊓", 15: "↧", 16: "⌐", 17: "❖"}
 TITLES = {
     1: "Линейная подача",
     2: "Поздний скачок",
@@ -89,6 +89,7 @@ TITLES = {
     14: "Пакет реакций, оторванный от просмотров",
     15: "Площадка списала реакции",
     16: "Одновременный обрыв просмотров и реакций",
+    17: "Поток одной реакции",
 }
 LEVEL_SYMBOLS = {0: "○", 1: "◔", 2: "◑", 3: "●"}
 LEVEL_LABELS = {
@@ -121,6 +122,8 @@ ALTERNATIVES = {
     "external_link_wave": "видео посмотрели по ссылке из соцсети или с сайта: на RuTube такие волны обычны",
     "platform_write_off": "площадка удалила реакции аккаунтов, которые сочла недостоверными",
     "post_edited_reactions_reset": "пост пересоздали или изменили так, что площадка сбросила часть реакций",
+    "single_reaction_call": "в посте попросили поставить определённую реакцию (голосование, призыв)",
+    "content_invites_reaction": "пост переслали в чат, где его встретили одной и той же реакцией",
 }
 QUALITY_TEXTS = {
     "reported_reaction_shape": "форма сохранённых реакций отмечена слабым сигналом без подтверждения точности или сопоставимой аудитории",
@@ -241,12 +244,14 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         # внутри лишь укрупняет отрезок. Губкинский в MAX: +265 реакций за 6 ч
         # с пробелом сбора 2,6 ч внутри снимались целиком.
         episode = sign.pattern == 14
+        # Поток одной реакции сравнивает состав по концам окна.
+        stream = sign.pattern == 17
         # Медленная волна (признак 8) складывает только покрытые часы окна:
         # пробел уменьшает сумму, а не придумывает её. У MAX окно в шесть
         # часов почти всегда задевает пробел сбора.
         wave = sign.pattern == 8 and sign.render.get("kind") == "synchrony_wave"
         if (sign.pattern != GAP_PATTERN and not endpoint_reference and not bounded_counts
-                and not endpoint_comparison and not late_endpoints and not episode and not wave
+                and not endpoint_comparison and not late_endpoints and not episode and not wave and not stream
                 and _overlap(sign.interval, relevant_gaps) > UNANALYZABLE_OVERLAP):
             continue
         if sign.norm_confidence is not None and sign.norm_confidence < LOW_CONFIDENCE:

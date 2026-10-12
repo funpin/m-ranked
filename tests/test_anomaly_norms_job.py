@@ -30,7 +30,7 @@ class FakeStore:
                  "signals": self.levels.get(item.publication_id, (0, []))[1]} for item in self.series.values()]
         return sorted(rows, key=lambda row: (row["platform"], str(row["account_id"]), row["published_at"]))
 
-    def read_series(self, targets):
+    def read_series(self, targets, kinds_for=None):
         return {target.publication_id: self.series[target.publication_id] for target in targets}
 
     def latest_accepted_norm_version(self):

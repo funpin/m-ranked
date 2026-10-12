@@ -86,3 +86,68 @@ def test_a_wave_on_few_posts_is_not_enough():
 def test_reactions_that_follow_views_are_an_external_push_not_a_wave():
     # Тридцать просмотров на реакцию — та же доля, что вне волны.
     assert _waves(wave_rate=4) == []
+
+
+# Молодой пост внутри волны: Московский Политех в MAX, 06.10 — посты,
+# опубликованные в часы волны, набрали по 100–120 реакций на ~1 000 просмотров
+# (обычно 10–25) и признака не получали: сравнивать их с собственным хвостом
+# нельзя, хвоста ещё нет.
+YOUNG_PUBLISHED = START + timedelta(hours=WAVE.start - 1)
+FRESH = (2, 8)                 # свежие посты до волны: опубликованы на 2-м и 8-м часу
+
+
+def _fresh_rows(first: int) -> list[dict]:
+    """Свежие посты до волны: в первые сутки 2 реакции на 100 просмотров в час."""
+    rows = []
+    for number, published_hour in enumerate(FRESH):
+        r = v = 0
+        for hour in range(published_hour, HOURS + 1):
+            r, v = r + (2 if hour - published_hour < 24 else 0), v + (100 if hour - published_hour < 24 else 5)
+            rows.append({"publication_id": UUID(int=100 + number), "published_at": START + timedelta(hours=published_hour),
+                         "hour": first + hour, "reactions": r, "views": v})
+    return rows
+
+
+def _young(reactions_per_hour: int, views_per_hour: int) -> PostSeries:
+    instants, reactions, views, r, v = [], [], [], 0, 0
+    for minutes in range(5, (HOURS - WAVE.start + 1) * 60, 15):
+        at = YOUNG_PUBLISHED + timedelta(minutes=minutes)
+        r, v = r + reactions_per_hour / 4, v + views_per_hour / 4
+        instants.append(at)
+        reactions.append(int(r))
+        views.append(int(v))
+    return PostSeries(UUID(int=2), ACCOUNT, "max", YOUNG_PUBLISHED, False, tuple(instants),
+                      {Metric.VIEWS: tuple(views), Metric.REACTIONS: tuple(reactions)})
+
+
+def _young_waves(subject: PostSeries, fresh: bool = True) -> list:
+    first = int(START.timestamp() // HOUR)
+    reactions, views = _levels(3)
+    rows = [{"publication_id": UUID(int=10 + sibling), "published_at": PUBLISHED, "hour": first + index - 1,
+             "reactions": reactions[index], "views": views[index]}
+            for sibling in range(SIBLINGS) for index in range(HOURS + 2)]
+    activity = SiblingActivity.from_hourly(rows + (_fresh_rows(first) if fresh else []), first, first + HOURS)
+    prepared = prepare(subject, START + timedelta(hours=HOURS), CollectionCadence())
+    return [sign for sign in synchronous_rise.detect(prepared, DetectorContext("max", None, activity))
+            if sign.render.get("kind") == "synchrony_wave"]
+
+
+def test_a_post_born_inside_a_wave_is_its_member():
+    # 6 реакций на 40 просмотров в час — 15 % при 2 % у свежих постов до волны.
+    signs = _young_waves(_young(6, 40))
+    # Волна в десять часов — до двух шестичасовых окон; в выводе они одно событие.
+    assert 1 <= len(signs) <= 2 and all(item.render["member"] == "young" for item in signs)
+    sign = signs[0]
+    assert sign.render["posts"] == SIBLINGS + 1
+    assert sign.strength == synchronous_rise.YOUNG_MAX_STRENGTH
+    assert sign.interval.start >= YOUNG_PUBLISHED
+    assert "свежие посты аккаунта до волны" in sign.formula
+
+
+def test_a_fresh_post_with_the_usual_share_is_not_a_member():
+    # Те же 2 % — обычный свежий пост, опубликованный во время чужой волны.
+    assert _young_waves(_young(2, 100)) == []
+
+
+def test_no_member_without_fresh_posts_to_compare_with():
+    assert _young_waves(_young(6, 40), fresh=False) == []

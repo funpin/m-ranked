@@ -22,7 +22,7 @@ from ..series import DAY, HOUR, PreparedSeries
 from .base import DetectorContext, SiblingActivity, make_sign, number
 
 ID = "synchronous_rise"
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 PATTERN = 8
 FAMILY = Family.SYNCHRONY
 NEEDS_NORM = False
@@ -75,6 +75,27 @@ WAVE_MIN_ENGAGEMENT_RATIO = 3.0
 # Прирост подписчиков больше процента за окно — первым объяснением идёт
 # внешний толчок, и признак не выставляется.
 MAX_SUBSCRIBER_GROWTH = 0.01
+# Молодой пост внутри волны. Сравнивать его с собственным хвостом нельзя —
+# хвоста ещё нет, а после волны у поста MAX набирается сотня просмотров за
+# сутки, и обрыв реакций на ней недоказуем. Московский Политех в MAX,
+# 06.10 17:00 – 07.10 14:00: реакции разом получали 18–29 постов возрастом до
+# девяти суток, а посты, опубликованные в эти часы, признака не получали
+# вовсе (уровни 0–1 при 100–120 реакциях на ~1 000 просмотров против
+# обычных 10–25). Волну подтверждают старые посты, как и прежде; молодой
+# пост — её участник, если его доля реакций на новый просмотр в окне хотя
+# бы вчетверо выше доли других постов аккаунта в их первые сутки до волны.
+# Молодой пост сравнивается с молодыми: у старых постов доля в хвосте в
+# разы ниже, чем в первые часы (ADR-015), и сравнение с ними объявило бы
+# участником любой свежий пост. Часы ближе полусуток к окну в базу не
+# входят: волна идёт и до найденного окна.
+YOUNG_MIN_RATIO = 4.0
+YOUNG_MIN_REACTIONS = 15
+YOUNG_BASE_AGE = 24 * HOUR
+YOUNG_BASE_GAP_HOURS = 12
+YOUNG_BASE_MIN_VIEWS = 300
+# Доказательство участника слабее собственного подъёма старого поста: сила
+# не выше выраженной аномалии, уровень 3 — только вместе с другим семейством.
+YOUNG_MAX_STRENGTH = 0.75
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
@@ -181,47 +202,89 @@ def _waves(prepared: PreparedSeries, context: DetectorContext, own, subject: np.
     last_end = -WAVE_HOURS
     for end in range(WAVE_HOURS - 1, subject.size):
         start = end - WAVE_HOURS + 1
-        if end - last_end < WAVE_HOURS or own.ages[0, start] < MIN_AGE:
+        if end - last_end < WAVE_HOURS:
             continue
-        if context.synchrony_from is not None and own.hours[start] * HOUR < context.synchrony_from:
+        young = own.ages[0, start] < MIN_AGE
+        # Граница переноса сравнивается с началом самого признака: у молодого
+        # поста оно не раньше публикации. Иначе в часы между началом окна и
+        # публикацией признак не искался бы и не переносился (перенос — по
+        # началу признака, worker._carried).
+        begins = max(own.hours[start] * HOUR, published) if young else own.hours[start] * HOUR
+        if context.synchrony_from is not None and begins < context.synchrony_from:
             continue
         # Резкий подъём в том же окне уже описан почасовым режимом.
-        if any(start - 1 <= hour <= end + 1 for hour in taken) \
-                or not _waving(subject, end, WAVE_MIN_SUBJECT_HISTORY_HOURS):
+        if any(start - 1 <= hour <= end + 1 for hour in taken):
+            continue
+        if young:
+            # Участник волны: пост существовал в окне и набрал в нём реакции.
+            known = ~np.isnan(subject[start:end + 1])
+            if known.sum() < WAVE_MIN_KNOWN_HOURS \
+                    or np.nansum(subject[start:end + 1]) < YOUNG_MIN_REACTIONS:
+                continue
+        elif not _waving(subject, end, WAVE_MIN_SUBJECT_HISTORY_HOURS):
             continue
         waving = [index for index in range(sibling_rows.shape[0])
                   if siblings.ages[index, start] >= MIN_AGE and _waving(sibling_rows[index], end)]
         if len(waving) < WAVE_MIN_SIBLINGS:
             continue
-        rows = np.vstack([subject, sibling_rows[waving]])
-        views = np.vstack([own_views, siblings.views[waving]])
         inside = np.zeros(subject.size, dtype=bool)
         inside[start:end + 1] = True
+        # Волну доказывают старые посты; молодой пост в её долях не участвует.
+        rows = sibling_rows[waving] if young else np.vstack([subject, sibling_rows[waving]])
+        views = siblings.views[waving] if young else np.vstack([own_views, siblings.views[waving]])
         wave_reactions, wave_views = np.nansum(rows[:, inside]), np.nansum(views[:, inside])
         usual_reactions, usual_views = np.nansum(rows[:, ~inside]), np.nansum(views[:, ~inside])
         usual = usual_reactions / usual_views if usual_views > 0 else None
         wave = wave_reactions / wave_views if wave_views > 0 else np.inf
         if usual is None or usual <= 0 or wave < WAVE_MIN_ENGAGEMENT_RATIO * usual:
             continue
+        if young:
+            own_reactions, own_seen = np.nansum(subject[inside]), np.nansum(own_views[inside])
+            share = own_reactions / own_seen if own_seen > 0 else np.inf
+            base = _young_share(siblings, start - YOUNG_BASE_GAP_HOURS)
+            if base is None or base <= 0 or share < YOUNG_MIN_RATIO * base:
+                continue
         start_age = float(own.hours[start] * HOUR - published)
         end_age = float(own.hours[end] * HOUR + HOUR - published)
         growth = context.subscriber_growth(start_age - HOUR, end_age)
         if growth is not None and growth > MAX_SUBSCRIBER_GROWTH:
             continue
         last_end = end
-        rise, expected = _wave_rise(subject, end, WAVE_MIN_SUBJECT_HISTORY_HOURS)  # type: ignore[misc]
         first = datetime.fromtimestamp(own.hours[start] * HOUR, tz=timezone.utc)
         last = datetime.fromtimestamp(own.hours[end] * HOUR + HOUR, tz=timezone.utc)
         times = "∞" if not np.isfinite(wave) else f"{number(wave / usual)}"
-        formula = (f"реакции росли одновременно у {len(waving) + 1} постов аккаунта "
-                   f"{first:%d.%m %H:00}–{last:%H:00} UTC (+{number(rise)} у этого за {WAVE_HOURS} ч "
-                   f"при обычных ~{number(expected)}); реакций на новый просмотр в {times} раза больше обычного")
-        strength = min(1.0, 0.4 + 0.05 * len(waving))
+        render = {"kind": "synchrony_wave", "posts": len(waving) + 1, "hour": first.isoformat(), "hours": WAVE_HOURS}
+        if young:
+            # Начало окна для молодого поста — не раньше публикации.
+            start_age = max(start_age, 0.0)
+            ratio = "∞" if not np.isfinite(share) else number(share / base)
+            formula = (f"реакции росли одновременно у {len(waving)} старых постов аккаунта "
+                       f"{first:%d.%m %H:00}–{last:%H:00} UTC (реакций на новый просмотр в {times} раза больше "
+                       f"обычного); этот пост опубликован рядом с волной и в те же часы получил "
+                       f"+{number(own_reactions)} реакций на +{number(own_seen)} просмотров — в {ratio} раза "
+                       f"больше, чем свежие посты аккаунта до волны")
+            strength = min(YOUNG_MAX_STRENGTH, 0.4 + 0.05 * len(waving))
+            render["member"] = "young"
+        else:
+            rise, expected = _wave_rise(subject, end, WAVE_MIN_SUBJECT_HISTORY_HOURS)  # type: ignore[misc]
+            formula = (f"реакции росли одновременно у {len(waving) + 1} постов аккаунта "
+                       f"{first:%d.%m %H:00}–{last:%H:00} UTC (+{number(rise)} у этого за {WAVE_HOURS} ч "
+                       f"при обычных ~{number(expected)}); реакций на новый просмотр в {times} раза больше обычного")
+            strength = min(1.0, 0.4 + 0.05 * len(waving))
         signs.append(make_sign(PATTERN, FAMILY, prepared, Metric.REACTIONS, strength, start_age, end_age,
-                               timedelta(hours=WAVE_HOURS), formula,
-                               {"kind": "synchrony_wave", "posts": len(waving) + 1, "hour": first.isoformat(),
-                                "hours": WAVE_HOURS}, ("account_mentioned_externally",)))
+                               timedelta(hours=WAVE_HOURS), formula, render, ("account_mentioned_externally",)))
     return signs
+
+
+def _young_share(siblings: SiblingActivity, before: int) -> float | None:
+    """Доля реакций на новый просмотр у постов аккаунта в их первые сутки, в часах до `before`."""
+    if before <= 0:
+        return None
+    ages = siblings.ages[:, :before]
+    reactions, views = siblings.reactions[:, :before], siblings.views[:, :before]
+    mask = (ages >= 0) & (ages < YOUNG_BASE_AGE) & ~np.isnan(reactions) & ~np.isnan(views)
+    seen = float(views[mask].sum())
+    return float(reactions[mask].sum()) / seen if seen >= YOUNG_BASE_MIN_VIEWS else None
 
 
 def _step(prepared: PreparedSeries, metric: Metric, start_age: float) -> tuple[float, float]:
