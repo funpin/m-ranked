@@ -59,7 +59,7 @@ from uuid import UUID
 
 from .tail_ledger import MOSCOW, Point, TailLedger
 
-METHOD_VERSION = "account-findings-v3"
+METHOD_VERSION = "account-findings-v4"
 WINDOW_DAYS = 30
 STATUS_LABELS = {1: "необычный", 2: "устойчиво необычный"}
 TITLES = {
@@ -212,7 +212,13 @@ class AccountFinding:
 
     @property
     def title(self) -> str:
-        return TITLES[self.kind]
+        return TITLES.get(self.kind) or _reach().TITLES[self.kind]
+
+
+def _reach():
+    """Находки по охватам (v2/reach_findings.py) ссылаются на этот модуль — импорт ленивый."""
+    from . import reach_findings
+    return reach_findings
 
 
 def pack_ratio(ledger: TailLedger) -> tuple[float, int, int, int, int] | None:
@@ -626,6 +632,8 @@ def _ru(value: float, digits: int = 1) -> str:
 
 def summary(finding: AccountFinding) -> str:
     """Одна фраза с числами — для карточки аккаунта и ссылки со страницы поста."""
+    if finding.kind in _reach().REACH_KINDS:
+        return _reach().summary(finding)
     data = finding.metrics
     if finding.kind == "early_pack":
         cohort = data.get("cohort", {})
@@ -704,6 +712,8 @@ def _days(count: int) -> str:
 
 def headline(finding: AccountFinding) -> str:
     """Короткая строка для свёрнутого вида: что происходит, одним предложением."""
+    if finding.kind in _reach().REACH_KINDS:
+        return _reach().headline(finding)
     data = finding.metrics
     if finding.kind == "early_pack":
         return f"Пакет реакций в первые часы у {round(100 * data['share'])} % постов"
@@ -729,6 +739,8 @@ def headline(finding: AccountFinding) -> str:
 
 def figure(finding: AccountFinding) -> dict[str, Any] | None:
     """Аккаунт против типичного аккаунта площадки — одна мера для инфографики."""
+    if finding.kind in _reach().REACH_KINDS:
+        return _reach().figure(finding)
     data = finding.metrics
     typical = (data.get("cohort") or {}).get("median")
     if finding.kind == "early_pack":
@@ -759,4 +771,6 @@ def with_texts(finding: AccountFinding) -> AccountFinding:
     return replace(finding, metrics={**finding.metrics, "title": finding.title, "summary": summary(finding),
                                      "headline": headline(finding), "figure": figure(finding),
                                      "statusLabel": STATUS_LABELS[finding.status],
-                                     "alternatives": ALTERNATIVES[finding.kind], "members": len(finding.members)})
+                                     "alternatives": ALTERNATIVES.get(finding.kind)
+                                     or _reach().ALTERNATIVES[finding.kind],
+                                     "members": len(finding.members)})

@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from statistics import quantiles
-from typing import Sequence
+from typing import Any, Sequence
 from uuid import UUID
 
 from .account_findings import WINDOW_DAYS, AccountFinding, LedgerPost, _halves_by_time
@@ -258,3 +258,54 @@ def flat_day_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[A
         result.append(AccountFinding(account, platform_of[account], "flat_daily_views", 2 if steady else 1,
                                      start, computed_for, metrics, tuple(members)))
     return result
+
+
+def _percent(value: float) -> str:
+    return f"{round(100 * value)} %"
+
+
+def _number(value: int) -> str:
+    return f"{value:,}".replace(",", " ")
+
+
+def summary(finding: AccountFinding) -> str:
+    """Одна фраза с числами — для карточки аккаунта и ссылки со страницы поста."""
+    data = finding.metrics
+    if finding.kind == "view_packs":
+        return (f"У {data['packs']} из {data['posts']} постов за {WINDOW_DAYS} дней просмотры с публикации шли "
+                f"ровным темпом и обрывались при почти полном отсутствии реакций; у аккаунтов площадки такое "
+                f"бывает не больше чем у {_percent(data['cohortP90'])} постов (90-й перцентиль)")
+    if finding.kind == "view_waves":
+        return (f"В {data['days']} дн. ({data['hours']} ч) последние {data['latestN']} постов одновременно "
+                f"получали просмотры почти без реакций: +{_number(data['views'])} просмотров, "
+                f"{_number(data['reactions'])} реакций; это {_percent(data['viewShare'])} просмотров постов окна")
+    if finding.kind == "level3_share":
+        return (f"{data['level3']} из {data['posts']} постов за {WINDOW_DAYS} дней на уровне 3 (признаки "
+                f"{', '.join(map(str, data['patterns']))}); у аккаунтов площадки — не больше "
+                f"{_percent(data['cohortP90'])} (90-й перцентиль). Сводка признаков постов, а не новое свидетельство")
+    return (f"Самые тихие четыре часа суток дают {_percent(data['amplitude'])} притока просмотров самых активных; "
+            f"у аккаунтов площадки — не больше {_percent(data['cohortP90'])}: живая аудитория ночью почти не смотрит")
+
+
+def headline(finding: AccountFinding) -> str:
+    """Короткая строка для свёрнутого вида."""
+    data = finding.metrics
+    if finding.kind == "view_packs":
+        return f"Пакеты просмотров с публикации у {_percent(data['share'])} постов"
+    if finding.kind == "view_waves":
+        return f"Волны просмотров по последним {data['latestN']} постам"
+    if finding.kind == "level3_share":
+        return f"{_percent(data['share'])} постов на уровне 3"
+    return "Просмотры идут круглые сутки"
+
+
+def figure(finding: AccountFinding) -> dict[str, Any] | None:
+    """Аккаунт против 90-го перцентиля площадки — одна мера для инфографики."""
+    data = finding.metrics
+    if finding.kind == "view_waves":
+        return None
+    labels = {"view_packs": "постов с пакетом просмотров", "level3_share": "постов на уровне 3",
+              "flat_daily_views": "тихие часы к активным"}
+    value = data["amplitude"] if finding.kind == "flat_daily_views" else data["share"]
+    return {"value": value, "typical": data["cohortP90"], "unit": "percent", "label": labels[finding.kind],
+            "direction": "higher"}

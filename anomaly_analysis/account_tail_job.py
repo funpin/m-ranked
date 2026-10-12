@@ -22,6 +22,7 @@ from .v2.account_findings import (
     METHOD_VERSION as FINDINGS_VERSION, WINDOW_DAYS, LedgerPost, SynchronyEvent, findings, with_texts,
 )
 from .v2.account_tail import POSTS_FROM_DAYS, POSTS_UNTIL_DAYS, PostLedger, profiles, window_end
+from .v2 import reach_findings
 from .v2.store import PostgresAnomalyStore
 from .v2.tail_ledger import MOSCOW, ledger_from_payload
 
@@ -62,6 +63,16 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
     synchrony = [SynchronyEvent(row["account_id"], row["platform"], row["publication_id"], row["hour"])
                  for row in store.read_synchrony_events(start, end)]
     result = [with_texts(item) for item in findings(posts, computed_for, late, tail_status, synchrony)]
+    # Находки по охватам: уровни и признаки постов окна плюс те же сводки.
+    levels = [reach_findings.PostLevel(row["publication_id"], row["account_id"], row["platform"],
+                                       row["published_at"], int(row["level"]), frozenset(row["patterns"] or ()),
+                                       bool(row["view_pack"]))
+              for row in store.read_post_levels(start, end)]
+    reach = (reach_findings.view_pack_findings(levels, computed_for)
+             + reach_findings.level3_findings(levels, computed_for)
+             + reach_findings.wave_findings(posts, computed_for)
+             + reach_findings.flat_day_findings(posts, computed_for))
+    result += [with_texts(item) for item in reach]
     store.write_account_findings(result, FINDINGS_VERSION)
     return result
 

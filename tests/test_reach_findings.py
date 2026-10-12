@@ -150,3 +150,22 @@ def test_ordinary_night_trough_is_not_a_finding():
 def test_small_audience_gives_no_rhythm_finding():
     others = [p for a in range(2, 12) for p in flat(a, 0.15)]
     assert not of(flat_day_findings(others + flat(1, 0.9, count=5), TODAY))
+
+
+def test_every_reach_kind_has_words_for_the_api():
+    from anomaly_analysis.v2.account_findings import with_texts
+    others = [p for a in range(2, 12) for p in wall(a)]
+    found = (of(wave_findings(wall(1, waves=WAVES) + others, TODAY))
+             + of(level3_findings(cohort() + spread(1, 80, 40, level3=True), TODAY))
+             + of(view_pack_findings(cohort() + spread(1, 80, 25, packs=True), TODAY))
+             + of(flat_day_findings([p for a in range(2, 12) for p in flat(a, 0.15)] + flat(1, 0.9), TODAY)))
+    assert {f.kind for f in found} == {"view_waves", "level3_share", "view_packs", "flat_daily_views"}
+    for finding in found:
+        metrics = with_texts(finding).metrics
+        assert finding.title and metrics["summary"] and metrics["headline"] and metrics["alternatives"]
+        assert metrics["statusLabel"] and "накрут" not in (metrics["summary"] + metrics["headline"]).lower()
+
+
+def test_findings_method_version_is_bumped():
+    from anomaly_analysis.v2.account_findings import METHOD_VERSION
+    assert METHOD_VERSION == "account-findings-v4"
