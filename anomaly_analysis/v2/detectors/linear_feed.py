@@ -13,7 +13,7 @@ from datetime import timedelta
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries, growth_bounds, value_at
+from ..series import HOUR, PointFlag, PreparedSeries, growth_bounds
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
@@ -94,7 +94,10 @@ STEADY_STOP_MODE = "steady_feed_stop_v1"
 # признак не выше слабого сигнала.
 VIEW_SHORT_SCALE = timedelta(minutes=15)
 VIEW_SHORT_ONSET_UNTIL = 12 * HOUR
-VIEW_SHORT_CELLS = (8, 40)             # 2–10 ч
+# 1,5–10 ч. Калибровка 01–21.09: у Косыгина в ВК часть пакетов длится 1 ч 45 мин;
+# порог 1,5 ч добавил пять срабатываний, все в аккаунтах с пакетами, ни одного
+# у других аккаунтов.
+VIEW_SHORT_CELLS = (6, 40)
 VIEW_SHORT_MIN_RATE = 150.0            # просмотров в час
 VIEW_SHORT_BACKGROUND = 3.0            # темп не ниже трёх фонов
 VIEW_SHORT_SPREAD = 2.0                # часовые темпы в пределах ×2
@@ -105,6 +108,14 @@ VIEW_SHORT_AFTER = 2 * HOUR
 VIEW_SHORT_RESPONSE = 1 / 3            # реакций на просмотр в пакете ≤ трети остального поста
 VIEW_SHORT_SILENT_PER_K = 1.0
 VIEW_SHORT_MIN_REST_REACTIONS = 10
+# Пробел опроса внутри участка — не больше четверти его ячеек: сумма участка
+# известна по краям (Косыгин 22.09: полчаса без замеров внутри трёхчасового
+# пакета). Начало участка и окно после обрыва должны быть покрыты целиком.
+VIEW_SHORT_MAX_GAP_SHARE = 0.25
+# Ячейка пригодна, если её покрывают замеры не дальше 45 минут друг от друга:
+# сумма за час известна и при опросе раз в 20–30 минут (Косыгин в ВК), хотя
+# «ожидаемый шаг» первых суток — 5 минут, и общая сетка такие ячейки отбрасывает.
+VIEW_SHORT_MAX_SPACING = 45 * 60
 VIEW_SHORT_EXPLICIT, VIEW_SHORT_PRONOUNCED, VIEW_SHORT_UNCHECKED, VIEW_SHORT_ORDINARY = 0.95, 0.75, 0.6, 0.5
 
 
@@ -201,7 +212,7 @@ def _short_views(prepared: PreparedSeries) -> Sign | None:
     rates = grid.rates * HOUR
     size = rates.size
     starts = grid.edges[:-1]
-    valid = grid.usable & ~grid.negative & (expected_step(prepared, starts) <= width)
+    valid = ~grid.negative & _spaced(data.ages, data.flags, grid.edges)
     begins = np.flatnonzero(starts <= VIEW_SHORT_ONSET_UNTIL)
     if not begins.size:
         return None
@@ -235,7 +246,10 @@ def _short_views(prepared: PreparedSeries) -> Sign | None:
                 else (feed_limit[0] <= end_ages) & (end_ages <= feed_limit[1]))
     background = np.where(begins >= 4, (total[begins] - total[np.maximum(begins - 4, 0)]) / 4, np.nan)
     background = np.where(np.isnan(background)[:, None], after, background[:, None])
-    ok = (inside & (bad[ends_at + after_cells] == bad[first]) & (mean >= VIEW_SHORT_MIN_RATE)
+    gaps_inside = bad[ends_at] - bad[first]
+    covered = ((gaps_inside <= np.floor(VIEW_SHORT_MAX_GAP_SHARE * lengths)) & valid[begins][:, None]
+               & (bad[ends_at + after_cells] == bad[ends_at]))
+    ok = (inside & covered & (mean >= VIEW_SHORT_MIN_RATE)
           & (spread <= VIEW_SHORT_MAX_CV * mean) & (low * VIEW_SHORT_SPREAD >= high)
           # Участок кончается там, где обрыв: первая ячейка за ним уже медленная.
           # Иначе хвост пакета попадает в окно «после», а конец — раньше
@@ -249,6 +263,37 @@ def _short_views(prepared: PreparedSeries) -> Sign | None:
     column = int(np.flatnonzero(ok[row])[-1])
     begin, end = int(begins[row]), int(ends[row, column])
     return _pack_sign(prepared, grid, bounded, begin, end, float(mean[row, column]), float(after[row, column]))
+
+
+def _spaced(ages: np.ndarray, flags: np.ndarray, edges: np.ndarray) -> np.ndarray:
+    """Ячейки, которые покрывают замеры не дальше VIEW_SHORT_MAX_SPACING друг от друга.
+
+    Сброс счётчика и пропуск метрики в замере делают отрезок непригодным.
+    """
+    if ages.size < 2:
+        return np.zeros(edges.size - 1, dtype=bool)
+    spacing = np.diff(ages)
+    broken = (flags[1:] & np.uint8(PointFlag.COUNTER_RESET | PointFlag.MISSING)) != 0
+    bad = (spacing > VIEW_SHORT_MAX_SPACING) | broken
+    last = ages.size - 2
+    first = np.clip(np.searchsorted(ages, edges[:-1], side="right") - 1, 0, last)
+    stop = np.clip(np.searchsorted(ages, edges[1:], side="left"), 1, last + 1)
+    prefix = np.concatenate(([0], np.cumsum(bad)))
+    inside = (edges[:-1] >= ages[0]) & (edges[1:] <= ages[-1])
+    return inside & (prefix[stop] - prefix[first] == 0)
+
+
+def _reactions_at(data, age: float) -> float | None:
+    """Реакции на возрасте: замер или интерполяция между замерами не дальше VIEW_SHORT_MAX_SPACING."""
+    if data is None or not data.ages.size or not data.ages[0] <= age <= data.ages[-1]:
+        return None
+    right = int(np.searchsorted(data.ages, age))
+    if data.ages[right] == age:
+        return float(data.values[right])
+    if data.ages[right] - data.ages[right - 1] > VIEW_SHORT_MAX_SPACING or data.flags[right] & np.uint8(
+            PointFlag.COUNTER_RESET | PointFlag.MISSING):
+        return None
+    return float(np.interp(age, data.ages[right - 1:right + 1], data.values[right - 1:right + 1]))
 
 
 def _pack_sign(prepared, grid, bounded, begin, end, mean, after) -> Sign | None:
@@ -268,7 +313,7 @@ def _pack_sign(prepared, grid, bounded, begin, end, mean, after) -> Sign | None:
         mode = "bounded_views"
     reactions = prepared.metrics.get(Metric.REACTIONS)
     last_age = float(reactions.ages[-1]) if reactions is not None and reactions.ages.size else end_age
-    r_start, r_end, r_last = (value_at(reactions, age) for age in (start_age, end_age, last_age))
+    r_start, r_end, r_last = (_reactions_at(reactions, age) for age in (start_age, end_age, last_age))
     v_last = float(grid.cumulative[-1])
     strength = VIEW_SHORT_UNCHECKED
     pack_per_k = rest_per_k = None

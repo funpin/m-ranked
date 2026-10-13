@@ -142,3 +142,77 @@ def test_vk_video_keeps_view_shape_checks():
     # проверяется, отключаются только сравнения реакций с просмотрами.
     (sign,) = short(kosygin(kind="video", reactions=pack_then_rest(0, 30)))
     assert sign.strength >= 0.95
+
+
+def batched(series, pattern=(0.4, 2.2, 0.5, 0.9)):
+    """Как ВК обновляет просмотры порциями: 15-минутные приросты неровные, часовые — те же."""
+    views = list(series.values[Metric.VIEWS])
+    out, carried = [], 0.0
+    for index in range(len(views)):
+        if index == 0:
+            out.append(views[0])
+            continue
+        step = views[index] - views[index - 1]
+        carried += step * pattern[(index // 3) % len(pattern)]
+        out.append(max(out[-1], min(views[index], int(views[0] + carried))))
+    out[-1] = views[-1]
+    return PostSeries(series.publication_id, series.account_id, series.platform, series.published_at, False,
+                      series.observed_at, {**series.values, Metric.VIEWS: tuple(out)},
+                      qualities=series.qualities, publication_type=series.publication_type)
+
+
+def test_pack_with_batched_counter_updates_is_found():
+    # Темпы по 15 минутам от 200 до 700, по часам ровные: Косыгин 22.09.
+    (sign,) = short(batched(kosygin(reactions=pack_then_rest(0, 30))))
+    assert sign.strength >= 0.75
+
+
+def test_short_collection_gap_inside_the_pack_is_tolerated():
+    # Полчаса без замеров внутри трёхчасового пакета: сумма участка известна по краям.
+    series = kosygin(reactions=pack_then_rest(0, 30))
+    keep = [i for i, at in enumerate(series.observed_at)
+            if not timedelta(hours=1) < at - series.published_at < timedelta(hours=1, minutes=30)]
+    gapped = PostSeries(series.publication_id, series.account_id, series.platform, series.published_at, False,
+                        tuple(series.observed_at[i] for i in keep),
+                        {m: tuple(col[i] for i in keep) for m, col in series.values.items()},
+                        qualities={m: tuple(col[i] for i in keep) for m, col in series.qualities.items()},
+                        publication_type="photo")
+    (sign,) = short(gapped)
+    assert sign.strength >= 0.75
+
+
+def test_pack_polled_every_twenty_minutes_is_found():
+    # Косыгин в ВК опрашивается раз в 20 минут: ячейки по 15 минут без своего
+    # замера, но сумма за час известна — пакет судится по фактическим замерам.
+    series = build("vk", [420, 400, 380] + [15] * 21, step=20, reactions=pack_then_rest(0, 30)[::4])
+    (sign,) = short(series)
+    # Первые 20 минут до первого замера не видны: сумма участка чуть меньше пакета.
+    assert sign.strength >= 0.75 and 900 <= sign.render["packViews"] <= 1300
+
+
+def test_pack_with_hour_long_holes_in_polling_gives_no_sign():
+    # Замер раз в час: внутри часа формы участка не видно — признака нет.
+    series = build("vk", [420, 400, 380] + [15] * 21, step=60, reactions=pack_then_rest(0, 30)[::12])
+    assert short(series) == []
+
+
+def by_minute(rate_at, minutes=24 * 60, step=5, reactions=None):
+    """Ряд ВК с темпом просмотров rate_at(минута) в час; замер каждые `step` минут."""
+    at, views, total = [], [], 0.0
+    for minute in range(step, minutes + 1, step):
+        total += rate_at(minute) * step / 60
+        at.append(MSK_NOON + timedelta(minutes=minute))
+        views.append(int(total))
+    reacts = (reactions or pack_then_rest(0, 30))[:len(views)]
+    return PostSeries(UUID(int=7), UUID(int=8), "vk", MSK_NOON, False, tuple(at),
+                      {Metric.VIEWS: tuple(views), Metric.REACTIONS: tuple(reacts)}, publication_type="photo")
+
+
+def test_pack_of_an_hour_and_three_quarters_is_found():
+    # Косыгин 16.09, 16:00: ~400/ч 1 ч 45 мин с публикации, затем 25–60/ч.
+    (sign,) = short(by_minute(lambda minute: 400 if minute <= 105 else 25))
+    assert sign.strength >= 0.75
+
+
+def test_hour_long_pack_is_too_short_to_judge():
+    assert short(by_minute(lambda minute: 400 if minute <= 60 else 25)) == []
