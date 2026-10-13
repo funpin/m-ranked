@@ -116,7 +116,7 @@ VIEW_SHORT_MAX_GAP_SHARE = 0.25
 # сумма за час известна и при опросе раз в 20–30 минут (Косыгин в ВК), хотя
 # «ожидаемый шаг» первых суток — 5 минут, и общая сетка такие ячейки отбрасывает.
 VIEW_SHORT_MAX_SPACING = 45 * 60
-VIEW_SHORT_EXPLICIT, VIEW_SHORT_PRONOUNCED, VIEW_SHORT_UNCHECKED, VIEW_SHORT_ORDINARY = 0.95, 0.75, 0.6, 0.5
+VIEW_SHORT_EXPLICIT, VIEW_SHORT_PRONOUNCED = 0.95, 0.75
 
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
@@ -334,32 +334,30 @@ def _pack_sign(prepared, grid, bounded, begin, end, mean, after, v_last) -> Sign
     reactions = prepared.metrics.get(Metric.REACTIONS)
     last_age = float(reactions.ages[-1]) if reactions is not None and reactions.ages.size else end_age
     r_start, r_end, r_last = (_reactions_at(reactions, age) for age in (start_age, end_age, last_age))
-    strength = VIEW_SHORT_UNCHECKED
-    pack_per_k = rest_per_k = None
+    # Признак — только при проверенном низком отклике в участке. Ровный приток с
+    # обрывом при обычном отклике (рекомендации) или без реакций для сравнения
+    # свидетельством не считается: на карточках 22.09–07.10 такие слабые
+    # сигналы в четырёх случаях из девяти ложились на живые посты.
+    if None in (r_start, r_end, r_last):
+        return None
+    pack_reactions = max(0.0, r_end - r_start)
+    rest_reactions = max(0.0, r_last - pack_reactions)
+    pack_per_k = 1000 * pack_reactions / max(views, 1.0)
+    rest_per_k = 1000 * rest_reactions / max(1.0, v_last - views)
+    if rest_reactions < VIEW_SHORT_MIN_REST_REACTIONS or pack_per_k > VIEW_SHORT_RESPONSE * rest_per_k:
+        return None
+    strength = (VIEW_SHORT_EXPLICIT if after * VIEW_SHORT_HARD_STOP <= mean or pack_per_k <= VIEW_SHORT_SILENT_PER_K
+                else VIEW_SHORT_PRONOUNCED)
     alternatives = ("paid_promotion", "site_embed", "mailing_link")
-    if None not in (r_start, r_end, r_last):
-        pack_reactions = max(0.0, r_end - r_start)
-        rest_reactions = max(0.0, r_last - pack_reactions)
-        pack_per_k = 1000 * pack_reactions / max(views, 1.0)
-        rest_per_k = 1000 * rest_reactions / max(1.0, v_last - views)
-        if rest_reactions >= VIEW_SHORT_MIN_REST_REACTIONS:
-            if pack_per_k > VIEW_SHORT_RESPONSE * rest_per_k:
-                strength, alternatives = VIEW_SHORT_ORDINARY, ("recommendation_feed", "paid_promotion", "site_embed")
-            elif after * VIEW_SHORT_HARD_STOP <= mean or pack_per_k <= VIEW_SHORT_SILENT_PER_K:
-                strength = VIEW_SHORT_EXPLICIT
-            else:
-                strength = VIEW_SHORT_PRONOUNCED
     formula = (f"просмотры: +{number(views)} за {age_text(duration)} ровным темпом ≈ {number(mean)}/ч "
                f"(t ∈ [{age_text(start_age)}; {age_text(end_age)}]), затем {number(after)}/ч")
-    if pack_per_k is not None:
-        formula += (f"; реакций на 1 000 просмотров в участке — {pack_per_k:.1f}, "
-                    f"у остального поста — {rest_per_k:.1f}")
+    formula += (f"; реакций на 1 000 просмотров в участке — {pack_per_k:.1f}, "
+                f"у остального поста — {rest_per_k:.1f}")
     formula += ". Живой приток в первые часы затухает, а не идёт ровно и не обрывается"
     render = {"kind": "linear", "mode": "short_views", "stepDown": True, "packViews": round(views),
               "slope": round(mean, 3), "intercept": round(float(grid.cumulative[begin]), 1),
               "afterRate": round(after, 3),
-              "packReactionsPerK": None if pack_per_k is None else round(pack_per_k, 2),
-              "restReactionsPerK": None if rest_per_k is None else round(rest_per_k, 2)}
+              "packReactionsPerK": round(pack_per_k, 2), "restReactionsPerK": round(rest_per_k, 2)}
     if mode:
         render["measurementMode"] = mode
     return make_sign(PATTERN, FAMILY, prepared, Metric.VIEWS, strength, start_age, end_age, VIEW_SHORT_SCALE,

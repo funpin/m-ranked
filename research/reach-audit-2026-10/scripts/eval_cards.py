@@ -136,8 +136,8 @@ def render(out):
 
     data = json.load(open(f"{out}/cards.json"))
 
-    def draw(ax, card, title):
-        pts = [p for p in card["points"] if p[0] <= 72]
+    def draw(ax, card, title, until=72):
+        pts = [p for p in card["points"] if p[0] <= until]
         ages = [p[0] for p in pts]
         ax.plot(ages, [p[1] for p in pts], color="#2b6cb0", lw=1.2, label="просмотры")
         ax.set_xlabel("часы", fontsize=7)
@@ -146,8 +146,8 @@ def render(out):
         twin.plot(ages, [p[2] for p in pts], color="#c05621", lw=1.0, label="реакции")
         twin.tick_params(labelsize=6, colors="#c05621")
         for sign in card["signs"]:
-            if sign["startAge"] is not None and sign["endAge"] is not None and sign["startAge"] / 3600 <= 72:
-                ax.axvspan(sign["startAge"] / 3600, min(72, sign["endAge"] / 3600),
+            if sign["startAge"] is not None and sign["endAge"] is not None and sign["startAge"] / 3600 <= until:
+                ax.axvspan(sign["startAge"] / 3600, min(until, sign["endAge"] / 3600),
                            color="#e53e3e" if sign["pattern"] == 1 and sign["metric"] == "views" else "#a0aec0",
                            alpha=0.18)
         ax.set_title(title, fontsize=7)
@@ -162,7 +162,8 @@ def render(out):
     for card in data["accounts"]:
         fig, axes = plt.subplots(2, 3, figsize=(10, 4.4))
         for ax, post in zip(axes.flat, card["posts"]):
-            draw(ax, post, f"уровень {post['level']}")
+            # Волны и сводные находки видны на всём сроке поста, а не в первые трое суток.
+            draw(ax, post, f"уровень {post['level']}", until=30 * 24)
         fig.suptitle(f"{card['card']} · {card['platform']} · {card['kind']} · статус {card['status']} · "
                      f"{json.dumps(card['metrics'], ensure_ascii=False)}", fontsize=7)
         fig.tight_layout()

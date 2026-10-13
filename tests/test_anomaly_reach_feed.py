@@ -88,10 +88,10 @@ def test_silent_pack_with_hard_stop_is_explicit():
     assert sign.strength >= 0.95
 
 
-def test_pack_without_reactions_to_compare_stays_weak():
-    # Реакций на посте нет вовсе: отклик не проверить — только слабый сигнал.
-    (sign,) = short(kosygin(reactions=[0] * 288))
-    assert sign.strength < 0.7
+def test_pack_without_reactions_to_compare_is_not_a_sign():
+    # Реакций на посте нет вовсе: отклик не проверить — свидетельства нет
+    # (на карточках 22.09–07.10 такие слабые сигналы ложились и на органику).
+    assert short(kosygin(reactions=[0] * 288)) == []
 
 
 def test_organic_decay_is_not_a_pack():
@@ -101,9 +101,9 @@ def test_organic_decay_is_not_a_pack():
 
 def test_pack_with_ordinary_response_is_not_flagged():
     # Попадание в рекомендации: темп ровный, но реакции идут как у остального поста.
-    # После пакета 60/ч: у остального поста хватает реакций для сравнения.
-    (sign,) = short(kosygin(after=60, per_view=0.012))
-    assert sign.strength < 0.7 and "recommendation_feed" in sign.alternatives
+    # После пакета 60/ч: у остального поста хватает реакций для сравнения,
+    # и отклик в участке обычный — признака нет.
+    assert short(kosygin(after=60, per_view=0.012)) == []
 
 
 def test_stop_at_night_is_not_evidence():
