@@ -5,10 +5,13 @@
 
 type Point = { day: string; reactions: number };
 
-const W = 560, H = 190, L = 34, R = 8, T = 10, B = 26;
+const W = 560, H = 200, L = 46, R = 8, T = 10, B = 36;
+// Без осей — в строке карточки: только точки и коридор.
+const MINI = { W: 560, H: 64, L: 2, R: 2, T: 4, B: 4 };
 
-export function ReactionCorridor({ points, dayMinPosts }: { points: readonly Point[]; dayMinPosts: number }) {
+export function ReactionCorridor({ points, dayMinPosts, compact = false }: { points: readonly Point[]; dayMinPosts: number; compact?: boolean }) {
   if (points.length < 2) return null;
+  const { W: width, H: height, L: left, R: right, T: top_, B: bottom } = compact ? MINI : { W, H, L, R, T, B };
   const byDay = new Map<string, number[]>();
   for (const point of points) byDay.set(point.day, [...(byDay.get(point.day) ?? []), point.reactions]);
   const band = points.map((point) => {
@@ -18,8 +21,8 @@ export function ReactionCorridor({ points, dayMinPosts }: { points: readonly Poi
     return { mean, low: Math.max(0, mean - 2 * Math.sqrt(mean)), high: mean + 2 * Math.sqrt(mean) };
   });
   const top = niceMax(Math.max(...points.map((point) => point.reactions), ...band.map((item) => item?.high ?? 0)));
-  const x = (index: number) => L + (index / (points.length - 1)) * (W - L - R);
-  const y = (value: number) => T + (1 - value / top) * (H - T - B);
+  const x = (index: number) => left + (index / (points.length - 1)) * (width - left - right);
+  const y = (value: number) => top_ + (1 - value / top) * (height - top_ - bottom);
   const judged = points.filter((_, index) => band[index]);
   const outside = points.filter((point, index) => band[index] && (point.reactions < band[index]!.low || point.reactions > band[index]!.high)).length;
   // Коридор — ступеньками по дням: у каждого поста — коридор его дня.
@@ -30,31 +33,47 @@ export function ReactionCorridor({ points, dayMinPosts }: { points: readonly Poi
     if (last && last.to === index - 1 && points[index]!.day === points[last.to]!.day) last.to = index;
     else runs.push({ from: index, to: index, ...item });
   });
-  const half = (W - L - R) / (points.length - 1) / 2;
+  const half = (width - left - right) / (points.length - 1) / 2;
   const line = points.map((point, index) => `${x(index).toFixed(1)},${y(point.reactions).toFixed(1)}`).join(" ");
   const ticks = [0, top / 2, top];
   const labels = [0, Math.floor((points.length - 1) / 2), points.length - 1];
+  const label = `Реакции к 72 часам: ${outside} из ${judged.length} постов вне коридора случайности своего дня`;
+  const runShapes = runs.map((run) => {
+    // Ступенька дня — до середины между соседними постами, в пределах области графика.
+    const from = Math.max(left, x(run.from) - half), to = Math.min(width - right, x(run.to) + half);
+    return <g key={`${run.from}-${run.to}`}>
+      <rect x={from} width={Math.max(to - from, 1)} y={y(run.high)}
+        height={Math.max(y(run.low) - y(run.high), 1)} className="fill-muted-foreground/15" />
+      <line x1={from} x2={to} y1={y(run.mean)} y2={y(run.mean)}
+        className="stroke-muted-foreground" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+    </g>;
+  });
+  if (compact) {
+    return <figure className="grid min-w-0 gap-1" data-testid="reaction-corridor-mini">
+      <figcaption className="flex items-baseline justify-between gap-2 text-xs">
+        <span className="text-muted-foreground min-w-0 truncate">реакции постов и коридор случайности</span>
+        <span className="text-foreground shrink-0 text-[11px] font-medium">вне коридора {outside} из {judged.length}</span>
+      </figcaption>
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-12 w-full" role="img" aria-label={label}>
+        {runShapes}
+        <polyline points={line} fill="none" className="stroke-chart-3" strokeWidth="1.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </figure>;
+  }
   return <figure className="grid gap-2" data-testid="reaction-corridor">
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img"
-      aria-label={`Реакции к 72 часам: ${outside} из ${judged.length} постов вне коридора случайности своего дня`}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={label}>
+      <text transform={`translate(10 ${T + (H - T - B) / 2}) rotate(-90)`} textAnchor="middle"
+        className="fill-muted-foreground text-[10px]">реакций к 72 ч</text>
+      <text x={L + (W - L - R) / 2} y={H - 2} textAnchor="middle" className="fill-muted-foreground text-[10px]">посты по порядку публикации, дата</text>
       {ticks.map((tick) => <g key={tick}>
         <line x1={L} x2={W - R} y1={y(tick)} y2={y(tick)} className="stroke-border" strokeWidth="1" />
         <text x={L - 6} y={y(tick) + 3} textAnchor="end" className="fill-muted-foreground text-[10px] tabular-nums">{Math.round(tick)}</text>
       </g>)}
-      {runs.map((run) => {
-        // Ступенька дня — до середины между соседними постами, в пределах области графика.
-        const from = Math.max(L, x(run.from) - half), to = Math.min(W - R, x(run.to) + half);
-        return <g key={`${run.from}-${run.to}`}>
-          <rect x={from} width={Math.max(to - from, 1)} y={y(run.high)}
-            height={Math.max(y(run.low) - y(run.high), 1)} className="fill-muted-foreground/15" />
-          <line x1={from} x2={to} y1={y(run.mean)} y2={y(run.mean)}
-            className="stroke-muted-foreground" strokeWidth="1" strokeDasharray="3 3" />
-        </g>;
-      })}
+      {runShapes}
       <polyline points={line} fill="none" className="stroke-chart-3" strokeWidth="1.5" strokeLinejoin="round" />
       {points.map((point, index) => <circle key={index} cx={x(index)} cy={y(point.reactions)} r={points.length > 80 ? 1.6 : 2.4}
         className="fill-chart-3"><title>{`${point.day}: ${point.reactions} реакций`}</title></circle>)}
-      {labels.map((index) => <text key={index} x={x(index)} y={H - 8}
+      {labels.map((index) => <text key={index} x={x(index)} y={H - 18}
         textAnchor={index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"}
         className="fill-muted-foreground text-[10px] tabular-nums">{shortDay(points[index]!.day)}</text>)}
     </svg>

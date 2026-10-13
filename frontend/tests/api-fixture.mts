@@ -250,18 +250,38 @@ const server = createServer(async (request, response) => {
   if (accountFindings) {
     const accountId = accountFindings[1]!;
     const many = Number(accountId.slice(0, 8)) === 1 && Number(accountId.slice(-12)) === 2;
-    const kinds: Schema["AccountAnomalyFinding"]["kind"][] = ["late_growth", "level3_share", "synchronous_waves", "view_waves", "regular_reactions"];
-    const items: Schema["AccountAnomalyFinding"][] = many ? kinds.map((kind, index) => ({
-      accountId, accountUsername: "channel2", kind, platform: "vk", status: index < 4 ? 2 : 1,
-      statusLabel: index < 4 ? "устойчиво необычный" : "необычный", title: `Находка ${index + 1}`,
-      headline: `Короткая строка находки ${index + 1}`, summary: `Сводка находки ${index + 1}`, alternatives: "Другие объяснения",
-      figure: index === 3 ? null : { value: 0.4 + index / 10, typical: 0.1, unit: "percent", label: `мера ${index + 1}`, direction: "higher" },
-      membersCount: 10 + index, windowStart: "2026-09-08", windowEnd: "2026-10-08", computedAt: asOf,
-      methodologyVersion: "account-findings-v5",
+    // Аккаунт ВК «Канал 2» — остальные виды находок, чтобы у каждого был свой график.
+    const others = Number(accountId.slice(0, 8)) === 2 && Number(accountId.slice(-12)) === 2;
+    type Finding = Schema["AccountAnomalyFinding"];
+    const percent = (value: number, typical: number, label: string): Finding["figure"] => ({ value, typical, unit: "percent", label, direction: "higher" });
+    const times = (value: number, typical: number, label: string): Finding["figure"] => ({ value, typical, unit: "times", label, direction: "higher" });
+    const specs: [Finding["kind"], Finding["figure"], Record<string, unknown>][] = many ? [
+      ["late_growth", percent(0.42, 0.05, "постов, добравших реакции через дни"), { posts: 60, boosted: 25, share: 0.42, run: 9, medianDay: 14, medianLate: 61 }],
+      ["level3_share", percent(0.35, 0.08, "постов на уровне 3"), { posts: 60, level3: 21, share: 0.35, cohortP90: 0.08 }],
+      ["synchronous_waves", percent(0.5, 0.06, "постов в волнах реакций"), { posts: 60, days: 5, maxPosts: 17, share: 0.5,
+        dates: ["2026-09-12", "2026-09-19", "2026-09-26", "2026-10-01", "2026-10-03"] }],
+      ["view_waves", null, { days: 6, hours: 19, views: 52000, reactions: 120, viewShare: 0.31, posts: 60 }],
       // «Слишком ровный отклик»: 30 постов по три в день, реакции почти одинаковые.
-      metrics: kind === "regular_reactions" ? { dayMinPosts: 3, points72: Array.from({ length: 30 }, (_, post) =>
-        [`2026-09-${String(20 + Math.floor(post / 3)).padStart(2, "0")}`, 38 + ((post * 7) % 5) - 2]) } : {},
-    })) : [];
+      ["regular_reactions", { value: 0, typical: 0.1, unit: "decimal", label: "разброс реакций сверх случайного", direction: "lower" },
+        { dayMinPosts: 3, points72: Array.from({ length: 30 }, (_, post) =>
+          [`2026-09-${String(20 + Math.floor(post / 3)).padStart(2, "0")}`, 38 + ((post * 7) % 5) - 2]) }],
+    ] : others ? [
+      ["early_pack", times(53, 3.2, "доля реакций: первые часы / остаток суток"), { posts: 40, median: 53, share: 0.55,
+        earlyReactions: 2600, earlyViews: 21000, laterReactions: 410, laterViews: 98000, cohort: { accounts: 85, median: 3.2 } }],
+      ["engagement_shift", times(3.4, 1.4, "рост доли реакций на просмотр"), { cut: "2026-09-24", ratio: 3.4, erBefore: 0.011, erAfter: 0.0374,
+        medianViewsBefore: 1500, medianViewsAfter: 1450, viewsRatio: 0.97, separation: 0.8, cohort: { accounts: 85, median: 1.4 } }],
+      ["night_reactions", times(6.2, 1.1, "доля реакций ночью к доле просмотров"), { nightStartMsk: 1, viewShare: 0.05, reactionShare: 0.31,
+        lift: 6.2, shiftHours: 0, cohort: { accounts: 85, median: 1.1 } }],
+      ["view_packs", percent(0.46, 0.12, "постов с пакетом просмотров"), { posts: 40, packs: 18, share: 0.46, cohortP90: 0.12 }],
+      ["promotion", null, { posts: 5, days: 5, firstDay: "2026-10-07", lastDay: "2026-10-11", views: 24641, reactions: 21, excessMedian: 16.9 }],
+    ] : [];
+    const items: Finding[] = specs.map(([kind, figure, metrics], index) => ({
+      accountId, accountUsername: many ? "channel2" : "fixture_2", kind, platform: "vk", status: index < 4 ? 2 : 1,
+      statusLabel: index < 4 ? "устойчиво необычный" : "необычный", title: many ? `Находка ${index + 1}` : `Находка ${kind}`,
+      headline: `Короткая строка находки ${index + 1}`, summary: `Сводка находки ${index + 1}`, alternatives: "Другие объяснения",
+      figure, membersCount: 10 + index, windowStart: "2026-09-08", windowEnd: "2026-10-08", computedAt: asOf,
+      methodologyVersion: "account-findings-v5", metrics,
+    }));
     response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
     response.end(JSON.stringify({ accountId, datasetRevision: revision, items, disclaimer: "Не доказательство." }));
     return;

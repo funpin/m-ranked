@@ -168,6 +168,31 @@ test("an account with many findings shows three in full and folds the rest into 
   expect(box!.height).toBeLessThan(viewport.height-40);
 });
 
+test("each account finding kind has its own chart with labelled values",async({page})=>{
+  await page.goto("/accounts/00000002-0000-4000-8000-000000000002");
+  const card=page.getByTestId("account-analysis-card");
+  const early=card.locator('[data-kind="early_pack"]');
+  // В строке — две полосы от нуля с числами, а не точка на шкале без делений.
+  const bars=early.getByTestId("compare-bars");
+  await expect(bars).toHaveAttribute("aria-label",/этот аккаунт — 53×, типичный аккаунт ВК — 3,2×/);
+  await early.getByRole("button",{name:"подробнее"}).click();
+  let details=page.getByTestId("account-finding-details").filter({hasText:"early_pack"});
+  await expect(details.getByRole("img",{name:/Реакций на 1 000 просмотров: в первые часы 124, за остаток суток 4,2/})).toBeVisible();
+  await page.keyboard.press("Escape");
+  const night=card.locator('[data-kind="night_reactions"]');
+  await expect(night.getByTestId("compare-bars")).toHaveAttribute("aria-label",/поздних реакций — 31 %, поздних просмотров — 5 %/);
+  await card.getByTestId("account-findings-more").locator("summary").click();
+  await card.locator('[data-kind="promotion"]').getByRole("button",{name:"подробнее"}).click();
+  details=page.getByTestId("account-finding-details").filter({hasText:"promotion"});
+  await expect(details.getByTestId("finding-stats")).toContainText("24 641");
+  await page.keyboard.press("Escape");
+  await page.goto("/channels/2");
+  const waves=page.getByTestId("account-analysis-card").locator('[data-kind="synchronous_waves"]');
+  await waves.getByRole("button",{name:"подробнее"}).click();
+  details=page.getByTestId("account-finding-details").filter({has:page.getByTestId("wave-calendar")});
+  await expect(details.getByRole("img",{name:"Дни с волной реакций: 5 из 31"})).toBeVisible();
+});
+
 test("a post without signals reads calmly and an unanalyzed post says so",async({page})=>{
   await page.goto("/posts/3");
   await expect(page.getByTestId("anomaly-toggle")).toContainText("Нет признаков");
