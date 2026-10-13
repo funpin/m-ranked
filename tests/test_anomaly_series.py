@@ -212,11 +212,12 @@ def test_exact_views_are_taken_as_they_are():
 
 def test_a_collection_gap_over_the_band_end_is_bridged_by_equal_reads():
     # Пробел сбора 22,7–25,9 ч: реакции на обоих концах 195, значит, и на
-    # 24-м часу ровно 195, хотя интерполяции через пробел нет.
+    # 24-м часу ровно 195. Счётчик не убывает, поэтому такой промежуток —
+    # доказанное плато, а не пробел.
     ages = list(np.arange(0, 22.7 * H, 15 * M)) + [22.7 * H, 25.9 * H]
     reactions = [min(195, int(age // 300)) for age in ages[:-2]] + [195, 195]
     prepared = prepare(post(ages, {"reactions": reactions}), later(26), CADENCE)
-    assert prepared.metrics[Metric.REACTIONS].gaps
+    assert not prepared.metrics[Metric.REACTIONS].gaps
     estimate = engagement_estimate_at(prepared, 24 * H)
     assert (estimate.value, estimate.low, estimate.high) == (195, 195, 195)
 

@@ -16,7 +16,7 @@ import numpy as np
 
 from .domain import Metric, PostSeries
 
-PREPARATION_VERSION = "2.4.0"
+PREPARATION_VERSION = "2.5.0"
 
 MINUTE, HOUR, DAY = 60, 3600, 86400
 
@@ -32,6 +32,18 @@ GAP_FACTOR = 3.0
 # больше — сброс счётчика, через который скорость не считается.
 RESET_FRACTION = 0.2
 RESET_MIN_DROP = 10
+
+# Накопленный счётчик не убывает. Промежуток без замеров с равными краями —
+# доказанное плато: внутри него прироста нет, и он пригоден как обычный
+# участок. До 07.10.2026 сборщик хранил только изменения, и простой клипа
+# МИФИ ВК №35481 был пробелом — у рывка +78 лайков после него не было фона.
+# Промежуток с малым приростом (до 0,2 % значения, не меньше двух) остаётся
+# пробелом: форма роста внутри неизвестна, и интерполяция рисовала бы ровный
+# темп, которого не было (ложные «поздний скачок» и «линейная подача» на
+# слепых карточках 13.10). Он даёт только верхнюю границу темпа —
+# `Grid.quiet_upper`: этого хватает, чтобы доказать тишину до и после рывка.
+PLATEAU_FRACTION = 0.002
+PLATEAU_MIN = 2
 
 # Площадки, где счётчик просмотров репоста принадлежит источнику. Замеры
 # 1 100 репостов MAX и Telegram (12.09–05.10.2026) показали обратное: в первом
@@ -160,6 +172,13 @@ class Grid:
     usable: np.ndarray
     in_gap: np.ndarray
     negative: np.ndarray
+    # Границы темпа ячейки: у пригодной — сам темп; у задевающей только
+    # промежутки с малым приростом — по замерам вокруг ячейки (счётчик не
+    # убывает): сверху весь прирост задетых промежутков, снизу прирост между
+    # замерами внутри неё. NaN — границы неизвестны; None — таких промежутков
+    # нет, границы совпадают с темпом пригодных ячеек.
+    quiet_upper: np.ndarray | None = None
+    quiet_lower: np.ndarray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -577,6 +596,10 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
     expected = np.maximum(cadence.expected_step_seconds(series.platform, ages[:-1]),
                           cadence.expected_step_seconds(series.platform, ages[1:]))
     gap = elapsed > GAP_FACTOR * expected
+    quiet = None
+    if gap.any():
+        quiet = gap & (delta > 0) & (delta <= np.maximum(PLATEAU_MIN, PLATEAU_FRACTION * values[:-1]))
+        gap &= delta != 0
     if covered is not None and covered.size == all_ages.size:
         # Подтверждение журналом годится только для соседних точек: метрика,
         # пропавшая в замерах между ними, — это отсутствие данных именно по ней.
@@ -592,7 +615,9 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
                      count_change_trusted=not bool(missing[index])) for index in gap_index)
     span = float(all_ages[-1] - all_ages[0])
     coverage = 1.0 if span <= 0 else float(elapsed[~unusable].sum()) / span
-    grids = {scale: _grid(scale, ages, values, unusable, reset, negative) for scale in scales}
+    if quiet is not None:
+        quiet &= ~missing
+    grids = {scale: _grid(scale, ages, values, unusable, reset, negative, quiet) for scale in scales}
     return MetricSeries(
         metric, _frozen(ages), _frozen(values), _frozen(flags), gaps, grids, coverage,
         source_counter=views_belong_to_source(series) and metric is Metric.VIEWS,
@@ -600,7 +625,7 @@ def _metric(metric: Metric, all_ages: np.ndarray, raw: np.ndarray, series: PostS
 
 
 def _grid(scale: timedelta, ages: np.ndarray, values: np.ndarray, gap: np.ndarray,
-          reset: np.ndarray, negative: np.ndarray) -> Grid:
+          reset: np.ndarray, negative: np.ndarray, quiet: np.ndarray | None = None) -> Grid:
     width = scale.total_seconds()
     first, last = np.ceil(ages[0] / width), np.floor(ages[-1] / width)
     edges = np.arange(first, last + 1, dtype=np.float64) * width
@@ -624,8 +649,19 @@ def _grid(scale: timedelta, ages: np.ndarray, values: np.ndarray, gap: np.ndarra
 
     in_gap = touched(gap)
     usable = ~(in_gap | touched(reset))
+    if quiet is None or not quiet.any():
+        return Grid(scale, _frozen(edges), _frozen(cumulative), _frozen(rates), _frozen(usable),
+                    _frozen(in_gap), _frozen(touched(negative)))
+    bounded = ~usable & ~touched(gap & ~quiet) & ~touched(reset)
+    span = values[np.minimum(stop, last_segment + 1)] - values[start]
+    inner_first = np.searchsorted(ages, edges[:-1], side="left")
+    inner_last = np.searchsorted(ages, edges[1:], side="right") - 1
+    inner = np.where(inner_last > inner_first,
+                     values[np.clip(inner_last, 0, ages.size - 1)] - values[np.clip(inner_first, 0, ages.size - 1)], 0.0)
+    quiet_upper = np.where(usable, rates, np.where(bounded, span / width, np.nan))
+    quiet_lower = np.where(usable, rates, np.where(bounded, np.maximum(inner, 0.0) / width, np.nan))
     return Grid(scale, _frozen(edges), _frozen(cumulative), _frozen(rates), _frozen(usable),
-                _frozen(in_gap), _frozen(touched(negative)))
+                _frozen(in_gap), _frozen(touched(negative)), _frozen(quiet_upper), _frozen(quiet_lower))
 
 
 def _frozen(array: np.ndarray) -> np.ndarray:
