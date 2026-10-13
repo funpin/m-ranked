@@ -6,7 +6,7 @@ import { ARTICLES } from "./methodology";
 export const SITEMAP_CACHE_SECONDS = 6 * 3600;
 
 const STATIC_PATHS = [
-  "/", "/review", "/findings", "/compare", "/methodology",
+  "/", "/review", "/findings", "/findings/anomalous", "/compare", "/methodology",
   ...ARTICLES.map((article) => `/methodology/${article.slug}`), "/methodology/api",
 ] as const;
 

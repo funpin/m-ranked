@@ -162,7 +162,7 @@ test("findings flags accounts with persistent findings and hides them on request
 test("findings switches to the anomalous ranking with its own sorts and keeps the selection", async ({ page }, info) => {
   await page.goto("/findings?platform=telegram&period=30d&sort=views24");
   await page.getByTestId("findings-view-tabs").getByRole("link", { name: "Аномальные посты" }).click();
-  await expect(page).toHaveURL(/view=anomalous/);
+  await expect(page).toHaveURL(/\/findings\/anomalous\?/);
   await expect(page).toHaveURL(/platform=telegram/);
   await expect(page).toHaveURL(/period=30d/);
   await expect(page.locator('select[name="sort"]')).toHaveValue("anomaly");
@@ -177,10 +177,9 @@ test("findings switches to the anomalous ranking with its own sorts and keeps th
   // Доля ещё не посчитана — прочерк, а не ноль.
   await expect(rows.nth(3).getByRole("button", { name: /Доля ещё не посчитана/ })).toHaveText("—");
   await page.locator('select[name="sort"]').selectOption("anomaly_volume");
-  await expect(page).toHaveURL(/sort=anomaly_volume/);
-  await expect(page).toHaveURL(/view=anomalous/);
+  await expect(page).toHaveURL(/\/findings\/anomalous\?.*sort=anomaly_volume/);
   await page.getByTestId("findings-view-tabs").getByRole("link", { name: "Выше нормы" }).click();
-  await expect(page).not.toHaveURL(/view=/);
+  await expect(page).not.toHaveURL(/anomalous/);
   await expect(page.locator('select[name="sort"]')).toHaveValue("interaction_index");
 });
 

@@ -67,14 +67,13 @@ const SORTS = new Set<string>(FINDINGS_SORT_OPTIONS.map(([value]) => value));
 const ANOMALOUS_SORTS = new Set<string>(ANOMALOUS_SORT_OPTIONS.map(([value]) => value));
 const TYPES: readonly FindingsType[] = FINDINGS_TYPE_OPTIONS.map(([value]) => value);
 
-export function normalizeFindingsQuery(params: SearchParams): ParsedFindingsQuery {
+export function normalizeFindingsQuery(params: SearchParams, view: FindingsView = "above_norm"): ParsedFindingsQuery {
   const institution = parsePositiveLegacyId(first(params.institution) ?? "");
   const mode: FindingsMode = first(params.mode) === "institution" && institution !== null ? "institution" : "all";
   const period = first(params.period) ?? "";
   const sort = first(params.sort) ?? "";
   const requested = new Set(many(params.types));
   const platform = normalizePlatform(params.platform, "all");
-  const view: FindingsView = first(params.view) === "anomalous" ? "anomalous" : "above_norm";
   const resolvedSort: FindingsSort = view === "anomalous"
     ? ANOMALOUS_SORTS.has(sort) ? sort as AnomalousSort : "anomaly"
     : SORTS.has(sort) && sortAvailable(sort as AboveNormSort, platform) ? sort as AboveNormSort : "interaction_index";
@@ -98,7 +97,6 @@ export const DEFAULT_FINDINGS_QUERY: ParsedFindingsQuery = Object.freeze(normali
 
 export function findingsHrefQuery(query: ParsedFindingsQuery): Record<string, QueryValue> {
   return {
-    view: query.view === "anomalous" ? "anomalous" : undefined,
     clean: query.clean ? "1" : undefined,
     mode: query.mode === "institution" ? "institution" : undefined,
     institution: query.institution ?? undefined,
@@ -138,9 +136,14 @@ export function recallInstitution(storage: Pick<Storage, "getItem"> | null): num
   try { return parsePositiveLegacyId(storage?.getItem(INSTITUTION_STORAGE_KEY) ?? ""); } catch { return null; }
 }
 
+/** Адрес раздела: у каждого раздела своя страница и свой бандл. */
+export function findingsPath(view: FindingsView): string {
+  return view === "anomalous" ? "/findings/anomalous" : "/findings";
+}
+
 /** Тот же отбор в другом разделе: сортировка у разделов своя и сбрасывается. */
-export function viewHrefQuery(query: ParsedFindingsQuery, view: FindingsView): Record<string, QueryValue> {
-  return { ...findingsHrefQuery(query), view: view === "anomalous" ? "anomalous" : undefined, sort: undefined, direction: undefined };
+export function viewHrefQuery(query: ParsedFindingsQuery): Record<string, QueryValue> {
+  return { ...findingsHrefQuery(query), sort: undefined, direction: undefined };
 }
 
 /** Комментарии отдают все площадки, кроме MAX; репосты — только ВКонтакте. */

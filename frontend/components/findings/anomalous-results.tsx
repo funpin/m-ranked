@@ -41,7 +41,7 @@ export function AnomalousResults({ page, query }: { page: AnomalousFindingsPage;
           <AnomalousRows rows={group.items} query={query} showInstitution={false} personal={personal} />
           {group.institutionLegacyId !== null ? (
             <Link className="mt-3 inline-block text-sm underline-offset-4 hover:underline" prefetch={false}
-              href={queryHref("/findings", { ...findingsHrefQuery(query), mode: "institution", institution: group.institutionLegacyId, group: undefined })}>
+              href={queryHref("/findings/anomalous", { ...findingsHrefQuery(query), mode: "institution", institution: group.institutionLegacyId, group: undefined })}>
               Все аномальные посты вуза →
             </Link>
           ) : null}
@@ -55,7 +55,7 @@ export function AnomalousResults({ page, query }: { page: AnomalousFindingsPage;
     <AnomalousRows rows={visible} query={query} showInstitution={query.mode === "all"} personal={personal} />
     {shown < page.items.length ? <div className="flex justify-center"><Button type="button" variant="outline" onClick={() => setShown(page.items.length)}>Показать ещё</Button></div>
       : page.nextCursor ? <div className="flex justify-center"><Link className={buttonVariants({ variant: "outline" })} prefetch={false}
-          href={queryHref("/findings", { ...findingsHrefQuery(query), cursor: page.nextCursor })}>Следующие 50</Link></div> : null}
+          href={queryHref("/findings/anomalous", { ...findingsHrefQuery(query), cursor: page.nextCursor })}>Следующие 50</Link></div> : null}
   </div></TooltipProvider>;
 }
 
@@ -140,6 +140,6 @@ function NoAnomalies({ query }: { query: ParsedFindingsQuery }) {
       <EmptyDescription className="text-sm">В рейтинг входят посты с уровнем «выраженная аномалия» и выше.</EmptyDescription>
     </EmptyHeader>
     {wider ? <EmptyContent><Link className={buttonVariants({ variant: "outline" })} prefetch={false}
-      href={queryHref("/findings", { ...findingsHrefQuery(query), period: "30d" })}>Расширить до 30 дней</Link></EmptyContent> : null}
+      href={queryHref("/findings/anomalous", { ...findingsHrefQuery(query), period: "30d" })}>Расширить до 30 дней</Link></EmptyContent> : null}
   </Empty>;
 }

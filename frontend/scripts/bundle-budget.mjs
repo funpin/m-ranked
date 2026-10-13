@@ -26,10 +26,15 @@ const output = process.env.BUNDLE_REPORT ?? "reports/bundle-budget.json";
 // slides, their heatmap and the analysis load as separate chunks near the
 // viewport. Measured 205.8 KiB, 13.9 KiB of it the weekly trend's animated
 // toggle that the page already carried.
+// /findings/anomalous 260 KiB, October 2026: the second section of «Находки»
+// is its own route so the default feed does not carry the ranking (feed
+// 246.2 → 247.5 KiB for the account-findings flag and toggle); the ranking
+// shares the feed's toolbar and measured 252.5 KiB.
 const DEFAULT_BUDGET = 205 * 1024;
 const ROUTE_BUDGETS = new Map([
   ["/compare", 235 * 1024],
   ["/findings", 260 * 1024],
+  ["/findings/anomalous", 260 * 1024],
   ["/publications/[id]", 275 * 1024],
   ["/manage", 260 * 1024],
   ["/accounts/[id]", 215 * 1024],

@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   DEFAULT_FINDINGS_QUERY, findingBadge, findingsHrefQuery, formatIndex, normalizeFindingsQuery,
   recallInstitution, rememberInstitution,
-  findingIndex, isNewSince, periodRange, previousVisit, sortOptionsFor, viewHrefQuery, anomalyGrowthText, hasPersistentFindings,
+  findingIndex, isNewSince, periodRange, previousVisit, sortOptionsFor, viewHrefQuery, anomalyGrowthText, findingsPath, hasPersistentFindings,
 } from "../lib/findings";
 import type { Finding } from "../lib/types";
 
@@ -47,7 +47,7 @@ test("institution mode keeps the id and drops grouping", () => {
 test("href query omits defaults-free empties and repeats types", () => {
   const query = normalizeFindingsQuery({ types: ["photo", "video"], q: "" });
   assert.deepEqual(findingsHrefQuery(query), {
-    view: undefined, clean: undefined, mode: undefined, institution: undefined, platform: "all", period: "7d",
+    clean: undefined, mode: undefined, institution: undefined, platform: "all", period: "7d",
     types: ["photo", "video"], sort: "interaction_index", direction: "desc", group: undefined, q: undefined,
   });
 });
@@ -123,14 +123,15 @@ test("previousVisit pins the last visit for the session and records this one", (
 });
 
 test("anomalous view has its own sorts and keeps the selection across tabs", () => {
-  const query = normalizeFindingsQuery({ view: "anomalous", sort: "interaction_index", platform: "vk", clean: "1", period: "30d" });
+  const query = normalizeFindingsQuery({ sort: "interaction_index", platform: "vk", clean: "1", period: "30d" }, "anomalous");
   assert.equal(query.view, "anomalous");
   assert.equal(query.sort, "anomaly");
   assert.equal(query.clean, true);
-  assert.equal(normalizeFindingsQuery({ view: "anomalous", sort: "anomaly_volume" }).sort, "anomaly_volume");
+  assert.equal(normalizeFindingsQuery({ sort: "anomaly_volume" }, "anomalous").sort, "anomaly_volume");
+  assert.equal(findingsPath("anomalous"), "/findings/anomalous");
+  assert.equal(findingsPath("above_norm"), "/findings");
   assert.equal(normalizeFindingsQuery({ sort: "anomaly_share" }).sort, "interaction_index");
-  const back = viewHrefQuery(query, "above_norm");
-  assert.equal(back.view, undefined);
+  const back = viewHrefQuery(query);
   assert.equal(back.sort, undefined);
   assert.equal(back.platform, "vk");
   assert.equal(back.period, "30d");
