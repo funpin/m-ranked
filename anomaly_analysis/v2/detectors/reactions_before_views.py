@@ -44,7 +44,9 @@ ENDPOINT_MODE = "observed_gap_endpoints_v1"
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
-    if reactions is None or views is None:
+    # Просмотры не аудитория поста (видео ВК): реакции из ленты клипов
+    # «обгоняют» просмотры стены без всякой аномалии.
+    if reactions is None or views is None or views_ratio_unreliable(prepared.series):
         return ()
     grid = reactions.grids.get(SCALE)
     if grid is None or not grid.rates.size:
