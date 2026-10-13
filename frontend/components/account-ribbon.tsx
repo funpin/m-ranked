@@ -72,7 +72,8 @@ export function AccountRibbon({ slides, label }: { slides: readonly RibbonSlide[
     pinned.current = id;
     // Без прокрутки scrollend не придёт: запасной срок снятия закрепа.
     window.setTimeout(() => { if (pinned.current === id) pinned.current = null; }, 1200);
-    root.scrollTo({ left: root.scrollLeft + card.getBoundingClientRect().left - root.getBoundingClientRect().left - 4, behavior: "smooth" });
+    const gutter = Number.parseFloat(getComputedStyle(root).scrollPaddingLeft) || 0;
+    root.scrollTo({ left: root.scrollLeft + card.getBoundingClientRect().left - root.getBoundingClientRect().left - gutter, behavior: "smooth" });
     setActive(id);
   };
   const step = (direction: 1 | -1) => {
@@ -104,11 +105,13 @@ export function AccountRibbon({ slides, label }: { slides: readonly RibbonSlide[
           </button>
         </div>
       </div>
-      {/* Край ленты гаснет, пока за ним есть карточки: обрезанная карточка
-          читается как «дальше есть ещё», а не как поломка вёрстки. */}
+      {/* Лента выходит в поля страницы до её края, а карточки встают по
+          колонке содержимого (scroll-padding). Гаснут только поля: выбранная
+          карточка видна целиком, соседние уходят за край страницы, а не
+          обрезаются тёмной полосой посреди экрана. */}
       <div ref={scroller} tabIndex={0} role="region" aria-label={`${label}: листается вбок`}
-        style={{ maskImage: `linear-gradient(to right, ${edges.start ? "#000" : "transparent"}, #000 ${edges.start ? "0" : "2.5rem"}, #000 calc(100% - ${edges.end ? "0px" : "3.5rem"}), ${edges.end ? "#000" : "transparent"})` }}
-        className="focus-visible:ring-ring/50 -mx-1 flex snap-x snap-mandatory items-stretch gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-1 pb-3 outline-none focus-visible:ring-[3px] [scrollbar-width:thin] motion-reduce:scroll-auto">
+        style={{ maskImage: `linear-gradient(to right, ${edges.start ? "#000" : "transparent"}, #000 ${edges.start ? "0px" : "var(--ribbon-gutter)"}, #000 calc(100% - ${edges.end ? "0px" : "var(--ribbon-gutter)"}), ${edges.end ? "#000" : "transparent"})` }}
+        className="focus-visible:ring-ring/50 mx-[calc(-1*var(--ribbon-gutter))] flex snap-x snap-mandatory scroll-px-(--ribbon-gutter) items-stretch gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-(--ribbon-gutter) pb-3 outline-none [--ribbon-gutter:1rem] focus-visible:ring-[3px] [scrollbar-width:thin] motion-reduce:scroll-auto sm:[--ribbon-gutter:1.5rem] lg:[--ribbon-gutter:2.5rem]">
         {slides.map((slide) => (
           <div key={slide.id} data-ribbon-slide={slide.id} className={cn("flex min-w-0 shrink-0 snap-start flex-col", slide.width)}>
             {slide.content}

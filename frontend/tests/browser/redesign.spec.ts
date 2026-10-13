@@ -242,6 +242,12 @@ test("карточка аккаунта — лента разделов, у пл
   const sections = ribbon.getByRole("navigation", { name: "Разделы карточки" });
   await expect(sections.getByRole("button")).toHaveText(["Обзор", "Динамика", "Анализ", "Сравнение", "Время и форматы"]);
   await expect(sections.getByRole("button", { name: "Обзор" })).toHaveAttribute("aria-current", "true");
+  // Выбранная карточка встаёт по колонке страницы, а не под гаснущий край:
+  // лента уходит в поля, и гаснут только они.
+  await sections.getByRole("button", { name: "Динамика" }).click();
+  await expect(sections.getByRole("button", { name: "Динамика" })).toHaveAttribute("aria-current", "true");
+  const column = (await sections.boundingBox())!.x;
+  await expect.poll(async () => Math.abs((await ribbon.locator('[data-ribbon-slide="dynamics"]').boundingBox())!.x - column)).toBeLessThan(2);
   await sections.getByRole("button", { name: "Сравнение" }).click();
   await expect(sections.getByRole("button", { name: "Сравнение" })).toHaveAttribute("aria-current", "true");
   const standing = page.getByTestId("account-standing");
