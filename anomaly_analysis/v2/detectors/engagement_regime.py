@@ -296,7 +296,8 @@ def _pelt(intervals) -> list[int]:
     """Границы отрезков с постоянной долей (Killick и др., 2012, пуассоновская стоимость).
 
     −log L отрезка при оценке q = R/V без слагаемых, не зависящих от
-    разбиения (Σ R_i log V_i, log R_i!): R − R·log(R/V); при R = 0 — ноль.
+    разбиения (Σ R_i log V_i, log R_i!): R − R·log(R/V); при R = 0 — ноль
+    (R·log(·) с R = 0 даёт ноль и без ветвления).
     """
     n = len(intervals)
     sums_r = np.concatenate(([0.0], np.cumsum([item[2] for item in intervals])))
@@ -304,16 +305,18 @@ def _pelt(intervals) -> list[int]:
     best = np.zeros(n + 1)
     best[0] = -PENALTY
     previous = np.zeros(n + 1, dtype=np.int64)
-    candidates = np.array([0], dtype=np.int64)
+    buffer = np.zeros(n + 1, dtype=np.int64)
+    candidates = buffer[:1]
     for end in range(1, n + 1):
         r = sums_r[end] - sums_r[candidates]
         v = np.maximum(sums_v[end] - sums_v[candidates], 1e-9)
-        safe = np.where(r > 0, r, 1.0)
-        cost = np.where(r > 0, r - r * np.log(safe / v), 0.0)
-        scores = best[candidates] + cost + PENALTY
-        choice = int(np.argmin(scores))
+        scores = best[candidates] + (r - r * np.log(np.maximum(r, 1e-300) / v)) + PENALTY
+        choice = int(scores.argmin())
         best[end], previous[end] = scores[choice], candidates[choice]
-        candidates = np.append(candidates[scores - PENALTY <= best[end]], end)
+        kept = candidates[scores - PENALTY <= best[end]]
+        buffer[:kept.size] = kept
+        buffer[kept.size] = end
+        candidates = buffer[:kept.size + 1]
     bounds = [n]
     while bounds[-1] > 0:
         bounds.append(int(previous[bounds[-1]]))
