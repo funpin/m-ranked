@@ -186,6 +186,19 @@ def test_promoted_posts_are_marked_with_context_status():
     assert finding.metrics["days"] >= 4 and finding.metrics["excessMedian"] >= 5
 
 
+def test_one_stray_reaction_does_not_break_a_promotion_run():
+    """Отклик судится по всей серии: МФТИ №58974 — 1 реакция на 903 просмотра на 11-е сутки."""
+    others = [p for a in range(2, 12) for p in campaign(a)]
+    items = campaign(1, promoted={5, 6})
+    post = items[5]
+    days = tuple((day, views, 40 if index in (2, 4) else reactions, night)
+                 for index, (day, views, reactions, night) in enumerate(post.ledger.days))
+    items[5] = LedgerPost(post.publication_id, post.account_id, post.platform, post.published_at, False,
+                          TailLedger(post.ledger.early, None, None, days=days))
+    (finding,) = of(promotion_findings(items + others, TODAY))
+    assert {member.int % 10_000 for member in finding.members} == {5, 6}
+
+
 def test_promotion_needs_low_response_and_a_night_trough():
     others = [p for a in range(2, 12) for p in campaign(a)]
     assert not of(promotion_findings(campaign(1, promoted={5, 6}, response=1.0) + others, TODAY))

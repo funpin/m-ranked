@@ -79,7 +79,11 @@ FLAT_WINDOW = 4
 # поста остаются как есть.
 PROMOTION_PLATFORMS = frozenset({"vk"})
 PROMOTION_EXCESS = 5.0
-PROMOTION_RESPONSE = 0.35
+# Отклик — по всей серии суток, а не по каждым: реакций в сутки у такого поста
+# единицы, и одна случайная реакция рвала серию (МФТИ №58974: 1 реакция на
+# 903 просмотра — 1,19 нормы аккаунта на 11-е сутки). У пяти постов МФТИ
+# суммарный отклик серии — 0,03–0,57 нормы аккаунта того же возраста.
+PROMOTION_RESPONSE = 0.6
 PROMOTION_NIGHT_SHARE = 0.17
 PROMOTION_MIN_VIEWS = 100
 PROMOTION_MIN_DAYS = 2
@@ -241,8 +245,9 @@ def _post_day_index(post: LedgerPost, day: str) -> int:
 
 
 def _promotion_days(items: Sequence[LedgerPost], start: date,
-                    computed_for: date) -> dict[UUID, list[tuple[int, str, int, int, float]]]:
-    """Сутки постов аккаунта, похожие на продвижение: (k, дата, просмотры, реакции, превышение)."""
+                    computed_for: date) -> dict[UUID, list[tuple[int, str, int, int, float, float]]]:
+    """Сутки постов аккаунта, похожие на продвижение: (k, дата, просмотры, реакции, превышение,
+    ожидаемые реакции при отклике аккаунта)."""
     views_by_k: dict[int, list[int]] = {}
     totals: dict[int, list[int]] = {}
     for post in items:
@@ -255,28 +260,29 @@ def _promotion_days(items: Sequence[LedgerPost], start: date,
     base = {k: sorted(values)[len(values) // 2] for k, values in views_by_k.items()
             if len(values) >= PROMOTION_MIN_BASE_POSTS}
     response = {k: pair[1] / pair[0] for k, pair in totals.items() if pair[0] > 0}
-    found: dict[UUID, list[tuple[int, str, int, int, float]]] = {}
+    found: dict[UUID, list[tuple[int, str, int, int, float, float]]] = {}
     for post in items:
         days = []
         for day, views, reactions, night in post.ledger.days:
             k = _post_day_index(post, day)
             if (k not in base or views < PROMOTION_MIN_VIEWS or not start <= date.fromisoformat(day) < computed_for
-                    or views < PROMOTION_EXCESS * max(base[k], 1)
-                    or reactions > PROMOTION_RESPONSE * response.get(k, 0.0) * views
-                    or night > PROMOTION_NIGHT_SHARE * views):
+                    or views < PROMOTION_EXCESS * max(base[k], 1) or night > PROMOTION_NIGHT_SHARE * views):
                 continue
-            days.append((k, day, views, reactions, views / max(base[k], 1)))
+            # Ожидаемые реакции на эти просмотры при отклике аккаунта того же возраста.
+            days.append((k, day, views, reactions, views / max(base[k], 1), response.get(k, 0.0) * views))
         if days:
             found[post.publication_id] = days
     return found
 
 
-def _longest_run(days: list[tuple[int, str, int, int, float]]) -> list[tuple[int, str, int, int, float]]:
+def _longest_run(days: list[tuple[int, str, int, int, float, float]]) -> list[tuple[int, str, int, int, float, float]]:
+    """Самая длинная серия суток подряд с откликом не выше PROMOTION_RESPONSE нормы в сумме."""
     best: list = []
     current: list = []
     for item in days:
         current = current + [item] if current and item[0] == current[-1][0] + 1 else [item]
-        if len(current) > len(best):
+        if len(current) > len(best) and sum(day[3] for day in current) <= PROMOTION_RESPONSE * sum(
+                day[5] for day in current):
             best = current
     return best
 
