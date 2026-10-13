@@ -63,10 +63,10 @@ def short(series):
     return [s for s in feed_signs(series) if s.render.get("mode") == "short_views"]
 
 
-def kosygin(start=MSK_NOON, platform="vk", reactions=None, rounded=False, after=15, per_view=None):
+def kosygin(start=MSK_NOON, platform="vk", reactions=None, rounded=False, after=15, per_view=None, kind="photo"):
     # ~400/ч три часа с публикации, затем `after`/ч: пакет ~1 200 при органике в десятки.
     return build(platform, [420, 400, 380] + [after] * 21, start=start, reactions=reactions,
-                 rounded=rounded, per_view=per_view)
+                 rounded=rounded, per_view=per_view, kind=kind)
 
 
 def pack_then_rest(pack_reactions, rest_reactions):
@@ -135,3 +135,10 @@ def test_rounded_telegram_pack_is_found_through_bounds():
     (sign,) = short(build("telegram", [1500, 1450, 1500] + [30] * 21, rounded=True,
                           reactions=pack_then_rest(1, 30)))
     assert sign.render["measurementMode"] == "bounded_views"
+
+
+def test_vk_video_keeps_view_shape_checks():
+    # Просмотры стены у клипа можно накрутить так же, как у фото: форма просмотров
+    # проверяется, отключаются только сравнения реакций с просмотрами.
+    (sign,) = short(kosygin(kind="video", reactions=pack_then_rest(0, 30)))
+    assert sign.strength >= 0.95

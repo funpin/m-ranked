@@ -13,7 +13,7 @@ from scipy.stats import chi2
 
 from ..domain import Family, Metric, Sign
 from ..norms import ERV
-from ..series import DAY, PointFlag, PreparedSeries
+from ..series import DAY, PointFlag, PreparedSeries, views_ratio_unreliable
 from .base import DetectorContext, age_text, expected_step, make_sign
 
 ID = "reactions_catch_up"
@@ -41,7 +41,8 @@ EXPLORATORY_CAP = 0.45
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
-    if prepared.series.is_repost or reactions is None or views is None or views.source_counter:
+    if (prepared.series.is_repost or reactions is None or views is None or views.source_counter
+            or views_ratio_unreliable(prepared.series)):
         return ()
     # Aggregate nonoverlapping actual read pairs. Splitting a six-hour change
     # across an interpolated grid halves variance and correlates neighbors.

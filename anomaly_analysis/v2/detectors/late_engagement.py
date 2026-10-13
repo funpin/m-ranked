@@ -26,7 +26,7 @@ import math
 from scipy.stats import poisson
 
 from ..domain import Family, Metric, Sign
-from ..series import PreparedSeries, views_belong_to_source
+from ..series import PreparedSeries, views_ratio_unreliable
 from ..tail_ledger import build_ledger
 from .base import DetectorContext, age_text, make_sign, number
 
@@ -52,7 +52,7 @@ MAX_STRENGTH = 0.6
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     # Просмотры не аудитория поста (видео ВК): доля реакций на просмотр ничего не значит.
-    if views_belong_to_source(prepared.series):
+    if views_ratio_unreliable(prepared.series):
         return ()
     ledger = build_ledger(prepared.series, prepared.analyzed_at)
     late = ledger.late

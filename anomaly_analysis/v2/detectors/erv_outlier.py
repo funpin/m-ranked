@@ -20,7 +20,7 @@ import numpy as np
 from ..domain import Family, Metric, Sign
 from ..norms import ERV
 from ..series import (
-    AGE_BAND_EDGES, PreparedSeries, counter_estimate_at, engagement_estimate_at, views_belong_to_source,
+    AGE_BAND_EDGES, PreparedSeries, counter_estimate_at, engagement_estimate_at, views_ratio_unreliable,
 )
 from .base import DetectorContext, age_text, make_sign
 
@@ -41,7 +41,7 @@ ENGAGEMENT = (Metric.REACTIONS, Metric.COMMENTS, Metric.SHARES)
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     series = prepared.series
     views = series.values.get(Metric.VIEWS)
-    if series.is_repost or context.norm is None or views is None or views_belong_to_source(series):
+    if series.is_repost or context.norm is None or views is None or views_ratio_unreliable(series):
         return ()
     observed = [at for at, value in zip(series.observed_at, views)
                 if value is not None and at <= prepared.analyzed_at]

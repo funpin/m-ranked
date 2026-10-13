@@ -246,17 +246,19 @@ def _typed(platform="vk", kind="video", repost=False):
               {M.VIEWS: (10, 20, 30), M.REACTIONS: (5, 9, 12)}, publication_type=kind)
 
 
-def test_vk_video_views_are_not_the_post_audience():
-    from anomaly_analysis.v2.series import views_belong_to_source, views_not_audience_reason
+def test_vk_video_views_are_not_a_base_for_reaction_ratios():
+    from anomaly_analysis.v2.series import views_belong_to_source, views_not_audience_reason, views_ratio_unreliable
     assert views_not_audience_reason(_typed()) == "vk_video_views"
-    assert views_belong_to_source(_typed())
+    assert views_ratio_unreliable(_typed())
+    # Просмотры стены — собственные: их форма проверяется, как у любого поста.
+    assert not views_belong_to_source(_typed())
 
 
 def test_other_vk_types_and_other_platforms_keep_their_views():
-    from anomaly_analysis.v2.series import views_belong_to_source
-    assert not views_belong_to_source(_typed(kind="photo"))
-    assert not views_belong_to_source(_typed(platform="telegram"))
-    assert not views_belong_to_source(_typed(kind=None))
+    from anomaly_analysis.v2.series import views_ratio_unreliable
+    assert not views_ratio_unreliable(_typed(kind="photo"))
+    assert not views_ratio_unreliable(_typed(platform="telegram"))
+    assert not views_ratio_unreliable(_typed(kind=None))
 
 
 def _tg(views, qualities, step_minutes=30):

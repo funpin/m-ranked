@@ -58,7 +58,17 @@ def views_not_audience_reason(series: PostSeries) -> str | None:
 
 
 def views_belong_to_source(series: PostSeries) -> bool:
-    """Просмотры поста — не его аудитория: репост с чужим счётчиком или видео ВК."""
+    """Просмотры поста — чужая аудитория (репост на площадке из списка выше)."""
+    return views_not_audience_reason(series) == "repost_source_counter"
+
+
+def views_ratio_unreliable(series: PostSeries) -> bool:
+    """Доля реакций на просмотр у поста ничего не значит: просмотры источника или видео ВК.
+
+    Форма самих просмотров при этом проверяется (у видео ВК просмотры стены
+    растут и от купленного притока), отключаются только сравнения реакций с
+    просмотрами.
+    """
     return views_not_audience_reason(series) is not None
 
 

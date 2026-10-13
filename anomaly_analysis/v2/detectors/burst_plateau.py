@@ -18,7 +18,7 @@ from math import log2
 import numpy as np
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PreparedSeries, views_belong_to_source
+from ..series import HOUR, PreparedSeries, views_belong_to_source, views_ratio_unreliable
 from .base import DetectorContext, age_text, make_sign, number
 from .bounded_reaction_burst import _candidate_pairs, _views
 
@@ -96,7 +96,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
 
 def _early(prepared: PreparedSeries) -> Sign | None:
     reactions, views = prepared.metrics.get(Metric.REACTIONS), prepared.metrics.get(Metric.VIEWS)
-    if reactions is None or views is None or views.source_counter:
+    if reactions is None or views is None or views.source_counter or views_ratio_unreliable(prepared.series):
         return None
     # Anchor to the first actual readings, never an invented publication-time
     # zero. A pack already present there is checked by the endpoint detector.

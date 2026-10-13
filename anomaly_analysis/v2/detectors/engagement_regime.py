@@ -30,7 +30,7 @@ import numpy as np
 from scipy.stats import chi2, poisson
 
 from ..domain import Family, Metric, Sign
-from ..series import HOUR, PointFlag, PreparedSeries, views_belong_to_source
+from ..series import HOUR, PointFlag, PreparedSeries, views_ratio_unreliable
 from .base import DetectorContext, age_text, make_sign, number
 
 ID = "engagement_regime"
@@ -129,7 +129,7 @@ class Episode:
 
 def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ...]:
     # Просмотры не аудитория поста (видео ВК): доля реакций на просмотр ничего не значит.
-    if views_belong_to_source(prepared.series):
+    if views_ratio_unreliable(prepared.series):
         return ()
     ages, reactions, views = from_publication(*paired(prepared))
     episodes: list[Episode] = []
