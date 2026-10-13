@@ -117,6 +117,12 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
         if after >= len(rows) or ages[after] - ages[end] > AFTER_HOURS + BOUNDARY_TOLERANCE_HOURS:
             continue
         before = int(np.searchsorted(ages, ages[begin] - BACKGROUND_HOURS, side="right")) - 1
+        if before < 0 or ages[begin] - ages[before] > BACKGROUND_HOURS + BOUNDARY_TOLERANCE_HOURS:
+            # Замера ровно за шесть часов может не быть, когда сборщик хранил
+            # только изменения: фон тогда — от последнего замера не позже чем
+            # за пять часов (МИФИ ВК №35481: 5 ч 55 мин тишины перед +78).
+            before = int(np.searchsorted(
+                ages, ages[begin] - (BACKGROUND_HOURS - BOUNDARY_TOLERANCE_HOURS), side="right")) - 1
         if (before < 0 or ages[begin] - ages[before] > BACKGROUND_HOURS + BOUNDARY_TOLERANCE_HOURS
                 or ages[first_after] - ages[end] > 1.5 or prefix[after+1] != prefix[before]):
             continue
