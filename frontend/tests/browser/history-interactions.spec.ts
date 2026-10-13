@@ -142,6 +142,32 @@ test("account page explains late engagement against the platform without waiting
   await expect(card).not.toContainText(/накрут|мошен/);
 });
 
+test("an account with many findings shows three in full and folds the rest into one line",async({page})=>{
+  await page.goto("/channels/2");
+  const card=page.getByTestId("account-analysis-card");
+  await expect(card.getByTestId("account-analysis-summary")).toContainText("5");
+  await expect(card.getByTestId("account-finding").filter({visible:true})).toHaveCount(3);
+  const more=card.getByTestId("account-findings-more");
+  await expect(more.locator("summary")).toContainText("Ещё 3: Находка 4, Находка 5, Отклик на старые посты");
+  await more.locator("summary").click();
+  await expect(card.getByTestId("account-finding").filter({visible:true})).toHaveCount(6);
+  // Свёрнутые строки — без линейки: она в «подробнее».
+  await expect(more.getByRole("figure")).toHaveCount(0);
+  await more.getByTestId("account-finding").first().getByRole("button",{name:"подробнее"}).click();
+  await expect(page.getByTestId("account-finding-details")).toContainText("Находка 4");
+  await page.keyboard.press("Escape");
+  // «Слишком ровный отклик» — коридор случайности вместо линейки.
+  await more.getByTestId("account-finding").nth(1).getByRole("button",{name:"подробнее"}).click();
+  const details=page.getByTestId("account-finding-details").filter({has:page.getByTestId("reaction-corridor")});
+  await expect(details.getByTestId("reaction-corridor")).toBeVisible();
+  await expect(details.getByRole("img",{name:/0 из 30 постов вне коридора/})).toBeVisible();
+  await expect(details.getByRole("figure").filter({hasText:"типично для"})).toHaveCount(0);
+  // Окно не растягивается на весь экран: высота — по содержимому.
+  const box=await details.boundingBox();
+  const viewport=page.viewportSize()!;
+  expect(box!.height).toBeLessThan(viewport.height-40);
+});
+
 test("a post without signals reads calmly and an unanalyzed post says so",async({page})=>{
   await page.goto("/posts/3");
   await expect(page.getByTestId("anomaly-toggle")).toContainText("Нет признаков");

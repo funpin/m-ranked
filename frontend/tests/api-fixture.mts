@@ -245,6 +245,27 @@ function dashboard(period: "7d" | "30d"): Schema["ComparisonDashboard"] {
 }
 const server = createServer(async (request, response) => {
   const url = new URL(request.url!, "http://127.0.0.1");
+  // Аккаунт канала 2 — «особо отличившийся»: пять находок, карточка сворачивает лишние.
+  const accountFindings = /^\/api\/v1\/accounts\/([0-9a-f-]{36})\/anomaly-findings$/.exec(url.pathname);
+  if (accountFindings) {
+    const accountId = accountFindings[1]!;
+    const many = Number(accountId.slice(0, 8)) === 1 && Number(accountId.slice(-12)) === 2;
+    const kinds: Schema["AccountAnomalyFinding"]["kind"][] = ["late_growth", "level3_share", "synchronous_waves", "view_waves", "regular_reactions"];
+    const items: Schema["AccountAnomalyFinding"][] = many ? kinds.map((kind, index) => ({
+      accountId, accountUsername: "channel2", kind, platform: "vk", status: index < 4 ? 2 : 1,
+      statusLabel: index < 4 ? "устойчиво необычный" : "необычный", title: `Находка ${index + 1}`,
+      headline: `Короткая строка находки ${index + 1}`, summary: `Сводка находки ${index + 1}`, alternatives: "Другие объяснения",
+      figure: index === 3 ? null : { value: 0.4 + index / 10, typical: 0.1, unit: "percent", label: `мера ${index + 1}`, direction: "higher" },
+      membersCount: 10 + index, windowStart: "2026-09-08", windowEnd: "2026-10-08", computedAt: asOf,
+      methodologyVersion: "account-findings-v5",
+      // «Слишком ровный отклик»: 30 постов по три в день, реакции почти одинаковые.
+      metrics: kind === "regular_reactions" ? { dayMinPosts: 3, points72: Array.from({ length: 30 }, (_, post) =>
+        [`2026-09-${String(20 + Math.floor(post / 3)).padStart(2, "0")}`, 38 + ((post * 7) % 5) - 2]) } : {},
+    })) : [];
+    response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    response.end(JSON.stringify({ accountId, datasetRevision: revision, items, disclaimer: "Не доказательство." }));
+    return;
+  }
   const canonical = /^\/api\/v1\/(accounts|publications)\/([0-9a-f-]{36})(\/(publications|history|anomaly-analysis|anomaly-levels|tail-profile))?$/.exec(url.pathname);
   if (canonical) {
     const id = Number(canonical[2]!.slice(-12));

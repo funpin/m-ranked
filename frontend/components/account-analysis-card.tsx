@@ -13,6 +13,7 @@ import { PLATFORM_LABELS } from "@/lib/format";
 import type { AccountAnomalyFinding, AccountAnomalyFindings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { figureComparison as comparison } from "@/lib/finding-figure";
+import { ReactionCorridor } from "@/components/reaction-corridor";
 
 export type FindingsLoad = AccountAnomalyFindings | null;
 
@@ -21,6 +22,9 @@ const METHOD = "Закономерности, которые видны толь
   + "и в первой, и во второй половине окна. Находки считаются отдельно и не меняют уровни постов; посты, из "
   + "которых складывается находка, ссылаются на неё. Необычное бывает и у живой аудитории: находка сама по "
   + "себе не доказывает искусственное происхождение активности или действия университета.";
+
+// Строк находок в карточке целиком; остальные свёрнуты одной строкой.
+const VISIBLE_ROWS = 3;
 
 const ICONS: Record<string, LucideIcon> = {
   early_pack: Package, regular_reactions: ScanLine, late_growth: TrendingUp, late_engagement: History,
@@ -34,6 +38,8 @@ type Figure = NonNullable<AccountAnomalyFinding["figure"]>;
 type Row = {
   key: string; title: string; status: string | null; strong: boolean; finding: boolean; notable: boolean;
   headline: string; figure: Figure | null; details: React.ReactNode;
+  /** «Слишком ровный отклик»: реакции постов против коридора случайности — в «подробнее» вместо линейки. */
+  corridor?: { points: { day: string; reactions: number }[]; dayMinPosts: number } | null;
 };
 
 /** Карточка ленты: находки сразу видны строками с линейкой «типично ↔ этот
@@ -61,11 +67,25 @@ export function AccountAnalysisCard({ findings, tail, platform }: {
         {found.length ? <StatusPill tone="amber">{found.length} {plural(found.length)}</StatusPill> : null}
         <MethodNote title="Анализ аккаунта">{METHOD}</MethodNote>
       </div>
-      {rows.length ? (
+      {rows.length ? (<>
         <ul className="divide-border -mx-1 mt-2 divide-y">
-          {rows.map((row) => <AnalysisRow key={row.key} row={row} platform={platform} />)}
+          {rows.slice(0, VISIBLE_ROWS).map((row) => <AnalysisRow key={row.key} row={row} platform={platform} />)}
         </ul>
-      ) : (
+        {rows.length > VISIBLE_ROWS ? (
+          // У «особо отличившихся» аккаунтов (МИРЭА, СКФУ) пять-шесть находок:
+          // полностью — первые три, остальные одной строкой, линейка — в «подробнее».
+          <details className="group -mx-1 border-t" data-testid="account-findings-more">
+            <summary className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex cursor-pointer list-none items-center gap-1 rounded-md px-1 py-2 text-xs focus-visible:ring-[3px] focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+              <ChevronRight className="size-3 transition-transform group-open:rotate-90" aria-hidden="true" />
+              <span className="group-open:hidden">Ещё {rows.length - VISIBLE_ROWS}: {rows.slice(VISIBLE_ROWS).map((row) => row.title).join(", ")}</span>
+              <span className="hidden group-open:inline">Свернуть</span>
+            </summary>
+            <ul className="divide-border divide-y">
+              {rows.slice(VISIBLE_ROWS).map((row) => <AnalysisRow key={row.key} row={row} platform={platform} compact />)}
+            </ul>
+          </details>
+        ) : null}
+      </>) : (
         <p className="text-muted-foreground mt-auto flex items-center gap-1.5 py-6 text-xs">
           <CircleCheck className="size-4" aria-hidden="true" />Признаков, общих для многих постов, не найдено.
         </p>
@@ -74,7 +94,7 @@ export function AccountAnalysisCard({ findings, tail, platform }: {
   );
 }
 
-function AnalysisRow({ row, platform }: { row: Row; platform: string }) {
+function AnalysisRow({ row, platform, compact = false }: { row: Row; platform: string; compact?: boolean }) {
   const Icon = ICONS[row.key] ?? History;
   return (
     <li data-testid="account-finding" data-kind={row.key} className="grid min-w-0 gap-2 px-1 py-3">
@@ -85,7 +105,7 @@ function AnalysisRow({ row, platform }: { row: Row; platform: string }) {
             <span className="font-semibold">{row.title}</span>
             {row.status ? <StatusPill tone={row.strong ? "amber" : "neutral"}>{row.status}</StatusPill> : null}
           </div>
-          <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">{row.headline}</p>
+          <p className={cn("text-muted-foreground mt-0.5 text-xs leading-relaxed", compact && "line-clamp-1")} title={compact ? row.headline : undefined}>{row.headline}</p>
         </div>
         {row.details ? (
           <Dialog>
@@ -97,13 +117,14 @@ function AnalysisRow({ row, platform }: { row: Row; platform: string }) {
                 <DialogTitle className="flex items-center gap-2"><Icon className="text-chart-3 size-4" aria-hidden="true" />{row.title}</DialogTitle>
                 <DialogDescription>{row.headline}</DialogDescription>
               </DialogHeader>
-              {row.figure ? <Ruler figure={row.figure} platform={platform} muted={!row.finding} showGap={row.notable} /> : null}
+              {row.corridor ? <ReactionCorridor points={row.corridor.points} dayMinPosts={row.corridor.dayMinPosts} />
+                : row.figure ? <Ruler figure={row.figure} platform={platform} muted={!row.finding} showGap={row.notable} /> : null}
               <div className="grid gap-3 text-xs leading-relaxed">{row.details}</div>
             </DialogContent>
           </Dialog>
         ) : null}
       </div>
-      {row.figure ? <div className="pl-6"><Ruler figure={row.figure} platform={platform} muted={!row.finding} showGap={row.notable} /></div> : null}
+      {row.figure && !compact ? <div className="pl-6"><Ruler figure={row.figure} platform={platform} muted={!row.finding} showGap={row.notable} /></div> : null}
     </li>
   );
 }
@@ -148,6 +169,7 @@ function buildRows(findings: FindingsLoad, tail: TailProfileLoad): Row[] {
   const rows: Row[] = (findings?.items ?? []).map((item) => ({
     key: item.kind, title: item.title ?? item.kind, status: item.statusLabel, strong: item.status === 2, finding: true, notable: true,
     headline: item.headline ?? item.summary ?? "", figure: item.figure,
+    corridor: item.kind === "regular_reactions" ? corridorPoints(item.metrics) : null,
     details: <>
       {item.summary ? <p>{item.summary}.</p> : null}
       {item.kind === "late_engagement" && tail ? <TailDetails tail={tail} /> : null}
@@ -174,6 +196,15 @@ function buildRows(findings: FindingsLoad, tail: TailProfileLoad): Row[] {
     });
   }
   return rows;
+}
+
+function corridorPoints(metrics: Record<string, unknown> | undefined): Row["corridor"] {
+  const raw = metrics?.points72;
+  if (!Array.isArray(raw)) return null;
+  const points = raw.flatMap((item) => Array.isArray(item) && typeof item[0] === "string" && typeof item[1] === "number"
+    ? [{ day: item[0], reactions: item[1] }] : []);
+  const dayMinPosts = typeof metrics?.dayMinPosts === "number" ? metrics.dayMinPosts : 3;
+  return points.length >= 2 ? { points, dayMinPosts } : null;
 }
 
 function TailDetails({ tail }: { tail: NonNullable<TailProfileLoad> }) {

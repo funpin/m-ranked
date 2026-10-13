@@ -108,6 +108,7 @@ REGULAR_HALF_EXTRA = 0.10
 # ~95 реакций на пост до 19.09 и ~250 после) раздувает разброс за окно, хотя
 # посты одного дня по-прежнему получают почти одно и то же число реакций.
 REGULAR_DAY_MIN_POSTS = 3
+REGULAR_POINTS_MAX = 240
 REGULAR_MIN_DAYS = 8
 REGULAR_HALF_MIN_DAYS = 4
 # Недоразброс: χ² разброса внутри дней ниже 1-го перцентиля (z = −2,326) при
@@ -390,6 +391,11 @@ def _regular_stats(items: Sequence[LedgerPost], min_posts: int = REGULAR_MIN_POS
         "sdLogViews": round(math.sqrt(sum((value - view_mean) ** 2 for value in view_logs) / len(view_logs)), 4),
         "medianReactions": median(reactions), "medianViews": median(views),
         "p10Reactions": ordered[len(ordered) // 10], "p90Reactions": ordered[(9 * len(ordered)) // 10],
+        # Реакции к 72 ч по постам в порядке публикации — для графика «коридор
+        # случайности» на странице аккаунта (сутки МСК, реакции).
+        "points72": [[post.published_at.astimezone(MOSCOW).date().isoformat(), mark.reactions]
+                     for post, mark in sorted(rows, key=lambda row: row[0].published_at)][-REGULAR_POINTS_MAX:],
+        "dayMinPosts": REGULAR_DAY_MIN_POSTS,
         "members": [post.publication_id for post, _ in rows],
     }
 

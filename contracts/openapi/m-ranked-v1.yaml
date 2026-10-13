@@ -6115,7 +6115,7 @@ components:
         windowEnd: { type: string, format: date }
         computedAt: { type: string, format: date-time }
         methodologyVersion: { type: string }
-        metrics: { type: object }
+        metrics: { type: object, additionalProperties: true, description: 'Kind-specific measures; regular_reactions carries points72 — [MSK day, reactions at 72 h] of its posts in publication order.' }
     AccountAnomalyFindings:
       type: object
       additionalProperties: false
@@ -6125,7 +6125,7 @@ components:
         datasetRevision: { type: integer, format: int64, minimum: 0 }
         items:
           type: array
-          maxItems: 7
+          maxItems: 12
           items: { $ref: '#/components/schemas/AccountAnomalyFinding' }
         disclaimer: { type: string }
     AccountTailProfile:
