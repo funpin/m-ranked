@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import timedelta
 
 import numpy as np
@@ -62,6 +63,17 @@ MSK_OFFSET = 3 * HOUR
 # Telegram (01.10) шла с 6-го по 40-й час, а признак закрывал 6–12 ч: дальше
 # начиналась ночь, и обрыв там не засчитывается, а ступеньки у продолжения нет.
 WIDEN_TOLERANCE = 1.5
+# Подача МИСИС шла с паузами: 12-й, 28–29-й, 36-й часы — по 200–400 вместо
+# 1 200, а на 19-м часу был пробел сбора. Пауза или пробел до двух часов, за
+# которыми темп возвращается в полосу, — та же подача: участок уже доказан,
+# расширение только показывает эпизод. Без этого эпизод 6–43 ч рвался на
+# куски, а продолжения без ступеньки и обрыва не доказываются.
+WIDEN_PAUSE = 2
+# Фон коридора «1,2K» — худший случай по сплошному отрезку дневных часов: у
+# каждого часа по отдельности погрешность ±2 деления (±200 при «1.9K»), это
+# порядок самого фона. Берётся наименьший худший темп среди отрезков по три
+# часа: медиана шести ячеек ниже X ровно тогда, когда ниже X хотя бы три.
+BACKGROUND_RUN = 3
 # Незначимый по объёму участок не признак: минимум 20 % значения на начало.
 MIN_SHARE = 0.2
 MIN_DELTA = {Metric.VIEWS: 100, Metric.REACTIONS: 30}
@@ -456,13 +468,57 @@ def _after(prepared, grid, rates, valid, end) -> np.ndarray:
 
 
 def _widen(rates: np.ndarray, valid: np.ndarray, begin: int, end: int, mean: float) -> tuple[int, int]:
-    """Расширить участок на соседние пригодные ячейки с темпом в пределах ×WIDEN_TOLERANCE."""
+    """Расширить участок на соседние пригодные ячейки с темпом в пределах ×WIDEN_TOLERANCE.
+
+    Пауза или пробел сбора не длиннее WIDEN_PAUSE ячеек входит в эпизод, если
+    за ними темп возвращается в полосу.
+    """
     low, high = mean / WIDEN_TOLERANCE, mean * WIDEN_TOLERANCE
-    while begin > 0 and valid[begin - 1] and low <= rates[begin - 1] <= high:
-        begin -= 1
-    while end < rates.size and valid[end] and low <= rates[end] <= high:
-        end += 1
-    return begin, end
+    left = _stretch(rates, valid, begin - 1, -1, low, high)
+    right = _stretch(rates, valid, end, 1, low, high)
+    return (begin if left is None else left), (end if right is None else right + 1)
+
+
+def _stretch(rates: np.ndarray, valid: np.ndarray, cell: int, step: int, low: float, high: float) -> int | None:
+    """Дальняя ячейка в полосе, достижимая из `cell` с паузами не длиннее WIDEN_PAUSE."""
+    reached, pause = None, 0
+    while 0 <= cell < rates.size:
+        if valid[cell] and low <= rates[cell] <= high:
+            reached, pause = cell, 0
+        else:
+            pause += 1
+            if pause > WIDEN_PAUSE:
+                break
+        cell += step
+    return reached
+
+
+def _background_upper(bounded, cells: Sequence[float], width: float) -> float | None:
+    """Наименьший худший темп фона в час по сплошным отрезкам из BACKGROUND_RUN дневных ячеек.
+
+    Отрезок короче, если дневных ячеек подряд меньше (ночь их разрывает).
+    None — по краям отрезков нет замеров.
+    """
+    starts = sorted(cells)
+    if not starts:
+        return None
+    runs, current = [], [starts[0]]
+    for start in starts[1:]:
+        if start - current[-1] <= width + 1.0:
+            current.append(start)
+        else:
+            runs.append(current)
+            current = [start]
+    runs.append(current)
+    size = min(BACKGROUND_RUN, max(len(run) for run in runs))
+    best = None
+    for run in runs:
+        for first in range(len(run) - size + 1):
+            bounds = growth_bounds(bounded, run[first], run[first + size - 1] + width)
+            if bounds is not None:
+                rate = bounds[1] / (size * width) * HOUR
+                best = rate if best is None else min(best, rate)
+    return best
 
 
 def _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, stepped_down,
@@ -470,11 +526,12 @@ def _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, ste
     """Ступенька и обрыв по худшему случаю внутри коридоров «1,2K».
 
     Прирост участка — наименьший возможный, фон и хвост — наибольшие. Фон —
-    те же дневные ячейки перед участком, что и у точных счётчиков, каждая по
-    наибольшему возможному приросту, и их медиана. Среднее за шесть часов до
-    участка захватывало крутой старт поста: подача с 6-го часа (МИСИС, 01.10)
-    ступенькой не признавалась. None — при любых значениях в коридорах ни
-    ступеньки, ни обрыва нет.
+    те же дневные ячейки перед участком, что и у точных счётчиков, по
+    сплошным отрезкам (`_background_upper`). Среднее за шесть часов до участка
+    захватывало крутой старт поста, а худший случай каждого часа отдельно
+    раздувал фон округлением: на настоящем ряде МИСИС (01.10) — 415/ч против
+    328/ч по отрезку, и подача с 6-го часа теряла признак. None — при любых
+    значениях в коридорах ни ступеньки, ни обрыва нет.
     """
     growth = growth_bounds(bounded, start_age, end_age)
     if growth is None:
@@ -485,9 +542,8 @@ def _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, ste
         tail = growth_bounds(bounded, end_age, end_age + AFTER_CELLS * width)
         stepped_down = tail is not None and mean >= STEP_DOWN * max(tail[1] / (AFTER_CELLS * width) * HOUR, 1.0)
     if stepped_up:
-        uppers = [growth_bounds(bounded, cell_start, cell_start + width) for cell_start in background_cells]
-        stepped_up = bool(uppers) and all(item is not None for item in uppers) and mean >= STEP_UP * max(
-            float(np.median([item[1] for item in uppers])) / width * HOUR, 1.0)
+        upper = _background_upper(bounded, background_cells, width)
+        stepped_up = upper is not None and mean >= STEP_UP * max(upper, 1.0)
     if not stepped_up and not stepped_down:
         return None
     return delta, stepped_up, stepped_down

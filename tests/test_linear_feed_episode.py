@@ -11,6 +11,8 @@ import math
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+import numpy as np
+
 from anomaly_analysis.v2.domain import Metric, PostSeries
 from anomaly_analysis.v2.levels import assess
 from anomaly_analysis.v2.series import CollectionCadence
@@ -61,3 +63,41 @@ def test_organic_rounded_post_has_no_feed() -> None:
     series = _post(0)
     verdict = assess(series, analyzed_at=series.observed_at[-1], cadence=CollectionCadence())
     assert not [sign for sign in verdict.signs if sign.pattern == 1]
+
+
+# Почасовой прирост просмотров настоящего поста МИСИС в Telegram (01.10.2026):
+# пологий старт, подача ~1 200/ч с 6-го по 43-й час с паузами на 12-м, 28–29-м
+# и 36-м часах, затем обрыв. На 19-м часу сбора не было.
+REAL_HOURLY = (718, 217, 385, 180, 380, 430, 1140, 1230, 1220, 1220, 1210, 1220, 280, 1070, 1100, 1200, 1300,
+               1200, 1200, 500, 1600, 1400, 1200, 1200, 1100, 1300, 1200, 1200, 400, 400, 1000, 1100, 1200, 1300,
+               1100, 1200, 400, 1000, 1200, 1200, 1200, 1200, 1200, 600) + (0,) * 12
+COLLECTION_GAP = (19.0, 20.0)
+
+
+def _real_shape() -> PostSeries:
+    cumulative = np.concatenate(([0.0], np.cumsum(REAL_HOURLY)))
+    observed, views, reactions, qualities = [], [], [], []
+    for minute in range(5, 60 * len(REAL_HOURLY), 5):
+        age = minute / 60
+        if COLLECTION_GAP[0] < age < COLLECTION_GAP[1]:
+            continue
+        value, quality = _display(float(np.interp(age, np.arange(cumulative.size), cumulative)))
+        observed.append(PUBLISHED + timedelta(hours=age))
+        views.append(max(value, views[-1]) if views else value)
+        qualities.append(quality)
+        reactions.append(min(30, minute // 10))
+    return PostSeries(uuid4(), uuid4(), "telegram", PUBLISHED, False, tuple(observed),
+                      {Metric.VIEWS: tuple(views), Metric.REACTIONS: tuple(reactions)},
+                      qualities={Metric.VIEWS: tuple(qualities), Metric.REACTIONS: ("exact",) * len(views)})
+
+
+def test_real_feed_with_pauses_and_a_gap_is_one_episode() -> None:
+    """Худший случай каждого часа по отдельности раздувал фон округлением
+    (415/ч против 328/ч по отрезку), и признак терялся; паузы и пробел рвали
+    эпизод на куски."""
+    series = _real_shape()
+    verdict = assess(series, analyzed_at=series.observed_at[-1], cadence=CollectionCadence())
+    feeds = [sign for sign in verdict.signs if sign.pattern == 1 and sign.metric is Metric.VIEWS]
+    assert len(feeds) == 1 and int(verdict.level) >= 2
+    start, end = _hours(series, feeds[0])
+    assert start <= 6.5 and end >= 42.5
