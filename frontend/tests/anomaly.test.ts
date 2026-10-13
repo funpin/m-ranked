@@ -157,9 +157,24 @@ test("initial plateau shows the actual first count and highest status even witho
   const chart = miniChart(initial, [], PUBLISHED);
   assert.equal(chart.type, "bars");
   if (chart.type === "bars") {
-    assert.deepEqual(chart.bars.map(item => item.value), [105,117,122,136]);
-    assert.match(chart.bars[0].label, /первый замер/);
-    assert.match(chart.bars[2].label, /плато/);
+    assert.deepEqual(chart.bars.map(item => item.value), [0,105,117,122,136]);
+    assert.equal(chart.bars[0].label, "публикация");
+    assert.match(chart.bars[1].label, /первый замер · 6 мин: минимум/);
+    assert.equal(chart.bars[1].highlight, true);
+    assert.match(chart.bars[3].label, /плато · 3 ч/);
+  }
+});
+
+test("initial plateau with exact counts starts from zero at publication and keeps one bar per reading", () => {
+  const exact = signal({ pattern: 9, metric: "reactions", render: {
+    kind: "bounded_burst", mode: "initial_plateau", startAge: 240, endAge: 11340,
+    beforeRange: [100,100], afterRange: [105,105], timingUnknown: true,
+  } });
+  const chart = miniChart(exact, [], PUBLISHED);
+  assert.equal(chart.type, "bars");
+  if (chart.type === "bars") {
+    assert.deepEqual(chart.bars.map(item => [item.label, item.value, item.highlight]),
+      [["публикация", 0, false], ["первый замер · 4 мин", 100, true], ["плато · 3 ч", 105, false]]);
   }
 });
 

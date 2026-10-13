@@ -152,12 +152,28 @@ export function miniChart(signal: AnomalySignal, rows: readonly HistorySnapshot[
       const item = (render as Record<string, unknown>)[key];
       return Array.isArray(item) && typeof item[index] === "number" ? item[index] : 0;
     };
-    const initial = render.mode === "initial_plateau";
+    if (render.mode === "initial_plateau") {
+      // Счётчик начинается с нуля в момент публикации: скачок — от нуля до
+      // первого замера, а не от первого замера к плато (МИРЭА ВК: 100 реакций
+      // через 4 минуты, затем +5 за три часа). Равные границы — один столбец.
+      const span = (key: string, label: string, highlight: boolean) => {
+        const low = range(key, 0), high = range(key, 1);
+        return low === high ? [{ label, value: low, highlight }]
+          : [{ label: `${label}: минимум`, value: low, highlight }, { label: `${label}: максимум`, value: high, highlight }];
+      };
+      const first = numberAt(render, "startAge");
+      const plateau = numberAt(render, "endAge");
+      return { type: "bars", percent: false, bars: [
+        { label: "публикация", value: 0, highlight: false },
+        ...span("beforeRange", first ? `первый замер · ${scaleText(first)}` : "первый замер", true),
+        ...span("afterRange", plateau ? `плато · ${scaleText(plateau)}` : "плато", false),
+      ] };
+    }
     return { type: "bars", percent: false, bars: [
-      { label: initial ? "первый замер: минимум" : "до: минимум", value: range("beforeRange", 0), highlight: false },
-      { label: initial ? "первый замер: максимум" : "до: максимум", value: range("beforeRange", 1), highlight: false },
-      { label: initial ? "плато: минимум" : "после: минимум", value: range("afterRange", 0), highlight: true },
-      { label: initial ? "плато: максимум" : "после: максимум", value: range("afterRange", 1), highlight: true },
+      { label: "до: минимум", value: range("beforeRange", 0), highlight: false },
+      { label: "до: максимум", value: range("beforeRange", 1), highlight: false },
+      { label: "после: минимум", value: range("afterRange", 0), highlight: true },
+      { label: "после: максимум", value: range("afterRange", 1), highlight: true },
     ] };
   }
   if (render.kind === "reference") {
