@@ -19,13 +19,15 @@ from typing import Any, Sequence
 from uuid import UUID
 
 from .account_findings import WINDOW_DAYS, AccountFinding, LedgerPost, _halves_by_time
+from .tail_ledger import MOSCOW
 
-REACH_KINDS = ("view_packs", "view_waves", "level3_share", "flat_daily_views")
+REACH_KINDS = ("view_packs", "view_waves", "level3_share", "flat_daily_views", "promotion")
 TITLES = {
     "view_packs": "Повторяющиеся пакеты просмотров",
     "view_waves": "Волны просмотров по стене",
     "level3_share": "Много постов с признаками искусственной активности",
     "flat_daily_views": "Просмотры без суточного ритма",
+    "promotion": "Похоже на продвижение записей",
 }
 ALTERNATIVES = {
     "view_packs": "Регулярное платное продвижение записей; встраивание на сайт или рассылка со ссылкой",
@@ -33,6 +35,8 @@ ALTERNATIVES = {
     "level3_share": ("Сводка признаков постов, новых свидетельств не добавляет; методика может "
                      "систематически ошибаться на особом формате аккаунта"),
     "flat_daily_views": "Аудитория в нескольких часовых поясах; круглосуточный показ на экранах",
+    "promotion": ("Платное продвижение записи: реклама ВК засчитывает показы как просмотры; подборка "
+                  "или рекомендация площадки; ссылка на запись с внешнего ресурса"),
 }
 
 # Пакеты просмотров: пост с признаком 1 режима «short_views» не слабее
@@ -63,6 +67,24 @@ FLAT_MIN_VIEWS = 20_000
 FLAT_AMPLITUDE = 0.5
 FLAT_COHORT_FACTOR = 1.5
 FLAT_WINDOW = 4
+
+
+# Похоже на продвижение (только ВК): сутки поста, когда просмотров во много
+# раз больше, чем у постов аккаунта в те же сутки жизни, реакций на просмотр
+# мало, а ночью (00–06 МСК) просмотров почти нет — показы идут по суточному
+# ритму аудитории. Калибровка — пять постов МФТИ с подтверждённой рекламой
+# 07.10–12.10.2026 (research/findings-2026-10-13). Ровный круглосуточный пакет
+# ночную долю не проходит. Это контекст поста, а не уровень аномалии: статус
+# всегда 1 (аккаунт не скрывается фильтром устойчивых находок), признаки
+# поста остаются как есть.
+PROMOTION_PLATFORMS = frozenset({"vk"})
+PROMOTION_EXCESS = 5.0
+PROMOTION_RESPONSE = 0.35
+PROMOTION_NIGHT_SHARE = 0.17
+PROMOTION_MIN_VIEWS = 100
+PROMOTION_MIN_DAYS = 2
+# Базовая линия суток жизни — медиана хотя бы пяти постов аккаунта.
+PROMOTION_MIN_BASE_POSTS = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,6 +236,89 @@ def wave_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[Accou
     return result
 
 
+def _post_day_index(post: LedgerPost, day: str) -> int:
+    return (date.fromisoformat(day) - post.published_at.astimezone(MOSCOW).date()).days
+
+
+def _promotion_days(items: Sequence[LedgerPost], start: date,
+                    computed_for: date) -> dict[UUID, list[tuple[int, str, int, int, float]]]:
+    """Сутки постов аккаунта, похожие на продвижение: (k, дата, просмотры, реакции, превышение)."""
+    views_by_k: dict[int, list[int]] = {}
+    totals: dict[int, list[int]] = {}
+    for post in items:
+        for day, views, reactions, _ in post.ledger.days:
+            k = _post_day_index(post, day)
+            views_by_k.setdefault(k, []).append(views)
+            pair = totals.setdefault(k, [0, 0])
+            pair[0] += views
+            pair[1] += reactions
+    base = {k: sorted(values)[len(values) // 2] for k, values in views_by_k.items()
+            if len(values) >= PROMOTION_MIN_BASE_POSTS}
+    response = {k: pair[1] / pair[0] for k, pair in totals.items() if pair[0] > 0}
+    found: dict[UUID, list[tuple[int, str, int, int, float]]] = {}
+    for post in items:
+        days = []
+        for day, views, reactions, night in post.ledger.days:
+            k = _post_day_index(post, day)
+            if (k not in base or views < PROMOTION_MIN_VIEWS or not start <= date.fromisoformat(day) < computed_for
+                    or views < PROMOTION_EXCESS * max(base[k], 1)
+                    or reactions > PROMOTION_RESPONSE * response.get(k, 0.0) * views
+                    or night > PROMOTION_NIGHT_SHARE * views):
+                continue
+            days.append((k, day, views, reactions, views / max(base[k], 1)))
+        if days:
+            found[post.publication_id] = days
+    return found
+
+
+def _longest_run(days: list[tuple[int, str, int, int, float]]) -> list[tuple[int, str, int, int, float]]:
+    best: list = []
+    current: list = []
+    for item in days:
+        current = current + [item] if current and item[0] == current[-1][0] + 1 else [item]
+        if len(current) > len(best):
+            best = current
+    return best
+
+
+def promotion_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[AccountFinding]:
+    """Посты ВК, у которых не меньше двух суток подряд просмотры как у продвигаемой записи."""
+    start = computed_for - timedelta(days=WINDOW_DAYS)
+    by_account = {account: [post for post in items if post.platform in PROMOTION_PLATFORMS and post.ledger.days]
+                  for account, items in _own(posts, computed_for).items()}
+    candidates = {account: _promotion_days(items, start, computed_for)
+                  for account, items in by_account.items() if items}
+    # Сутки, когда «продвижение» видно у половины аккаунтов площадки, — событие
+    # площадки (обновление счётчиков), а не аккаунта.
+    busy: dict[str, int] = {}
+    for found in candidates.values():
+        for day in {item[1] for days in found.values() for item in days}:
+            busy[day] = busy.get(day, 0) + 1
+    limit = max(2, WAVE_PLATFORM_SHARE * len(candidates))
+    result = []
+    for account, found in candidates.items():
+        members, days_all, views_in, reactions_in, excesses = set(), set(), 0, 0, []
+        for publication, days in found.items():
+            run = _longest_run([item for item in days if busy[item[1]] < limit])
+            if len(run) < PROMOTION_MIN_DAYS:
+                continue
+            members.add(publication)
+            days_all |= {item[1] for item in run}
+            views_in += sum(item[2] for item in run)
+            reactions_in += sum(item[3] for item in run)
+            excesses += [item[4] for item in run]
+        if not members:
+            continue
+        ordered = sorted(days_all)
+        excesses.sort()
+        metrics = {"posts": len(members), "days": len(ordered), "firstDay": ordered[0], "lastDay": ordered[-1],
+                   "views": views_in, "reactions": reactions_in,
+                   "excessMedian": round(excesses[len(excesses) // 2], 1)}
+        result.append(AccountFinding(account, by_account[account][0].platform, "promotion", 1, start, computed_for,
+                                     metrics, tuple(sorted(members, key=str))))
+    return result
+
+
 def _amplitude(items: Sequence[LedgerPost]) -> tuple[float, int] | None:
     """Самое тихое окно четырёх часов к самому активному и начало тихого (час UTC)."""
     views = [0] * 24
@@ -268,6 +373,10 @@ def _number(value: int) -> str:
     return f"{value:,}".replace(",", " ")
 
 
+def _day(value: str) -> str:
+    return date.fromisoformat(value).strftime("%d.%m")
+
+
 def summary(finding: AccountFinding) -> str:
     """Одна фраза с числами — для карточки аккаунта и ссылки со страницы поста."""
     data = finding.metrics
@@ -279,6 +388,11 @@ def summary(finding: AccountFinding) -> str:
         return (f"В {data['days']} дн. ({data['hours']} ч) последние {data['latestN']} постов одновременно "
                 f"получали просмотры почти без реакций: +{_number(data['views'])} просмотров, "
                 f"{_number(data['reactions'])} реакций; это {_percent(data['viewShare'])} просмотров постов окна")
+    if finding.kind == "promotion":
+        return (f"У {data['posts']} пост. в {data['days']} дн. ({_day(data['firstDay'])}–{_day(data['lastDay'])}) "
+                f"просмотров в {data['excessMedian']:g} раза больше, чем у постов аккаунта того же возраста, "
+                f"по суточному ритму аудитории и почти без реакций: +{_number(data['views'])} просмотров, "
+                f"{_number(data['reactions'])} реакций. Пометка — контекст поста, а не уровень аномалии")
     if finding.kind == "level3_share":
         return (f"{data['level3']} из {data['posts']} постов за {WINDOW_DAYS} дней на уровне 3 (признаки "
                 f"{', '.join(map(str, data['patterns']))}); у аккаунтов площадки — не больше "
@@ -294,6 +408,8 @@ def headline(finding: AccountFinding) -> str:
         return f"Пакеты просмотров с публикации у {_percent(data['share'])} постов"
     if finding.kind == "view_waves":
         return f"Волны просмотров по последним {data['latestN']} постам"
+    if finding.kind == "promotion":
+        return f"Похоже на продвижение: {data['posts']} пост. за {data['days']} дн."
     if finding.kind == "level3_share":
         return f"{_percent(data['share'])} постов на уровне 3"
     return "Просмотры идут круглые сутки"
@@ -302,7 +418,7 @@ def headline(finding: AccountFinding) -> str:
 def figure(finding: AccountFinding) -> dict[str, Any] | None:
     """Аккаунт против 90-го перцентиля площадки — одна мера для инфографики."""
     data = finding.metrics
-    if finding.kind == "view_waves":
+    if finding.kind in ("view_waves", "promotion"):
         return None
     labels = {"view_packs": "постов с пакетом просмотров", "level3_share": "постов на уровне 3",
               "flat_daily_views": "тихие часы к активным"}

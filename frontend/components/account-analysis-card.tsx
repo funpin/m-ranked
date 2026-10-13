@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import {
-  ArrowUpFromLine, ChevronRight, CircleCheck, Eye, History, Layers, Moon, Package, ScanLine, TrendingUp, TriangleAlert, Waves,
+  ArrowUpFromLine, ChevronRight, CircleCheck, Eye, History, Layers, Megaphone, Moon, Package, ScanLine, TrendingUp, TriangleAlert, Waves,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -25,7 +25,7 @@ const METHOD = "Закономерности, которые видны толь
 const ICONS: Record<string, LucideIcon> = {
   early_pack: Package, regular_reactions: ScanLine, late_growth: TrendingUp, late_engagement: History,
   synchronous_waves: Layers, engagement_shift: ArrowUpFromLine, night_reactions: Moon,
-  view_packs: Eye, view_waves: Waves, level3_share: TriangleAlert,
+  view_packs: Eye, view_waves: Waves, level3_share: TriangleAlert, promotion: Megaphone,
 };
 
 type Figure = NonNullable<AccountAnomalyFinding["figure"]>;

@@ -123,7 +123,8 @@ _ACCOUNTS = """    SELECT account.id AS account_id,account.platform::text AS pla
                            ORDER BY finding.status DESC,finding.kind) AS account_findings,
                  coalesce(bool_or(finding.status=2),false) AS persistent_findings
             FROM analytics.account_anomaly_finding finding
-           WHERE finding.account_id=account.id) finding ON true
+           -- «Похоже на продвижение» — пометка постов, а не находка аккаунта.
+           WHERE finding.account_id=account.id AND finding.kind<>'promotion') finding ON true
      WHERE account.enabled
        AND (%(platform)s='all' OR account.platform::text=%(platform)s)
        AND (%(institution_legacy_id)s::bigint IS NULL
@@ -134,6 +135,12 @@ FINDINGS = f"""
 WITH params AS (
     SELECT %(as_of)s::timestamptz AS as_of,
            %(as_of)s::timestamptz-make_interval(days=>%(period_days)s) AS cutoff
+), promoted AS MATERIALIZED (
+    -- Посты с пометкой «похоже на продвижение»: участники немногих находок вида.
+    SELECT DISTINCT member AS publication_id
+      FROM analytics.account_anomaly_finding finding
+     CROSS JOIN LATERAL unnest(finding.members) member
+     WHERE finding.kind='promotion'
 ), accounts AS MATERIALIZED (
     {_ACCOUNTS}
 ), published AS MATERIALIZED (
@@ -177,7 +184,8 @@ WITH params AS (
     -- Всё о посте уже есть в published: ни публикации, ни анализ повторно не
     -- читаются. Псевдоним publication и поле id нужны SEARCH_PREDICATE.
     SELECT publication.publication_id,publication.published_at,publication.publication_type,
-           accounts.*,publication.level
+           accounts.*,publication.level,
+           publication.publication_id IN (SELECT publication_id FROM promoted) AS promotion
       FROM (SELECT published.*,published.publication_id AS id FROM published) publication
       JOIN accounts ON accounts.account_id=publication.account_id
       JOIN catalog.visible_platform_account account ON account.id=accounts.account_id
@@ -229,6 +237,7 @@ WITH params AS (
       FROM eligible
      WHERE above_norm AND (NOT %(exclude_anomalies)s OR coalesce(level,0)<2)
        AND NOT (%(clean)s AND persistent_findings)
+       AND (%(promotion)s='all' OR (%(promotion)s='only')=promotion)
 ), ranked AS (
     SELECT visible.*,
            row_number() OVER(ORDER BY
@@ -306,6 +315,12 @@ ANOMALOUS = f"""
 WITH params AS (
     SELECT %(as_of)s::timestamptz AS as_of,
            %(as_of)s::timestamptz-make_interval(days=>%(period_days)s) AS cutoff
+), promoted AS MATERIALIZED (
+    -- Посты с пометкой «похоже на продвижение»: участники немногих находок вида.
+    SELECT DISTINCT member AS publication_id
+      FROM analytics.account_anomaly_finding finding
+     CROSS JOIN LATERAL unnest(finding.members) member
+     WHERE finding.kind='promotion'
 ), accounts AS MATERIALIZED (
     {_ACCOUNTS}
 ), published AS MATERIALIZED (
@@ -320,7 +335,8 @@ WITH params AS (
      WHERE coalesce(recheck.effective_level,state.level,0)>=%(min_level)s
 ), candidates AS (
     SELECT publication.publication_id,publication.published_at,publication.publication_type,
-           publication.level,publication.signals,accounts.*
+           publication.level,publication.signals,accounts.*,
+           publication.publication_id IN (SELECT publication_id FROM promoted) AS promotion
       FROM (SELECT published.*,published.publication_id AS id FROM published) publication
       JOIN accounts ON accounts.account_id=publication.account_id
       JOIN catalog.visible_platform_account account ON account.id=accounts.account_id
@@ -353,6 +369,7 @@ WITH params AS (
             FROM jsonb_array_elements(candidates.signals) sign) signs ON true
 ), visible AS (
     SELECT * FROM scored WHERE NOT (%(clean)s AND persistent_findings)
+       AND (%(promotion)s='all' OR (%(promotion)s='only')=promotion)
 ), ranked AS (
     SELECT visible.*,
            row_number() OVER(ORDER BY

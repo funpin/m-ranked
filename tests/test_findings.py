@@ -209,6 +209,15 @@ def test_norms_cache_does_not_keep_a_failed_load() -> None:
     asyncio.run(scenario())
 
 
+def test_findings_query_promotion_filter() -> None:
+    assert _query().promotion == "all"
+    assert _query(promotion="only").promotion == "only" and _query(promotion="hide").promotion == "hide"
+    assert len({_query(promotion=value).dimensions for value in ("all", "only", "hide")}) == 3
+    assert _query(promotion="all").dimensions == _query().dimensions
+    with pytest.raises(BadRequest):
+        _query(promotion="yes")
+
+
 def test_findings_query_clean_and_anomalous_view() -> None:
     assert _query(clean="1").clean is True and _query(clean="0").clean is False
     assert _query(clean="1").dimensions != _query().dimensions

@@ -134,7 +134,7 @@ def test_nightly_job_writes_reach_findings_with_the_others():
         read_synchrony_events=lambda start, end: [], read_post_levels=lambda start, end: levels,
         write_account_findings=lambda found, version: written.update(found=found, version=version))
     run_findings(store, date(2026, 10, 8))
-    assert written["version"] == "account-findings-v4"
+    assert written["version"] == "account-findings-v5"
     (finding,) = [item for item in written["found"] if item.kind == "level3_share"]
     assert finding.account_id == UUID(int=1) and finding.metrics["summary"]
 

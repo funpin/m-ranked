@@ -96,6 +96,24 @@ def test_payload_round_trip_and_unknown_versions():
     assert ledger_from_payload({"v": 99}) is None and ledger_from_payload(None) is None
 
 
+def test_vk_ledger_keeps_moscow_days_with_night_views():
+    """Сутки ВК для находки «похоже на продвижение»: со вторых московских суток, прирост за сутки и за 00–06."""
+    # Публикация в 12:00 МСК: первые полные сутки начинаются через 12 ч. Замеры каждые 3 часа.
+    points, views, reactions = [], 0, 0
+    for step in range(0, 6 * 8 + 1):
+        age = 12 * HOUR + step * 3 * HOUR
+        hour = (age // HOUR + 12) % 24
+        views += 0 if hour < 6 else 120
+        reactions += 1
+        points.append((age, views, reactions))
+    ledger = build_ledger(_series(points, platform="vk"))
+    assert ledger.days and ledger.days[0][0] == "2026-09-02"
+    day, day_views, day_reactions, night_views = ledger.days[0]
+    assert day_views == 120 * 6 and day_reactions == 8 and night_views <= 120
+    assert ledger_from_payload(ledger.payload()).days == ledger.days
+    assert not build_ledger(_series(points, platform="max")).days
+
+
 def _detect(subject):
     prepared = prepare(subject, subject.observed_at[-1], CollectionCadence())
     return late_engagement.detect(prepared, DetectorContext(subject.platform))
@@ -175,7 +193,7 @@ def test_version_three_ledgers_are_still_readable_without_hours():
     payload.pop("hours", None)
     old = ledger_from_payload(payload)
     assert old is not None and old.hours is None and old.early.views == 1000
-    assert build_ledger(_series(points)).payload()["v"] == 5
+    assert build_ledger(_series(points)).payload()["v"] == 6
 
 
 def _old_post_with_wave(rounded=False):

@@ -47,10 +47,22 @@ export const FINDINGS_TYPE_OPTIONS = [
   ["text", "Текст"], ["photo", "Фото"], ["album", "Альбом"], ["video", "Видео"], ["other", "Прочее"],
 ] as const satisfies readonly (readonly [FindingsType, string])[];
 
+export type FindingsPromotion = "all" | "only" | "hide";
+
+export const FINDINGS_PROMOTION_OPTIONS = [
+  { value: "all", label: "Все посты" },
+  { value: "only", label: "Только продвижение" },
+  { value: "hide", label: "Без продвижения" },
+] as const satisfies readonly { value: FindingsPromotion; label: string }[];
+
+const PROMOTION_VALUES = new Set<string>(FINDINGS_PROMOTION_OPTIONS.map((option) => option.value));
+
 export interface ParsedFindingsQuery {
   view: FindingsView;
   /** Скрыть посты аккаунтов с устойчивыми аккаунтными находками. */
   clean: boolean;
+  /** Посты с пометкой «похоже на продвижение» (ВК): все, только они или без них. */
+  promotion: FindingsPromotion;
   mode: FindingsMode;
   institution: number | null;
   platform: Platform;
@@ -80,6 +92,7 @@ export function normalizeFindingsQuery(params: SearchParams, view: FindingsView 
   return {
     view,
     clean: first(params.clean) === "1",
+    promotion: PROMOTION_VALUES.has(first(params.promotion) ?? "") ? first(params.promotion) as FindingsPromotion : "all",
     mode,
     institution: mode === "institution" ? institution : null,
     platform,
@@ -98,6 +111,7 @@ export const DEFAULT_FINDINGS_QUERY: ParsedFindingsQuery = Object.freeze(normali
 export function findingsHrefQuery(query: ParsedFindingsQuery): Record<string, QueryValue> {
   return {
     clean: query.clean ? "1" : undefined,
+    promotion: query.promotion === "all" ? undefined : query.promotion,
     mode: query.mode === "institution" ? "institution" : undefined,
     institution: query.institution ?? undefined,
     platform: query.platform,

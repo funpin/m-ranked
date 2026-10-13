@@ -152,11 +152,14 @@ API `/api/v1/findings` принимает `mode` (`all`, `institution`), `instit
 запрос страницы читает только посты выбранного периода. `clean=1` скрывает посты
 аккаунтов с устойчивой (статус 2) аккаунтной находкой; `hiddenByFindings` —
 число таких постов в выдаче, у каждого поста `accountFindings` — виды и статусы
-находок его аккаунта.
+находок его аккаунта (кроме «похоже на продвижение»: это пометка поста, а не
+находка аккаунта). `promotion=only|hide` оставляет только посты с пометкой
+«похоже на продвижение» (ВК) или убирает их; у каждого поста — признак
+`promotion`.
 
 API `/api/v1/findings/anomalous` — раздел «Аномальные посты»: посты периода с
 действующим уровнем 2–3. Те же `mode`, `institution`, `platform`, `period`,
-`types`, `direction`, `group`, `q`, `clean`, `limit`, `cursor`; `sort` —
+`types`, `direction`, `group`, `q`, `clean`, `promotion`, `limit`, `cursor`; `sort` —
 `anomaly` (уровень, затем доля необычного прироста), `anomaly_share`,
 `anomaly_volume`, `published_at`. Доля — `render.episodeShare` признака в
 сохранённом анализе: часть итогового значения метрики, набранная в участке

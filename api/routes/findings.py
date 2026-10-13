@@ -63,7 +63,7 @@ def findings_body(query: normalize.FindingsQuery, rows: list[dict[str, Any]],
         "mode": query.mode, "institution": query.institution, "platform": query.platform,
         "period": query.period, "types": list(query.types), "sort": query.sort,
         "direction": query.direction, "group": query.group, "q": query.search,
-        "clean": query.clean, "items": items, "groups": groups,
+        "clean": query.clean, "promotion": query.promotion, "items": items, "groups": groups,
         "total": posts[0]["total"] if posts else 0,
         "hiddenByFindings": rows[0]["hidden_by_findings"] if rows else 0,
         "institutions": [dto.finding_institution(row) for row in institutions],
@@ -89,11 +89,12 @@ async def findings(
     q: str | None = Query(None),
     anomalies: str | None = Query(None),
     clean: str | None = Query(None),
+    promotion: str | None = Query(None),
     limit: int = Query(50),
     cursor: str | None = Query(None),
 ) -> Response:
     query = normalize.findings_query(mode, institution, platform, period, types, sort,
-                                     direction, group, q, anomalies, clean)
+                                     direction, group, q, anomalies, clean, promotion=promotion)
     page_size = normalize.limit(limit, default=50, maximum=50)
 
     async def build(revision: int, committed_at: Any) -> dict[str, Any]:
@@ -117,6 +118,7 @@ async def findings(
             "cap": PAGE_CAP, "comment_floor": COMMENT_NORM_FLOOR, "share_floor": SHARE_NORM_FLOOR,
             "min_comments": FINDING_MIN_COMMENTS, "min_shares": FINDING_MIN_SHARES,
             "top_reactions": TOP_REACTIONS, "clean": query.clean,
+            "promotion": query.promotion,
         })
         institutions = await db.fetch_all(sql.INSTITUTIONS, {})
         institutions.sort(key=lambda row: (row["short_name"] or row["canonical_name"]).lower())
@@ -141,12 +143,14 @@ async def anomalous_findings(
     group: str | None = Query(None),
     q: str | None = Query(None),
     clean: str | None = Query(None),
+    promotion: str | None = Query(None),
     limit: int = Query(50),
     cursor: str | None = Query(None),
 ) -> Response:
     """Рейтинг постов периода с выраженной аномалией по доле необычного прироста."""
     query = normalize.findings_query(mode, institution, platform, period, types, sort,
-                                     direction, group, q, None, clean, view="anomalous")
+                                     direction, group, q, None, clean, view="anomalous",
+                                     promotion=promotion)
     page_size = normalize.limit(limit, default=50, maximum=50)
 
     async def build(revision: int, committed_at: Any) -> dict[str, Any]:
@@ -160,7 +164,7 @@ async def anomalous_findings(
             "types": list(query.types), "q": query.search, "search_pattern": _like_pattern(query.search),
             "username_pattern": _like_pattern(username_search), "min_level": ANOMALOUS_MIN_LEVEL,
             "sort": query.sort, "direction": query.direction, "group": query.group,
-            "cap": PAGE_CAP, "clean": query.clean,
+            "cap": PAGE_CAP, "clean": query.clean, "promotion": query.promotion,
         })
         institutions = await db.fetch_all(sql.INSTITUTIONS, {})
         institutions.sort(key=lambda row: (row["short_name"] or row["canonical_name"]).lower())

@@ -133,19 +133,22 @@ class FindingsQuery:
     clean: bool = False
     # «above_norm» — посты выше нормы, «anomalous» — рейтинг аномальных постов.
     view: str = "above_norm"
+    # Посты с пометкой «похоже на продвижение»: all — все, only — только они, hide — без них.
+    promotion: str = "all"
 
     @property
     def dimensions(self) -> str:
         return ":".join((self.view, self.mode, str(self.institution or ""), self.platform, self.period,
                          ",".join(self.types), self.sort, self.direction, self.group,
-                         self.search, self.anomalies, "clean" if self.clean else ""))
+                         self.search, self.anomalies, "clean" if self.clean else "")) \
+            + ("" if self.promotion == "all" else f":promotion={self.promotion}")
 
 
 def findings_query(mode: str | None, institution: str | None, platform: str | None,
                    period: str | None, types: list[str] | None, sort: str | None,
                    direction: str | None, group: str | None, q: str | None,
                    anomalies: str | None, clean: str | None = None,
-                   view: str = "above_norm") -> FindingsQuery:
+                   view: str = "above_norm", promotion: str | None = None) -> FindingsQuery:
     resolved_mode = mode or "all"
     if resolved_mode not in ("all", "institution"):
         raise BadRequest("режим должен быть all или institution")
@@ -183,6 +186,9 @@ def findings_query(mode: str | None, institution: str | None, platform: str | No
             raise BadRequest("группировка по вузам доступна только в режиме all")
     if clean not in (None, "", "0", "1"):
         raise BadRequest("значение clean должно быть 0 или 1")
+    resolved_promotion = promotion or "all"
+    if resolved_promotion not in ("all", "only", "hide"):
+        raise BadRequest("значение promotion должно быть all, only или hide")
     text = (q or "").strip()
     if len(text) > 200:
         raise BadRequest("поисковый фрагмент длиннее 200 символов")
@@ -190,7 +196,7 @@ def findings_query(mode: str | None, institution: str | None, platform: str | No
         resolved_mode, resolved_institution, resolved_platform, resolved_period,
         tuple(value for value in FINDING_TYPES if value in requested_types),
         resolved_sort, resolved_direction, resolved_group, text, resolved_anomalies,
-        clean == "1", view,
+        clean == "1", view, resolved_promotion,
     )
 
 

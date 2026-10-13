@@ -70,7 +70,8 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
               for row in store.read_post_levels(start, end)]
     reach = (reach_findings.view_pack_findings(levels, computed_for)
              + reach_findings.level3_findings(levels, computed_for)
-             + reach_findings.wave_findings(posts, computed_for))
+             + reach_findings.wave_findings(posts, computed_for)
+             + reach_findings.promotion_findings(posts, computed_for))
     # «Без суточного ритма» (flat_day_findings) не публикуется: на копии прода
     # 01.09–07.10 не подтвердилась (research/reach-audit-2026-10/VALIDATION.md).
     result += [with_texts(item) for item in reach]

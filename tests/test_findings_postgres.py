@@ -125,14 +125,14 @@ class World:
                         INSERT INTO ingest.reaction_breakdown(snapshot_published_month,snapshot_id,reaction_key,reaction_count)
                         VALUES (%s,%s,%s,%s)""", (month, snapshot, key, count))
 
-    def finding(self, kind: str = "late_growth", status: int = 2) -> None:
+    def finding(self, kind: str = "late_growth", status: int = 2, members=()) -> None:
         """Аккаунтная находка аккаунта этого вуза."""
         with _connect(self.dsn) as connection:
             connection.execute("""
                 INSERT INTO analytics.account_anomaly_finding(
-                  account_id,kind,platform,status,window_start,window_end,metrics,method_version)
-                VALUES (%s,%s,%s,%s,'2026-08-28','2026-09-27','{}','test')""",
-                (self.account, kind, self.platform, status))
+                  account_id,kind,platform,status,window_start,window_end,metrics,members,method_version)
+                VALUES (%s,%s,%s,%s,'2026-08-28','2026-09-27','{}',%s::uuid[],'test')""",
+                (self.account, kind, self.platform, status, list(members)))
 
     def baseline(self, count: int = MIN_NORM_SAMPLE, views: int = 1000, reactions: int = 20,
                  days_ago: int = 20) -> None:
@@ -151,7 +151,7 @@ def run(dsn: str, world: World | None = None, **overrides) -> list[dict]:
         "sort": "interaction_index", "direction": "desc", "exclude_anomalies": True,
         "group": "none", "cap": PAGE_CAP, "comment_floor": COMMENT_NORM_FLOOR,
         "share_floor": SHARE_NORM_FLOOR, "min_comments": FINDING_MIN_COMMENTS,
-        "min_shares": FINDING_MIN_SHARES, "top_reactions": TOP_REACTIONS, "clean": False,
+        "min_shares": FINDING_MIN_SHARES, "top_reactions": TOP_REACTIONS, "clean": False, "promotion": "all",
     }
     params.update(overrides)
     with _connect(dsn) as connection:
@@ -373,7 +373,7 @@ def anomalous(dsn: str, world: World | None = None, **overrides) -> list[dict]:
         "institution_legacy_id": world.legacy_id if world else None,
         "types": [], "q": "", "search_pattern": "%", "username_pattern": "%",
         "min_level": ANOMALOUS_MIN_LEVEL, "sort": "anomaly", "direction": "desc",
-        "group": "none", "cap": PAGE_CAP, "clean": False,
+        "group": "none", "cap": PAGE_CAP, "clean": False, "promotion": "all",
     } | overrides
     with _connect(dsn) as connection:
         return connection.execute(sql.ANOMALOUS, params).fetchall()
@@ -402,6 +402,24 @@ def test_findings_carry_account_findings_and_clean_hides_persistent(dsn) -> None
     assert flagged.legacy_id not in kept and plain.legacy_id in kept
     assert clean[0]["hidden_by_findings"] >= 1
     assert run(dsn, flagged)[0]["hidden_by_findings"] == 1
+
+
+def test_promotion_marks_posts_filters_them_and_stays_off_the_account_flag(dsn) -> None:
+    world = World(dsn)
+    world.baseline()
+    promoted = world.post(AS_OF - timedelta(days=1), {24: (1000, 90)})
+    plain = world.post(AS_OF - timedelta(days=2), {24: (1000, 90)})
+    level = world.post(AS_OF - timedelta(days=1, hours=1), {24: (1000, 20)}, level=2, signals=[_signal(0.4, 50)])
+    world.finding("promotion", 1, members=[promoted, level])
+    rows = {row["publication_id"]: row for row in posts(run(dsn, world))}
+    assert rows[promoted]["promotion"] is True and rows[plain]["promotion"] is False
+    # «Похоже на продвижение» — пометка поста, не находка аккаунта.
+    assert rows[promoted]["account_findings"] is None and rows[promoted]["persistent_findings"] is False
+    assert {row["publication_id"] for row in posts(run(dsn, world, promotion="only"))} == {promoted}
+    assert promoted not in {row["publication_id"] for row in posts(run(dsn, world, promotion="hide"))}
+    ranked = {row["publication_id"]: row for row in posts(anomalous(dsn, world))}
+    assert ranked[level]["promotion"] is True
+    assert {row["publication_id"] for row in posts(anomalous(dsn, world, promotion="hide"))}.isdisjoint({level})
 
 
 def test_status_one_finding_is_not_hidden(dsn) -> None:

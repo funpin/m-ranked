@@ -69,8 +69,8 @@ def test_a_few_packs_are_not_a_finding():
 
 
 from anomaly_analysis.v2.account_findings import LedgerPost  # noqa: E402
-from anomaly_analysis.v2.reach_findings import flat_day_findings, wave_findings  # noqa: E402
-from anomaly_analysis.v2.tail_ledger import Point, TailLedger  # noqa: E402
+from anomaly_analysis.v2.reach_findings import flat_day_findings, promotion_findings, wave_findings  # noqa: E402
+from anomaly_analysis.v2.tail_ledger import MOSCOW as MOSCOW_TZ, Point, TailLedger  # noqa: E402
 
 BASE = datetime(2026, 9, 8, 9, tzinfo=timezone.utc)
 
@@ -152,14 +152,66 @@ def test_small_audience_gives_no_rhythm_finding():
     assert not of(flat_day_findings(others + flat(1, 0.9, count=5), TODAY))
 
 
+def campaign(account, count=40, promoted=(), platform="vk", response=0.0, night=0.1, excess=30.0):
+    """count постов ВК по 18 ч с 10.09; продвигаемые получают на вторые–пятые сутки в excess раз
+    больше просмотров, response — доля реакций от обычной, night — доля ночных просмотров.
+    Обычный пост: сутки k — 400/k просмотров, 4 % реакций, ночью 8 %."""
+    start = datetime(2026, 9, 10, 9, tzinfo=timezone.utc)
+    items = []
+    for i in range(count):
+        published = start + timedelta(hours=18 * i)
+        first = published.astimezone(MOSCOW_TZ).date()
+        days = []
+        for k in range(1, 15):
+            day = first + timedelta(days=k)
+            if day >= TODAY:
+                break
+            views = 400 // k
+            reactions, night_views = views * 4 // 100, views * 8 // 100
+            if i in promoted and 2 <= k <= 5:
+                views = int(views * excess)
+                reactions = int(views * 0.04 * response)
+                night_views = int(views * night)
+            days.append((day.isoformat(), views, reactions, night_views))
+        ledger = TailLedger(Point(86400, 1000, 30), None, None, days=tuple(days))
+        items.append(LedgerPost(UUID(int=account * 10_000 + i), UUID(int=account), platform, published, False, ledger))
+    return items
+
+
+def test_promoted_posts_are_marked_with_context_status():
+    others = [p for a in range(2, 12) for p in campaign(a)]
+    (finding,) = of(promotion_findings(campaign(1, promoted={5, 6, 7, 30}) + others, TODAY))
+    assert finding.kind == "promotion" and finding.status == 1
+    assert {member.int % 10_000 for member in finding.members} == {5, 6, 7, 30}
+    assert finding.metrics["days"] >= 4 and finding.metrics["excessMedian"] >= 5
+
+
+def test_promotion_needs_low_response_and_a_night_trough():
+    others = [p for a in range(2, 12) for p in campaign(a)]
+    assert not of(promotion_findings(campaign(1, promoted={5, 6}, response=1.0) + others, TODAY))
+    # Ровный круглосуточный пакет: ночью четверть суточных просмотров.
+    assert not of(promotion_findings(campaign(1, promoted={5, 6}, night=0.25) + others, TODAY))
+    assert not of(promotion_findings(campaign(1, promoted={5, 6}, excess=3.0) + others, TODAY))
+
+
+def test_promotion_is_vk_only_and_not_a_platform_event():
+    telegram = [p for a in range(2, 12) for p in campaign(a, platform="telegram")]
+    assert not of(promotion_findings(campaign(1, promoted={5, 6}, platform="telegram") + telegram, TODAY))
+    # Те же сутки у всех аккаунтов площадки — событие площадки.
+    everyone = [p for a in range(1, 12) for p in campaign(a, promoted={5, 6})]
+    assert not of(promotion_findings(everyone, TODAY))
+
+
 def test_every_reach_kind_has_words_for_the_api():
     from anomaly_analysis.v2.account_findings import with_texts
     others = [p for a in range(2, 12) for p in wall(a)]
     found = (of(wave_findings(wall(1, waves=WAVES) + others, TODAY))
              + of(level3_findings(cohort() + spread(1, 80, 40, level3=True), TODAY))
              + of(view_pack_findings(cohort() + spread(1, 80, 25, packs=True), TODAY))
-             + of(flat_day_findings([p for a in range(2, 12) for p in flat(a, 0.15)] + flat(1, 0.9), TODAY)))
-    assert {f.kind for f in found} == {"view_waves", "level3_share", "view_packs", "flat_daily_views"}
+             + of(flat_day_findings([p for a in range(2, 12) for p in flat(a, 0.15)] + flat(1, 0.9), TODAY))
+             + of(promotion_findings(campaign(1, promoted={5, 6}) + [p for a in range(2, 12) for p in campaign(a)],
+                                     TODAY)))
+    assert {f.kind for f in found} == {"view_waves", "level3_share", "view_packs", "flat_daily_views", "promotion"}
     for finding in found:
         metrics = with_texts(finding).metrics
         assert finding.title and metrics["summary"] and metrics["headline"] and metrics["alternatives"]
@@ -168,4 +220,4 @@ def test_every_reach_kind_has_words_for_the_api():
 
 def test_findings_method_version_is_bumped():
     from anomaly_analysis.v2.account_findings import METHOD_VERSION
-    assert METHOD_VERSION == "account-findings-v4"
+    assert METHOD_VERSION == "account-findings-v5"

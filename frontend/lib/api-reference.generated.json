@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "b5f6f9f3b4f9f31000386bb3dcba1f44ecb9891b5c460ca0c0f3fdb733052a51",
+  "sourceSha256": "bec9bfbbe3098f56ee55ec183c58b5c975a2fca460f7d84a9db395f228913b00",
   "version": "1.0.0",
   "operations": [
     {
@@ -957,6 +957,18 @@
           "default": "0"
         },
         {
+          "name": "promotion",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "only",
+            "hide"
+          ],
+          "default": "all"
+        },
+        {
           "name": "limit",
           "in": "query",
           "required": false,
@@ -1017,6 +1029,10 @@
         {
           "name": "clean",
           "type": "boolean"
+        },
+        {
+          "name": "promotion",
+          "type": "string"
         },
         {
           "name": "items",
@@ -1176,6 +1192,18 @@
           "default": "0"
         },
         {
+          "name": "promotion",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "only",
+            "hide"
+          ],
+          "default": "all"
+        },
+        {
           "name": "limit",
           "in": "query",
           "required": false,
@@ -1232,6 +1260,10 @@
         {
           "name": "clean",
           "type": "boolean"
+        },
+        {
+          "name": "promotion",
+          "type": "string"
         },
         {
           "name": "items",

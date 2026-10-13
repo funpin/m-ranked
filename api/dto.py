@@ -507,6 +507,7 @@ def finding(row: dict[str, Any]) -> dict[str, Any]:
                          for entry in (row.get("top_reactions") or [])],
         "curve": _finding_curve(row.get("post_curve"), row.get("norm_curve")),
         "accountFindings": account_findings(row.get("account_findings")),
+        "promotion": bool(row.get("promotion")),
     }
 
 
@@ -545,6 +546,7 @@ def anomalous_post(row: dict[str, Any]) -> dict[str, Any]:
         "comments": row["comments"] if "comments" in supported else None,
         "shares": row["shares"] if "shares" in supported else None,
         "accountFindings": account_findings(row.get("account_findings")),
+        "promotion": bool(row.get("promotion")),
     }
 
 

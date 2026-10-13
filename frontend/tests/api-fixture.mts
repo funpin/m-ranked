@@ -79,6 +79,8 @@ function finding(id: number, platform: "telegram" | "vk" | "max" | "rutube", ins
     curve: { hours: [1, 3, 6, 12, 24], post: [10, 30, 55, id === 2 ? null : 80, id === 2 ? null : 100 - id],
       norm: [4, 9, 13, 17, 20] },
     accountFindings: fixtureAccountFindings(institution),
+    // Пост 3 ВК — участник находки «похоже на продвижение».
+    promotion: platform === "vk" && id === 3,
   };
 }
 /** У первого вуза — устойчивая и обычная аккаунтные находки, у второго их нет. */
@@ -99,6 +101,7 @@ function anomalousPost(id: number, platform: "telegram" | "vk" | "max" | "rutube
       { pattern: 2, title: "Поздний скачок", metric: "views", strength: 0.75 }],
     views: 12000, reactions: 300, comments: platform === "max" ? null : 4, shares: platform === "vk" ? 2 : null,
     accountFindings: fixtureAccountFindings(institution),
+    promotion: platform === "vk" && id === 3,
   };
 }
 
@@ -468,8 +471,10 @@ const server = createServer(async (request, response) => {
     const group = (url.searchParams.get("group") ?? "none") as Schema["Findings"]["group"];
     const rowPlatform = platform === "all" ? "vk" : platform;
     const clean = url.searchParams.get("clean") === "1";
+    const promotion = (url.searchParams.get("promotion") ?? "all") as Schema["Findings"]["promotion"];
     const all = empty ? [] : Array.from({ length: 30 }, (_, index) => finding(index + 1, rowPlatform, mode === "institution" ? institution! : (index % 2) + 1));
-    const items = clean ? all.filter((item) => !item.accountFindings.some((entry) => entry.status === 2)) : all;
+    const items = (clean ? all.filter((item) => !item.accountFindings.some((entry) => entry.status === 2)) : all)
+      .filter((item) => promotion === "all" || (promotion === "only") === item.promotion);
     const body: Schema["Findings"] = {
       mode: mode as Schema["Findings"]["mode"], institution, platform,
       period: (url.searchParams.get("period") ?? "7d") as Schema["Findings"]["period"],
@@ -484,7 +489,7 @@ const server = createServer(async (request, response) => {
         institutionCanonicalName: `Полное название университета ${String(number).padStart(3, "0")}`,
         findingCount: 15, items: items.filter((item) => item.institutionLegacyId === number).slice(0, 3),
       })) : [],
-      total: items.length, hiddenAnomalous: empty ? 0 : 3, clean, hiddenByFindings: all.filter((item) => item.accountFindings.some((entry) => entry.status === 2)).length,
+      total: items.length, hiddenAnomalous: empty ? 0 : 3, clean, promotion, hiddenByFindings: all.filter((item) => item.accountFindings.some((entry) => entry.status === 2)).length,
       institutions: [1, 2].map((number) => ({ legacyId: number, shortName: `Вуз ${String(number).padStart(3, "0")}`, canonicalName: `Полное название университета ${String(number).padStart(3, "0")}` })),
       limit: 50, offset: 0, hasMore: false, nextCursor: null, datasetRevision: revision, asOf,
     };
@@ -500,16 +505,18 @@ const server = createServer(async (request, response) => {
     const empty = url.searchParams.get("q") === "missing";
     const group = (url.searchParams.get("group") ?? "none") as Schema["AnomalousFindings"]["group"];
     const clean = url.searchParams.get("clean") === "1";
+    const promotion = (url.searchParams.get("promotion") ?? "all") as Schema["AnomalousFindings"]["promotion"];
     const rowPlatform = platform === "all" ? "vk" : platform;
     const all = empty ? [] : Array.from({ length: 20 }, (_, index) => anomalousPost(index + 1, rowPlatform, mode === "institution" ? institution! : (index % 2) + 1));
-    const items = clean ? all.filter((item) => !item.accountFindings.some((entry) => entry.status === 2)) : all;
+    const items = (clean ? all.filter((item) => !item.accountFindings.some((entry) => entry.status === 2)) : all)
+      .filter((item) => promotion === "all" || (promotion === "only") === item.promotion);
     const body: Schema["AnomalousFindings"] = {
       mode: mode as Schema["AnomalousFindings"]["mode"], institution, platform,
       period: (url.searchParams.get("period") ?? "7d") as Schema["AnomalousFindings"]["period"],
       types: url.searchParams.getAll("types") as Schema["AnomalousFindings"]["types"],
       sort: (url.searchParams.get("sort") ?? "anomaly") as Schema["AnomalousFindings"]["sort"],
       direction: (url.searchParams.get("direction") ?? "desc") as Schema["AnomalousFindings"]["direction"],
-      group, q: url.searchParams.get("q") ?? "", clean,
+      group, q: url.searchParams.get("q") ?? "", clean, promotion,
       items: group === "none" ? items : [],
       groups: group === "institution" && !empty ? [1, 2].map((number) => ({
         institutionLegacyId: number, institutionShortName: `Вуз ${String(number).padStart(3, "0")}`,

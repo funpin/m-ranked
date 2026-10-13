@@ -9,7 +9,7 @@ import type { Finding } from "../lib/types";
 
 test("findings defaults to all institutions, 7 days and interaction index", () => {
   assert.deepEqual(normalizeFindingsQuery({}), {
-    view: "above_norm", clean: false,
+    view: "above_norm", clean: false, promotion: "all",
     mode: "all", institution: null, platform: "all", period: "7d", types: [],
     sort: "interaction_index", direction: "desc", group: "none", q: "",
   });
@@ -47,9 +47,16 @@ test("institution mode keeps the id and drops grouping", () => {
 test("href query omits defaults-free empties and repeats types", () => {
   const query = normalizeFindingsQuery({ types: ["photo", "video"], q: "" });
   assert.deepEqual(findingsHrefQuery(query), {
-    clean: undefined, mode: undefined, institution: undefined, platform: "all", period: "7d",
+    clean: undefined, promotion: undefined, mode: undefined, institution: undefined, platform: "all", period: "7d",
     types: ["photo", "video"], sort: "interaction_index", direction: "desc", group: undefined, q: undefined,
   });
+});
+
+test("promotion filter keeps only known values and stays out of the default href", () => {
+  assert.equal(normalizeFindingsQuery({ promotion: "only" }).promotion, "only");
+  assert.equal(normalizeFindingsQuery({ promotion: "hide" }).promotion, "hide");
+  assert.equal(normalizeFindingsQuery({ promotion: "yes" }).promotion, "all");
+  assert.equal(findingsHrefQuery(normalizeFindingsQuery({ promotion: "hide" })).promotion, "hide");
 });
 
 test("formatIndex covers small, large and missing values", () => {

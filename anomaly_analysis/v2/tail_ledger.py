@@ -36,10 +36,10 @@ import numpy as np
 
 from .domain import Metric, PostSeries
 
-VERSION = 5
+VERSION = 6
 # Сводки третьей версии читаются: в них нет только почасовой раскладки;
-# четвёртой — часов притока (surges).
-READABLE_VERSIONS = (3, 4, 5)
+# четвёртой — часов притока (surges); пятой — суток ВК (days).
+READABLE_VERSIONS = (3, 4, 5, 6)
 MOSCOW = ZoneInfo("Europe/Moscow")
 HOUR = 3600
 # С этого значения Telegram показывает просмотры сокращённо («1,2K»).
@@ -115,6 +115,8 @@ class TailLedger:
     hours: tuple[tuple[int, ...], tuple[int, ...]] | None = None
     # Часы притока: (час UTC от эпохи, просмотры, реакции); пусто — нет или v3/v4.
     surges: tuple[tuple[int, int, int], ...] = ()
+    # Сутки ВК: (дата МСК, просмотры, реакции, просмотры 00–06); пусто — не ВК или до v6.
+    days: tuple[tuple[str, int, int, int], ...] = ()
 
     @property
     def late(self) -> tuple[int, int] | None:
@@ -136,6 +138,7 @@ class TailLedger:
             "marks": {key: point.payload() for key, point in self.marks.items()},
             **({"hours": [list(self.hours[0]), list(self.hours[1])]} if self.hours else {}),
             **({"surges": [list(item) for item in self.surges]} if self.surges else {}),
+            **({"days": [list(item) for item in self.days]} if self.days else {}),
         }
 
 
@@ -152,7 +155,9 @@ def ledger_from_payload(payload: Mapping[str, Any] | None) -> TailLedger | None:
                       bool(payload.get("rounded", False)),
                       {str(key): point(value) for key, value in (payload.get("marks") or {}).items()},
                       _hours_from(payload.get("hours")),
-                      tuple(tuple(int(value) for value in item) for item in payload.get("surges") or ()))
+                      tuple(tuple(int(value) for value in item) for item in payload.get("surges") or ()),
+                      tuple((str(item[0]), int(item[1]), int(item[2]), int(item[3]))
+                            for item in payload.get("days") or ()))
 
 
 def _hours_from(value) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
@@ -198,7 +203,42 @@ def build_ledger(series: PostSeries, analyzed_at: datetime | None = None, *, sur
     rounded = any(point is not None and point.age in inexact for point in (early, start, end))
     return TailLedger(early, start, end, covered, growth, rounded, marks,
                       _hours(joint, inexact, published),
-                      _surges(series, joint, early, published) if surges else ())
+                      _surges(series, joint, early, published) if surges else (),
+                      _post_days(joint, inexact, published) if surges and series.platform in DAYS_PLATFORMS else ())
+
+
+# Сутки поста ВК для находки «похоже на продвижение» (reach_findings): прирост
+# просмотров и реакций за московские сутки со вторых по 14-е и просмотры за
+# 00–06 МСК. Только ВК: показы рекламы записи засчитываются как её просмотры.
+# Как и `_days`, только настоящие замеры: прирост относится к суткам, в которые
+# он впервые наблюдался, сутки с разрывом замеров длиннее DAY_BRACKET — неизвестны.
+DAYS_PLATFORMS = frozenset({"vk"})
+DAYS_UNTIL = 14
+NIGHT_UNTIL_HOUR = 6
+
+
+def _post_days(points: list[Point], inexact: set[float], published: float) -> tuple[tuple[str, int, int, int], ...]:
+    exact = [point for point in points if point.age not in inexact]
+    if len(exact) < 2:
+        return ()
+    instants = [published + point.age for point in exact]
+    day = _moscow_midnight(published) + timedelta(days=1)
+    found = []
+    for _ in range(DAYS_UNTIL):
+        start, end = day.timestamp(), (day + timedelta(days=1)).timestamp()
+        if end > instants[-1]:
+            break
+        before = bisect_right(instants, start) - 1
+        through = bisect_right(instants, end) - 1
+        after = bisect_left(instants, end)
+        night = bisect_right(instants, start + NIGHT_UNTIL_HOUR * HOUR) - 1
+        if before >= 0 and all(right - left <= DAY_BRACKET
+                               for left, right in zip(instants[before:after], instants[before + 1:after + 1])):
+            found.append((day.date().isoformat(), max(0, exact[through].views - exact[before].views),
+                          max(0, exact[through].reactions - exact[before].reactions),
+                          max(0, exact[night].views - exact[before].views)))
+        day += timedelta(days=1)
+    return tuple(found)
 
 
 def _hours(points: list[Point], inexact: set[float],

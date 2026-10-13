@@ -3,7 +3,7 @@
 import { ExternalLink } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "@/components/native-link";
-import { AccountFindingsFlag } from "@/components/findings/account-findings-flag";
+import { AccountFindingsFlag, PromotionMark } from "@/components/findings/account-findings-flag";
 import { GrowthSparkline } from "@/components/findings/growth-sparkline";
 import { ReactionGlyph } from "@/components/reaction-glyph";
 import { RowLink } from "@/components/row-link";
@@ -173,6 +173,7 @@ export function Identity({ row, showInstitution, badge, marks, linked = false }:
     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
       {showInstitution ? <span className="max-w-full truncate font-medium" title={row.institutionCanonicalName}>{row.institutionShortName || row.institutionCanonicalName}</span> : null}
       <AccountFindingsFlag findings={row.accountFindings} />
+      <PromotionMark promoted={row.promotion} />
       {marks.mine ? <span className="bg-[var(--chart-2)] text-background shrink-0 rounded-full px-2 py-px text-[11px] font-semibold">ваш вуз</span> : null}
       {linked
         ? <Link className="text-muted-foreground hover:text-foreground flex min-w-0 max-w-full gap-x-1 underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{description}</Link>

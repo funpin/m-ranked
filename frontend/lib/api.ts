@@ -156,6 +156,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
         sort: input.sort as AboveNormSort, direction: input.direction, group: input.group,
         q: q || undefined, anomalies: input.anomalies,
         ...(input.clean ? { clean: "1" as const } : {}),
+        ...(input.promotion && input.promotion !== "all" ? { promotion: input.promotion } : {}),
         limit: Math.min(50, Math.max(1, input.limit ?? 50)),
         ...(input.cursor ? { cursor: input.cursor } : {}),
       } } }).then(unwrap);
@@ -170,6 +171,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
         sort: input.sort as AnomalousSort,
         direction: input.direction, group: input.group, q: q || undefined,
         ...(input.clean ? { clean: "1" as const } : {}),
+        ...(input.promotion && input.promotion !== "all" ? { promotion: input.promotion } : {}),
         limit: Math.min(50, Math.max(1, input.limit ?? 50)),
         ...(input.cursor ? { cursor: input.cursor } : {}),
       } } }).then(unwrap);

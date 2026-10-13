@@ -159,6 +159,25 @@ test("findings flags accounts with persistent findings and hides them on request
   await expect(page.getByTestId("findings-clean-toggle").locator("input")).toBeChecked();
 });
 
+test("findings marks promoted VK posts and filters them", async ({ page }, info) => {
+  await page.goto("/findings?platform=vk");
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("findings-cards").locator("article")
+    : page.getByTestId("findings-table").locator("tbody tr");
+  // В фикстуре пост 3 ВК — участник находки «похоже на продвижение».
+  await expect(rows.getByTestId("findings-promotion-mark")).toHaveCount(1);
+  await expect(rows.getByTestId("findings-promotion-mark")).toHaveAttribute("aria-label", /Похоже на продвижение/);
+  await page.getByTestId("findings-promotion-filter").selectOption("only");
+  await expect(page).toHaveURL(/promotion=only/);
+  await expect(rows).toHaveCount(1);
+  await expect(page.getByTestId("findings-promotion-filter")).toHaveValue("only");
+  await page.getByTestId("findings-promotion-filter").selectOption("hide");
+  await expect(page).toHaveURL(/promotion=hide/);
+  await expect(rows.getByTestId("findings-promotion-mark")).toHaveCount(0);
+  await page.goto("/findings?platform=telegram");
+  await expect(page.getByTestId("findings-promotion-filter")).toHaveCount(0);
+});
+
 test("findings switches to the anomalous ranking with its own sorts and keeps the selection", async ({ page }, info) => {
   await page.goto("/findings?platform=telegram&period=30d&sort=views24");
   await page.getByTestId("findings-view-tabs").getByRole("link", { name: "Аномальные посты" }).click();

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ArrowRight, Search, X } from "lucide-react";
 import Link from "@/components/native-link";
 import { CleanToggle } from "@/components/findings/clean-toggle";
+import { PromotionFilter } from "@/components/findings/promotion-filter";
 import { FindingsFilterForm } from "@/components/findings/filter-form";
 import { FindingsViewTabs } from "@/components/findings/view-tabs";
 import { InstitutionPicker } from "@/components/findings/institution-picker";
@@ -48,7 +49,7 @@ export async function FindingsScreen({ raw, view, results }: {
   const parsed = normalizeFindingsQuery(raw, view);
   // Без отчёта об аномалиях раздела «Аномальные посты» и пометок находок нет.
   if (!anomaliesVisible && view === "anomalous") redirect(queryHref("/findings", viewHrefQuery(parsed)));
-  const query = anomaliesVisible ? parsed : { ...parsed, clean: false };
+  const query = anomaliesVisible ? parsed : { ...parsed, clean: false, promotion: "all" as const };
   const anomalous = query.view === "anomalous";
   const path = findingsPath(query.view);
   // «Мой вуз» без выбранного вуза — пустое состояние с выбором, без запроса постов.
@@ -133,6 +134,8 @@ export async function FindingsScreen({ raw, view, results }: {
     </FindingsFilterForm>
     {anomaliesVisible && page && !choosing && (page.hiddenByFindings > 0 || query.clean)
       ? <CleanToggle key={String(query.clean)} form="findings-filters" clean={query.clean} count={page.hiddenByFindings} /> : null}
+    {anomaliesVisible && page && !choosing && (query.platform === "all" || query.platform === "vk")
+      ? <PromotionFilter key={query.promotion} form="findings-filters" value={query.promotion} /> : null}
 
     <NavigationBoundary fallback={<FindingsSkeleton chrome={false} />}>
       {failed ? <ApiFailureState retryHref={queryHref(path, findingsHrefQuery(query))} />

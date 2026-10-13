@@ -182,7 +182,7 @@ def test_admin_group_is_implemented(contract: dict, app) -> None:
 def test_finding_kinds_cover_what_the_nightly_job_publishes(contract):
     """Виды аккаунтных находок в контракте — те, что пишет ночное задание (без «ритма»)."""
     published = {"early_pack", "regular_reactions", "late_growth", "late_engagement", "synchronous_waves",
-                 "engagement_shift", "night_reactions", "view_packs", "view_waves", "level3_share"}
+                 "engagement_shift", "night_reactions", "view_packs", "view_waves", "level3_share", "promotion"}
     enums = []
 
     def walk(node):
