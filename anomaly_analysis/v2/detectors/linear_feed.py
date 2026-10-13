@@ -17,7 +17,7 @@ from ..series import HOUR, PointFlag, PreparedSeries, growth_bounds
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
-VERSION = "2.5.0"
+VERSION = "2.6.0"
 PATTERN = 1
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -57,6 +57,11 @@ FEED_LIMIT = {"vk": (22 * HOUR, 26 * HOUR)}
 AFTER_CELLS = 2
 AFTER_WINDOW = 4 * HOUR
 MSK_OFFSET = 3 * HOUR
+# Найденный участок показывается на весь эпизод: соседние часы с темпом в
+# пределах ×1,5 от темпа участка — та же подача. Ровная подача МИСИС в
+# Telegram (01.10) шла с 6-го по 40-й час, а признак закрывал 6–12 ч: дальше
+# начиналась ночь, и обрыв там не засчитывается, а ступеньки у продолжения нет.
+WIDEN_TOLERANCE = 1.5
 # Незначимый по объёму участок не признак: минимум 20 % значения на начало.
 MIN_SHARE = 0.2
 MIN_DELTA = {Metric.VIEWS: 100, Metric.REACTIONS: 30}
@@ -415,18 +420,23 @@ def _refine(rates: np.ndarray, valid: np.ndarray, begin: int, end: int) -> tuple
 
 def _daytime_background(prepared, grid, rates, valid, begin) -> np.ndarray:
     """Скорости дневных пригодных ячеек до участка: не больше шести часов, не дальше 18."""
+    return np.asarray([float(rates[cell]) for cell in _daytime_cells(prepared, grid, valid, begin)])
+
+
+def _daytime_cells(prepared, grid, valid, begin) -> list[int]:
+    """Номера ячеек фона: дневные пригодные до участка, не больше шести часов, не дальше 18."""
     width = grid.scale.total_seconds()
     wanted = max(1, int(BACKGROUND_WINDOW / width))
     earliest = max(0, begin - max(1, int(BACKGROUND_LOOKBACK / width)))
     published = prepared.series.published_at.timestamp()
-    picked: list[float] = []
+    picked: list[int] = []
     for cell in range(begin - 1, earliest - 1, -1):
         clock = int((published + grid.edges[cell] + MSK_OFFSET) // HOUR) % 24
         if valid[cell] and clock not in NIGHT_HOURS_MSK:
-            picked.append(float(rates[cell]))
+            picked.append(cell)
             if len(picked) >= wanted:
                 break
-    return np.asarray(picked)
+    return picked
 
 
 def _after(prepared, grid, rates, valid, end) -> np.ndarray:
@@ -445,11 +455,26 @@ def _after(prepared, grid, rates, valid, end) -> np.ndarray:
     return np.asarray(cells[:AFTER_CELLS])
 
 
-def _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, stepped_down):
+def _widen(rates: np.ndarray, valid: np.ndarray, begin: int, end: int, mean: float) -> tuple[int, int]:
+    """Расширить участок на соседние пригодные ячейки с темпом в пределах ×WIDEN_TOLERANCE."""
+    low, high = mean / WIDEN_TOLERANCE, mean * WIDEN_TOLERANCE
+    while begin > 0 and valid[begin - 1] and low <= rates[begin - 1] <= high:
+        begin -= 1
+    while end < rates.size and valid[end] and low <= rates[end] <= high:
+        end += 1
+    return begin, end
+
+
+def _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, stepped_down,
+                   background_cells=()):
     """Ступенька и обрыв по худшему случаю внутри коридоров «1,2K».
 
-    Прирост участка — наименьший возможный, фон и хвост — наибольшие. None —
-    при любых значениях в коридорах ни ступеньки, ни обрыва нет.
+    Прирост участка — наименьший возможный, фон и хвост — наибольшие. Фон —
+    те же дневные ячейки перед участком, что и у точных счётчиков, каждая по
+    наибольшему возможному приросту, и их медиана. Среднее за шесть часов до
+    участка захватывало крутой старт поста: подача с 6-го часа (МИСИС, 01.10)
+    ступенькой не признавалась. None — при любых значениях в коридорах ни
+    ступеньки, ни обрыва нет.
     """
     growth = growth_bounds(bounded, start_age, end_age)
     if growth is None:
@@ -460,11 +485,9 @@ def _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, ste
         tail = growth_bounds(bounded, end_age, end_age + AFTER_CELLS * width)
         stepped_down = tail is not None and mean >= STEP_DOWN * max(tail[1] / (AFTER_CELLS * width) * HOUR, 1.0)
     if stepped_up:
-        # Фон — наибольший возможный темп за шесть часов до участка (от первого замера).
-        first = max(float(bounded.data.ages[0]), start_age - BACKGROUND_WINDOW)
-        before = growth_bounds(bounded, first, start_age) if first < start_age else None
-        stepped_up = before is not None and mean >= STEP_UP * max(
-            before[1] / max(start_age - first, width) * HOUR, 1.0)
+        uppers = [growth_bounds(bounded, cell_start, cell_start + width) for cell_start in background_cells]
+        stepped_up = bool(uppers) and all(item is not None for item in uppers) and mean >= STEP_UP * max(
+            float(np.median([item[1] for item in uppers])) / width * HOUR, 1.0)
     if not stepped_up and not stepped_down:
         return None
     return delta, stepped_up, stepped_down
@@ -481,7 +504,8 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None)
     cv = float(segment.std() / mean) if mean > 0 else np.inf
     third = max(1, segment.size // 3)
     drift = float(segment[-third:].mean() / max(segment[:third].mean(), 1e-9))
-    background = _daytime_background(prepared, grid, rates, valid, begin)
+    background_cells = _daytime_cells(prepared, grid, valid, begin)
+    background = np.asarray([float(rates[cell]) for cell in background_cells])
     if cv > MAX_CV or not 1 / MAX_DRIFT <= drift <= MAX_DRIFT:
         return None
     stepped_up = background.size and max(float(np.median(background)), 1.0) * STEP_UP <= mean
@@ -500,13 +524,30 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None)
     delta = float(grid.cumulative[end] - start_value)
     mode = None
     if bounded is not None:
-        verdict = _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, stepped_down)
+        verdict = _bounded_check(bounded, start_age, end_age, duration, width, stepped_up, stepped_down,
+                                 [float(grid.edges[cell]) for cell in background_cells])
         if verdict is None:
             return None
         delta, stepped_up, stepped_down = verdict
         mode = "bounded_views"
     if delta < max(MIN_DELTA[metric], MIN_SHARE * start_value):
         return None
+    # Участок доказан; показывается он на весь эпизод той же подачи.
+    core = (begin, end)
+    begin, end = _widen(rates, valid, begin, end, mean)
+    if (begin, end) != core:
+        start_age, end_age = float(grid.edges[begin]), float(grid.edges[end])
+        duration = end_age - start_age
+        start_value = float(grid.cumulative[begin])
+        delta = float(grid.cumulative[end] - start_value)
+        if bounded is not None:
+            widened = growth_bounds(bounded, start_age, end_age)
+            delta = widened[0] if widened is not None else delta
+        if not stepped_down:
+            after = _after(prepared, grid, rates, valid, end)
+            at_feed_limit = feed_limit is not None and feed_limit[0] <= end_age <= feed_limit[1]
+            stepped_down = (after.size >= AFTER_CELLS and not at_feed_limit
+                            and mean >= STEP_DOWN * max(float(after.mean()), 1.0))
     hours = (grid.edges[begin:end + 1] - start_age) / HOUR
     slope, intercept = np.polyfit(hours, grid.cumulative[begin:end + 1], 1)
     fitted = slope * hours + intercept

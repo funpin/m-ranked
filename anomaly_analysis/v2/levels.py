@@ -276,7 +276,10 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
             required.append(index)
             families.add(sign.family)
     chosen = (required + [i for i in range(len(unique)) if i not in required])[:MAX_SIGNS]
-    ordered = [_with_episode(prepared, unique[i]) for i in sorted(chosen)]
+    ordered = [unique[i] for i in sorted(chosen)]
+    # Доля необычного прироста нужна только рейтингу постов уровня 2–3.
+    if level >= Level.PRONOUNCED_ANOMALY:
+        ordered = [_with_episode(prepared, sign) for sign in ordered]
     quality = _quality(prepared, context, unanalyzable)
     if any(sign.render.get("measurementMode") == BOUNDED_REACTION_MODE for sign in ordered):
         quality = replace(quality, codes=(*quality.codes, "bounded_reaction_counts"))
