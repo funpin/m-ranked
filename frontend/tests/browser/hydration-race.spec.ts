@@ -9,8 +9,8 @@ test.beforeEach(async ({ page }) => {
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
 });
 
-test("institution search on statistics works before the page settles", async ({ page }) => {
-  await page.goto("/statistics?mode=institution");
+test("institution search on findings works before the page settles", async ({ page }) => {
+  await page.goto("/findings?mode=institution");
   await page.getByRole("combobox", { name: "Вуз" }).fill("002");
   await page.getByRole("option", { name: /Вуз 002/ }).click();
   await expect(page).toHaveURL(/institution=2/);

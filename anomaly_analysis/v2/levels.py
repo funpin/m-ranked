@@ -36,7 +36,8 @@ from .detectors.reactions_exceed_views import TELEGRAM_ORDER_MODE
 from .norms import LOW_CONFIDENCE, NormSet
 from .mature_reference import MatureReference, ReferenceSet, PATTERNS as REFERENCE_PATTERNS, VERSION as REFERENCE_VERSION
 from .series import (
-    DAY, PREPARATION_VERSION, CollectionCadence, PreparedSeries, prepare, views_not_audience_reason,
+    DAY, PREPARATION_VERSION, CollectionCadence, CounterEstimate, PreparedSeries, counter_estimate_at, prepare,
+    views_not_audience_reason,
 )
 
 # Пороги силы. Сильный признак — тот, что один даёт выраженную аномалию: у
@@ -50,7 +51,7 @@ WEAK = 0.2
 # обрезаются до средней силы (исследование, раздел 8, мера 5).
 YOUNG_NORM_CAP = 0.55
 MAX_SIGNS = 6
-AGGREGATION_VERSION = "2.6.0"
+AGGREGATION_VERSION = "2.7.0"
 # Признак, больше половины интервала которого лежит в участке «вывод
 # невозможен», отбрасывается. Прирост за пробел живёт именно там — он исключение.
 UNANALYZABLE_OVERLAP = 0.5
@@ -275,7 +276,7 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
             required.append(index)
             families.add(sign.family)
     chosen = (required + [i for i in range(len(unique)) if i not in required])[:MAX_SIGNS]
-    ordered = [unique[i] for i in sorted(chosen)]
+    ordered = [_with_episode(prepared, unique[i]) for i in sorted(chosen)]
     quality = _quality(prepared, context, unanalyzable)
     if any(sign.render.get("measurementMode") == BOUNDED_REACTION_MODE for sign in ordered):
         quality = replace(quality, codes=(*quality.codes, "bounded_reaction_counts"))
@@ -287,6 +288,41 @@ def verdict(prepared: PreparedSeries, context: DetectorContext, signs: Sequence[
         quality = replace(quality, codes=(*quality.codes, "reported_reaction_shape"))
     return PostVerdict(prepared.series.publication_id, level, tuple(ordered) if level else (),
                        quality, versions, norm_version)
+
+
+def _with_episode(prepared: PreparedSeries, sign: Sign) -> Sign:
+    """Сколько метрики признака пришло в его участке и какая это доля итога.
+
+    Мера для рейтинга «Аномальные посты»: пост, у которого 900 из 1 000
+    просмотров пришли пакетом, необычнее поста, где скачок дал десятую часть.
+    Концы участка — точные значения или середины коридоров округления
+    (series.counter_estimate_at); итог — последний замер метрики. Начало до
+    первого замера и у публикации — ноль. Нет оценки — нет меры, признак
+    остаётся без неё.
+    """
+    published = prepared.series.published_at
+    start = (sign.interval.start - published).total_seconds()
+    end = (sign.interval.end - published).total_seconds()
+    column = prepared.series.values.get(sign.metric)
+    if column is None:
+        return sign
+    last = None
+    for at, value in zip(reversed(prepared.series.observed_at), reversed(column)):
+        if value is not None and at <= prepared.analyzed_at:
+            last = (at - published).total_seconds()
+            break
+    if last is None:
+        return sign
+    final = counter_estimate_at(prepared, sign.metric, last)
+    finish = counter_estimate_at(prepared, sign.metric, min(end, last))
+    begin = (CounterEstimate(0.0, 0.0, 0.0) if start <= 0
+             else counter_estimate_at(prepared, sign.metric, start))
+    if final is None or finish is None or begin is None or final.value <= 0:
+        return sign
+    growth = max(0.0, finish.value - begin.value)
+    share = min(1.0, growth / final.value)
+    return replace(sign, render={**sign.render, "episodeGrowth": round(growth),
+                                 "episodeShare": round(share, 4)})
 
 
 def _rutube_waves(prepared: PreparedSeries, signs: Sequence[Sign]) -> list[Sign]:

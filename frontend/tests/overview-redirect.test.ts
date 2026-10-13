@@ -8,5 +8,11 @@ test("старые ссылки обзора ведут на /review с теми
   assert.equal(overviewRedirect(new URL("https://site.test/rating?platform=max&period=30d")), null);
   assert.equal(overviewRedirect(new URL("https://site.test/")), null);
   assert.equal(overviewRedirect(new URL("https://site.test/?utm_source=tg")), null);
-  assert.equal(overviewRedirect(new URL("https://site.test/statistics?platform=vk")), null);
+  assert.equal(overviewRedirect(new URL("https://site.test/findings?platform=vk")), null);
+});
+
+test("раздел «Статистика» переехал в «Находки» вместе с фильтрами", () => {
+  assert.equal(overviewRedirect(new URL("https://site.test/statistics?platform=vk&period=30d"))?.href, "https://site.test/findings?platform=vk&period=30d");
+  assert.equal(overviewRedirect(new URL("https://site.test/statistics"))?.pathname, "/findings");
+  assert.equal(overviewRedirect(new URL("https://site.test/statistics/x")), null);
 });

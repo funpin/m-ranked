@@ -196,4 +196,4 @@ def test_finding_kinds_cover_what_the_nightly_job_publishes(contract):
             for value in node:
                 walk(value)
     walk(contract)
-    assert len(enums) == 2 and all(item == published for item in enums)
+    assert len(enums) == 3 and all(item == published for item in enums)

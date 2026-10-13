@@ -46,6 +46,9 @@ export type FindingsRequest = import("./findings").ParsedFindingsQuery & {
 
 export type FindingsPage = components["schemas"]["Findings"];
 export type Finding = components["schemas"]["Finding"];
+export type AnomalousFindingsPage = components["schemas"]["AnomalousFindings"];
+export type AnomalousPost = components["schemas"]["AnomalousPost"];
+export type PostAccountFindings = components["schemas"]["PostAccountFindings"];
 export type FindingGroup = components["schemas"]["FindingGroup"];
 export type FindingInstitution = components["schemas"]["FindingInstitution"];
 

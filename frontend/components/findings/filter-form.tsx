@@ -39,7 +39,7 @@ export function FindingsFilterForm(props: ComponentProps<"form">) {
     });
     const replace = replacing.delete(form);
     beginNavigation();
-    const href = `/statistics?${query}`;
+    const href = `/findings?${query}`;
     startTransition(() => replace ? router.replace(href, { scroll: false }) : router.push(href, { scroll: false }));
   }
 

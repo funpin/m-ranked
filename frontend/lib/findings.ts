@@ -3,8 +3,12 @@ import type { Finding, Platform, SortDirection } from "./types";
 
 export type FindingsMode = "all" | "institution";
 export type FindingsPeriod = "1d" | "7d" | "30d";
-export type FindingsSort = "interaction_index" | "view_index" | "comment_index" | "share_index"
+/** Раздел «Находок»: посты выше нормы или рейтинг аномальных постов. */
+export type FindingsView = "above_norm" | "anomalous";
+export type AboveNormSort = "interaction_index" | "view_index" | "comment_index" | "share_index"
   | "interactions24" | "views24" | "erv24" | "published_at";
+export type AnomalousSort = "anomaly" | "anomaly_share" | "anomaly_volume" | "published_at";
+export type FindingsSort = AboveNormSort | AnomalousSort;
 export type FindingsType = "text" | "photo" | "album" | "video" | "other";
 export type FindingsGroup = "none" | "institution";
 
@@ -23,13 +27,30 @@ export const FINDINGS_SORT_OPTIONS = [
   ["views24", "Просмотры"],
   ["erv24", "ERV"],
   ["published_at", "Новые"],
-] as const satisfies readonly (readonly [FindingsSort, string])[];
+] as const satisfies readonly (readonly [AboveNormSort, string])[];
+
+/** Сортировки рейтинга аномальных постов: по умолчанию — уровень, затем доля
+ *  необычного прироста. */
+export const ANOMALOUS_SORT_OPTIONS = [
+  ["anomaly", "Сильнее аномалия"],
+  ["anomaly_share", "Доля необычного прироста"],
+  ["anomaly_volume", "Объём необычного прироста"],
+  ["published_at", "Новые"],
+] as const satisfies readonly (readonly [AnomalousSort, string])[];
+
+export const FINDINGS_VIEW_OPTIONS = [
+  { value: "above_norm", label: "Выше нормы", title: "Посты, сработавшие лучше обычного для своего аккаунта" },
+  { value: "anomalous", label: "Аномальные посты", title: "Посты с самой необычной динамикой счётчиков" },
+] as const satisfies readonly { value: FindingsView; label: string; title: string }[];
 
 export const FINDINGS_TYPE_OPTIONS = [
   ["text", "Текст"], ["photo", "Фото"], ["album", "Альбом"], ["video", "Видео"], ["other", "Прочее"],
 ] as const satisfies readonly (readonly [FindingsType, string])[];
 
 export interface ParsedFindingsQuery {
+  view: FindingsView;
+  /** Скрыть посты аккаунтов с устойчивыми аккаунтными находками. */
+  clean: boolean;
   mode: FindingsMode;
   institution: number | null;
   platform: Platform;
@@ -43,6 +64,7 @@ export interface ParsedFindingsQuery {
 
 const PERIODS = new Set<string>(FINDINGS_PERIOD_OPTIONS.map((option) => option.value));
 const SORTS = new Set<string>(FINDINGS_SORT_OPTIONS.map(([value]) => value));
+const ANOMALOUS_SORTS = new Set<string>(ANOMALOUS_SORT_OPTIONS.map(([value]) => value));
 const TYPES: readonly FindingsType[] = FINDINGS_TYPE_OPTIONS.map(([value]) => value);
 
 export function normalizeFindingsQuery(params: SearchParams): ParsedFindingsQuery {
@@ -52,13 +74,19 @@ export function normalizeFindingsQuery(params: SearchParams): ParsedFindingsQuer
   const sort = first(params.sort) ?? "";
   const requested = new Set(many(params.types));
   const platform = normalizePlatform(params.platform, "all");
+  const view: FindingsView = first(params.view) === "anomalous" ? "anomalous" : "above_norm";
+  const resolvedSort: FindingsSort = view === "anomalous"
+    ? ANOMALOUS_SORTS.has(sort) ? sort as AnomalousSort : "anomaly"
+    : SORTS.has(sort) && sortAvailable(sort as AboveNormSort, platform) ? sort as AboveNormSort : "interaction_index";
   return {
+    view,
+    clean: first(params.clean) === "1",
     mode,
     institution: mode === "institution" ? institution : null,
     platform,
     period: PERIODS.has(period) ? period as FindingsPeriod : "7d",
     types: TYPES.filter((value) => requested.has(value)),
-    sort: SORTS.has(sort) && sortAvailable(sort as FindingsSort, platform) ? sort as FindingsSort : "interaction_index",
+    sort: resolvedSort,
     direction: first(params.direction) === "asc" ? "asc" : "desc",
     group: mode === "all" && first(params.group) === "institution" ? "institution" : "none",
     q: (first(params.q) ?? "").trim(),
@@ -70,6 +98,8 @@ export const DEFAULT_FINDINGS_QUERY: ParsedFindingsQuery = Object.freeze(normali
 
 export function findingsHrefQuery(query: ParsedFindingsQuery): Record<string, QueryValue> {
   return {
+    view: query.view === "anomalous" ? "anomalous" : undefined,
+    clean: query.clean ? "1" : undefined,
     mode: query.mode === "institution" ? "institution" : undefined,
     institution: query.institution ?? undefined,
     platform: query.platform,
@@ -108,14 +138,20 @@ export function recallInstitution(storage: Pick<Storage, "getItem"> | null): num
   try { return parsePositiveLegacyId(storage?.getItem(INSTITUTION_STORAGE_KEY) ?? ""); } catch { return null; }
 }
 
+/** Тот же отбор в другом разделе: сортировка у разделов своя и сбрасывается. */
+export function viewHrefQuery(query: ParsedFindingsQuery, view: FindingsView): Record<string, QueryValue> {
+  return { ...findingsHrefQuery(query), view: view === "anomalous" ? "anomalous" : undefined, sort: undefined, direction: undefined };
+}
+
 /** Комментарии отдают все площадки, кроме MAX; репосты — только ВКонтакте. */
-function sortAvailable(sort: FindingsSort, platform: Platform): boolean {
+function sortAvailable(sort: AboveNormSort, platform: Platform): boolean {
   if (sort === "comment_index") return platform !== "max";
   if (sort === "share_index") return platform === "all" || platform === "vk";
   return true;
 }
 
-export function sortOptionsFor(platform: Platform) {
+export function sortOptionsFor(platform: Platform, view: FindingsView = "above_norm"): readonly (readonly [FindingsSort, string])[] {
+  if (view === "anomalous") return ANOMALOUS_SORT_OPTIONS;
   return FINDINGS_SORT_OPTIONS.filter(([value]) => sortAvailable(value, platform));
 }
 
@@ -155,6 +191,26 @@ export function previousVisit(local: Pick<Storage, "getItem" | "setItem"> | null
   }
 }
 
-export function isNewSince(row: Finding, visit: number | null): boolean {
+export function isNewSince(row: Pick<Finding, "publishedAt">, visit: number | null): boolean {
   return visit !== null && row.publishedAt !== null && Date.parse(row.publishedAt) > visit;
+}
+
+const shareFormat = new Intl.NumberFormat("ru-RU", { style: "percent", maximumFractionDigits: 0 });
+const METRIC_GENITIVE: Record<string, string> = {
+  views: "просмотров", reactions: "реакций", comments: "комментариев", shares: "репостов",
+};
+
+/** «+1 000 просмотров · 83 % итога»: сколько и какая доля метрики пришла в участке признака. */
+export function anomalyGrowthText(growth: number | null, share: number | null, metric: string | null,
+  format: (value: number) => string): { headline: string; detail: string | null } {
+  if (share === null || growth === null || metric === null) return { headline: "—", detail: null };
+  return {
+    headline: shareFormat.format(share),
+    detail: `+${format(growth)} ${METRIC_GENITIVE[metric] ?? metric}`,
+  };
+}
+
+/** Устойчивые (статус 2) находки аккаунта поста — первыми. */
+export function hasPersistentFindings(row: { accountFindings: readonly { status: number }[] }): boolean {
+  return row.accountFindings.some((item) => item.status === 2);
 }

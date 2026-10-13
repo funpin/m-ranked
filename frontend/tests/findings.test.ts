@@ -3,12 +3,13 @@ import test from "node:test";
 import {
   DEFAULT_FINDINGS_QUERY, findingBadge, findingsHrefQuery, formatIndex, normalizeFindingsQuery,
   recallInstitution, rememberInstitution,
-  findingIndex, isNewSince, periodRange, previousVisit, sortOptionsFor,
+  findingIndex, isNewSince, periodRange, previousVisit, sortOptionsFor, viewHrefQuery, anomalyGrowthText, hasPersistentFindings,
 } from "../lib/findings";
 import type { Finding } from "../lib/types";
 
 test("findings defaults to all institutions, 7 days and interaction index", () => {
   assert.deepEqual(normalizeFindingsQuery({}), {
+    view: "above_norm", clean: false,
     mode: "all", institution: null, platform: "all", period: "7d", types: [],
     sort: "interaction_index", direction: "desc", group: "none", q: "",
   });
@@ -46,7 +47,7 @@ test("institution mode keeps the id and drops grouping", () => {
 test("href query omits defaults-free empties and repeats types", () => {
   const query = normalizeFindingsQuery({ types: ["photo", "video"], q: "" });
   assert.deepEqual(findingsHrefQuery(query), {
-    mode: undefined, institution: undefined, platform: "all", period: "7d",
+    view: undefined, clean: undefined, mode: undefined, institution: undefined, platform: "all", period: "7d",
     types: ["photo", "video"], sort: "interaction_index", direction: "desc", group: undefined, q: undefined,
   });
 });
@@ -119,4 +120,29 @@ test("previousVisit pins the last visit for the session and records this one", (
   assert.equal(previousVisit(broken, broken, 1), null);
   assert.equal(isNewSince({ publishedAt: "2026-09-27T10:00:00Z" } as Finding, Date.parse("2026-09-27T09:00:00Z")), true);
   assert.equal(isNewSince({ publishedAt: "2026-09-27T10:00:00Z" } as Finding, null), false);
+});
+
+test("anomalous view has its own sorts and keeps the selection across tabs", () => {
+  const query = normalizeFindingsQuery({ view: "anomalous", sort: "interaction_index", platform: "vk", clean: "1", period: "30d" });
+  assert.equal(query.view, "anomalous");
+  assert.equal(query.sort, "anomaly");
+  assert.equal(query.clean, true);
+  assert.equal(normalizeFindingsQuery({ view: "anomalous", sort: "anomaly_volume" }).sort, "anomaly_volume");
+  assert.equal(normalizeFindingsQuery({ sort: "anomaly_share" }).sort, "interaction_index");
+  const back = viewHrefQuery(query, "above_norm");
+  assert.equal(back.view, undefined);
+  assert.equal(back.sort, undefined);
+  assert.equal(back.platform, "vk");
+  assert.equal(back.period, "30d");
+  assert.equal(back.clean, "1");
+  assert.deepEqual(sortOptionsFor("vk", "anomalous").map(([value]) => value), ["anomaly", "anomaly_share", "anomaly_volume", "published_at"]);
+});
+
+test("anomaly growth text shows the share and the gained metric", () => {
+  const text = anomalyGrowthText(1000, 0.8333, "views", (value) => String(value));
+  assert.equal(text.headline.replace(/\s/g, " "), "83 %");
+  assert.equal(text.detail, "+1000 просмотров");
+  assert.deepEqual(anomalyGrowthText(null, null, null, String), { headline: "—", detail: null });
+  assert.equal(hasPersistentFindings({ accountFindings: [{ status: 1 }, { status: 2 }] }), true);
+  assert.equal(hasPersistentFindings({ accountFindings: [{ status: 1 }] }), false);
 });

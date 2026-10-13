@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 
 from api.findings import (
-    COMMENT_NORM_FLOOR, FINDING_MIN_COMMENTS, FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS,
+    ANOMALOUS_MIN_LEVEL, COMMENT_NORM_FLOOR, FINDING_MIN_COMMENTS, FINDING_MIN_INDEX, FINDING_MIN_INTERACTIONS,
     FINDING_MIN_SHARES, INTERACTION_NORM_FLOOR, MIN_NORM_SAMPLE, NORM_WINDOW_DAYS, PAGE_CAP,
     SHARE_NORM_FLOOR, TOP_REACTIONS, VIEW_NORM_FLOOR, index, norm,
 )
@@ -64,7 +64,8 @@ class World:
 
     def post(self, published_at: datetime, points: dict[int, tuple[int | None, ...]],
              *, level: int | None = None, recheck_to: int | None = None,
-             publication_type: str = "photo", external_id: str | None = None):
+             publication_type: str = "photo", external_id: str | None = None,
+             signals: list[dict] | None = None):
         """points: час -> (просмотры, реакции[, комментарии[, репосты]])."""
         publication = uuid4()
         with _connect(self.dsn) as connection:
@@ -86,8 +87,9 @@ class World:
             if level is not None:
                 analyzed = published_at + timedelta(hours=30)
                 connection.execute("""
-                    INSERT INTO analytics.post_anomaly_state(publication_id,published_at,level,analyzed_at,next_due_at)
-                    VALUES (%s,%s,%s,%s,%s)""", (publication, published_at, level, analyzed, analyzed))
+                    INSERT INTO analytics.post_anomaly_state(publication_id,published_at,level,analyzed_at,next_due_at,signals)
+                    VALUES (%s,%s,%s,%s,%s,%s)""",
+                    (publication, published_at, level, analyzed, analyzed, Jsonb(signals or [])))
                 if recheck_to is not None:
                     connection.execute("""
                         INSERT INTO analytics.post_anomaly_context_recheck(
@@ -123,6 +125,15 @@ class World:
                         INSERT INTO ingest.reaction_breakdown(snapshot_published_month,snapshot_id,reaction_key,reaction_count)
                         VALUES (%s,%s,%s,%s)""", (month, snapshot, key, count))
 
+    def finding(self, kind: str = "late_growth", status: int = 2) -> None:
+        """Аккаунтная находка аккаунта этого вуза."""
+        with _connect(self.dsn) as connection:
+            connection.execute("""
+                INSERT INTO analytics.account_anomaly_finding(
+                  account_id,kind,platform,status,window_start,window_end,metrics,method_version)
+                VALUES (%s,%s,%s,%s,'2026-08-28','2026-09-27','{}','test')""",
+                (self.account, kind, self.platform, status))
+
     def baseline(self, count: int = MIN_NORM_SAMPLE, views: int = 1000, reactions: int = 20,
                  days_ago: int = 20) -> None:
         for number in range(count):
@@ -140,7 +151,7 @@ def run(dsn: str, world: World | None = None, **overrides) -> list[dict]:
         "sort": "interaction_index", "direction": "desc", "exclude_anomalies": True,
         "group": "none", "cap": PAGE_CAP, "comment_floor": COMMENT_NORM_FLOOR,
         "share_floor": SHARE_NORM_FLOOR, "min_comments": FINDING_MIN_COMMENTS,
-        "min_shares": FINDING_MIN_SHARES, "top_reactions": TOP_REACTIONS,
+        "min_shares": FINDING_MIN_SHARES, "top_reactions": TOP_REACTIONS, "clean": False,
     }
     params.update(overrides)
     with _connect(dsn) as connection:
@@ -354,3 +365,77 @@ def test_top_reactions_come_from_latest_snapshot(dsn) -> None:
         {"reaction": "custom:5064709487953183440", "count": 12}][:TOP_REACTIONS]
     plain = next(row for row in posts(run(dsn, world)) if row["publication_id"] == other)
     assert plain["top_reactions"] is None
+
+
+def anomalous(dsn: str, world: World | None = None, **overrides) -> list[dict]:
+    params = {
+        "as_of": AS_OF, "period_days": 7, "platform": "all",
+        "institution_legacy_id": world.legacy_id if world else None,
+        "types": [], "q": "", "search_pattern": "%", "username_pattern": "%",
+        "min_level": ANOMALOUS_MIN_LEVEL, "sort": "anomaly", "direction": "desc",
+        "group": "none", "cap": PAGE_CAP, "clean": False,
+    } | overrides
+    with _connect(dsn) as connection:
+        return connection.execute(sql.ANOMALOUS, params).fetchall()
+
+
+def _signal(share: float | None, growth: float, pattern: int = 9, metric: str = "reactions",
+            strength: float = 0.8) -> dict:
+    render = {} if share is None else {"episodeShare": share, "episodeGrowth": growth}
+    return {"pattern": pattern, "title": "Рывок", "metric": metric, "strength": strength, "render": render}
+
+
+def test_findings_carry_account_findings_and_clean_hides_persistent(dsn) -> None:
+    flagged, plain = World(dsn), World(dsn)
+    flagged.finding("late_growth", 2)
+    flagged.finding("early_pack", 1)
+    for world in (flagged, plain):
+        world.baseline()
+        world.post(AS_OF - timedelta(days=1), {24: (1000, 90)})
+    rows = {row["institution_legacy_id"]: row for row in posts(run(dsn, None))
+            if row["institution_legacy_id"] in (flagged.legacy_id, plain.legacy_id)}
+    assert rows[flagged.legacy_id]["persistent_findings"] is True
+    assert [item["kind"] for item in rows[flagged.legacy_id]["account_findings"]] == ["late_growth", "early_pack"]
+    assert rows[plain.legacy_id]["account_findings"] is None and rows[plain.legacy_id]["persistent_findings"] is False
+    clean = run(dsn, None, clean=True)
+    kept = {row["institution_legacy_id"] for row in posts(clean)}
+    assert flagged.legacy_id not in kept and plain.legacy_id in kept
+    assert clean[0]["hidden_by_findings"] >= 1
+    assert run(dsn, flagged)[0]["hidden_by_findings"] == 1
+
+
+def test_status_one_finding_is_not_hidden(dsn) -> None:
+    world = World(dsn)
+    world.finding("early_pack", 1)
+    world.baseline()
+    target = world.post(AS_OF - timedelta(days=1), {24: (1000, 90)})
+    assert target in {row["publication_id"] for row in posts(run(dsn, world, clean=True))}
+
+
+def test_anomalous_ranks_by_level_then_share(dsn) -> None:
+    world = World(dsn)
+    small = world.post(AS_OF - timedelta(days=1), {24: (1000, 20)}, level=3, signals=[_signal(0.2, 50)])
+    big = world.post(AS_OF - timedelta(days=2), {24: (1000, 20)}, level=2,
+                     signals=[_signal(0.9, 80), _signal(0.1, 5, pattern=2, metric="views")])
+    large = world.post(AS_OF - timedelta(days=3), {24: (1000, 20)}, level=3, signals=[_signal(0.7, 500)])
+    unscored = world.post(AS_OF - timedelta(days=3, hours=1), {24: (1000, 20)}, level=3, signals=[_signal(None, 0)])
+    world.post(AS_OF - timedelta(days=1), {24: (1000, 20)}, level=1, signals=[_signal(0.99, 900)])
+    rows = posts(anomalous(dsn, world))
+    assert [row["publication_id"] for row in rows] == [large, small, unscored, big]
+    top = rows[-1]
+    assert top["anomaly_share"] == 0.9 and top["anomaly_metric"] == "reactions" and top["anomaly_pattern"] == 9
+    assert len(top["anomaly_signals"]) == 2
+    by_share = posts(anomalous(dsn, world, sort="anomaly_share"))
+    assert [row["publication_id"] for row in by_share][:3] == [big, large, small]
+    assert [row["publication_id"] for row in posts(anomalous(dsn, world, sort="anomaly_volume"))][0] == large
+
+
+def test_anomalous_respects_recheck_and_clean(dsn) -> None:
+    world = World(dsn)
+    lowered = world.post(AS_OF - timedelta(days=1), {24: (1000, 20)}, level=2, recheck_to=1, signals=[_signal(0.5, 10)])
+    kept = world.post(AS_OF - timedelta(days=1, hours=2), {24: (1000, 20)}, level=2, signals=[_signal(0.5, 10)])
+    assert [row["publication_id"] for row in posts(anomalous(dsn, world))] == [kept]
+    world.finding("view_waves", 2)
+    rows = anomalous(dsn, world, clean=True)
+    assert not posts(rows) and rows[0]["hidden_by_findings"] == 1
+    assert lowered not in {row["publication_id"] for row in posts(anomalous(dsn, world))}

@@ -641,7 +641,8 @@ paths:
         non-empty checkpoint of 1, 3, 6, 12 or 24 hours) over the 30 days before the dataset
         revision. Posts with an effective anomaly level 2-3 are excluded from norms and, unless
         anomalies=include, from results. In mode=all only posts with an interaction index of at
-        least 1.5 and at least 10 interactions are returned.
+        least 1.5 and at least 10 interactions are returned. clean=1 hides posts of accounts with a
+        persistent (status 2) account-level finding (getAccountAnomalyFindings).
       security: []
       parameters:
         - { name: mode, in: query, schema: { type: string, enum: [all, institution], default: all } }
@@ -654,6 +655,7 @@ paths:
         - { name: group, in: query, schema: { type: string, enum: [none, institution], default: none } }
         - { name: q, in: query, schema: { type: string, maxLength: 200 } }
         - { name: anomalies, in: query, schema: { type: string, enum: [exclude, include], default: exclude } }
+        - { name: clean, in: query, description: '1 hides posts of accounts with a persistent account-level finding.', schema: { type: string, enum: ['0', '1'], default: '0' } }
         - { name: limit, in: query, schema: { type: integer, format: int32, minimum: 1, maximum: 50, default: 50 } }
         - { name: cursor, in: query, required: false, schema: { type: string, maxLength: 512 } }
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -666,6 +668,50 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Findings' }
+        '304':
+          description: The supplied validator matches this representation.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/findings/anomalous:
+    get:
+      tags: [Query]
+      operationId: getAnomalousFindings
+      summary: Rank publications with a pronounced anomaly by the size of their unusual growth
+      description: >-
+        Publications of the period with an effective anomaly level 2-3, ranked by level and then by
+        the share of the metric's final value gained inside the interval of a sign (episodeShare in
+        the saved analysis). Posts analyzed before the share was recorded rank last within their
+        level. clean=1 hides posts of accounts with a persistent account-level finding.
+      security: []
+      parameters:
+        - { name: mode, in: query, schema: { type: string, enum: [all, institution], default: all } }
+        - { name: institution, in: query, description: Institution legacy id; required when mode=institution., schema: { type: integer, format: int64, minimum: 1 } }
+        - { name: platform, in: query, schema: { type: string, enum: [all, telegram, vk, max, rutube], default: all } }
+        - { name: period, in: query, schema: { type: string, enum: ['1d', '7d', '30d'], default: '7d' } }
+        - { name: types, in: query, style: form, explode: true, schema: { type: array, maxItems: 5, items: { type: string, enum: [text, photo, album, video, other] } } }
+        - { name: sort, in: query, schema: { type: string, enum: [anomaly, anomaly_share, anomaly_volume, published_at], default: anomaly } }
+        - { name: direction, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { name: group, in: query, schema: { type: string, enum: [none, institution], default: none } }
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: clean, in: query, description: '1 hides posts of accounts with a persistent account-level finding.', schema: { type: string, enum: ['0', '1'], default: '0' } }
+        - { name: limit, in: query, schema: { type: integer, format: int32, minimum: 1, maximum: 50, default: 50 } }
+        - { name: cursor, in: query, required: false, schema: { type: string, maxLength: 512 } }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Revision-pinned ranking of anomalous publications.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/PublicCache' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnomalousFindings' }
         '304':
           description: The supplied validator matches this representation.
           headers:
@@ -4932,7 +4978,7 @@ components:
     Finding:
       type: object
       additionalProperties: false
-      required: [publicationId, institutionId, institutionLegacyId, institutionShortName, institutionCanonicalName, accountId, platform, publicationType, externalId, publicUrl, publishedAt, ageHours, preliminary, interactionIndex, viewIndex, interactionNorm, viewNorm, normSampleSize, interactions, reactions, comments, shares, views, erv, anomalyLevel, capabilities, commentIndex, shareIndex, commentNorm, shareNorm, topReactions, curve]
+      required: [publicationId, institutionId, institutionLegacyId, institutionShortName, institutionCanonicalName, accountId, platform, publicationType, externalId, publicUrl, publishedAt, ageHours, preliminary, interactionIndex, viewIndex, interactionNorm, viewNorm, normSampleSize, interactions, reactions, comments, shares, views, erv, anomalyLevel, capabilities, commentIndex, shareIndex, commentNorm, shareNorm, topReactions, curve, accountFindings]
       properties:
         publicationId: { type: string, format: uuid }
         institutionId: { type: string, format: uuid }
@@ -4984,6 +5030,91 @@ components:
             hours: { type: array, items: { type: integer, enum: [1, 3, 6, 12, 24] }, minItems: 5, maxItems: 5 }
             post: { type: array, items: { type: ['integer', 'null'], minimum: 0 }, minItems: 5, maxItems: 5 }
             norm: { type: array, items: { type: ['number', 'null'], minimum: 0 }, minItems: 5, maxItems: 5 }
+        accountFindings: { $ref: '#/components/schemas/PostAccountFindings' }
+    PostAccountFindings:
+      type: array
+      description: Account-level findings of the post's account (getAccountAnomalyFindings); status 2 is persistent.
+      items:
+        type: object
+        additionalProperties: false
+        required: [kind, status]
+        properties:
+          kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share] }
+          status: { type: integer, enum: [1, 2] }
+    AnomalousPost:
+      type: object
+      additionalProperties: false
+      required: [publicationId, institutionId, institutionLegacyId, institutionShortName, institutionCanonicalName, accountId, platform, publicationType, externalId, publicUrl, publishedAt, anomalyLevel, anomalyShare, anomalyGrowth, anomalyMetric, anomalyPattern, signals, views, reactions, comments, shares, accountFindings]
+      properties:
+        publicationId: { type: string, format: uuid }
+        institutionId: { type: string, format: uuid }
+        institutionLegacyId: { type: ['integer', 'null'], format: int64 }
+        institutionShortName: { type: ['string', 'null'] }
+        institutionCanonicalName: { type: string }
+        accountId: { type: string, format: uuid }
+        platform: { type: string, enum: [telegram, vk, max, rutube] }
+        publicationType: { type: string }
+        externalId: { type: ['string', 'null'] }
+        publicUrl: { type: ['string', 'null'] }
+        publishedAt: { type: ['string', 'null'], format: date-time }
+        anomalyLevel: { type: integer, minimum: 2, maximum: 3 }
+        anomalyShare: { type: ['number', 'null'], minimum: 0, maximum: 1, description: Share of the metric's final value gained inside the interval of the strongest-by-share sign; null until the post is re-analyzed. }
+        anomalyGrowth: { type: ['integer', 'null'], minimum: 0, description: Growth of that metric inside the sign interval. }
+        anomalyMetric: { type: ['string', 'null'], enum: [views, reactions, comments, shares, null] }
+        anomalyPattern: { type: ['integer', 'null'] }
+        signals:
+          type: array
+          maxItems: 6
+          items:
+            type: object
+            additionalProperties: false
+            required: [pattern, title, metric, strength]
+            properties:
+              pattern: { type: integer }
+              title: { type: string }
+              metric: { type: string, enum: [views, reactions, comments, shares] }
+              strength: { type: ['number', 'null'], minimum: 0, maximum: 1 }
+        views: { type: ['integer', 'null'], minimum: 0 }
+        reactions: { type: ['integer', 'null'], minimum: 0 }
+        comments: { type: ['integer', 'null'], minimum: 0 }
+        shares: { type: ['integer', 'null'], minimum: 0 }
+        accountFindings: { $ref: '#/components/schemas/PostAccountFindings' }
+    AnomalousGroup:
+      type: object
+      additionalProperties: false
+      required: [institutionLegacyId, institutionShortName, institutionCanonicalName, findingCount, items]
+      properties:
+        institutionLegacyId: { type: ['integer', 'null'], format: int64 }
+        institutionShortName: { type: ['string', 'null'] }
+        institutionCanonicalName: { type: string }
+        findingCount: { type: integer, minimum: 1 }
+        items: { type: array, maxItems: 3, items: { $ref: '#/components/schemas/AnomalousPost' } }
+    AnomalousFindings:
+      type: object
+      additionalProperties: false
+      required: [mode, institution, platform, period, types, sort, direction, group, q, clean, items, groups, total, hiddenByFindings, institutions, limit, offset, hasMore, nextCursor, datasetRevision, asOf]
+      properties:
+        mode: { type: string, enum: [all, institution] }
+        institution: { type: ['integer', 'null'], format: int64 }
+        platform: { type: string, enum: [all, telegram, vk, max, rutube] }
+        period: { type: string, enum: ['1d', '7d', '30d'] }
+        types: { type: array, items: { type: string, enum: [text, photo, album, video, other] } }
+        sort: { type: string, enum: [anomaly, anomaly_share, anomaly_volume, published_at] }
+        direction: { type: string, enum: [asc, desc] }
+        group: { type: string, enum: [none, institution] }
+        q: { type: string, maxLength: 200 }
+        clean: { type: boolean }
+        items: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/AnomalousPost' } }
+        groups: { type: array, items: { $ref: '#/components/schemas/AnomalousGroup' } }
+        total: { type: integer, minimum: 0 }
+        hiddenByFindings: { type: integer, minimum: 0, description: 'Posts of accounts with a persistent account-level finding: hidden with clean=1, shown otherwise.' }
+        institutions: { type: array, items: { $ref: '#/components/schemas/FindingInstitution' } }
+        limit: { type: integer, format: int32, minimum: 1, maximum: 50 }
+        offset: { type: integer, minimum: 0 }
+        hasMore: { type: boolean }
+        nextCursor: { type: ['string', 'null'] }
+        datasetRevision: { type: integer, format: int64, minimum: 0 }
+        asOf: { type: string, format: date-time }
     FindingGroup:
       type: object
       additionalProperties: false
@@ -5005,7 +5136,7 @@ components:
     Findings:
       type: object
       additionalProperties: false
-      required: [mode, institution, platform, period, types, sort, direction, group, q, anomalies, items, groups, total, hiddenAnomalous, institutions, limit, offset, hasMore, nextCursor, datasetRevision, asOf]
+      required: [mode, institution, platform, period, types, sort, direction, group, q, anomalies, clean, items, groups, total, hiddenAnomalous, hiddenByFindings, institutions, limit, offset, hasMore, nextCursor, datasetRevision, asOf]
       properties:
         mode: { type: string, enum: [all, institution] }
         institution: { type: ['integer', 'null'], format: int64 }
@@ -5017,10 +5148,12 @@ components:
         group: { type: string, enum: [none, institution] }
         q: { type: string, maxLength: 200 }
         anomalies: { type: string, enum: [exclude, include] }
+        clean: { type: boolean }
         items: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/Finding' } }
         groups: { type: array, items: { $ref: '#/components/schemas/FindingGroup' } }
         total: { type: integer, minimum: 0 }
         hiddenAnomalous: { type: integer, minimum: 0 }
+        hiddenByFindings: { type: integer, minimum: 0, description: 'Posts of accounts with a persistent account-level finding: hidden with clean=1, shown otherwise.' }
         institutions: { type: array, items: { $ref: '#/components/schemas/FindingInstitution' } }
         limit: { type: integer, format: int32, minimum: 1, maximum: 50 }
         offset: { type: integer, minimum: 0 }

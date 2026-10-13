@@ -26,7 +26,7 @@ test("MAX fits its selection and comparison tabs have a visible selected surface
     await page.emulateMedia({ colorScheme: theme });
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const path of ["/review?platform=max", "/statistics?platform=max"]) {
+      for (const path of ["/review?platform=max", "/findings?platform=max"]) {
         await page.goto(path);
         const max = page.getByTestId("platform-segments").getByRole("radio", { name: "MAX", exact: true });
         await expect(max).toBeChecked();
@@ -60,9 +60,9 @@ test("filter rows fill available space with the same controls on every public pa
   await page.emulateMedia({ colorScheme: "dark" });
   const pages = [
     { path: "/review?platform=vk", periods: 4, singleRow: true },
-    { path: "/statistics?platform=vk", periods: 3, singleRow: true },
+    { path: "/findings?platform=vk", periods: 3, singleRow: true },
     // «Мой вуз»: поле вуза — отдельная строка на всю ширину.
-    { path: "/statistics?mode=institution&institution=1", periods: 3, singleRow: false },
+    { path: "/findings?mode=institution&institution=1", periods: 3, singleRow: false },
   ];
   for (const width of [320, 375, 390, 430, 640, 768, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -95,7 +95,7 @@ test("filter rows fill available space with the same controls on every public pa
         const direction = form.querySelector('[data-testid="direction-segments"]')!.getBoundingClientRect();
         return { radius: style.borderRadius, padding: style.padding, gap: style.gap, search: Math.round(search.height), direction: Math.round(direction.height) };
       }));
-      if ([390,768,1024,1280,1440].includes(width)) await toolbar.screenshot({ path: `/tmp/mranked-toolbar-${width}-${path.startsWith("/review") ? "review" : path.includes("institution=") ? "institution" : "statistics"}.png` });
+      if ([390,768,1024,1280,1440].includes(width)) await toolbar.screenshot({ path: `/tmp/mranked-toolbar-${width}-${path.startsWith("/review") ? "review" : path.includes("institution=") ? "institution" : "findings"}.png` });
     }
     expect(controls[1]).toEqual(controls[0]);
     expect(controls[2]).toEqual(controls[0]);
@@ -112,7 +112,7 @@ test("icon-only direction submits and survives browser history", async ({ page }
   await expect(page).toHaveURL(/direction=desc/);
   await page.goBack();
   await expect(toolbar.getByRole("radio", { name: "По возрастанию", exact: true })).toBeChecked();
-  await page.goto("/statistics?platform=vk");
+  await page.goto("/findings?platform=vk");
   await toolbar.getByRole("radio", { name: "По возрастанию", exact: true }).check();
   await expect(page).toHaveURL(/[?&]direction=asc/);
   await expect(toolbar.getByRole("radio", { name: "По возрастанию", exact: true })).toBeChecked();

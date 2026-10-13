@@ -78,6 +78,27 @@ function finding(id: number, platform: "telegram" | "vk" | "max" | "rutube", ins
       ? [{ reaction: "🔥", count: 40 }, { reaction: "❤", count: 25 }, { reaction: "👍", count: 15 }] : [],
     curve: { hours: [1, 3, 6, 12, 24], post: [10, 30, 55, id === 2 ? null : 80, id === 2 ? null : 100 - id],
       norm: [4, 9, 13, 17, 20] },
+    accountFindings: fixtureAccountFindings(institution),
+  };
+}
+/** У первого вуза — устойчивая и обычная аккаунтные находки, у второго их нет. */
+function fixtureAccountFindings(institution: number): Schema["PostAccountFindings"] {
+  return institution === 1 ? [{ kind: "view_waves", status: 2 }, { kind: "early_pack", status: 1 }] : [];
+}
+function anomalousPost(id: number, platform: "telegram" | "vk" | "max" | "rutube", institution = 1): Schema["AnomalousPost"] {
+  return {
+    publicationId: uuid(6, id), institutionId: uuid(9, institution), institutionLegacyId: institution,
+    institutionShortName: `Вуз ${String(institution).padStart(3, "0")}`,
+    institutionCanonicalName: `Полное название университета ${String(institution).padStart(3, "0")}`,
+    accountId: uuid(1, institution), platform, publicationType: id % 3 === 0 ? "video" : "photo",
+    externalId: String(id), publicUrl: `https://example.test/${id}`, publishedAt: asOf,
+    anomalyLevel: id <= 10 ? 3 : 2, anomalyShare: id === 4 ? null : Math.max(0.05, 0.95 - id / 40),
+    anomalyGrowth: id === 4 ? null : 5000 - id * 100, anomalyMetric: id === 4 ? null : id % 2 ? "views" : "reactions",
+    anomalyPattern: id === 4 ? null : id % 2 ? 1 : 9,
+    signals: [{ pattern: id % 2 ? 1 : 9, title: id % 2 ? "Линейная подача" : "Рывок, обрывающийся в плато", metric: id % 2 ? "views" : "reactions", strength: 0.95 },
+      { pattern: 2, title: "Поздний скачок", metric: "views", strength: 0.75 }],
+    views: 12000, reactions: 300, comments: platform === "max" ? null : 4, shares: platform === "vk" ? 2 : null,
+    accountFindings: fixtureAccountFindings(institution),
   };
 }
 
@@ -446,7 +467,9 @@ const server = createServer(async (request, response) => {
     const empty = url.searchParams.get("q") === "missing";
     const group = (url.searchParams.get("group") ?? "none") as Schema["Findings"]["group"];
     const rowPlatform = platform === "all" ? "vk" : platform;
-    const items = empty ? [] : Array.from({ length: 30 }, (_, index) => finding(index + 1, rowPlatform, mode === "institution" ? institution! : (index % 2) + 1));
+    const clean = url.searchParams.get("clean") === "1";
+    const all = empty ? [] : Array.from({ length: 30 }, (_, index) => finding(index + 1, rowPlatform, mode === "institution" ? institution! : (index % 2) + 1));
+    const items = clean ? all.filter((item) => !item.accountFindings.some((entry) => entry.status === 2)) : all;
     const body: Schema["Findings"] = {
       mode: mode as Schema["Findings"]["mode"], institution, platform,
       period: (url.searchParams.get("period") ?? "7d") as Schema["Findings"]["period"],
@@ -461,7 +484,39 @@ const server = createServer(async (request, response) => {
         institutionCanonicalName: `Полное название университета ${String(number).padStart(3, "0")}`,
         findingCount: 15, items: items.filter((item) => item.institutionLegacyId === number).slice(0, 3),
       })) : [],
-      total: items.length, hiddenAnomalous: empty ? 0 : 3,
+      total: items.length, hiddenAnomalous: empty ? 0 : 3, clean, hiddenByFindings: all.filter((item) => item.accountFindings.some((entry) => entry.status === 2)).length,
+      institutions: [1, 2].map((number) => ({ legacyId: number, shortName: `Вуз ${String(number).padStart(3, "0")}`, canonicalName: `Полное название университета ${String(number).padStart(3, "0")}` })),
+      limit: 50, offset: 0, hasMore: false, nextCursor: null, datasetRevision: revision, asOf,
+    };
+    return json(body);
+  }
+  if (url.pathname === "/api/v1/findings/anomalous") {
+    const mode = url.searchParams.get("mode") ?? "all";
+    const institution = Number(url.searchParams.get("institution") ?? "0") || null;
+    if (mode === "institution" && institution !== 1 && institution !== 2) {
+      return json({ type: "about:blank", title: "Not Found", status: 404, detail: "вуз не найден" }, 404);
+    }
+    const platform = (url.searchParams.get("platform") ?? "all") as Schema["AnomalousFindings"]["platform"];
+    const empty = url.searchParams.get("q") === "missing";
+    const group = (url.searchParams.get("group") ?? "none") as Schema["AnomalousFindings"]["group"];
+    const clean = url.searchParams.get("clean") === "1";
+    const rowPlatform = platform === "all" ? "vk" : platform;
+    const all = empty ? [] : Array.from({ length: 20 }, (_, index) => anomalousPost(index + 1, rowPlatform, mode === "institution" ? institution! : (index % 2) + 1));
+    const items = clean ? all.filter((item) => !item.accountFindings.some((entry) => entry.status === 2)) : all;
+    const body: Schema["AnomalousFindings"] = {
+      mode: mode as Schema["AnomalousFindings"]["mode"], institution, platform,
+      period: (url.searchParams.get("period") ?? "7d") as Schema["AnomalousFindings"]["period"],
+      types: url.searchParams.getAll("types") as Schema["AnomalousFindings"]["types"],
+      sort: (url.searchParams.get("sort") ?? "anomaly") as Schema["AnomalousFindings"]["sort"],
+      direction: (url.searchParams.get("direction") ?? "desc") as Schema["AnomalousFindings"]["direction"],
+      group, q: url.searchParams.get("q") ?? "", clean,
+      items: group === "none" ? items : [],
+      groups: group === "institution" && !empty ? [1, 2].map((number) => ({
+        institutionLegacyId: number, institutionShortName: `Вуз ${String(number).padStart(3, "0")}`,
+        institutionCanonicalName: `Полное название университета ${String(number).padStart(3, "0")}`,
+        findingCount: 10, items: items.filter((item) => item.institutionLegacyId === number).slice(0, 3),
+      })).filter((entry) => entry.items.length) : [],
+      total: items.length, hiddenByFindings: all.filter((item) => item.accountFindings.some((entry) => entry.status === 2)).length,
       institutions: [1, 2].map((number) => ({ legacyId: number, shortName: `Вуз ${String(number).padStart(3, "0")}`, canonicalName: `Полное название университета ${String(number).padStart(3, "0")}` })),
       limit: 50, offset: 0, hasMore: false, nextCursor: null, datasetRevision: revision, asOf,
     };

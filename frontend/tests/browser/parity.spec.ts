@@ -109,8 +109,8 @@ test("legacy validation returns 422 and repeated scalar chooses last", async ({ 
 });
 
 test("findings list shows posts above norm with one badge and hidden-anomaly note", async ({ page }, info) => {
-  await page.goto("/statistics?platform=vk");
-  await expect(page.getByRole("heading", { level: 1, name: "Находки: посты выше нормы" })).toBeVisible();
+  await page.goto("/findings?platform=vk");
+  await expect(page.getByRole("heading", { level: 1, name: "Находки" })).toBeVisible();
   const rows = info.project.name === "mobile"
     ? page.getByTestId("findings-cards").locator("article")
     : page.getByTestId("findings-table").locator("tbody tr");
@@ -142,8 +142,50 @@ test("findings list shows posts above norm with one badge and hidden-anomaly not
   await expect(rows).toHaveCount(30);
 });
 
+test("findings flags accounts with persistent findings and hides them on request", async ({ page }, info) => {
+  await page.goto("/findings?platform=vk");
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("findings-cards").locator("article")
+    : page.getByTestId("findings-table").locator("tbody tr");
+  // Вуз 001 — устойчивая находка «Волны просмотров по стене», Вуз 002 — без находок.
+  await expect(rows.first().getByTestId("findings-account-flag")).toHaveAttribute("aria-label", /Волны просмотров по стене \(устойчиво\)/);
+  await expect(rows.nth(1).getByTestId("findings-account-flag")).toHaveCount(0);
+  const toggle = page.getByTestId("findings-clean-toggle");
+  await expect(toggle).toContainText("Скрыть аккаунты с устойчивыми находками (15)");
+  await toggle.click();
+  await expect(page).toHaveURL(/clean=1/);
+  await expect(rows.first()).toContainText("Вуз 002");
+  await expect(page.getByTestId("findings-account-flag")).toHaveCount(0);
+  await expect(page.getByTestId("findings-clean-toggle").locator("input")).toBeChecked();
+});
+
+test("findings switches to the anomalous ranking with its own sorts and keeps the selection", async ({ page }, info) => {
+  await page.goto("/findings?platform=telegram&period=30d&sort=views24");
+  await page.getByTestId("findings-view-tabs").getByRole("link", { name: "Аномальные посты" }).click();
+  await expect(page).toHaveURL(/view=anomalous/);
+  await expect(page).toHaveURL(/platform=telegram/);
+  await expect(page).toHaveURL(/period=30d/);
+  await expect(page.locator('select[name="sort"]')).toHaveValue("anomaly");
+  await expect(page.getByTestId("findings-view-tabs").getByRole("link", { name: "Аномальные посты" })).toHaveAttribute("aria-current", "page");
+  const rows = info.project.name === "mobile"
+    ? page.getByTestId("anomalous-cards").locator("article")
+    : page.getByTestId("anomalous-table").locator("tbody tr");
+  await expect(rows).toHaveCount(20);
+  await expect(rows.first()).toContainText("признаки искусственной активности");
+  await expect(rows.first()).toContainText(/92\s%/);
+  await expect(rows.first()).toContainText(/\+4\s900 просмотров/);
+  // Доля ещё не посчитана — прочерк, а не ноль.
+  await expect(rows.nth(3).getByRole("button", { name: /Доля ещё не посчитана/ })).toHaveText("—");
+  await page.locator('select[name="sort"]').selectOption("anomaly_volume");
+  await expect(page).toHaveURL(/sort=anomaly_volume/);
+  await expect(page).toHaveURL(/view=anomalous/);
+  await page.getByTestId("findings-view-tabs").getByRole("link", { name: "Выше нормы" }).click();
+  await expect(page).not.toHaveURL(/view=/);
+  await expect(page.locator('select[name="sort"]')).toHaveValue("interaction_index");
+});
+
 test("findings shows the period window, growth curves, top reactions and per-platform sorts", async ({ page }, info) => {
-  await page.goto("/statistics?platform=telegram");
+  await page.goto("/findings?platform=telegram");
   // Период отсчитывается от момента данных двойника (01.08.2026, 15:00 МСК).
   await expect(page.getByText("период 25.07 – 01.08")).toBeVisible();
   const rows = info.project.name === "mobile"
@@ -155,9 +197,9 @@ test("findings shows the period window, growth curves, top reactions and per-pla
   const sort = page.locator('select[name="sort"]');
   await expect(sort.locator("option")).toContainText(["Обсуждаемые"]);
   await expect(sort.locator('option[value="share_index"]')).toHaveCount(0);
-  await page.goto("/statistics?platform=max");
+  await page.goto("/findings?platform=max");
   await expect(page.locator('select[name="sort"] option[value="comment_index"]')).toHaveCount(0);
-  await page.goto("/statistics?platform=vk&sort=share_index");
+  await page.goto("/findings?platform=vk&sort=share_index");
   await expect(page.locator('select[name="sort"]')).toHaveValue("share_index");
   if (info.project.name !== "mobile") await expect(page.getByRole("columnheader", { name: /Индекс · репосты/ })).toBeVisible();
 });
@@ -168,7 +210,7 @@ test("findings marks posts new since the last visit and the remembered vuz in th
     localStorage.setItem("m-ranked-findings-visit", String(Date.parse("2026-07-31T00:00:00Z")));
     localStorage.setItem("m-ranked-findings-institution", "2");
   });
-  await page.goto("/statistics?platform=vk");
+  await page.goto("/findings?platform=vk");
   const rows = info.project.name === "mobile"
     ? page.getByTestId("findings-cards").locator("article")
     : page.getByTestId("findings-table").locator("tbody tr");
@@ -187,12 +229,12 @@ test("findings marks posts new since the last visit and the remembered vuz in th
   await page.reload();
   await expect(rows.first().getByText("Новое с прошлого визита.")).toBeAttached();
   // В «Моём вузе» свои все строки — отметка не нужна.
-  await page.goto("/statistics?mode=institution&institution=2&platform=vk");
+  await page.goto("/findings?mode=institution&institution=2&platform=vk");
   await expect(page.getByText("ваш вуз", { exact: true })).toHaveCount(0);
 });
 
 test("findings restores URL state and searches", async ({ page }) => {
-  await page.goto("/statistics?platform=vk&period=30d&sort=views24&direction=asc&q=alpha");
+  await page.goto("/findings?platform=vk&period=30d&sort=views24&direction=asc&q=alpha");
   await expect(page.locator('input[name="period"][value="30d"]')).toBeChecked();
   await expect(page.locator('select[name="sort"]')).toHaveValue("views24");
   await expect(page.locator('input[name="direction"][value="asc"]')).toBeChecked();
@@ -207,7 +249,7 @@ test("findings restores URL state and searches", async ({ page }) => {
 });
 
 test("findings groups by institution and links into institution mode", async ({ page }) => {
-  await page.goto("/statistics?group=institution");
+  await page.goto("/findings?group=institution");
   const groups = page.getByTestId("findings-groups").locator("section");
   await expect(groups).toHaveCount(2);
   await expect(groups.first().getByRole("heading", { level: 2 })).toHaveText("Вуз 001");
@@ -218,12 +260,12 @@ test("findings groups by institution and links into institution mode", async ({ 
 });
 
 test("institution mode without a choice asks for one and unknown id is not an error", async ({ page }) => {
-  await page.goto("/statistics?mode=institution");
+  await page.goto("/findings?mode=institution");
   await expect(page.getByText("Выберите вуз, чтобы увидеть его посты")).toBeVisible();
   await page.getByRole("combobox", { name: "Вуз" }).fill("002");
   await page.getByRole("option", { name: /Вуз 002/ }).click();
   await expect(page).toHaveURL(/institution=2/);
-  await page.goto("/statistics?mode=institution&institution=999");
+  await page.goto("/findings?mode=institution&institution=999");
   await expect(page.getByText("Вуз не найден — выберите другой")).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Вуз" })).toBeVisible();
   await expect(page.getByRole("alert").filter({ hasText: "Не удалось загрузить данные" })).toHaveCount(0);
@@ -237,7 +279,7 @@ test("institution choice works when localStorage throws", async ({ page }) => {
     const fail = () => { throw new DOMException("denied", "SecurityError"); };
     Object.defineProperty(window, "localStorage", { configurable: true, get: fail });
   });
-  await page.goto("/statistics?mode=institution");
+  await page.goto("/findings?mode=institution");
   await expect(page.getByText("Выберите вуз, чтобы увидеть его посты")).toBeVisible();
   await page.getByRole("combobox", { name: "Вуз" }).fill("002");
   await page.getByRole("option", { name: /Вуз 002/ }).click();
@@ -247,7 +289,7 @@ test("institution choice works when localStorage throws", async ({ page }) => {
 });
 
 test("findings filters popover applies publication types once on close", async ({ page }) => {
-  await page.goto("/statistics");
+  await page.goto("/findings");
   const trigger = page.getByRole("button", { name: /Фильтры/ });
   await trigger.click();
   await page.getByRole("checkbox", { name: "Видео" }).check();
@@ -438,8 +480,8 @@ test("account list and institutional zero/one/many routes preserve identity",asy
   await page.goto("/platform-accounts/3");await expect(page.getByTestId("brand")).toHaveAttribute("href","/");await expect(page.locator('[data-testid="main-nav"] a[href^="/review"]')).toHaveAttribute("href","/review?platform=max");
 });
 
-test("overview and statistics share a dense responsive toolbar",async({page},info)=>{
-  for(const path of ["/review?platform=telegram","/statistics?platform=telegram"]){
+test("overview and findings share a dense responsive toolbar",async({page},info)=>{
+  for(const path of ["/review?platform=telegram","/findings?platform=telegram"]){
     await page.goto(path);
     const toolbar=page.getByTestId("filter-toolbar");
     await expect(toolbar).toBeVisible();

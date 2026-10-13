@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "7bd1898ffd4ca64d52c6d050e9d33d9d6f304c7315bfb10ae4ccfbc746121467",
+  "sourceSha256": "f14472d34a9dc3d6c59ac1e5856f58049773c228eb8bed09546492a58d9fe7e3",
   "version": "1.0.0",
   "operations": [
     {
@@ -946,6 +946,17 @@
           "default": "exclude"
         },
         {
+          "name": "clean",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "default": "0"
+        },
+        {
           "name": "limit",
           "in": "query",
           "required": false,
@@ -1004,6 +1015,10 @@
           "type": "string"
         },
         {
+          "name": "clean",
+          "type": "boolean"
+        },
+        {
           "name": "items",
           "type": "object[]"
         },
@@ -1017,6 +1032,221 @@
         },
         {
           "name": "hiddenAnomalous",
+          "type": "integer"
+        },
+        {
+          "name": "hiddenByFindings",
+          "type": "integer"
+        },
+        {
+          "name": "institutions",
+          "type": "object[]"
+        },
+        {
+          "name": "limit",
+          "type": "integer"
+        },
+        {
+          "name": "offset",
+          "type": "integer"
+        },
+        {
+          "name": "hasMore",
+          "type": "boolean"
+        },
+        {
+          "name": "nextCursor",
+          "type": "string | null"
+        },
+        {
+          "name": "datasetRevision",
+          "type": "integer"
+        },
+        {
+          "name": "asOf",
+          "type": "date-time"
+        }
+      ]
+    },
+    {
+      "operationId": "getAnomalousFindings",
+      "path": "/api/v1/findings/anomalous",
+      "summary": "Rank publications with a pronounced anomaly by the size of their unusual growth",
+      "parameters": [
+        {
+          "name": "mode",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "institution"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "institution",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "platform",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "all",
+            "telegram",
+            "vk",
+            "max",
+            "rutube"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "period",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "1d",
+            "7d",
+            "30d"
+          ],
+          "default": "7d"
+        },
+        {
+          "name": "types",
+          "in": "query",
+          "required": false,
+          "type": "string[]"
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "anomaly",
+            "anomaly_share",
+            "anomaly_volume",
+            "published_at"
+          ],
+          "default": "anomaly"
+        },
+        {
+          "name": "direction",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "default": "desc"
+        },
+        {
+          "name": "group",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "none",
+            "institution"
+          ],
+          "default": "none"
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "clean",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "enum": [
+            "0",
+            "1"
+          ],
+          "default": "0"
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "required": false,
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 50
+        },
+        {
+          "name": "cursor",
+          "in": "query",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "response": "AnomalousFindings",
+      "fields": [
+        {
+          "name": "mode",
+          "type": "string"
+        },
+        {
+          "name": "institution",
+          "type": "integer | null"
+        },
+        {
+          "name": "platform",
+          "type": "string"
+        },
+        {
+          "name": "period",
+          "type": "string"
+        },
+        {
+          "name": "types",
+          "type": "string[]"
+        },
+        {
+          "name": "sort",
+          "type": "string"
+        },
+        {
+          "name": "direction",
+          "type": "string"
+        },
+        {
+          "name": "group",
+          "type": "string"
+        },
+        {
+          "name": "q",
+          "type": "string"
+        },
+        {
+          "name": "clean",
+          "type": "boolean"
+        },
+        {
+          "name": "items",
+          "type": "object[]"
+        },
+        {
+          "name": "groups",
+          "type": "object[]"
+        },
+        {
+          "name": "total",
+          "type": "integer"
+        },
+        {
+          "name": "hiddenByFindings",
           "type": "integer"
         },
         {

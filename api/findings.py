@@ -30,6 +30,11 @@ FINDING_MIN_COMMENTS = 5
 FINDING_MIN_SHARES = 5
 CURVE_HOURS = (1, 3, 6, 12, 24)
 TOP_REACTIONS = 3
+# Раздел «Аномальные посты»: только выраженная аномалия и признаки
+# искусственной активности (действующие уровни 2–3); слабый сигнал в рейтинг
+# «самых необычных» не попадает.
+ANOMALOUS_MIN_LEVEL = 2
+ANOMALOUS_SORTS = ("anomaly", "anomaly_share", "anomaly_volume", "published_at")
 
 
 def type_bucket(publication_type: str) -> str:

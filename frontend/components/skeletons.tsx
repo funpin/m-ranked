@@ -121,10 +121,10 @@ export function TableSkeleton({ rows = 10, chrome = true }: { rows?: number; chr
   );
 }
 
-/** Статистика меняет представление в том же breakpoint, что и результат:
+/** Находки меняют представление в том же breakpoint, что и результат:
  *  строки на широком экране и полноценные карточки на телефоне. Старая
  *  заготовка всегда обещала таблицу, а затем резко меняла и ширину, и высоту. */
-export function StatisticsSkeleton({ rows = 5, chrome = true }: {
+export function FindingsSkeleton({ rows = 5, chrome = true }: {
   rows?: number;
   chrome?: boolean;
 }) {
@@ -132,7 +132,7 @@ export function StatisticsSkeleton({ rows = 5, chrome = true }: {
     <>
       {chrome ? <FindingsChrome /> : null}
       <section className="min-w-0 space-y-3" role="status" aria-live="polite">
-        <span className="sr-only">Загрузка статистики</span>
+        <span className="sr-only">Загрузка находок</span>
         <Skeleton className="h-6 w-44" />
         <div className="grid min-w-0 gap-3 md:hidden">
           {Array.from({ length: Math.min(rows, 5) }, (_, index) => (
@@ -257,7 +257,7 @@ export function skeletonFor(href: string) {
   if (!href) return null;
   const path = href.split("?")[0] ?? "";
   if (path === "/review") return <CardGridSkeleton />;
-  if (path.startsWith("/statistics")) return <StatisticsSkeleton />;
+  if (path.startsWith("/findings")) return <FindingsSkeleton />;
   if (path.startsWith("/compare")) {
     return <CompareDashboardSkeleton />;
   }

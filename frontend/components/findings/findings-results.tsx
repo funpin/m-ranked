@@ -3,6 +3,7 @@
 import { ExternalLink } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "@/components/native-link";
+import { AccountFindingsFlag } from "@/components/findings/account-findings-flag";
 import { GrowthSparkline } from "@/components/findings/growth-sparkline";
 import { ReactionGlyph } from "@/components/reaction-glyph";
 import { RowLink } from "@/components/row-link";
@@ -20,7 +21,7 @@ import {
 } from "@/lib/findings";
 import { formatMetric, formatPercentage, PLATFORM_LABELS, publicationLabel } from "@/lib/format";
 import { queryHref } from "@/lib/params";
-import type { Finding, FindingsPage } from "@/lib/types";
+import type { AnomalousPost, Finding, FindingsPage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const published = new Intl.DateTimeFormat("ru-RU", {
@@ -31,7 +32,7 @@ const published = new Intl.DateTimeFormat("ru-RU", {
 const INITIAL_ROWS = 20;
 
 /** Что знает о пользователе только его браузер: прошлый визит и «свой» вуз. */
-type Personal = { visit: number | null; mine: number | null };
+export type Personal = { visit: number | null; mine: number | null };
 
 function storage(name: "localStorage" | "sessionStorage"): Storage | null {
   try { return window[name]; } catch { return null; }
@@ -39,7 +40,7 @@ function storage(name: "localStorage" | "sessionStorage"): Storage | null {
 
 /** Читается после монтирования: сервер не знает localStorage, и разметка
  *  до гидратации должна совпасть. */
-function usePersonal(): Personal {
+export function usePersonal(): Personal {
   const [personal, setPersonal] = useState<Personal>({ visit: null, mine: null });
   useEffect(() => {
     const local = storage("localStorage");
@@ -72,7 +73,7 @@ export function FindingsResults({ page, query, anomaliesVisible }: {
           <FindingRows rows={group.items} query={query} anomaliesVisible={anomaliesVisible} showInstitution={false} personal={personal} />
           {group.institutionLegacyId !== null ? (
             <Link className="mt-3 inline-block text-sm underline-offset-4 hover:underline" prefetch={false}
-              href={queryHref("/statistics", { ...findingsHrefQuery(query), mode: "institution", institution: group.institutionLegacyId, group: undefined })}>
+              href={queryHref("/findings", { ...findingsHrefQuery(query), mode: "institution", institution: group.institutionLegacyId, group: undefined })}>
               Все посты вуза →
             </Link>
           ) : null}
@@ -88,17 +89,17 @@ export function FindingsResults({ page, query, anomaliesVisible }: {
     <FindingRows rows={visible} query={query} anomaliesVisible={anomaliesVisible} showInstitution={query.mode === "all"} personal={personal} />
     {shown < page.items.length ? <div className="flex justify-center"><Button type="button" variant="outline" onClick={() => setShown(page.items.length)}>Показать ещё</Button></div>
       : page.nextCursor ? <div className="flex justify-center"><Link className={buttonVariants({ variant: "outline" })} prefetch={false}
-          href={queryHref("/statistics", { ...findingsHrefQuery(query), cursor: page.nextCursor })}>Следующие 50</Link></div> : null}
+          href={queryHref("/findings", { ...findingsHrefQuery(query), cursor: page.nextCursor })}>Следующие 50</Link></div> : null}
     {hiddenNote}
   </div></TooltipProvider>;
 }
 
-const SORT_LABELS = Object.fromEntries(FINDINGS_SORT_OPTIONS) as Record<ParsedFindingsQuery["sort"], string>;
+const SORT_LABELS = Object.fromEntries(FINDINGS_SORT_OPTIONS) as Record<string, string>;
 
 /** «Ваш вуз» — синим цветом бренда (--chart-2), а не почти чёрным primary:
  *  в светлой теме полупрозрачный primary сливался с наведением на строку. */
-const MINE_ROW = "bg-[color-mix(in_oklch,var(--chart-2)_8%,transparent)] shadow-[inset_4px_0_0_var(--chart-2)] hover:bg-[color-mix(in_oklch,var(--chart-2)_12%,transparent)]";
-const MINE_CARD = "border-2 border-[var(--chart-2)] bg-[color-mix(in_oklch,var(--chart-2)_7%,var(--card))]";
+export const MINE_ROW = "bg-[color-mix(in_oklch,var(--chart-2)_8%,transparent)] shadow-[inset_4px_0_0_var(--chart-2)] hover:bg-[color-mix(in_oklch,var(--chart-2)_12%,transparent)]";
+export const MINE_CARD = "border-2 border-[var(--chart-2)] bg-[color-mix(in_oklch,var(--chart-2)_7%,var(--card))]";
 
 const INDEX_HEADERS: Partial<Record<ParsedFindingsQuery["sort"], string>> = {
   comment_index: "комментарии", share_index: "репосты",
@@ -157,8 +158,8 @@ function FindingRows({ rows, query, anomaliesVisible, showInstitution, personal 
 /** В таблице описание поста — настоящая ссылка: её видят клавиатура и
  *  читалка экрана, а нажатие по строке лишь дублирует её. В карточке ссылкой
  *  служит кнопка «Открыть карточку». */
-function Identity({ row, showInstitution, badge, marks, linked = false }: {
-  row: Finding; showInstitution: boolean; badge: string | null; marks: { fresh: boolean; mine: boolean }; linked?: boolean;
+export function Identity({ row, showInstitution, badge, marks, linked = false }: {
+  row: Finding | AnomalousPost; showInstitution: boolean; badge: string | null; marks: { fresh: boolean; mine: boolean }; linked?: boolean;
 }) {
   const number = row.externalId ? publicationLabel(row.externalId, row.platform).replace(/^(?:№\s*)+/, "") : null;
   const kind = `${PLATFORM_LABELS[row.platform]} · ${typeName(row.publicationType)}`;
@@ -171,6 +172,7 @@ function Identity({ row, showInstitution, badge, marks, linked = false }: {
   return <div className="min-w-0">
     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
       {showInstitution ? <span className="max-w-full truncate font-medium" title={row.institutionCanonicalName}>{row.institutionShortName || row.institutionCanonicalName}</span> : null}
+      <AccountFindingsFlag findings={row.accountFindings} />
       {marks.mine ? <span className="bg-[var(--chart-2)] text-background shrink-0 rounded-full px-2 py-px text-[11px] font-semibold">ваш вуз</span> : null}
       {linked
         ? <Link className="text-muted-foreground hover:text-foreground flex min-w-0 max-w-full gap-x-1 underline-offset-4 hover:underline" href={publicationHref(row.publicationId)} prefetch={false}>{description}</Link>
@@ -226,11 +228,11 @@ function Interactions({ row, stacked = false }: { row: Finding; stacked?: boolea
     </TooltipContent></Tooltip>;
 }
 
-function Original({ row }: { row: Finding }) {
+export function Original({ row }: { row: Pick<Finding, "publicUrl"> }) {
   return row.publicUrl ? <a className="hover:bg-accent focus-visible:ring-ring relative z-10 inline-flex size-9 shrink-0 items-center justify-center rounded-md focus-visible:ring-2" href={row.publicUrl} target="_blank" rel="noopener noreferrer" aria-label="Открыть оригинал"><ExternalLink className="size-4" aria-hidden="true" /></a> : null;
 }
 
-function Pair({ label, value }: { label: string; value: ReactNode }) {
+export function Pair({ label, value }: { label: string; value: ReactNode }) {
   return <div className="min-w-0"><dt className="text-muted-foreground truncate text-[10px] uppercase">{label}</dt><dd className="font-medium tabular-nums">{value}</dd></div>;
 }
 
@@ -249,6 +251,6 @@ function NoFindings({ query }: { query: ParsedFindingsQuery }) {
       <EmptyDescription className="text-sm">{description}</EmptyDescription>
     </EmptyHeader>
     {wider ? <EmptyContent><Link className={buttonVariants({ variant: "outline" })} prefetch={false}
-      href={queryHref("/statistics", { ...findingsHrefQuery(query), period: "30d" })}>Расширить до 30 дней</Link></EmptyContent> : null}
+      href={queryHref("/findings", { ...findingsHrefQuery(query), period: "30d" })}>Расширить до 30 дней</Link></EmptyContent> : null}
   </Empty>;
 }

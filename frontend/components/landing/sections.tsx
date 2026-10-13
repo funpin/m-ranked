@@ -456,7 +456,7 @@ export function Closing() {
         <p className="text-muted-foreground max-w-2xl text-lg leading-relaxed text-pretty sm:text-xl">
           Каждый вуз — на одной шкале, каждый пост — в одном возрасте. Остальное — в статистике по площадкам.
         </p>
-        <Link href="/statistics" prefetch={false} className="landing-button landing-button--solid group">
+        <Link href="/findings" prefetch={false} className="landing-button landing-button--solid group">
           Открыть статистику<ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
         </Link>
         <RankField className="text-foreground mt-6 w-full max-w-xl" />

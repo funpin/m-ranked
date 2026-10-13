@@ -452,7 +452,7 @@ curl -fsS http://127.0.0.1:8080/api/v1/health/live
 curl -fsS http://127.0.0.1:8080/api/v1/health/ready
 curl -fsS http://127.0.0.1:8080/api/v1/health/freshness
 # публичные страницы и публичный API — снаружи, не с петли
-curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/statistics?platform=telegram'
+curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/findings?platform=telegram'
 curl -fsS -o /dev/null -w '%{http_code}\n' 'https://m.funpin.org/api/v1/statistics?platform=telegram'
 # старые namespace свободны для будущего рейтинга
 test "$(curl -sS -o /dev/null -w '%{http_code}' 'https://m.funpin.org/rating')" = 404

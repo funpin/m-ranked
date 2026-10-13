@@ -29,7 +29,7 @@ const output = process.env.BUNDLE_REPORT ?? "reports/bundle-budget.json";
 const DEFAULT_BUDGET = 205 * 1024;
 const ROUTE_BUDGETS = new Map([
   ["/compare", 235 * 1024],
-  ["/statistics", 260 * 1024],
+  ["/findings", 260 * 1024],
   ["/publications/[id]", 275 * 1024],
   ["/manage", 260 * 1024],
   ["/accounts/[id]", 215 * 1024],
