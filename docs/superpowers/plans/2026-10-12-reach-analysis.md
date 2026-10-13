@@ -149,7 +149,7 @@ echo "created $name"
 
 ```bash
 docker exec mranked-local-db psql -U mranked_bootstrap -d postgres -c "CREATE ROLE local_probe LOGIN SUPERUSER PASSWORD '<случайный>'"
-export ANOMALY_DATABASE_URL="postgresql://local_probe:<пароль>@127.0.0.1:55432/mranked_eval_base"
+export ANOMALY_DATABASE_URL="<DSN локальной копии mranked_eval_base>"
 export MRANKED_STORAGE_PATH="$TMPDIR"
 python -m anomaly_analysis.backfill --days 40 --as-of 2026-10-08T00:00:00+00:00 --redetect-synchrony 2>&1 | tail -3
 python -m anomaly_analysis.account_tail_job --as-of 2026-10-08T00:00:00+00:00
@@ -1520,7 +1520,7 @@ git commit -m "feat(anomalies): reach findings in the nightly job, words for the
 ```bash
 bash research/reach-audit-2026-10/scripts/eval_setup.sh cand
 docker exec -i mranked-local-db psql -U mranked_bootstrap -d mranked_eval_cand -v ON_ERROR_STOP=1 < db/migrations/0079_account_finding_reach_kinds.sql
-export ANOMALY_DATABASE_URL="postgresql://local_probe:<пароль>@127.0.0.1:55432/mranked_eval_cand"
+export ANOMALY_DATABASE_URL="<DSN локальной копии mranked_eval_cand>"
 time python -m anomaly_analysis.backfill --days 40 --as-of 2026-10-08T00:00:00+00:00 --redetect-synchrony
 time python -m anomaly_analysis.account_tail_job --as-of 2026-10-08T00:00:00+00:00
 ```
