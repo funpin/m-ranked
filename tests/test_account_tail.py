@@ -137,3 +137,19 @@ def test_nightly_job_writes_reach_findings_with_the_others():
     assert written["version"] == "account-findings-v4"
     (finding,) = [item for item in written["found"] if item.kind == "level3_share"]
     assert finding.account_id == UUID(int=1) and finding.metrics["summary"]
+
+
+def test_nightly_job_does_not_publish_the_unconfirmed_rhythm_finding(monkeypatch):
+    # «Без суточного ритма» на реальных данных не подтвердилась (VALIDATION.md):
+    # ночное задание её не считает.
+    from types import SimpleNamespace
+    from anomaly_analysis import account_tail_job
+    from anomaly_analysis.v2 import reach_findings
+    called = []
+    monkeypatch.setattr(reach_findings, "flat_day_findings", lambda *a, **k: called.append(1) or [])
+    store = SimpleNamespace(
+        read_finding_ledgers=lambda start, end: [], read_late_members=lambda accounts, start, end: {},
+        read_synchrony_events=lambda start, end: [], read_post_levels=lambda start, end: [],
+        write_account_findings=lambda found, version: None)
+    account_tail_job.run_findings(store, date(2026, 10, 8))
+    assert called == []
