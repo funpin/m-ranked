@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import datetime, timedelta
 from enum import IntFlag
 from typing import Mapping
@@ -204,6 +204,12 @@ def age_band(ages: np.ndarray) -> np.ndarray:
     return np.clip(bands, 0, AGE_BAND_EDGES.size - 1)
 
 
+def _has_non_exact(column: tuple[int | None, ...], qualities: tuple[str, ...], keep: np.ndarray) -> bool:
+    """Есть ли среди замеров до момента анализа полученное, но не точное значение."""
+    candidates = np.flatnonzero((np.asarray(qualities) != "exact") & keep)
+    return any(column[index] is not None for index in candidates)
+
+
 def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadence,
             scales: tuple[timedelta, ...] = SCALES) -> PreparedSeries:
     published = series.published_at.timestamp()
@@ -213,14 +219,20 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
     columns = {metric: np.asarray(series.exact_values(metric), dtype=np.float64)[keep]
                for metric in series.values}
     quality_codes = []
-    if any(value is not None and quality != "exact" for metric, column in series.values.items()
-           for value, quality, active in zip(column, series.qualities[metric], keep) if active):
+    # Массивами: проход генератором по каждому замеру стоил ~1,5 мс на пост.
+    if any(_has_non_exact(column, series.qualities[metric], keep) for metric, column in series.values.items()):
         quality_codes.append("non_exact_counters")
-    if any(flag for flag, active in zip(series.interval_uncertain, keep) if active):
+    if (np.asarray(series.interval_uncertain, dtype=bool) & keep).any():
         quality_codes.append("uncertain_observations")
-    collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64,
-                            count=len(series.collected))
-    collected = collected[collected <= analyzed_at.timestamp()] - published
+    # Журнал циклов сбора читается только там, где цикл подтверждает чтение
+    # поста (confirm_unchanged): у остальных площадок перевод тысяч отметок
+    # аккаунта в числа стоил ~1 мс на пост впустую.
+    if series.platform in CYCLES_CONFIRM_READS:
+        collected = np.fromiter((item.timestamp() for item in series.collected), dtype=np.float64,
+                                count=len(series.collected))
+        collected = collected[collected <= analyzed_at.timestamp()] - published
+    else:
+        collected = np.zeros(0)
     raw_ages, rows, covered = confirm_unchanged(instants[keep] - published, collected, cadence, series.platform)
     ages = _frozen(raw_ages)
     steps = _frozen(cadence.expected_step_seconds(series.platform, ages))
@@ -244,7 +256,12 @@ def prepare(series: PostSeries, analyzed_at: datetime, cadence: CollectionCadenc
     )
 
 
-BOUNDED_MAX_SCALE = timedelta(hours=6)
+# Поздняя подача по коридору судится на часовой сетке: шестичасовая и суточная
+# не строятся (каждая сетка — заметная доля подготовки ряда Telegram).
+BOUNDED_MAX_SCALE = timedelta(hours=1)
+BOUNDED_FINE_SCALE = timedelta(minutes=15)
+# Пакет начинается не позже 12 ч и длится не дольше 10 ч, плюс 2 ч после и запас.
+BOUNDED_FINE_UNTIL = 26 * HOUR
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,18 +282,38 @@ def _bounded_views(series: PostSeries, keep: np.ndarray, ages: np.ndarray, rows:
     column = series.values.get(Metric.VIEWS)
     if series.platform not in COMPACT_PLATFORMS or column is None or views_belong_to_source(series):
         return None
-    pairs = [bounds for bounds, active in zip(
-        (counter_bounds(value, quality, uncertain) for value, quality, uncertain in zip(
-            column, series.qualities[Metric.VIEWS], series.interval_uncertain)), keep) if active]
-    if not any(pair is not None and pair[0] != pair[1] for pair in pairs):
+    quality = np.asarray(series.qualities[Metric.VIEWS])[keep]
+    rounded = quality == "rounded"
+    if not rounded.any():
         return None
-    low = np.array([np.nan if pair is None else pair[0] for pair in pairs], dtype=np.float64)[rows]
-    high = np.array([np.nan if pair is None else pair[1] for pair in pairs], dtype=np.float64)[rows]
+    # Те же границы, что у counter_bounds, но массивом: шаг показа — наибольшая
+    # степень десяти, на которую делится значение (не больше 10⁹).
+    values = np.array([np.nan if value is None else value for value in column], dtype=np.float64)[keep]
+    uncertain = np.asarray(series.interval_uncertain, dtype=bool)[keep]
+    usable = ~np.isnan(values) & ~uncertain & ((quality == "exact") | (rounded & (values > 0)))
+    unit = np.ones(values.size)
+    whole = np.where(usable, values, 1.0).astype(np.int64)
+    for _ in range(9):
+        step = (whole % (unit.astype(np.int64) * 10) == 0) & (unit < 10**9)
+        if not step.any():
+            break
+        unit = np.where(step, unit * 10, unit)
+    unit = np.where(rounded, unit, 0.0)
+    low = np.where(usable, np.maximum(values - unit, 0.0), np.nan)[rows]
+    high = np.where(usable, values + unit, np.nan)[rows]
     # Сетки только тех масштабов, что читает линейная подача: суточные не нужны.
-    wanted = tuple(scale for scale in scales if scale <= BOUNDED_MAX_SCALE)
-    data = _metric(Metric.VIEWS, ages, (low + high) / 2, series, cadence, wanted, covered)
+    # Мелкая сетка нужна лишь пакетам первых суток — строится по первым суткам.
+    middle = (low + high) / 2
+    wanted = tuple(scale for scale in scales if BOUNDED_FINE_SCALE < scale <= BOUNDED_MAX_SCALE)
+    data = _metric(Metric.VIEWS, ages, middle, series, cadence, wanted, covered)
     if data is None:
         return None
+    if BOUNDED_FINE_SCALE in scales:
+        early = ages <= BOUNDED_FINE_UNTIL
+        fine = _metric(Metric.VIEWS, ages[early], middle[early], series, cadence, (BOUNDED_FINE_SCALE,),
+                       covered[early] if covered.size == ages.size else covered)
+        if fine is not None:
+            data = replace(data, grids={**data.grids, BOUNDED_FINE_SCALE: fine.grids[BOUNDED_FINE_SCALE]})
     present = ~np.isnan(low)
     return BoundedViews(data, _frozen(low[present]), _frozen(high[present]))
 

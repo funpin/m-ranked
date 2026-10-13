@@ -207,13 +207,32 @@ def _short_views(prepared: PreparedSeries) -> Sign | None:
     grid = data.grids.get(VIEW_SHORT_SCALE)
     width = VIEW_SHORT_SCALE.total_seconds()
     after_cells = int(VIEW_SHORT_AFTER / width)
-    if grid is None or grid.rates.size < VIEW_SHORT_CELLS[0] + after_cells:
+    # Замеры реже VIEW_SHORT_MAX_SPACING (RuTube — раз в час): формы участка не видно.
+    early = data.ages[data.ages <= VIEW_SHORT_ONSET_UNTIL + VIEW_SHORT_CELLS[1] * VIEW_SHORT_SCALE.total_seconds()]
+    if early.size < 2 or float(np.median(np.diff(early))) > VIEW_SHORT_MAX_SPACING:
         return None
-    rates = grid.rates * HOUR
-    size = rates.size
-    starts = grid.edges[:-1]
-    valid = ~grid.negative & _spaced(data.ages, data.flags, grid.edges)
-    begins = np.flatnonzero(starts <= VIEW_SHORT_ONSET_UNTIL)
+    # Первые часы поста не прочитаны — пакета с публикации не видно.
+    if (grid is None or grid.rates.size < VIEW_SHORT_CELLS[0] + after_cells
+            or grid.edges[0] > VIEW_SHORT_ONSET_UNTIL):
+        return None
+    # Пакет начинается не позже VIEW_SHORT_ONSET_UNTIL и длится не дольше
+    # VIEW_SHORT_CELLS[1]: дальше первых суток сетку читать незачем.
+    size = min(grid.rates.size, int((VIEW_SHORT_ONSET_UNTIL - grid.edges[0]) // width) + 1
+               + VIEW_SHORT_CELLS[1] + after_cells)
+    rates = grid.rates[:size] * HOUR
+    # Быстрый отсев: ни одного отрезка в полтора часа со средним темпом пакета.
+    shortest = VIEW_SHORT_CELLS[0]
+    if size < shortest or (np.convolve(rates, np.ones(shortest), "valid") / shortest).max() < VIEW_SHORT_MIN_RATE:
+        return None
+    edges = grid.edges[:size + 1]
+    starts = edges[:-1]
+    valid = ~grid.negative[:size] & _spaced(data.ages, data.flags, edges)
+    # Первый час ровного участка не медленнее половины среднего темпа (часовые
+    # темпы в пределах ×2; у участка из 6–7 ячеек то же следует из разброса):
+    # начала с первым часом медленнее VIEW_SHORT_MIN_RATE / 2 не перебираются.
+    head = np.convolve(rates, np.ones(4), "valid") / 4
+    begins = np.flatnonzero(starts[:head.size] <= VIEW_SHORT_ONSET_UNTIL)
+    begins = begins[head[begins] >= VIEW_SHORT_MIN_RATE / VIEW_SHORT_SPREAD]
     if not begins.size:
         return None
     # Все пары (начало, длина) сразу на префиксных суммах: детектор укладывается
@@ -262,7 +281,8 @@ def _short_views(prepared: PreparedSeries) -> Sign | None:
     row = int(rows[0])
     column = int(np.flatnonzero(ok[row])[-1])
     begin, end = int(begins[row]), int(ends[row, column])
-    return _pack_sign(prepared, grid, bounded, begin, end, float(mean[row, column]), float(after[row, column]))
+    return _pack_sign(prepared, grid, bounded, begin, end, float(mean[row, column]), float(after[row, column]),
+                      float(data.values[-1]))
 
 
 def _spaced(ages: np.ndarray, flags: np.ndarray, edges: np.ndarray) -> np.ndarray:
@@ -296,7 +316,7 @@ def _reactions_at(data, age: float) -> float | None:
     return float(np.interp(age, data.ages[right - 1:right + 1], data.values[right - 1:right + 1]))
 
 
-def _pack_sign(prepared, grid, bounded, begin, end, mean, after) -> Sign | None:
+def _pack_sign(prepared, grid, bounded, begin, end, mean, after, v_last) -> Sign | None:
     start_age, end_age = float(grid.edges[begin]), float(grid.edges[end])
     duration = end_age - start_age
     mode = None
@@ -314,7 +334,6 @@ def _pack_sign(prepared, grid, bounded, begin, end, mean, after) -> Sign | None:
     reactions = prepared.metrics.get(Metric.REACTIONS)
     last_age = float(reactions.ages[-1]) if reactions is not None and reactions.ages.size else end_age
     r_start, r_end, r_last = (_reactions_at(reactions, age) for age in (start_age, end_age, last_age))
-    v_last = float(grid.cumulative[-1])
     strength = VIEW_SHORT_UNCHECKED
     pack_per_k = rest_per_k = None
     alternatives = ("paid_promotion", "site_embed", "mailing_link")

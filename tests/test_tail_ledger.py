@@ -222,3 +222,46 @@ def test_rounded_telegram_surges_use_the_lower_bound():
     from anomaly_analysis.v2.tail_ledger import build_ledger
     ledger = build_ledger(_old_post_with_wave(rounded=True))
     assert ledger.surges and all(views < 1300 for _, views, _ in ledger.surges)
+
+
+def _reference_surges(series, points, early, published):
+    """Прежний расчёт циклом — эталон для векторного."""
+    from anomaly_analysis.v2.series import max_display_unit
+    from anomaly_analysis.v2 import tail_ledger as t
+    if early is None:
+        return ()
+    threshold = max(t.SURGE_MIN_VIEWS, t.SURGE_SHARE * early.views)
+    compact = series.platform in t.ROUNDED_PLATFORMS
+    hours = {}
+    for left, right in zip(points, points[1:]):
+        if left.age < t.SURGE_FROM or right.age > t.SURGE_UNTIL or right.age - left.age > t.SURGE_MAX_GAP:
+            continue
+        unit_left = max_display_unit(left.views) if compact and left.views >= t.COMPACT_FROM else 0
+        unit_right = max_display_unit(right.views) if compact and right.views >= t.COMPACT_FROM else 0
+        bucket = hours.setdefault(int((published + right.age) // t.HOUR), [0, 0])
+        bucket[0] += max(0, (right.views - unit_right) - (left.views + unit_left))
+        bucket[1] += max(0, right.reactions - left.reactions)
+    found = [(hour, views, reactions) for hour, (views, reactions) in hours.items() if views >= threshold]
+    return tuple(sorted(sorted(found, key=lambda item: -item[1])[:t.SURGE_MAX]))
+
+
+def test_vector_surges_equal_the_loop_on_random_walls():
+    import random
+    from anomaly_analysis.v2 import tail_ledger as t
+    from anomaly_analysis.v2.tail_ledger import Point
+    rng = random.Random(7)
+    for case in range(300):
+        platform = rng.choice(["vk", "telegram"])
+        start = 1_758_000_000 + rng.randint(0, 3600)
+        points, views, reactions, age = [], rng.randint(0, 3000), 0, rng.randint(60, 600)
+        early = None
+        while age < 20 * 86400:
+            views += rng.choice([0, 1, 5, 40, 300, 2000]) if rng.random() < 0.7 else 0
+            reactions += rng.choice([0, 0, 1, 3])
+            shown = views // 100 * 100 if platform == "telegram" and views >= 1000 else views
+            points.append(Point(float(age), shown, reactions))
+            if early is None and age >= 86400:
+                early = points[-1]
+            age += rng.choice([300, 900, 1800, 3600, 5400])
+        series = type("S", (), {"platform": platform})()
+        assert t._surges(series, points, early, float(start)) == _reference_surges(series, points, early, float(start)), case

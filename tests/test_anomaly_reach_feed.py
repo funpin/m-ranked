@@ -216,3 +216,28 @@ def test_pack_of_an_hour_and_three_quarters_is_found():
 
 def test_hour_long_pack_is_too_short_to_judge():
     assert short(by_minute(lambda minute: 400 if minute <= 60 else 25)) == []
+
+
+def test_old_post_gives_the_same_pack_as_a_young_one():
+    # Пакет ищется в первые сутки; хвост в 30 суток на вывод не влияет.
+    young = kosygin(reactions=pack_then_rest(0, 30))
+    old = build("vk", [420, 400, 380] + [15] * 21 + [5] * (29 * 24), step=15,
+                reactions=pack_then_rest(0, 30)[::3] + [30] * (29 * 24 * 4))
+    (a,), (b,) = short(young), short(old)
+    assert abs(a.render["packViews"] - b.render["packViews"]) < 60 and b.strength >= 0.75
+
+
+def test_telegram_fine_bounded_grid_covers_only_the_first_day():
+    series = build("telegram", [1500, 1450, 1500] + [30] * 21 + [10] * (10 * 24), step=15, rounded=True,
+                   reactions=pack_then_rest(1, 30)[::3] + [31] * (10 * 24 * 4))
+    grid = prepare(series, series.observed_at[-1], CollectionCadence()).bounded_views.data.grids[
+        linear_feed.VIEW_SHORT_SCALE]
+    assert grid.edges[-1] <= 27 * 3600
+
+
+def test_hourly_polled_platform_skips_the_pack_search_early(monkeypatch):
+    # Шаг сбора RuTube — час: пакет не судится, и сетка даже не читается.
+    series = build("rutube", [420, 400, 380] + [15] * 21, step=60, reactions=pack_then_rest(0, 30)[::12])
+    prepared = prepare(series, series.observed_at[-1], CollectionCadence())
+    monkeypatch.setattr(linear_feed, "_spaced", lambda *a: (_ for _ in ()).throw(AssertionError("grid read")))
+    assert linear_feed._short_views(prepared) is None

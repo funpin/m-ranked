@@ -54,7 +54,7 @@ def detect(prepared: PreparedSeries, context: DetectorContext) -> tuple[Sign, ..
     # Просмотры не аудитория поста (видео ВК): доля реакций на просмотр ничего не значит.
     if views_ratio_unreliable(prepared.series):
         return ()
-    ledger = build_ledger(prepared.series, prepared.analyzed_at)
+    ledger = build_ledger(prepared.series, prepared.analyzed_at, surges=False)
     late = ledger.late
     early = ledger.early
     # Округлённые счётчики Telegram годятся для сравнения аккаунтов, но не для признака поста.

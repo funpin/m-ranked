@@ -27,12 +27,14 @@ from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
+from operator import attrgetter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
+import numpy as np
+
 from .domain import Metric, PostSeries
-from .series import max_display_unit
 
 VERSION = 5
 # Сводки третьей версии читаются: в них нет только почасовой раскладки;
@@ -159,11 +161,12 @@ def _hours_from(value) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
     return tuple(int(item) for item in value[0]), tuple(int(item) for item in value[1])
 
 
-def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> TailLedger:
+def build_ledger(series: PostSeries, analyzed_at: datetime | None = None, *, surges: bool = True) -> TailLedger:
     """Сводка позднего отклика по ряду поста на момент анализа.
 
     Репост получает только отметки: его просмотры собственные, но поздний
     отклик чужого содержания с профилем аккаунта не сравнивается (ADR-015).
+    `surges=False` — без часов притока (признаку поста они не нужны).
     """
     limit = analyzed_at.timestamp() if analyzed_at is not None else float("inf")
     published = series.published_at.timestamp()
@@ -194,7 +197,8 @@ def build_ledger(series: PostSeries, analyzed_at: datetime | None = None) -> Tai
     covered, growth = _days(exact_r, published)
     rounded = any(point is not None and point.age in inexact for point in (early, start, end))
     return TailLedger(early, start, end, covered, growth, rounded, marks,
-                      _hours(joint, inexact, published), _surges(series, joint, early, published))
+                      _hours(joint, inexact, published),
+                      _surges(series, joint, early, published) if surges else ())
 
 
 def _hours(points: list[Point], inexact: set[float],
@@ -213,25 +217,51 @@ def _hours(points: list[Point], inexact: set[float],
     return (tuple(views), tuple(reactions)) if counted else None
 
 
+_age, _views, _reactions = attrgetter("age"), attrgetter("views"), attrgetter("reactions")
+
+
 def _surges(series: PostSeries, points: list[Point], early: Point | None,
             published: float) -> tuple[tuple[int, int, int], ...]:
-    """Календарные часы крупного притока просмотров поста старше суток."""
-    if early is None:
+    """Календарные часы крупного притока просмотров поста старше суток.
+
+    Массивами: сводку строит каждый анализ поста, и цикл по парам замеров
+    стоил ~0,2 мс на пост.
+    """
+    if early is None or len(points) < 2:
         return ()
     threshold = max(SURGE_MIN_VIEWS, SURGE_SHARE * early.views)
-    compact = series.platform in ROUNDED_PLATFORMS
-    hours: dict[int, list[int]] = {}
-    for left, right in zip(points, points[1:]):
-        if left.age < SURGE_FROM or right.age > SURGE_UNTIL or right.age - left.age > SURGE_MAX_GAP:
-            continue
+    # Пары начинаются не раньше суток. Если после суток пост набрал меньше
+    # порога одного часа, часа притока нет: прирост пары не больше разности
+    # показанных значений. Счётчик просмотров не убывает; при уменьшении проверка
+    # лишь осторожнее (пропустит час, но не добавит лишний).
+    first = max(0, bisect_left(points, SURGE_FROM, key=_age) - 1)
+    points = points[first:]
+    if len(points) < 2 or points[-1].views - points[0].views < threshold:
+        return ()
+    ages = np.fromiter(map(_age, points), dtype=np.float64, count=len(points))
+    views = np.fromiter(map(_views, points), dtype=np.int64, count=len(points))
+    reactions = np.fromiter(map(_reactions, points), dtype=np.int64, count=len(points))
+    pairs = (ages[:-1] >= SURGE_FROM) & (ages[1:] <= SURGE_UNTIL) & (np.diff(ages) <= SURGE_MAX_GAP)
+    if not pairs.any():
+        return ()
+    unit = np.zeros(views.size, dtype=np.int64)
+    if series.platform in ROUNDED_PLATFORMS:
         # Показанное «1,2K» — коридор: прирост берётся наименьший возможный.
-        unit_left = max_display_unit(left.views) if compact and left.views >= COMPACT_FROM else 0
-        unit_right = max_display_unit(right.views) if compact and right.views >= COMPACT_FROM else 0
-        bucket = hours.setdefault(int((published + right.age) // HOUR), [0, 0])
-        bucket[0] += max(0, (right.views - unit_right) - (left.views + unit_left))
-        bucket[1] += max(0, right.reactions - left.reactions)
-    found = [(hour, views, reactions) for hour, (views, reactions) in hours.items() if views >= threshold]
-    return tuple(sorted(sorted(found, key=lambda item: -item[1])[:SURGE_MAX]))
+        compact = views >= COMPACT_FROM
+        unit[compact] = 1
+        for _ in range(9):
+            step = compact & (views % np.maximum(unit * 10, 1) == 0) & (unit < 10**9)
+            if not step.any():
+                break
+            unit[step] *= 10
+    gained = np.maximum(0, (views[1:] - unit[1:]) - (views[:-1] + unit[:-1]))[pairs]
+    reacted = np.maximum(0, np.diff(reactions))[pairs]
+    hours, inverse = np.unique(((published + ages[1:][pairs]) // HOUR).astype(np.int64), return_inverse=True)
+    totals = np.bincount(inverse, weights=gained, minlength=hours.size)
+    responses = np.bincount(inverse, weights=reacted, minlength=hours.size)
+    found = np.flatnonzero(totals >= threshold)
+    top = found[np.argsort(-totals[found], kind="stable")[:SURGE_MAX]]
+    return tuple(sorted((int(hours[i]), int(totals[i]), int(responses[i])) for i in top))
 
 
 def _marks(points: list[Point]) -> dict[str, Point]:
