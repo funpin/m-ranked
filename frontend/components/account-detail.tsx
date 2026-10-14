@@ -102,7 +102,7 @@ export function AccountDetail({ account, posts, nextCursor = null, siblings = []
         <div className="bg-card h-full min-w-0 rounded-xl border p-1 [&>section]:h-full [&>section]:border-0 [&>section]:bg-transparent">
           <WeeklyTrend key={selectedTrend ?? "unselected"} points={series} primary={primary} selectedDay={selectedDay} selectedTrend={selectedTrend} accountId={account.accountId} />
         </div> }] : []),
-      ...(findings || tailProfile ? [{ id: "analysis", label: "Анализ", width: "w-[min(86vw,32rem)]", content:
+      ...(findings || tailProfile ? [{ id: "analysis", label: "Анализ", width: "w-[min(86vw,32rem)]", contained: true, content:
         <Suspense fallback={<div className="bg-card h-full min-h-48 w-full rounded-xl border" role="status" aria-label="Анализ аккаунта загружается" />}>
           <AccountAnalysis findings={findings} tail={tailProfile} platform={account.platform} />
         </Suspense> }] : []),

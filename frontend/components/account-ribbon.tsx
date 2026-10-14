@@ -4,7 +4,11 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type RibbonSlide = { id: string; label: string; width: string; content: ReactNode };
+/** `contained` — карточка не задаёт высоту ленты: ряд берёт высоту остальных
+ *  карточек, а длинное содержимое прокручивается внутри своей рамки. Иначе
+ *  анализ аккаунта с тремя находками растягивал всю ленту, и под графиком
+ *  динамики оставалась пустота. */
+export type RibbonSlide = { id: string; label: string; width: string; content: ReactNode; contained?: boolean };
 
 /**
  * Лента карточек аккаунта: цифры, динамика, анализ и сравнение стоят в ряд и
@@ -113,8 +117,13 @@ export function AccountRibbon({ slides, label }: { slides: readonly RibbonSlide[
         style={{ maskImage: `linear-gradient(to right, ${edges.start ? "#000" : "transparent"}, #000 ${edges.start ? "0px" : "var(--ribbon-gutter)"}, #000 calc(100% - ${edges.end ? "0px" : "var(--ribbon-gutter)"}), ${edges.end ? "#000" : "transparent"})` }}
         className="focus-visible:ring-ring/50 mx-[calc(-1*var(--ribbon-gutter))] flex snap-x snap-mandatory scroll-px-(--ribbon-gutter) items-stretch gap-4 overflow-x-auto overscroll-x-contain scroll-smooth px-(--ribbon-gutter) pb-3 outline-none [--ribbon-gutter:1rem] focus-visible:ring-[3px] [scrollbar-width:thin] motion-reduce:scroll-auto sm:[--ribbon-gutter:1.5rem] lg:[--ribbon-gutter:2.5rem]">
         {slides.map((slide) => (
-          <div key={slide.id} data-ribbon-slide={slide.id} className={cn("flex min-w-0 shrink-0 snap-start flex-col", slide.width)}>
-            {slide.content}
+          <div key={slide.id} data-ribbon-slide={slide.id}
+            className={cn("flex min-w-0 shrink-0 snap-start flex-col", slide.contained && "relative min-h-72", slide.width)}>
+            {slide.contained
+              ? <div className="absolute inset-0 flex flex-col [&>*]:min-h-0 [&>*]:flex-1 [&>*]:overflow-y-auto" data-ribbon-contained="">
+                  {slide.content}
+                </div>
+              : slide.content}
           </div>
         ))}
       </div>
