@@ -18,7 +18,7 @@ from ..series import HOUR, PointFlag, PreparedSeries, growth_bounds
 from .base import DetectorContext, age_text, expected_step, make_sign, number, pelt, scale_text, strongest
 
 ID = "linear_feed"
-VERSION = "2.6.0"
+VERSION = "2.7.0"
 PATTERN = 1
 FAMILY = Family.VELOCITY
 NEEDS_NORM = False
@@ -75,6 +75,13 @@ WIDEN_PAUSE = 2
 # часа: медиана шести ячеек ниже X ровно тогда, когда ниже X хотя бы три.
 BACKGROUND_RUN = 3
 # Незначимый по объёму участок не признак: минимум 20 % значения на начало.
+# Ступенька и обрыв по тихим промежуткам (Grid.quiet_upper): фон — верхняя
+# граница темпа, у малых постов это и обычные часы. Подача тогда — не меньше
+# 150 в час (как короткий пакет просмотров) и в 20 раз выше фона: у МИФИ,
+# КБГУ и ГУУ 1 000–1 300 в час против 1,5–6, у суточного ритма малых постов —
+# 23–74 в час против 2–24.
+QUIET_STEP_UP = 20.0
+QUIET_MIN_RATE = 150.0
 MIN_SHARE = 0.2
 MIN_DELTA = {Metric.VIEWS: 100, Metric.REACTIONS: 30}
 NAMES = {Metric.VIEWS: "просмотры", Metric.REACTIONS: "реакции"}
@@ -467,6 +474,29 @@ def _after(prepared, grid, rates, valid, end) -> np.ndarray:
     return np.asarray(cells[:AFTER_CELLS])
 
 
+def _stop(prepared, grid, rates, valid, edge_rates, edge_valid, end, mean, at_feed_limit):
+    """Обрыв за участком: по пригодным ячейкам, как раньше, или — для крупной
+    подачи — по верхней границе тихих промежутков."""
+    def dropped(after: np.ndarray) -> bool:
+        return after.size >= AFTER_CELLS and not at_feed_limit and mean >= STEP_DOWN * max(float(after.mean()), 1.0)
+    after = _after(prepared, grid, rates, valid, end)
+    if dropped(after) or mean < QUIET_MIN_RATE or edge_rates is rates:
+        return after, dropped(after)
+    quiet_after = _after(prepared, grid, edge_rates, edge_valid, end)
+    return (quiet_after, True) if dropped(quiet_after) else (after, False)
+
+
+def _with_quiet(grid, rates: np.ndarray, valid: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Темпы ячеек для фона и хвоста: пригодные — как есть, тихие — верхней границей."""
+    if grid.quiet_upper is None:
+        return rates, valid
+    upper = grid.quiet_upper * HOUR
+    quiet = ~grid.usable & np.isfinite(upper)
+    if not quiet.any():
+        return rates, valid
+    return np.where(quiet, upper, rates), valid | quiet
+
+
 def _widen(rates: np.ndarray, valid: np.ndarray, begin: int, end: int, mean: float) -> tuple[int, int]:
     """Расширить участок на соседние пригодные ячейки с темпом в пределах ×WIDEN_TOLERANCE.
 
@@ -560,20 +590,32 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None)
     cv = float(segment.std() / mean) if mean > 0 else np.inf
     third = max(1, segment.size // 3)
     drift = float(segment[-third:].mean() / max(segment[:third].mean(), 1e-9))
-    background_cells = _daytime_cells(prepared, grid, valid, begin)
-    background = np.asarray([float(rates[cell]) for cell in background_cells])
     if cv > MAX_CV or not 1 / MAX_DRIFT <= drift <= MAX_DRIFT:
         return None
-    stepped_up = background.size and max(float(np.median(background)), 1.0) * STEP_UP <= mean
+    # Фон и хвост — и по тихим промежуткам (Grid.quiet_upper): счётчик за них
+    # почти не вырос, сборщик реже заходил, и ячейки там не «пригодны». Темп
+    # берётся верхней границей — худший для ступеньки и обрыва случай. НИЯУ
+    # МИФИ ВК №35481, 18.09: +2 просмотра за 6 ч, затем ~1 300/ч шесть часов
+    # и +1 за следующие 6,5 ч — без тихих ячеек фона не было вовсе.
+    edge_rates, edge_valid = _with_quiet(grid, rates, valid)
+    background_cells = _daytime_cells(prepared, grid, valid, begin)
+    background = np.asarray([float(rates[cell]) for cell in background_cells])
+    stepped_up = bool(background.size) and max(float(np.median(background)), 1.0) * STEP_UP <= mean
+    if not stepped_up and edge_rates is not rates and mean >= QUIET_MIN_RATE:
+        # У малого поста и обычные часы по 2–5 просмотров «тихие»: вечерний
+        # или утренний подъём до 30–70 в час от такого фона — суточный ритм
+        # (БРУ, ИВГПУ, ВГЛТУ). От тихого фона ступенька берётся только крупная.
+        quiet_cells = _daytime_cells(prepared, grid, edge_valid, begin)
+        quiet_background = np.asarray([float(edge_rates[cell]) for cell in quiet_cells])
+        if quiet_background.size and max(float(np.median(quiet_background)), 1.0) * QUIET_STEP_UP <= mean:
+            stepped_up, background_cells, background = True, quiet_cells, quiet_background
     # Обрыв подачи: сразу за ровным участком скорость падает в пять раз и
     # больше. Органика затухает плавно; ровные 62 просмотра в час всю ночь и
     # затем +9 за два часа (Губкинский в MAX, 23–25.09) — нет. Начало такой
     # подачи ступенькой не выделяется: первые часы поста и так быстрые.
-    after = _after(prepared, grid, rates, valid, end)
     feed_limit = FEED_LIMIT.get(prepared.series.platform)
     at_feed_limit = feed_limit is not None and feed_limit[0] <= end_age <= feed_limit[1]
-    stepped_down = (after.size >= AFTER_CELLS and not at_feed_limit
-                    and mean >= STEP_DOWN * max(float(after.mean()), 1.0))
+    after, stepped_down = _stop(prepared, grid, rates, valid, edge_rates, edge_valid, end, mean, at_feed_limit)
     if not stepped_up and not stepped_down:
         return None
     start_value = float(grid.cumulative[begin])
@@ -600,10 +642,8 @@ def _judge(prepared, metric, data, grid, rates, valid, begin, end, bounded=None)
             widened = growth_bounds(bounded, start_age, end_age)
             delta = widened[0] if widened is not None else delta
         if not stepped_down:
-            after = _after(prepared, grid, rates, valid, end)
             at_feed_limit = feed_limit is not None and feed_limit[0] <= end_age <= feed_limit[1]
-            stepped_down = (after.size >= AFTER_CELLS and not at_feed_limit
-                            and mean >= STEP_DOWN * max(float(after.mean()), 1.0))
+            after, stepped_down = _stop(prepared, grid, rates, valid, edge_rates, edge_valid, end, mean, at_feed_limit)
     hours = (grid.edges[begin:end + 1] - start_age) / HOUR
     slope, intercept = np.polyfit(hours, grid.cumulative[begin:end + 1], 1)
     fitted = slope * hours + intercept
