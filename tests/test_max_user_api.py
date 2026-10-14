@@ -298,3 +298,20 @@ def test_comment_count_distinguishes_empty_unknown_and_disabled_discussions():
         }]]}}],
     }) is None
     assert _comment_count({"attaches": []}) is None
+
+
+def test_max_client_presents_a_supported_app_version(tmp_path):
+    """13.10.2026 MAX отказал 26.25.0 (client.unsupported-version): клиент берёт
+    версию и отпечаток APK из репозитория, а не встроенную рекомендацию PyMax."""
+    pytest.importorskip("pymax")
+    from pymax.versions.catalog import VersionCatalog
+    from collector_runtime.max_user_api import MAX_APP_VERSION, MaxUserClient, max_version_catalog
+
+    client = MaxUserClient("+70000000000", tmp_path / "max.session.db")
+    assert client.client.app_version == MAX_APP_VERSION != VersionCatalog.RECOMMENDED_APP_VERSION
+    fingerprint = client.client.catalog.resolve(MAX_APP_VERSION)
+    builtin = VersionCatalog().resolve(VersionCatalog.RECOMMENDED_APP_VERSION)
+    assert fingerprint.build_number > builtin.build_number
+    # Подлинность отпечатка: тот же сертификат подписи APK, что у встроенных версий.
+    assert fingerprint.certificate_sha256 == builtin.certificate_sha256
+    assert max_version_catalog().resolve(VersionCatalog.RECOMMENDED_APP_VERSION) == builtin
