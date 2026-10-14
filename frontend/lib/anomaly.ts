@@ -30,6 +30,7 @@ export const SIGNAL_LEGEND = [
   { pattern: 15, title: "площадка списала реакции" },
   { pattern: 16, title: "одновременный обрыв просмотров и реакций" },
   { pattern: 17, title: "поток одной реакции" },
+  { pattern: 18, title: "реакции сквозь ночь" },
 ] as const;
 
 export const METRIC_NAMES = { views: "просмотры", reactions: "реакции", comments: "комментарии", shares: "репосты" } as const;

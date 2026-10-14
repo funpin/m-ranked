@@ -43,6 +43,7 @@ def post_payload(series: PostSeries) -> dict[str, Any]:
         "platform": series.platform,
         "published_at": series.published_at.isoformat(),
         "is_repost": series.is_repost,
+        **({"publication_type": series.publication_type} if series.publication_type else {}),
         "age_seconds": [_age(series.published_at, item) for item in series.observed_at],
         "qualities": {metric.value: list(column) for metric, column in series.qualities.items()},
         "interval_uncertain": list(series.interval_uncertain),
@@ -141,6 +142,7 @@ def _series(payload: Mapping[str, Any], *, default_quality: str = "unknown") -> 
         interval_uncertain=tuple(payload.get("interval_uncertain", ())),
         reaction_breakdowns=tuple(payload.get("reaction_breakdowns", ())),
         reaction_kinds=tuple(payload.get("reaction_kinds", ())),
+        publication_type=payload.get("publication_type"),
     )
 
 

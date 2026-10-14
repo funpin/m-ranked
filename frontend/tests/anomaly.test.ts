@@ -59,7 +59,7 @@ test("interval boundaries become the nearest saved points and markers keep their
   const [marker] = signalMarkers(analysis());
   assert.equal(marker!.pattern, 1);
   assert.equal(marker!.to - marker!.from, 24 * 3600_000);
-  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 16);
+  assert.equal(new Set(SIGNAL_LEGEND.map((item) => item.pattern)).size, 17);
 });
 
 test("linear signal draws its fitted line only inside the interval", () => {

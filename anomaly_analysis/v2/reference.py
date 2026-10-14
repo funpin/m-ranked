@@ -132,6 +132,8 @@ class Post:
     # Вид реакции, которым приходят добавленные реакции (поток одной реакции);
     # без него добавка делится между видами, как органика.
     stream_key: str | None = None
+    # Тип записи: у видео ВК (клипа) просмотры записи — не аудитория.
+    publication_type: str | None = None
 
 
 def _poisson(rng: random.Random, mean: float) -> int:
@@ -242,7 +244,7 @@ def build(post: Post, rng: random.Random, publication_id: UUID, account_id: UUID
                       if post.platform == "telegram" and R in values else ())
     return PostSeries(publication_id, account_id, post.platform, post.published_at, post.is_repost,
                       tuple(post.published_at + timedelta(seconds=age) for age in ages), values,
-                      reaction_kinds=reaction_kinds)
+                      reaction_kinds=reaction_kinds, publication_type=post.publication_type)
 
 
 def subscribers(published_at: datetime, horizon: float, base: int, rng: random.Random,
@@ -437,6 +439,12 @@ def cases() -> tuple[Case, ...]:
              Post("telegram", _at(16, 11), (_tg(4000),), 2 * DAY, {R: (Ramp(1 * HOUR, 3 * HOUR, 90),)},
                   stream_key="🙈"),
              Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (17,)),
+        Case("p18_night_reaction_stream_vk_clip", "synthetic",
+             "Клип ВК вышел в 11:00 МСК; с 20:00 до 04:00 лайки идут своим потоком (+400) "
+             "и обрываются в ноль, просмотры записи растут дальше (Губкинский, 01.10.2026).",
+             Post("vk", _at(17, 11), (_vk(800),), 2 * DAY, {R: (Ramp(9 * HOUR, 17 * HOUR, 400),)},
+                  ratios={R: 0.0005, C: 0.0003, S: 0.0004}, publication_type="video"),
+             Level.PRONOUNCED_ANOMALY, Level.ARTIFICIAL_ACTIVITY_SIGNS, (18,)),
         Case("honest_organic_telegram", "synthetic",
              "Telegram: органическое степенное затухание, 30 суток, шаг сбора по возрасту.",
              Post("telegram", _at(17, 9), (_tg(5200),), 30 * DAY), **HONEST),
