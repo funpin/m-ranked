@@ -5042,7 +5042,7 @@ components:
         additionalProperties: false
         required: [kind, status]
         properties:
-          kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion] }
+          kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response] }
           status: { type: integer, enum: [1, 2] }
     AnomalousPost:
       type: object
@@ -5876,7 +5876,7 @@ components:
                   required: [platform, kind, status]
                   properties:
                     platform: { $ref: '#/components/schemas/PlatformValue' }
-                    kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion] }
+                    kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response] }
                     status: { type: integer, minimum: 1, maximum: 2 }
         stats:
           type: array
@@ -6089,7 +6089,7 @@ components:
       properties:
         accountId: { type: string, format: uuid }
         accountUsername: { type: [string, 'null'] }
-        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion] }
+        kind: { type: string, enum: [early_pack, regular_reactions, late_growth, late_engagement, synchronous_waves, engagement_shift, night_reactions, view_packs, view_waves, level3_share, promotion, early_response] }
         platform: { type: string, enum: [telegram, vk, max, rutube] }
         status: { type: integer, minimum: 1, maximum: 2 }
         statusLabel: { type: [string, 'null'] }

@@ -59,7 +59,7 @@ from uuid import UUID
 
 from .tail_ledger import MOSCOW, Point, TailLedger
 
-METHOD_VERSION = "account-findings-v5"
+METHOD_VERSION = "account-findings-v6"
 WINDOW_DAYS = 30
 STATUS_LABELS = {1: "необычный", 2: "устойчиво необычный"}
 TITLES = {
@@ -188,6 +188,7 @@ class LedgerPost:
     is_repost: bool
     ledger: TailLedger
     institution_id: UUID | None = None
+    publication_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

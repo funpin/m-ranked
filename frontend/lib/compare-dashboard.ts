@@ -79,6 +79,7 @@ export const FINDING_TITLES: Record<InstitutionFinding["kind"], string> = {
   view_waves: "Волны просмотров по стене",
   level3_share: "Много постов с признаками искусственной активности",
   promotion: "Похоже на продвижение записей",
+  early_response: "Ранний отклик выше площадки",
 };
 
 export type InstitutionRow = {

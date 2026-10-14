@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import {
-  ArrowUpFromLine, ChevronRight, CircleCheck, Eye, History, Layers, Megaphone, Moon, Package, ScanLine, TrendingUp, TriangleAlert, Waves,
+  ArrowUpFromLine, ChevronRight, CircleCheck, Eye, History, Layers, Megaphone, Moon, Package, ScanLine, Timer, TrendingUp, TriangleAlert, Waves,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -30,7 +30,7 @@ const VISIBLE_ROWS = 3;
 const ICONS: Record<string, LucideIcon> = {
   early_pack: Package, regular_reactions: ScanLine, late_growth: TrendingUp, late_engagement: History,
   synchronous_waves: Layers, engagement_shift: ArrowUpFromLine, night_reactions: Moon,
-  view_packs: Eye, view_waves: Waves, level3_share: TriangleAlert, promotion: Megaphone,
+  view_packs: Eye, view_waves: Waves, level3_share: TriangleAlert, promotion: Megaphone, early_response: Timer,
 };
 
 type Figure = NonNullable<AccountAnomalyFinding["figure"]>;
@@ -307,7 +307,8 @@ function findingVisuals(item: AccountAnomalyFinding, platform: string): { inline
 function FigureBars({ figure, platform, kind, accent, showGap, axis = false }: {
   figure: Figure; platform: string; kind?: string; accent: boolean; showGap: boolean; axis?: boolean;
 }) {
-  const percentile = kind === "view_packs" || kind === "level3_share" || kind === "flat_daily_views";
+  const percentile = kind === "view_packs" || kind === "level3_share" || kind === "flat_daily_views"
+    || kind === "early_response";
   const percent = figure.unit === "percent";
   const typicalLabel = percentile ? `9 из 10 аккаунтов ${platformName(platform)} ≤` : `типичный аккаунт ${platformName(platform)}`;
   const items: BarItem[] = [

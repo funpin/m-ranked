@@ -55,7 +55,7 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
         if ledger is not None:
             posts.append(LedgerPost(row["publication_id"], row["account_id"], row["platform"],
                                     row["published_at"], bool(row["is_repost"]), ledger,
-                                    row.get("institution_id")))
+                                    row.get("institution_id"), row.get("publication_type")))
     tail_status = {item.account_id: (item.platform, item.status, {**item.metrics})
                    for item in tail_profiles if item.status is not None}
     persistent = [account for account, (_, status, _) in tail_status.items() if status == 2]
@@ -71,7 +71,8 @@ def run_findings(store: PostgresAnomalyStore, computed_for: date, tail_profiles=
     reach = (reach_findings.view_pack_findings(levels, computed_for)
              + reach_findings.level3_findings(levels, computed_for)
              + reach_findings.wave_findings(posts, computed_for)
-             + reach_findings.promotion_findings(posts, computed_for))
+             + reach_findings.promotion_findings(posts, computed_for)
+             + reach_findings.early_response_findings(posts, computed_for))
     # «Без суточного ритма» (flat_day_findings) не публикуется: на копии прода
     # 01.09–07.10 не подтвердилась (research/reach-audit-2026-10/VALIDATION.md).
     result += [with_texts(item) for item in reach]

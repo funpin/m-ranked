@@ -69,7 +69,9 @@ def test_a_few_packs_are_not_a_finding():
 
 
 from anomaly_analysis.v2.account_findings import LedgerPost  # noqa: E402
-from anomaly_analysis.v2.reach_findings import flat_day_findings, promotion_findings, wave_findings  # noqa: E402
+from anomaly_analysis.v2.reach_findings import (  # noqa: E402
+    early_response_findings, flat_day_findings, promotion_findings, wave_findings,
+)
 from anomaly_analysis.v2.tail_ledger import MOSCOW as MOSCOW_TZ, Point, TailLedger  # noqa: E402
 
 BASE = datetime(2026, 9, 8, 9, tzinfo=timezone.utc)
@@ -223,8 +225,11 @@ def test_every_reach_kind_has_words_for_the_api():
              + of(view_pack_findings(cohort() + spread(1, 80, 25, packs=True), TODAY))
              + of(flat_day_findings([p for a in range(2, 12) for p in flat(a, 0.15)] + flat(1, 0.9), TODAY))
              + of(promotion_findings(campaign(1, promoted={5, 6}) + [p for a in range(2, 12) for p in campaign(a)],
-                                     TODAY)))
-    assert {f.kind for f in found} == {"view_waves", "level3_share", "view_packs", "flat_daily_views", "promotion"}
+                                     TODAY))
+             + of(early_response_findings(early(1, quick=set(range(0, 20, 2)))
+                                          + [p for a in range(2, 12) for p in early(a)], TODAY)))
+    assert {f.kind for f in found} == {"view_waves", "level3_share", "view_packs", "flat_daily_views", "promotion",
+                                       "early_response"}
     for finding in found:
         metrics = with_texts(finding).metrics
         assert finding.title and metrics["summary"] and metrics["headline"] and metrics["alternatives"]
@@ -233,4 +238,47 @@ def test_every_reach_kind_has_words_for_the_api():
 
 def test_findings_method_version_is_bumped():
     from anomaly_analysis.v2.account_findings import METHOD_VERSION
-    assert METHOD_VERSION == "account-findings-v5"
+    assert METHOD_VERSION == "account-findings-v6"
+
+
+def early(account, count=20, quick=(), platform="vk", publication_type="photo", views=60):
+    """count постов по 30 ч с 12.09; у `quick` на первом замере реакций 60 % просмотров, у прочих 4 %."""
+    start = datetime(2026, 9, 12, 9, tzinfo=timezone.utc)
+    items = []
+    for i in range(count):
+        reactions = int(views * (0.6 if i in quick else 0.04))
+        ledger = TailLedger(None, None, None, marks={"first": Point(600, views, reactions)})
+        items.append(LedgerPost(UUID(int=account * 10_000 + i), UUID(int=account), platform,
+                                start + timedelta(hours=30 * i), False, ledger, None, publication_type))
+    return items
+
+
+def test_early_response_on_many_posts_is_a_persistent_finding():
+    others = [p for a in range(2, 12) for p in early(a)]
+    (finding,) = of(early_response_findings(early(1, quick=set(range(0, 20, 2))) + others, TODAY))
+    assert finding.kind == "early_response" and finding.status == 2
+    assert finding.metrics["early"] == 10 and finding.metrics["share"] == 0.5 and finding.metrics["cohortP90"] == 0
+    assert {member.int % 10_000 for member in finding.members} == set(range(0, 20, 2))
+
+
+def test_early_response_in_one_half_only_is_not_persistent():
+    others = [p for a in range(2, 12) for p in early(a)]
+    (finding,) = of(early_response_findings(early(1, quick={0, 1, 2, 3, 4}) + others, TODAY))
+    assert finding.status == 1
+
+
+def test_early_response_ignores_clips_small_first_readings_and_few_posts():
+    others = [p for a in range(2, 12) for p in early(a)]
+    everything = set(range(20))
+    assert not of(early_response_findings(early(1, quick=everything, publication_type="video") + others, TODAY))
+    assert not of(early_response_findings(early(1, quick=everything, views=19) + others, TODAY))
+    assert not of(early_response_findings(early(1, count=9, quick=everything) + others, TODAY))
+    assert not of(early_response_findings(early(1, quick={0, 1}) + others, TODAY))
+
+
+def test_early_response_is_judged_against_the_platform():
+    # У двух аккаунтов площадки из десяти ранний отклик ещё чаще: 90-й перцентиль выше.
+    others = [p for a in range(2, 12) for p in early(a, quick=set(range(14)) if a < 4 else set())]
+    assert not of(early_response_findings(early(1, quick=set(range(0, 20, 2))) + others, TODAY))
+    telegram = [p for a in range(2, 12) for p in early(a, platform="telegram")]
+    assert not of(early_response_findings(early(1, quick=set(range(20)), platform="telegram") + telegram, TODAY))

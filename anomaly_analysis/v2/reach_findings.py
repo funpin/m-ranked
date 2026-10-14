@@ -21,13 +21,14 @@ from uuid import UUID
 from .account_findings import WINDOW_DAYS, AccountFinding, LedgerPost, _halves_by_time
 from .tail_ledger import MOSCOW
 
-REACH_KINDS = ("view_packs", "view_waves", "level3_share", "flat_daily_views", "promotion")
+REACH_KINDS = ("view_packs", "view_waves", "level3_share", "flat_daily_views", "promotion", "early_response")
 TITLES = {
     "view_packs": "Повторяющиеся пакеты просмотров",
     "view_waves": "Волны просмотров по стене",
     "level3_share": "Много постов с признаками искусственной активности",
     "flat_daily_views": "Просмотры без суточного ритма",
     "promotion": "Похоже на продвижение записей",
+    "early_response": "Ранний отклик выше площадки",
 }
 ALTERNATIVES = {
     "view_packs": "Регулярное платное продвижение записей; встраивание на сайт или рассылка со ссылкой",
@@ -37,6 +38,8 @@ ALTERNATIVES = {
     "flat_daily_views": "Аудитория в нескольких часовых поясах; круглосуточный показ на экранах",
     "promotion": ("Платное продвижение записи: реклама ВК засчитывает показы как просмотры; подборка "
                   "или рекомендация площадки; ссылка на запись с внешнего ресурса"),
+    "early_response": ("Ядро подписчиков, которое реагирует сразу: студенческие чаты, сотрудники; анонс "
+                       "записи в чате или рассылке до публикации"),
 }
 
 # Пакеты просмотров: пост с признаком 1 режима «short_views» не слабее
@@ -92,6 +95,21 @@ PROMOTION_MIN_VIEWS = 300
 PROMOTION_MIN_DAYS = 2
 # Базовая линия суток жизни — медиана хотя бы пяти постов аккаунта.
 PROMOTION_MIN_BASE_POSTS = 5
+
+
+# Ранний отклик выше площадки (только ВК, без видео: у клипа просмотры записи
+# — не аудитория): доля постов, у которых на первом точном замере (не позже
+# получаса, tail_ledger.marks["first"]) реакций не меньше 40 % просмотров.
+# Живой ранний отклик ВК — единицы процентов. Посты ВК 15.09–11.10.2026 (копия
+# прода 12.10; 36 аккаунтов, у которых таких постов не меньше 10): у ГУАП 86 %,
+# у РТУ МИРЭА 46 %, у остальных не больше 6 %, 90-й перцентиль площадки 1,5 %.
+EARLY_PLATFORMS = frozenset({"vk"})
+EARLY_EXCLUDED_TYPES = frozenset({"video"})
+EARLY_RATIO = 0.4
+EARLY_MIN_VIEWS = 20
+EARLY_MIN_POSTS = 10
+EARLY_SHARE = 0.15
+EARLY_STRONG_SHARE = 0.25
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,6 +346,49 @@ def promotion_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[
     return result
 
 
+def _early_ratio(post: LedgerPost) -> float | None:
+    """Доля реакций на просмотр на первом точном замере; None — пост не судится."""
+    if post.platform not in EARLY_PLATFORMS or post.publication_type in EARLY_EXCLUDED_TYPES:
+        return None
+    first = post.ledger.marks.get("first")
+    if first is None or first.views < EARLY_MIN_VIEWS:
+        return None
+    return first.reactions / first.views
+
+
+def early_response_findings(posts: Sequence[LedgerPost], computed_for: date) -> list[AccountFinding]:
+    """Посты аккаунта систематически получают реакции на первых минутах выше площадки."""
+    start = computed_for - timedelta(days=WINDOW_DAYS)
+    judged: dict[UUID, list[tuple[LedgerPost, float]]] = {}
+    for account, items in _own(posts, computed_for).items():
+        pairs = [(post, ratio) for post in items if (ratio := _early_ratio(post)) is not None]
+        if pairs:
+            judged[account] = pairs
+    share = {account: sum(ratio >= EARLY_RATIO for _, ratio in pairs) / len(pairs)
+             for account, pairs in judged.items()}
+    platform_of = {account: pairs[0][0].platform for account, pairs in judged.items()}
+    result = []
+    for account, pairs in judged.items():
+        if len(pairs) < EARLY_MIN_POSTS:
+            continue
+        cohort = _p90_without({other: value for other, value in share.items()
+                               if len(judged[other]) >= EARLY_MIN_POSTS}, platform_of, account)
+        if share[account] < max(EARLY_SHARE, cohort):
+            continue
+        members = [post for post, ratio in pairs if ratio >= EARLY_RATIO]
+        member_ids = {post.publication_id for post in members}
+        halves = _halves_by_time([post for post, _ in pairs], start, computed_for)
+        steady = share[account] >= max(EARLY_STRONG_SHARE, cohort) and all(
+            any(post.publication_id in member_ids for post in half) for half in halves)
+        ratios = sorted(ratio for _, ratio in pairs)
+        metrics = {"posts": len(pairs), "early": len(members), "share": round(share[account], 3),
+                   "cohortP90": round(cohort, 3), "ratio": EARLY_RATIO,
+                   "medianRatio": round(ratios[len(ratios) // 2], 3)}
+        result.append(AccountFinding(account, platform_of[account], "early_response", 2 if steady else 1, start,
+                                     computed_for, metrics, tuple(post.publication_id for post in members)))
+    return result
+
+
 def _amplitude(items: Sequence[LedgerPost]) -> tuple[float, int] | None:
     """Самое тихое окно четырёх часов к самому активному и начало тихого (час UTC)."""
     views = [0] * 24
@@ -402,6 +463,11 @@ def summary(finding: AccountFinding) -> str:
                 f"просмотров в {data['excessMedian']:g} раза больше, чем у постов аккаунта того же возраста, "
                 f"по суточному ритму аудитории и почти без реакций: +{_number(data['views'])} просмотров, "
                 f"{_number(data['reactions'])} реакций. Пометка — контекст поста, а не уровень аномалии")
+    if finding.kind == "early_response":
+        return (f"У {data['early']} из {data['posts']} постов за {WINDOW_DAYS} дней на первом замере, в первые "
+                f"полчаса, реакций было не меньше {_percent(data['ratio'])} просмотров (медиана — "
+                f"{_percent(data['medianRatio'])}); у 9 из 10 аккаунтов площадки таких постов не больше "
+                f"{_percent(data['cohortP90'])}. Живой ранний отклик — единицы процентов")
     if finding.kind == "level3_share":
         return (f"{data['level3']} из {data['posts']} постов за {WINDOW_DAYS} дней на уровне 3 (признаки "
                 f"{', '.join(map(str, data['patterns']))}); у аккаунтов площадки — не больше "
@@ -419,6 +485,8 @@ def headline(finding: AccountFinding) -> str:
         return f"Волны просмотров по последним {data['latestN']} постам"
     if finding.kind == "promotion":
         return f"Похоже на продвижение: {data['posts']} пост. за {data['days']} дн."
+    if finding.kind == "early_response":
+        return f"Реакций не меньше {_percent(data['ratio'])} просмотров в первые полчаса у {_percent(data['share'])} постов"
     if finding.kind == "level3_share":
         return f"{_percent(data['share'])} постов на уровне 3"
     return "Просмотры идут круглые сутки"
@@ -430,7 +498,8 @@ def figure(finding: AccountFinding) -> dict[str, Any] | None:
     if finding.kind in ("view_waves", "promotion"):
         return None
     labels = {"view_packs": "постов с пакетом просмотров", "level3_share": "постов на уровне 3",
-              "flat_daily_views": "тихие часы к активным"}
+              "flat_daily_views": "тихие часы к активным",
+              "early_response": f"постов с реакциями ≥ {_percent(EARLY_RATIO)} просмотров в первые полчаса"}
     value = data["amplitude"] if finding.kind == "flat_daily_views" else data["share"]
     return {"value": value, "typical": data["cohortP90"], "unit": "percent", "label": labels[finding.kind],
             "direction": "higher"}
