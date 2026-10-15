@@ -79,3 +79,14 @@ def test_job_retrospective_uses_the_previous_published_month():
     assert [(body["parameters"]["status"], body["parameters"]["basePeriod"]) for body in database.recorded] == \
         [("retrospective", "Июль 2026"), ("retrospective", "Август 2026")]
     assert all(body["parameters"]["postsScale"] == 1.0 for body in database.recorded)
+
+
+def test_definer_functions_read_the_revision_without_foreign_functions():
+    """На проде функции 0084 принадлежат migration_owner, а у него нет EXECUTE на
+    analytics.latest_dataset_revision() (владелец — mranked_bootstrap): запись
+    снимка падала с InsufficientPrivilege. Ревизию читаем из таблицы напрямую."""
+    from pathlib import Path
+    migration = (Path(__file__).parents[1] / "db/migrations/0084_rating_forecast.sql").read_text(encoding="utf-8")
+    body = migration.split("CREATE FUNCTION ops_and_admin.record_rating_forecast", 1)[1]
+    assert "latest_dataset_revision" not in body
+    assert body.count("SELECT max(id) INTO revision FROM analytics.dataset_revision") == 2

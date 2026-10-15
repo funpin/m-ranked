@@ -10,6 +10,7 @@ SQLite-контура, Spring и reverse-sync в текущем релизе н�
 - `m-ranked-target-collector@{telegram,vk,max,rutube}.service` — независимые сборщики;
 - `m-ranked-target-anomaly-analysis.service` — анализ аномалий;
 - maintenance, backup и restore timers из `operations/systemd/`.
+- `m-ranked-target-rating-forecast.timer` — ночной снимок прогноза М-Рейтинга по соцсетям (см. ниже).
 
 API использует отдельные роли `api_read`, `api_write_admin` и
 `outbox_worker`. Сборщики используют только `collector_ingest`.
@@ -55,3 +56,38 @@ admin export endpoints, Next.js не содержит совместимых `/e
 Подробные процедуры: [deploy](../operations/runbooks/DEPLOY.md),
 [backup/restore](../operations/runbooks/BACKUP_RESTORE.md),
 [аварийный откат приложения](../operations/runbooks/ROLLBACK.md).
+
+## Прогноз М-Рейтинга
+
+Вкладка `/rating` читает готовые снимки из `rating.rating_run` и
+`rating.rating_result`; считает их `m-ranked-target-rating-forecast.service`
+(`python -m api.tools.rating_forecast`) раз в сутки в 01:47 по Москве — после
+проверки официального рейтинга и до ночного дампа. Задание берёт текущий месяц
+(бегущая оценка) и прошлый, пока за него нет официального списка (итоговый
+прогноз); когда официальный месяц появился, последний снимок до публикации
+помечается итоговым, промежуточные снимки этого месяца удаляются. На копии прода
+прогон занимает меньше секунды и около 50 МБ памяти. До первого снимка
+вкладка показывает «Снимков прогноза ещё нет».
+
+Ретроспектива (август–сентябрь 2026, пометка «ретроспективный расчёт»)
+запускается разово после миграции 0084 тем же юнитом с аргументом, с низким
+приоритетом:
+
+```bash
+systemd-run --wait --pipe --unit=m-ranked-rating-retro --property=Nice=10 \
+  --property=CPUQuota=50% --property=User=m-ranked-api --property=Group=m-ranked-api \
+  --property=WorkingDirectory=/opt/m-ranked/current \
+  --property=EnvironmentFile=/etc/m-ranked/api.env \
+  --property=LoadCredential=api-read-db-password:/etc/m-ranked/credentials/api-read-db-password \
+  --property=LoadCredential=api-write-admin-db-password:/etc/m-ranked/credentials/api-write-admin-db-password \
+  /bin/sh -c 'API_READ_DB_PASSWORD_FILE=$CREDENTIALS_DIRECTORY/api-read-db-password \
+    API_WRITE_ADMIN_DB_PASSWORD_FILE=$CREDENTIALS_DIRECTORY/api-write-admin-db-password \
+    exec /opt/m-ranked/current/.venv/bin/python -m api.tools.rating_forecast --retrospective 2026-08..2026-09'
+```
+
+Запись снимков — только функциями `ops_and_admin.record_rating_forecast` и
+`ops_and_admin.finalize_rating_forecast` (`SECURITY DEFINER`, владелец
+`migration_owner`, `EXECUTE` у `api_write_admin`). Откат — раздел «Откат» в
+`db/migrations/0084_rating_forecast.sql`; формулу v1 как опубликованную удаляет
+только владелец. Точность прогноза проверяет
+`research/m-rating-forecast/backtest.py`.

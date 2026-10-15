@@ -71,7 +71,9 @@ BEGIN
      WHERE formula_key = p_payload->>'formulaKey' AND version = (p_payload->>'version')::integer
        AND status = 'published';
     IF formula IS NULL THEN RAISE EXCEPTION 'unknown rating formula' USING ERRCODE = '22023'; END IF;
-    SELECT id INTO revision FROM analytics.latest_dataset_revision();
+    -- Ревизия — прямо из таблицы: владелец функции — migration_owner, а у него нет
+    -- EXECUTE на функцию последней ревизии; таблица ревизий принадлежит ему же.
+    SELECT max(id) INTO revision FROM analytics.dataset_revision;
     IF revision IS NULL THEN RAISE EXCEPTION 'no dataset revision' USING ERRCODE = '55000'; END IF;
     -- Снимок суток один: повторный запуск задания заменяет его. Ретроспектива
     -- месяца тоже одна. Итоговый снимок опубликованного месяца неприкосновенен.
@@ -122,7 +124,9 @@ BEGIN
        AND run.window_start = p_window_start AND run.id <> keep
        AND run.parameters->>'status' IN ('running', 'final');
     GET DIAGNOSTICS removed = ROW_COUNT;
-    SELECT id INTO revision FROM analytics.latest_dataset_revision();
+    -- Ревизия — прямо из таблицы: владелец функции — migration_owner, а у него нет
+    -- EXECUTE на функцию последней ревизии; таблица ревизий принадлежит ему же.
+    SELECT max(id) INTO revision FROM analytics.dataset_revision;
     INSERT INTO ops_and_admin.outbox_event(dataset_revision_id, event_type, aggregate_type, aggregate_id,
                                            affected_tags, payload)
     VALUES (revision, 'rating_forecast.finalized', 'rating_run', keep::text, ARRAY['rating-forecast'],

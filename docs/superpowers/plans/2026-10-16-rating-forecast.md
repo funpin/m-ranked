@@ -2817,4 +2817,27 @@ git commit -m "docs(rating): forecast timer operations and before/after measurem
 
 ## Замеры
 
-(заполняется в Task 11)
+16.10.2026, локальная копия прода `mranked_prod_20261013`, миграция 0084 применена как
+`migration_owner`; API и web — production-сборки, роли входа — члены `api_read` /
+`api_write_admin` с их настройками (`jit = off`, `random_page_cost = 1.1`). «До» —
+`origin/main` 2ac5d9f3, «после» — эта ветка; два круга, один холодный запрос и 20 тёплых.
+
+| Страница | До: холодный / p50 / p95, мс | После: холодный / p50 / p95, мс |
+|---|---|---|
+| `/review` | 191 / 30 / 34–37 | 190–196 / 29–30 / 35–37 |
+| `/compare` | 528–541 / 22 / 24–26 | 541–545 / 21–23 / 25 |
+| `/rating` | — | 36–43 / 14–15 / 16–17 |
+| `/rating?month=2026-09` | — | 24–25 / 13–15 / 15–18 |
+| `/rating/own` | — | 8–9 / 6 / 7 |
+
+Память: API 94–98 МБ до и 95–97 МБ после; web 318–321 МБ до и 323–327 МБ после (в
+пределах разброса). SQL `PLATFORM_MONTH`: сентябрь 70–99 мс, октябрь 24–30 мс;
+единственный заметный Seq Scan — `publication_latest` (73 тыс. строк, 8 мс, hash join),
+`ingest.publication` — по индексу. Задание: ретроспектива двух месяцев 0.41 с, ночной
+прогон 0.35 с, RSS 52 МБ. Регрессий нет.
+
+Находка замеров: на копии прода запись снимка падала с `InsufficientPrivilege` —
+функции 0084 принадлежат `migration_owner`, а у него нет `EXECUTE` на
+`analytics.latest_dataset_revision()`. Исправлено: ревизия читается из
+`analytics.dataset_revision` напрямую (тест
+`test_definer_functions_read_the_revision_without_foreign_functions`).
