@@ -111,6 +111,7 @@ def rutube_batch(
                 sampling_interval_seconds, video.published_at,
             ),
             quality_flags={"engagement_request_degraded": engagement is None},
+            uploaded_at=video.uploaded_at,
         ))
     return RawCollectionBatch(
         account,

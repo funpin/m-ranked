@@ -749,6 +749,45 @@ def test_max_and_rutube_unsupported_values_remain_null() -> None:
     )
 
 
+def test_rutube_batch_carries_upload_time_outside_snapshot_fingerprints() -> None:
+    target = account(Platform.RUTUBE)
+    base = RutubeVideo(
+        "video-1", "Video", NOW - timedelta(minutes=5), 3,
+        "https://rutube.ru/video/video-1/", {},
+    )
+    uploaded = replace(base, uploaded_at=NOW - timedelta(days=40))
+
+    def normalized(video: RutubeVideo):
+        raw = rutube_batch(
+            account=target,
+            channel=RutubeChannel(5, "RUTUBE", "https://rutube.ru/channel/5/"),
+            videos=(video,),
+            metrics={"video-1": RutubeVideoMetrics(1, 0, {})},
+            observed_at=NOW,
+            collected_at=NOW,
+            subscriber_count=None,
+        )
+        assert raw.publications[0].uploaded_at == video.uploaded_at
+        return CanonicalNormalizer().normalize(
+            raw, context(Platform.RUTUBE),
+        ).publications[0]
+
+    without, with_date = normalized(base), normalized(uploaded)
+    assert without.uploaded_at is None
+    assert with_date.uploaded_at == NOW - timedelta(days=40)
+    # Дата загрузки не входит в отпечатки снимка: иначе каждое видео Rutube
+    # получило бы лишнюю строку снимка, а старые — открытый архивный месяц.
+    assert with_date.quality_flags == without.quality_flags
+    assert (
+        with_date.snapshot.semantic_fingerprint
+        == without.snapshot.semantic_fingerprint
+    )
+    assert (
+        with_date.snapshot.source_fingerprint
+        == without.snapshot.source_fingerprint
+    )
+
+
 def test_rutube_gateway_keeps_other_videos_when_one_metric_request_fails() -> None:
     class Client:
         async def resolve_channel(self, reference: str, url: str | None) -> int:
