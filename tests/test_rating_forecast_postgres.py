@@ -270,3 +270,41 @@ def test_rows_join_the_official_actual_for_the_period(dsn):
         row = connection.execute(sql.FORECAST_ROWS, {"run_id": run["id"], "period": "Сентябрь 2026"}).fetchone()
     assert row["actual"]["social"] == {"rank": 8, "score": 65.9}
     assert row["actual"]["vk"]["rank"] == 38
+
+
+def test_job_end_to_end_on_postgres(dsn):
+    import asyncio
+    from types import SimpleNamespace
+    import psycopg
+    from psycopg.rows import dict_row
+    from api.tools import rating_forecast as job
+
+    class Direct:
+        """Оба пула — одно соединение суперпользователя: права проверяют тесты выше."""
+        async def _rows(self, query, params):
+            async with await psycopg.AsyncConnection.connect(dsn, row_factory=dict_row, autocommit=True) as connection:
+                return await (await connection.execute(query, params)).fetchall()
+        async def fetch_all(self, query, params=None): return await self._rows(query, params)
+        async def admin_fetch_all(self, query, params=None): return await self._rows(query, params)
+        async def admin_fetch_one(self, query, params=None): return (await self._rows(query, params))[0]
+
+    world = World(dsn, "vk")
+    code = f"t{world.legacy_id}"
+    coded(dsn, world, code)
+    with _connect(dsn) as connection:
+        connection.execute("UPDATE catalog.platform_account SET created_at='2026-08-01' WHERE id=%s", (world.account,))
+        evidence = {"items": [{"code": code, "name": f"Вуз {world.legacy_id}",
+                               "scores": {"social": 50.0, "ok": 60.0, "vk": 55.0, "rt": 20.0}}]}
+        connection.execute("""
+            INSERT INTO rating.official_import(actor,correlation_id,period,source_url,source_hash,fetched_at,evidence,evidence_sha256)
+            VALUES ('test',gen_random_uuid(),'Сентябрь 2026','https://www.m-rating.ru/r.json',%s,now(),%s,%s)""",
+            ("a" * 64, Jsonb(evidence), "b" * 64))
+    for day in range(1, 12):
+        latest(dsn, world.post(datetime(2026, 10, day, 9, tzinfo=timezone.utc), {}), 1000, 20)
+    asyncio.run(job.run(Direct(), datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
+    with _connect(dsn) as connection:
+        run = connection.execute(sql.FORECAST_RUN, {"formula_key": rf.FORMULA_KEY, "window_start": START}).fetchone()
+        rows = connection.execute(sql.FORECAST_ROWS, {"run_id": run["id"], "period": "Октябрь 2026"}).fetchall()
+    assert run["parameters"]["status"] == "running"
+    mine = next(row for row in rows if row["institution_id"] == str(world.institution))
+    assert mine["explanation"]["platforms"]["vk"]["metrics"]["posts"] == 11
