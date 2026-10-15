@@ -131,3 +131,19 @@ groups:
           severity: critical
         annotations:
           summary: Pause low-priority collection; never purge unacknowledged batches.
+      - alert: MRankedCatalogSyncStale
+        # Сервер 1 давно не сверял справочник с Сервером 2: новые и изменённые
+        # в /manage аккаунты сборщики не видят (0082).
+        expr: time() - mranked_catalog_sync_last_success_timestamp_seconds > 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Server 1 has not synced the catalog from Server 2 for over an hour.
+      - alert: MRankedCatalogSyncConflicts
+        expr: mranked_catalog_sync_account_conflicts > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Server 2 accounts collide with a different Server 1 account on platform and external key.

@@ -18,6 +18,7 @@ import ssl
 import time
 from typing import Any, Iterable
 
+from collector_target.catalog_sync import CATALOG_PATH, valid_digest
 from operations.storage.hub import NodeRejected
 
 from .handler import MAX_WIRE_BYTES, IngestHandler
@@ -138,11 +139,11 @@ async def _read_body(reader: asyncio.StreamReader, headers: dict[str, str]) -> b
         raise _BadRequest(400, "incomplete_body") from error
 
 
-def _binary_head(status: int, length: int) -> bytes:
+def _binary_head(status: int, length: int, content_type: str = "application/octet-stream") -> bytes:
     # Заголовок отдельно от тела: тело куска файла не копируется ещё раз.
     return (
         f"HTTP/1.1 {status} {_REASON.get(status, 'Error')}\r\n"
-        "content-type: application/octet-stream\r\n"
+        f"content-type: {content_type}\r\n"
         f"content-length: {length}\r\n"
         "connection: close\r\n"
         "cache-control: no-store\r\n"
@@ -153,9 +154,11 @@ def _binary_head(status: int, length: int) -> bytes:
 class _NodeDone(Exception):
     """Ответ узловой точки готов; несёт его мимо разбора пачки замеров."""
 
-    def __init__(self, status: int, body: Any, binary: bytes | None):
+    def __init__(self, status: int, body: Any, binary: bytes | None,
+                 content_type: str = "application/octet-stream"):
         super().__init__(status)
         self.status, self.body, self.binary = status, body, binary
+        self.content_type = content_type
 
 
 def _response(status: int, body: Any) -> bytes:
@@ -179,6 +182,7 @@ class IngestServer:
         path: str = "/transfer/v1/batches",
         allowed_producers: Iterable[str] | None = None,
         node_hub: Any = None,
+        catalog: Any = None,
         clock: Any = time.monotonic,
     ) -> None:
         self.handler = handler
@@ -187,6 +191,10 @@ class IngestServer:
         # Узлы из реестра серверов (ADR-016): агенты хранилища и сборщики,
         # подключённые из панели без правки окружения приёмника.
         self.node_hub = node_hub
+        # Справочник для сборщиков Сервера 1 (0082): они читают каталог из
+        # своей базы, а команды каталога пишут только здесь.
+        self.catalog = catalog
+        self._catalog_requests = asyncio.Semaphore(1)
         self._clock = clock
         self._registry: tuple[str, ...] = ()
         self._registry_at = float("-inf")
@@ -238,11 +246,25 @@ class IngestServer:
             return 404, {"error": "unknown_endpoint"}, None
         return outcome.status, outcome.body, outcome.binary
 
+    async def _serve_catalog(self, request: "_Request", peer_ids: tuple[str, ...]) -> bytes:
+        target, _, query = request.target.partition("?")
+        if target != CATALOG_PATH:
+            raise _BadRequest(404, "unknown_endpoint")
+        if request.method != "GET":
+            raise _BadRequest(405, "method_not_allowed")
+        # Снимок отдаётся тем же, кому разрешено слать пачки.
+        if not peer_ids:
+            raise _BadRequest(403, "producer_identity_mismatch")
+        params = dict(item.partition("=")[::2] for item in query.split("&") if item)
+        async with self._catalog_requests:
+            return await asyncio.to_thread(self.catalog.respond, valid_digest(params.get("known")))
+
     async def _serve(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
     ) -> None:
         status, body = 500, {"error": "ingest_failed"}
         binary: bytes | None = None
+        content_type = "application/octet-stream"
         try:
             ssl_object = writer.get_extra_info("ssl_object")
             peer_cert = ssl_object.getpeercert() if ssl_object is not None else None
@@ -259,6 +281,9 @@ class IngestServer:
             request = await asyncio.wait_for(
                 _read_head(reader), timeout=READ_TIMEOUT_SECONDS,
             )
+            if request.target.startswith("/catalog/") and self.catalog is not None:
+                raise _NodeDone(200, None, await self._serve_catalog(request, peer_ids),
+                                "application/json")
             if request.target.startswith("/node/") and self.node_hub is not None:
                 try:
                     status, body, binary = await self._serve_node(request, reader, certificate_ids)
@@ -282,6 +307,7 @@ class IngestServer:
                 status, body = outcome.status, dict(outcome.body)
         except _NodeDone as done:
             status, body, binary = done.status, done.body, done.binary
+            content_type = done.content_type
         except _BadRequest as error:
             status, body = error.status, {"error": error.code}
         except asyncio.TimeoutError:
@@ -291,7 +317,7 @@ class IngestServer:
             status, body = 500, {"error": "ingest_failed"}
         try:
             if binary is not None:
-                writer.write(_binary_head(status, len(binary)))
+                writer.write(_binary_head(status, len(binary), content_type))
                 writer.write(binary)
             else:
                 writer.write(_response(status, body))

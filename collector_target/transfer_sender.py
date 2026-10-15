@@ -22,6 +22,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from . import catalog_sync
+from .catalog_sync import CatalogSync, CatalogSyncStats
 from .repository import PostgresCollectorRepository
 from .transfer import HttpsMtlsTransport, InProcessTransport, PostgresDataAdapter
 from .transfer import PostgresTransferProducer, _row
@@ -79,7 +81,41 @@ def build_transport(repository: PostgresCollectorRepository) -> Any:
     )
 
 
-def publish_metrics(path: Path, delivered: int, backlog: int, failures: int) -> None:
+def build_catalog_sync(
+    repository: PostgresCollectorRepository, transport: Any,
+) -> CatalogSync | None:
+    """Сверка справочника с Сервером 2 по тому же mTLS-клиенту.
+
+    Нужна только профилю B: в профиле A база одна, и справочник уже здесь.
+    Ноль в интервале выключает сверку.
+    """
+    if not isinstance(transport, HttpsMtlsTransport):
+        return None
+    interval = _positive_int(
+        "COLLECTOR_CATALOG_SYNC_INTERVAL_SECONDS",
+        catalog_sync.DEFAULT_INTERVAL_SECONDS, 0, 86400,
+    )
+    if interval == 0:
+        return None
+    endpoint = (
+        os.environ.get("COLLECTOR_CATALOG_SYNC_ENDPOINT", "").strip()
+        or catalog_sync.catalog_endpoint(transport.endpoint)
+    )
+    catalog_sync.catalog_endpoint(endpoint)  # та же проверка: только HTTPS
+
+    def fetch(known: str | None) -> bytes:
+        return transport.get_bytes(
+            endpoint, params={"known": known} if known else {},
+            limit=catalog_sync.MAX_SNAPSHOT_BYTES,
+        )
+
+    return CatalogSync(repository._connection, fetch, interval_seconds=interval)
+
+
+def publish_metrics(
+    path: Path, delivered: int, backlog: int, failures: int,
+    catalog: CatalogSyncStats | None = None,
+) -> None:
     """Текстовый файл для node_exporter. Пишется атомарно, как и везде."""
     body = (
         "# HELP mranked_transfer_sender_delivered_total Доставленные конверты\n"
@@ -92,6 +128,8 @@ def publish_metrics(path: Path, delivered: int, backlog: int, failures: int) -> 
         "# TYPE mranked_transfer_sender_failures_total counter\n"
         f"mranked_transfer_sender_failures_total {failures}\n"
     )
+    if catalog is not None:
+        body += catalog_sync.metrics_lines(catalog)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(body, encoding="utf-8")
     temporary.replace(path)
@@ -138,6 +176,7 @@ def run() -> int:
     repository = PostgresCollectorRepository(_required("COLLECTOR_DATABASE_URL"))
     repository.transfer_producer_id = producer_id
     producer = PostgresTransferProducer(repository, build_transport(repository))
+    catalog = build_catalog_sync(repository, producer.transport)
 
     stop = threading.Event()
     for number in (signal.SIGINT, signal.SIGTERM):
@@ -147,8 +186,9 @@ def run() -> int:
     purged_total = 0
     failures_total = 0
     logger.info(
-        "transfer sender started producer=%s interval=%ss limit=%s",
+        "transfer sender started producer=%s interval=%ss limit=%s catalog_sync=%s",
         producer_id, interval, limit,
+        f"{catalog.interval_seconds}s" if catalog is not None else "off",
     )
     while not stop.is_set():
         try:
@@ -173,11 +213,16 @@ def run() -> int:
         except Exception as error:  # noqa: BLE001 — журнал важнее падения
             failures_total += 1
             logger.warning("delivery pass failed: %s", type(error).__name__)
+        # Справочник — после доставки и в своём ритме: сбой сверки не задевает
+        # отправку, а новые аккаунты появятся у сборщиков с их следующего цикла.
+        if catalog is not None:
+            catalog.run_if_due()
         if metrics_path is not None:
             try:
                 publish_metrics(
                     metrics_path, delivered_total,
                     backlog_size(repository), failures_total,
+                    catalog.stats if catalog is not None else None,
                 )
             except Exception:  # noqa: BLE001 — метрики не должны ронять отправку
                 logger.debug("metrics publication failed", exc_info=True)
