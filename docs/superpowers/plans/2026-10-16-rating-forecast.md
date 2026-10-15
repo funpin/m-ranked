@@ -4,7 +4,7 @@
 
 **Goal:** ночной снимок прогноза мест вузов в официальном М-Рейтинге по соцсетям (общий + MAX/VK/Rutube) и вкладка `/rating` с разделами «Прогноз М-Рейтинга» и «Наш рейтинг» (каркас).
 
-**Architecture:** чистый модуль расчёта `api/rating_forecast.py` (без базы) считает баллы площадок, соцсети и места среди 233 вузов. Ночное задание `api.tools.rating_forecast` читает агрегаты публикаций пулом чтения, баллы официального базового месяца — функцией `SECURITY DEFINER`, и записывает снимок в `rating.rating_run`/`rating.rating_result` функцией `ops_and_admin.record_rating_forecast` (миграция 0083). Публичный API (`/api/v1/rating/...`) читает готовый снимок; страница Next.js рисует таблицу и разброс «прогноз против факта».
+**Architecture:** чистый модуль расчёта `api/rating_forecast.py` (без базы) считает баллы площадок, соцсети и места среди 233 вузов. Ночное задание `api.tools.rating_forecast` читает агрегаты публикаций пулом чтения, баллы официального базового месяца — функцией `SECURITY DEFINER`, и записывает снимок в `rating.rating_run`/`rating.rating_result` функцией `ops_and_admin.record_rating_forecast` (миграция 0084). Публичный API (`/api/v1/rating/...`) читает готовый снимок; страница Next.js рисует таблицу и разброс «прогноз против факта».
 
 **Tech Stack:** Python 3.13, FastAPI, psycopg 3, PostgreSQL 18, systemd timers; Next.js 16 / React / TypeScript, openapi-fetch, recharts 3.8, Playwright, node:test.
 
@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- Номер миграции — 0084: 0083 занят `0083_publication_uploaded_at.sql` из PR funpin/m-ranked#26 (дата загрузки Rutube). Если #26 сольют раньше, Rutube-порог можно перевести на `uploaded_at` отдельной версией формулы; в этой ветке — по `published_at`.
 - Репозиторий публичный: адреса, порты, ключи и доступы серверов не записываются ни в один файл.
 - Коммиты без строки соавторства Claude (`Co-Authored-By` не добавлять).
 - Работа только в worktree `.claude/worktrees/rating-forecast`, ветка `feat/rating-forecast`; перед коммитом `git status` и `git branch --show-current`.
@@ -42,7 +43,7 @@
 |---|---|
 | `api/rating_forecast.py` (новый) | Формула v1, баллы площадок, места, диапазоны, типичные ошибки, месяцы — чистые функции |
 | `api/official_rating.py` | + сводный балл в `evidence` |
-| `db/migrations/0083_rating_forecast.sql` (новый) | Формула v1, `rating_run.parameters`, функции чтения официальных баллов и записи/финализации снимков |
+| `db/migrations/0084_rating_forecast.sql` (новый) | Формула v1, `rating_run.parameters`, функции чтения официальных баллов и записи/финализации снимков |
 | `api/sql/rating.py` (новый) | SQL агрегатов задания и читателей API |
 | `api/tools/rating_forecast.py` (новый) | Ночное задание и ретроспектива |
 | `operations/systemd/m-ranked-target-rating-forecast.{service,timer}` (новые) | Расписание |
@@ -60,7 +61,7 @@
 ## Подготовка окружения (один раз)
 
 - Python: `.venv` основной копии — `/Users/funpin/Documents/ChatGPT/TG-monitoring/.venv/bin/python` (в worktree своей `.venv` нет; запускать из корня worktree, `PYTHONPATH=.`). Ниже `PY` — этот путь.
-- Postgres для тестов: по памяти `local-pytest-postgres` — `docker compose -p mranked-pytest -f infra/compose.yaml up -d --wait postgres` с одноразовыми паролями и `POSTGRES_PORT=55439`; база `findings_it` со всеми `db/migrations/*.sql` (включая 0083 после Task 4). `MRANKED_FINDINGS_TEST_DSN` — суперпользователь на `findings_it`.
+- Postgres для тестов: по памяти `local-pytest-postgres` — `docker compose -p mranked-pytest -f infra/compose.yaml up -d --wait postgres` с одноразовыми паролями и `POSTGRES_PORT=55439`; база `findings_it` со всеми `db/migrations/*.sql` (включая 0084 после Task 4). `MRANKED_FINDINGS_TEST_DSN` — суперпользователь на `findings_it`.
 - Фронт: `cd frontend && npx -y pnpm@11.19.0 install --frozen-lockfile` (pnpm нет в PATH).
 
 ---
@@ -295,7 +296,7 @@ PLATFORMS = ("max", "vk", "rutube")
 CATEGORIES = ("social", "max", "vk", "rutube")
 
 # Совпадает с definition строки rating.formula_definition версии 1 (миграция
-# 0083); тест сверяет их. Правка порогов — новая версия, а не правка этой.
+# 0084); тест сверяет их. Правка порогов — новая версия, а не правка этой.
 FORMULA_V1: dict[str, Any] = {
     "formulaKey": FORMULA_KEY,
     "version": 1,
@@ -692,10 +693,10 @@ git add api/official_rating.py tests/test_rating_coverage.py
 git commit -m "feat(official-rating): keep the consolidated score in import evidence"
 ```
 
-### Task 4: Миграция 0083 — формула, снимки, функции записи
+### Task 4: Миграция 0084 — формула, снимки, функции записи
 
 **Files:**
-- Create: `db/migrations/0083_rating_forecast.sql`
+- Create: `db/migrations/0084_rating_forecast.sql`
 - Test: `tests/test_rating_forecast_postgres.py`
 
 **Interfaces:**
@@ -714,7 +715,7 @@ git commit -m "feat(official-rating): keep the consolidated score in import evid
 ```python
 """Снимки прогноза М-Рейтинга на одноразовой базе «Находок»; без неё пропускается.
 
-Применить 0083 к базе перед запуском: psql -f db/migrations/0083_rating_forecast.sql.
+Применить 0084 к базе перед запуском: psql -f db/migrations/0084_rating_forecast.sql.
 """
 from __future__ import annotations
 
@@ -883,12 +884,12 @@ def test_grants_follow_the_roles(dsn):
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `MRANKED_FINDINGS_TEST_DSN=... $PY -m pytest tests/test_rating_forecast_postgres.py -q`
-Expected: FAIL — `function ops_and_admin.record_rating_forecast(jsonb) does not exist` (0083 ещё нет).
+Expected: FAIL — `function ops_and_admin.record_rating_forecast(jsonb) does not exist` (0084 ещё нет).
 
-- [ ] **Step 3: Write the migration** `db/migrations/0083_rating_forecast.sql`. JSON и хеш ниже посчитаны от `FORMULA_V1` из Task 1 (`sha256` канонического `json.dumps(..., sort_keys=True, separators=(",", ":"), ensure_ascii=False)`); тест `test_formula_v1_matches_the_python_definition` сверяет оба — при любой правке `FORMULA_V1` пересчитать.
+- [ ] **Step 3: Write the migration** `db/migrations/0084_rating_forecast.sql`. JSON и хеш ниже посчитаны от `FORMULA_V1` из Task 1 (`sha256` канонического `json.dumps(..., sort_keys=True, separators=(",", ":"), ensure_ascii=False)`); тест `test_formula_v1_matches_the_python_definition` сверяет оба — при любой правке `FORMULA_V1` пересчитать.
 
 ```sql
--- 0083 — прогноз М-Рейтинга по соцсетям: формула v1 и ночные снимки.
+-- 0084 — прогноз М-Рейтинга по соцсетям: формула v1 и ночные снимки.
 -- Спек: docs/superpowers/specs/2026-10-16-rating-forecast-design.md.
 --
 -- Таблицы rating.rating_run/rating_result были в схеме с самого начала и
@@ -1036,14 +1037,14 @@ COMMIT;
 
 - [ ] **Step 4: Apply and run the tests**
 
-Run: `psql "$MRANKED_FINDINGS_TEST_DSN" -v ON_ERROR_STOP=1 -f db/migrations/0083_rating_forecast.sql && $PY -m pytest tests/test_rating_forecast_postgres.py -q`
+Run: `psql "$MRANKED_FINDINGS_TEST_DSN" -v ON_ERROR_STOP=1 -f db/migrations/0084_rating_forecast.sql && $PY -m pytest tests/test_rating_forecast_postgres.py -q`
 Expected: PASS (9 passed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add db/migrations/0083_rating_forecast.sql tests/test_rating_forecast_postgres.py
-git commit -m "feat(db): 0083 — forecast formula v1, snapshot parameters, definer write/finalize functions"
+git add db/migrations/0084_rating_forecast.sql tests/test_rating_forecast_postgres.py
+git commit -m "feat(db): 0084 — forecast formula v1, snapshot parameters, definer write/finalize functions"
 ```
 
 ### Task 5: SQL агрегатов и читателей
@@ -1053,7 +1054,7 @@ git commit -m "feat(db): 0083 — forecast formula v1, snapshot parameters, defi
 - Test: `tests/test_rating_forecast_postgres.py` (добавить тесты)
 
 **Interfaces:**
-- Consumes: 0083 (Task 4).
+- Consumes: 0084 (Task 4).
 - Produces (строки SQL; параметры — именованные):
   - `PLATFORM_MONTH(window_start, window_end, mature_before)` → строки `institution_id, code, name, platform (NULL если нет аккаунтов), posts, mature_posts, mature_views, mature_interactions, viewed_posts, views, interactions, covered`
   - `FORECAST_MONTHS(formula_key)` → `month (YYYY-MM), status, as_of`, новые первыми
@@ -1309,7 +1310,7 @@ git commit -m "feat(rating): SQL for monthly platform aggregates and forecast sn
 - Test: `tests/test_rating_forecast_job.py` (новый), `tests/test_operations_profiles.py`, `tests/test_rating_forecast_postgres.py`
 
 **Interfaces:**
-- Consumes: `api.rating_forecast` (Tasks 1–2), `api.sql.rating` (Task 5), функции 0083 (Task 4), `api.institution_profile._students_by_institution`.
+- Consumes: `api.rating_forecast` (Tasks 1–2), `api.sql.rating` (Task 5), функции 0084 (Task 4), `api.institution_profile._students_by_institution`.
 - Produces:
   - `async def run(database, as_of: datetime, *, retrospective: list[date] | None = None) -> list[dict]` — ответы `record_rating_forecast` по месяцам
   - `def parse_retrospective(value: str) -> list[date]` — `"2026-08..2026-09"` → `[date(2026,8,1), date(2026,9,1)]`
@@ -1417,7 +1418,7 @@ Expected: FAIL — `ImportError: cannot import name 'rating_forecast' from 'api.
 считается разово при выкатке: по месяцу, со статусом retrospective.
 
 Агрегаты читает пул чтения; баллы базового месяца и запись снимка — через
-функции миграции 0083 под api_write_admin. Задание фоновое (CPUWeight=10):
+функции миграции 0084 под api_write_admin. Задание фоновое (CPUWeight=10):
 агрегация месяца по 75 вузам на копии прода — меньше секунды.
 """
 from __future__ import annotations
@@ -2790,7 +2791,7 @@ git commit -m "research(rating): reproducible forecast backtest against publishe
 
 - [ ] **Step 1: Baseline «до»** — на `main` (основная копия, не трогая её файлы: собрать отдельный worktree `main` только для чтения или использовать текущий прод-релиз фронта) снять p50/p95 холодный/тёплый `/review` и `/compare` на локальном стенде с копией `mranked_prod_20261013` (20 запросов, первый — холодный после перезапуска API). Записать в план.
 
-- [ ] **Step 2: Apply 0083 to the local copy** — сухой прогон (вырезать `BEGIN;`/`COMMIT;`, обернуть в `BEGIN … ROLLBACK`), затем настоящий: `docker exec -i mranked-local-db psql -U mranked_bootstrap -d mranked_prod_20261013 -v ON_ERROR_STOP=1 -c "SET ROLE migration_owner" -f - < db/migrations/0083_rating_forecast.sql`.
+- [ ] **Step 2: Apply 0084 to the local copy** — сухой прогон (вырезать `BEGIN;`/`COMMIT;`, обернуть в `BEGIN … ROLLBACK`), затем настоящий: `docker exec -i mranked-local-db psql -U mranked_bootstrap -d mranked_prod_20261013 -v ON_ERROR_STOP=1 -c "SET ROLE migration_owner" -f - < db/migrations/0084_rating_forecast.sql`.
 
 - [ ] **Step 3: SQL timing** — `EXPLAIN (ANALYZE, BUFFERS)` под `SET ROLE api_read; SET jit = off; SET random_page_cost = 1.1` для `PLATFORM_MONTH` (октябрь и сентябрь), `FORECAST_MONTHS`, `FORECAST_RUN`, `FORECAST_ROWS`. Ожидание: `PLATFORM_MONTH` < 1 с без Seq Scan по `ingest.publication`; читатели API < 20 мс. Записать планы-выжимки.
 
@@ -2798,7 +2799,7 @@ git commit -m "research(rating): reproducible forecast backtest against publishe
 
 - [ ] **Step 5: «После»** — тот же стенд на ветке: p50/p95 холодный/тёплый `/review`, `/compare`, `/rating`, `/rating?month=2026-09`, `/rating/own`. Критерий: `/review`, `/compare` не хуже «до» больше чем на шум (±10 %); `/rating` p95 тёплый ≤ `/compare`. Ухудшение — стоп, цифры владельцу.
 
-- [ ] **Step 6: Docs** — в `docs/OPERATIONS.md` рядом с описанием `m-ranked-target-official-rating.timer`: таймер прогноза, время, что делает, как запустить ретроспективу разово (`systemd-run` под пользователем `m-ranked-api` с тем же `EnvironmentFile`/`LoadCredential`, `Nice=10`, `CPUQuota=50%`), как откатить (раздел «Откат» миграции 0083), что `/rating` пуст до первого снимка. Без адресов и портов.
+- [ ] **Step 6: Docs** — в `docs/OPERATIONS.md` рядом с описанием `m-ranked-target-official-rating.timer`: таймер прогноза, время, что делает, как запустить ретроспективу разово (`systemd-run` под пользователем `m-ranked-api` с тем же `EnvironmentFile`/`LoadCredential`, `Nice=10`, `CPUQuota=50%`), как откатить (раздел «Откат» миграции 0084), что `/rating` пуст до первого снимка. Без адресов и портов.
 
 - [ ] **Step 7: Commit**
 
@@ -2812,7 +2813,7 @@ git commit -m "docs(rating): forecast timer operations and before/after measurem
 - [ ] **Step 1: Full gates** — `$PY -m pytest tests anomaly_analysis -q` на одноразовом Postgres (память `local-pytest-postgres`; сравнить падения с `main`: 16 известных падений — не наши), `cd frontend && npx -y pnpm@11.19.0 check`.
 - [ ] **Step 2: Review** — скил `superpowers:requesting-code-review` по всей ветке; исправить находки.
 - [ ] **Step 3: Hygiene** — `git grep -nE '([0-9]{1,3}\.){3}[0-9]{1,3}' -- ':!*.lock'` по изменённым файлам не находит адресов; `git log --format=%B origin/main..HEAD | grep -i co-authored` пусто.
-- [ ] **Step 4: PR** — `git push -u origin feat/rating-forecast`, `gh pr create` (скил `pr` для тела: что сделано, бэктест, замеры, план выкатки «после делай»: 0083 на S2, оверлей API+web, unit/timer, ретроспектива август–сентябрь). Выкатку не начинать.
+- [ ] **Step 4: PR** — `git push -u origin feat/rating-forecast`, `gh pr create` (скил `pr` для тела: что сделано, бэктест, замеры, план выкатки «после делай»: 0084 на S2, оверлей API+web, unit/timer, ретроспектива август–сентябрь). Выкатку не начинать.
 
 ## Замеры
 
