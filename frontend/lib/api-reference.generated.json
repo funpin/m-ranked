@@ -1,5 +1,5 @@
 {
-  "sourceSha256": "791e6e39b91b8b9968d6be87f0542a3b65bf290107285ac9a2d19eca7cc995ef",
+  "sourceSha256": "102fef32b68a3dbd558a282023ef56afbdccf6d0af856c6c6bdcc8e59c1bffff",
   "version": "1.0.0",
   "operations": [
     {
@@ -1486,6 +1486,10 @@
       "fields": [
         {
           "name": "trackedInstitutions",
+          "type": "integer"
+        },
+        {
+          "name": "ratedInstitutions",
           "type": "integer"
         },
         {
