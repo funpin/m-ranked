@@ -149,7 +149,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       {/* Заготовка стоит только вокруг списка: заголовок и фильтры остаются
           видимыми и рабочими, пока едет новая выборка. */}
       <NavigationBoundary fallback={<CardGridSkeleton chrome={false} />}>
-        {platform === "all" ? <CoverageSummary items={items} trackedInstitutions={summary?.trackedInstitutions ?? null} referenceInstitutions={summary?.ratingInstitutions ?? 233} /> : null}
+        {platform === "all" ? <CoverageSummary items={items} trackedInstitutions={summary?.trackedInstitutions ?? null}
+          ratedInstitutions={summary?.ratedInstitutions ?? null} referenceInstitutions={summary?.ratingInstitutions ?? 233} /> : null}
 
         <section className="reveal grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4" aria-label="Вузы">{items.length ? (
           items.map((item) => <OverviewCard item={item} integrationWarning={page.integrationWarning} key={item.entityId} />)

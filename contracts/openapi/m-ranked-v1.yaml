@@ -2633,6 +2633,7 @@ components:
       required: [available, institutions, accounts, accountsByPlatform, publications, snapshots, computedAt]
       properties:
         trackedInstitutions: { type: integer, minimum: 0, description: 'All catalog institutions with at least one enabled official account, independent of filters and pagination.' }
+        ratedInstitutions: { type: integer, minimum: 0, description: 'The tracked institutions that take part in M-Rating (have a current m-rating.ru code); the numerator of rating coverage.' }
         ratingInstitutions: { type: integer, minimum: 1, description: 'Social M-Rating institution count, initially 233; refreshed only by the administrative M-Rating update action.' }
         available: { type: boolean }
         institutions: { type: ['integer', 'null'], minimum: 0 }

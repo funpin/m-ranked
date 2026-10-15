@@ -25,6 +25,7 @@ async def site_summary(request: Request) -> Response:
         row = await db.fetch_one(sql.SUMMARY, {})
         coverage = await db.fetch_one(sql.COVERAGE, {})
         counts = {"trackedInstitutions": coverage["tracked_institutions"],
+                  "ratedInstitutions": coverage["rated_institutions"],
                   "ratingInstitutions": coverage["rating_institutions"]}
         if row is None:
             # Обслуживание ещё не посчитало сводку: главная покажет раздел без цифр.
