@@ -1121,3 +1121,129 @@ def test_real_postgres_account_transaction_is_idempotent_and_atomic(imported_pub
         finally:
             admin.execute("SET session_replication_role=origin")
             admin.close()
+
+
+def test_real_postgres_rutube_upload_time_is_kept_and_written_once() -> None:
+    psycopg = pytest.importorskip("psycopg")
+    from psycopg.rows import dict_row
+
+    from collector_runtime.rutube import RutubeChannel, RutubeVideo, RutubeVideoMetrics
+    from collector_target.platforms.rutube import rutube_batch
+
+    collector_dsn = _dsn("MRANKED_TEST_POSTGRES_DSN")
+    admin_dsn = os.getenv(
+        "MRANKED_TEST_POSTGRES_ADMIN_DSN", collector_dsn,
+    ).strip()
+    institution_id = uuid4()
+    account_id = uuid4()
+    partition = f"rutube-upload-{uuid4()}"
+    scheduled = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
+    uploaded = scheduled - timedelta(days=3)
+    contexts = tuple(
+        CollectionContext.create(
+            Platform.RUTUBE, partition, "rutube-upload-v1",
+            scheduled + timedelta(minutes=minutes),
+            scheduled + timedelta(minutes=minutes),
+        )
+        for minutes in (0, 5, 10, 15)
+    )
+    account = AccountRef(
+        account_id, institution_id, Platform.RUTUBE,
+        f"rutube_{account_id.hex}", "official_api",
+    )
+    video = RutubeVideo(
+        "uploaded-video", "Video", scheduled - timedelta(hours=2), 10,
+        "https://rutube.ru/video/uploaded-video/", {}, uploaded_at=uploaded,
+    )
+
+    def normalized(context: CollectionContext, item: RutubeVideo):
+        return CanonicalNormalizer().normalize(rutube_batch(
+            account=account,
+            channel=RutubeChannel(5, "RUTUBE", "https://rutube.ru/channel/5/"),
+            videos=(item,),
+            metrics={item.id: RutubeVideoMetrics(1, 0, {})},
+            observed_at=context.started_at,
+            collected_at=context.started_at,
+            subscriber_count=None,
+        ), context)
+
+    def persist(context: CollectionContext, item: RutubeVideo):
+        repository.start_run(context)
+        assert repository.begin_account(context, account, context.started_at)
+        batch = normalized(context, item)
+        repository.persist_account_batch(batch)
+        assert repository.finish_run(
+            context, context.started_at,
+        ).status.value == "succeeded"
+        return admin.execute(
+            "SELECT uploaded_at, xmin::text AS xmin FROM ingest.publication WHERE id=%s",
+            (batch.publications[0].id,),
+        ).fetchone()
+
+    admin = psycopg.connect(admin_dsn, autocommit=True, row_factory=dict_row)
+    try:
+        _ensure_initial_revision(admin)
+        admin.execute(
+            "INSERT INTO catalog.institution(id, canonical_name) VALUES (%s,%s)",
+            (institution_id, f"rutube upload integration {institution_id}"),
+        )
+        admin.execute(
+            """INSERT INTO catalog.platform_account(
+                   id, institution_id, platform, canonical_external_id, access_mode
+               ) VALUES (%s,%s,'rutube',%s,'official_api')""",
+            (account_id, institution_id, account.canonical_external_id),
+        )
+        repository = PostgresCollectorRepository(collector_dsn)
+
+        # Видео, собранное до выкатки, получает дату с первым же пакетом с ней.
+        before_rollout = persist(contexts[0], replace(video, uploaded_at=None))
+        assert before_rollout["uploaded_at"] is None
+        first = persist(contexts[1], video)
+        assert first["uploaded_at"] == uploaded
+        # Пакет без даты (старый конверт, точечный запрос старого сборщика)
+        # дату не стирает, даже когда сама строка меняется.
+        moved = replace(video, published_at=video.published_at + timedelta(minutes=1))
+        dateless = persist(contexts[2], replace(moved, uploaded_at=None))
+        assert dateless["uploaded_at"] == uploaded
+        assert dateless["xmin"] != first["xmin"]
+        # Неизменный пакет с датой строку публикации не переписывает.
+        repeated = persist(contexts[3], moved)
+        assert repeated == dateless
+    finally:
+        run_ids = [item.run_id for item in contexts]
+        try:
+            admin.execute("SET session_replication_role='replica'")
+            admin.execute(
+                """DELETE FROM ops_and_admin.outbox_event
+                    WHERE dataset_revision_id IN (
+                        SELECT id FROM analytics.dataset_revision
+                         WHERE source_run_id=ANY(%s))""",
+                (run_ids,),
+            )
+            for statement in (
+                "DELETE FROM ingest.raw_payload WHERE collection_run_id=ANY(%s)",
+                "DELETE FROM ingest.publication_metric_snapshot WHERE collection_run_id=ANY(%s)",
+                "DELETE FROM analytics.dataset_revision WHERE source_run_id=ANY(%s)",
+                "DELETE FROM ingest.collection_account_result WHERE collection_run_id=ANY(%s)",
+                "DELETE FROM ingest.collection_run WHERE id=ANY(%s)",
+            ):
+                admin.execute(statement, (run_ids,))
+            for statement in (
+                "DELETE FROM ingest.account_metric_snapshot WHERE platform_account_id=%s",
+                "DELETE FROM ingest.publication_identity WHERE platform_account_id=%s",
+                "DELETE FROM ingest.publication WHERE primary_account_id=%s",
+                "DELETE FROM catalog.account_identity_history WHERE platform_account_id=%s",
+                "DELETE FROM catalog.account_external_identity WHERE platform_account_id=%s",
+                "DELETE FROM catalog.platform_account WHERE id=%s",
+            ):
+                admin.execute(statement, (account_id,))
+            admin.execute(
+                "DELETE FROM ops_and_admin.operational_checkpoint WHERE scope_id IN (%s,%s)",
+                (account_id, contexts[0].partition_scope_id),
+            )
+            admin.execute(
+                "DELETE FROM catalog.institution WHERE id=%s", (institution_id,),
+            )
+        finally:
+            admin.execute("SET session_replication_role=origin")
+            admin.close()

@@ -1549,6 +1549,7 @@ class PostgresCollectorRepository:
                 "history_completeness": item.history_completeness.value,
                 "synthetic_baseline_allowed": item.synthetic_baseline_allowed,
                 "quality_flags": item.quality_flags,
+                "uploaded_at": item.uploaded_at,
             }
             for publication_id, item in publication_by_resolved_id.items()
         ]
@@ -1561,19 +1562,20 @@ class PostgresCollectorRepository:
                        first_observation_age_seconds integer,
                        publication_type text, is_repost boolean,
                        history_completeness text,
-                       synthetic_baseline_allowed boolean, quality_flags jsonb
+                       synthetic_baseline_allowed boolean, quality_flags jsonb,
+                       uploaded_at timestamptz
                    )
                )
                INSERT INTO ingest.publication AS current(
                    id, primary_account_id, content_group_id, published_at,
                    discovered_at, first_observation_age_seconds, publication_type,
                    is_repost, history_completeness, synthetic_baseline_allowed,
-                   quality_flags
+                   quality_flags, uploaded_at
                ) SELECT id, primary_account_id, content_group_id, published_at,
                         discovered_at, first_observation_age_seconds,
                         publication_type, is_repost,
                         history_completeness::ingest.history_completeness,
-                        synthetic_baseline_allowed, quality_flags
+                        synthetic_baseline_allowed, quality_flags, uploaded_at
                    FROM input
                ON CONFLICT (id) DO UPDATE SET
                    content_group_id=COALESCE(excluded.content_group_id, current.content_group_id),
@@ -1603,6 +1605,8 @@ class PostgresCollectorRepository:
                            OR excluded.synthetic_baseline_allowed
                    END,
                    quality_flags=current.quality_flags || excluded.quality_flags,
+                   -- Пакет без даты загрузки (старый конверт) её не стирает.
+                   uploaded_at=COALESCE(excluded.uploaded_at, current.uploaded_at),
                    deleted_at=NULL
                WHERE ROW(
                        current.content_group_id,
@@ -1614,6 +1618,7 @@ class PostgresCollectorRepository:
                        current.history_completeness,
                        current.synthetic_baseline_allowed,
                        current.quality_flags,
+                       current.uploaded_at,
                        current.deleted_at
                    ) IS DISTINCT FROM ROW(
                        COALESCE(excluded.content_group_id, current.content_group_id),
@@ -1643,6 +1648,7 @@ class PostgresCollectorRepository:
                                OR excluded.synthetic_baseline_allowed
                        END,
                        current.quality_flags || excluded.quality_flags,
+                       COALESCE(excluded.uploaded_at, current.uploaded_at),
                        NULL::timestamptz
                    )
                RETURNING id""",
