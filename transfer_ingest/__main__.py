@@ -10,6 +10,7 @@ import signal
 import time
 from typing import Any
 
+from collector_target.catalog_sync import CatalogSnapshotSource
 from collector_target.normalize import sanitize_error_code
 from collector_target.evidence import ImmutableEvidenceStore
 from collector_target.repository import PostgresCollectorRepository
@@ -141,6 +142,11 @@ async def _run() -> int:
             node_hub=(
                 hub_from_environment(settings.database_url)
                 if os.getenv("TRANSFER_INGEST_NODE_HUB", "on").strip().lower() != "off" else None
+            ),
+            # Снимок справочника для сборщиков Сервера 1 (0082); выключается явно.
+            catalog=(
+                CatalogSnapshotSource(repository._connection)
+                if os.getenv("TRANSFER_INGEST_CATALOG_SYNC", "on").strip().lower() != "off" else None
             ),
         )
         context = build_ssl_context(
