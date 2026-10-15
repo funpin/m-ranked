@@ -55,7 +55,11 @@ AUTHORITATIVE_MISSING_REASONS = {
     }),
     "vk": frozenset({"vk_wall_get_by_id_not_found_or_deleted"}),
     "max": frozenset({"max_get_messages_not_found_or_deleted"}),
-    "rutube": frozenset({"rutube_video_http_404", "rutube_video_http_410"}),
+    "rutube": frozenset({
+        "rutube_video_http_404",
+        "rutube_video_http_410",
+        "rutube_video_deleted",
+    }),
 }
 
 
