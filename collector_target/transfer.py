@@ -191,6 +191,9 @@ def _batch_dict(batch: CanonicalAccountBatch) -> dict[str, Any]:
                 "semanticFingerprint": item.snapshot.semantic_fingerprint.hex(),
                 "sanitizedSource": item.snapshot.sanitized_source,
             },
+            # Ключ только при известной дате: события прочих площадок остаются
+            # байт в байт прежними, с теми же eventId.
+            **({} if item.uploaded_at is None else {"uploadedAt": _iso(item.uploaded_at)}),
         } for item in batch.publications],
         "sourceName": batch.source_name,
         "sourceVersion": batch.source_version,
@@ -423,6 +426,10 @@ def _decode_batch(value: Mapping[str, Any]) -> CanonicalAccountBatch:
                     bool(snapshot["intervalUncertain"]), bool(snapshot["synthetic"]),
                     snapshot["reactionBreakdown"], snapshot["sourceFingerprint"],
                     bytes.fromhex(snapshot["semanticFingerprint"]), snapshot["sanitizedSource"],
+                ),
+                uploaded_at=(
+                    _parse_time(item["uploadedAt"])
+                    if item.get("uploadedAt") is not None else None
                 ),
             ))
         probes = tuple(CanonicalDeletionProbe(
