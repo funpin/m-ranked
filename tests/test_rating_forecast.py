@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -170,3 +171,42 @@ def test_evaluate_reports_errors_and_top20():
     result = rf.evaluate(predicted, actual, ranks, ranks)
     assert result["mae"] == 0 and result["rankMedian"] == 0 and result["spearman"] == pytest.approx(1)
     assert (result["top20Hits"], result["top20Total"]) == (20, 20)
+
+def test_period_month_round_trip():
+    assert rf.period_month("Сентябрь 2026") == date(2026, 9, 1)
+    assert rf.period_label(date(2026, 1, 1)) == "Январь 2026"
+    with pytest.raises(ValueError):
+        rf.period_month("September 2026")
+
+
+def test_month_window_is_moscow_time():
+    start, end = rf.month_window(date(2026, 9, 1))
+    assert start == datetime(2026, 8, 31, 21, tzinfo=timezone.utc)
+    assert end == datetime(2026, 9, 30, 21, tzinfo=timezone.utc)
+
+
+def test_running_scale_mid_month_and_after_the_end():
+    assert rf.running_scale(date(2026, 10, 1), datetime(2026, 10, 15, 9, tzinfo=timezone.utc)) == (31 / 15, False)
+    assert rf.running_scale(date(2026, 9, 1), datetime(2026, 10, 2, tzinfo=timezone.utc)) == (1.0, False)
+
+
+def test_running_scale_on_the_first_day():
+    # 00:30 по Москве 1-го числа: прошли первые сутки, оценка «слишком рано».
+    scale, early = rf.running_scale(date(2026, 11, 1), datetime(2026, 10, 31, 21, 30, tzinfo=timezone.utc))
+    assert (scale, early) == (30.0, True)
+    assert rf.running_scale(date(2026, 11, 1), datetime(2026, 11, 7, 9, tzinfo=timezone.utc))[1] is False
+
+
+def test_months_to_forecast_adds_the_unpublished_previous_month():
+    as_of = datetime(2026, 11, 3, 22, 50, tzinfo=timezone.utc)  # 4 ноября по Москве
+    published = {date(2026, 9, 1)}
+    assert rf.months_to_forecast(as_of, published) == [(date(2026, 10, 1), "final"), (date(2026, 11, 1), "running")]
+    published.add(date(2026, 10, 1))
+    assert rf.months_to_forecast(as_of, published) == [(date(2026, 11, 1), "running")]
+
+
+def test_base_month_is_the_latest_published_before():
+    published = {date(2026, 8, 1), date(2026, 9, 1)}
+    assert rf.base_month_for(date(2026, 11, 1), published) == date(2026, 9, 1)
+    assert rf.base_month_for(date(2026, 9, 1), published) == date(2026, 8, 1)
+    assert rf.base_month_for(date(2026, 8, 1), published) is None

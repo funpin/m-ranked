@@ -11,11 +11,14 @@ docs/superpowers/specs/2026-10-16-rating-forecast-design.md): балл площ�
 """
 from __future__ import annotations
 
+import calendar
 import math
 import statistics
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 FORMULA_KEY = "m-rating-social-forecast"
 PLATFORMS = ("max", "vk", "rutube")
@@ -216,3 +219,50 @@ def evaluate(predicted: Mapping[str, float], actual: Mapping[str, float],
         "spearman": round(_spearman({key: predicted[key] for key in keys}, {key: actual[key] for key in keys}), 3),
         "top20Hits": len(top_actual & top_predicted), "top20Total": len(top_actual),
     }
+
+
+MOSCOW = ZoneInfo("Europe/Moscow")
+MONTH_NAMES = ("Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август",
+               "Сентябрь", "Октябрь", "Ноябрь", "Декабрь")
+
+
+def period_month(period: str) -> date:
+    """Период импорта официального рейтинга («Сентябрь 2026») — первое число месяца."""
+    parts = period.split()
+    if len(parts) != 2 or parts[0] not in MONTH_NAMES or not parts[1].isdigit():
+        raise ValueError(f"unknown official period: {period!r}")
+    return date(int(parts[1]), MONTH_NAMES.index(parts[0]) + 1, 1)
+
+
+def period_label(month: date) -> str:
+    return f"{MONTH_NAMES[month.month - 1]} {month.year}"
+
+
+def _next_month(month: date) -> date:
+    return date(month.year + month.month // 12, month.month % 12 + 1, 1)
+
+
+def month_window(month: date) -> tuple[datetime, datetime]:
+    return (datetime.combine(month, time(), MOSCOW), datetime.combine(_next_month(month), time(), MOSCOW))
+
+
+def running_scale(month: date, as_of: datetime, formula: Mapping[str, Any] = FORMULA_V1) -> tuple[float, bool]:
+    """Во сколько раз досчитать публикации незаконченного месяца и рано ли судить."""
+    _, end = month_window(month)
+    if as_of >= end:
+        return 1.0, False
+    days = calendar.monthrange(month.year, month.month)[1]
+    elapsed = (as_of.astimezone(MOSCOW).date() - month).days + 1
+    return days / elapsed, elapsed < formula["earlyBeforeDay"]
+
+
+def months_to_forecast(as_of: datetime, published: Collection[date]) -> list[tuple[date, str]]:
+    current = as_of.astimezone(MOSCOW).date().replace(day=1)
+    previous = (current.replace(day=1) - timedelta(days=1)).replace(day=1)
+    months = [] if previous in published else [(previous, "final")]
+    return months + [(current, "running")]
+
+
+def base_month_for(month: date, published: Collection[date]) -> date | None:
+    earlier = [item for item in published if item < month]
+    return max(earlier) if earlier else None
