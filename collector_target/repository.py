@@ -58,6 +58,18 @@ def _row_value(row: Any, key: str, index: int) -> Any:
     return row[index]
 
 
+def _identity_superseded(observed_at: datetime, valid_from: datetime,
+                         source_run_id: Any) -> bool:
+    """Whether an observation at or before the current version yields to it.
+
+    An older observation cannot open a version before the current one, and an
+    admin edit (no source run) wins a tie. Profile B makes this ordinary: S1
+    seals a batch, an admin edits the account on S2, then the batch arrives.
+    Two collector observations at one instant stay a collision.
+    """
+    return observed_at < valid_from or source_run_id is None
+
+
 # Скобки нужны там, где интервал сбора длинный и рост между точками иначе
 # растягивается на часы; старше двух недель посты читаются редко и почти
 # не меняются. Предел числа записей держит память процесса в мегабайтах.
@@ -1256,7 +1268,7 @@ class PostgresCollectorRepository:
         )
         if presentation_seen:
             current = connection.execute(
-                """SELECT id, username, title, url, valid_from
+                """SELECT id, username, title, url, valid_from, source_run_id
                      FROM catalog.account_identity_history
                     WHERE platform_account_id=%s AND valid_to IS NULL
                     FOR UPDATE""",
@@ -1270,14 +1282,25 @@ class PostgresCollectorRepository:
                 _row_value(current, "title", 2),
                 _row_value(current, "url", 3),
             ) != (username, title, url)
+            if differs and current is not None:
+                valid_from = utc(
+                    _row_value(current, "valid_from", 4),
+                    "identity.valid_from",
+                )
+                if observation.observed_at <= valid_from:
+                    if not _identity_superseded(
+                        observation.observed_at, valid_from,
+                        _row_value(current, "source_run_id", 5),
+                    ):
+                        raise RuntimeError("account identity observation time collision")
+                    # The current version is the newer fact: keep it, and
+                    # keep the account row on it too. Metrics still apply.
+                    username = _row_value(current, "username", 1)
+                    title = _row_value(current, "title", 2)
+                    url = _row_value(current, "url", 3)
+                    differs = False
             if differs:
                 if current is not None:
-                    valid_from = utc(
-                        _row_value(current, "valid_from", 4),
-                        "identity.valid_from",
-                    )
-                    if observation.observed_at <= valid_from:
-                        raise RuntimeError("account identity observation time collision")
                     connection.execute(
                         """UPDATE catalog.account_identity_history
                               SET valid_to=%s
@@ -1329,7 +1352,7 @@ class PostgresCollectorRepository:
             # a second parallel "current" native identifier.
             namespace = f"{account.platform.value}:native_id"
             current_native = connection.execute(
-                """SELECT id, external_id, valid_from
+                """SELECT id, external_id, valid_from, source_run_id
                      FROM catalog.account_external_identity
                     WHERE platform_account_id=%s
                       AND identity_namespace=%s
@@ -1337,27 +1360,36 @@ class PostgresCollectorRepository:
                     FOR UPDATE""",
                 (account.id, namespace),
             ).fetchone()
-            if (
+            versioned = (
                 current_native is None
                 or str(_row_value(current_native, "external_id", 1))
                     != observation.native_external_id
-            ):
-                if current_native is None:
-                    boundary = connection.execute(
-                        """SELECT max(valid_to) AS last_closed FROM catalog.account_external_identity
-                            WHERE platform_account_id=%s AND identity_namespace=%s""",
-                        (account.id, namespace),
-                    ).fetchone()
-                    last_closed = _row_value(boundary, "last_closed", 0) if boundary is not None else None
-                    if last_closed is not None and observation.observed_at <= utc(last_closed, "external_identity.last_closed"):
+            )
+            if versioned and current_native is None:
+                boundary = connection.execute(
+                    """SELECT max(valid_to) AS last_closed FROM catalog.account_external_identity
+                        WHERE platform_account_id=%s AND identity_namespace=%s""",
+                    (account.id, namespace),
+                ).fetchone()
+                last_closed = _row_value(boundary, "last_closed", 0) if boundary is not None else None
+                # Only an admin clear closes the native id without a successor,
+                # so an observation up to that clear yields to it.
+                if last_closed is not None and observation.observed_at <= utc(last_closed, "external_identity.last_closed"):
+                    versioned = False
+            elif versioned:
+                valid_from = utc(
+                    _row_value(current_native, "valid_from", 2),
+                    "external_identity.valid_from",
+                )
+                if observation.observed_at <= valid_from:
+                    if not _identity_superseded(
+                        observation.observed_at, valid_from,
+                        _row_value(current_native, "source_run_id", 3),
+                    ):
                         raise RuntimeError("account native identity time collision")
+                    versioned = False
+            if versioned:
                 if current_native is not None:
-                    valid_from = utc(
-                        _row_value(current_native, "valid_from", 2),
-                        "external_identity.valid_from",
-                    )
-                    if observation.observed_at <= valid_from:
-                        raise RuntimeError("account native identity time collision")
                     connection.execute(
                         """UPDATE catalog.account_external_identity
                               SET valid_to=%s

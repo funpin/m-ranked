@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import json
 import os
 from uuid import uuid4, uuid5
 
@@ -9,13 +10,13 @@ import pytest
 
 from collector_target.model import (
     AccountRef, CollectionContext, HistoryCompleteness, Platform,
-    RawCollectionBatch, RawPublication,
+    RawAccountObservation, RawCollectionBatch, RawPublication,
 )
 from collector_target.normalize import CanonicalNormalizer
 from collector_target.repository import PostgresCollectorRepository
 from collector_target.transfer import (
     InProcessTransport, PostgresDataAdapter, PostgresTransferProducer,
-    TRANSFER_NAMESPACE, TransferRejected,
+    TRANSFER_NAMESPACE, TransferRejected, seal_batch,
 )
 
 
@@ -769,5 +770,205 @@ def test_profile_b_round_trip_over_real_mtls_reaches_the_same_database() -> None
         thread.join(timeout=30)
         loop.close()
         workspace.cleanup()
+        repository.close()
+        admin.close()
+
+
+def _identity_batch(account, observed_at, username, native_id, views, run=None):
+    context = run or CollectionContext.create(
+        Platform.TELEGRAM, f"identity-{uuid4()}", "identity-test-v1",
+        observed_at, observed_at,
+    )
+    raw = RawCollectionBatch(
+        account,
+        RawAccountObservation(
+            observed_at, observed_at, 100 + views, str(100 + views),
+            username=username, title=f"{username} title",
+            url=f"https://t.me/{username}", native_external_id=native_id,
+        ),
+        (RawPublication(
+            "m:7", observed_at - timedelta(minutes=1), observed_at, observed_at,
+            observed_at, "text",
+            {"views": views, "reactions": 1, "comments": None, "shares": None},
+            {"kind": "integration"},
+            history_completeness=HistoryCompleteness.COMPLETE,
+        ),),
+        "identity-integration", "1",
+    )
+    return CanonicalNormalizer().normalize(raw, context)
+
+
+@pytest.mark.parametrize("admin_native_id", ["333", ""])
+def test_server_two_applies_a_batch_older_than_an_admin_identity_edit(
+    tmp_path, monkeypatch, admin_native_id: str,
+) -> None:
+    """S1 sealed an observation before an admin edited the account on S2.
+
+    The edit opens identity versions at the admin's commit time, later than
+    the sealed observation. Applying that batch used to raise «account
+    identity observation time collision» on every retry, so the inbox never
+    drained and the batch's metrics never landed. The admin edit stays
+    current; the batch's metrics are applied.
+    """
+    psycopg = pytest.importorskip("psycopg")
+    from psycopg.rows import dict_row
+
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path))
+    collector_dsn = _dsn("MRANKED_TEST_POSTGRES_DSN")
+    admin = psycopg.connect(_dsn("MRANKED_TEST_POSTGRES_ADMIN_DSN"),
+                            autocommit=True, row_factory=dict_row)
+    institution_id, account_id = uuid4(), uuid4()
+    account = AccountRef(
+        account_id, institution_id, Platform.TELEGRAM,
+        f"identity_{account_id.hex}", "public_web",
+    )
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    producer_id = f"server-1/identity-{uuid4()}"
+    repository = PostgresCollectorRepository(collector_dsn)
+    adapter = PostgresDataAdapter(repository)
+    suffix = account_id.hex[:12]
+    try:
+        _seed_account(admin, institution_id, account_id, account.canonical_external_id)
+        # S2 already holds an earlier collector observation of the account.
+        adapter.receive(seal_batch(
+            _identity_batch(account, now - timedelta(minutes=10),
+                            f"old_{suffix}", "111", 10),
+            producer_id, cursor=1,
+        ))
+        # S1 seals a newer observation (renamed, new native id) ...
+        sealed = _identity_batch(account, now - timedelta(minutes=5),
+                                 f"seen_{suffix}", "222", 20)
+        envelope = seal_batch(sealed, producer_id, cursor=2)
+        # ... and before it reaches S2 an admin edits the account there.
+        version = admin.execute(
+            "SELECT row_version FROM catalog.platform_account WHERE id=%s",
+            (account_id,),
+        ).fetchone()["row_version"]
+        edit = admin.execute(
+            "SELECT ops_and_admin.catalog_command(%s,%s,%s,%s::jsonb,%s,%s) AS r",
+            ("account.upsert", None, version, json.dumps({
+                "platform": "telegram", "externalKey": account.canonical_external_id,
+                "username": f"admin_{suffix}", "title": "Admin title",
+                "url": f"https://t.me/admin_{suffix}", "accessMode": "public_web",
+                "institutionId": str(institution_id),
+            }), "integration-admin", uuid4()),
+        ).fetchone()["r"]
+        assert edit["outcome"] == "succeeded"
+        version = admin.execute(
+            "SELECT row_version FROM catalog.platform_account WHERE id=%s",
+            (account_id,),
+        ).fetchone()["row_version"]
+        native = admin.execute(
+            "SELECT ops_and_admin.catalog_command(%s,%s,%s,%s::jsonb,%s,%s) AS r",
+            ("account.native_id", account_id, version,
+             json.dumps({"nativeId": admin_native_id}), "integration-admin", uuid4()),
+        ).fetchone()["r"]
+        assert native["outcome"] == "succeeded"
+
+        ack = adapter.receive(envelope)
+        assert adapter.receive(envelope) == ack
+
+        inbox = admin.execute(
+            """SELECT state,accepted_count,duplicate_count
+                 FROM ops_and_admin.transfer_inbox WHERE receipt_id=%s""",
+            (ack.receipt_id,),
+        ).fetchone()
+        assert inbox == {"state": "applied", "accepted_count": 1, "duplicate_count": 0}
+        # The metrics of the late batch are applied ...
+        assert admin.execute(
+            """SELECT views_count FROM analytics.publication_latest
+                WHERE publication_id=%s""",
+            (sealed.publications[0].id,),
+        ).fetchone()["views_count"] == 20
+        assert admin.execute(
+            """SELECT count(*) AS count FROM ingest.account_metric_snapshot
+                WHERE platform_account_id=%s AND collection_run_id=%s""",
+            (account_id, sealed.context.run_id),
+        ).fetchone()["count"] == 1
+        # ... while the admin edit, the newer fact, stays current.
+        current = admin.execute(
+            """SELECT current_username,current_title,current_url
+                 FROM catalog.platform_account WHERE id=%s""",
+            (account_id,),
+        ).fetchone()
+        assert current == {
+            "current_username": f"admin_{suffix}", "current_title": "Admin title",
+            "current_url": f"https://t.me/admin_{suffix}",
+        }
+        history = admin.execute(
+            """SELECT username,source_run_id,valid_to FROM catalog.account_identity_history
+                WHERE platform_account_id=%s ORDER BY valid_from""",
+            (account_id,),
+        ).fetchall()
+        assert [row["username"] for row in history] == [f"old_{suffix}", f"admin_{suffix}"]
+        assert history[-1]["source_run_id"] is None and history[-1]["valid_to"] is None
+        natives = admin.execute(
+            """SELECT external_id,valid_to FROM catalog.account_external_identity
+                WHERE platform_account_id=%s AND identity_namespace='telegram:native_id'
+                ORDER BY valid_from""",
+            (account_id,),
+        ).fetchall()
+        expected_natives = ["111"] + ([admin_native_id] if admin_native_id else [])
+        assert [row["external_id"] for row in natives] == expected_natives
+        assert (natives[-1]["valid_to"] is None) == bool(admin_native_id)
+
+        # A later observation still versions identity on top of the admin edit.
+        later = _identity_batch(account, now + timedelta(minutes=1),
+                                f"later_{suffix}", "444", 30)
+        adapter.receive(seal_batch(later, producer_id, cursor=3))
+        assert admin.execute(
+            "SELECT current_username FROM catalog.platform_account WHERE id=%s",
+            (account_id,),
+        ).fetchone()["current_username"] == f"later_{suffix}"
+        assert admin.execute(
+            """SELECT external_id FROM catalog.account_external_identity
+                WHERE platform_account_id=%s AND identity_namespace='telegram:native_id'
+                  AND valid_to IS NULL""",
+            (account_id,),
+        ).fetchone()["external_id"] == "444"
+    finally:
+        repository.close()
+        admin.close()
+
+
+@pytest.mark.parametrize("field", ["username", "native_id"])
+def test_same_instant_collector_identity_conflict_still_raises(
+    tmp_path, monkeypatch, field: str,
+) -> None:
+    """Two collector runs claim different identities at one instant.
+
+    Neither is newer, so there is no order to version them in; the guard
+    stays and the second batch is refused rather than silently dropped.
+    """
+    psycopg = pytest.importorskip("psycopg")
+    from psycopg.rows import dict_row
+
+    monkeypatch.setenv("MRANKED_IDENTITY_RECEIPT_DIR", str(tmp_path))
+    admin = psycopg.connect(_dsn("MRANKED_TEST_POSTGRES_ADMIN_DSN"),
+                            autocommit=True, row_factory=dict_row)
+    institution_id, account_id = uuid4(), uuid4()
+    account = AccountRef(
+        account_id, institution_id, Platform.TELEGRAM,
+        f"collision_{account_id.hex}", "public_web",
+    )
+    at = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(minutes=5)
+    producer_id = f"server-1/collision-{uuid4()}"
+    repository = PostgresCollectorRepository(_dsn("MRANKED_TEST_POSTGRES_DSN"))
+    adapter = PostgresDataAdapter(repository)
+    suffix = account_id.hex[:12]
+    try:
+        _seed_account(admin, institution_id, account_id, account.canonical_external_id)
+        adapter.receive(seal_batch(
+            _identity_batch(account, at, f"first_{suffix}", "111", 10), producer_id,
+            cursor=1,
+        ))
+        rival = _identity_batch(
+            account, at,
+            f"first_{suffix}" if field == "native_id" else f"rival_{suffix}",
+            "222" if field == "native_id" else "111", 10,
+        )
+        with pytest.raises(RuntimeError, match="time collision"):
+            adapter.receive(seal_batch(rival, producer_id, cursor=2))
+    finally:
         repository.close()
         admin.close()
