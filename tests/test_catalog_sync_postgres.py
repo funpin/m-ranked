@@ -259,6 +259,9 @@ def test_a_chain_of_admin_versions_lands_in_order_for_a_new_account(db) -> None:
 
 def test_institution_codes_mirror_server2_including_reopen_and_removal(db) -> None:
     institution = _institution(db, f"Коды {uuid4()}")
+    # Снимок без единого аккаунта функция отвергает как сбой источника; на
+    # чистой тестовой базе аккаунтов нет, поэтому заводим свой.
+    _account(db, institution, "vk", f"codes_{uuid4().hex[:10]}")
     code = f"c{uuid4().hex[:8]}"
     kept = db.execute(
         """INSERT INTO catalog.institution_external_id(institution_id, namespace, external_id, valid_from)
