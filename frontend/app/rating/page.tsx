@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "@/components/native-link";
 import { ForecastMethod } from "@/components/rating/method-block";
-import { ForecastScatter } from "@/components/rating/forecast-scatter";
+import { ForecastScatter } from "@/components/rating/forecast-scatter-lazy";
 import { ForecastTable } from "@/components/rating/forecast-table";
 import { RatingTabs } from "@/components/rating/rating-tabs";
 import { ApiFailureState, EmptyState, PageHeader } from "@/components/ui";
