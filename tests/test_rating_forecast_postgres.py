@@ -308,3 +308,22 @@ def test_job_end_to_end_on_postgres(dsn):
     assert run["parameters"]["status"] == "running"
     mine = next(row for row in rows if row["institution_id"] == str(world.institution))
     assert mine["explanation"]["platforms"]["vk"]["metrics"]["posts"] == 11
+
+
+def test_typical_errors_ignore_retrospective_snapshots(dsn):
+    """Ретроспектива сентября посчитана на тех же данных, где подбирались пороги:
+    её ошибка занижена. Диапазоны мест берут ошибку только у прогноза до публикации."""
+    world = World(dsn, "vk")
+    as_of = datetime(2026, 10, 16, 22, tzinfo=timezone.utc)
+    record(dsn, payload(world.institution, as_of, status="retrospective", window_start=SEPT[0], window_end=SEPT[1]))
+    with _connect(dsn) as connection:
+        rows = connection.execute(sql.PUBLISHED_SNAPSHOT_SCORES, {
+            "formula_key": rf.FORMULA_KEY, "window_start": SEPT[0], "period": "Сентябрь 2026"}).fetchall()
+    assert rows == []
+    record(dsn, payload(world.institution, as_of + timedelta(hours=1), status="final", window_start=SEPT[0],
+                        window_end=SEPT[1]))
+    with _connect(dsn) as connection:
+        connection.execute("SELECT ops_and_admin.finalize_rating_forecast(%s, %s)", (rf.FORMULA_KEY, SEPT[0]))
+        rows = connection.execute(sql.PUBLISHED_SNAPSHOT_SCORES, {
+            "formula_key": rf.FORMULA_KEY, "window_start": SEPT[0], "period": "Сентябрь 2026"}).fetchall()
+    assert len(rows) == 4

@@ -56,11 +56,15 @@ def test_job_records_current_month_with_extrapolation_and_finalizes_published():
     asyncio.run(job.run(database, datetime(2026, 10, 15, 22, 10, tzinfo=timezone.utc)))
     [body] = database.recorded
     assert body["parameters"]["status"] == "running" and body["parameters"]["basePeriod"] == "Сентябрь 2026"
-    assert body["parameters"]["early"] is False and body["parameters"]["postsScale"] == pytest.approx(31 / 16)
+    # 16 октября 01:10 по Москве — прошло 15 суток и 70 минут.
+    elapsed = 15 + 70 / 1440
+    assert body["parameters"]["early"] is False
+    assert body["parameters"]["postsScale"] == pytest.approx(31 / elapsed, abs=1e-4)
     assert body["windowEnd"] == "2026-10-15T22:10:00+00:00"
     vk = body["results"][0]["explanation"]["platforms"]["vk"]
     # Просмотры — по зрелым постам: 70 000 / 70.
-    assert vk["metrics"]["avgViews"] == 1000.0 and vk["metrics"]["postsExtrapolated"] == pytest.approx(155.0)
+    assert vk["metrics"]["avgViews"] == 1000.0
+    assert vk["metrics"]["postsExtrapolated"] == pytest.approx(80 * 31 / elapsed, abs=0.1)
     assert len(database.finalized) == 2
 
 

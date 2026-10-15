@@ -248,12 +248,15 @@ def month_window(month: date) -> tuple[datetime, datetime]:
 
 def running_scale(month: date, as_of: datetime, formula: Mapping[str, Any] = FORMULA_V1) -> tuple[float, bool]:
     """Во сколько раз досчитать публикации незаконченного месяца и рано ли судить."""
-    _, end = month_window(month)
+    start, end = month_window(month)
     if as_of >= end:
         return 1.0, False
     days = calendar.monthrange(month.year, month.month)[1]
-    elapsed = (as_of.astimezone(MOSCOW).date() - month).days + 1
-    return days / elapsed, elapsed < formula["earlyBeforeDay"]
+    # Прошедшее время, а не число начатых суток: ночной прогон в 01:47 d-го числа
+    # видит d−1 сутки данных. Не меньше суток — первые часы месяца не раздувают масштаб.
+    elapsed = max(1.0, (as_of - start).total_seconds() / 86400)
+    day = (as_of.astimezone(MOSCOW).date() - month).days + 1
+    return days / elapsed, day < formula["earlyBeforeDay"]
 
 
 def months_to_forecast(as_of: datetime, published: Collection[date]) -> list[tuple[date, str]]:

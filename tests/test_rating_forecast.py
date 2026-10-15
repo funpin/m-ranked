@@ -186,14 +186,25 @@ def test_month_window_is_moscow_time():
 
 
 def test_running_scale_mid_month_and_after_the_end():
-    assert rf.running_scale(date(2026, 10, 1), datetime(2026, 10, 15, 9, tzinfo=timezone.utc)) == (31 / 15, False)
+    # 15 октября 12:00 по Москве: прошло 14.5 суток.
+    assert rf.running_scale(date(2026, 10, 1), datetime(2026, 10, 15, 9, tzinfo=timezone.utc)) == (31 / 14.5, False)
     assert rf.running_scale(date(2026, 9, 1), datetime(2026, 10, 2, tzinfo=timezone.utc)) == (1.0, False)
 
 
 def test_running_scale_on_the_first_day():
-    # 00:30 по Москве 1-го числа: прошли первые сутки, оценка «слишком рано».
+    # 00:30 по Москве 1-го числа: прошло полчаса, масштаб ограничен сутками, «слишком рано».
     scale, early = rf.running_scale(date(2026, 11, 1), datetime(2026, 10, 31, 21, 30, tzinfo=timezone.utc))
     assert (scale, early) == (30.0, True)
+
+
+@pytest.mark.parametrize("day", [2, 8])
+def test_running_scale_counts_elapsed_time_at_the_nightly_run(day):
+    """Задание идёт в 01:47 по Москве: за d-е число данных ещё почти нет. Масштаб по
+    целым суткам (÷ d) занижал публикации на ~50 % 2-го числа и на ~12 % 8-го."""
+    as_of = datetime(2026, 10, day, 1, 47, tzinfo=rf.MOSCOW)
+    elapsed = (day - 1) + (1 * 60 + 47) / 1440
+    scale, _ = rf.running_scale(date(2026, 10, 1), as_of)
+    assert scale == pytest.approx(31 / elapsed)
     assert rf.running_scale(date(2026, 11, 1), datetime(2026, 11, 7, 9, tzinfo=timezone.utc))[1] is False
 
 

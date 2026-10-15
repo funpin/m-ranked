@@ -87,8 +87,10 @@ SELECT result.institution_id::text AS institution_id, alias.legacy_id, instituti
 """
 
 # Прогноз опубликованного месяца против факта — для типичных ошибок следующих снимков.
+# Только снимок до публикации (published): ретроспектива посчитана на данных, где
+# подбирались пороги, и её ошибка занижена — диапазоны мест вышли бы вдвое уже.
 PUBLISHED_SNAPSHOT_SCORES = f"""
-WITH best AS ({_BEST_RUN.format(filter="AND run.window_start = %(window_start)s")})
+WITH best AS ({_BEST_RUN.format(filter="AND run.window_start = %(window_start)s AND run.parameters->>'status' = 'published'")})
 SELECT result.institution_id::text AS institution_id, category.key AS category,
        (result.explanation->'categories'->category.key->>'score')::float8 AS predicted,
        (SELECT observation.score::float8 FROM rating.official_institution_rating_observation observation
