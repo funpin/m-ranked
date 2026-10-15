@@ -166,3 +166,41 @@ def test_rutube_api_calls_never_follow_a_redirect():
 
 def test_rutube_default_client_does_not_follow_redirects():
     assert RutubeClient().client.follow_redirects is False
+
+
+def test_rutube_video_lookup_keeps_upload_time_apart_from_publication():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={
+            "id": "video-1", "title": "V",
+            "created_ts": "2026-07-31T21:00:00",
+            "publication_ts": "2026-08-01T08:00:00",
+        })
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            return await RutubeClient("https://rutube.ru/api", http).video("video-1")
+
+    video = asyncio.run(run())
+    assert video.published_at == datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc)
+    assert video.uploaded_at == datetime(2026, 7, 31, 21, 0, tzinfo=timezone.utc)
+
+
+def test_rutube_channel_listing_reads_upload_time_and_tolerates_bad_values():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"has_next": False, "results": [
+            {"id": "a", "created_ts": "2026-07-30T10:00:00Z",
+             "publication_ts": "2026-08-02T10:00:00Z"},
+            {"id": "b", "created_ts": "not a date",
+             "publication_ts": "2026-08-02T11:00:00Z"},
+            {"id": "c", "publication_ts": "2026-08-02T12:00:00+03:00"},
+        ]})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            return await RutubeClient("https://rutube.ru/api", http).videos(5)
+
+    _channel, videos = asyncio.run(run())
+    by_id = {video.id: video for video in videos}
+    assert by_id["a"].uploaded_at == datetime(2026, 7, 30, 10, 0, tzinfo=timezone.utc)
+    assert by_id["b"].uploaded_at is None
+    assert by_id["c"].uploaded_at is None

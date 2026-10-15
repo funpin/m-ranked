@@ -25,6 +25,9 @@ class RutubeVideo:
     views: int | None
     url: str
     raw: dict[str, Any]
+    # created_ts — время загрузки. М-Рейтинг считает видео за месяц по нему,
+    # а не по выходу (publication_ts), поэтому оно хранится рядом.
+    uploaded_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,16 @@ def channel_page_url(value: str | None) -> str | None:
 def parse_rutube_datetime(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+
+
+def optional_rutube_datetime(value: Any) -> datetime | None:
+    """Parse an optional RUTUBE timestamp; a bad value must not drop the video."""
+    if not value:
+        return None
+    try:
+        return parse_rutube_datetime(str(value))
+    except ValueError:
+        return None
 
 
 class RutubeClient:
@@ -161,6 +174,7 @@ class RutubeClient:
                     views=int(item["hits"]) if item.get("hits") is not None else None,
                     url=str(item.get("video_url") or f"https://rutube.ru/video/{item['id']}/"),
                     raw=item,
+                    uploaded_at=optional_rutube_datetime(item.get("created_ts")),
                 ))
                 if len(result) >= limit:
                     break
@@ -199,6 +213,7 @@ class RutubeClient:
                 or f"https://rutube.ru/video/{external_id}/"
             ),
             raw=payload,
+            uploaded_at=optional_rutube_datetime(payload.get("created_ts")),
         )
 
     async def video_metrics(self, video_id: str) -> RutubeVideoMetrics:
