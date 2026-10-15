@@ -13,6 +13,7 @@ import pytest
 from psycopg.types.json import Jsonb
 
 from api import rating_forecast as rf
+from api.sql import rating as sql
 from test_findings_postgres import World, _connect, dsn  # noqa: F401 — фикстура dsn
 
 START = datetime(2026, 9, 30, 21, tzinfo=timezone.utc)   # 1 октября по Москве
@@ -162,3 +163,110 @@ def test_grants_follow_the_roles(dsn):
                    has_table_privilege('api_write_admin','rating.rating_run','DELETE') AS direct_delete,
                    has_table_privilege('api_read','rating.rating_run','SELECT') AS read_runs""").fetchone()
     assert check == {"writer": True, "reader": False, "scores": True, "direct_delete": False, "read_runs": True}
+
+def _platform_month(dsn, window_start, window_end, mature_before, role=None):
+    with _connect(dsn) as connection:
+        if role:
+            connection.execute(f"SET ROLE {role}")
+        return connection.execute(sql.PLATFORM_MONTH, {"window_start": window_start, "window_end": window_end,
+                                                       "mature_before": mature_before}).fetchall()
+
+
+def coded(dsn, world, code):
+    with _connect(dsn) as connection:
+        connection.execute("INSERT INTO catalog.institution_external_id(institution_id,namespace,external_id,valid_from) "
+                           "VALUES (%s,'m-rating',%s,'2026-01-01')", (world.institution, code))
+
+
+def latest(dsn, publication, views, reactions, comments=0, shares=0):
+    with _connect(dsn) as connection:
+        connection.execute("""
+            INSERT INTO analytics.publication_latest(publication_id,institution_id,platform_account_id,platform,observed_at,
+              views_count,views_observed_at,views_quality,reactions_count,reactions_observed_at,reactions_quality,
+              comments_count,comments_observed_at,comments_quality,shares_count,shares_observed_at,shares_quality,
+              quality,history_completeness,dataset_revision_id)
+            SELECT p.id,a.institution_id,a.id,a.platform,now(),%s,now(),'exact',%s,now(),'exact',%s,now(),'exact',%s,now(),'exact',
+                   'exact','complete',(SELECT max(id) FROM analytics.dataset_revision)
+              FROM ingest.publication p JOIN catalog.platform_account a ON a.id=p.primary_account_id WHERE p.id=%s""",
+            (views, reactions, comments, shares, publication))
+
+
+SEPT = (datetime(2026, 8, 31, 21, tzinfo=timezone.utc), datetime(2026, 9, 30, 21, tzinfo=timezone.utc))
+
+
+def test_platform_month_sums_moscow_month_and_mature_posts(dsn):
+    world = World(dsn, "vk")
+    code = f"t{world.legacy_id}"
+    coded(dsn, world, code)
+    with _connect(dsn) as connection:
+        connection.execute("UPDATE catalog.platform_account SET created_at='2026-08-01' WHERE id=%s", (world.account,))
+    inside = world.post(datetime(2026, 8, 31, 21, 30, tzinfo=timezone.utc), {})   # 1 сентября 00:30 МСК
+    young = world.post(datetime(2026, 9, 29, 12, tzinfo=timezone.utc), {})
+    world.post(datetime(2026, 8, 31, 20, 59, tzinfo=timezone.utc), {})            # 31 августа МСК
+    latest(dsn, inside, 1000, 30, 5, 5)
+    latest(dsn, young, 10, 1)
+    rows = [row for row in _platform_month(dsn, *SEPT, datetime(2026, 9, 27, tzinfo=timezone.utc))
+            if row["code"] == code]
+    assert len(rows) == 1
+    row = rows[0]
+    assert (row["platform"], row["posts"], row["mature_posts"], row["mature_views"], row["mature_interactions"]) == \
+        ("vk", 2, 1, 1000, 40)
+    assert (row["viewed_posts"], row["views"], row["interactions"], row["covered"]) == (2, 1010, 41, True)
+
+
+def test_platform_month_marks_accounts_added_mid_month_uncovered(dsn):
+    """Нижневартовский ГУ: VK добавлен 15.09, самая ранняя публикация 02.09."""
+    world = World(dsn, "vk")
+    code = f"t{world.legacy_id}"
+    coded(dsn, world, code)
+    with _connect(dsn) as connection:
+        connection.execute("UPDATE catalog.platform_account SET created_at='2026-09-15' WHERE id=%s", (world.account,))
+    world.post(datetime(2026, 9, 2, 9, tzinfo=timezone.utc), {})
+    row = next(row for row in _platform_month(dsn, *SEPT, SEPT[1]) if row["code"] == code)
+    assert row["covered"] is False
+    # История, догруженная до начала месяца, делает месяц покрытым.
+    world.post(datetime(2026, 7, 1, 9, tzinfo=timezone.utc), {})
+    row = next(row for row in _platform_month(dsn, *SEPT, SEPT[1]) if row["code"] == code)
+    assert row["covered"] is True
+
+
+def test_platform_month_lists_coded_institutions_without_accounts_and_runs_as_api_read(dsn):
+    world = World(dsn, "telegram")       # Telegram в прогноз не входит
+    code = f"t{world.legacy_id}"
+    coded(dsn, world, code)
+    with _connect(dsn) as connection:
+        if not connection.execute("SELECT 1 FROM pg_roles WHERE rolname='api_read'").fetchone():
+            pytest.skip("роль api_read не создана")
+    rows = [row for row in _platform_month(dsn, *SEPT, SEPT[1], role="api_read") if row["code"] == code]
+    assert [(row["platform"], row["posts"]) for row in rows] == [(None, None)]
+
+
+def test_months_and_rows_prefer_the_real_forecast_over_retrospective(dsn):
+    world = World(dsn, "vk")
+    as_of = datetime(2026, 10, 16, 22, tzinfo=timezone.utc)
+    record(dsn, payload(world.institution, as_of, status="retrospective", window_start=SEPT[0], window_end=SEPT[1]))
+    record(dsn, payload(world.institution, as_of, status="final", window_start=SEPT[0], window_end=SEPT[1], score=60))
+    with _connect(dsn) as connection:
+        months = connection.execute(sql.FORECAST_MONTHS, {"formula_key": rf.FORMULA_KEY}).fetchall()
+        run = connection.execute(sql.FORECAST_RUN, {"formula_key": rf.FORMULA_KEY, "window_start": SEPT[0]}).fetchone()
+        rows = connection.execute(sql.FORECAST_ROWS, {"run_id": run["id"], "period": "Сентябрь 2026"}).fetchall()
+    assert [(item["month"], item["status"]) for item in months] == [("2026-09", "final")]
+    assert run["parameters"]["status"] == "final" and run["version"] == 1
+    assert (float(rows[0]["score"]), rows[0]["legacy_id"], rows[0]["actual"]) == (60.0, world.legacy_id, None)
+
+
+def test_rows_join_the_official_actual_for_the_period(dsn):
+    world = World(dsn, "vk")
+    as_of = datetime(2026, 10, 16, 22, tzinfo=timezone.utc)
+    record(dsn, payload(world.institution, as_of, status="retrospective", window_start=SEPT[0], window_end=SEPT[1]))
+    with _connect(dsn) as connection:
+        for category, rank, score in (("social", 8, 65.9), ("vk", 38, 70.2)):
+            connection.execute("""
+                INSERT INTO rating.official_rating_observation(institution_id,category,period,rank,score,source_url,
+                  source_hash,fetched_at) VALUES (%s,%s,'Сентябрь 2026',%s,%s,'https://www.m-rating.ru/r.json',%s,now())""",
+                (world.institution, category, rank, score, hashlib.sha256(category.encode()).hexdigest()))
+        run = connection.execute(sql.FORECAST_RUN, {"formula_key": rf.FORMULA_KEY, "window_start": SEPT[0]}).fetchone()
+        connection.execute("SET ROLE api_read")
+        row = connection.execute(sql.FORECAST_ROWS, {"run_id": run["id"], "period": "Сентябрь 2026"}).fetchone()
+    assert row["actual"]["social"] == {"rank": 8, "score": 65.9}
+    assert row["actual"]["vk"]["rank"] == 38
